@@ -464,8 +464,11 @@ have no own-answer button.
 
 - Press `✍ Свой ответ` and keryx posts a message that asks you to reply to it. Reply
   to **that message** (Telegram's Reply, not a new line) with your text. The text is
-  returned to the agent as your own answer, not as an option, and the question
-  message shows it. The reply must come from the same person who was asked.
+  returned to the agent as your own answer, not as an option. The question message
+  is edited to `Own answer (user <id>, <time>)`: it records who answered and when, not
+  the text (the shell's transcript and the journal show the text, redacted). The
+  reply must come from the same person who was asked. If the dock answered in the
+  same moment, the shell drops your text and the message is corrected to say so.
 - The binding is the replied-to message and the person, never "the next message":
   a reply to some other message, a reply from another person, or a reply posted in
   another session's topic resolves nothing. A reply to the box never starts a turn.
@@ -473,7 +476,8 @@ have no own-answer button.
 - Pressing the button gives you at least **5 minutes** to type (the option buttons
   keep their own timeout, `choiceTimeoutMs`, 2 minutes by default). A reply after the
   window, or after the question was answered elsewhere, resolves nothing, and the
-  topic says once that the question is no longer open.
+  topic answers each such reply (from whoever sent it) with "That question is no
+  longer open".
 - Approvals (Allow, Deny, Always, `/mode`, grants) have no such path: typing "yes" or
   "allow", as an own answer or as a reply, never approves anything. Only the
   approval's own button does.
@@ -483,8 +487,10 @@ have no own-answer button.
   flow's `journal.md` or the report. See the
   [recommendation journal](recommendation-journal.md#your-own-answer-and-a-typed-reason).
 
-The shell and `serve` keep the box in memory: if `serve` restarts while a box is
-waiting, a reply to it is taken as an ordinary line. The shell closes a question on
+`serve` keeps the box in memory: if it restarts while a box is waiting, the question
+is gone, and a reply to that box is told the question is no longer open (`serve`
+recognises the box by the text Telegram attaches to a reply); it never starts a turn.
+The shell closes a question on
 `serve` with the loopback route `prompt-close` when it was answered in the dock or the
 turn was stopped.
 

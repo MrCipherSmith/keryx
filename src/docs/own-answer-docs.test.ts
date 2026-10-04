@@ -74,6 +74,24 @@ describe("the Telegram remote guide (AC12)", () => {
     expect(part).toContain("no longer open");
   });
 
+  it("describes what serve really does: every late reply is answered, the question message records who and when, not the text", () => {
+    const flat = part.replace(/\s+/g, " ");
+    expect(flat).not.toContain("says once");
+    expect(flat).not.toContain("the question message shows it");
+    expect(flat).toContain("answers each such reply");
+    expect(flat).toContain("Own answer (user <id>, <time>)");
+    // the strings the docs quote are the ones the code sends
+    const surface = read("src/remote/http-surface.ts");
+    expect(surface).toContain("`Own answer (user ${meta.fromId}, ${when}).`");
+    expect(surface).toContain("That question is no longer open, so your reply was not used.");
+  });
+
+  it("says what happens to a box after a serve restart", () => {
+    const flat = REMOTE.replace(/\s+/g, " ");
+    expect(flat).not.toContain("a reply to it is taken as an ordinary line");
+    expect(flat).toContain("a reply to that box is told the question is no longer open");
+  });
+
   it("says approvals are button-only and that pickers get no own row", () => {
     expect(part).toContain("Approvals (Allow, Deny, Always, `/mode`, grants) have no such path");
     expect(part).toContain("`/model`, `/connect` and `/resume`");

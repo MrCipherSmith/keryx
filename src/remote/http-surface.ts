@@ -38,6 +38,7 @@ import {
   MAX_OWN_ANSWER_CHARS,
   OWN_ANSWER_BUTTON_LABEL,
   OWN_ANSWER_WINDOW_MS,
+  OWN_REPLY_PROMPT,
   ownCallbackData,
   parseOwnCallback,
   type PromptCloseBody,
@@ -315,6 +316,11 @@ interface FinishedPrompt {
    * stored (`approval-result`), once, and the message is edited to say which.
    */
   rememberOf?: { original: string | undefined; who: string; when: string; pattern: string } | undefined;
+  /**
+   * Set when an own answer was written to the shell's stream (flow 401): a write is not receipt, so if the
+   * shell then says it was answered in the dock (`prompt-close` by "shell"), the message is corrected.
+   */
+  ownSent?: { original: string | undefined } | undefined;
 }
 
 const MAX_FINISHED_PROMPTS = 128;
@@ -898,6 +904,15 @@ export class RemoteHttpSurface {
     }
     const entry = this.choices.get(value.promptId);
     if (entry === undefined || entry.sessionId !== value.sessionId) {
+      const done = this.finished.get(value.promptId);
+      if (done?.ownSent !== undefined && done.sessionId === value.sessionId && value.by === "shell") {
+        // The own answer was confirmed in the topic, but the dock answered first and the shell dropped it.
+        this.finishApproval(value.promptId, done.sessionId, done.messageId, done.ownSent.original, {
+          result: `Answered in the shell at ${clockText(this.now())}: your own answer was not used.`,
+          shortReply: "The shell answered first, so your own answer was not used.",
+        });
+        return ok({ closed: true });
+      }
       return ok({ closed: false });
     }
     this.dropChoice(value.promptId);
@@ -1106,6 +1121,12 @@ export class RemoteHttpSurface {
       // A reply to a message this serve armed for an own answer is never an ordinary line: it either
       // answers that prompt or answers nothing, and it starts no turn (flow 401).
       this.replyToArmed(sessionId, line, meta, this.armedOwn.get(meta.replyToMessageId) as ArmedOwn);
+      return Promise.resolve();
+    }
+    if (meta.replyToMessageId !== undefined && meta.replyToText?.startsWith(OWN_REPLY_PROMPT) === true) {
+      // A reply to a reply box this serve has no record of (it restarted, or the box was resent from the
+      // durable queue): the question is gone, so the reply is told so and is not an ordinary line (flow 401).
+      void this.hub?.send(sessionId, "That question is no longer open, so your reply was not used.").catch(() => undefined);
       return Promise.resolve();
     }
     if (this.completed.get(sessionId)?.has(meta.updateId) === true) {
@@ -1341,7 +1362,8 @@ export class RemoteHttpSurface {
    * off by an option timeout that was sized for a tap.
    */
   private armOwn(promptId: string, entry: PendingChoice, callback: CallbackDelivery): void {
-    if (entry.armed === true) {
+    const hub = this.hub;
+    if (entry.armed === true || hub === undefined) {
       return;
     }
     entry.armed = true;
@@ -1352,10 +1374,14 @@ export class RemoteHttpSurface {
     entry.timer = this.timers.setTimeout(() => this.expireChoice(promptId), expiresAt - now);
     const sessionId = entry.sessionId;
     const userId = callback.fromId;
-    void this.hub
-      ?.send(sessionId, "Reply to this message with your own answer. It is open for 5 minutes.", {
+    void hub
+      .send(sessionId, OWN_REPLY_PROMPT, {
         forceReply: { placeholder: "Your own answer" },
         onSent: (info) => this.onArmedSent(promptId, sessionId, userId, expiresAt, info.messageId),
+      })
+      .then((queued) => {
+        // Not queued (the session is unknown to the hub): nothing was sent, so the button must work again.
+        if (!queued) entry.armed = false;
       })
       .catch(() => {
         // The ForceReply message could not be queued: let the person press the button again.
@@ -1382,7 +1408,7 @@ export class RemoteHttpSurface {
    * A reply to an armed own-answer message. It answers the prompt only when it comes from the person who
    * pressed the button, inside the window, while the prompt is still open. A reply from anyone else, or to
    * a prompt that belongs to another session, answers nothing and is not a line. A late reply answers
-   * nothing and is told so once.
+   * nothing and is told so (every late reply, from whoever sent it).
    */
   private replyToArmed(sessionId: string, line: string, meta: DeliverMeta, armed: ArmedOwn): void {
     if (armed.sessionId !== sessionId) {
@@ -1406,12 +1432,19 @@ export class RemoteHttpSurface {
     const event: ChoiceEvent = { updateId: meta.updateId, promptId: armed.promptId, index: -1, fromId: meta.fromId, own: text.slice(0, MAX_OWN_ANSWER_CHARS) };
     const told = stream?.write(encodeSseEvent("choice", event, meta.updateId)) === true;
     const when = clockText(this.now());
-    this.finishApproval(armed.promptId, sessionId, entry.messageId, entry.text, {
-      result: told
-        ? `Own answer (user ${meta.fromId}, ${when}).`
-        : `Not delivered at ${when}: the shell is not connected, so nothing changed.`,
-      shortReply: told ? "Your own answer was sent." : "Not delivered: the shell is not connected, so nothing changed.",
-    });
+    this.finishApproval(
+      armed.promptId,
+      sessionId,
+      entry.messageId,
+      entry.text,
+      {
+        result: told
+          ? `Own answer (user ${meta.fromId}, ${when}).`
+          : `Not delivered at ${when}: the shell is not connected, so nothing changed.`,
+        shortReply: told ? "Your own answer was sent." : "Not delivered: the shell is not connected, so nothing changed.",
+      },
+      told,
+    );
   }
 
   private onChoiceSent(promptId: string, sessionId: string, messageId: number, text: string): void {
@@ -1479,6 +1512,7 @@ export class RemoteHttpSurface {
     messageId: number | undefined,
     original: string | undefined,
     outcome: { result: string; shortReply: string },
+    ownSent = false,
   ): void {
     const finalText = messageId === undefined ? outcome.result : settledText(original, outcome.result);
     this.finished.delete(approvalId);
@@ -1487,6 +1521,7 @@ export class RemoteHttpSurface {
       ...(messageId === undefined ? {} : { messageId }),
       finalText,
       shortReply: outcome.shortReply,
+      ...(ownSent ? { ownSent: { original } } : {}),
     });
     while (this.finished.size > MAX_FINISHED_PROMPTS) {
       const oldest = this.finished.keys().next().value;

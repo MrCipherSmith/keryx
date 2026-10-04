@@ -21,9 +21,10 @@ export interface BotMessage {
   text?: string;
   /**
    * The message this one answers (flow 401). In a forum topic Telegram also sets it on a plain
-   * message, to the topic's first message; only the id is read, and only to match an armed own-answer prompt.
+   * message, to the topic's first message; only the id and the opening of the text are read, and only to
+   * match an armed own-answer prompt (the text recognises a reply box this serve no longer knows).
    */
-  reply_to_message?: { message_id: number };
+  reply_to_message?: { message_id: number; text?: string };
   /** Set when the message was forwarded from somewhere else (Bot API 7+ and the older fields). */
   forward_origin?: unknown;
   forward_date?: number;

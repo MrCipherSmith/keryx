@@ -4332,7 +4332,10 @@ async function offerRoundLimitReset(
   } catch {
     return "cancel";
   }
-  if (chosen !== "reset") {
+  // flow 401: the dock may answer with an object (a pick plus a reason) or an own answer; only a
+  // pick of "reset" continues, an own answer is not one of the two choices and cancels
+  const choice = typeof chosen === "string" ? chosen : chosen.kind === "option" ? chosen.choice : undefined;
+  if (choice !== "reset") {
     return "cancel";
   }
   roundState.maxRounds += resolveAgentMaxRounds();

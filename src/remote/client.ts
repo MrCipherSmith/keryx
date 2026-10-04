@@ -283,6 +283,8 @@ export class RemoteClient {
   private readonly lingerTimers = new Set<ReturnType<typeof setTimeout>>();
   private readonly choiceWaiters = new Map<string, { resolve: (answer: ChoiceAnswer) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly earlyChoices = new Map<string, ChoiceAnswer>();
+  /** Prompts this side ended (the dock answered first, the turn stopped): a frame for one is dropped, never parked as early. */
+  private readonly closedChoices = new Set<string>();
   private firstResult: ((result: StartResult) => void) | undefined;
 
   /** The topic name and thread, once registered. */
@@ -552,6 +554,7 @@ export class RemoteClient {
     }
     const signal = options.signal;
     if (signal?.aborted === true) {
+      this.markChoiceClosed(promptId);
       await this.closePrompt(promptId, closeByFor(signal));
       return none;
     }
@@ -568,6 +571,7 @@ export class RemoteClient {
         const waiter = this.choiceWaiters.get(promptId);
         if (waiter !== undefined) clearTimeout(waiter.timer);
         this.choiceWaiters.delete(promptId);
+        this.markChoiceClosed(promptId);
         resolve(none);
         void this.closePrompt(promptId, closeByFor(signal));
       };
@@ -1060,6 +1064,10 @@ export class RemoteClient {
   private resolveChoice(promptId: string, answer: ChoiceAnswer): void {
     const waiter = this.choiceWaiters.get(promptId);
     if (waiter === undefined) {
+      if (this.closedChoices.has(promptId)) {
+        // This side already ended the question (the dock answered, the turn stopped): a late answer is not parked.
+        return;
+      }
       // The press beat the response that names its id; park it briefly.
       if (this.earlyChoices.size >= MAX_EARLY_DECISIONS) {
         const oldest = this.earlyChoices.keys().next().value;
@@ -1073,6 +1081,17 @@ export class RemoteClient {
     clearTimeout(waiter.timer);
     this.choiceWaiters.delete(promptId);
     waiter.resolve(answer);
+  }
+
+  private markChoiceClosed(promptId: string): void {
+    this.earlyChoices.delete(promptId);
+    if (this.closedChoices.size >= MAX_EARLY_DECISIONS) {
+      const oldest = this.closedChoices.values().next().value;
+      if (oldest !== undefined) {
+        this.closedChoices.delete(oldest);
+      }
+    }
+    this.closedChoices.add(promptId);
   }
 
   private failChoices(): void {

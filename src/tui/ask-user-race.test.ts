@@ -83,6 +83,26 @@ test("the turn stopping closes both places, the topic one as cancelled", async (
   expect(topicReason).toBe("cancelled");
 });
 
+test("a dock leg that rejects still closes the topic question and the dock", async () => {
+  let topicReason: unknown;
+  let dockReason: unknown;
+  await expect(
+    raceAskUser({
+      turnSignal: new AbortController().signal,
+      dock: (signal) => {
+        signal.addEventListener("abort", () => (dockReason = signal.reason));
+        return Promise.reject(new Error("dock broke"));
+      },
+      topic: (signal) => {
+        signal.addEventListener("abort", () => (topicReason = signal.reason));
+        return never();
+      },
+    }),
+  ).rejects.toThrow("dock broke");
+  expect(topicReason).toBe("cancelled");
+  expect(dockReason).toBe("cancelled");
+});
+
 test("a question of a turn typed in the shell has no topic part at all", async () => {
   const dock = dockThatWaitsForAbort();
   const outcome = raceAskUser({ turnSignal: new AbortController().signal, dock: dock.run });

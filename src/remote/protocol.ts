@@ -257,6 +257,12 @@ export function parseChoiceCallback(data: string): { promptId: string; index: nu
 export const OWN_ANSWER_BUTTON_LABEL = "✍ Свой ответ";
 /** How long an own answer may take after the button is pressed. At least five minutes, whatever the options' own timeout. */
 export const OWN_ANSWER_WINDOW_MS = 5 * 60_000;
+/**
+ * The text of the ForceReply message. A reply whose replied-to text opens with it is a reply to a reply box,
+ * so one this serve no longer knows (a restart, a box resent from the durable queue) is told it is late
+ * instead of starting a turn.
+ */
+export const OWN_REPLY_PROMPT = "Reply to this message with your own answer. It is open for 5 minutes.";
 /** The most characters of an own answer a reply may carry through the stream (Telegram's own message limit). */
 export const MAX_OWN_ANSWER_CHARS = 4_096;
 

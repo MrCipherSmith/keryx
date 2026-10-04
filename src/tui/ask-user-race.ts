@@ -29,6 +29,7 @@ export async function raceAskUser<D>(options: {
   } else {
     options.turnSignal.addEventListener("abort", stop, { once: true });
   }
+  let topicWon = false;
   try {
     const dockRun = options.dock(dockAbort.signal).then((result): AskRaceOutcome<D> => ({ from: "dock", result }));
     if (options.topic === undefined) {
@@ -44,11 +45,16 @@ export async function raceAskUser<D>(options: {
       topicAbort.abort(options.turnSignal.aborted ? "cancelled" : "shell");
     } else {
       // answered in the topic: the dock is taken down, and its own (cancel) result is dropped
+      topicWon = true;
       dockAbort.abort("topic");
       await dockRun;
     }
     return first;
   } finally {
     options.turnSignal.removeEventListener("abort", stop);
+    // however the race ended (a dock leg that rejected included) neither place is left open; an abort
+    // after the fact is a no-op, so a place already closed keeps the reason it was closed with
+    dockAbort.abort("cancelled");
+    if (!topicWon) topicAbort.abort("cancelled");
   }
 }

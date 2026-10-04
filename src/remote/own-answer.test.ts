@@ -12,7 +12,7 @@ import type { ChoiceAnswer, RemoteClient } from "./client";
 import { saveRemoteConfig } from "./config";
 import { FakeBotApi, type FakeSentMessage } from "./fake-bot-api";
 import { OutboundQueue } from "./outbound-queue";
-import { OWN_ANSWER_BUTTON_LABEL, OWN_ANSWER_WINDOW_MS, ownCallbackData, parseChoiceCallback, parseOwnCallback } from "./protocol";
+import { OWN_ANSWER_BUTTON_LABEL, OWN_ANSWER_WINDOW_MS, OWN_REPLY_PROMPT, ownCallbackData, parseChoiceCallback, parseOwnCallback } from "./protocol";
 import { makeRig, type Rig } from "./remote.http.test-helpers";
 import { FAKE_CHAT_ID, OWNER_ID, settle, testConfig, until } from "./remote.test-helpers";
 
@@ -443,6 +443,98 @@ describe("the question is shown once, and closed when answered elsewhere (AC7)",
     await settle();
     expect(rig.api.message(prompt.messageId)?.text ?? "").toContain("Chosen");
     expect(rig.api.message(prompt.messageId)?.text ?? "").not.toContain("Answered in the shell");
+  });
+});
+
+describe("review round 1: late and lost own answers (F2, F3, F7)", () => {
+  type ClientInternals = {
+    earlyChoices: Map<string, unknown>;
+    resolveChoice(promptId: string, answer: ChoiceAnswer): void;
+    closePrompt(promptId: string, by: "shell" | "cancelled"): Promise<void>;
+  };
+  const internals = (client: RemoteClient): ClientInternals => client as unknown as ClientInternals;
+  const promptIdOf = (prompt: FakeSentMessage): string => parseChoiceCallback((prompt.inlineKeyboard ?? []).flat()[0]?.callback_data as string)?.promptId as string;
+
+  test("F2: a reply to a reply box serve has no record of is told the question is closed and starts no turn", async () => {
+    rig = makeRig();
+    lines = [];
+    await rig.startServe();
+    const { threadId } = await session("sess-own-0030", "release");
+    // The box was sent by an earlier serve (or resent from the durable queue): its id is not in this serve's memory.
+    rig.api.pushMessage({ fromId: OWNER_ID, text: "answer to a box from before the restart", threadId, replyToMessageId: 987_654, replyToText: OWN_REPLY_PROMPT });
+    await until(() => textsIn(threadId).some((text) => text.includes(LATE_NOTE)), "told the question is closed");
+    await settle();
+    await settle();
+    expect(lines).toEqual([]);
+    expect(textsIn(threadId).filter((text) => text.includes(LATE_NOTE))).toHaveLength(1);
+  });
+
+  test("F2: a reply to some other message that merely has text is still an ordinary line", async () => {
+    rig = makeRig();
+    lines = [];
+    await rig.startServe();
+    const { threadId } = await session("sess-own-0031", "release");
+    rig.api.pushMessage({ fromId: OWNER_ID, text: "ordinary reply", threadId, replyToMessageId: 987_655, replyToText: "Some other bot message" });
+    await until(() => lines.includes("ordinary reply"), "an ordinary turn");
+    expect(textsIn(threadId).some((text) => text.includes(LATE_NOTE))).toBe(false);
+  });
+
+  test("F3: an own answer that reaches the shell after the shell closed the question is dropped, not parked", async () => {
+    rig = makeRig();
+    lines = [];
+    await rig.startServe();
+    const { client, threadId } = await session("sess-own-0032", "release");
+    const abort = new AbortController();
+    const pending = client.askChoice("Which way?", OPTIONS, 5_000, { own: true, signal: abort.signal });
+    const prompt = await untilPrompt(threadId);
+    const promptId = promptIdOf(prompt);
+    abort.abort("shell");
+    expect(await pending).toEqual({ kind: "none" });
+
+    internals(client).resolveChoice(promptId, { kind: "own", text: "too late" });
+    expect(internals(client).earlyChoices.size).toBe(0);
+  });
+
+  test("F3: the dock won after the topic answer was confirmed: the question message is corrected", async () => {
+    rig = makeRig();
+    lines = [];
+    await rig.startServe();
+    const { client, threadId } = await session("sess-own-0033", "release");
+    const pending = client.askChoice("Which way?", OPTIONS, 5_000, { own: true });
+    const prompt = await untilPrompt(threadId);
+    const promptId = promptIdOf(prompt);
+    const armed = await pressOwn(threadId, prompt);
+    reply(threadId, "typed in the topic", armed.messageId);
+    expect(await pending).toEqual({ kind: "own", text: "typed in the topic" });
+    await until(() => (rig.api.message(prompt.messageId)?.text ?? "").includes("Own answer"), "confirmed as an own answer");
+
+    // The shell had already dropped that answer for the dock's, and now says so.
+    await internals(client).closePrompt(promptId, "shell");
+    await until(() => (rig.api.message(prompt.messageId)?.text ?? "").includes("your own answer was not used"), "corrected");
+    expect(rig.api.message(prompt.messageId)?.text ?? "").not.toContain("Own answer (user");
+  });
+
+  test("F7: when the reply box could not be queued, the own button works again", async () => {
+    rig = makeRig();
+    lines = [];
+    const serve = await rig.startServe();
+    const { client, threadId } = await session("sess-own-0034", "release");
+    const pending = client.askChoice("Which way?", OPTIONS, 5_000, { own: true });
+    const prompt = await untilPrompt(threadId);
+
+    const hub = serve.service.hub() as NonNullable<ReturnType<typeof serve.service.hub>>;
+    const realSend = hub.send.bind(hub);
+    let refuse = true;
+    hub.send = async (sessionId, text, options) => (refuse && text === OWN_REPLY_PROMPT ? false : realSend(sessionId, text, options));
+    rig.api.pushCallback({ fromId: OWNER_ID, data: ownButton(prompt) as string, threadId, messageId: prompt.messageId });
+    await settle();
+    await settle();
+    expect(armedMessages(threadId)).toHaveLength(0);
+
+    refuse = false;
+    const armed = await pressOwn(threadId, prompt);
+    reply(threadId, "second try", armed.messageId);
+    expect(await pending).toEqual({ kind: "own", text: "second try" });
   });
 });
 

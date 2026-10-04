@@ -44,6 +44,8 @@ export interface InboundEntry {
   messageId?: number;
   /** The message this line was sent as a reply to (flow 401), for `kind: "text"`: what binds an own answer to its prompt. */
   replyToMessageId?: number;
+  /** The opening of the text of the message replied to (flow 401): how a reply to a reply box serve lost track of is recognised. */
+  replyToText?: string;
   /** The pressed button, for `kind: "callback"`. */
   callback?: { id: string; data: string; messageId?: number };
 }

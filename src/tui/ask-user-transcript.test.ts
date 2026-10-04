@@ -78,6 +78,23 @@ otuiTest("AC2: the typed own answer shows in the transcript after the question b
   h.renderer.destroy();
 });
 
+otuiTest("a credential typed into an own answer or a reason never reaches the transcript", async () => {
+  const otui = OTUI;
+  if (otui === undefined) throw new Error("unreachable");
+  const h = await mount(otui);
+  const token = `ghp_${"a1B2c3D4e5".repeat(4)}`;
+  mountAskAnswerLine(otui.core, h.renderer, h.chrome.transcript, "s1", OPTIONS, { kind: "own", text: `use ${token} for it` });
+  mountAskAnswerLine(otui.core, h.renderer, h.chrome.transcript, "s2", OPTIONS, { kind: "reason", id: "a", reason: `because ${token}` });
+  await h.flush();
+  const frame = h.captureCharFrame();
+  expect(frame).not.toContain(token);
+  expect(frame).not.toContain("a1B2c3D4e5a1B2c3D4e5");
+  expect(frame).toContain("→ ✍ use ");
+  expect(frame).toContain("→ Option A — because ");
+  h.chrome.destroy();
+  h.renderer.destroy();
+});
+
 otuiTest("a picked option with a reason, a plain pick and a cancel each get their own line", async () => {
   const otui = OTUI;
   if (otui === undefined) throw new Error("unreachable");

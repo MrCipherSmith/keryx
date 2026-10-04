@@ -304,11 +304,13 @@ export class FakeBotApi implements BotApi {
   }
 
   /** Simulate an operator or an attacker writing in a topic. */
-  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number; replyToMessageId?: number }): BotUpdate {
+  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number; replyToMessageId?: number; replyToText?: string }): BotUpdate {
     const message = {
       message_id: ++this.messageSeq,
       ...(input.threadId === undefined ? {} : { message_thread_id: input.threadId }),
-      ...(input.replyToMessageId === undefined ? {} : { reply_to_message: { message_id: input.replyToMessageId } }),
+      ...(input.replyToMessageId === undefined
+        ? {}
+        : { reply_to_message: { message_id: input.replyToMessageId, ...(input.replyToText === undefined ? {} : { text: input.replyToText }) } }),
       from: { id: input.fromId },
       chat: { id: input.chatId ?? this.chatId },
       date: Math.floor(this.now() / 1000),

@@ -33,6 +33,9 @@ import { ServiceTopics } from "./service-topics";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
 import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
+/** How much of a replied-to message's text is kept: enough to recognise a reply box by its opening. */
+const MAX_REPLY_TO_TEXT_CHARS = 120;
+
 export interface DeliverMeta {
   updateId: number;
   threadId: number;
@@ -40,6 +43,8 @@ export interface DeliverMeta {
   receivedAt: number;
   /** The message the line replied to (flow 401), when it was a reply. */
   replyToMessageId?: number;
+  /** The opening of the text of the message the line replied to (flow 401), when Telegram carried it. */
+  replyToText?: string;
 }
 
 export interface CallbackDelivery {
@@ -921,12 +926,14 @@ export class RemoteHub {
         return undefined;
       }
       const replyTo = message.reply_to_message?.message_id;
+      const replyToText = message.reply_to_message?.text;
       const appended = this.inbound.append(key, {
         ...base,
         kind: "text",
         text: message.text,
         messageId: message.message_id,
         ...(typeof replyTo === "number" ? { replyToMessageId: replyTo } : {}),
+        ...(typeof replyTo === "number" && typeof replyToText === "string" ? { replyToText: replyToText.slice(0, MAX_REPLY_TO_TEXT_CHARS) } : {}),
       });
       if (appended.added) {
         // The first thing the sender sees: the message was received. Fire and forget.
@@ -1114,6 +1121,7 @@ export class RemoteHub {
               fromId: entry.fromId,
               receivedAt: entry.receivedAt,
               ...(typeof entry.replyToMessageId === "number" ? { replyToMessageId: entry.replyToMessageId } : {}),
+              ...(typeof entry.replyToText === "string" ? { replyToText: entry.replyToText } : {}),
             });
           } else if (entry.callback !== undefined && this.consumer.deliverCallback !== undefined) {
             await this.consumer.deliverCallback(record.sessionId, {

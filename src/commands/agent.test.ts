@@ -1683,6 +1683,68 @@ test("runAgentTurn: askUser answering 'reset' on an exceeded round budget raises
   expect(text.join("")).toContain("Done after reset.");
 });
 
+test("runAgentTurn: askUser answering a pick of 'reset' with a reason (flow 401) still raises the ceiling and continues", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "Done after reset." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const askUser: AskUserFn = async () => ({ kind: "option", choice: "reset", reason: "the build needs more rounds" });
+  const text: string[] = [];
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxRounds: 1,
+    askUser,
+  };
+  await runAgentTurn({ write: (s) => text.push(s) }, deps, [], "probe twice");
+  expect(requests.length).toBe(3);
+  expect(text.join("")).toContain("Done after reset.");
+});
+
+test("runAgentTurn: an own answer at the round budget (flow 401) is not 'reset' and stops the turn", async () => {
+  const { provider, requests } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "a" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "b" }) },
+      { kind: "model_end" },
+    ],
+  ]);
+  const askUser: AskUserFn = async () => ({ kind: "own", text: "reset" });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probeTool()],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxRounds: 1,
+    askUser,
+  };
+  await runAgentTurn({ write: () => {} }, deps, [], "probe twice");
+  expect(requests.length).toBe(1);
+});
+
 test("runAgentTurn: askUser answering 'cancel' at the round budget stops without a wrap-up request", async () => {
   const { provider, requests } = scriptedProvider([
     [
