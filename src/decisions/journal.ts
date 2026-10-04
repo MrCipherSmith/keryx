@@ -1,20 +1,21 @@
 // Flow 392: the three operations on the journal — open, answer, reason.
 //
-// `open` is called BEFORE the question is shown: it decides blind or ordinary,
+// `open` is called BEFORE the question is shown: it assigns the arm (A to D),
 // writes the record (recommendation included), and returns what to display.
 // `answer` records the choice and returns the reveal. Nothing here talks to a
 // model, a TUI or a chat bridge; the caller asks the human.
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
-import { BLIND_PROBABILITY, isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
+import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm, REASON_SUBSAMPLE_ENV, reasonSubsample, reasonSubsampleOff, recordEligible } from "./arms";
+import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 import type {
   AnswerInput,
   AnswerRecord,
   AnswerResult,
-  DecisionMode,
+  DecisionRecord,
   OpenInput,
   OpenRecord,
   OpenResult,
@@ -22,14 +23,53 @@ import type {
 } from "./types";
 
 export const DEFAULT_STAGE = "unspecified";
+export const DEFAULT_CHANNEL = "tui";
 
 function newId(now: Date): string {
   return `d-${now.getTime().toString(36)}-${randomBytes(3).toString("hex")}`;
 }
 
+/** What makes two questions the same question: the normalised text and the set of option ids, hashed. */
+function questionHash(question: string, optionIds: readonly string[]): string {
+  const text = oneLine(question).toLowerCase();
+  return createHash("sha256").update(JSON.stringify([text, [...optionIds].sort()])).digest("hex");
+}
+
+function resultOf(record: OpenRecord): OpenResult {
+  return {
+    id: record.id,
+    mode: record.mode,
+    arm: record.arm ?? armOfMode(record.mode),
+    seed: record.seed ?? 0,
+    preselected: record.preselected ?? false,
+    forced: record.forced ?? false,
+    eligible: recordEligible(record),
+    reasonRequested: record.reasonRequested === true,
+    channel: record.channel ?? DEFAULT_CHANNEL,
+    order: record.order,
+    showMark: record.showMark ?? record.mode === "ordinary",
+    irreversible: record.irreversible ?? false,
+    blindRefused: record.blindRefused ?? false,
+    flow: record.flow,
+  };
+}
+
+/** The still-unanswered open record of this repository that asks the same question, if any (one scan of the journal). */
+function findOpenTwin(records: readonly DecisionRecord[], hash: string): OpenRecord | undefined {
+  const answered = new Set<string>();
+  for (const r of records) if (r.kind === "answer") answered.add(r.id);
+  for (const r of records) {
+    if (r.kind !== "open" || r.backfilled === true || answered.has(r.id)) continue;
+    if (questionHash(r.question, r.options.map((option) => option.id)) === hash) return r;
+  }
+  return undefined;
+}
+
+export { REASON_SUBSAMPLE_ENV };
+
 export async function openDecision(input: OpenInput): Promise<OpenResult> {
   const now = (input.now ?? (() => new Date()))();
-  const random = input.random ?? Math.random;
+  const random = input.random ?? Math.random; // the shuffle only: the arm is seeded
   const question = oneLine(input.question);
   if (question.length === 0) throw new Error("decisions open needs a question");
   if (input.options.length < 2) throw new Error("decisions open needs at least two options");
@@ -44,16 +84,40 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     throw new Error(`the recommended option "${recommendation.optionId}" is not one of the options`);
   }
 
+  // Idempotent per question: asking the same question again while it is still unanswered returns the arm already
+  // drawn for it, so repeating `open` cannot re-roll the arm. Once it is answered, the next open is a new decision.
+  const records = await readRecords(input.cwd);
+  const twin = findOpenTwin(records, questionHash(question, [...ids]));
+  if (twin !== undefined) return resultOf(twin);
+
   const config = await loadDecisionsConfig(input.cwd);
   const tagged = input.action !== undefined && input.action.trim().length > 0;
   // A caller that tags the action, or says so outright, has declared it irreversible; the text match is the safety net.
   const irreversible = input.irreversible === true || tagged || isIrreversible(config.irreversible, question, input.action, input.options);
-  // Blind needs a recommendation to hide, and is never applied to an irreversible action (AC4).
-  const wantsBlind = recommendation !== null && random() < BLIND_PROBABILITY;
-  const mode: DecisionMode = wantsBlind && !irreversible ? "blind" : "ordinary";
+  // The arm is a pure function of (repoSalt, seq), so a repeated run assigns it the same way. An irreversible
+  // question is always arm A with forced: true, and never blind (AC4).
+  const salt = input.salt ?? (await loadRepoSalt(input.cwd));
+  const seq = input.seq ?? records.filter((r) => r.kind === "open").length + 1;
+  const choice = chooseArm({
+    salt,
+    seq,
+    weights: await loadArmWeights(input.cwd),
+    irreversible,
+    hasRecommendation: recommendation !== null,
+    force: input.arm,
+  });
+  const factors = ARM_FACTORS[choice.arm];
+  const mode = modeOfArm(choice.arm);
   const given = input.options.map((option) => option.id);
-  const order = mode === "blind" ? shuffle(given, random) : given;
-  const showMark = mode === "ordinary" && recommendation !== null;
+  const order = factors.order === "shuffled" ? shuffle(given, random) : given;
+  const showMark = factors.mark === "shown" && recommendation !== null;
+  const preselected = factors.preselect && recommendation !== null;
+  const channel = input.channel !== undefined && input.channel.trim().length > 0 ? oneLine(input.channel) : DEFAULT_CHANNEL;
+  const blindRefused = recommendation !== null && irreversible && choice.drawn === "D";
+  // AC20: eligible is the exact complement of forced. AC17: the reason subsample is a deterministic hash of (seed, seq),
+  // decided here, before the question is shown; a surface that cannot take free text (reasonPrompt false) is left out.
+  const eligible = !choice.forced;
+  const reasonRequested = eligible && input.reasonPrompt !== false && !reasonSubsampleOff() && reasonSubsample(choice.seed, seq);
 
   const record: OpenRecord = {
     kind: "open",
@@ -70,21 +134,38 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     })),
     recommendation: recommendation === null ? null : { optionId: recommendation.optionId, reason: oneLine(recommendation.reason) },
     mode,
+    arm: choice.arm,
+    seed: choice.seed,
+    seq,
+    preselected,
+    forced: choice.forced,
+    eligible,
+    reasonRequested,
+    reasonPrompt: input.reasonPrompt !== false,
+    channel,
     order,
     showMark,
     irreversible,
     ...(tagged ? { action: input.action?.trim() ?? "" } : {}),
-    ...(wantsBlind && irreversible ? { blindRefused: true } : {}),
+    ...(blindRefused ? { blindRefused: true } : {}),
+    ...(input.source !== undefined && input.source.trim().length > 0 ? { source: oneLine(input.source) } : {}),
     ...(input.session !== undefined && input.session.length > 0 ? { session: input.session } : {}),
   };
   await appendRecord(input.cwd, record);
   return {
     id: record.id,
     mode,
+    arm: choice.arm,
+    seed: choice.seed,
+    preselected,
+    forced: choice.forced,
+    eligible,
+    reasonRequested,
+    channel,
     order,
     showMark,
     irreversible,
-    blindRefused: wantsBlind && irreversible,
+    blindRefused,
     flow: record.flow,
   };
 }
@@ -110,7 +191,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
   const hasReason = records.some((r) => r.kind === "reason" && r.id === input.id);
   const recommendedId = open.recommendation?.optionId;
   // The reason is offered once per decision: an earlier deviation already offered it.
-  const alreadyOffered = priorAnswers.some((r) => recommendedId !== undefined && r.choice !== recommendedId);
+  const alreadyOffered = priorAnswers.some((r) => (recommendedId !== undefined && r.choice !== recommendedId) || (open.reasonRequested === true && prior > 0));
   const timeToAnswerMs = Math.max(0, now.getTime() - Date.parse(open.at));
   const record: AnswerRecord = {
     kind: "answer",
@@ -140,7 +221,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
     matched,
     deviation,
     timeToAnswerMs: record.timeToAnswerMs,
-    askReason: deviation && !hasReason && !alreadyOffered,
+    askReason: (deviation || open.reasonRequested === true) && !hasReason && !alreadyOffered,
     flow: open.flow,
   };
 }

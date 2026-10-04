@@ -44,16 +44,6 @@ function clock(...isoTimes: string[]): () => Date {
   return () => new Date(isoTimes[Math.min(i++, isoTimes.length - 1)] as string);
 }
 
-function mulberry32(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 describe("AC1 and AC2: one record per question, the recommendation first", () => {
   test("open writes the question, options, recommendation, reason, mode and order; answer adds the choice and the time", async () => {
     const opened = await openDecision({
@@ -62,7 +52,7 @@ describe("AC1 and AC2: one record per question, the recommendation first", () =>
       options: OPTIONS,
       recommendation: { optionId: "a", reason: "least risk" },
       stage: "design",
-      random: () => 0.9,
+      arm: "A",
       now: clock("2026-10-02T10:00:00.000Z"),
       id: "d-1",
     });
@@ -100,7 +90,7 @@ describe("AC1 and AC2: one record per question, the recommendation first", () =>
   });
 
   test("a question without a recommendation is still recorded, and is never blind", async () => {
-    const opened = await openDecision({ cwd: root, question: "Any idea?", options: OPTIONS, random: () => 0 });
+    const opened = await openDecision({ cwd: root, question: "Any idea?", options: OPTIONS, arm: "D", random: () => 0 });
     expect(opened.mode).toBe("ordinary");
     expect(opened.showMark).toBe(false);
     expect((await readRecords(root))[0]).toMatchObject({ kind: "open", recommendation: null });
@@ -125,7 +115,7 @@ describe("AC3: blind mode", () => {
         // the question is answered "b"; the reason prompt that follows the deviation is skipped
         return request.question === "Pick" ? "b" : "skip";
       },
-      { cwd: root, notify: (text) => notes.push(text), random: sequence([0.1, 0.0, 0.0]) },
+      { cwd: root, notify: (text) => notes.push(text), arm: "D", random: sequence([0.1, 0.0, 0.0]) },
     );
     const chosen = await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) })) });
     expect(chosen).toBe("b");
@@ -151,7 +141,7 @@ describe("AC3: blind mode", () => {
         shown.push(request);
         return "a";
       },
-      { cwd: root, random: () => 0.99 },
+      { cwd: root, arm: "A" },
     );
     await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 1 ? { recommended: true } : {}) })) });
     expect(shown[0]?.options.map((o) => o.id)).toEqual(["a", "b", "c"]);
@@ -159,55 +149,54 @@ describe("AC3: blind mode", () => {
   });
 
   test("about a third of the questions are blind (seeded run)", async () => {
-    const random = mulberry32(392);
     let blind = 0;
     const runs = 900;
     for (let i = 0; i < runs; i += 1) {
-      const opened = await openDecision({ cwd: root, question: `Q${i}`, options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, random });
+      const opened = await openDecision({ cwd: root, question: `Q${i}`, options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, salt: "fixed-test-salt", seq: i + 1 });
       if (opened.mode === "blind") blind += 1;
     }
-    expect(blind / runs).toBeGreaterThan(0.28);
-    expect(blind / runs).toBeLessThan(0.39);
+    expect(blind / runs).toBeGreaterThan(0.16);
+    expect(blind / runs).toBeLessThan(0.24);
   });
 });
 
 describe("AC4: irreversible actions are never blind", () => {
   test("a release, a delete and a push are asked in the ordinary way, even when the draw says blind", async () => {
-    const draw = () => 0; // always "blind"
+    const draw = "D" as const; // always "blind"
     for (const [question, action] of [
       ["Ship version 1.4 now?", "release"],
       ["Remove the old branch?", "delete"],
       ["Push the fix to the shared repo?", undefined],
       ["Delete the cache directory?", undefined],
     ] as const) {
-      const opened = await openDecision({ cwd: root, question, options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, action, random: draw });
+      const opened = await openDecision({ cwd: root, question, options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, action, arm: draw });
       expect(opened.mode).toBe("ordinary");
       expect(opened.blindRefused).toBe(true);
       expect(opened.showMark).toBe(true);
       expect(opened.irreversible).toBe(true);
     }
-    const plain = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, random: draw });
+    const plain = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, arm: draw });
     expect(plain.mode).toBe("blind");
   });
 
   test("the config list adds actions, and cannot remove the built-in ones", async () => {
     await writeFile(path.join(root, ".metaproject", "decisions.config.json"), JSON.stringify({ irreversible: ["migrate prod"] }), "utf8");
-    const custom = await openDecision({ cwd: root, question: "Migrate prod tonight?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, random: () => 0 });
+    const custom = await openDecision({ cwd: root, question: "Migrate prod tonight?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, arm: "D", random: () => 0 });
     expect(custom.mode).toBe("ordinary");
-    const builtin = await openDecision({ cwd: root, question: "Release it?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, random: () => 0 });
+    const builtin = await openDecision({ cwd: root, question: "Release it?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, arm: "D", random: () => 0 });
     expect(builtin.mode).toBe("ordinary");
   });
 
   test("a broken config falls back to the built-in list", async () => {
     await writeFile(path.join(root, ".metaproject", "decisions.config.json"), "{ not json", "utf8");
-    const opened = await openDecision({ cwd: root, question: "Deploy now?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, random: () => 0 });
+    const opened = await openDecision({ cwd: root, question: "Deploy now?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, arm: "D", random: () => 0 });
     expect(opened.mode).toBe("ordinary");
   });
 });
 
 describe("AC5: a changed answer", () => {
   test("keeps both answers and says the second one was changed", async () => {
-    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, random: () => 0, id: "d-2", now: clock("2026-10-02T10:00:00Z") });
+    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, arm: "D", random: () => 0, id: "d-2", now: clock("2026-10-02T10:00:00Z") });
     const first = await answerDecision({ cwd: root, id: "d-2", choice: "b", now: clock("2026-10-02T10:00:05Z") });
     const second = await answerDecision({ cwd: root, id: "d-2", choice: "a", now: clock("2026-10-02T10:00:20Z") });
     expect(first.changed).toBe(false);
@@ -226,7 +215,7 @@ describe("AC5: a changed answer", () => {
 
 describe("AC6: the reason for a deviation, asked once", () => {
   test("answer says to ask, the reason is recorded, and a second ask is refused", async () => {
-    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-3", random: () => 0.9 });
+    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-3", arm: "A" });
     const answered = await answerDecision({ cwd: root, id: "d-3", choice: "c" });
     expect(answered).toMatchObject({ deviation: true, askReason: true });
     expect(await recordReason(root, "d-3", "A is too slow for this")).toBe(true);
@@ -236,7 +225,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
   });
 
   test("an empty reason is recorded as absent", async () => {
-    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-4", random: () => 0.9 });
+    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-4", arm: "A" });
     await answerDecision({ cwd: root, id: "d-4", choice: "b" });
     expect(await recordReason(root, "d-4", "   ")).toBe(true);
     const reason = (await readRecords(root)).find((r) => r.kind === "reason");
@@ -256,7 +245,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
           release = resolve;
         });
       },
-      { cwd: root, random: () => 0.9 },
+      { cwd: root, arm: "A" },
     );
     const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
     let settled = false;
@@ -286,7 +275,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
         questions.push(request.question);
         return questions.length === 1 ? "b" : "A is too slow";
       },
-      { cwd: root, random: () => 0.9 },
+      { cwd: root, arm: "A" },
     );
     const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
     expect(await ask({ question: "First?", options })).toBe("b");
@@ -305,7 +294,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
         if (calls === 2) throw new Error("prompt closed");
         return "b";
       },
-      { cwd: root, random: () => 0.9 },
+      { cwd: root, arm: "A" },
     );
     const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
     expect(await ask({ question: "First?", options })).toBe("b");
@@ -313,7 +302,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
   });
 
   test("/decisions reason can still add or change a reason later (the latest wins)", async () => {
-    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-5", random: () => 0.9 });
+    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-5", arm: "A" });
     await answerDecision({ cwd: root, id: "d-5", choice: "b" });
     await recordReason(root, "d-5", undefined);
     const added = await giveReason({ cwd: root, id: "d-5", text: "B fits the deadline" });
@@ -325,7 +314,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
 
   test("through ask_user: a followed recommendation says nothing about a reason", async () => {
     const notes: string[] = [];
-    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) });
+    const ask = journalAsk(async () => "a", { cwd: root, arm: "A", notify: (text) => notes.push(text) });
     await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) })) });
     expect(notes).toEqual([]);
   });
@@ -341,11 +330,11 @@ describe("AC7: the report is deterministic and has the pieces", () => {
       ["d-r4", "build", 0, "a", "c", 9000],
     ];
     for (const [id, stage, draw, rec, chose, ms] of plan) {
-      await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: { optionId: rec, reason: "r" }, stage, id, random: () => draw, now: clock("2026-10-02T10:00:00Z") });
+      await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: { optionId: rec, reason: "r" }, stage, id, arm: draw === 0 ? "D" : "A", now: clock("2026-10-02T10:00:00Z") });
       await answerDecision({ cwd: root, id, choice: chose, now: clock(new Date(Date.parse("2026-10-02T10:00:00Z") + ms).toISOString()) });
     }
     await recordReason(root, "d-r2", "B fits the deadline");
-    await openDecision({ cwd: root, question: "Still open", options: OPTIONS, id: "d-open", random: () => 0.9 });
+    await openDecision({ cwd: root, question: "Still open", options: OPTIONS, id: "d-open", arm: "A" });
   }
 
   test("prints the match share by mode and by stage, and the deviations with their reasons", async () => {
@@ -403,7 +392,7 @@ describe("AC9: never blocks the question; project journal and flow journal", () 
         asked += 1;
         return "b";
       },
-      { cwd: root, onNote: (text) => notes.push(text), random: () => 0 },
+      { cwd: root, onNote: (text) => notes.push(text), arm: "D", random: () => 0 },
     );
     const result = await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) })) });
     expect(result).toBe("b");
@@ -412,7 +401,7 @@ describe("AC9: never blocks the question; project journal and flow journal", () 
   });
 
   test("a question outside a flow goes to the project journal only", async () => {
-    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9 });
+    const ask = journalAsk(async () => "a", { cwd: root, arm: "A" });
     await ask({ question: "Pick", options: OPTIONS });
     expect((await readRecords(root))[0]).toMatchObject({ flow: null });
   });
@@ -420,7 +409,7 @@ describe("AC9: never blocks the question; project journal and flow journal", () 
   test("a question inside a flow is also a line in that flow's journal.md", async () => {
     const flows = createFlowService({ tracker: null, healthGate: async () => ({ status: "pass", reasons: [] }), now: () => new Date("2026-10-02T10:00:00Z") });
     const created = await flows.init({ cwd: root, title: "Journaled" });
-    const ask = journalAsk(async () => "b", { cwd: root, flow: created.flow.id, stage: "design", random: () => 0.9 });
+    const ask = journalAsk(async () => "b", { cwd: root, flow: created.flow.id, stage: "design", arm: "A" });
     await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) })) });
     const journal = await readFile(path.join(root, created.dir, "journal.md"), "utf8");
     expect(journal).toContain("decision d-");
@@ -430,13 +419,13 @@ describe("AC9: never blocks the question; project journal and flow journal", () 
   });
 
   test("a flow that does not exist does not break the answer", async () => {
-    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, flow: "9999", random: () => 0.9 });
+    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, flow: "9999", arm: "A" });
     const answered = await answerDecision({ cwd: root, id: opened.id, choice: "a" });
     expect(answered.choice).toBe("a");
   });
 
   test("a cancelled question writes no answer", async () => {
-    const ask = journalAsk(async () => "__cancel__", { cwd: root, random: () => 0.9 });
+    const ask = journalAsk(async () => "__cancel__", { cwd: root, arm: "A" });
     expect(await ask({ question: "Pick", options: OPTIONS })).toBe("__cancel__");
     expect((await readRecords(root)).map((r) => r.kind)).toEqual(["open"]);
   });

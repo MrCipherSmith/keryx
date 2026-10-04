@@ -4,7 +4,8 @@
 // shows the question it opens a journal record (so the recommendation is on disk
 // first), and in blind mode it hides the mark and shuffles the options. After the
 // answer it records the choice and reveals the recommendation. On a deviation it
-// asks the human ONCE for an optional reason and the tool result waits for it (no
+// asks the human ONCE for an optional reason (also on a deterministic one-third of the
+// other questions, whatever the answer: `reasonRequested`) and the tool result waits for it (no
 // timeout; an empty answer is recorded as absent and releases the wait): that is
 // the one deliberate wait, by operator decision. The reason can also be added or
 // changed later with `/decisions reason <why>`. A blind answer can be changed after
@@ -17,8 +18,10 @@
 // The types are structural copies of the harness' `AskUserFn`, because the core
 // zone cannot import the client zone; they are assignable both ways.
 
+import type { Arm } from "./arms";
 import { answerDecision, openDecision, recordReason } from "./journal";
 import type { FlowContext } from "./context";
+import { DECISION_SOURCES } from "./sources";
 import type { OpenResult } from "./types";
 
 export interface AskOption {
@@ -26,16 +29,26 @@ export interface AskOption {
   label: string;
   description: string;
   recommended?: boolean;
+  /**
+   * Whether the host starts with this option highlighted. Set only by the journal: true for the recommended
+   * option in arm A, false on every option in arms B, C and D (no option starts highlighted). Absent when the
+   * question was not journaled; a host then falls back to preselecting the recommended option.
+   */
+  preselected?: boolean;
 }
 
 export interface AskRequest {
   question: string;
   options: AskOption[];
+  /** One sentence on why the recommended option is recommended. Recorded in the journal; never shown before the answer. */
+  recommendationReason?: string;
   allowFreeform?: boolean;
   /** The irreversible action this question decides (release, delete, push, publish, deploy, ...). Any tag keeps the question out of blind mode. */
   action?: string;
   /** True when the question decides an irreversible action. Keeps it out of blind mode. */
   irreversible?: boolean;
+  /** The surface that asked (see `DECISION_SOURCES`); recorded as `source`. Wins over `JournalAskDeps.source`. */
+  source?: string;
 }
 
 /**
@@ -63,7 +76,16 @@ export interface JournalAskDeps {
   onDecision?: ((id: string) => void) | undefined;
   /** The session asking: recorded on every record, so `/decisions change` can be held to this session's own decisions. */
   session?: string | undefined;
+  /** Test seam: the shuffle's random source. The arm is seeded, never drawn from it. */
   random?: (() => number) | undefined;
+  /** Test seam: put the question in this arm (an irreversible one is still moved to A, forced). */
+  arm?: Arm | undefined;
+  /** Where the question is asked: "tui" when absent. */
+  channel?: string | undefined;
+  /** The surface that asked, when the request does not say ("ask_user" when absent). */
+  source?: string | undefined;
+  /** False for a picker that cannot take free text: the deviation reason is then not asked (add it with `/decisions reason`). */
+  askReason?: boolean | undefined;
   now?: (() => Date) | undefined;
 }
 
@@ -104,16 +126,38 @@ export function stripRecommendedMarks(text: string): string {
   return stripped.replace(/\s{2,}/g, " ").trim();
 }
 
+/**
+ * Arm D: no word from the `stripRecommendedMarks` list may be left anywhere in the text,
+ * not only the mark forms that function cuts ("the recommended way" would otherwise stay).
+ */
+export function scrubRecommendWords(text: string): string {
+  const word = new RegExp(RECOMMEND_WORD, "giu");
+  return stripRecommendedMarks(text).replace(word, "").replace(/\s+([,.;:!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
+}
+
 function present(request: AskRequest, opened: OpenResult): AskRequest {
   const byId = new Map(request.options.map((option) => [option.id, option]));
   const ordered = opened.order.map((id) => byId.get(id)).filter((option): option is AskOption => option !== undefined);
+  const recommendedId = request.options.find((option) => option.recommended === true)?.id;
   const options = ordered.map((option): AskOption => {
-    if (opened.showMark) return option;
-    const { recommended: _hidden, ...rest } = option;
-    const label = stripRecommendedMarks(rest.label);
-    return { ...rest, label: label.length > 0 ? label : rest.id, description: stripRecommendedMarks(rest.description) };
+    const withMark = opened.showMark
+      ? option
+      : (() => {
+          const { recommended: _hidden, ...rest } = option;
+          const label = scrubRecommendWords(rest.label);
+          return { ...rest, label: label.length > 0 ? label : rest.id, description: scrubRecommendWords(rest.description) };
+        })();
+    // arm A with a recommendation: only the recommended option starts highlighted; B, C and D: none does
+    if (recommendedId === undefined) return withMark;
+    return { ...withMark, preselected: opened.preselected && option.id === recommendedId };
   });
-  return { ...request, options };
+  const { recommendationReason: reason, ...rest } = request;
+  // the reason is for after the answer; in arm D the host gets it scrubbed of every recommend word
+  const shownReason = opened.showMark ? reason : reason === undefined ? undefined : scrubRecommendWords(reason);
+  // arm D: a mark planted in the question itself is hidden too
+  const scrubbedQuestion = opened.showMark ? rest.question : scrubRecommendWords(rest.question);
+  const question = scrubbedQuestion.length > 0 ? scrubbedQuestion : rest.question;
+  return { ...rest, question, ...(shownReason !== undefined && shownReason.length > 0 ? { recommendationReason: shownReason } : {}), options };
 }
 
 export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
@@ -133,8 +177,8 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         cwd: deps.cwd,
         question: request.question,
         options: request.options.map((option) => ({ id: option.id, label: option.label, description: option.description })),
-        // ask_user options carry a description of the option, not a reason for recommending it: no reason is recorded
-        recommendation: recommended === undefined ? undefined : { optionId: recommended.id, reason: "" },
+        // an option's description says what it is, not why it is recommended: the reason is the top-level recommendationReason
+        recommendation: recommended === undefined ? undefined : { optionId: recommended.id, reason: request.recommendationReason ?? "" },
         stage: deps.stage ?? context.stage ?? "ask_user",
         flow: deps.flow ?? context.flow,
         flowSource: deps.flow === undefined ? context.flowSource : undefined,
@@ -142,6 +186,11 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         irreversible: request.irreversible,
         session: deps.session,
         random: deps.random,
+        arm: deps.arm,
+        channel: deps.channel,
+        // a picker that cannot take free text cannot ask the reason either, so it is left out of the reason subsample
+        reasonPrompt: deps.askReason !== false,
+        source: request.source ?? deps.source ?? DECISION_SOURCES.askUser,
         now: deps.now,
       });
     } catch (cause) {
@@ -159,14 +208,19 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
       const result = await answerDecision({ cwd: deps.cwd, id: opened.id, choice: chosen, other, now: deps.now });
       deps.onDecision?.(opened.id);
       const parts: string[] = [];
-      if (result.recommendation !== null && opened.mode === "blind") {
-        const label = request.options.find((option) => option.id === result.recommendation?.optionId)?.label ?? result.recommendation.optionId;
-        const why = result.recommendation.reason.length > 0 ? `: ${result.recommendation.reason}` : "";
-        parts.push(`Blind question. The agent recommended "${label}"${why}.`);
-        parts.push(result.matched === true ? "You chose the recommended option." : "You chose differently.");
-        parts.push("To change your answer: /decisions change <option>.");
-      } else if (result.deviation) {
-        parts.push("You chose differently from the recommendation.");
+      const recommendation = result.recommendation;
+      if (recommendation !== null) {
+        const label = request.options.find((option) => option.id === recommendation.optionId)?.label ?? recommendation.optionId;
+        const why = recommendation.reason.length > 0 ? `: ${recommendation.reason}` : "";
+        if (opened.arm === "D") {
+          // arm D: the mark was hidden, so the recommendation and its reason are revealed after ANY answer
+          parts.push(`Blind question. The agent recommended "${label}"${why}.`);
+          parts.push(result.matched === true ? "You chose the recommended option." : "You chose differently.");
+          parts.push("To change your answer: /decisions change <option>.");
+        } else if (result.deviation) {
+          // every other arm: after a deviation the transcript names the recommended option and its reason
+          parts.push(`You chose differently from the recommendation. The agent recommended "${label}"${why}.`);
+        }
       }
       if (parts.length > 0) notify(deps, parts.join(" "));
       // The one deliberate wait (AC6, operator decision): after a deviation the human is asked ONCE for an
@@ -175,8 +229,9 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
       if (reasonGiven !== undefined) {
         // flow 401: the operator typed a reason with the pick, so there is nothing left to ask; the latest reason wins
         await recordReason(deps.cwd, opened.id, reasonGiven, deps.now, { replace: true });
-      } else if (result.askReason) {
-        await askReasonOnce(ask, deps, opened.id);
+      } else if (result.askReason && deps.askReason !== false) {
+        // the same prompt for a deviation and for the reason subsample (AC17): it is the flow-401 free-text row, not a second prompt
+        await askReasonOnce(ask, deps, opened.id, result.deviation);
       }
     } catch (cause) {
       note(deps, `decision journal: could not record the answer (${cause instanceof Error ? cause.message : String(cause)})`);
@@ -191,11 +246,11 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
  * it releases the wait and counts as the one ask. `/decisions reason <why>` can still
  * add or change a reason later. A failure to record is a note, never an error.
  */
-async function askReasonOnce(ask: AskFn, deps: JournalAskDeps, id: string): Promise<void> {
+async function askReasonOnce(ask: AskFn, deps: JournalAskDeps, id: string, deviation: boolean): Promise<void> {
   let text: string | undefined;
   try {
     const answer = await ask({
-      question: "You chose differently from the recommendation. Why? (optional, asked once)",
+      question: deviation ? "You chose differently from the recommendation. Why? (optional, asked once)" : "Why this choice? (optional, asked once)",
       options: [
         { id: SKIP_REASON, label: "No reason", description: "Leave it empty" },
         { id: LATER_REASON, label: "Not now", description: "Skip; you will not be asked again for this question (add one later with /decisions reason <why>)" },

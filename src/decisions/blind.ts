@@ -9,7 +9,7 @@
 import { readFile } from "node:fs/promises";
 import { configFile } from "./store";
 
-/** Probability that a question is asked blind (AC3). */
+/** Flow 392 probability that a question is asked blind. Superseded by the arm weights in arms.ts (D is 0.2 by default); kept for the exports that still name it. */
 export const BLIND_PROBABILITY = 1 / 3;
 
 /**

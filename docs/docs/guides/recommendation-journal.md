@@ -12,7 +12,7 @@ Every question with options writes one record:
 - the flow and the stage it was asked in (or no flow);
 - the question and the options, with the order they were shown in;
 - the recommendation and its reason, **written before the question is shown**;
-- the display mode: `ordinary` or `blind`;
+- the arm the question was asked in (`A`, `B`, `C` or `D`), the seed it was drawn from, whether the recommended option was preselected, where it was asked (`channel`, `tui` when absent) and the display mode (`ordinary`, `partial` or `blind`, derived from the arm);
 - your choice and the time it took you to answer;
 - a reason for deviating, when you give one.
 
@@ -30,13 +30,45 @@ flow's status.
 
 ## Blind questions
 
-One question in three is asked **blind**: the recommended option carries no
-"recommended" mark and the options come in random order. Your answer is recorded,
-and then the recommendation is revealed. This is what lets the match share mean
-something: if you only ever saw the recommendation marked, you would match it
-because it was marked.
+A question with a recommendation is asked in one of four **arms**, drawn from a
+seeded generator on the repository's salt (kept outside the repository, in
+`~/.config/keryx/decisions`, mode 0600) and the position in the journal, so an
+assignment can be replayed:
 
-A question about something on the **irreversible list** is never blind. The list has
+| Arm | Order | "Recommended" mark | Recommended option preselected | Default weight |
+| --- | --- | --- | --- | --- |
+| A | the agent's | shown | yes | 0.4 |
+| B | the agent's | shown | no | 0.2 |
+| C | shuffled | shown | no | 0.2 |
+| D (blind) | shuffled | hidden | no | 0.2 |
+
+Change the weights under `arms` in `.metaproject/decisions.config.json`, for example
+`{ "arms": { "A": 0.4, "B": 0.2, "C": 0.2, "D": 0.2 } }`. A weight is any
+non-negative number (they are normalised), and the draw stays a pure function of the
+salt and the position, so an assignment can still be replayed. A weights block that
+cannot be used (a negative or non-numeric weight, all zeros, not an object) is
+ignored: the defaults are used and the report says so in a `Config:` line. In arm D the recommended
+option carries no "recommended" mark and the options come in random order. Your
+answer is recorded, and then the recommendation is revealed. After a deviation in any
+arm the transcript names the recommended option and its reason; in arm D it does so
+after any answer. The agent gives the reason as the top-level `recommendationReason`
+of `ask_user`, and may mark at most one option recommended. This is what lets the match share mean
+something: if you only ever saw the recommendation marked, you would match it
+because it was marked. A question that carries no recommendation is always asked the ordinary way and is left out of every arm and channel cell of the report (it is still counted in the total and under "without a recommendation"), so it cannot skew the A count or its median time.
+
+### What the arm assignment protects against
+
+The salt is outside the repository (`$XDG_CONFIG_HOME/keryx/decisions`, or
+`~/.config/keryx/decisions`; one file per repository, shared by all its worktrees), so
+the agent cannot read it from the tree it works in, and asking the same unanswered
+question again returns the arm already drawn instead of drawing a new one. The
+`ask_user` description tells the agent what `irreversible` and `action` mean and
+nothing about how a question is shown. That protects against accident and casual
+steering. It does not protect against a hostile agent running as your own user: such
+an agent can read your config directory and the journal.
+
+A question about something on the **irreversible list** is never blind: it is always
+arm A, and the record says `forced: true` (every other A says `forced: false`). The list has
 two tiers, so that ordinary coding questions ("merge these two helpers", "drop an
 unused import", "remove dead code", "force a type") are not mistaken for a release:
 
@@ -85,13 +117,15 @@ risk target and a real object, such as "Merge the two date
 helpers?", is asked normally and can be blind. A question with no recommendation
 is never blind. In a blind question a mark written into a label, such as
 `(Recommended)`, `[recommended]`, `- recommended`, `Recommended:` or a star, is
-removed from what is shown.
+removed from what is shown, and in arm D so is every other use of the words
+recommend, рекоменд, preferred and suggested in a label, a description or the reason.
 
 ## Changing your mind, and giving a reason
 
 After you answer, the transcript shows the reveal and tells you what you can still
-do. The one thing the journal waits for is the reason after a deviation: when you
-chose something other than the recommendation, keryx asks you **once** why, and the
+do. The one thing the journal waits for is the reason: when you
+chose something other than the recommendation, and on a deterministic third of the
+other questions (next section), keryx asks you **once** why, and the
 tool result waits for your answer (there is no timeout). The reason is optional: an
 empty answer, "No reason" or "Not now" is recorded as absent and releases the wait,
 and you are not asked again for that decision. Nothing else waits.
@@ -151,15 +185,73 @@ What is stored:
 An own answer is never counted as following the recommendation, even when its
 words happen to equal an option's id.
 
+## A reason on one question in three
+
+Asking only after a deviation would show who explains a disagreement and never who
+explains an agreement. So a **deterministic one-third of the eligible questions**
+also asks for a reason when you *did* follow the recommendation. The subsample is a
+hash of the repository's seed and the position of the question, independent of the
+arm: it is chosen and written on the record (`reasonRequested`) **before the
+question is shown**, so the agent and you cannot tell which questions it will be:
+`keryx decisions open` does not print it either, and `keryx decisions answer` says it
+only once the choice is recorded. The prompt comes after the answer, whether or not
+the choice matched.
+
+- It is the **same prompt** as the one after a deviation: the dock's free-text row
+  from the section above (in Telegram, the same reply-to-the-message step), not a
+  second kind of prompt. Only the wording differs ("Why this choice?" instead of
+  "You chose differently from the recommendation. Why?"). A reason you already typed
+  with the pick (Tab) counts, and nothing more is asked.
+- It is asked once and is optional, like every reason.
+- A question is **eligible** (`eligible: true` on the record) unless it is
+  irreversible, an action or a match of the irreversible list (`forced: true`);
+  ineligible questions are never in the subsample. A surface that cannot take free
+  text (a plain picker) is left out of it too, and its record says so
+  (`reasonPrompt: false`): it never prompts, not even after a deviation.
+- `KERYX_DECISIONS_REASON_SUBSAMPLE=off` turns the subsample off (the tests use it);
+  a deviation is still asked. The report's settings block says so
+  (`Reason subsample: off (KERYX_DECISIONS_REASON_SUBSAMPLE)`).
+
 ## The report
 
 ```text
-keryx decisions report [--json | --line]
+keryx decisions report [--json | --line] [--exclude-legacy]
 ```
 
-It prints, from the journal alone:
+It prints, from the journal alone (plus the quality ratings, below):
 
-- the match share overall and by mode (`ordinary`, `blind`);
+- the match share overall and by mode (`ordinary`, `blind`, and `partial` for arms B and C when there are any);
+- the match share by **arm**: A, B, C and D. Arm A is shown as two rows, **A free**
+  (drawn) and **A forced** (the question looked irreversible, so it was always A).
+  A forced A was not randomized, so it is never pooled with the drawn arms;
+- the match share by **channel** (`tui`, `telegram`, ...), each channel cut by arm.
+  On `telegram` arms A and B are **one row, "A+B"**, because a poll cannot preselect
+  an option (see "What the journal does NOT measure");
+- the records from before the arms in a block of their own, **legacy** (see
+  "Importing earlier decisions"). By default they stay in the old overall and by-mode
+  totals, as before, and never appear in the arm and channel tables.
+  `--exclude-legacy` leaves them, and the imported historical records, out of every
+  number and block;
+- the share of **named reasons**, separately for agreement and for deviation. Only
+  decisions that could be asked count: a deviation asks wherever the surface can
+  prompt, so every one of those counts; an agreement only asks inside the reason
+  subsample, so only those count (the others were never asked). A deviation on a
+  surface that never prompts (a picker menu) was never asked either: it is counted
+  apart as "not asked" and stays out of the share. Next to it, the median time to
+  answer for the decisions where a reason was requested and for the rest, on the
+  `tui` channel and over the same population: eligible questions on a surface that
+  can prompt (forced irreversible questions and picker menus are in neither);
+- the **ineligible** questions (irreversible, an action or a match of the irreversible
+  list) on a line of their own, outside the arm comparison;
+- **progress** toward flow 392 AC11 (20 answered decisions, 5 of them blind) and toward
+  the per-arm threshold: reversible, answered questions with a recommendation per arm,
+  against `perArmThreshold` in `.metaproject/decisions.config.json` (150 by default,
+  a positive whole number);
+- the arm weights and the per-arm threshold in use, each saying whether it comes from
+  `decisions.config.json` or is the default, the reason subsample (on, or off through
+  `KERYX_DECISIONS_REASON_SUBSAMPLE`), and a `Config:` line naming what in
+  `decisions.config.json` could not be used and fell back to a default;
+- the recommendation-quality matrix (see "Rating the recommendation");
 - the match share by stage;
 - every deviation with its reason (`(none given)` when you gave none);
 - your own answers and typed reasons, in full (see above);
@@ -173,7 +265,9 @@ counted separately, because it was given after the reveal.
 
 In the shell the same report is `/decisions`, and the sidebar shows a
 `N decisions · /decisions` row once the journal holds a record; clicking it opens
-the report. `/decisions` works while a turn is running.
+the report. `/decisions arms` (or a click on the arms row) opens the arm summary: the
+share per arm, the reasons named, the ineligible line and the progress. `/decisions`
+works while a turn is running.
 
 ## Importing earlier decisions
 
@@ -202,9 +296,16 @@ counts. It prints `Imported: N, skipped: S, with recommendation: R, answered: A,
 deviations: D`, plus `, repaired: R` and `, malformed: M` when there are any. With
 `--json` a failure is `{"error": "..."}`.
 
-An imported decision is **backfilled**: its recommendation was written down after
-the fact, so it is never blind, its time to answer is unknown, and it stays apart
-from the live records everywhere. The report has a block "до (историческое,
+An imported decision is **backfilled** and **legacy**: its recommendation was written
+down after the fact, its time to answer is unknown, and it was not drawn by the arms.
+An ordinary record is stamped `legacy: true` and goes to arm A; a line with
+`"mode":"blind"` goes to arm D. A record that is already in the journal from before
+the arms (no `arm` field) is read the same way, so the roughly 87 pre-v2 records need
+no rewrite (the journal is append-only and is never rewritten). Running the import
+again changes nothing. The arm a legacy record carries only says how it was shown
+(marked or blind); it was **not randomized**, so the report keeps it in a "Legacy,
+before the arms" block, split by that arm, and never mixes it into the arm tables.
+It stays apart from the live records everywhere. The report has a block "до (историческое,
 дозаполнено задним числом)" with the total, the decisions that had a
 recommendation, the matches and their share, and every deviation with its reason;
 the live numbers and the median time to answer never include it, and `--json` has
@@ -222,7 +323,8 @@ three commands any agent can call:
 
 ```text
 keryx decisions open --question "<text>" --option a=<label> --option b=<label> \
-    --recommend a --reason "<why>" [--stage <name>] [--flow <id>] [--action <tag>] [--json]
+    --recommend a --reason "<why>" [--stage <name>] [--flow <id>] [--action <tag>] \
+    [--channel <name>] [--json]
 keryx decisions answer <id> --choice <id> [--reason "<why>"] [--json]
 keryx decisions reason <id> --text "<why>" [--json]
 ```
@@ -236,16 +338,90 @@ keryx decisions reason <id> --text "<why>" [--json]
    own `ask_user` waits for it; an empty answer is recorded as absent.)
 
 `--flow` and `--stage` default to what the checkout says (`KERYX_FLOW`, the
-branch, the only flow in progress). A failure here is
+branch, the only flow in progress). `--channel` says where the question is shown
+(`telegram` for a chat bridge); it is lower-cased, and a question without one is `tui`.
+A bridge that shows polls must pass `--channel telegram`: that is what lets the report
+treat arms A and B as one condition there. A failure here is
 reported on one line and never has to stop the question.
 
 keryx's own `ask_user` tool does all of this for you.
+
+## Rating the recommendation
+
+Matching the recommendation is not the same as the recommendation being good. After a
+decision is closed you can rate it:
+
+```text
+keryx decisions rate <id> good|bad|unclear [--note "<why>"] [--json]
+keryx decisions rate --blind-model --model "<label>" --model-cmd "<command>" \
+    [--since <date>] [--id <id>] [--limit <n>] [--json]
+```
+
+- `rate <id> ...` is **your** rating and the main measure. It needs a closed decision.
+- `rate --blind-model` has a model rate every closed decision that carries a
+  recommendation, in a **clean context**: the model gets only the question and the
+  options, numbered, in the order you saw them, with the recommendation mark removed
+  and no reason, no choice and no conversation history. Its pick is compared with the
+  agent's recommendation (`good` when they agree, `bad` when they do not, `unclear`
+  for no usable answer). `--model` is the label the rating is filed under;
+  `--model-cmd` is a command that reads the prompt on stdin and prints the answer
+  (for example `claude -p`). Each call is a new process, which is what makes the
+  context clean, and a rating records `cleanContext: true` only when the call really
+  carried no earlier messages. A decision already rated under the same label is
+  skipped, and imported records are left out (their recommendation was written after
+  the answer).
+
+Ratings are appended to `.metaproject/data/decisions/quality.jsonl` (mode 0600), a file
+of their own next to the journal. The report shows a matrix with your rating in the
+rows and the model's in the columns, and your rating against whether you followed the
+recommendation. Every model rating is labelled **model self-assessment**.
+
+## Exporting for analysis
+
+```text
+keryx decisions export [--since <date>] [--format jsonl|json] [--exclude-legacy]
+```
+
+One row per decision with its **structure only**: arm, seed, preselected, forced,
+legacy, channel, the display order as option positions (never ids), the position of
+the recommended and the chosen option, whether you deviated, how many times you
+changed the answer, whether the question was `eligible`, whether a reason was
+requested (`reasonRequested`) and whether one was named (`reasonNamed`, a yes or no,
+never the words), the quality ratings and the times. There is no question text, no
+option label or description, no reason and no note; the decision id is replaced by a
+short hash, and a stage, channel or model name is kept only when it is a plain
+identifier. A test plants strings in every text field and fails if one reaches the
+export, so the file can be shared without reading it first.
+
+## What the journal does NOT measure
+
+Read the numbers with these limits in mind:
+
+- **Arms A and B are indistinguishable in Telegram.** A Telegram poll cannot start with
+  an option highlighted, so a question asked there shows the "recommended" mark and
+  no preselection whichever of the two arms was drawn. The report merges A and B into
+  one "A+B" row for the `telegram` channel, and the effect of preselection can only be
+  read from the `tui` channel.
+- **Model ratings are a self-assessment by the same model.** The model that rates a
+  recommendation in a clean context is usually the model that wrote it, so it will tend
+  to agree with itself, and a clean context does not remove that. Treat the model
+  columns as a consistency check; your own rating is the measure.
+- **The legacy records are not randomized.** The roughly 87 records from before the
+  arms were shown marked, or blind, by a hand-made rule, not drawn. Their share
+  of matches cannot be compared with the randomized arms, which is why they have a
+  block of their own and why `--exclude-legacy` exists.
+- **A forced A is not randomized either.** Irreversible questions are always arm A, so
+  "A forced" is reported apart from "A free".
+- **A match is not a good recommendation.** Following the recommendation can mean the
+  recommendation was right, or only that it was marked. Only the arm comparison and
+  your rating separate the two.
 
 ## What it does not do
 
 - Journaling itself never blocks or delays a question: a journaling failure is
   shown as a one-line note in the transcript and the question goes on. The single
-  deliberate wait is the optional reason prompt after a deviation (see above).
+  deliberate wait is the optional reason prompt after a deviation, or inside the
+  one-in-three reason subsample (see above).
 - The tool-permission picker (allow / deny a tool call) is not journaled; it is
   an approval, not a question with a recommendation.
 - It judges nothing and gates nothing; the report is a mirror.

@@ -46,7 +46,7 @@ const answering = (choice: string, reason = "skip") => async (request: AskReques
 describe("F-001 / F-002: the reason is asked once and awaited; the TUI can add or change it later", () => {
   test("a deviation asks for the reason once, waits for it, and the question itself is not asked again", async () => {
     const shown: string[] = [];
-    const ask = journalAsk(async (request: AskRequest) => (shown.push(request.question), answering("b", "too slow")(request)), { cwd: root, random: () => 0.9 });
+    const ask = journalAsk(async (request: AskRequest) => (shown.push(request.question), answering("b", "too slow")(request)), { cwd: root, arm: "A" });
     expect(await ask({ question: "Pick", options: withRec() })).toBe("b");
     expect(shown).toHaveLength(2);
     expect(shown[0]).toBe("Pick");
@@ -59,7 +59,7 @@ describe("F-001 / F-002: the reason is asked once and awaited; the TUI can add o
       const dir = await mkdtemp(path.join(tmpdir(), "keryx-decisions-skip-"));
       await mkdir(path.join(dir, ".metaproject"), { recursive: true });
       try {
-        const ask = journalAsk(answering("b", reply), { cwd: dir, random: () => 0.9 });
+        const ask = journalAsk(answering("b", reply), { cwd: dir, arm: "A" });
         expect(await ask({ question: "Pick", options: withRec() })).toBe("b");
         expect((await loadReport(dir)).deviations[0]).not.toHaveProperty("reason");
         expect((await readRecords(dir)).filter((r) => r.kind === "reason")).toHaveLength(1);
@@ -71,7 +71,7 @@ describe("F-001 / F-002: the reason is asked once and awaited; the TUI can add o
 
   test("giveReason adds a reason later for the latest answered decision, and changes it (the latest wins)", async () => {
     const ids: string[] = [];
-    const ask = journalAsk(answering("b"), { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
+    const ask = journalAsk(answering("b"), { cwd: root, arm: "A", onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
     const given = await giveReason({ cwd: root, text: "B fits the deadline", lastId: ids[0] });
     expect(given).toMatchObject({ recorded: true, replaced: false });
@@ -82,7 +82,7 @@ describe("F-001 / F-002: the reason is asked once and awaited; the TUI can add o
 
   test("a reason needs text and a deviation", async () => {
     const ids: string[] = [];
-    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
+    const ask = journalAsk(async () => "a", { cwd: root, arm: "A", onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
     await expect(giveReason({ cwd: root, text: "  ", lastId: ids[0] })).rejects.toThrow(/needs some text/);
     await expect(giveReason({ cwd: root, text: "why", lastId: ids[0] })).rejects.toThrow(/no deviation/);
@@ -92,7 +92,7 @@ describe("F-001 / F-002: the reason is asked once and awaited; the TUI can add o
 describe("F-011: the answer can be changed after the reveal", () => {
   test("changeAnswer takes an option id or a label, keeps both answers, and the share counts the first", async () => {
     const ids: string[] = [];
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0, onDecision: (id) => ids.push(id) });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "D", random: () => 0, onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
     const changed = await changeAnswer({ cwd: root, choice: "option a", lastId: ids[0] });
     expect(changed).toMatchObject({ changed: true, seq: 2, choice: "a", matched: true });
@@ -105,7 +105,7 @@ describe("F-011: the answer can be changed after the reveal", () => {
 
   test("an unknown option is refused and lists the valid ones", async () => {
     const ids: string[] = [];
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "A", onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
     await expect(changeAnswer({ cwd: root, choice: "zzz", lastId: ids[0] })).rejects.toThrow(/not one of the options.*a \(Option A\)/);
   });
@@ -120,7 +120,7 @@ describe("F-003: the flow and the stage are resolved, and the journal.md line is
     expect(context.flow).toBe(created.flow.id);
     expect(context.stage).toBe(created.flow.status);
 
-    const ask = journalAsk(async () => "b", { cwd: root, context: () => resolveFlowContext(root, {}), random: () => 0.9 });
+    const ask = journalAsk(async () => "b", { cwd: root, context: () => resolveFlowContext(root, {}), arm: "A" });
     await ask({ question: "Pick", options: withRec() });
     const open = (await readRecords(root)).find((r) => r.kind === "open");
     expect(open).toMatchObject({ flow: created.flow.id, stage: created.flow.status });
@@ -176,7 +176,7 @@ describe("F-004: the irreversible list reads the options and Russian wording", (
         { id: "b", label: "Option B" },
       ],
       recommendation: REC,
-      random: () => 0,
+      arm: "D", random: () => 0,
     });
     expect(opened).toMatchObject({ mode: "ordinary", blindRefused: true });
   });
@@ -184,13 +184,13 @@ describe("F-004: the irreversible list reads the options and Russian wording", (
 
 describe("F-005: an answer must be one of the options", () => {
   test("a choice that is no option is refused and writes nothing", async () => {
-    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: REC, random: () => 0.9 });
+    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: REC, arm: "A" });
     await expect(answerDecision({ cwd: root, id: opened.id, choice: "nope" })).rejects.toThrow(/not one of the options.*a, b, c/);
     expect((await readRecords(root)).map((r) => r.kind)).toEqual(["open"]);
   });
 
   test("a free-form ask_user answer is recorded as such, and counts as a deviation", async () => {
-    const ask = journalAsk(async () => "something else entirely", { cwd: root, random: () => 0.9 });
+    const ask = journalAsk(async () => "something else entirely", { cwd: root, arm: "A" });
     await ask({ question: "Pick", options: withRec(), allowFreeform: true });
     const answer = (await readRecords(root)).find((r) => r.kind === "answer");
     expect(answer).toMatchObject({ choice: "something else entirely", other: true });
@@ -200,7 +200,7 @@ describe("F-005: an answer must be one of the options", () => {
 
 describe("F-006: a malformed record does not take the report down", () => {
   test("a malformed open is skipped and counted", async () => {
-    await openDecision({ cwd: root, question: "Fine", options: OPTIONS, recommendation: REC, id: "d-ok", random: () => 0.9 });
+    await openDecision({ cwd: root, question: "Fine", options: OPTIONS, recommendation: REC, id: "d-ok", arm: "A" });
     const file = await resolveJournalFile(root);
     const bad = [
       JSON.stringify({ kind: "open", id: "d-bad", at: "2026-10-02T10:00:00Z" }),
@@ -220,7 +220,7 @@ describe("F-006: a malformed record does not take the report down", () => {
 describe("F-007: the recorded reason is the real one, or none", () => {
   test("ask_user records no reason for the recommendation, and the reveal does not invent one", async () => {
     const notes: string[] = [];
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0, notify: (t) => notes.push(t) });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "D", random: () => 0, notify: (t) => notes.push(t) });
     await ask({ question: "Pick", options: withRec() });
     expect((await readRecords(root))[0]).toMatchObject({ recommendation: { optionId: "a", reason: "" } });
     expect(notes[0]).not.toContain("the safe one");
@@ -231,7 +231,7 @@ describe("F-008: a journaling failure is a visible note", () => {
   test("the bridge-style onNote receives the failure, and the question still returns", async () => {
     await writeFile(path.join(root, ".metaproject", "data"), "in the way", "utf8");
     const notes: string[] = [];
-    const ask = journalAsk(async () => "a", { cwd: root, onNote: (t) => notes.push(t), random: () => 0 });
+    const ask = journalAsk(async () => "a", { cwd: root, onNote: (t) => notes.push(t), arm: "D", random: () => 0 });
     expect(await ask({ question: "Pick", options: withRec() })).toBe("a");
     expect(notes[0]).toContain("decision journal: could not open a record");
   });
@@ -254,7 +254,7 @@ describe("F-009: worktrees share one journal under the main checkout", () => {
     const worktree = path.join(await realpath(tmpdir()), `keryx-decisions-wt-${Date.now()}`);
     await git(root, "worktree", "add", "-q", "-b", "side", worktree);
     try {
-      await openDecision({ cwd: worktree, question: "From the worktree", options: OPTIONS, recommendation: REC, id: "d-wt", random: () => 0.9 });
+      await openDecision({ cwd: worktree, question: "From the worktree", options: OPTIONS, recommendation: REC, id: "d-wt", arm: "A" });
       expect((await readRecords(root)).map((r) => r.id)).toEqual(["d-wt"]);
       expect(await resolveJournalFile(worktree)).toBe(await resolveJournalFile(root));
       expect(await resolveJournalFile(worktree)).toBe(journalFile(await realpath(root)));
@@ -287,11 +287,11 @@ describe("F-010: blind mode hides recommended marks written into labels", () => 
       { id: "b", label: "Option B", description: "the quick one" },
     ];
     const blindShown: AskRequest[] = [];
-    await journalAsk(async (r) => (blindShown.push(r), "a"), { cwd: root, random: () => 0 })({ question: "Pick", options: marked });
+    await journalAsk(async (r) => (blindShown.push(r), "a"), { cwd: root, arm: "D", random: () => 0 })({ question: "Pick", options: marked });
     expect(blindShown[0]?.options.map((o) => o.label).sort()).toEqual(["Option A", "Option B"]);
 
     const ordinaryShown: AskRequest[] = [];
-    await journalAsk(async (r) => (ordinaryShown.push(r), "a"), { cwd: root, random: () => 0.9 })({ question: "Pick", options: marked });
+    await journalAsk(async (r) => (ordinaryShown.push(r), "a"), { cwd: root, arm: "A" })({ question: "Pick", options: marked });
     expect(ordinaryShown[0]?.options[0]?.label).toBe("Option A (Recommended)");
   });
 });

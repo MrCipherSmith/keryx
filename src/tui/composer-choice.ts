@@ -2,16 +2,41 @@
 //
 // Permissions, wiki-enrich plans, and agent `ask_user` questions share one UI:
 // a mouse+keyboard option list with label + description, docked above the
-// input (not in the transcript). Esc returns cancelId. Recommended options are
-// marked in the label and pre-selected.
+// input (not in the transcript). Esc returns cancelId. A recommended option is
+// marked in the label; whether it is also pre-selected is a separate flag
+// (`preselected`), which the decision journal's arms vary.
 
 /** One selectable answer. */
 export interface ChoiceOption {
   id: string;
   label: string;
   description: string;
-  /** When true, label is prefixed with "(Recommended)" and pre-selected. */
+  /** When true, the label is prefixed with "(Recommended)". Preselection is separate: see `preselected`. */
   recommended?: boolean;
+  /**
+   * Whether the menu opens with this option highlighted. Absent: a recommended option is preselected (every
+   * menu that never set it behaves as before). The decision journal sets it explicitly: true on the recommended
+   * option in arm A, false on every option in arms B, C and D, where no option starts highlighted.
+   */
+  preselected?: boolean;
+}
+
+/** The label as the menu shows it: the "(Recommended)" prefix follows `recommended` only, never preselection. */
+export function choiceDisplayLabel(option: Pick<ChoiceOption, "label" | "recommended">): string {
+  return option.recommended === true ? `(Recommended) ${option.label}` : option.label;
+}
+
+/**
+ * The row highlighted when the menu opens, or -1 for none. An option with `preselected: true` wins; when every
+ * option says `preselected: false` nothing is highlighted (arms B, C and D); otherwise a recommended option
+ * is highlighted, else the first row (every menu that does not set `preselected`).
+ */
+export function initialChoiceSelection(options: ReadonlyArray<Pick<ChoiceOption, "recommended" | "preselected">>): number {
+  const preselected = options.findIndex((o) => o.preselected === true);
+  if (preselected >= 0) return preselected;
+  if (options.length > 0 && options.every((o) => o.preselected === false)) return -1;
+  const recommended = options.findIndex((o) => o.recommended === true && o.preselected !== false);
+  return recommended >= 0 ? recommended : 0;
 }
 
 /** Request shown in the composer-dock choice menu. */
@@ -254,7 +279,7 @@ function presentComposerChoice(
     const ownEnabled = request.ownAnswer !== undefined;
     const options = request.options.map((o) => ({
       ...o,
-      displayLabel: o.recommended === true ? `(Recommended) ${o.label}` : o.label,
+      displayLabel: choiceDisplayLabel(o),
     }));
     if (ownEnabled) {
       options.push({
@@ -269,8 +294,7 @@ function presentComposerChoice(
     let ownInput: InstanceType<OpenTui["InputRenderable"]> | undefined;
     let ownNote: Text | undefined;
 
-    const recommendedIdx = options.findIndex((o) => o.recommended === true);
-    let selected = recommendedIdx >= 0 ? recommendedIdx : 0;
+    let selected = initialChoiceSelection(options);
 
     dock.visible = true;
     const openedAt = Date.now();
@@ -613,7 +637,7 @@ function presentComposerChoice(
         return;
       }
       if (key.name === "up") {
-        selected = selected > 0 ? selected - 1 : options.length - 1;
+        selected = selected > 0 ? selected - 1 : options.length - 1; // from "none" (-1) this lands on the last row
         paintOptions();
         key.preventDefault();
         key.stopPropagation();

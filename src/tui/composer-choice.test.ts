@@ -7,7 +7,7 @@
 // UI callers pass `enqueue: false` to cancel immediately.
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
-import { showComposerChoice, showComposerChoiceDetailed } from "./composer-choice";
+import { choiceDisplayLabel, initialChoiceSelection, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<
@@ -282,6 +282,71 @@ otuiTest("closed dialogs release their scroll boxes (no renderer 'selection' lis
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   expect(count()).toBe(baseline);
+  h.destroy();
+});
+
+// Flow 400 AC2: the "(Recommended)" prefix follows `recommended`; preselection is a separate flag.
+const ROWS = [
+  { id: "a", label: "Alpha", description: "" },
+  { id: "b", label: "Beta", description: "" },
+  { id: "c", label: "Gamma", description: "" },
+];
+
+test("AC2: the prefix follows recommended, never preselected", () => {
+  expect(choiceDisplayLabel({ label: "Beta", recommended: true })).toBe("(Recommended) Beta");
+  expect(choiceDisplayLabel({ label: "Beta" })).toBe("Beta");
+  expect(choiceDisplayLabel({ label: "Beta", recommended: false })).toBe("Beta");
+});
+
+test("AC2: arm A preselects the recommended option", () => {
+  const options = ROWS.map((o) => ({ ...o, recommended: o.id === "b", preselected: o.id === "b" }));
+  expect(initialChoiceSelection(options)).toBe(1);
+});
+
+test("AC2: arms B and C mark the recommendation and preselect nothing", () => {
+  const options = ROWS.map((o) => ({ ...o, recommended: o.id === "b", preselected: false }));
+  expect(options.map(choiceDisplayLabel)).toEqual(["Alpha", "(Recommended) Beta", "Gamma"]);
+  expect(initialChoiceSelection(options)).toBe(-1);
+});
+
+test("AC2: arm D has no mark and nothing preselected", () => {
+  const options = ROWS.map((o) => ({ ...o, preselected: false }));
+  expect(options.map(choiceDisplayLabel)).toEqual(["Alpha", "Beta", "Gamma"]);
+  expect(initialChoiceSelection(options)).toBe(-1);
+});
+
+test("AC2: a menu that never sets preselected keeps the old behaviour", () => {
+  expect(initialChoiceSelection(ROWS.map((o) => ({ ...o, recommended: o.id === "c" })))).toBe(2);
+  const plain: ChoiceOption[] = ROWS;
+  expect(initialChoiceSelection(plain)).toBe(0);
+  expect(initialChoiceSelection([])).toBe(0);
+});
+
+otuiTest("AC2: with nothing preselected Enter answers nothing; Down then Enter picks the first row", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: string | undefined;
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Pick one",
+    cancelId: "none",
+    acceptDelayMs: 0,
+    options: [
+      { id: "a", label: "Alpha", description: "", preselected: false },
+      { id: "b", label: "Beta", description: "", recommended: true, preselected: false },
+    ],
+  }).then((id) => {
+    settled = id;
+    return id;
+  });
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("(Recommended) Beta");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(settled).toBeUndefined();
+  h.mockInput.pressArrow("down");
+  await h.flush();
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("a");
   h.destroy();
 });
 

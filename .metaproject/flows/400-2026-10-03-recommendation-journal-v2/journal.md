@@ -1,0 +1,17 @@
+# Flow Journal
+
+- 2026-10-03T19:20:13.037Z - flow created
+- 2026-10-03T19:21:16.666Z - frozen: 16 criteria; checksum recorded
+- 2026-10-03T20:10:28.959Z - started
+- 2026-10-03T20:41:08.566Z - implemented: draft PR: 875 (base: main)
+- 2026-10-03T20:50:27.705Z - task-done: T1: Collect remaining context
+- 2026-10-03T20:50:28.099Z - task-done: T2: Implement per plan
+- 2026-10-03T20:50:28.513Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-03T20:50:28.907Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-04T03:30:05.623Z - decision d-musvikwc-c87703 [review, blind]: chose all; recommended cheap
+- 2026-10-04T11:45:31.014Z - decision d-mutr656s-5b29a7 [unspecified, blind]: chose apply; followed the recommendation
+- 2026-10-04T11:45:50.331Z - ac-updated: AC17: "(new)" -> "Every eligible question whose hash of seed and seq falls in the one-third subsample gets an optional "why" prompt after the answer whether or not the choice matched the recommendation; the subsample is chosen deterministically and recorded before display (`reasonRequested`, `reason` on the record). [verify: exec `bun test src/decisions/reasons.test.ts`]" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)
+- 2026-10-04T11:45:50.816Z - ac-updated: AC18: "(new)" -> "The report and `--json` show the share of named reasons separately for agreement and deviation, and the median `timeToAnswerMs` separately for `reasonRequested` decisions; `export` carries `reasonRequested` and whether a reason was named but never the reason text. [verify: exec `bun test src/decisions/report.test.ts`]" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)
+- 2026-10-04T11:45:51.278Z - ac-updated: AC19: "(new)" -> "Arm weights are read from `.metaproject/decisions.config.json` with defaults A 0.4, B 0.2, C 0.2, D 0.2; an invalid config falls back to the defaults and the report says so; assignment stays deterministic. [verify: exec `bun test src/decisions/arms.test.ts`]" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)
+- 2026-10-04T11:45:51.734Z - ac-updated: AC20: "(new)" -> "Each record carries `eligible` (false exactly when `forced` is true); the report shows ineligible questions on a separate line outside the arm comparison; records without the field are still read. [verify: exec `bun test src/decisions/report.test.ts`]" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)
+- 2026-10-04T11:45:52.173Z - ac-updated: AC21: "(new)" -> "The report shows progress toward flow 392 AC11 (20 decisions, 5 blind) and toward the per-arm threshold (default 150 reversible questions, configurable). [verify: exec `bun test src/decisions/report.test.ts`]" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)

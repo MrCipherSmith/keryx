@@ -44,6 +44,8 @@ try {
 const root = mkdtempSync(path.join(tmpdir(), "keryx-test-config-"));
 process.env.XDG_DATA_HOME = root;
 process.env.APPDATA = root;
+// The decisions journal keeps its arm salt under `$XDG_CONFIG_HOME/keryx` (flow 400): same temp root, so no test reads or writes ~/.config.
+process.env.XDG_CONFIG_HOME = root;
 // Published through the ENVIRONMENT, not as a module export, and that is
 // load-bearing. The guard in `test-preload.test.ts` originally imported this
 // module to read the root — which executed it, set the variables, and passed
@@ -51,6 +53,14 @@ process.env.APPDATA = root;
 // mutation-checked and produced no failure at all: a guard that could not fail.
 // An env var is only present if something actually ran this file first.
 process.env.KERYX_TEST_CONFIG_ROOT = root;
+
+// The decisions journal asks for an optional reason on a deterministic third of the questions, chosen from a
+// hash of the per-repository salt (flow 400). The salt is random per fixture, so a test that expects "a followed
+// recommendation shows no prompt" would fail one run in three. Off by default here; a test of the subsample
+// itself deletes the variable (src/decisions/reasons.test.ts) and picks its draw with the `salt` and `seq` seams.
+if (process.env.KERYX_DECISIONS_REASON_SUBSAMPLE === undefined) {
+  process.env.KERYX_DECISIONS_REASON_SUBSAMPLE = "off";
+}
 
 // Default the lifecycle-hook runtime OFF for every test (flow 306, W6, T16).
 //

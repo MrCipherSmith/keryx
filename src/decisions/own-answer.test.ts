@@ -44,7 +44,7 @@ describe("AC2: an own answer is returned to the agent, as the operator's own", (
   });
 
   test("an own answer whose words equal an option id is still an own answer, not the option", async () => {
-    const ask = journalAsk(async () => ({ kind: "own", text: "a" }), { cwd: root, random: () => 0.9 });
+    const ask = journalAsk(async () => ({ kind: "own", text: "a" }), { cwd: root, random: () => 0.9, arm: "A" });
     await ask({ question: "Pick", options: OPTIONS });
     const answer = (await readRecords(root)).find((r) => r.kind === "answer");
     expect(answer).toMatchObject({ choice: "a", other: true, text: "a" });

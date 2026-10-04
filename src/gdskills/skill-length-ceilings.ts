@@ -122,7 +122,7 @@ const CEILINGS_BY_KEY = {
   "planning/docpack-orchestrator": 172,
   "planning/docpack-review": 92,
   "planning/interview": 209,
-  "planning/interviewer": 131,
+  "planning/interviewer": 129,
   "planning/patterns-researcher": 254,
   "planning/planner": 208,
   "planning/prd-creator": 210,
