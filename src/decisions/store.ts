@@ -224,6 +224,11 @@ function normalise(record: DecisionRecord): DecisionRecord {
   if (record.kind === "open" && record.recommendation !== null && !isString(record.recommendation.reason)) {
     return { ...record, recommendation: { optionId: record.recommendation.optionId, reason: "" } };
   }
+  // flow 401: a hand-edited answer whose `text` is not a string must not reach a renderer
+  if (record.kind === "answer" && record.text !== undefined && !isString(record.text)) {
+    const { text: _dropped, ...rest } = record;
+    return rest;
+  }
   return record;
 }
 

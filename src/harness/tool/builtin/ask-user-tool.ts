@@ -25,7 +25,14 @@ export interface AskUserRequest {
   irreversible?: boolean;
 }
 
-export type AskUserFn = (request: AskUserRequest) => Promise<string>;
+/**
+ * Flow 401: what the host answers with. A bare string is an option id (or typed freeform text that
+ * is no option's id), as it always was. `own` is the operator's own answer; `option` is a picked
+ * option with a typed reason. A structural copy of the decisions core's `AskAnswer`.
+ */
+export type AskUserAnswer = string | { kind: "option"; choice: string; reason?: string } | { kind: "own"; text: string };
+
+export type AskUserFn = (request: AskUserRequest) => Promise<AskUserAnswer>;
 
 /**
  * Build the `ask_user` tool. `ask` is injected by the host (TUI wires the
@@ -104,17 +111,27 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
         return { output: "ask_user: need at least 2 valid options with id+label", isError: true };
       }
       try {
-        const chosen = await ask({
+        const given = await ask({
           question,
           options,
           ...(input.allow_freeform === true ? { allowFreeform: true } : {}),
           ...(typeof input.action === "string" && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
           ...(input.irreversible === true ? { irreversible: true } : {}),
         });
+        if (typeof given !== "string" && given.kind === "own") {
+          const text = given.text.trim();
+          if (text.length === 0) return { output: "User gave an empty own answer; ask again if an answer is needed.", isError: true };
+          // said outright, so the model cannot take it for a pick: this is the operator's own answer, not one of the options
+          return { output: `User gave their OWN answer (none of the offered options): ${text}`, isError: false };
+        }
+        const chosen = typeof given === "string" ? given : given.choice;
+        const reason = typeof given !== "string" && given.reason !== undefined && given.reason.trim().length > 0 ? given.reason.trim() : undefined;
         const match = options.find((o) => o.id === chosen);
         if (match !== undefined) {
           return {
-            output: `User selected id="${match.id}" label="${match.label}"${match.recommended === true ? " (recommended)" : ""}`,
+            output:
+              `User selected id="${match.id}" label="${match.label}"${match.recommended === true ? " (recommended)" : ""}` +
+              (reason === undefined ? "" : `. The user's reason: ${reason}`),
             isError: false,
           };
         }

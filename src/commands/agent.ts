@@ -4311,7 +4311,7 @@ async function offerRoundLimitReset(
   if (deps.askUser === undefined) {
     return "cancel";
   }
-  let chosen: string;
+  let chosen: Awaited<ReturnType<AskUserFn>>;
   try {
     chosen = await deps.askUser({
       question: `Tool-loop round limit reached this turn: ${roundState.round}/${roundState.maxRounds} rounds. What should I do?`,

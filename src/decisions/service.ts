@@ -6,17 +6,17 @@ import { buildReport, renderReport, renderReportLine, type DecisionsReport } fro
 import { readJournal } from "./store";
 
 export { journalAsk } from "./ask";
-export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
+export type { AskAnswer, AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
-export type { BackfilledReport, DecisionsReport, DeviationRow, Tally, TimingStats } from "./report";
+export type { AnnotatedRow, BackfilledReport, DecisionsReport, DeviationRow, Tally, TimingStats } from "./report";
 export { importBackfill, renderImportResult } from "./import";
 export type { ImportResult } from "./import";
 export { journalFile, resolveJournalFile } from "./store";
 export { resolveFlowContext } from "./context";
 export type { FlowContext, FlowSource } from "./context";
-export { MAX_TEXT_LENGTH, oneLine } from "./text";
+export { MAX_OPERATOR_TEXT_LENGTH, MAX_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
 export type { ChangeAnswerResult, GiveReasonResult } from "./followup";
 export type {
