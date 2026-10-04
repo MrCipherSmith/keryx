@@ -7,8 +7,6 @@ import { readQuality } from "./quality";
 import { readJournal } from "./store";
 
 export { CANCEL_ANSWER, journalAsk } from "./ask";
-export { MAX_INTERVIEW_QUESTIONS, interviewPath, runInterview } from "./interviewer";
-export type { InterviewAnswer, InterviewAssumption, InterviewHost, InterviewQuestion, InterviewResult } from "./interviewer";
 export { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
 export type { DecisionSource } from "./sources";
 export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
@@ -28,7 +26,7 @@ export {
   renderQualityMatrix,
 } from "./quality";
 export type { BlindModelResult, ModelCallFn, ModelCallRequest, ModelCallResult, Quality, QualityMatrix, QualityRecord } from "./quality";
-export { buildExport, loadExport, renderExport } from "./export";
+export { buildExport, exportSummaryLine, loadExport, loadExportWithSummary, renderExport } from "./export";
 export type { ExportFormat, ExportOptions, ExportRow } from "./export";
 export { importBackfill, renderImportResult } from "./import";
 export type { ImportResult } from "./import";

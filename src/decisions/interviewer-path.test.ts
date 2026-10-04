@@ -1,118 +1,167 @@
-// Flow 400 (AC9): with a host the interviewer asks through ask_user; without one it asks no question
-// and returns NEEDS_CONTEXT with its assumptions.
-import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+// Flow 400 (AC9, review T-3): the interviewer's questions go through the recommendation journal like every other
+// work decision.
+//
+// How the interview reaches the journal in production: the interviewer skill tells the agent to ask every question
+// through the `ask_user` tool when a host can show it. The agent's roster registers that tool as
+// `createAskUserTool(journaledAskUser(cwd))` (see `buildInteractiveAgentTools`), so each question is opened in the
+// journal (source, arm, recommendation) before it is shown and the answer is recorded after. The agent does not call
+// `keryx decisions open|answer` for an interview, and no code of the repository runs a question list itself.
+//
+// This test drives that exact path: the tool name is parsed out of each SKILL.md copy, looked up in the real roster,
+// and invoked the way the model calls it. Without a host the same tool answers "cancelled", which is the skill's cue
+// to ask nothing and return NEEDS_CONTEXT with assumptions; nothing may reach the journal then.
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { CANCEL_ANSWER, type AskRequest } from "./ask";
-import { MAX_INTERVIEW_QUESTIONS, interviewPath, runInterview, type InterviewQuestion } from "./interviewer";
+import { buildInteractiveAgentTools } from "../commands/interactive-agent-tools";
+import { createDefaultSearchProviderController } from "../harness/search";
+import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { setAskUserHost } from "../tui/ask-user-bridge";
+import { DECISION_SOURCES } from "./sources";
+import { readJournal } from "./store";
+import type { AnswerRecord, OpenRecord } from "./types";
 
-function question(id: string): InterviewQuestion {
-  return {
-    id,
-    question: `Question ${id}?`,
-    options: [
-      { id: "a", label: "A", description: "first" },
-      { id: "b", label: "B", description: "second" },
-      { id: "c", label: "C", description: "third" },
-      { id: "d", label: "D", description: "other" },
-    ],
-    assumption: `assume ${id}`,
-  };
+const COPIES = ["src/gdskills/bundled/skills/planning/interviewer/SKILL.md", ".metaproject/skills/gdskills/planning/interviewer/SKILL.md"];
+const root = path.join(import.meta.dir, "..", "..");
+
+const stubSpawn: InteractiveTool = {
+  definition: { name: "spawn_subagent", description: "stub", inputSchema: { type: "object", properties: {}, additionalProperties: false }, risk: "read" },
+  invoke: async () => ({ output: "ok", isError: false }),
+};
+
+/** The section of one skill copy that states the host rule. */
+async function hostSection(copy: string): Promise<string> {
+  const text = await readFile(path.join(root, copy), "utf8");
+  const start = text.indexOf("## Host or no host");
+  const end = text.indexOf("## Question Bank");
+  expect(start, `${copy}: "## Host or no host" section`).toBeGreaterThanOrEqual(0);
+  expect(end, `${copy}: "## Question Bank" section`).toBeGreaterThan(start);
+  return text.slice(start, end);
 }
 
-describe("a host is present", () => {
-  test("every question goes through ask_user, one per call, and the answers are certain", async () => {
-    const seen: AskRequest[] = [];
-    const result = await runInterview([question("1"), question("2")], {
-      askUser: async (request) => {
-        seen.push(request);
-        return "b";
-      },
-    });
-    expect(interviewPath({ askUser: async () => "a" })).toBe("ask_user");
-    expect(seen.map((r) => r.question)).toEqual(["Question 1?", "Question 2?"]);
-    expect(result.status).toBe("READY");
-    expect(result.asked).toBe(2);
-    expect(result.answers.map((a) => [a.id, a.answer, a.confidence])).toEqual([
-      ["1", "b", "certain"],
-      ["2", "b", "certain"],
-    ]);
-    expect(result.assumptions).toEqual([]);
-  });
+/** The tool the skill tells the agent to ask through: parsed from the "Host present" line, not assumed. */
+function toolNamedBySkill(section: string, copy: string): string {
+  const line = section.split("\n").find((l) => l.startsWith("- **Host present:**"));
+  const name = line === undefined ? undefined : /ask every question through `([a-z_]+)`/.exec(line)?.[1];
+  expect(name, `${copy}: the Host present line names the tool`).toBeDefined();
+  return name ?? "";
+}
 
-  test("a cancelled answer is an assumption and ends the asking", async () => {
-    let calls = 0;
-    const result = await runInterview([question("1"), question("2"), question("3")], {
-      askUser: async () => {
-        calls += 1;
-        return calls === 1 ? "a" : CANCEL_ANSWER;
-      },
-    });
-    expect(calls).toBe(2);
-    expect(result.status).toBe("NEEDS_CONTEXT");
-    expect(result.answers.map((a) => a.id)).toEqual(["1"]);
-    expect(result.assumptions.map((a) => a.id)).toEqual(["2", "3"]);
+function rosterTool(cwd: string, name: string): InteractiveTool {
+  const tools = buildInteractiveAgentTools({
+    cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: createDefaultSearchProviderController(),
+    spawnTool: stubSpawn,
   });
+  const tool = tools.find((candidate) => candidate.definition.name === name);
+  expect(tool, `the agent roster registers a tool named "${name}"`).toBeDefined();
+  if (tool === undefined) throw new Error(`no tool ${name} in the roster`);
+  return tool;
+}
 
-  test("a failing host is not an answer either", async () => {
-    const result = await runInterview([question("1")], {
-      askUser: async () => {
-        throw new Error("no dock");
-      },
-    });
-    expect(result.status).toBe("NEEDS_CONTEXT");
-    expect(result.assumptions).toHaveLength(1);
-  });
+let cwd: string;
+const savedFlow = process.env["KERYX_FLOW"];
 
-  test(`no more than ${MAX_INTERVIEW_QUESTIONS} questions are asked`, async () => {
-    let calls = 0;
-    const questions = Array.from({ length: MAX_INTERVIEW_QUESTIONS + 2 }, (_, i) => question(String(i)));
-    const result = await runInterview(questions, {
-      askUser: async () => {
-        calls += 1;
+beforeEach(async () => {
+  cwd = await mkdtemp(path.join(tmpdir(), "keryx-interviewer-path-"));
+  await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+  delete process.env["KERYX_FLOW"];
+});
+
+afterEach(async () => {
+  setAskUserHost(undefined);
+  if (savedFlow === undefined) delete process.env["KERYX_FLOW"];
+  else process.env["KERYX_FLOW"] = savedFlow;
+  await rm(cwd, { recursive: true, force: true });
+});
+
+// An interview question as the model sends it: A/B/C/D options, one of them recommended with its reason.
+const INTERVIEW_QUESTION = {
+  question: "What is the primary trigger for this feature?",
+  options: [
+    { id: "a", label: "User request", description: "A new requirement", recommended: true },
+    { id: "b", label: "Tech debt", description: "A refactor" },
+    { id: "c", label: "Incident", description: "A bug in production" },
+    { id: "d", label: "Other", description: "Describe it" },
+  ],
+  recommendationReason: "The brief names a user request.",
+  allow_freeform: true,
+};
+
+describe("a host is present: the interviewer's question goes through ask_user into the journal", () => {
+  for (const copy of COPIES) {
+    test(`${copy}: the tool the skill names opens a journaled decision, and the answer lands`, async () => {
+      const toolName = toolNamedBySkill(await hostSection(copy), copy);
+      const shown: string[] = [];
+      setAskUserHost(async (request) => {
+        shown.push(request.question);
         return "a";
-      },
+      });
+
+      const result = await rosterTool(cwd, toolName).invoke(INTERVIEW_QUESTION);
+
+      expect(result.isError).toBe(false);
+      expect(shown).toEqual([INTERVIEW_QUESTION.question]);
+      const { records } = await readJournal(cwd);
+      const open = records.find((record): record is OpenRecord => record.kind === "open");
+      expect(open).toBeDefined();
+      expect(open?.question).toBe(INTERVIEW_QUESTION.question);
+      expect(open?.source).toBe(DECISION_SOURCES.askUser);
+      expect(["A", "B", "C", "D"]).toContain(open?.arm ?? "none");
+      expect(open?.recommendation).toEqual({ optionId: "a", reason: INTERVIEW_QUESTION.recommendationReason });
+      expect(open?.options.map((option) => option.id).sort()).toEqual(["a", "b", "c", "d"]);
+      const answer = records.find((record): record is AnswerRecord => record.kind === "answer");
+      expect(answer).toMatchObject({ id: open?.id, choice: "a" });
     });
-    expect(calls).toBe(MAX_INTERVIEW_QUESTIONS);
-    expect(result.status).toBe("NEEDS_CONTEXT");
-    expect(result.assumptions).toHaveLength(2);
+  }
+
+  test("two questions are two decisions: each is opened and answered on its own", async () => {
+    const toolName = toolNamedBySkill(await hostSection(COPIES[0] ?? ""), COPIES[0] ?? "");
+    setAskUserHost(async () => "b");
+    const tool = rosterTool(cwd, toolName);
+    await tool.invoke(INTERVIEW_QUESTION);
+    await tool.invoke({ ...INTERVIEW_QUESTION, question: "What must NOT change?" });
+    const { records } = await readJournal(cwd);
+    expect(records.filter((record) => record.kind === "open")).toHaveLength(2);
+    expect(records.filter((record) => record.kind === "answer")).toHaveLength(2);
   });
 });
 
-describe("no host", () => {
-  test("no question is asked and NEEDS_CONTEXT carries every assumption", async () => {
-    expect(interviewPath(undefined)).toBe("needs_context");
-    const result = await runInterview([question("1"), question("2")], undefined);
-    expect(result.status).toBe("NEEDS_CONTEXT");
-    expect(result.asked).toBe(0);
-    expect(result.answers).toEqual([]);
-    expect(result.assumptions).toEqual([
-      { id: "1", question: "Question 1?", assumption: "assume 1", confidence: "assumption" },
-      { id: "2", question: "Question 2?", assumption: "assume 2", confidence: "assumption" },
-    ]);
-  });
-});
+describe("no host: ask_user answers cancelled, nothing is journaled, and the skill says what to do then", () => {
+  for (const copy of COPIES) {
+    test(`${copy}: the cancel is the cue for NEEDS_CONTEXT with assumptions`, async () => {
+      const section = await hostSection(copy);
+      const toolName = toolNamedBySkill(section, copy);
+      setAskUserHost(undefined);
 
-describe("the skill states the same rule, in every copy the repo keeps", () => {
-  const COPIES = ["src/gdskills/bundled/skills/planning/interviewer/SKILL.md", ".metaproject/skills/gdskills/planning/interviewer/SKILL.md"];
-  const root = path.join(import.meta.dir, "..", "..");
+      const result = await rosterTool(cwd, toolName).invoke(INTERVIEW_QUESTION);
 
-  test("each copy names ask_user for a host, NEEDS_CONTEXT with assumptions and no question without one", async () => {
-    for (const copy of COPIES) {
-      const text = await readFile(path.join(root, copy), "utf8");
-      const section = text.slice(text.indexOf("## Host or no host"), text.indexOf("## Question Bank"));
-      expect(section, copy).toContain("Host present");
-      expect(section, copy).toContain("`ask_user`");
-      expect(section, copy).toContain("No host");
-      expect(section, copy).toContain("ask NO question");
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("cancelled");
+      expect((await readJournal(cwd)).records).toEqual([]);
+      // the skill's reaction to that answer, in its own words
+      expect(section, copy).toContain("**No host:** ask NO question");
       expect(section, copy).toContain('status: "NEEDS_CONTEXT"');
-      expect(section, copy).toContain("assumptions");
-      expect(section, copy).toContain("src/decisions/interviewer.ts");
-    }
-  });
+      expect(section, copy).toContain("`assumptions`");
+      expect(section, copy).toContain(`A cancelled or empty \`${toolName}\` answer is not an answer`);
+    });
+  }
+});
 
-  test("the copies are identical", async () => {
+describe("the skill copies", () => {
+  test("are identical", async () => {
     const [bundled, project] = await Promise.all(COPIES.map((copy) => readFile(path.join(root, copy), "utf8")));
     expect(project).toBe(bundled);
+  });
+
+  test("point at this test, not at code no production path calls", async () => {
+    for (const copy of COPIES) {
+      const text = await readFile(path.join(root, copy), "utf8");
+      expect(text, copy).toContain("src/decisions/interviewer-path.test.ts");
+      expect(text, copy).not.toContain("runInterview");
+    }
   });
 });

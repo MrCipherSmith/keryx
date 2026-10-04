@@ -97,11 +97,44 @@ describe("AC10: --channel is recorded and the report cuts by it, merging A and B
     expect(text).toContain("Channel tui:");
   });
 
-  test("the channel cut does not change the cut by arm: B on telegram is still counted in arm B", async () => {
+  test("the headline arm table covers the tui channel only; telegram is in its own cut", async () => {
     await decide("B", { channel: "telegram", follow: true });
     await decide("B", { follow: false });
     const result = await report();
-    expect(result.byArm.B).toMatchObject({ decisions: 2, answered: 2, tally: { answered: 2, matched: 1 } });
+    expect(result.headlineChannel).toBe("tui");
+    expect(result.byArm.B).toMatchObject({ decisions: 1, answered: 1, tally: { answered: 1, matched: 0 } });
+    expect(result.byChannel.find((c) => c.channel === "telegram")?.rows[0]?.row).toMatchObject({ decisions: 1, tally: { answered: 1, matched: 1 } });
+    const text = renderReport(result);
+    expect(text).toContain("By arm, channel tui only");
+    expect(text).toContain("Channel telegram:");
+  });
+
+  test("a telegram A with a very different time to answer does not move the headline A median or share", async () => {
+    const answerAt = async (arm: Arm, channel: string | undefined, ms: number, follow: boolean): Promise<void> => {
+      counter += 1;
+      const id = `m-${counter}`;
+      const at = new Date(Date.UTC(2026, 9, 3, 12, counter, 0));
+      await openDecision({ cwd: root, id, question: `Median ${counter}?`, options: OPTIONS, recommendation: { optionId: "o0", reason: "simplest" }, arm, salt: "test-salt", seq: counter, ...(channel === undefined ? {} : { channel }), now: () => at });
+      await answerDecision({ cwd: root, id, choice: follow ? "o0" : "o1", now: () => new Date(at.getTime() + ms) });
+    };
+    await answerAt("A", undefined, 4000, true);
+    await answerAt("A", undefined, 6000, false);
+    const before = await report();
+    expect(before.armA.free).toMatchObject({ decisions: 2, medianMs: 5000, tally: { answered: 2, matched: 1 } });
+
+    await answerAt("A", "telegram", 600_000, true);
+    const after = await report();
+    expect(after.armA.free).toEqual(before.armA.free);
+    expect(after.byArm.A).toEqual(before.byArm.A);
+    expect(after.byChannel.find((c) => c.channel === "telegram")?.rows[0]).toMatchObject({ key: "A+B", row: { decisions: 1, medianMs: 600_000 } });
+    expect(renderReport(after)).toMatch(/A free\s+2 decisions, 2 answered, match 50% \(1\/2\), median 5\.0s/);
+  });
+
+  test("a journal with only telegram records still prints its channel cut under an empty headline", async () => {
+    await decide("C", { channel: "telegram", follow: true });
+    const text = renderReport(await report());
+    expect(text).toContain("none yet on tui");
+    expect(text).toContain("Channel telegram:");
   });
 
   test("the report loaded from disk carries the same channel rows", async () => {

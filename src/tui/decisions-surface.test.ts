@@ -273,6 +273,25 @@ test("armsSummaryText: the table, the A split, and `-` where no answered decisio
   expect(text).toContain("A forced (irreversible)");
 });
 
+test("the arms modal is labelled with the one channel its table covers and shows the other channels apart", () => {
+  const withChannels = {
+    ...ARM_REPORT,
+    headlineChannel: "tui",
+    byChannel: [
+      { channel: "telegram", rows: [{ key: "A+B", label: "A+B (mark, no preselection)", row: cell(4, 4, 3, 60_000) }] },
+      { channel: "tui", rows: [{ key: "A-free", label: "A (free)", row: cell(7, 6, 5) }] },
+    ],
+  };
+  const summary = summarizeArms(withChannels);
+  expect(summary.channel).toBe("tui");
+  expect(summary.channels.map((entry) => entry.channel)).toEqual(["telegram"]);
+  const text = armsSummaryText(summary);
+  expect(text).toContain("Recommendation arms (randomized decisions, tui channel only)");
+  expect(text).toContain("Channel telegram:");
+  expect(text).toMatch(/A\+B \(mark, no preselection\)\s+4\s+3\/4\s+75%\s+1m/);
+  expect(text).not.toContain("Channel tui:");
+});
+
 test("without the new fields the summary falls back to the older modes and says so, never throws", () => {
   const modes = { byMode: { ordinary: { answered: 4, matched: 3 }, partial: { answered: 0, matched: 0 }, blind: { answered: 2, matched: 1 } } };
   const summary = summarizeArms(modes);

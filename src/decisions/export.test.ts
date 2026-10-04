@@ -2,15 +2,15 @@
 // strings in every free-text field a record can carry and asserts none of them reaches the output,
 // not through the options and not through `order` (which holds ids, so it is turned into positions).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { decisionsCommand } from "../commands/decisions";
-import { EXPORT_FIELDS, buildExport, exportRef, loadExport, renderExport, type ExportRow } from "./export";
+import { EXPORT_CHANNELS, EXPORT_FIELDS, EXPORT_STAGES, MODEL_ID, buildExport, buildExportWithSummary, exportRef, exportSummaryLine, loadExport, loadExportWithSummary, renderExport, type ExportRow } from "./export";
 import { importBackfill } from "./import";
 import { answerDecision, openDecision, recordReason } from "./journal";
-import { rateBlindModel, rateDecision } from "./quality";
-import { readRecords } from "./store";
+import { rateBlindModel, rateDecision, type QualityRecord } from "./quality";
+import { decisionsDir, journalFile, readRecords } from "./store";
 import type { DecisionRecord, OpenRecord } from "./types";
 
 let root: string;
@@ -213,5 +213,175 @@ describe("AC14: what the export does carry", () => {
     const rows = await loadExport(root);
     expect(renderExport(rows, "jsonl").split("\n")).toHaveLength(1);
     expect(JSON.parse(renderExport(rows, "json"))).toHaveLength(1);
+  });
+});
+
+// --- review S-2 and T-7: the allow-list is enforced at run time, and a closed vocabulary is not "identifier-shaped" ---
+
+const SECRET_ID = "sk_live_abc123XYZ";
+
+function openLine(id: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    kind: "open",
+    id,
+    at: "2026-10-03T10:00:00.000Z",
+    flow: "400",
+    stage: "review",
+    question: "Q?",
+    options: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+    recommendation: { optionId: "a", reason: "r" },
+    mode: "ordinary",
+    order: ["a", "b"],
+    showMark: true,
+    irreversible: false,
+    arm: "B",
+    seed: 7,
+    preselected: false,
+    channel: "tui",
+    ...extra,
+  };
+}
+
+const answerLine = (id: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
+  kind: "answer",
+  id,
+  at: "2026-10-03T10:00:04.000Z",
+  seq: 1,
+  choice: "a",
+  timeToAnswerMs: 4000,
+  changed: false,
+  ...extra,
+});
+
+describe("T-7: stage, channel and model are exported only from a closed vocabulary", () => {
+  test("an identifier-shaped secret in stage, channel and model is exported as other", () => {
+    const rows = buildExport(
+      [openLine(SECRET_ID, { stage: SECRET_ID, channel: SECRET_ID }) as unknown as OpenRecord],
+      [{ seq: 1, decisionId: SECRET_ID, rater: "model", quality: "good", model: SECRET_ID, at: "2026-10-03T12:00:00.000Z" }],
+    );
+    expect(rows[0]).toMatchObject({ stage: "other", channel: "other" });
+    expect(rows[0]?.ratings[0]?.model).toBe("other");
+    expect(renderExport(rows)).not.toContain(SECRET_ID);
+    expect(renderExport(rows).toLowerCase()).not.toContain(SECRET_ID.toLowerCase());
+  });
+
+  test("the known vocabulary passes through and a model id of the conservative shape is kept", () => {
+    const rows = buildExport(
+      [openLine("v1", { stage: "implement", channel: "Telegram" }) as unknown as OpenRecord, openLine("v2", { stage: "ask_user", channel: undefined }) as unknown as OpenRecord],
+      [{ seq: 1, decisionId: "v1", rater: "model", quality: "bad", model: "claude-opus-5.5", at: "2026-10-03T12:00:00.000Z" }],
+    );
+    expect(rows.map((r) => [r.stage, r.channel])).toEqual([
+      ["implement", "telegram"],
+      ["ask_user", "tui"],
+    ]);
+    expect(rows[0]?.ratings[0]?.model).toBe("claude-opus-5.5");
+  });
+
+  test("a model label that is too long, upper-case or has other characters is other", () => {
+    for (const model of ["Claude-Opus", "m_1", "x".repeat(41), "has space", ""]) {
+      expect(MODEL_ID.test(model)).toBe(false);
+    }
+  });
+
+  test("87 records with hostile free text in every string field leak none of it", () => {
+    const records: DecisionRecord[] = [];
+    const ratings: QualityRecord[] = [];
+    const tokens: string[] = [];
+    for (let i = 0; i < 87; i += 1) {
+      const t = (field: string): string => {
+        const token = `HOSTILE-${field}-${i}-sk_live_abc123XYZ`;
+        tokens.push(token);
+        return token;
+      };
+      const id = t("id");
+      records.push(
+        openLine(id, {
+          flow: t("flow"),
+          stage: t("stage"),
+          question: t("question"),
+          options: [{ id: t("optid-a"), label: t("label-a"), description: t("desc-a") }, { id: t("optid-b"), label: t("label-b") }],
+          recommendation: { optionId: t("recommended"), reason: t("reason") },
+          order: [t("order-a"), t("order-b")],
+          channel: t("channel"),
+          source: t("source"),
+          session: t("session"),
+          action: t("action"),
+          arm: (["A", "B", "C", "D"] as const)[i % 4],
+        }) as unknown as OpenRecord,
+        answerLine(id, { choice: t("choice"), other: i % 2 === 0 }) as unknown as DecisionRecord,
+        { kind: "reason", id, at: "2026-10-03T10:01:00.000Z", reason: t("human-reason") },
+      );
+      ratings.push({ seq: 1, decisionId: id, rater: i % 2 === 0 ? "human" : "model", quality: "good", note: t("note"), model: t("model"), at: "2026-10-03T12:00:00.000Z" });
+    }
+    const { rows, summary } = buildExportWithSummary(records, ratings);
+    expect(rows).toHaveLength(87);
+    expect(summary).toEqual({ rows: 87, skipped: 0, blanked: 0 });
+    for (const text of [renderExport(rows, "jsonl"), renderExport(rows, "json")]) {
+      for (const token of tokens) expect(text).not.toContain(token);
+      for (const piece of ["HOSTILE", "sk_live", "abc123", "XYZ"]) expect(text).not.toContain(piece);
+    }
+    // every string left in a row is one of the closed values, a timestamp or a hash
+    const allowed = (key: string, value: string): boolean =>
+      key === "ref" ? /^[0-9a-f]{12}$/.test(value) : key === "stage" ? EXPORT_STAGES.includes(value) : key === "channel" ? EXPORT_CHANNELS.includes(value) : key === "model" ? value === "other" || MODEL_ID.test(value) : key === "arm" ? /^[ABCD]$/.test(value) : key === "rater" ? /^(human|model)$/.test(value) : key === "quality" ? /^(good|bad|unclear)$/.test(value) : /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(value);
+    const walk = (key: string, value: unknown): void => {
+      if (typeof value === "string") expect([key, allowed(key, value)]).toEqual([key, true]);
+      else if (Array.isArray(value)) for (const item of value) walk(key, item);
+      else if (value !== null && typeof value === "object") for (const [k, v] of Object.entries(value)) walk(k, v);
+    };
+    for (const row of rows) walk("row", row);
+  });
+});
+
+describe("S-2: every exported field is validated at run time", () => {
+  test("a hand-edited journal line with prose in at, seed, timeToAnswerMs and arm exports no prose", async () => {
+    await mkdir(decisionsDir(root), { recursive: true });
+    const lines = [
+      openLine("edited-1", { at: "PROSE-in-the-timestamp, call me", seed: "PROSE-seed", preselected: "PROSE-flag", forced: "PROSE-forced" }),
+      answerLine("edited-1", { at: "PROSE-answered-at", timeToAnswerMs: "PROSE-time" }),
+      openLine("edited-2", { arm: "PROSE-arm" }),
+      answerLine("edited-2"),
+      openLine("fine-1"),
+      answerLine("fine-1"),
+    ];
+    await appendFile(journalFile(root), `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`);
+    const { rows, summary } = await loadExportWithSummary(root);
+    const text = renderExport(rows, "jsonl");
+    expect(text).not.toContain("PROSE");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ ref: exportRef("edited-1"), openedAt: null, seed: null, preselected: null, answeredAt: null, timeToAnswerMs: null, forced: false, answered: true });
+    expect(rows[1]).toMatchObject({ ref: exportRef("fine-1"), openedAt: "2026-10-03T10:00:00.000Z", seed: 7, timeToAnswerMs: 4000 });
+    // edited-1: openedAt, seed, preselected, answeredAt, timeToAnswerMs blanked; edited-2: skipped for its arm
+    expect(summary).toEqual({ rows: 2, skipped: 1, blanked: 5 });
+    expect(exportSummaryLine(summary)).toBe("Export: 2 decisions, 1 skipped, 5 invalid fields blanked.");
+  });
+
+  test("numbers must be finite and non-negative integers where they count; timestamps ISO-8601 UTC; enums closed", () => {
+    const rows = buildExport(
+      [
+        openLine("n1", { seed: -3 }) as unknown as OpenRecord,
+        openLine("n2", { seed: 1.5 }) as unknown as OpenRecord,
+        openLine("n3", { seed: Number.POSITIVE_INFINITY }) as unknown as OpenRecord,
+        openLine("n4", { at: "2026-10-03 10:00:00" }) as unknown as OpenRecord,
+        openLine("n5", { at: "2026-10-03T10:00:00+02:00" }) as unknown as OpenRecord,
+        answerLine("n1", { timeToAnswerMs: -1 }) as unknown as DecisionRecord,
+        answerLine("n2", { timeToAnswerMs: Number.NaN }) as unknown as DecisionRecord,
+        openLine("n6", { seed: 0 }) as unknown as OpenRecord,
+        answerLine("n6", { timeToAnswerMs: 0 }) as unknown as DecisionRecord,
+      ],
+      [
+        { seq: 1, decisionId: "n6", rater: "model", quality: "good", cleanContext: "yes" as unknown as boolean, modelAgree: true, at: "yesterday" },
+        { seq: 2, decisionId: "n6", rater: "robot" as unknown as "human", quality: "good", at: "2026-10-03T12:00:00.000Z" },
+        { seq: 3, decisionId: "n6", rater: "human", quality: "great" as unknown as "good", at: "2026-10-03T12:00:00.000Z" },
+      ],
+    );
+    expect(rows.map((r) => r.seed)).toEqual([null, null, null, 7, 7, 0]);
+    expect(rows.map((r) => r.openedAt)).toEqual(["2026-10-03T10:00:00.000Z", "2026-10-03T10:00:00.000Z", "2026-10-03T10:00:00.000Z", null, null, "2026-10-03T10:00:00.000Z"]);
+    expect(rows.map((r) => r.timeToAnswerMs)).toEqual([null, null, null, null, null, 0]);
+    expect(rows[5]?.ratings).toEqual([{ rater: "model", quality: "good", modelAgree: true, at: null }]);
+  });
+
+  test("--since leaves out a record whose time cannot be read", () => {
+    const rows = buildExport([openLine("s1", { at: "PROSE" }) as unknown as OpenRecord, openLine("s2") as unknown as OpenRecord], [], { since: new Date("2026-10-01T00:00:00Z") });
+    expect(rows.map((r) => r.ref)).toEqual([exportRef("s2")]);
   });
 });

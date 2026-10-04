@@ -115,9 +115,11 @@ export interface DecisionsReport {
   inferredFlow: number;
   timing: TimingStats;
   backfilled: BackfilledReport;
-  /** Flow 400: the randomized records (legacy left out) by arm. A is the sum of the free and the forced rows below. */
+  /** The one channel the headline `byArm` and `armA` cover (the TUI channel). Every other channel is in `byChannel`. */
+  headlineChannel: string;
+  /** Flow 400: the randomized records (legacy left out) of the headline channel only, by arm. A is the sum of the free and the forced rows below. */
   byArm: Record<Arm, ArmRow>;
-  /** Arm A split by why it is A: drawn (free) or forced because the question is irreversible, an action or matched blind.ts. */
+  /** Arm A of the headline channel split by why it is A: drawn (free) or forced because the question is irreversible, an action or matched blind.ts. */
   armA: { free: ArmRow; forced: ArmRow };
   /** The randomized records cut by channel; on "telegram" arms A and B are one row. */
   byChannel: ChannelReport[];
@@ -204,6 +206,13 @@ function armRow(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerRec
 
 const channelOf = (open: OpenRecord): string => (open.channel === undefined || open.channel.trim().length === 0 ? "tui" : open.channel.trim().toLowerCase());
 
+/**
+ * The channel the headline arm table covers. A typed answer on Telegram and a pick in the TUI picker are different
+ * conditions, so pooling them would mix two ways of answering into one median and one share: the other channels
+ * are reported in their own cut.
+ */
+export const HEADLINE_CHANNEL = "tui";
+
 /** Telegram polls cannot preselect an option, so arms A (preselected) and B (not) are the same condition there. */
 export const MERGES_A_AND_B = "telegram";
 
@@ -280,6 +289,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
   // the arm cells compare how a recommendation was put: a question without one is always arm A (nothing to
   // hide, order or preselect), so it would only skew the A counts and times. It stays in `withoutRecommendation`.
   const compared = randomized.filter((open) => open.recommendation !== null);
+  const headline = compared.filter((open) => channelOf(open) === HEADLINE_CHANNEL);
   const channels = [...new Set(compared.map(channelOf))].sort();
   const known = new Map<string, boolean | null>();
   for (const open of kept) {
@@ -301,10 +311,11 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
     inferredFlow: live.filter((open) => open.flow !== null && open.flowSource === "inferred").length,
     timing: { answered: 0, medianMs: null },
     backfilled: buildBackfilled(history, firstAnswer, reasons),
-    byArm: Object.fromEntries(ARMS.map((arm) => [arm, armRow(compared.filter((open) => effectiveArm(open) === arm), firstAnswer)])) as Record<Arm, ArmRow>,
+    headlineChannel: HEADLINE_CHANNEL,
+    byArm: Object.fromEntries(ARMS.map((arm) => [arm, armRow(headline.filter((open) => effectiveArm(open) === arm), firstAnswer)])) as Record<Arm, ArmRow>,
     armA: {
-      free: armRow(compared.filter((open) => effectiveArm(open) === "A" && open.forced !== true), firstAnswer),
-      forced: armRow(compared.filter((open) => effectiveArm(open) === "A" && open.forced === true), firstAnswer),
+      free: armRow(headline.filter((open) => effectiveArm(open) === "A" && open.forced !== true), firstAnswer),
+      forced: armRow(headline.filter((open) => effectiveArm(open) === "A" && open.forced === true), firstAnswer),
     },
     byChannel: channels.map((channel) => ({ channel, rows: channelRows(compared.filter((open) => channelOf(open) === channel), channel, firstAnswer) })),
     legacy: excludeLegacy ? buildLegacy([], firstAnswer) : buildLegacy(live.filter((open) => isLegacy(open)), firstAnswer),
@@ -397,16 +408,21 @@ function rowText(row: ArmRow): string {
 }
 
 function renderArms(report: DecisionsReport): string[] {
+  const channel = oneLine(report.headlineChannel, 40);
   const randomized = ARMS.reduce((sum, arm) => sum + report.byArm[arm].decisions, 0);
-  const lines = [`By arm (${randomized} randomized decision${randomized === 1 ? "" : "s"}, first answer; legacy records are not in this table):`];
-  if (randomized === 0) return [...lines, "  (none yet)"];
-  lines.push(`  A free    ${rowText(report.armA.free)}`);
-  lines.push(`  A forced  ${rowText(report.armA.forced)}  (irreversible, an action or a blind.ts match: not randomized)`);
-  for (const arm of ["B", "C", "D"] as const) lines.push(`  ${arm}         ${rowText(report.byArm[arm])}`);
-  for (const channel of report.byChannel) {
-    lines.push("", `Channel ${oneLine(channel.channel, 40)}:`);
-    for (const row of channel.rows) lines.push(`  ${row.label.padEnd(30)} ${rowText(row.row)}`);
-    if (channel.channel === MERGES_A_AND_B) lines.push("  (Telegram polls cannot preselect an option, so arms A and B are one condition here)");
+  const lines = [`By arm, channel ${channel} only (${randomized} randomized decision${randomized === 1 ? "" : "s"}, first answer; legacy records are not in this table):`];
+  if (randomized === 0 && report.byChannel.length === 0) return [...lines, "  (none yet)"];
+  if (randomized === 0) {
+    lines.push(`  (none yet on ${channel}; the other channels are cut below)`);
+  } else {
+    lines.push(`  A free    ${rowText(report.armA.free)}`);
+    lines.push(`  A forced  ${rowText(report.armA.forced)}  (irreversible, an action or a blind.ts match: not randomized)`);
+    for (const arm of ["B", "C", "D"] as const) lines.push(`  ${arm}         ${rowText(report.byArm[arm])}`);
+  }
+  for (const entry of report.byChannel) {
+    lines.push("", `Channel ${oneLine(entry.channel, 40)}:`);
+    for (const row of entry.rows) lines.push(`  ${row.label.padEnd(30)} ${rowText(row.row)}`);
+    if (entry.channel === MERGES_A_AND_B) lines.push("  (Telegram polls cannot preselect an option, so arms A and B are one condition here)");
   }
   return lines;
 }

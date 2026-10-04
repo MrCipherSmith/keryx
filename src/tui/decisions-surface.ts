@@ -127,12 +127,21 @@ export interface ArmsSummaryRow {
   medianMs: number | null;
 }
 
+export interface ArmsSummaryChannel {
+  channel: string;
+  rows: ArmsSummaryRow[];
+}
+
 export interface ArmsSummary {
   /** "arms": the report carries the four arms; "modes": only the older three modes were available. */
   basis: "arms" | "modes";
+  /** The one channel `rows` and `armA` cover: a typed answer on Telegram is never pooled with a TUI pick. */
+  channel: string;
   rows: ArmsSummaryRow[];
   /** Arm A split by why it is A (drawn or forced), when the report has the split. */
   armA: ArmsSummaryRow[];
+  /** The other channels, each in its own cut (Telegram has arms A and B merged into one row). */
+  channels: ArmsSummaryChannel[];
 }
 
 function nonNegative(value: unknown): number {
@@ -171,17 +180,36 @@ const MODE_LABELS: ReadonlyArray<readonly [string, string]> = [
 
 /** Cut a report into the arm table. Accepts anything: a missing field is an empty cell, never an error. */
 export function summarizeArms(report: unknown): ArmsSummary {
-  const r = (report ?? {}) as { byArm?: Record<string, unknown>; armA?: { free?: unknown; forced?: unknown }; byMode?: Record<string, unknown> };
+  const r = (report ?? {}) as {
+    byArm?: Record<string, unknown>;
+    armA?: { free?: unknown; forced?: unknown };
+    byMode?: Record<string, unknown>;
+    headlineChannel?: unknown;
+    byChannel?: unknown;
+  };
+  const channel = typeof r.headlineChannel === "string" && r.headlineChannel.length > 0 ? oneLine(r.headlineChannel, 40) : "tui";
+  const channels: ArmsSummaryChannel[] = [];
+  if (Array.isArray(r.byChannel)) {
+    for (const entry of r.byChannel as unknown[]) {
+      const e = (entry ?? {}) as { channel?: unknown; rows?: unknown };
+      if (typeof e.channel !== "string" || e.channel === channel || !Array.isArray(e.rows)) continue;
+      const rows = (e.rows as unknown[]).map((row) => {
+        const x = (row ?? {}) as { key?: unknown; label?: unknown; row?: unknown };
+        return cellRow(typeof x.key === "string" ? x.key : "?", typeof x.label === "string" ? oneLine(x.label, 40) : "?", x.row);
+      });
+      channels.push({ channel: oneLine(e.channel, 40), rows });
+    }
+  }
   if (r.byArm !== undefined && r.byArm !== null && typeof r.byArm === "object") {
     const byArm = r.byArm;
     const armA: ArmsSummaryRow[] = [];
     if (r.armA !== undefined && r.armA !== null && typeof r.armA === "object") {
       armA.push(cellRow("A-free", "A drawn", r.armA.free), cellRow("A-forced", "A forced (irreversible)", r.armA.forced));
     }
-    return { basis: "arms", rows: ARMS.map((arm) => cellRow(arm, armLabel(arm), byArm[arm])), armA };
+    return { basis: "arms", channel, rows: ARMS.map((arm) => cellRow(arm, armLabel(arm), byArm[arm])), armA, channels };
   }
   const byMode = r.byMode ?? {};
-  return { basis: "modes", rows: MODE_LABELS.map(([key, label]) => cellRow(key, label, { tally: byMode[key] })), armA: [] };
+  return { basis: "modes", channel, rows: MODE_LABELS.map(([key, label]) => cellRow(key, label, { tally: byMode[key] })), armA: [], channels: [] };
 }
 
 function pct(share: number | null): string {
@@ -202,12 +230,13 @@ function armsTableLine(row: ArmsSummaryRow, labelWidth: number): string {
 
 /** The modal body: the arm table, the A split when the report has it, and a plain note when it degraded. */
 export function armsSummaryText(summary: ArmsSummary): string {
-  const rows = [...summary.rows, ...summary.armA];
+  const rows = [...summary.rows, ...summary.armA, ...summary.channels.flatMap((entry) => entry.rows)];
   const width = Math.max(...rows.map((row) => row.label.length));
   const header = ["arm".padEnd(width), "asked".padStart(5), "matched".padStart(7), "share".padStart(5)].join("  ") + "  median";
-  const lines = [summary.basis === "arms" ? "Recommendation arms (randomized decisions)" : "Recommendation modes (no per-arm data in this report)", "", header];
+  const lines = [summary.basis === "arms" ? `Recommendation arms (randomized decisions, ${summary.channel} channel only)` : "Recommendation modes (no per-arm data in this report)", "", header];
   lines.push(...summary.rows.map((row) => armsTableLine(row, width)));
   if (summary.armA.length > 0) lines.push("", "Arm A, split:", ...summary.armA.map((row) => armsTableLine(row, width)));
+  for (const entry of summary.channels) lines.push("", `Channel ${entry.channel}:`, ...entry.rows.map((row) => armsTableLine(row, width)));
   lines.push("", "share = first answers that matched the recommendation, out of the answered ones that had one.");
   if (summary.basis === "modes") lines.push("The per-arm split (A, B, C, D) needs a journal report with arm data; the older modes are shown instead.");
   return lines.join("\n");

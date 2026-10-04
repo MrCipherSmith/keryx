@@ -27,7 +27,8 @@ import {
   commandModelCall,
   importBackfill,
   isQuality,
-  loadExport,
+  exportSummaryLine,
+  loadExportWithSummary,
   openDecision,
   rateBlindModel,
   rateDecision,
@@ -215,7 +216,7 @@ async function runRate(args: string[]): Promise<void> {
       return;
     }
     console.log(`${MODEL_LABEL}: rated ${result.rated.length}, skipped ${result.skipped.length} (clean context: ${result.rated.filter((r) => r.cleanContext === true).length} of ${result.rated.length})`);
-    for (const rating of result.rated) console.log(`  ${rating.decisionId}: ${rating.quality}${rating.modelAgree === true ? " (the model chose the recommended option)" : ""}`);
+    for (const rating of result.rated) console.log(`  ${rating.decisionId}: ${rating.unusable === true ? "unusable reply (not counted)" : rating.quality}${rating.modelAgree === true ? " (the model chose the recommended option)" : ""}`);
     for (const skip of result.skipped) console.log(`  skipped ${skip.id}: ${skip.reason}`);
     return;
   }
@@ -237,9 +238,10 @@ async function runExport(args: string[]): Promise<void> {
   rejectUnknownFlags("export", args, EXPORT_FLAGS);
   const format = optionValue(args, "--format") ?? "jsonl";
   if (format !== "jsonl" && format !== "json") throw new Error(`keryx decisions export: --format must be jsonl or json, not "${format}"`);
-  const rows = await loadExport(process.cwd(), { since: parseSince(args, "export"), excludeLegacy: args.includes("--exclude-legacy") });
+  const { rows, summary } = await loadExportWithSummary(process.cwd(), { since: parseSince(args, "export"), excludeLegacy: args.includes("--exclude-legacy") });
   const text = renderExport(rows, format);
   if (text.length > 0) console.log(text);
+  console.error(exportSummaryLine(summary));
 }
 
 async function runReport(args: string[]): Promise<void> {
