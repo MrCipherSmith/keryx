@@ -400,7 +400,7 @@ import { SubagentSessionStore } from "./subagent-session";
 // Flow 176 T18 — the external-agent operator loop. Everything but the four call
 // sites below lives in `external-operator.ts`; this file only constructs it,
 // attaches it, routes a sidebar click and dispatches `/delegate`.
-import { attachExternalOperator, type ExternalOperator } from "./external-operator";
+import { attachExternalOperator, delegateReport, type ExternalOperator } from "./external-operator";
 import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
@@ -4639,14 +4639,18 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       io.onSystem?.(`◇ delegating to ${parsed.agentId}…\n`);
-      void (async () => {
+      // Tracked, so a /delegate sent from the Telegram topic is answered with how the agent ended
+      // (and its reaction follows) instead of stopping at the "delegating" line. The shell itself
+      // still does not wait: tracking only registers the run. A refused or failed run throws after
+      // its line is printed, which is how the topic's command counts as failed.
+      trackCommandWork(async () => {
         const outcome = await external.delegate({ agentId: parsed.agentId, task: parsed.task });
-        io.onSystem?.(
-          outcome.ok
-            ? `◇ ${parsed.agentId} ${outcome.result.status}: ${outcome.result.output}\n`
-            : `◇ /delegate refused: ${outcome.reason}\n`,
-        );
-      })();
+        const report = delegateReport(parsed.agentId, outcome);
+        io.onSystem?.(report.text);
+        if (report.failed) {
+          throw new Error(`/delegate ${parsed.agentId} did not succeed`);
+        }
+      });
     };
 
     // Flow 273 (specification §5.1): the bus join's `status()` callback reads
