@@ -214,4 +214,39 @@ describe("a slow intake press is answered early, and its result still arrives (S
     await until(() => hub.events().some((event) => event.type === "delivery-failed" && /did not finish/.test(event.detail ?? "")), "timeout event");
     expect(h.api.answeredCallbacks.map((a) => a.text)).toEqual([INTAKE_EARLY_ACK_TEXT]);
   });
+
+  test("a handler that finishes after the hard timeout still has its result posted to the topic", async () => {
+    const g = gate();
+    let started = false;
+    const { intakeThread, cardMessageId, hub } = await setup(async () => {
+      started = true;
+      return g.done;
+    });
+    h.api.pushCallback({ fromId: OWNER_ID, data: DATA, threadId: intakeThread, messageId: cardMessageId });
+    await until(() => started, "handler started");
+    await h.clock.advance(INTAKE_HANDLER_TIMEOUT_MS);
+    await until(() => hub.events().some((event) => event.type === "delivery-failed" && /did not finish/.test(event.detail ?? "")), "timeout event");
+    expect(h.api.sent.some((m) => m.text.includes("flow 412"))).toBe(false);
+    g.open({ text: "Взято в работу: flow 412" });
+    await until(() => h.api.sent.some((m) => m.text.includes("flow 412")), "late result");
+  });
+
+  test("a late result the handler already put on the card is not posted after the hard timeout either", async () => {
+    const g = gate();
+    let started = false;
+    const { intakeThread, cardMessageId, hub } = await setup(async () => {
+      started = true;
+      return g.done;
+    });
+    h.api.pushCallback({ fromId: OWNER_ID, data: DATA, threadId: intakeThread, messageId: cardMessageId });
+    await until(() => started, "handler started");
+    await h.clock.advance(INTAKE_HANDLER_TIMEOUT_MS);
+    await until(() => hub.events().some((event) => event.type === "delivery-failed" && /did not finish/.test(event.detail ?? "")), "timeout event");
+    g.open({ text: "уже на карточке", edited: true });
+    await Bun.sleep(0);
+    const fence = await hub.sendToServiceTopic(INTAKE_SERVICE_TOPIC, "fence");
+    expect(fence.ok).toBe(true);
+    await until(() => h.api.sent.some((m) => m.text === "fence"), "fence sent");
+    expect(h.api.sent.some((m) => m.text.includes("уже на карточке"))).toBe(false);
+  });
 });

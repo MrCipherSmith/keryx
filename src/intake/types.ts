@@ -200,6 +200,8 @@ export interface IntakeState {
   readonly recent: readonly IntakeRecentEvent[];
   /** card id -> the status line to put under the Telegram card, for a decision made in the TUI or the CLI. */
   readonly pendingEdits: Readonly<Record<string, string>>;
+  /** card id -> when its pending edit was queued and how many times Telegram refused it; an edit is dropped past a cap or a TTL. */
+  readonly pendingEditTries: Readonly<Record<string, { readonly since: string; readonly attempts: number }>>;
 }
 
 export interface IntakeRecentEvent {

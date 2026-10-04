@@ -43,13 +43,33 @@ const PIPE_GRACE_MS = 500;
 /**
  * The environment of the keryx child: the same allowlist the digest's gh calls get (no GH_TOKEN, GITHUB_TOKEN or any
  * other secret of the host, so the account the path chose cannot be overridden) plus keryx's own non-secret settings.
+ * `credentials` names the few secret variables a particular child cannot work without; none is ever logged or written.
  */
-export function intakeChildEnv(cwd: string, base: Record<string, string | undefined> = process.env): Record<string, string | undefined> {
+export function intakeChildEnv(
+  cwd: string,
+  base: Record<string, string | undefined> = process.env,
+  credentials: readonly string[] = [],
+): Record<string, string | undefined> {
   const env = ghEnvForProject(cwd, base);
   for (const [name, value] of Object.entries(base)) {
     if (value !== undefined && name.startsWith("KERYX_") && !/TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL/i.test(name)) env[name] = value;
   }
+  for (const name of credentials) {
+    const value = base[name];
+    if (value !== undefined && value.length > 0) env[name] = value;
+  }
   return env;
+}
+
+/**
+ * The environment of `keryx review ci-triage`: it sends a redacted log excerpt to Jev through OpenRouter, so it needs
+ * that one credential (the key saved in the keryx shell config is found through HOME and KERYX_HOME, both kept). The
+ * flow-init child never gets it.
+ */
+export const CI_TRIAGE_CREDENTIAL_VARS: readonly string[] = ["OPENROUTER_API_KEY"];
+
+export function ciTriageChildEnv(cwd: string, base: Record<string, string | undefined> = process.env): Record<string, string | undefined> {
+  return intakeChildEnv(cwd, base, CI_TRIAGE_CREDENTIAL_VARS);
 }
 
 /**
@@ -59,7 +79,15 @@ export function intakeChildEnv(cwd: string, base: Record<string, string | undefi
  */
 export function runProcess(
   argv: readonly string[],
-  options: { readonly cwd: string; readonly env: Record<string, string | undefined>; readonly timeoutMs: number; readonly maxBytes: number; readonly graceMs?: number },
+  options: {
+    readonly cwd: string;
+    readonly env: Record<string, string | undefined>;
+    readonly timeoutMs: number;
+    readonly maxBytes: number;
+    readonly graceMs?: number;
+    /** Where the parent's exit and termination signals are heard. Default `process`; a test passes its own emitter. */
+    readonly lifecycle?: NodeJS.EventEmitter;
+  },
 ): Promise<Captured> {
   const graceMs = options.graceMs ?? PIPE_GRACE_MS;
   return new Promise((resolve) => {
@@ -71,7 +99,8 @@ export function runProcess(
     const child = spawn(argv[0]!, argv.slice(1), { cwd: options.cwd, env: options.env as NodeJS.ProcessEnv, stdio: ["ignore", "pipe", "pipe"], detached: true });
     const killGroup = (): void => {
       try {
-        if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+        // Only ever the child's own group (it leads it); never serve's, whatever the pid says.
+        if (child.pid !== undefined && child.pid > 1 && child.pid !== process.pid) process.kill(-child.pid, "SIGKILL");
       } catch {
         try {
           child.kill("SIGKILL");
@@ -80,9 +109,32 @@ export function runProcess(
         }
       }
     };
+    // The child leads its own group so that a timeout can kill the whole group without touching serve's. That also
+    // means Ctrl-C or a stop of serve/the TUI no longer reaches it by itself: the parent kills the CHILD'S group when
+    // it exits or is told to stop, and takes the handlers away again when the child is done.
+    const lifecycle: NodeJS.EventEmitter = options.lifecycle ?? process;
+    const ownsProcess = lifecycle === process;
+    const onExit = (): void => killGroup();
+    const onSignal = (signal: NodeJS.Signals): void => {
+      killGroup();
+      detach();
+      // Listening for a signal removes its default effect (stop the process): put it back unless someone else listens.
+      if (ownsProcess && lifecycle.listenerCount(signal) === 0) process.kill(process.pid, signal);
+    };
+    const onSigint = (): void => onSignal("SIGINT");
+    const onSigterm = (): void => onSignal("SIGTERM");
+    const detach = (): void => {
+      lifecycle.removeListener("exit", onExit);
+      lifecycle.removeListener("SIGINT", onSigint);
+      lifecycle.removeListener("SIGTERM", onSigterm);
+    };
+    lifecycle.on("exit", onExit);
+    lifecycle.on("SIGINT", onSigint);
+    lifecycle.on("SIGTERM", onSigterm);
     const finish = (code: number | null, extra = ""): void => {
       if (settled) return;
       settled = true;
+      detach();
       clearTimeout(timer);
       if (grace !== undefined) clearTimeout(grace);
       child.stdout?.destroy();
@@ -111,9 +163,9 @@ export function runProcess(
   });
 }
 
-/** Run keryx itself. */
-const runKeryx: KeryxRunner = (args, cwd, timeoutMs, maxBytes) =>
-  runProcess([...invocationArgv(resolveKeryxInvocation()), ...args], { cwd, env: intakeChildEnv(cwd), timeoutMs, maxBytes });
+/** Run keryx itself, with the strict environment of a flow-init child unless the caller names another. */
+const runKeryx = (args: readonly string[], cwd: string, timeoutMs: number, maxBytes: number, env: Record<string, string | undefined> = intakeChildEnv(cwd)): Promise<Captured> =>
+  runProcess([...invocationArgv(resolveKeryxInvocation()), ...args], { cwd, env, timeoutMs, maxBytes });
 
 async function flowDirs(projectRoot: string): Promise<string[]> {
   try {
@@ -215,7 +267,7 @@ export function createDefaultFlowPort(options: { timeoutMs?: number; run?: Keryx
 export function createDefaultCiTriagePort(): IntakeCiTriagePort {
   return {
     async run(projectRoot, input) {
-      const run = await runKeryx(["review", "ci-triage", "--run", input.runId, "--repo", input.repo], projectRoot, input.timeoutMs, input.maxBytes);
+      const run = await runKeryx(["review", "ci-triage", "--run", input.runId, "--repo", input.repo], projectRoot, input.timeoutMs, input.maxBytes, ciTriageChildEnv(projectRoot));
       if (run.timedOut) return { ok: false, reason: "ci-triage timed out" };
       if (run.code !== 0) return { ok: false, reason: `ci-triage refused or failed: ${lastLine(run.stderr) || `exit ${run.code ?? "none"}`}` };
       const output = run.stdout.replace(ANSI, "").trim();

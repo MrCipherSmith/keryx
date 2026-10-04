@@ -14,6 +14,7 @@ import { FakeGh, FakeSink, TestClock, depsFor, issuesJson, local, setupIntakeEnv
 import { flushIntakeCards, runIntakePoll } from "./poll";
 import { createIntakePressHandler } from "./press";
 import {
+  INTAKE_PENDING_EDIT_MAX_ATTEMPTS,
   INTAKE_SEEN_CAP,
   appendIntakeIfState,
   appendIntakeRecord,
@@ -21,6 +22,7 @@ import {
   intakeCardsPath,
   intakeLedgerPath,
   markIntakeSeen,
+  queueIntakeCardEdit,
   readIntakeCardView,
   readIntakeCardViews,
   readIntakeCards,
@@ -266,6 +268,56 @@ describe("a decision from another surface reaches the Telegram card (L7)", () =>
     expect((await readIntakeState(env.root)).pendingEdits).toEqual({});
   });
 
+  test("an edit the Telegram API keeps refusing is dropped after the attempt cap, and the run says so", async () => {
+    const card = await seedCard(env.root);
+    await decideIntakeCard(env.root, card.id, "decline", { decidedBy: "cli", now: local(12) });
+    const sink = new FakeSink();
+    sink.editOk = false;
+    const deps = depsFor(env, { gh: new FakeGh(), clock: new TestClock(local(12)), sink, config: testConfig() });
+    for (let i = 0; i < INTAKE_PENDING_EDIT_MAX_ATTEMPTS; i += 1) {
+      const run = await flushIntakeCards(env.root, deps);
+      expect(run.failures.map((f) => f.detail).join("\n")).toContain("retried");
+      expect(Object.keys((await readIntakeState(env.root)).pendingEdits)).toEqual([card.id]);
+    }
+    expect((await readIntakeState(env.root)).pendingEditTries[card.id]?.attempts).toBe(INTAKE_PENDING_EDIT_MAX_ATTEMPTS);
+    const last = await flushIntakeCards(env.root, deps);
+    expect(last.failures.map((f) => f.detail).join("\n")).toContain("the edit is dropped");
+    const state = await readIntakeState(env.root);
+    expect(state.pendingEdits).toEqual({});
+    expect(state.pendingEditTries).toEqual({});
+    // nothing left to try: the API is not called again
+    const calls = sink.edits.length;
+    await flushIntakeCards(env.root, deps);
+    expect(sink.edits.length).toBe(calls);
+  });
+
+  test("an edit nobody could apply for more than a day is dropped without another attempt", async () => {
+    const card = await seedCard(env.root);
+    await decideIntakeCard(env.root, card.id, "decline", { decidedBy: "cli", now: local(12) });
+    const clock = new TestClock(local(12));
+    const sink = new FakeSink();
+    sink.editOk = false;
+    const deps = depsFor(env, { gh: new FakeGh(), clock, sink, config: testConfig() });
+    await flushIntakeCards(env.root, deps);
+    expect(Object.keys((await readIntakeState(env.root)).pendingEdits)).toEqual([card.id]);
+    clock.set(local(12, 1, 6));
+    sink.editOk = true;
+    const run = await flushIntakeCards(env.root, deps);
+    expect(run.failures.map((f) => f.detail).join("\n")).toContain("the edit is dropped");
+    expect(sink.edits).toEqual([]);
+    expect((await readIntakeState(env.root)).pendingEdits).toEqual({});
+  });
+
+  test("queueing a new edit sheds the stale ones, so a project that never flushes does not collect them for ever", async () => {
+    await queueIntakeCardEdit(env.root, "cold", "отклонено", () => local(12));
+    await queueIntakeCardEdit(env.root, "recent", "отклонено", () => local(20, 0, 5));
+    expect(Object.keys((await readIntakeState(env.root)).pendingEdits).sort()).toEqual(["cold", "recent"]);
+    await queueIntakeCardEdit(env.root, "fresh", "отклонено", () => local(12, 1, 6));
+    const state = await readIntakeState(env.root);
+    expect(Object.keys(state.pendingEdits).sort()).toEqual(["fresh", "recent"]);
+    expect(Object.keys(state.pendingEditTries).sort()).toEqual(["fresh", "recent"]);
+  });
+
   test("a card that has no Telegram message has nothing to edit: its pending edit is dropped, not retried forever", async () => {
     const card = await seedCard(env.root, { delivered: false });
     await appendIntakeIfState(env.root, card.id, ["queued"], { state: "sent" });
@@ -285,6 +337,60 @@ describe("a decision from another surface reaches the Telegram card (L7)", () =>
     expect((await handler(pressFor(card, "decline")))?.edited).toBe(true);
     expect(hub.edits).toHaveLength(1);
     expect((await readIntakeState(env.root)).pendingEdits).toEqual({});
+  });
+});
+
+describe("a ledger line with no card content is not a card that can be sent (poll)", () => {
+  const ghost = "cghost000001";
+  const makeGhost = (): Promise<unknown> => appendIntakeRecord(env.root, { at: local(10).toISOString(), cardId: ghost, eventKey: "issue:owner/name#ghost", kind: "issue", state: "queued" });
+  const ghostRecord = async () => foldIntakeLedger(await readIntakeLedger(env.root)).find((c) => c.cardId === ghost);
+
+  test("it never takes the hourly allowance of a real card, however much older it is", async () => {
+    await makeGhost();
+    const real = await seedCard(env.root, { delivered: false, createdAt: local(11, 50) });
+    const sink = new FakeSink();
+    const deps = depsFor(env, { gh: new FakeGh(), clock: new TestClock(local(12)), sink, config: testConfig({ cardsPerHour: 1 }) });
+    const flushed = await flushIntakeCards(env.root, deps);
+    expect(flushed.sent).toBe(1);
+    expect(flushed.collapsed).toBe(0);
+    expect(sink.cards.map((c) => c.id)).toEqual([real.id]);
+    expect((await ghostRecord())?.state).toBe("queued");
+  });
+
+  test("it does not make a real card wait behind an overflow summary either", async () => {
+    await makeGhost();
+    const a = await seedCard(env.root, { delivered: false, createdAt: local(11, 50) });
+    const sink = new FakeSink();
+    const deps = depsFor(env, { gh: new FakeGh(), clock: new TestClock(local(12)), sink, config: testConfig({ cardsPerHour: 2 }) });
+    const flushed = await flushIntakeCards(env.root, deps);
+    expect(flushed.sent).toBe(1);
+    expect(sink.cards.map((c) => c.id)).toEqual([a.id]);
+    expect(sink.cards.some((c) => c.kind === "overflow")).toBe(false);
+  });
+
+  test("once it is older than the life of a button it is retired as expired, with the reason, and not counted as held", async () => {
+    await makeGhost();
+    const clock = new TestClock(local(12));
+    const sink = new FakeSink();
+    const deps = depsFor(env, { gh: new FakeGh(), clock, sink, config: testConfig({ buttonTtlHours: 24 }) });
+    expect((await flushIntakeCards(env.root, deps)).expired).toBe(0);
+    expect((await ghostRecord())?.state).toBe("queued");
+    clock.set(local(12, 0, 7));
+    const retired = await flushIntakeCards(env.root, deps);
+    expect(retired.expired).toBe(1);
+    expect(retired.held).toBe(0);
+    expect(await ghostRecord()).toMatchObject({ state: "expired", reason: "no card content in the registry" });
+    expect((await flushIntakeCards(env.root, deps)).expired).toBe(0);
+  });
+
+  test("a poll that sees the event again heals it before it is retired: the card is registered and sent", async () => {
+    const card = content(ghost);
+    await makeGhost();
+    expect(await registerIntakeCard(env.root, card)).toBe(true);
+    const sink = new FakeSink();
+    const deps = depsFor(env, { gh: new FakeGh(), clock: new TestClock(local(12)), sink, config: testConfig() });
+    expect((await flushIntakeCards(env.root, deps)).sent).toBe(1);
+    expect(sink.cards.map((c) => c.id)).toEqual([ghost]);
   });
 });
 

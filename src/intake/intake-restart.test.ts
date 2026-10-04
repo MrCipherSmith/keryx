@@ -111,6 +111,106 @@ describe("restart in `taking` (AC13)", () => {
     expect(fakes.ci.calls).toEqual([]);
   });
 
+  /** Resolves once `condition` holds; a condition that never holds fails the test instead of hanging it. */
+  async function until(condition: () => boolean | Promise<boolean>, what: string): Promise<void> {
+    for (let i = 0; i < 400; i += 1) {
+      if (await condition()) return;
+      await Bun.sleep(5);
+    }
+    throw new Error(`timed out waiting for ${what}`);
+  }
+
+  function held(fakes: ReturnType<typeof makeFakes>): () => void {
+    let open: () => void = () => undefined;
+    fakes.flows.gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return () => open();
+  }
+
+  test("two presses queued behind slow flow inits are not recovered while they are alive, however old their claims look", async () => {
+    const a = await seedCard(env.root);
+    const b = await seedCard(env.root);
+    const fakes = makeFakes();
+    const release = held(fakes);
+    const claimedAt = new Date();
+    const pressA = decideIntakeCard(env.root, a.id, "take", { decidedBy: "tui", now: claimedAt, deps: fakes.deps });
+    const pressB = decideIntakeCard(env.root, b.id, "take", { decidedBy: "tui", now: claimedAt, deps: fakes.deps });
+    await until(() => fakes.flows.initCalls.length === 2, "both presses to reach flow init");
+    // 160 s later (two ~80 s inits in a queue): older than the flat cutoff, yet both presses are running
+    const recovered = await recoverIntakeTaking(env.root, { deps: fakes.deps, now: () => new Date(claimedAt.getTime() + INTAKE_LONGEST_PORT_TIMEOUT_MS + 10_000) });
+    expect(recovered).toBe(0);
+    expect((await readIntakeCardView(env.root, a.id))?.state).toBe("taking");
+    expect((await readIntakeCardView(env.root, b.id))?.state).toBe("taking");
+
+    release();
+    const [ra, rb] = await Promise.all([pressA, pressB]);
+    expect(ra.ok).toBe(true);
+    expect(rb.ok).toBe(true);
+    expect(ra.message).toContain("Взято в работу");
+    expect((await readIntakeCardView(env.root, a.id))?.state).toBe("taken");
+    expect((await readIntakeCardView(env.root, b.id))?.state).toBe("taken");
+    // once the press is over, its claim is no longer protected: nothing is left to recover either
+    expect(await recoverIntakeTaking(env.root, aged(fakes))).toBe(0);
+  });
+
+  test("a running press refreshes its claim, so a recovery pass in another process sees it alive", async () => {
+    const card = await seedCard(env.root, { createdAt: new Date(Date.now() - 2 * 3_600_000) });
+    const fakes = makeFakes();
+    const release = held(fakes);
+    const claimedAt = new Date(Date.now() - 3_600_000);
+    const press = decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", now: claimedAt, deps: { ...fakes.deps, heartbeatMs: 10 } });
+    await until(async () => (await readIntakeCardView(env.root, card.id))?.state === "taking", "the claim");
+    await until(async () => Date.parse((await readIntakeCardView(env.root, card.id))!.updatedAt) > claimedAt.getTime() + 60_000, "a heartbeat on the claim");
+    release();
+    expect((await press).ok).toBe(true);
+    expect((await readIntakeCardView(env.root, card.id))?.state).toBe("taken");
+  });
+
+  test("a press whose taking->taken move the ledger refuses does not announce a success; a second press adopts the flow", async () => {
+    const card = await seedCard(env.root);
+    const fakes = makeFakes();
+    const release = held(fakes);
+    const press = decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", deps: fakes.deps });
+    await until(() => fakes.flows.initCalls.length === 1, "the press to reach flow init");
+    // another process's recovery pass marks the card failed while the init is still running
+    expect((await appendIntakeIfState(env.root, card.id, ["taking"], { state: "failed", reason: "interrupted by a restart; no flow found, check and press again" })).ok).toBe(true);
+    release();
+    const result = await press;
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("flow 412 создан");
+    expect(result.message).toContain("failed");
+    expect(result.statusLine).toBeUndefined();
+    expect((await readIntakeCardView(env.root, card.id))?.state).toBe("failed");
+
+    const second = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", deps: fakes.deps });
+    expect(second).toMatchObject({ ok: true, flowId: "412" });
+    expect(fakes.flows.initCalls).toHaveLength(1);
+    expect((await readIntakeCardView(env.root, card.id))?.state).toBe("taken");
+  });
+
+  test("a ci-triage whose decided move is refused says so and still hands back the analysis", async () => {
+    const card = await seedCard(env.root, { kind: "ci" });
+    const fakes = makeFakes();
+    let settle: () => void = () => undefined;
+    const slow = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const run = fakes.ci.run.bind(fakes.ci);
+    fakes.ci.run = async (project, input) => {
+      await slow;
+      return run(project, input);
+    };
+    const press = decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "tui", deps: fakes.deps });
+    await until(async () => (await readIntakeCardView(env.root, card.id))?.state === "taking", "the claim");
+    await appendIntakeIfState(env.root, card.id, ["taking"], { state: "failed", reason: "interrupted" });
+    settle();
+    const result = await press;
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("failed");
+    expect(result.detail).toContain("timeout");
+  });
+
   test("recovery leaves every other card alone", async () => {
     const card = await seedCard(env.root);
     const done = await seedCard(env.root);

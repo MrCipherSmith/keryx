@@ -880,6 +880,13 @@ export class RemoteHub {
         const outcome = await Promise.race([running, hard]);
         if (outcome === HANDLER_TIMED_OUT) {
           this.event("delivery-failed", `intake press ${press.updateId}: the handler did not finish within ${INTAKE_HANDLER_TIMEOUT_MS / 1000} s`);
+          // The press itself keeps running (a queued `flow init` can outlast this timeout): when it finishes, its result
+          // still goes to the topic, so the operator is never left without an answer.
+          void running
+            .then(async (late) => {
+              if (late?.text !== undefined && late.text.length > 0 && late.edited !== true) await this.sendToServiceTopic(INTAKE_SERVICE_TOPIC, late.text).catch(() => undefined);
+            })
+            .catch(() => undefined);
         } else {
           reply = outcome;
         }

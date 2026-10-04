@@ -32,6 +32,9 @@ import {
   appendIntakeIfState,
   cardIdFor,
   clearIntakeCardEdits,
+  INTAKE_PENDING_EDIT_MAX_ATTEMPTS,
+  INTAKE_PENDING_EDIT_TTL_MS,
+  recordIntakeEditRefused,
   markIntakeSeen,
   ensureIntakeDataIgnored,
   overflowCardId,
@@ -505,6 +508,13 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
   const contents = await readIntakeCards(root);
   for (const c of await readIntakeLedgerCards(root)) {
     const content = contents[c.cardId];
+    // A queued ledger line with no registry entry is the half of a card a crash left (see `registerIntakeCard`): the
+    // next poll completes it if the event comes back. It cannot be sent, so it is never counted against the hourly
+    // allowance, and once it is older than a button's life the poll has had its chance and it is retired.
+    if (content === undefined && c.state === "queued" && at.getTime() - Date.parse(c.createdAt) > config.buttonTtlHours * HOUR_MS) {
+      const r = await appendIntakeIfState(root, c.cardId, ["queued"], { state: "expired", at: at.toISOString(), reason: "no card content in the registry" });
+      if (r.ok) expired += 1;
+    }
     if (content !== undefined && INTAKE_OPEN_STATES.includes(c.state) && Date.parse(content.expiresAt) <= at.getTime()) {
       const r = await appendIntakeIfState(root, c.cardId, [c.state], { state: "expired", at: at.toISOString(), reason: "buttons expired" });
       if (r.ok) expired += 1;
@@ -520,9 +530,10 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
     }
   }
 
-  if (deps.sink?.editCard !== undefined) await applyPendingEdits(root, deps.sink, failures);
+  if (deps.sink?.editCard !== undefined) await applyPendingEdits(root, deps.sink, failures, now);
 
-  const folded = await readIntakeLedgerCards(root);
+  const sendable = await readIntakeCards(root);
+  const folded = (await readIntakeLedgerCards(root)).filter((c) => c.state !== "queued" || sendable[c.cardId] !== undefined);
   const queued = folded.filter((c) => c.state === "queued").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
   const base = { expired, reminded, failures };
   if (quiet || deps.sink === undefined) return { ...base, sent: 0, collapsed: 0, held: queued.length };
@@ -652,7 +663,8 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
     }
   }
 
-  const held = (await readIntakeLedgerCards(root)).filter((c) => c.state === "queued").length;
+  const heldContents = await readIntakeCards(root);
+  const held = (await readIntakeLedgerCards(root)).filter((c) => c.state === "queued" && heldContents[c.cardId] !== undefined).length;
   return { ...base, sent, collapsed, held, ...(overflowId !== undefined ? { overflowCardId: overflowId } : {}) };
 }
 
@@ -675,11 +687,21 @@ export async function runIntakeTick(root: string, deps: IntakeDeps = {}): Promis
  * A decision made in the TUI or the CLI leaves a pending edit; here serve puts it on the Telegram card (best effort:
  * a card with no message id has nothing to edit, and a refused edit is tried again on the next tick).
  */
-async function applyPendingEdits(root: string, sink: IntakeCardSink, failures: IntakeFailure[]): Promise<void> {
-  const pending = Object.entries((await readIntakeState(root)).pendingEdits);
+async function applyPendingEdits(root: string, sink: IntakeCardSink, failures: IntakeFailure[], now: () => Date): Promise<void> {
+  const state = await readIntakeState(root);
+  const pending = Object.entries(state.pendingEdits);
   if (pending.length === 0) return;
   const done: string[] = [];
+  const refused: string[] = [];
   for (const [cardId, status] of pending) {
+    // A refused edit (the message was deleted in Telegram, say) is not retried for ever: past a cap of attempts or a
+    // TTL it is dropped, and the run says so.
+    const tries = state.pendingEditTries[cardId];
+    if (tries !== undefined && (tries.attempts >= INTAKE_PENDING_EDIT_MAX_ATTEMPTS || now().getTime() - Date.parse(tries.since) > INTAKE_PENDING_EDIT_TTL_MS)) {
+      done.push(cardId);
+      failures.push({ source: "delivery", detail: `card ${cardId}: the decision was never shown on the Telegram card (${tries.attempts} refused attempts since ${tries.since}); the edit is dropped` });
+      continue;
+    }
     const view = await readIntakeCardView(root, cardId);
     if (view === undefined || view.messageId === undefined) {
       done.push(cardId);
@@ -692,7 +714,11 @@ async function applyPendingEdits(root: string, sink: IntakeCardSink, failures: I
       ok = false;
     }
     if (ok) done.push(cardId);
-    else failures.push({ source: "delivery", detail: `card ${cardId}: the decision could not be shown on the Telegram card yet; it is retried` });
+    else {
+      refused.push(cardId);
+      failures.push({ source: "delivery", detail: `card ${cardId}: the decision could not be shown on the Telegram card yet; it is retried` });
+    }
   }
+  await recordIntakeEditRefused(root, refused, now);
   await clearIntakeCardEdits(root, done);
 }

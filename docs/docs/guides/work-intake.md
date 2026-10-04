@@ -86,7 +86,7 @@ the card's own buttons. When the model is unavailable or over budget, the assess
 | New task | **Позже** (Later) | Reminds you once, after `laterHours` (4 h by default). A reminder that would fall in quiet hours moves to the end of them. |
 | Review requested | **Открыть ревью-flow** (Open a review flow) | Creates a review flow titled "Review owner/repo#N" with the pull request link in its description. |
 | Review requested | **Пропустить** (Skip) | Records the decision. |
-| CI failed | **Разобрать** (Triage) | Runs a read-only triage of the failed run (120 s limit, 64 KB of log) and posts the redacted result, up to 3000 characters, in the topic. |
+| CI failed | **Разобрать** (Triage) | Runs a read-only triage of the failed run (120 s limit, 64 KB of log) and posts the redacted result, up to 3000 characters, in the topic. The triage sends a redacted excerpt to the model, so it needs `OPENROUTER_API_KEY` in the environment of serve or a key saved in the keryx shell config; it is the only secret the triage child receives, and the flow-creating child receives none. |
 | CI failed | **Игнорировать** (Ignore) | Records the decision. |
 | New comment, Board change | **Понятно** (Understood) | Acknowledges the card. |
 
@@ -104,7 +104,13 @@ that hangs is cut off after three minutes.
   project of yours has a clone of that repository), the card goes to a failed state with the
   reason, and its buttons stay.
 - **A restart does not repeat a press.** When serve starts, a card left in the middle of an
-  action adopts the flow that was already made for it, or is marked failed for you to check.
+  action adopts the flow that was already made for it, or is marked failed for you to check. A
+  press that is still running, even one waiting behind other flow creations, is never taken for
+  an interrupted one. If the card was settled by someone else while the flow was being made, the
+  answer says that the flow exists; pressing again adopts it and creates no second one. An answer
+  that arrives after the three-minute cut-off is still posted in the topic.
+- **Stopping serve stops the child.** `flow init` and the CI triage run in their own process
+  group; Ctrl-C or a stop of serve or the TUI ends that group too.
 - **Buttons live 24 hours.** After `buttonTtlHours` a press is refused with "истекло"
   (expired), and the card expires. A card that was delayed in the queue gets its full lifetime
   from the moment it is actually sent.
@@ -144,6 +150,12 @@ marked undelivered. Each poll writes a report to `.metaproject/data/intake/repor
 (the last 50 are kept). A failure to read GitHub, or a model failure, is written in the report and
 said once in the topic as a status line (not repeated within an hour), instead of failing
 silently. A missing product index is reported in the report, not in the topic.
+
+A decision made in the TUI or the CLI is shown on the Telegram card at the next serve tick. If
+Telegram refuses the edit (the message was deleted, say) it is retried, and dropped after five
+refusals or a day, with a line in the run report. A queued card whose content never reached the
+registry (a crash between the two writes) is not counted against the hourly cap and is marked
+expired after `buttonTtlHours`; a poll that sees its event again completes it first.
 
 ## Work repositories are read-only
 

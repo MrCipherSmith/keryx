@@ -5,11 +5,12 @@
 //   T7  a failed init leaves nothing behind; a successful one returns the right directory.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { EventEmitter } from "node:events";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { flowsRoot } from "../flow/store";
-import { createDefaultFlowPort, intakeChildEnv, runProcess, type Captured, type KeryxRunner } from "./intake-ports";
+import { ciTriageChildEnv, createDefaultFlowPort, intakeChildEnv, runProcess, type Captured, type KeryxRunner } from "./intake-ports";
 
 let project: string;
 beforeEach(() => {
@@ -156,6 +157,37 @@ describe("the environment of the keryx child (S5)", () => {
   });
 });
 
+describe("the environment of the ci-triage child needs one credential, the flow-init child none", () => {
+  const host = {
+    PATH: "/usr/bin",
+    HOME: "/home/me",
+    OPENROUTER_API_KEY: "or-secret",
+    GH_WORK_ROOT: "/home/me/work",
+    GH_TOKEN: "ghp_secret",
+    GITHUB_TOKEN: "ghs_secret",
+    ANTHROPIC_API_KEY: "sk-ant-secret",
+    KERYX_HOME: "/home/me/.keryx",
+  };
+
+  test("ci-triage gets OPENROUTER_API_KEY, and still no GitHub token or other key of the host", () => {
+    const env = ciTriageChildEnv("/home/me/work/app", host);
+    expect(env["OPENROUTER_API_KEY"]).toBe("or-secret");
+    for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY"]) expect(env[name]).toBeUndefined();
+    expect(env["GH_ACCOUNT"]).toBe("work");
+    expect(env["HOME"]).toBe("/home/me");
+    expect(env["KERYX_HOME"]).toBe("/home/me/.keryx");
+  });
+
+  test("the flow-init child never gets it", () => {
+    expect(intakeChildEnv("/home/me/work/app", host)["OPENROUTER_API_KEY"]).toBeUndefined();
+  });
+
+  test("a key that is unset or empty is not put in the environment as an empty string", () => {
+    expect("OPENROUTER_API_KEY" in ciTriageChildEnv("/home/me/play/app", { PATH: "/usr/bin" })).toBe(false);
+    expect("OPENROUTER_API_KEY" in ciTriageChildEnv("/home/me/play/app", { PATH: "/usr/bin", OPENROUTER_API_KEY: "" })).toBe(false);
+  });
+});
+
 describe("running a process (S6)", () => {
   const options = { cwd: tmpdir(), env: { PATH: process.env["PATH"] }, maxBytes: 4000 };
 
@@ -203,5 +235,44 @@ describe("running a process (S6)", () => {
     expect(result.code).toBeNull();
     expect(result.stderr.length).toBeGreaterThan(0);
     expect(existsSync(options.cwd)).toBe(true);
+  });
+  describe("the parent stopping takes the child's group with it", () => {
+    const grandchildScript = (file: string): string[] => ["sh", "-c", `sleep 30 & echo $! > '${file}'; wait`];
+
+    async function pidOf(file: string): Promise<number> {
+      for (let i = 0; i < 200; i += 1) {
+        try {
+          const n = Number(readFileSync(file, "utf8").trim());
+          if (Number.isInteger(n) && n > 1) return n;
+        } catch {
+          // not written yet
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error("the grandchild never reported its pid");
+    }
+
+    for (const event of ["SIGTERM", "SIGINT", "exit"] as const) {
+      test(`${event} kills the child and its grandchild, and the listeners are taken away`, async () => {
+        const lifecycle = new EventEmitter();
+        const file = path.join(project, `pid-${event}`);
+        const running = runProcess(grandchildScript(file), { ...options, timeoutMs: 60_000, graceMs: 100, lifecycle });
+        const grandchild = await pidOf(file);
+        expect(lifecycle.listenerCount("exit") + lifecycle.listenerCount("SIGINT") + lifecycle.listenerCount("SIGTERM")).toBe(3);
+        lifecycle.emit(event, event);
+        const result = await running;
+        expect(result.timedOut).toBe(false);
+        expect(await gone(grandchild)).toBe(true);
+        for (const name of ["exit", "SIGINT", "SIGTERM"]) expect(lifecycle.listenerCount(name)).toBe(0);
+      });
+    }
+
+    test("a normal run leaves no listener behind on the real process, and a failed spawn leaves none either", async () => {
+      const before = ["exit", "SIGINT", "SIGTERM"].map((name) => process.listenerCount(name));
+      await runProcess(["sh", "-c", "echo hi"], { ...options, timeoutMs: 5000 });
+      await runProcess(["/definitely/not/a/program"], { ...options, timeoutMs: 1000 });
+      await runProcess(["sh", "-c", "sleep 30 & wait"], { ...options, timeoutMs: 200, graceMs: 50 });
+      expect(["exit", "SIGINT", "SIGTERM"].map((name) => process.listenerCount(name))).toEqual(before);
+    });
   });
 });

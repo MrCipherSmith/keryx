@@ -16,6 +16,9 @@ import type { IntakeCardContent, IntakeCardState, IntakeCardView, IntakeLedgerCa
 import { INTAKE_ACTIONS, INTAKE_CARD_STATES } from "./types";
 
 export const INTAKE_SEEN_CAP = 5000;
+/** A pending Telegram edit is dropped after this many refusals, or after this long, whichever comes first. */
+export const INTAKE_PENDING_EDIT_MAX_ATTEMPTS = 5;
+export const INTAKE_PENDING_EDIT_TTL_MS = 24 * 3_600_000;
 const RECENT_CAP = 60;
 
 export const intakeLedgerPath = (root: string): string => path.join(intakeDataDir(root), "ledger.jsonl");
@@ -53,7 +56,7 @@ export function overflowCardId(seed: string): string {
 // ---- state ---------------------------------------------------------------------------
 
 export function emptyIntakeState(): IntakeState {
-  return { version: 1, paused: false, seen: {}, baselined: [], delivery: {}, recent: [], pendingEdits: {} };
+  return { version: 1, paused: false, seen: {}, baselined: [], delivery: {}, recent: [], pendingEdits: {}, pendingEditTries: {} };
 }
 
 function parseState(text: string): IntakeState {
@@ -76,6 +79,13 @@ function parseState(text: string): IntakeState {
     if (typeof raw["pendingEdits"] === "object" && raw["pendingEdits"] !== null) {
       for (const [k, v] of Object.entries(raw["pendingEdits"] as Record<string, unknown>)) if (typeof v === "string") pendingEdits[k] = v;
     }
+    const pendingEditTries: Record<string, { since: string; attempts: number }> = {};
+    if (typeof raw["pendingEditTries"] === "object" && raw["pendingEditTries"] !== null) {
+      for (const [k, v] of Object.entries(raw["pendingEditTries"] as Record<string, unknown>)) {
+        const t = v as Record<string, unknown> | null;
+        if (t !== null && typeof t["since"] === "string" && typeof t["attempts"] === "number") pendingEditTries[k] = { since: t["since"], attempts: t["attempts"] };
+      }
+    }
     const lastStatus = raw["lastStatus"] as Record<string, unknown> | undefined;
     return {
       ...base,
@@ -88,6 +98,7 @@ function parseState(text: string): IntakeState {
       ...(lastStatus !== undefined && typeof lastStatus["text"] === "string" && typeof lastStatus["at"] === "string" ? { lastStatus: { text: lastStatus["text"], at: lastStatus["at"] } } : {}),
       recent: Array.isArray(raw["recent"]) ? (raw["recent"] as IntakeState["recent"]).slice(-RECENT_CAP) : [],
       pendingEdits,
+      pendingEditTries,
     };
   } catch {
     return emptyIntakeState();
@@ -322,8 +333,31 @@ export async function appendIntakeRecord(root: string, record: Omit<IntakeLedger
 // ---- edits of the Telegram card made from another surface ---------------------------------------
 
 /** A decision taken in the TUI or the CLI: the card in Telegram still shows its buttons until serve edits it. */
-export async function queueIntakeCardEdit(root: string, cardId: string, statusLine: string): Promise<void> {
-  await updateIntakeState(root, (s) => ({ ...s, pendingEdits: { ...s.pendingEdits, [cardId]: statusLine } }));
+export async function queueIntakeCardEdit(root: string, cardId: string, statusLine: string, now: () => Date = () => new Date()): Promise<void> {
+  await updateIntakeState(root, (s) => {
+    // Queueing is also where a project that never runs serve's flush sheds the edits nobody will ever apply.
+    const edits: Record<string, string> = {};
+    const tries: Record<string, { since: string; attempts: number }> = {};
+    for (const [id, line] of Object.entries(s.pendingEdits)) {
+      const t = s.pendingEditTries[id];
+      if (t !== undefined && now().getTime() - Date.parse(t.since) > INTAKE_PENDING_EDIT_TTL_MS) continue;
+      edits[id] = line;
+      if (t !== undefined) tries[id] = t;
+    }
+    edits[cardId] = statusLine;
+    tries[cardId] = { since: now().toISOString(), attempts: 0 };
+    return { ...s, pendingEdits: edits, pendingEditTries: tries };
+  });
+}
+
+/** Count one refused attempt to put a pending edit on its card. */
+export async function recordIntakeEditRefused(root: string, cardIds: readonly string[], now: () => Date = () => new Date()): Promise<void> {
+  if (cardIds.length === 0) return;
+  await updateIntakeState(root, (s) => {
+    const next = { ...s.pendingEditTries };
+    for (const id of cardIds) next[id] = { since: next[id]?.since ?? now().toISOString(), attempts: (next[id]?.attempts ?? 0) + 1 };
+    return { ...s, pendingEditTries: next };
+  });
 }
 
 /** Forget a pending edit once it has been applied (or when it no longer applies). */
@@ -331,7 +365,11 @@ export async function clearIntakeCardEdits(root: string, cardIds: readonly strin
   if (cardIds.length === 0) return;
   await updateIntakeState(root, (s) => {
     const next = { ...s.pendingEdits };
-    for (const id of cardIds) delete next[id];
-    return { ...s, pendingEdits: next };
+    const tries = { ...s.pendingEditTries };
+    for (const id of cardIds) {
+      delete next[id];
+      delete tries[id];
+    }
+    return { ...s, pendingEdits: next, pendingEditTries: tries };
   });
 }

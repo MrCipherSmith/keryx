@@ -23,6 +23,8 @@ export interface IntakeActionDeps {
   readonly config?: IntakeConfig;
   /** The environment the work-root check reads (`GH_WORK_ROOT`). Default `process.env`. */
   readonly env?: Record<string, string | undefined>;
+  /** How often a running press refreshes its `taking` claim so a recovery pass in another process sees it alive. Default 30 s. */
+  readonly heartbeatMs?: number;
 }
 
 export interface IntakeDecideOptions {
@@ -52,6 +54,14 @@ const CI_TRIAGE_TIMEOUT_MS = 120_000;
 const CI_TRIAGE_MAX_BYTES = 64_000;
 const CI_TRIAGE_DETAIL_CHARS = 3000;
 const REMIND_STEP_MS = 15 * 60_000;
+
+const HEARTBEAT_MS = 30_000;
+
+/**
+ * The cards this process is running a press for. A press can wait a long time in the per-project `flow init` queue
+ * behind others, so the age of its claim says nothing about whether it is alive: recovery never touches these.
+ */
+const liveClaims = new Set<string>();
 
 const hhmm = (at: Date): string => `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 
@@ -112,7 +122,7 @@ export async function decideIntakeCard(root: string, cardId: string, action: Int
   const result = await decide(root, cardId, action, options);
   // A decision made anywhere but on the Telegram card itself leaves the card's buttons live: queue the edit.
   if (result.ok && result.statusLine !== undefined && options.cardEdit !== "caller") {
-    await queueIntakeCardEdit(root, cardId, result.statusLine).catch(() => undefined);
+    await queueIntakeCardEdit(root, cardId, result.statusLine, () => options.now ?? new Date()).catch(() => undefined);
   }
   return result;
 }
@@ -151,7 +161,19 @@ async function decide(root: string, cardId: string, action: IntakeAction, option
     if (refused !== undefined) return refuse(refused);
     const claim = await appendIntakeIfState(root, cardId, INTAKE_OPEN_STATES, { state: "taking", ...decided }, clock);
     if (!claim.ok) return refuse(whyNotOpen(claim.state));
-    return action === "ci-triage" ? runCiTriage(root, view, options, deps, clock) : runFlow(root, view, action, options, deps, clock);
+    // From here the press is alive in THIS process (even while it waits in the flow-init queue), and in any other
+    // process as long as the claim keeps being refreshed.
+    liveClaims.add(cardId);
+    const beat = setInterval(() => {
+      void appendIntakeIfState(root, cardId, ["taking"], { state: "taking", ...decided }).catch(() => undefined);
+    }, deps.heartbeatMs ?? HEARTBEAT_MS);
+    beat.unref?.();
+    try {
+      return action === "ci-triage" ? await runCiTriage(root, view, options, deps, clock) : await runFlow(root, view, action, options, deps, clock);
+    } finally {
+      clearInterval(beat);
+      liveClaims.delete(cardId);
+    }
   }
 
   const config = deps.config ?? (await readIntakeConfig(root));
@@ -208,7 +230,12 @@ async function runFlow(
     await flows
       .journal(project, flow.dir, at, `intake: ${action} by ${surfaceOf(options.decidedBy)} at ${at}, card ${view.id}${suggestion}, origin agent-proposal, source ${view.url}`)
       .catch(() => undefined);
-    await appendIntakeIfState(root, view.id, ["taking"], { state: "taken", choice: action, decidedBy: options.decidedBy, decidedAt: at, flowId: flow.flowId }, clock);
+    const settled = await appendIntakeIfState(root, view.id, ["taking"], { state: "taken", choice: action, decidedBy: options.decidedBy, decidedAt: at, flowId: flow.flowId }, clock);
+    // The ledger is the truth: if it refused the move (a recovery pass or another surface settled the card first), the
+    // press must not announce a success the card does not show. `taken` by someone else is the same outcome.
+    if (!settled.ok && settled.state !== "taken") {
+      return refuse(`flow ${flow.flowId} создан, но карточка уже в состоянии «${settled.state ?? "неизвестно"}». Нажмите ещё раз: flow будет подхвачен, второй не создастся`);
+    }
     const time = hhmm(now);
     return action === "take"
       ? { ok: true, message: `Взято в работу: flow ${flow.flowId}`, flowId: flow.flowId, statusLine: `✅ взято ${time}, flow ${flow.flowId}` }
@@ -225,8 +252,11 @@ async function runCiTriage(root: string, view: IntakeCardView, options: IntakeDe
     const project = (await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo)) ?? root;
     const result = await (deps.ciTriage ?? intakeDefaultPorts().ciTriage()).run(project, { repo: view.repo, runId: view.ref, timeoutMs: CI_TRIAGE_TIMEOUT_MS, maxBytes: CI_TRIAGE_MAX_BYTES });
     if (!result.ok) return fail(root, view, clock, result.reason);
-    await appendIntakeIfState(root, view.id, ["taking"], { state: "decided", choice: "ci-triage", decidedBy: options.decidedBy, decidedAt: now.toISOString() }, clock);
+    const settled = await appendIntakeIfState(root, view.id, ["taking"], { state: "decided", choice: "ci-triage", decidedBy: options.decidedBy, decidedAt: now.toISOString() }, clock);
     const detail = redactSensitiveText(result.output).slice(0, CI_TRIAGE_DETAIL_CHARS).trim();
+    if (!settled.ok && settled.state !== "decided") {
+      return { ok: false, message: `Разбор готов, но карточка уже в состоянии «${settled.state ?? "неизвестно"}»`, detail };
+    }
     return { ok: true, message: "Разбор готов", statusLine: `🔎 разобран ${hhmm(now)}`, detail };
   } catch (error) {
     return fail(root, view, clock, error instanceof Error ? error.message : String(error));
@@ -241,9 +271,10 @@ async function runCiTriage(root: string, view: IntakeCardView, options: IntakeDe
 export async function recoverIntakeTaking(root: string, options: { readonly deps?: IntakeActionDeps; readonly now?: () => Date } = {}): Promise<number> {
   const clock = options.now ?? (() => new Date());
   // A claim younger than the longest port timeout may belong to a press that is still running (a live TUI press, or
-  // serve's own): leave it alone. It is picked up on a later pass if its process really died.
+  // serve's own): leave it alone. It is picked up on a later pass if its process really died. A running press
+  // refreshes its claim, and a press of this process is never recovered however long it waited in the init queue.
   const cutoff = clock().getTime() - INTAKE_LONGEST_PORT_TIMEOUT_MS;
-  const stuck = (await readIntakeCardViews(root)).filter((c) => c.state === "taking" && Date.parse(c.updatedAt) <= cutoff);
+  const stuck = (await readIntakeCardViews(root)).filter((c) => c.state === "taking" && !liveClaims.has(c.id) && Date.parse(c.updatedAt) <= cutoff);
   if (stuck.length === 0) return 0;
   const flows = options.deps?.flows ?? intakeDefaultPorts().flows();
   const projectFor = options.deps?.projectFor ?? intakeDefaultPorts().projectFor(root);
