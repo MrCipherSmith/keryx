@@ -456,7 +456,7 @@ async function announce(
   const at = now();
   if (state.lastStatus !== undefined && state.lastStatus.text === text && at.getTime() - Date.parse(state.lastStatus.at) < STATUS_REPEAT_MS) return text;
   if (deps.sink === undefined) return text;
-  let ok = false;
+  let ok: boolean;
   try {
     ok = (await deps.sink.sendStatus(`${text}${reportPath !== undefined ? `\nОтчёт: ${reportPath}` : ""}`)).ok;
   } catch {
@@ -707,7 +707,7 @@ async function applyPendingEdits(root: string, sink: IntakeCardSink, failures: I
       done.push(cardId);
       continue;
     }
-    let ok = false;
+    let ok: boolean;
     try {
       ok = (await sink.editCard!(view, status)).ok;
     } catch {

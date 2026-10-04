@@ -19,6 +19,7 @@ import { ghEnvForProject } from "../scheduler/digest-gh";
 import { redactSensitiveText } from "../security/service";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 
+// eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
 const FLOW_DIR = /^(\d+)-[^/\\]+$/;
 
@@ -288,7 +289,7 @@ function remoteOf(projectPath: string): string | undefined {
 export function createDefaultProjectFinder(intakeRoot: string): IntakeProjectFinder {
   return (repo) => {
     const wanted = `/${repo.toLowerCase()}`;
-    let registered: string[] = [];
+    let registered: string[];
     try {
       registered = listProjects()
         .filter((p) => p.state === "active")

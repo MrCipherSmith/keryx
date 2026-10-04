@@ -60,6 +60,7 @@ export function parseIntakeCallbackData(data: string): { readonly cardId: string
 /** One line of untrusted text with every character that could become markup removed, cut to `max`. */
 export function plainText(value: string, max: number): string {
   const flat = value
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f\u2028\u2029\u00a0]+/g, " ")
     .replace(/[*_~`[\]<>|\\]/g, "")
     .replace(/\s+/g, " ")

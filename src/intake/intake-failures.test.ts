@@ -8,7 +8,7 @@ import path from "node:path";
 import { backoffMs, DELIVERY_MAX_ATTEMPTS } from "../scheduler/digest-delivery";
 import { flushIntakeCards, runIntakePoll } from "./poll";
 import { readIntakeCardViews, readIntakeState } from "./store";
-import { FakeGh, FakeSink, REPO, TestClock, depsFor, fakeAssessor, issuesJson, local, ownPrsJson, reviewsJson, setupIntakeEnv, takeBaseline, testConfig, type IntakeTestEnv } from "./intake.test-helpers";
+import { FakeGh, FakeSink, REPO, TestClock, depsFor, fakeAssessor, issuesJson, local, reviewsJson, setupIntakeEnv, takeBaseline, testConfig, type IntakeTestEnv } from "./intake.test-helpers";
 
 let env: IntakeTestEnv;
 beforeEach(async () => {

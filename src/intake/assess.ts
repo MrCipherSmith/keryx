@@ -43,6 +43,7 @@ export type IntakeModelReply = { readonly ok: true; readonly text: string; reado
 export type IntakeModelCall = (request: IntakeModelRequest) => Promise<IntakeModelReply>;
 
 function clip(text: string, max: number): string {
+  // eslint-disable-next-line no-control-regex
   const flat = redactSensitiveText(text).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
@@ -77,6 +78,7 @@ export function parseAssessment(text: string, allowed: readonly IntakeAction[]):
   if (typeof record["assessment"] !== "string") return undefined;
   const assessment = record["assessment"]
     .replace(/(?:https?|ftp):\/\/\S+|www\.\S+/gi, "")
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
