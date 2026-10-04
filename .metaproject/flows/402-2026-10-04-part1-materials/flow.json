@@ -11,12 +11,12 @@
   "title": "Part 1 article materials: protocol, counts script, contribution log, pilot export",
   "status": "in-progress",
   "createdAt": "2026-10-04T13:12:49.686Z",
-  "updatedAt": "2026-10-04T13:24:47.602Z",
+  "updatedAt": "2026-10-04T14:54:26.123Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ff2c199401815dc079f2128c925f11f5a7c84400d606c92549d4460fb5dde96b",
+  "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -135,6 +135,16 @@
       "at": "2026-10-04T13:24:47.602Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-04T14:54:25.931Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"`protocol-part2.md` equals the attached `protocol-part2-v1.md` except for a first line `Version 1, fixed 2026-10-04` and the version table, which keeps the date and says later changes are new versions, not edits. [verify: exec `bun test src/docs/part1-materials.test.ts`]\" -> \"`protocol-part2.md` equals the operator's attached `protocol-part2-v2.md` byte for byte (version 2, fixed 2026-10-04, which corrects the P1 support condition of version 1 and keeps the version table with both rows); the test checks its SHA-256. [verify: exec `bun test src/docs/part1-materials.test.ts`]\" (Operator replaced protocol v1 with v2 (P1 support condition: upper bound instead of lower bound) in message 183166, before any confirmatory observation)"
+    },
+    {
+      "at": "2026-10-04T14:54:26.123Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"Every row of `contribution-log.md` has the form `YYYY-MM-DD · source · «verbatim quote» · what changed in the article`, and the quote is found verbatim in the named source. A row without a findable quote is not written. The log holds at least the rows the prompt names that have a findable quote, and the README or the flow journal lists each named decision for which no quote was found. [verify: judged]\" -> \"Every row of `contribution-log.md` has the form `YYYY-MM-DD · source · «verbatim quote» · what changed in the article`, and the quote is found verbatim in the named source (a channel message id, or the operator's export of the article draft comment threads, `draft-comments-export.md`, supplied 2026-10-04). A row without a findable quote is not written, and a row whose quote would reveal the operator's employer, team repositories or working hours is held back and listed by number in the flow journal for the operator to decide. [verify: judged]\" (Operator supplied the draft comment export in message 183166; add its source and the privacy hold rule consistent with AC7)"
     }
   ],
   "acKinds": {

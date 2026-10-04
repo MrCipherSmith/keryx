@@ -25,10 +25,10 @@ The script reads only `.metaproject/flows/*` and writes `part1-counts.json` to t
 ## Files
 
 - `README.md`: this file.
-- `protocol-part2.md`: the protocol for part 2, version 1, fixed 2026-10-04. Later changes are made as a new version with a new row in its version table, not as an edit of the text.
+- `protocol-part2.md`: the protocol for part 2, version 2, fixed 2026-10-04. Later changes are made as a new version with a new row in its version table, not as an edit of the text.
 - `part1-counts.py`: the counting script, unchanged.
 - `part1-counts.json`: the script output at `04809f4f`.
-- `contribution-log.md`: dated operator decisions that changed the direction of the article, with verbatim quotes.
+- `contribution-log.md`: dated operator decisions that changed the direction of the article, with verbatim quotes (45 rows).
 - `decisions-export-2026-10-04.jsonl`: the recommendation journal exported without text, produced by `keryx decisions export --since 2026-10-02T00:00:00Z`.
 
 ## Counts at the snapshot
@@ -47,17 +47,8 @@ The count differs from the 37 decisions named in the protocol. The export comman
 
 ## Protocol version
 
-`protocol-part2.md` is version 1. Its text is the original protocol with one added first line giving the version and date, and one added closing note about how versions are changed.
+`protocol-part2.md` is version 2, fixed 2026-10-04 and copied unchanged from the operator's attachment. Version 1, fixed the same day and before any confirmatory observation, had a logic error in the P1 support condition; version 2 corrects it. Later changes are new versions.
 
-## Not in the log
+## Contribution log
 
-These decisions are named in the brief for the log but have no verbatim quote in the sources that were available, so no row is written for them:
-
-- the genre decision (essay-research);
-- dropping the word "corpus";
-- «не по вечерам, а в свободное время»;
-- the ban on details about team repositories (the log may only say that such a ban exists);
-- «ведём эксперимент через слепые вопросы»;
-- the choice of thresholds P1, P2, P3 and P5 on 4 October.
-
-Their quotes are expected in the operator's artifact-comment export, and rows will be added when it is supplied.
+`contribution-log.md` has 45 rows: the first twelve come from operator messages in the working session, the rest from the operator's export of draft comments of 2026-10-04. Some decisions are withheld from the log at the author's discretion, and decisions without a findable quote are not logged.

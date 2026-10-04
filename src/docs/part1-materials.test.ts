@@ -1,5 +1,5 @@
 // Flow 402: the part 1 materials for the article stay what they claim to be. The directory holds exactly
-// the six files, the protocol is the original text plus the two added pieces, the recommendation export
+// the six files, the protocol is byte-equal to version 2, the recommendation export
 // carries no words, and the directory names none of the terms kept out of it.
 
 import { describe, expect, it } from "bun:test";
@@ -21,12 +21,9 @@ const FILES = [
   "protocol-part2.md",
 ];
 
-// Version 1 of the protocol, as it was handed over. The original file is not in the repository, so the
-// comparison is by digest of its exact bytes: any edit to the body changes the digest.
-const PROTOCOL_V1_SHA256 = "166dfcaabff3e761120199aa80b096c3ee9777910bae7ab69862ebb955c69e3b";
-const ADDED_HEADER = "Version 1, fixed 2026-10-04\n\n";
-const ADDED_NOTE =
-  "\nПримечание: любое последующее изменение протокола оформляется новой версией файла с новой строкой в таблице выше, а не правкой текста.\n";
+// Version 2 of the protocol, copied unchanged from the operator's attachment. The comparison is by digest of
+// the exact bytes: any edit to the file changes the digest, and a later change has to be a new version.
+const PROTOCOL_V2_SHA256 = "4ea9dde3b7cd9be948a3bc1fc3b08c70d49c84e2754ce5a6f9d4c5b975f2a5fe";
 
 const RATING_KEYS = ["rater", "quality", "model", "cleanContext", "modelAgree", "at"];
 const FORBIDDEN_KEYS = ["question", "options", "reason", "ownAnswer", "answer", "text", "note", "label", "description"];
@@ -37,12 +34,14 @@ describe("the part 1 materials directory (flow 402)", () => {
     expect(readdirSync(DIR).sort()).toEqual([...FILES].sort());
   });
 
-  it("keeps the protocol equal to version 1 apart from the added header and the version note", () => {
-    const text = read("protocol-part2.md");
-    expect(text.startsWith(ADDED_HEADER)).toBe(true);
-    expect(text.endsWith(ADDED_NOTE)).toBe(true);
-    const body = text.slice(ADDED_HEADER.length, text.length - ADDED_NOTE.length);
-    expect(createHash("sha256").update(body).digest("hex")).toBe(PROTOCOL_V1_SHA256);
+  it("keeps the protocol byte-equal to version 2, with version rows for 1 and 2", () => {
+    const text = readFileSync(path.join(DIR, "protocol-part2.md"));
+    expect(createHash("sha256").update(text).digest("hex")).toBe(PROTOCOL_V2_SHA256);
+    const lines = text.toString("utf8").split("\n");
+    expect(lines[0]?.startsWith("# ")).toBe(true);
+    expect(lines[0]?.endsWith("версия 2")).toBe(true);
+    expect(lines.some((line) => /^\| \d{4}-\d{2}-\d{2} \| 2 \|/.test(line))).toBe(true);
+    expect(lines.some((line) => /^\| \d{4}-\d{2}-\d{2} \| 1 \|/.test(line))).toBe(true);
   });
 
   it("exports only allow-listed keys, with no field that could carry text", () => {
