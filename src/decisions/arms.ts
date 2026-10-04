@@ -252,7 +252,7 @@ export async function loadRepoSalt(cwd: string, options: SaltOptions = {}): Prom
     await rename(temp, file);
   } catch (cause) {
     await rm(temp, { force: true }).catch(() => undefined);
-    throw new Error(`could not create the decisions salt file ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    throw new Error(`could not create the decisions salt file ${file}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
   }
   // another process may have replaced it in the same instant: whatever is on disk now is the salt
   const settled = (await readSalt(file)).salt ?? fresh;

@@ -64,9 +64,10 @@ test("ask_user passes the irreversible flag and the action tag to the host (flow
   expect(seen).toEqual([{ action: "release", irreversible: true }, {}, {}]);
 });
 
-test("the ask_user definition tells the agent it must set irreversible or action", () => {
+test("the ask_user definition describes irreversible and action without telling the agent how an arm is chosen", () => {
   const { definition } = createAskUserTool(async () => "x");
-  expect(definition.description).toMatch(/MUST set irreversible: true, or name it in action/);
+  expect(definition.description).toMatch(/irreversible: true means the question decides something that cannot be undone/);
+  expect(definition.description).not.toMatch(/blind|arm|MUST set irreversible/i);
   for (const word of ["release", "publish", "deploy", "delete", "push"]) expect(definition.description).toContain(word);
   const properties = (definition.inputSchema as { properties: Record<string, { type: string }> }).properties;
   expect(properties["action"]?.type).toBe("string");
