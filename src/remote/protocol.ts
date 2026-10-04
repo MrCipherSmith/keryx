@@ -283,6 +283,23 @@ export const RESERVED_CHOICE_PREFIX = "pk:";
 /** The most buttons one prompt may carry in total. */
 export const MAX_PROMPT_BUTTONS = 24;
 
+// ---- work intake cards (flow 403) ---------------------------------------------------------
+//
+// Intake cards live in the service topic "Intake", not in a session topic. Their buttons carry
+// `in:<card id>:<action code>`; the hub hands such a press to the intake handler only when it came
+// from an allowlisted user, in this chat, on a message of that topic. What the press does is read
+// from the intake registry, never from the data.
+
+/** The service topic the intake cards are written into. */
+export const INTAKE_SERVICE_TOPIC = "Intake";
+/** Button data of an intake card starts with this; shells may not use it and the hub routes it to intake. */
+export const RESERVED_INTAKE_PREFIX = "in:";
+
+/** True when `data` is within Telegram's limit and in the intake namespace. */
+export function isIntakeCallbackData(data: unknown): data is string {
+  return typeof data === "string" && data.startsWith(RESERVED_INTAKE_PREFIX) && Buffer.byteLength(data, "utf8") <= MAX_CALLBACK_DATA_BYTES;
+}
+
 /**
  * `always` (flow 396) is "allow this call and remember the offered pattern". It can only be the
  * answer to an approval that carried a `remember` offer; serve ignores it otherwise.
