@@ -261,7 +261,12 @@ type Key = { name: string; sequence: string };
 function openModalFake(
   getStatus: () => RemoteStatus,
   onToggle: () => void = () => {},
-  extra: { getPostureLines?: () => readonly string[] | undefined; visibleRows?: number; onHistory?: () => void | Promise<string | undefined> } = {},
+  extra: {
+    getPostureLines?: () => readonly string[] | undefined;
+    visibleRows?: number;
+    onHistory?: () => void | Promise<string | undefined>;
+    subscribeChange?: (listener: () => void) => () => void;
+  } = {},
 ) {
   const painted = new Map<string, { content: string }>();
   let input: { title: string; tabs: readonly { id: string; label: string }[]; initialTab?: string; footer?: readonly { key: string; label: string }[] } | undefined;
@@ -572,6 +577,37 @@ test("AC5: the status block and the sidebar row show the unconfirmed-approvals c
   // Off says nothing about approvals, whatever a stale count was.
   expect(formatRemoteStatusLines({ state: "off", unconfirmedApprovals: 3, events: [] }).join("\n")).not.toContain("not confirmed");
   expect(projectRemoteRow({ state: "off", unconfirmedApprovals: 3, events: [] }, 40).text).toBe("off");
+});
+
+// Flow 397 review L-1: an open modal repaints on the bridge's change notice, with no keypress, and stops once closed.
+test("L-1: an open modal repaints the unconfirmed-approvals line when the bridge reports a change, and unsubscribes on close", () => {
+  let status: RemoteStatus = { state: "on", name: "release", heartbeatAgeMs: 1000, events: [] };
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const listener of [...listeners]) listener();
+  };
+  const m = openModalFake(() => status, () => {}, {
+    visibleRows: 30,
+    subscribeChange: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  });
+  expect(m.text("status")).not.toContain("not confirmed");
+  expect(listeners.size).toBe(1);
+
+  status = { ...status, unconfirmedApprovals: 3 };
+  notify();
+  expect(m.text("status")).toContain("Approvals not confirmed: 3");
+
+  status = { state: "on", name: "release", heartbeatAgeMs: 1000, events: [] };
+  notify();
+  expect(m.text("status")).not.toContain("not confirmed");
+
+  m.close();
+  expect(listeners.size).toBe(0);
 });
 
 // ---- history (flow 399) -----------------------------------------------------------

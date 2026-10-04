@@ -206,6 +206,12 @@ export type PresentRemoteOptions = {
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
+  /**
+   * Subscribe to the bridge's change notices (a decision confirmed or aged out, a state change):
+   * the open modal repaints on each, so "Approvals not confirmed: N" appears and clears without a
+   * keypress. Returns the unsubscribe, called when the modal closes.
+   */
+  subscribeChange?: (listener: () => void) => () => void;
 };
 
 function paint(otui: unknown, renderer: unknown, body: unknown, id: string, content: string): { content: string } | undefined {
@@ -238,6 +244,7 @@ export function presentRemoteControl(
   let current = "status";
   const nodes = new Map<string, { content: string }>();
   let unsubscribeKey: (() => void) | undefined;
+  let unsubscribeChange: (() => void) | undefined = undefined;
   /** What the last `h` press says: that it is posting, or why nothing was posted. Shown in the status tab. */
   let historyNote: string | undefined;
   let postingHistory = false;
@@ -279,9 +286,13 @@ export function presentRemoteControl(
     onClose: () => {
       closed = true;
       unsubscribeKey?.();
+      unsubscribeChange?.();
     },
   });
   if (handle === undefined) return undefined;
+  unsubscribeChange = options.subscribeChange?.(() => {
+    if (!closed) repaint();
+  });
   if (options.onKeypress !== undefined) {
     unsubscribeKey = options.onKeypress((key) => {
       const token = key.name || key.sequence;
