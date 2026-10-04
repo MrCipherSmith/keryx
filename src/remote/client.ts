@@ -168,6 +168,21 @@ const DEFAULT_BACKOFF_INITIAL_MS = 250;
 const DEFAULT_BACKOFF_MAX_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const MAX_EARLY_DECISIONS = 32;
+
+/** Why serve refused a request: the message it sent (bounded, one line), else a sentence for the status. */
+async function refusalReason(response: Response): Promise<string> {
+  try {
+    const parsed = (await response.json()) as { error?: { message?: unknown } } | null;
+    const message = parsed?.error?.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message.replace(/\s+/g, " ").trim().slice(0, 200);
+    }
+  } catch {
+    // No readable body: the status says enough.
+  }
+  return response.status === 429 ? "too many questions are waiting for this session" : `the topic refused the question (status ${response.status})`;
+}
+
 /**
  * A decision frame can beat the response that names its approval id by a few milliseconds. That is the
  * only reason to park one; a frame no question claims within this long was for a question that is gone.
@@ -475,34 +490,42 @@ export class RemoteClient {
    * stream. Nothing here ever turns an absent answer into a yes.
    */
   async requestChoice(text: string, rows: string[][], timeoutMs: number, forUserId?: number): Promise<number | undefined> {
+    return (await this.askChoice(text, rows, timeoutMs, forUserId)).index;
+  }
+
+  /**
+   * Like {@link requestChoice}, and when serve refused the question (too many waiting, no stream, an
+   * error) it says why in `refusal`, so the caller can tell the operator instead of calling it a timeout (flow 387 review, L-4).
+   */
+  async askChoice(text: string, rows: string[][], timeoutMs: number, forUserId?: number): Promise<{ index: number | undefined; refusal?: string }> {
     if (!this.connected) {
-      return undefined;
+      return { index: undefined, refusal: "the shell is not connected to this topic" };
     }
     const body: PromptBody = { sessionId: this.options.sessionId, text, rows, timeoutMs, ...(forUserId === undefined ? {} : { forUserId }) };
     let promptId: string;
     try {
       const response = await this.post("prompt", body);
       if (!response.ok) {
-        return undefined;
+        return { index: undefined, refusal: await refusalReason(response) };
       }
       promptId = ((await response.json()) as PromptResponse).promptId;
     } catch {
-      return undefined;
+      return { index: undefined, refusal: "the question could not be sent to the topic" };
     }
     const early = this.earlyChoices.get(promptId);
     if (early !== undefined) {
       this.earlyChoices.delete(promptId);
-      return early;
+      return { index: early };
     }
     if (!this.connected) {
-      return undefined;
+      return { index: undefined };
     }
-    return new Promise<number | undefined>((resolve) => {
+    return new Promise<{ index: number | undefined }>((resolve) => {
       const timer = setTimeout(() => {
         this.choiceWaiters.delete(promptId);
-        resolve(undefined);
+        resolve({ index: undefined });
       }, timeoutMs);
-      this.choiceWaiters.set(promptId, { resolve, timer });
+      this.choiceWaiters.set(promptId, { resolve: (index) => resolve({ index }), timer });
     });
   }
 
