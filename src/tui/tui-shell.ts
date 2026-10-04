@@ -6834,9 +6834,18 @@ export async function launchTuiAgentShell(opts: {
         if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
       });
     };
+    // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
+    // (an approval confirmed or aged out), not only on the next keypress.
+    const remoteModalListeners = new Set<() => void>();
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        subscribeChange: (listener) => {
+          remoteModalListeners.add(listener);
+          return () => {
+            remoteModalListeners.delete(listener);
+          };
+        },
         getPostureLines: () => {
           const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
           return posture === undefined ? undefined : postureLines(posture);
@@ -9930,6 +9939,7 @@ export async function launchTuiAgentShell(opts: {
         },
         onChange: () => {
           liveRemotePanel?.refresh();
+          for (const listener of [...remoteModalListeners]) listener();
           // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
           paintModeRow();
         },

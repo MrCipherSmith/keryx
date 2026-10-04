@@ -375,7 +375,8 @@ test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-que
     ["remoteQueue.requeuePendingEdit(", 1],
     ["remoteQueue.runQueued(", 5],
     ["remoteQueue.turnStarted(source);", 1],
-    ["void remoteQueue.turnSettled({", 1],
+    // Flow 397 review T-2: the whole argument mapping, so constant flags (no failure reply) turn the test red.
+    ["void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });", 1],
     ["remoteQueue.runTelegramLine(", 1],
     ["remoteQueue.enqueueTelegramLine(", 1],
     ["remoteQueue.dropQueuedTelegramLines(", 1],
@@ -404,6 +405,34 @@ test("flow 399 T-2: tui-shell.ts still feeds the session entry and the history i
     // The bridge's reads: what the session says so far, and whether it was resumed.
     ["history: () => (archive.length > 0 ? archive : history),", 1],
     ["sessionResumed: () => sessionResumed,", 1],
+  ];
+  const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
+  expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
+});
+
+// Flow 397 review T-1: a session switch drops the remote bridge and the queued Telegram lines of the old
+// session. `applyOpened` (startup picker, /resume) and `startNewSession` (/new, /clear) each replace
+// `liveSession`; the stop must sit immediately before that assignment, in both, or the old session keeps
+// the remote attached (F-014). Text cannot drive the closure, so the order is read from the source.
+test("flow 397 T-1: both session replacements stop the remote immediately before liveSession changes", () => {
+  const source = readFileSync(SHELL_SOURCE, "utf8");
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  // The alias the shell's call sites use is the wiring method, once.
+  expect(shellOccurrences(source, "const stopRemoteForSessionSwitch = (): void => remoteQueue.stopRemoteForSessionSwitch();")).toBe(1);
+  // Every assignment of the live session from an opened handle is a session replacement.
+  expect(shellOccurrences(source, "liveSession = opened.handle;")).toBe(2);
+  // Each is directly preceded by the stop call (applyOpened, startNewSession).
+  const guarded = code.match(/stopRemoteForSessionSwitch\(\);\s*liveSession = opened\.handle;/g) ?? [];
+  expect(guarded).toHaveLength(2);
+});
+
+// Flow 397 review L-1: the open /remote-control modal follows the bridge's change notice.
+test("flow 397 L-1: tui-shell.ts hands the modal a change subscription and notifies it from the bridge's onChange", () => {
+  const source = readFileSync(SHELL_SOURCE, "utf8");
+  const expected: Array<[string, number]> = [
+    ["const remoteModalListeners = new Set<() => void>();", 1],
+    ["subscribeChange: (listener) => {", 1],
+    ["for (const listener of [...remoteModalListeners]) listener();", 1],
   ];
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
   expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
