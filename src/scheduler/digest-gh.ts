@@ -14,6 +14,12 @@
 // account from the PROJECT'S path and passes it as `GH_ACCOUNT`, the wrapper's
 // own override. It never runs `gh auth switch` or `gh auth login`, and no
 // catalogue entry could (see `ghReadOnlyProblem`).
+//
+// `GH_ACCOUNT` means something only to that wrapper. Against the real `gh`
+// binary it is ignored and gh uses whichever login is active. The digest cannot
+// ask gh who that is (`gh api` and `gh auth` are not in the read-only catalogue),
+// so it states in every run report which account it asked for, and the guide
+// says the choice needs the wrapper.
 
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -44,14 +50,56 @@ export function ghAccountForPath(
   return resolved === work || resolved.startsWith(`${work}${path.sep}`) ? "work" : "personal";
 }
 
-/** The environment the digest's gh calls run with: the operator's own, plus the path-chosen account. */
+/**
+ * The variables a digest's gh child may inherit from serve: what gh and the machine's gh wrapper need to
+ * find their config, the network and the locale, and nothing else. A token variable (`GH_TOKEN`,
+ * `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`) is never on the list: it would silently override the account the
+ * project's path chose, and no other secret of the host has any business in a read-only `gh` call.
+ */
+const GH_ENV_ALLOWED: ReadonlySet<string> = new Set([
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "TERM",
+  "TZ",
+  "LANG",
+  "LANGUAGE",
+  // gh's own config location, and the gh wrapper's overrides (see the header of this file)
+  "GH_CONFIG_DIR",
+  "GH_HOST",
+  "GH_REAL_BIN",
+  "GH_WORK_ROOT",
+  "GH_WORK_CONFIG_DIR",
+  "GH_PERSONAL_CONFIG_DIR",
+  // a corporate proxy or CA bundle, so gh can still reach GitHub
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+]);
+
+function ghEnvAllowed(name: string): boolean {
+  return GH_ENV_ALLOWED.has(name) || name.startsWith("LC_") || name.startsWith("XDG_");
+}
+
+/** The environment the digest's gh calls run with: an allowlisted part of the operator's own, plus the path-chosen account. */
 export function ghEnvForProject(
   projectRoot: string,
   base: Record<string, string | undefined> = process.env,
 ): Record<string, string | undefined> {
   const workRoot = base["GH_WORK_ROOT"];
   const account = ghAccountForPath(projectRoot, workRoot !== undefined && workRoot.length > 0 ? { workRoot } : {});
-  return { ...base, GH_ACCOUNT: account };
+  const env: Record<string, string | undefined> = {};
+  for (const [name, value] of Object.entries(base)) {
+    if (value !== undefined && ghEnvAllowed(name)) env[name] = value;
+  }
+  return { ...env, GH_ACCOUNT: account };
 }
 
 export interface GhCall {
