@@ -3,6 +3,11 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+- **Work intake from GitHub (flow 403).** `keryx serve` polls the repositories listed in `.metaproject/data/intake/config.json` for tickets assigned to you, review requests, failed CI on your own pull requests, comments on them and board movement, and sends each new event as a card with buttons in the Telegram topic "Intake". Take opens a flow from the ticket, review opens a review flow, CI cards run a read-only triage, and Later reminds once. The first poll is a baseline, events are deduplicated, nothing goes out in quiet hours, at most six cards an hour are sent with an overflow card for the rest, and a work repository never offers Take. A model assessment is bounded by a per-run dollar budget, and the whole feature is read-only toward GitHub. `keryx intake status|list|pause|resume|poll|report`, an `/intake` modal and a sidebar line in `keryx shell`. A project takes part only when its intake config exists and is enabled. Guide: `docs/docs/guides/work-intake.md`.
+
 ## [0.3.73] — 2026-10-04
 This release also carries 0.3.69 to 0.3.72, which were bumped on main but never published: the `v0.3.69` release run failed in the test gate and 0.3.70 to 0.3.72 were never tagged. The last version on npm before this one is 0.3.68, and their entries are below.
 

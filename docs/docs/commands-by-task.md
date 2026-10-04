@@ -128,6 +128,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx permissions` | The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
 | `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). A question also takes your own text: the last row "Свой ответ…" in the shell, the "✍ Свой ответ" button in Telegram, and Tab after an option adds a typed reason. |
+| `keryx intake` | GitHub work intake: tickets, review requests, failed CI, PR comments and board movement as cards in Telegram; status, pause, poll by hand, and a usefulness report. |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
@@ -148,6 +149,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. |
 | `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
+| `/intake` | GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status\|list\|pause\|resume\|poll]. |
 | `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |
 | `/remote-policy` | Telegram defaults for a turn started there: mode ask\|trust, run limit, approval wait. Never changes the shell's /mode. |
 

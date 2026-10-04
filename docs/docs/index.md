@@ -45,6 +45,7 @@ the one that describes shipped behaviour.
 - [Review every pull request with a bot, and measure it](guides/review-as-a-pr-bot.md)
 - [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md)
 - [Get a GitHub and board digest on a schedule](guides/scheduled-digest.md)
+- [Take work in from GitHub as cards in Telegram](guides/work-intake.md)
 - [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
 - [Slate for external agents](guides/slate.md)
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
