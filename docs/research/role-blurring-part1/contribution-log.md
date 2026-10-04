@@ -40,7 +40,11 @@ Quotes are in the language they were written in (Russian). The source of each ro
 
 2026-10-03 · article draft comment, §1, описание keryx, 07:06 UTC · «Сходи в https://github.com/MrCipherSmith/keryx посмотри о чем проект, и сформулируй точнее описание - как минимум это проект о управлении, разработке, менеджменте, организации памяти и тп. тебе нужно в теже несколько слов уместить описание (что бы он выглядел сильно и рекламировался в этой статье сам себя)» · The description of keryx was rewritten from its README.
 
+2026-10-03 · article draft comment, §1, роли в команде, 07:09 UTC · «замени на проджект или продукт менеджер, дизайнер,» · The list of roles was changed to project or product manager and designer.
+
 2026-10-03 · article draft comment, §2, 07:13 UTC · «выдели эту часть жирным - или как-то с акцентируй» · The claim "when trying is cheaper than discussing, discussion disappears" was emphasized.
+
+2026-10-03 · article draft comment, §1, роли в команде, 10:47 UTC · «Оставь только дизайнера, продукты у нас вообще не понятно чем занимаются» · Only the designer was kept in the example of role blurring.
 
 2026-10-04 · article draft comment, §2, 04:05 UTC · «Сегодня уже сентябрь 2026, нужно поискать свежие данные» · The industry background was rebuilt on 2025–2026 sources (LinearB, Sonar, DORA, Carta, Stripe).
 
