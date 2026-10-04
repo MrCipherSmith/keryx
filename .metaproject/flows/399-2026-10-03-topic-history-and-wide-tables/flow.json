@@ -11,7 +11,7 @@
   "title": "Telegram topic history restore and wide tables",
   "status": "implemented",
   "createdAt": "2026-10-03T06:28:47.928Z",
-  "updatedAt": "2026-10-03T18:15:58.641Z",
+  "updatedAt": "2026-10-04T07:09:19.905Z",
   "source": {
     "type": "description",
     "ref": null
@@ -77,7 +77,7 @@
     }
   },
   "pr": {
-    "url": "871"
+    "url": "https://github.com/MrCipherSmith/keryx/pull/871"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -96,7 +96,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -104,14 +104,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context gathered during PRD/AC drafting and the F2 design work; the flow's PR 871 and test PR 874 carry the result."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -119,14 +121,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented in PR 871 (merged as 99f0400c)."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -134,14 +138,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Tests shipped with PR 871; the remaining test gaps from review (T-1, T-2) were added in PR 874 (merged)."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -149,7 +155,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review ran as an independent review round on PR 871; findings and their dispositions are in the flow's reviews/ folder."
     }
   ],
   "history": [
@@ -370,6 +378,26 @@
       "at": "2026-10-03T18:15:58.641Z",
       "event": "implemented",
       "detail": "draft PR: 871 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-04T07:09:18.573Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-04T07:09:19.052Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-04T07:09:19.463Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-04T07:09:19.905Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
