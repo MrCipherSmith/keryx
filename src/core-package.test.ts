@@ -384,6 +384,7 @@ test("review round 1, REG-1: core.security and core.impactEvidence member names 
     "isDeniedForMcpChild",
     "isEntropyBackendEnabled",
     "loadSecurityConfig",
+    "looksLikeSecret",
     "looksSecretShaped",
     "looksSecretShapedIn",
     "memoizeResolved",

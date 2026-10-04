@@ -9,12 +9,12 @@ import { readJournal } from "./store";
 export { CANCEL_ANSWER, journalAsk } from "./ask";
 export { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
 export type { DecisionSource } from "./sources";
-export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
+export type { AskAnswer, AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
 export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
-export type { ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, LegacyReport, ReportOptions, Tally, TimingStats } from "./report";
+export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, LegacyReport, ReportOptions, Tally, TimingStats } from "./report";
 export { effectiveArm, isLegacy, stampLegacy } from "./legacy";
 export {
   MODEL_LABEL,
@@ -33,7 +33,7 @@ export type { ImportResult } from "./import";
 export { journalFile, resolveJournalFile } from "./store";
 export { resolveFlowContext } from "./context";
 export type { FlowContext, FlowSource } from "./context";
-export { MAX_TEXT_LENGTH, oneLine } from "./text";
+export { MAX_OPERATOR_TEXT_LENGTH, MAX_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
 export type { ChangeAnswerResult, GiveReasonResult } from "./followup";
 export type {
@@ -65,6 +65,11 @@ export async function reportLine(cwd: string): Promise<string> {
 /** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
 export async function decisionCount(cwd: string): Promise<number> {
   return (await loadReport(cwd)).total;
+}
+
+/** How many live decisions carry the operator's own text or a typed reason (flow 401). */
+export async function annotatedCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).annotated.length;
 }
 
 /** How many backfilled (imported, historical) decisions the journal holds. */

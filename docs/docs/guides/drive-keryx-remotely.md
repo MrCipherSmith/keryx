@@ -224,7 +224,7 @@ that it is off.
   same token meets a conflict from Telegram and stops polling for good instead of
   taking updates from the first.
 - **Two secrets, two route tables.** The `/v1/remote/*` routes (`register`,
-  `deregister`, `heartbeat`, `reply`, `approval`, `approval-ack`, `ack`, and `GET stream`) accept
+  `deregister`, `heartbeat`, `reply`, `approval`, `approval-ack`, `prompt`, `prompt-close`, `ack`, and `GET stream`) accept
   the shell token only, from a loopback connection. The serve bearer token does
   not reach them, and the shell token reaches nothing else. The shell token is
   new every time `serve` starts and the shell re-reads it on each request, so
@@ -453,6 +453,47 @@ message and the person it was sent to, expires, and is never mixed up with an
 approval button. After a press, the message is edited in place to show what was
 chosen and the buttons go away; approval messages are edited the same way.
 
+**Questions from the agent, and your own answer.** When a turn that started from
+Telegram makes the agent ask a question with options (`ask_user`), the question is
+shown in the topic with one button per option and a last button, **`✍ Свой ответ`**
+(own answer). It is shown in the shell's dock at the same time, and the first answer
+wins: the other place is closed, and the topic message is edited to say it was
+answered in the shell, or the dock says it was answered in Telegram. A question from
+a turn typed in the shell, and the pickers behind `/model`, `/connect` and `/resume`,
+have no own-answer button.
+
+- Press `✍ Свой ответ` and keryx posts a message that asks you to reply to it. Reply
+  to **that message** (Telegram's Reply, not a new line) with your text. The text is
+  returned to the agent as your own answer, not as an option. The question message
+  is edited to `Own answer (user <id>, <time>)`: it records who answered and when, not
+  the text (the shell's transcript and the journal show the text, redacted). The
+  reply must come from the same person who was asked. If the dock answered in the
+  same moment, the shell drops your text and the message is corrected to say so.
+- The binding is the replied-to message and the person, never "the next message":
+  a reply to some other message, a reply from another person, or a reply posted in
+  another session's topic resolves nothing. A reply to the box never starts a turn.
+  A line you type without replying is an ordinary line for the agent, as before.
+- Pressing the button gives you at least **5 minutes** to type (the option buttons
+  keep their own timeout, `choiceTimeoutMs`, 2 minutes by default). A reply after the
+  window, or after the question was answered elsewhere, resolves nothing, and the
+  topic answers each such reply (from whoever sent it) with "That question is no
+  longer open".
+- Approvals (Allow, Deny, Always, `/mode`, grants) have no such path: typing "yes" or
+  "allow", as an own answer or as a reply, never approves anything. Only the
+  approval's own button does.
+- The own text and a reason are kept in the recommendation journal up to 2000
+  characters (a cut one ends with a visible `[truncated: N more characters]` marker)
+  and are redacted first, so a token-shaped string never reaches the journal, a
+  flow's `journal.md` or the report. See the
+  [recommendation journal](recommendation-journal.md#your-own-answer-and-a-typed-reason).
+
+`serve` keeps the box in memory: if it restarts while a box is waiting, the question
+is gone, and a reply to that box is told the question is no longer open (`serve`
+recognises the box by the text Telegram attaches to a reply); it never starts a turn.
+The shell closes a question on
+`serve` with the loopback route `prompt-close` when it was answered in the dock or the
+turn was stopped.
+
 **Approval answers are confirmed by the shell.** When you press Allow or Deny,
 `serve` writes the answer to the shell's stream and waits 5 seconds for the shell
 to post `approval-ack`. The ack says whether the answer was applied to a question the
@@ -463,7 +504,12 @@ session reconnected), the ack says so and the message ends "Not applied at <time
 shell was no longer waiting for this question, so the Allow from user N changed
 nothing."; the shell's transcript says the same and never says it allowed anything.
 A shell older than this field sends an ack without it, which means only that the frame
-was received, and the message ends "Allowed" as before. Without it the message ends "Sent to the shell at <time>, not confirmed;
+was received, and the message ends "Allowed" as before, so an older shell can
+over-report: it says Allowed even when it applied nothing, and only a current shell
+produces the "Not applied" ending. Like every shell route, the ack is authorised by the
+shared shell token and names its session in the body: `serve` refuses an id that was
+sent to another session, but anyone holding the token can ack for a session it names.
+Without it the message ends "Sent to the shell at <time>, not confirmed;
 the shell denies by itself if it did not receive it." and the short reply says the
 answer was sent but not confirmed. That wording is about an answer the shell never
 received: its own approval question then times out as a denial. An Allow that the
@@ -494,7 +540,8 @@ was refused and why.
 `main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a
 short notice if it takes a while. A command from the topic never cancels the turn
 you are running in the shell: one that outlasts the limit is only no longer waited
-for, the topic is told it is still running in the shell, and it is left alone.
+for, the topic is told it is still running in the shell, and it is left alone; when it
+ends, the topic is told how it ended and what it printed.
 
 **`/new` and `/clear` keep the topic.** The topic stays bound to the running shell,
 gets one separator line (`--- new session ---`), and the session history records

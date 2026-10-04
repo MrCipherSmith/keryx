@@ -15,6 +15,7 @@ import {
   HISTORY_MAX_COUNT,
   HISTORY_SECRET_PLACEHOLDER,
   HISTORY_USAGE,
+  type HistoryItem,
   formatHistoryItem,
   looksLikeSecret,
   parseHistoryArgs,
@@ -52,6 +53,11 @@ const agent = (content: string): NormalizedMessage => ({ role: "assistant", cont
 const agentCalling = (content: string): NormalizedMessage =>
   ({ role: "assistant", content, toolCalls: [{ id: "c1", name: "read_file", arguments: "{}" }] }) as unknown as NormalizedMessage;
 const tool = (content: string): NormalizedMessage => ({ role: "tool", content, provenance: "tool", toolCallId: "c1" });
+
+/** The assistant message `message`, as a reasoning-capable model left it: visible chain of thought and an opaque replay payload. */
+function reasoned(message: NormalizedMessage, text: string, replay: string): NormalizedMessage {
+  return { ...message, reasoning: { text, redacted: false, replay: [{ providerId: "anthropic", kind: "thinking_signature", data: replay }], durationMs: 1200 } };
+}
 
 /** `turns` operator turns, each answered; message n of the conversation is "q<n>" then "a<n>". */
 function conversation(turns: number): NormalizedMessage[] {
@@ -91,6 +97,24 @@ describe("which messages qualify", () => {
     ]);
     expect(JSON.stringify(items)).not.toContain("let me look");
     expect(JSON.stringify(items)).not.toContain("output");
+  });
+
+  // AC7: reasoning is never posted. The fixtures carry every field a reasoning round has, on a
+  // tool-calling round and on the closing text round alike.
+  test("reasoning is never part of a message: not its text, not its replay payload", () => {
+    const history = [
+      user("q1"),
+      reasoned(agentCalling("let me look"), "THINKING-A the user wants the build checked", "REPLAY-A"),
+      tool("output"),
+      reasoned(agent("The build is green."), "THINKING-B no need to mention the cache", "REPLAY-B"),
+    ];
+    const items = qualifyingHistory(history);
+    expect(items).toEqual([
+      { role: "user", text: "q1" },
+      { role: "agent", text: "The build is green." },
+    ]);
+    expect(JSON.stringify(items)).not.toMatch(/THINKING|REPLAY/);
+    expect(formatHistoryItem(items[1] as HistoryItem)).toBe("Agent:\nThe build is green.");
   });
 
   test("the last 10 of a long session are items 16 to 25 of the 25, oldest first", () => {
@@ -175,6 +199,20 @@ describe("formatHistoryItem", () => {
     expect(straddling).not.toContain("sk-ant-api03-AbCd");
   });
 
+  // T-1 (flow 399 review): `SECRET` above is a long mixed-case run, so `looksLikeSecret` hides the whole
+  // turn and `redactSensitiveText` never runs. An AWS access key id is the other way round: the guard
+  // does not flag it and only the redactor can mask it.
+  test("a secret only the redactor knows is masked in place, before the cut (history.ts:134)", () => {
+    const AWS = "AKIAIOSFODNN7EXAMPLE";
+    expect(looksLikeSecret(AWS)).toBe(false);
+    expect(formatHistoryItem({ role: "user", text: `my aws key is ${AWS} thanks` })).toBe("You:\nmy aws key is [REDACTED:secret] thanks");
+    // It starts 10 characters before the cut: redacted after the cut it would stay half-shown ("AKIAIOSFO…").
+    const straddling = formatHistoryItem({ role: "agent", text: `${"x".repeat(HISTORY_ITEM_MAX_CHARS - 10)} ${AWS} ${"y".repeat(100)}` });
+    expect(looksLikeSecret(`${"x".repeat(HISTORY_ITEM_MAX_CHARS - 10)} ${AWS} ${"y".repeat(100)}`)).toBe(false);
+    expect(straddling).not.toContain("AKIAIO");
+    expect(straddling.endsWith("…")).toBe(true);
+  });
+
   test("a Telegram bot token or a bare token in a turn hides the whole turn, either role", () => {
     for (const text of [
       `here is the bot token ${BOT_TOKEN} thanks`,
@@ -210,6 +248,45 @@ describe("formatHistoryItem", () => {
       "На русском языке длинное слово: сверхъестественнейшаяпоследовательность",
     ]) {
       expect(looksLikeSecret(text)).toBe(false);
+    }
+  });
+
+  // L-1 (flow 399 review): a long identifier with a version number is mixed case plus a digit, and
+  // the whole turn that mentioned it used to be replaced by the placeholder.
+  test("a long camelCase or snake_case identifier with a digit in it is not a secret and the turn is kept", () => {
+    for (const identifier of [
+      "createManagedReviewPackageForVersion2Handler",
+      "parseHTTPResponseHeadersForProxyV2Adapter",
+      "buildTelegramHistoryRestorePlanFor10Items",
+      "Remote_Control_Topic_History_Restore_v2_Final",
+      "getUserProfileSettingsFromCache2",
+    ]) {
+      expect(identifier.length).toBeGreaterThanOrEqual(32);
+      expect(looksLikeSecret(identifier)).toBe(false);
+      const text = `see ${identifier} for details`;
+      expect(formatHistoryItem({ role: "agent", text })).toBe(`Agent:\n${text}`);
+    }
+  });
+
+  test("a token is still hidden when it carries word-like pieces, or sits next to an identifier", () => {
+    for (const text of [
+      // Built from pieces: a whole key-shaped literal would trip secret scanning on push.
+      ["sk", "live", "4eC39HqLyjWDarjtT1zdp7dcAbCdEfGh"].join("_"),
+      "ghp_16C7e42F292c6912E7710c838347Ae178B4a",
+      `createManagedReviewPackageForVersion2Handler ${SHELL_TOKEN}`,
+      "keyAbCdEfGhIjKlMnOpQrStUvWxYz0123456789Zq",
+      // Random base64url tokens whose pieces are long enough to read as words, but whose digits are
+      // scattered through the run (an identifier carries a version number or two).
+      "V4E9PvifRN1VMIRgxF5HYXFkibZenj_zorc",
+      "cntU92CS7AHYTwturM2dkcDQ7hhwMct34byy",
+      "N0y06KWO1JV9Ir05W1WQCBq5Bvhfj2TB9Q07l3G9",
+      // One or two digit groups, so only the word-length rule (a word is three letters or more)
+      // separates these from an identifier.
+      "aBcDeFgHiJkLmNoPqRsTuVwXyZaBcDeF1",
+      "xYzAbCdEfGhIjKlMnOpQrStUvWx7yZaBcDe3",
+    ]) {
+      expect(text.length).toBeGreaterThanOrEqual(32);
+      expect(looksLikeSecret(text)).toBe(true);
     }
   });
 
@@ -256,7 +333,9 @@ function bridgeHarness(
 ) {
   const calls: string[] = [];
   const sleeps: number[] = [];
-  const state = { history: opts.history ?? conversation(8), now: 1_000_000 };
+  // How often the bridge read the session's history. Only a restore or `/history` reads it, and a
+  // launched restore reads it before `enable()` returns, so "0" is a deterministic "no restore started".
+  const state = { history: opts.history ?? conversation(8), now: 1_000_000, reads: 0 };
   const host: RemoteBridgeHost = {
     sessionId: () => "sess-1",
     project: () => "/proj",
@@ -267,7 +346,14 @@ function bridgeHarness(
     cancelTurn: () => calls.push("cancel"),
     recordOn: (n) => calls.push(`on:${n}`),
     recordOff: () => calls.push("off"),
-    ...(opts.noHistoryHook ? {} : { history: () => state.history }),
+    ...(opts.noHistoryHook
+      ? {}
+      : {
+          history: () => {
+            state.reads += 1;
+            return state.history;
+          },
+        }),
     sessionResumed: () => opts.resumed ?? false,
     ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),
   };
@@ -348,7 +434,8 @@ describe("automatic restore", () => {
     const h = bridgeHarness({ reused: true, resumed: true });
     await h.bridge.enable();
     await h.bridge.idle();
-    await new Promise((r) => setTimeout(r, 20));
+    // No restore was started: it would have read the history before `enable()` returned.
+    expect(h.state.reads).toBe(0);
     expect(h.client().replies).toEqual([]);
     expect(h.bridge.status().history).toBeUndefined();
   });
@@ -356,14 +443,14 @@ describe("automatic restore", () => {
   test("a session that was not resumed is not refilled, even in a fresh topic", async () => {
     const h = bridgeHarness({ reused: false, resumed: false });
     await h.bridge.enable();
-    await new Promise((r) => setTimeout(r, 20));
+    expect(h.state.reads).toBe(0);
     expect(h.client().replies).toEqual([]);
   });
 
   test("a client that does not say whether the topic is new does not trigger a restore", async () => {
     const h = bridgeHarness({ resumed: true });
     await h.bridge.enable();
-    await new Promise((r) => setTimeout(r, 20));
+    expect(h.state.reads).toBe(0);
     expect(h.client().replies).toEqual([]);
   });
 
@@ -371,7 +458,9 @@ describe("automatic restore", () => {
     const h = bridgeHarness({ reused: false, resumed: true, history: [] });
     const result = await h.bridge.enable();
     expect(result.ok).toBe(true);
-    await new Promise((r) => setTimeout(r, 20));
+    // The restore did start (it read the history) and ended with the reason in the transcript.
+    await until(() => h.calls.some((c) => c.includes("not restored automatically")), "the restore to end");
+    expect(h.state.reads).toBe(1);
     expect(h.client().replies).toEqual([]);
     expect(h.bridge.status().state).toBe("on");
   });
@@ -382,10 +471,12 @@ describe("automatic restore", () => {
     await settle(h, 10);
     await h.bridge.disable();
     expect(h.bridge.status().history).toBeUndefined();
+    const readsBefore = h.state.reads;
     // The client says "new topic" again, as the hub does after a delete; the session is still resumed.
     await h.bridge.enable();
-    await new Promise((r) => setTimeout(r, 20));
     expect(h.clients).toHaveLength(2);
+    // No second restore started: it would have read the history before `enable()` returned.
+    expect(h.state.reads).toBe(readsBefore);
     expect(h.client().replies).toEqual([]);
     expect(h.bridge.status().history).toBeUndefined();
     // `/history` is how that topic gets its messages, and it does.
@@ -587,6 +678,27 @@ describe("/history from the shell", () => {
     ]);
   });
 
+  test("AC7: the reasoning of a round never reaches the topic, by /history or by the automatic restore", async () => {
+    const history = [
+      user("q1"),
+      reasoned(agent("a1"), "THINKING-1 private chain of thought", "REPLAY-1"),
+      user("q2"),
+      reasoned(agentCalling("looking"), "THINKING-2", "REPLAY-2"),
+      tool("output"),
+      reasoned(agent("a2"), "THINKING-3", "REPLAY-3"),
+    ];
+    const manual = bridgeHarness({ reused: true, history });
+    await manual.bridge.enable();
+    expect(await manual.bridge.postHistory(10)).toEqual({ ok: true, posted: 4 });
+    expect(manual.client().replies).toEqual(["You:\nq1", "Agent:\na1", "You:\nq2", "Agent:\na2"]);
+
+    const auto = bridgeHarness({ reused: false, resumed: true, history });
+    await auto.bridge.enable();
+    await settle(auto, 4);
+    expect(auto.client().replies).toEqual(["You:\nq1", "Agent:\na1", "You:\nq2", "Agent:\na2"]);
+    expect([...manual.client().replies, ...auto.client().replies].join("\n")).not.toMatch(/THINKING|REPLAY|chain of thought/);
+  });
+
   test("a secret in the session never reaches the topic", async () => {
     const h = bridgeHarness({ reused: true, history: [user(`use ${SECRET} for the call`), agent(`I used ${SECRET}`)] });
     await h.bridge.enable();
@@ -663,6 +775,9 @@ describe("the client reports whether the topic was new", () => {
 function realBridge(rig: Rig, opts: { resumed: boolean; sessionId: string; history?: NormalizedMessage[] }) {
   const clients: RemoteClient[] = [];
   const notices: string[] = [];
+  // Reads of the session's history: only a restore or `/history` makes one, and a launched restore
+  // makes it before `enable()` returns, so an unchanged count is a deterministic "no restore started".
+  const reads = { count: 0 };
   const bridge = new RemoteBridge({
     host: {
       sessionId: () => opts.sessionId,
@@ -674,7 +789,10 @@ function realBridge(rig: Rig, opts: { resumed: boolean; sessionId: string; histo
       cancelTurn: () => undefined,
       recordOn: () => undefined,
       recordOff: () => undefined,
-      history: () => opts.history ?? conversation(8),
+      history: () => {
+        reads.count += 1;
+        return opts.history ?? conversation(8);
+      },
       sessionResumed: () => opts.resumed,
     },
     historyPaceMs: 5,
@@ -689,7 +807,7 @@ function realBridge(rig: Rig, opts: { resumed: boolean; sessionId: string; histo
       .sentTo(threadId)
       .map((m) => m.text)
       .filter((text) => text.startsWith("You:") || text.startsWith("Agent:"));
-  return { bridge, clients, notices, sentTo, client: () => clients[clients.length - 1] as RemoteClient };
+  return { bridge, clients, notices, reads, sentTo, client: () => clients[clients.length - 1] as RemoteClient };
 }
 
 describe("the client reports whether the topic was new", () => {
@@ -720,7 +838,8 @@ describe("the client reports whether the topic was new", () => {
     const threadId = started.threadId;
     await until(() => t.sentTo(threadId).length === 10, "the automatic restore", 8_000);
     expect(t.sentTo(threadId)).toEqual(LAST_TEN_OF_EIGHT);
-    expect(t.client().reusedAtStart).toBe(false);
+    expect(t.reads.count).toBe(1);
+    const sendsBefore = rig.api.callCount("sendMessage");
 
     // Serve goes away and comes back; the client registers again, the hub says "reused" this time.
     await firstServe.stop();
@@ -729,10 +848,10 @@ describe("the client reports whether the topic was new", () => {
     await until(() => t.client().connected, "the shell to reconnect", 10_000);
     await settleLoop();
     await settleLoop();
-    // The flag is the first registration's, so a second registration changes nothing...
-    expect(t.client().reusedAtStart).toBe(false);
-    // ...and nothing was posted again.
-    await new Promise((r) => setTimeout(r, 100));
+    // The hub answered "reused" to this second registration; the restore reads the first one's answer
+    // (`started.reused` above), so nothing is posted again: no second read of the history, no further send.
+    expect(t.reads.count).toBe(1);
+    expect(rig.api.callCount("sendMessage")).toBe(sendsBefore);
     expect(t.sentTo(threadId)).toEqual(LAST_TEN_OF_EIGHT);
   });
 
@@ -749,9 +868,10 @@ describe("the client reports whether the topic was new", () => {
     if (!second.ok) throw new Error("second enable failed");
     expect(t.clients).toHaveLength(2);
     expect(second.reused).toBe(false); // a new topic, over a session that is still resumed
+    // No second restore started: it would have read the history before `enable()` returned.
+    expect(t.reads.count).toBe(1);
     const before = t.sentTo(second.threadId).length;
-    await new Promise((r) => setTimeout(r, 150));
-    expect(t.sentTo(second.threadId).length).toBe(before);
+    expect(before).toBe(0);
     expect(t.bridge.status().history).toBeUndefined();
 
     // On request it does fill.
@@ -774,10 +894,18 @@ describe("history through the real outbound queue under a rate limit", () => {
     const started = await t.bridge.enable("release");
     if (!started.ok) throw new Error("enable failed");
     // The next send is refused for one second; the queue holds, then sends everything once, in order.
+    const sendsBefore = rig.api.callCount("sendMessage");
+    const startedAt = Date.now();
     rig.api.rateLimitNext("sendMessage", 1, 1);
     expect(await t.bridge.historyForCommand("10")).toBeUndefined();
     await until(() => t.sentTo(started.threadId).length === 10, "all ten messages", 12_000);
-    await new Promise((r) => setTimeout(r, 100));
+    const elapsedMs = Date.now() - startedAt;
+    await settleLoop();
+    await settleLoop();
     expect(t.sentTo(started.threadId)).toEqual(LAST_TEN_OF_EIGHT);
+    // The 429 really fired: ten sends went through and one more call was refused, so no message
+    // was handed over twice; and the queue held for the whole `retry_after` before the first one.
+    expect(rig.api.callCount("sendMessage") - sendsBefore).toBe(11);
+    expect(elapsedMs).toBeGreaterThanOrEqual(900);
   });
 });

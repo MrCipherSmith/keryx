@@ -5,14 +5,16 @@
 // fixtures and records the argv it was given; the summary is scripted.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readDigestBoard } from "../commands/product";
 import { indexPath } from "../product/store";
 import { readTriggerRuns, type TriggerRunRecord } from "../trigger/record";
 import {
   addDigestSchedule,
   ciJson,
   FakeGh,
+  FakeSink,
   fakeSummary,
   issueJson,
   OTHER_REPO,
@@ -23,6 +25,8 @@ import {
   TestClock,
   type DigestTestEnv,
 } from "./digest.test-helpers";
+import { registerBoardReader, type BoardSource } from "./digest-board";
+import { deliveryPath } from "./digest-delivery";
 
 let env: DigestTestEnv;
 let clock: TestClock;
@@ -212,5 +216,85 @@ describe("AC2: a source that fails is an entry, not the end of the run", () => {
     const record = await lastRecord();
     expect(record.outcome).toBe("failed");
     expect(record.detail).toContain("no source could be read");
+  });
+});
+
+describe("review findings of flow 389", () => {
+  test("L-3: a board reader that throws is a board failure entry; the GitHub half is still delivered, and it is not a crash", async () => {
+    name = await addDigestSchedule(env);
+    const sink = new FakeSink();
+    registerBoardReader(async () => {
+      throw new Error("index exploded");
+    });
+    try {
+      await runDigest(env, name, { runGh: populatedGh().run, summarize: fakeSummary().summarize, now: clock.now, sink });
+    } finally {
+      registerBoardReader(readDigestBoard);
+    }
+    const record = await lastRecord();
+    expect(record.outcome).toBe("ok");
+    expect(record.detail).not.toContain("threw");
+    expect(await reportOf(record)).toContain("- board: the board could not be read: index exploded");
+    expect(sink.sent).toHaveLength(1);
+    expect(sink.sent[0]?.text).toContain("Fix the lockfile drift");
+    expect(sink.sent[0]?.text).not.toContain("stopped");
+  });
+
+  test("L-5: a change is not marked as reported before its message is queued; a run whose message could not be queued reports it next time", async () => {
+    name = await addDigestSchedule(env);
+    const first = populatedGh();
+    await runDigest(env, name, { runGh: first.run, summarize: fakeSummary().summarize, now: clock.now, sink: new FakeSink() });
+
+    // the delivery queue cannot be written: a non-empty directory sits where delivery.json goes
+    const queue = deliveryPath(env.root, name);
+    await rm(queue, { force: true });
+    await mkdir(queue, { recursive: true });
+    await writeFile(path.join(queue, "blocker"), "x", "utf8");
+    const changed = populatedGh().set("pr", prJson([{ number: 12, title: "NEWCHANGE retry button", author: "alice", updatedAt: "2026-10-02T11:00:00Z" }]));
+    clock.set("2026-10-03T12:00:00Z");
+    await runDigest(env, name, { runGh: changed.run, summarize: fakeSummary().summarize, now: clock.now, sink: new FakeSink() }).catch(() => {});
+    await rm(queue, { recursive: true, force: true });
+
+    const sink = new FakeSink();
+    clock.set("2026-10-04T12:00:00Z");
+    await runDigest(env, name, { runGh: changed.run, summarize: fakeSummary().summarize, now: clock.now, sink });
+    expect(sink.sent).toHaveLength(1);
+    expect(sink.sent[0]?.text).toContain("NEWCHANGE");
+    expect(sink.sent[0]?.text).not.toContain("nothing changed since the last digest");
+  });
+
+  test("S-1: a token in a board field never reaches the delivered message, which is scrubbed at the last hop", async () => {
+    name = await addDigestSchedule(env);
+    const token = "ghp_AbCdEf0123456789AbCdEf0123456789AbCd";
+    const board: BoardSource = {
+      state: "present",
+      entries: [{ id: "900", title: `rotate the key ${token}`, status: "open", closedAt: null, verdict: "" }],
+      chains: [{ id: "901", title: `closed with ${token}`, closedAt: "2026-09-30", outcome: "no criterion stated", hasCriterion: false }],
+    };
+    registerBoardReader(async () => board);
+    const sink = new FakeSink();
+    try {
+      await runDigest(env, name, { runGh: populatedGh().run, summarize: fakeSummary().summarize, now: clock.now, sink });
+    } finally {
+      registerBoardReader(readDigestBoard);
+    }
+    expect(sink.sent).toHaveLength(1);
+    const text = sink.sent[0]!.text;
+    expect(text).toContain("closed with");
+    expect(text).not.toContain(token);
+    expect(text).not.toContain("ghp_AbCdEf");
+    expect(text).toContain("[redacted");
+  });
+
+  test("S-3: the report says which gh account the digest asked for, and that only the gh wrapper honours it", async () => {
+    name = await addDigestSchedule(env);
+    await runDigest(env, name, {
+      runGh: populatedGh().run,
+      summarize: fakeSummary().summarize,
+      now: clock.now,
+      grantedEnv: { PATH: process.env["PATH"], GH_WORK_ROOT: path.dirname(env.root) },
+    });
+    const report = await reportOf(await lastRecord());
+    expect(report).toContain("- gh account asked for: work (set through GH_ACCOUNT; only the gh wrapper honours it");
   });
 });

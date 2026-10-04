@@ -9,17 +9,36 @@
   "id": "397",
   "slug": "remote-control-review-residuals-approval",
   "title": "Remote control review residuals: approval frame ack and TUI call-site tests",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-10-02T19:57:21.409Z",
-  "updatedAt": "2026-10-02T20:24:19.726Z",
+  "updatedAt": "2026-10-04T11:08:37.312Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-03T18:15:17.493Z"
+    },
+    "AC2": {
+      "at": "2026-10-03T18:15:17.903Z"
+    },
+    "AC3": {
+      "at": "2026-10-03T18:15:18.258Z"
+    },
+    "AC4": {
+      "at": "2026-10-03T18:15:18.657Z"
+    },
+    "AC5": {
+      "at": "2026-10-03T18:15:19.041Z"
+    },
+    "AC6": {
+      "at": "2026-10-03T18:15:19.444Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/867"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -84,7 +103,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -92,7 +111,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review happened in the flow 376 review rounds; code merged in PR #867 and #868, this flow only records the state"
     },
     {
       "id": "T5",
@@ -178,6 +199,60 @@
       "at": "2026-10-02T20:24:19.726Z",
       "event": "task-done",
       "detail": "T6: Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)"
+    },
+    {
+      "at": "2026-10-03T18:15:17.493Z",
+      "event": "ac-confirmed",
+      "detail": "AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:17.903Z",
+      "event": "ac-confirmed",
+      "detail": "AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:18.259Z",
+      "event": "ac-confirmed",
+      "detail": "AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:18.657Z",
+      "event": "ac-confirmed",
+      "detail": "AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:19.041Z",
+      "event": "ac-confirmed",
+      "detail": "AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:19.444Z",
+      "event": "ac-confirmed",
+      "detail": "AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-04T10:11:14.140Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-04T10:11:16.600Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/867 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-04T11:08:31.279Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-04T11:08:37.311Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-04T11:08:37.312Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -199,5 +274,144 @@
     "AC6": {
       "kind": "unclassified"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-03T18:15:17.493Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    },
+    {
+      "at": "2026-10-03T18:15:17.903Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    },
+    {
+      "at": "2026-10-03T18:15:18.258Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    },
+    {
+      "at": "2026-10-03T18:15:18.657Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    },
+    {
+      "at": "2026-10-03T18:15:19.041Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    },
+    {
+      "at": "2026-10-03T18:15:19.444Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    },
+    {
+      "at": "2026-10-04T11:08:37.312Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70",
+      "headCommit": "fd168c41cea916feceba242dbd12ee5ee36f6186"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-04T11:08:37.311Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "6 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "397-2026-10-02-remote-control-review-residuals-approval is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70"
+    }
+  ]
 }

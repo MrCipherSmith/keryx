@@ -326,7 +326,8 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            the question non-blind, and that is the reliable path; the text
            match is only a safety net.
   answer   records the choice (it must be one of the options; --other marks a
-           free-form answer), prints the recommendation (the reveal) and the
+           free-form answer: the text is kept in full, redacted, one line, up to
+           2000 characters), prints the recommendation (the reveal) and the
            time to answer. A second answer for the same id is a changed answer:
            both are kept. After a deviation it says the human should be asked
            for a reason, once; the command does not wait, the caller asks, and
@@ -335,7 +336,10 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            releases the wait); /decisions reason <why> and /decisions change
            <option> add or change them later.
   report   no model: match share by mode and by stage, and every deviation with
-           its reason. It also counts the questions that looked irreversible
+           its reason. Own answers (the human's own text, not an option) and
+           reasons are printed in full under "Own answers and reasons" and
+           in --json as "annotated" (stored up to 2000 characters, redacted,
+           a visible marker where cut). It also counts the questions that looked irreversible
            and the ones where blind was refused because of it, per stage: a
            high number on ordinary questions means the list over-matches.
            It also cuts the randomized decisions by arm (A free and A forced

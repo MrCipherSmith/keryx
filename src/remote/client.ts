@@ -39,7 +39,9 @@ import {
   type ApprovalResultBody,
   isApprovalId,
   type ChoiceEvent,
+  OWN_ANSWER_WINDOW_MS,
   type PromptBody,
+  type PromptCloseBody,
   type PromptResponse,
   type ApprovalResponse,
   type CallbackEvent,
@@ -60,6 +62,16 @@ import { readShellToken, SERVE_PROOF_HEADER, shellRequestCredential, verifyServe
 
 const UNVERIFIED_SERVE_MESSAGE =
   "the program answering on keryx serve's port did not prove it is the keryx serve this shell trusts; its answer was ignored. Restart `keryx serve` (an older serve cannot prove itself; update keryx on both sides)";
+
+/** What a Telegram question came back as (flow 401): a pressed position, the person's own text, or nothing (with the reason serve refused it, when it did: flow 387, L-4). */
+export type ChoiceAnswer =
+  | { kind: "index"; index: number; refusal?: undefined }
+  | { kind: "own"; text: string; refusal?: undefined }
+  | { kind: "none"; refusal?: string };
+
+function closeByFor(signal: AbortSignal | undefined): "shell" | "cancelled" {
+  return signal?.reason === "cancelled" ? "cancelled" : "shell";
+}
 
 export interface InboundMeta {
   updateId: number;
@@ -168,6 +180,21 @@ const DEFAULT_BACKOFF_INITIAL_MS = 250;
 const DEFAULT_BACKOFF_MAX_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const MAX_EARLY_DECISIONS = 32;
+
+/** Why serve refused a request: the message it sent (bounded, one line), else a sentence for the status. */
+async function refusalReason(response: Response): Promise<string> {
+  try {
+    const parsed = (await response.json()) as { error?: { message?: unknown } } | null;
+    const message = parsed?.error?.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message.replace(/\s+/g, " ").trim().slice(0, 200);
+    }
+  } catch {
+    // No readable body: the status says enough.
+  }
+  return response.status === 429 ? "too many questions are waiting for this session" : `the topic refused the question (status ${response.status})`;
+}
+
 /**
  * A decision frame can beat the response that names its approval id by a few milliseconds. That is the
  * only reason to park one; a frame no question claims within this long was for a question that is gone.
@@ -254,8 +281,10 @@ export class RemoteClient {
   /** Decision frames received whose ack has not gone through (approval id to when it arrived). Bounded and aged out. */
   private readonly unackedApprovals = new Map<string, number>();
   private readonly lingerTimers = new Set<ReturnType<typeof setTimeout>>();
-  private readonly choiceWaiters = new Map<string, { resolve: (index: number | undefined) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly earlyChoices = new Map<string, number>();
+  private readonly choiceWaiters = new Map<string, { resolve: (answer: ChoiceAnswer) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly earlyChoices = new Map<string, ChoiceAnswer>();
+  /** Prompts this side ended (the dock answered first, the turn stopped): a frame for one is dropped, never parked as early. */
+  private readonly closedChoices = new Set<string>();
   private firstResult: ((result: StartResult) => void) | undefined;
 
   /** The topic name and thread, once registered. */
@@ -288,11 +317,6 @@ export class RemoteClient {
 
   get connected(): boolean {
     return this.streamOpen && !this.stopped;
-  }
-
-  /** `reused` of the first registration of this client; undefined before one. A reconnect never changes it. */
-  get reusedAtStart(): boolean | undefined {
-    return this.firstReused;
   }
 
   /** How many approval decisions arrived whose ack serve has not confirmed (in flight, or failed within the last minute). */
@@ -480,19 +504,59 @@ export class RemoteClient {
    * stream. Nothing here ever turns an absent answer into a yes.
    */
   async requestChoice(text: string, rows: string[][], timeoutMs: number, forUserId?: number): Promise<number | undefined> {
+    const answer = await this.askChoice(text, rows, timeoutMs, forUserId === undefined ? {} : { forUserId });
+    return answer.kind === "index" ? answer.index : undefined;
+  }
+
+  /**
+   * Like {@link requestChoice}, and the prompt can offer an own answer (flow 401). The answer is the
+   * pressed position, the person's own text, or none. With `own`, serve may keep the prompt open past
+   * `timeoutMs` for a typed reply, so the wait here is bounded by that window too; serve says so with a
+   * `closed` frame the moment it gives up, so the shell never waits longer than serve does.
+   *
+   * When serve refused the question (too many waiting, no stream, an error) the answer is none and says
+   * why in `refusal`, so the caller can tell the operator instead of calling it a timeout (flow 387 review, L-4).
+   *
+   * `signal` ends the question from this side (the dock answered first, the turn stopped): serve is told,
+   * puts the topic message in its final state, and the answer is none. An abort with the reason `"cancelled"`
+   * (the turn stopped) is told to serve as cancelled; any other abort (the dock answered) as answered in the shell.
+   */
+  async askChoice(
+    text: string,
+    rows: string[][],
+    timeoutMs: number,
+    options: { forUserId?: number; own?: boolean; signal?: AbortSignal } = {},
+  ): Promise<ChoiceAnswer> {
+    const none: ChoiceAnswer = { kind: "none" };
     if (!this.connected) {
-      return undefined;
+      return { kind: "none", refusal: "the shell is not connected to this topic" };
     }
-    const body: PromptBody = { sessionId: this.options.sessionId, text, rows, timeoutMs, ...(forUserId === undefined ? {} : { forUserId }) };
+    if (options.signal?.aborted === true) {
+      return none;
+    }
+    const body: PromptBody = {
+      sessionId: this.options.sessionId,
+      text,
+      rows,
+      timeoutMs,
+      ...(options.forUserId === undefined ? {} : { forUserId: options.forUserId }),
+      ...(options.own === true ? { own: true } : {}),
+    };
     let promptId: string;
     try {
       const response = await this.post("prompt", body);
       if (!response.ok) {
-        return undefined;
+        return { kind: "none", refusal: await refusalReason(response) };
       }
       promptId = ((await response.json()) as PromptResponse).promptId;
     } catch {
-      return undefined;
+      return { kind: "none", refusal: "the question could not be sent to the topic" };
+    }
+    const signal = options.signal;
+    if (signal?.aborted === true) {
+      this.markChoiceClosed(promptId);
+      await this.closePrompt(promptId, closeByFor(signal));
+      return none;
     }
     const early = this.earlyChoices.get(promptId);
     if (early !== undefined) {
@@ -500,15 +564,43 @@ export class RemoteClient {
       return early;
     }
     if (!this.connected) {
-      return undefined;
+      return none;
     }
-    return new Promise<number | undefined>((resolve) => {
-      const timer = setTimeout(() => {
+    return new Promise<ChoiceAnswer>((resolve) => {
+      const onAbort = (): void => {
+        const waiter = this.choiceWaiters.get(promptId);
+        if (waiter !== undefined) clearTimeout(waiter.timer);
         this.choiceWaiters.delete(promptId);
-        resolve(undefined);
-      }, timeoutMs);
-      this.choiceWaiters.set(promptId, { resolve, timer });
+        this.markChoiceClosed(promptId);
+        resolve(none);
+        void this.closePrompt(promptId, closeByFor(signal));
+      };
+      const timer = setTimeout(
+        () => {
+          signal?.removeEventListener("abort", onAbort);
+          this.choiceWaiters.delete(promptId);
+          resolve(none);
+        },
+        timeoutMs + (options.own === true ? OWN_ANSWER_WINDOW_MS : 0),
+      );
+      this.choiceWaiters.set(promptId, {
+        resolve: (answer) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve(answer);
+        },
+        timer,
+      });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
+  }
+
+  /** Best effort: serve ends a prompt the shell no longer needs. A failure leaves the topic message to expire by itself. */
+  private async closePrompt(promptId: string, by: "shell" | "cancelled" = "cancelled"): Promise<void> {
+    try {
+      await this.post("prompt-close", { sessionId: this.options.sessionId, promptId, by });
+    } catch {
+      // The prompt expires on its own.
+    }
   }
 
   /**
@@ -559,7 +651,7 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | PromptCloseBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
@@ -766,7 +858,13 @@ export class RemoteClient {
       this.handleApprovalFrame(parsed);
     } else if (event === "choice") {
       const choice = parsed as ChoiceEvent;
-      this.resolveChoice(choice.promptId, choice.index);
+      if (typeof choice.own === "string") {
+        this.resolveChoice(choice.promptId, { kind: "own", text: choice.own });
+      } else if (choice.closed !== undefined) {
+        this.resolveChoice(choice.promptId, { kind: "none" });
+      } else {
+        this.resolveChoice(choice.promptId, { kind: "index", index: choice.index });
+      }
     } else if (event === "callback") {
       const callback = parsed as CallbackEvent;
       if (this.options.onCallback !== undefined) {
@@ -963,9 +1061,13 @@ export class RemoteClient {
     waiter.resolve(decision);
   }
 
-  private resolveChoice(promptId: string, index: number): void {
+  private resolveChoice(promptId: string, answer: ChoiceAnswer): void {
     const waiter = this.choiceWaiters.get(promptId);
     if (waiter === undefined) {
+      if (this.closedChoices.has(promptId)) {
+        // This side already ended the question (the dock answered, the turn stopped): a late answer is not parked.
+        return;
+      }
       // The press beat the response that names its id; park it briefly.
       if (this.earlyChoices.size >= MAX_EARLY_DECISIONS) {
         const oldest = this.earlyChoices.keys().next().value;
@@ -973,19 +1075,30 @@ export class RemoteClient {
           this.earlyChoices.delete(oldest);
         }
       }
-      this.earlyChoices.set(promptId, index);
+      this.earlyChoices.set(promptId, answer);
       return;
     }
     clearTimeout(waiter.timer);
     this.choiceWaiters.delete(promptId);
-    waiter.resolve(index);
+    waiter.resolve(answer);
+  }
+
+  private markChoiceClosed(promptId: string): void {
+    this.earlyChoices.delete(promptId);
+    if (this.closedChoices.size >= MAX_EARLY_DECISIONS) {
+      const oldest = this.closedChoices.values().next().value;
+      if (oldest !== undefined) {
+        this.closedChoices.delete(oldest);
+      }
+    }
+    this.closedChoices.add(promptId);
   }
 
   private failChoices(): void {
     for (const [id, waiter] of [...this.choiceWaiters.entries()]) {
       clearTimeout(waiter.timer);
       this.choiceWaiters.delete(id);
-      waiter.resolve(undefined);
+      waiter.resolve({ kind: "none" });
     }
     this.earlyChoices.clear();
   }

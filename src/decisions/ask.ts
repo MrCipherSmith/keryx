@@ -50,7 +50,15 @@ export interface AskRequest {
   source?: string;
 }
 
-export type AskFn = (request: AskRequest) => Promise<string>;
+/**
+ * Flow 401: what a host answers with. A plain string is what it always was (an option id, or typed
+ * freeform text that is no option's id). The two objects are the operator's own words said outright:
+ * `own` is their own answer (never an option, even when the words equal an option id), `option` is a
+ * picked option with a typed reason attached.
+ */
+export type AskAnswer = string | { kind: "option"; choice: string; reason?: string } | { kind: "own"; text: string };
+
+export type AskFn = (request: AskRequest) => Promise<AskAnswer>;
 
 export interface JournalAskDeps {
   cwd: string;
@@ -186,11 +194,14 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
       note(deps, `decision journal: could not open a record (${cause instanceof Error ? cause.message : String(cause)})`);
     }
 
-    const chosen = await ask(opened === undefined ? request : present(request, opened));
-    if (opened === undefined || chosen === CANCEL_ANSWER) return chosen;
+    const given = await ask(opened === undefined ? request : present(request, opened));
+    if (opened === undefined || given === CANCEL_ANSWER) return given;
+    // the structured forms (flow 401) say outright what a bare string only implies
+    const chosen = typeof given === "string" ? given : given.kind === "own" ? given.text : given.choice;
+    const reasonGiven = typeof given !== "string" && given.kind === "option" && given.reason !== undefined && given.reason.trim().length > 0 ? given.reason : undefined;
 
     try {
-      const other = !request.options.some((option) => option.id === chosen);
+      const other = typeof given !== "string" && given.kind === "own" ? true : typeof given !== "string" ? false : !request.options.some((option) => option.id === chosen);
       const result = await answerDecision({ cwd: deps.cwd, id: opened.id, choice: chosen, other, now: deps.now });
       deps.onDecision?.(opened.id);
       const parts: string[] = [];
@@ -212,11 +223,16 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
       // The one deliberate wait (AC6, operator decision): after a deviation the human is asked ONCE for an
       // optional reason and the tool result waits for it. `askReason` is false for any later answer to the
       // same decision, so it is never asked twice. Everything else here stays non-blocking.
-      if (result.askReason && deps.askReason !== false) await askReasonOnce(ask, deps, opened.id);
+      if (reasonGiven !== undefined) {
+        // flow 401: the operator typed a reason with the pick, so there is nothing left to ask; the latest reason wins
+        await recordReason(deps.cwd, opened.id, reasonGiven, deps.now, { replace: true });
+      } else if (result.askReason && deps.askReason !== false) {
+        await askReasonOnce(ask, deps, opened.id);
+      }
     } catch (cause) {
       note(deps, `decision journal: could not record the answer (${cause instanceof Error ? cause.message : String(cause)})`);
     }
-    return chosen;
+    return given;
   };
 }
 
@@ -237,7 +253,9 @@ async function askReasonOnce(ask: AskFn, deps: JournalAskDeps, id: string): Prom
       ],
       allowFreeform: true,
     });
-    if (answer !== SKIP_REASON && answer !== LATER_REASON && answer !== CANCEL_ANSWER) text = answer;
+    // the prompt's own row (flow 401) answers with the operator's text; a picked row with its id
+    if (typeof answer !== "string") text = answer.kind === "own" ? answer.text : undefined;
+    else if (answer !== SKIP_REASON && answer !== LATER_REASON && answer !== CANCEL_ANSWER) text = answer;
   } catch {
     text = undefined;
   }

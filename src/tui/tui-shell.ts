@@ -82,6 +82,7 @@ import {
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { BUSY_REASON } from "../remote/command-gateway";
+import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
@@ -272,6 +273,7 @@ import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
+import { mountAskAnswerLine } from "./ask-user-transcript";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
 import { formatBalance, mountBalancePanel } from "./balance-panel";
@@ -371,9 +373,11 @@ import {
   withLeaseMarker,
 } from "./tui-session-lease";
 import { DECISION_SOURCES } from "../decisions/service";
+import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import type { AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
+import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
@@ -400,7 +404,7 @@ import { SubagentSessionStore } from "./subagent-session";
 // Flow 176 T18 — the external-agent operator loop. Everything but the four call
 // sites below lives in `external-operator.ts`; this file only constructs it,
 // attaches it, routes a sidebar click and dispatches `/delegate`.
-import { attachExternalOperator, type ExternalOperator } from "./external-operator";
+import { attachExternalOperator, delegateReport, type ExternalOperator } from "./external-operator";
 import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
@@ -4652,14 +4656,18 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       io.onSystem?.(`◇ delegating to ${parsed.agentId}…\n`);
-      void (async () => {
+      // Tracked, so a /delegate sent from the Telegram topic is answered with how the agent ended
+      // (and its reaction follows) instead of stopping at the "delegating" line. The shell itself
+      // still does not wait: tracking only registers the run. A refused or failed run throws after
+      // its line is printed, which is how the topic's command counts as failed.
+      trackCommandWork(async () => {
         const outcome = await external.delegate({ agentId: parsed.agentId, task: parsed.task });
-        io.onSystem?.(
-          outcome.ok
-            ? `◇ ${parsed.agentId} ${outcome.result.status}: ${outcome.result.output}\n`
-            : `◇ /delegate refused: ${outcome.reason}\n`,
-        );
-      })();
+        const report = delegateReport(parsed.agentId, outcome);
+        io.onSystem?.(report.text);
+        if (report.failed) {
+          throw new Error(`/delegate ${parsed.agentId} did not succeed`);
+        }
+      });
     };
 
     // Flow 273 (specification §5.1): the bus join's `status()` callback reads
@@ -5775,7 +5783,7 @@ export async function launchTuiAgentShell(opts: {
     const askUserInteractive = async (req: {
       question: string;
       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
-    }): Promise<string> => {
+    }): Promise<AskUserAnswer> => {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask");
       setBusyPhase("waiting for your answer (menu above input)");
@@ -5787,43 +5795,50 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
         }),
       );
-      const chosen = await chrome.withOverlay(() =>
-        showComposerChoice(otui, r, chrome.dock, {
-          title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
-          subtitle: "Pick an option · Esc cancels",
-          cancelId: "__cancel__",
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
-          options: req.options.map(
-            (o): ChoiceOption => ({
-              id: o.id,
-              label: o.label,
-              description: o.description.length > 0 ? o.description : " ",
-              ...(o.recommended === true ? { recommended: true } : {}),
-              ...(o.preselected !== undefined ? { preselected: o.preselected } : {}),
+      // flow 401: a question of a Telegram-started turn is also put in the topic; the first answer wins
+      const topicBridge = remoteBridge?.telegramTurnActive === true ? remoteBridge : undefined;
+      const outcome = await raceAskUser({
+        turnSignal: foregroundOperation.signal,
+        ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
+        dock: (dockSignal) =>
+          chrome.withOverlay(() =>
+            showComposerChoiceDetailed(otui, r, chrome.dock, {
+              title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
+              subtitle: "Pick an option, or type your own answer · Esc cancels",
+              cancelId: "__cancel__",
+              // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
+              ownAnswer: {},
+              onOpen: () => chrome.blurComposer(),
+              signal: dockSignal,
+              options: req.options.map(
+                (o): ChoiceOption => ({
+                  id: o.id,
+                  label: o.label,
+                  description: o.description.length > 0 ? o.description : " ",
+                  ...(o.recommended === true ? { recommended: true } : {}),
+                  ...(o.preselected !== undefined ? { preselected: o.preselected } : {}),
+                }),
+              ),
             }),
           ),
-        }),
-      );
+      });
       input.focus();
-      if (chosen !== "__cancel__") {
-        const picked = req.options.find((o) => o.id === chosen);
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `aska${uid++}`,
-            content: otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)}`,
-          }),
-        );
-      } else {
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `askc${uid++}`,
-            content: otui.t`${dimChunk(otui, "→ cancelled")}`,
-          }),
-        );
-      }
+      const result: ComposerChoiceResult =
+        outcome.from === "dock"
+          ? outcome.result
+          : typeof outcome.answer === "string"
+            ? { kind: "id", id: outcome.answer }
+            : outcome.answer.kind === "own"
+              ? { kind: "own", text: outcome.answer.text }
+              : { kind: "id", id: outcome.answer.choice };
+      if (outcome.from === "topic") io.onSystem?.("◇ answered in Telegram.\n");
+      // shown right after the question breadcrumb; an own answer in full: it is what the agent now acts on
+      mountAskAnswerLine(otui, r, transcript, `aska${uid++}`, req.options, result);
       setMainAgent("running", "waiting");
-      return chosen;
+      if (outcome.from === "topic") return outcome.answer;
+      if (result.kind === "own") return { kind: "own", text: result.text };
+      if (result.kind === "reason") return { kind: "option", choice: result.id, reason: result.reason };
+      return result.id;
     };
     setAskUserHost(askUserInteractive);
     // Flow 392: the blind-mode reveal lands in the transcript, right after the answer.
@@ -6089,8 +6104,9 @@ export async function launchTuiAgentShell(opts: {
       }
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
-      sessionResumed = opened.resumed;
-      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
+      const entry = sessionEntryOf(opened.resumed);
+      sessionResumed = entry.resumed;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
@@ -6624,8 +6640,8 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
-      sessionResumed = false;
-      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
+      sessionResumed = NEW_SESSION_ENTRY.resumed;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(NEW_SESSION_ENTRY.kind);
       history = [];
       archive = [];
       nextArchiveIndex = 0;
@@ -6846,7 +6862,7 @@ export async function launchTuiAgentShell(opts: {
       const bridge = remoteBridge;
       if (bridge === undefined) return "Remote control is not available in this shell.";
       try {
-        return await bridge.historyForCommand(line.trim().split(/\s+/).slice(1).join(" "));
+        return await bridge.historyForCommand(historyArgsOf(line));
       } catch {
         return "The history could not be posted.";
       } finally {
@@ -6858,9 +6874,18 @@ export async function launchTuiAgentShell(opts: {
         if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
       });
     };
+    // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
+    // (an approval confirmed or aged out), not only on the next keypress.
+    const remoteModalListeners = new Set<() => void>();
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        subscribeChange: (listener) => {
+          remoteModalListeners.add(listener);
+          return () => {
+            remoteModalListeners.delete(listener);
+          };
+        },
         getPostureLines: () => {
           const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
           return posture === undefined ? undefined : postureLines(posture);
@@ -9966,6 +9991,7 @@ export async function launchTuiAgentShell(opts: {
         },
         onChange: () => {
           liveRemotePanel?.refresh();
+          for (const listener of [...remoteModalListeners]) listener();
           // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
           paintModeRow();
         },

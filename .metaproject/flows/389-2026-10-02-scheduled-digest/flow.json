@@ -9,22 +9,22 @@
   "id": "389",
   "slug": "scheduled-digest",
   "title": "Scheduled agent: GitHub and board digest on a schedule",
-  "status": "ready",
+  "status": "implemented",
   "createdAt": "2026-10-02T04:37:18.590Z",
-  "updatedAt": "2026-10-02T20:09:46.459Z",
+  "updatedAt": "2026-10-04T10:58:03.945Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026",
+  "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/848"
   },
   "owner": {
-    "value": "Aleksandr",
+    "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "outcomeAuthor": "human",
   "tasks": [
@@ -33,7 +33,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -41,14 +41,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,14 +58,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -71,14 +75,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -86,7 +92,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     }
   ],
   "history": [
@@ -108,6 +116,105 @@
       "at": "2026-10-02T20:09:46.459Z",
       "event": "origin-set",
       "detail": "unknown -> human-request; quote: \"за 7 дней работы расписания я хотя бы раз сделал что-то в GitHub или на доске из-за сводки раньше, чем заметил бы сам\"; source: ~/prompts/keryx-supervisor/flow-C-scheduled-agent.md (бриф оператора, строка Outcome) (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
+    },
+    {
+      "at": "2026-10-03T18:14:55.946Z",
+      "event": "ac-confirmed",
+      "detail": "AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:56.312Z",
+      "event": "ac-confirmed",
+      "detail": "AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:56.716Z",
+      "event": "ac-confirmed",
+      "detail": "AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:57.119Z",
+      "event": "ac-confirmed",
+      "detail": "AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:57.522Z",
+      "event": "ac-confirmed",
+      "detail": "AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:57.881Z",
+      "event": "ac-confirmed",
+      "detail": "AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:58.290Z",
+      "event": "ac-confirmed",
+      "detail": "AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:58.671Z",
+      "event": "ac-confirmed",
+      "detail": "AC8 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:59.007Z",
+      "event": "ac-confirmed",
+      "detail": "AC9 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:59.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC10 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:59.775Z",
+      "event": "ac-confirmed",
+      "detail": "AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:00.151Z",
+      "event": "ac-confirmed",
+      "detail": "AC12 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-04T10:14:32.603Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-04T10:14:32.876Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-04T10:14:33.171Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-04T10:14:33.515Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-04T10:14:48.736Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-04T10:14:51.342Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/848 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-04T10:15:05.999Z",
+      "event": "owner-changed",
+      "detail": "Aleksandr -> MrCipherSmith (Standing rule: the owner of every keryx flow is MrCipherSmith)"
+    },
+    {
+      "at": "2026-10-04T10:58:03.945Z",
+      "event": "ac-updated",
+      "detail": "AC9 named src/docs/scheduled-digest-docs.test.ts; the test lives at src/scheduler/scheduled-digest-docs.test.ts (review finding T-3, operator approved the correction in poll 75). Confirmations voided; operator re-confirms."
     }
   ],
   "acKinds": {
@@ -145,7 +252,7 @@
     },
     "AC9": {
       "kind": "exec",
-      "check": "bun test src/docs/scheduled-digest-docs.test.ts"
+      "check": "bun test src/scheduler/scheduled-digest-docs.test.ts"
     },
     "AC10": {
       "kind": "invariant",
@@ -162,5 +269,140 @@
     "kind": "human-request",
     "quote": "за 7 дней работы расписания я хотя бы раз сделал что-то в GitHub или на доске из-за сводки раньше, чем заметил бы сам",
     "source": "~/prompts/keryx-supervisor/flow-C-scheduled-agent.md (бриф оператора, строка Outcome)"
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-03T18:14:55.946Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:56.312Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:56.716Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:57.119Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:57.522Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:57.881Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:58.290Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:58.671Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:59.007Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:59.385Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:14:59.775Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-03T18:15:00.151Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    }
+  ],
+  "baseBranch": "main"
 }

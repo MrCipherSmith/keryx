@@ -96,6 +96,32 @@ describe("callback_data of a picker button (AC5)", () => {
   });
 });
 
+describe("a question serve refuses (review of flow 387, L-4)", () => {
+  test("the ninth open question of a session is refused with the reason serve gave, not a silent timeout", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const { client, threadId } = await session("sess-pk-0012", "release");
+    const open = Array.from({ length: 8 }, (_, index) => client.requestChoice(`Open ${index}`, [["Yes"], ["No"]], 5_000));
+    await until(() => rig.api.sentTo(threadId).filter((message) => message.inlineKeyboard !== undefined).length === 8, "eight pickers in the topic");
+    const ninth = await client.askChoice("One too many", [["Yes"], ["No"]], 5_000);
+    expect(ninth.kind).toBe("none");
+    expect(ninth.refusal ?? "").toMatch(/too many/i);
+    // The plain wrapper keeps its old contract: no answer.
+    expect(await client.requestChoice("And again", [["Yes"]], 5_000)).toBeUndefined();
+    await client.drop();
+    await Promise.all(open);
+  });
+
+  test("a question that nobody answered in time has no refusal, only no answer", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const { client } = await session("sess-pk-0013", "release");
+    const answer = await client.askChoice("Anyone?", [["Yes"]], 300);
+    expect(answer.kind).toBe("none");
+    expect(answer.refusal).toBeUndefined();
+  });
+});
+
 describe("a press is single-use (AC5)", () => {
   test("the first press answers; the message shows the result and loses its buttons; nothing else is sent", async () => {
     rig = makeRig();
@@ -263,6 +289,27 @@ describe("a press after the prompt expired (AC5)", () => {
     expect(current(message.messageId).text).toContain("Expired at");
     expect(current(message.messageId).text).not.toContain("Chosen");
     expect(textsIn(threadId)).toHaveLength(sentBefore);
+  });
+
+  // Review of flow 387, T-3: the guard is `expiresAt > now()` at the press itself. The per-prompt timer
+  // is the other thing that expires a prompt, and it can lag; this test moves the clock past the expiry
+  // while that timer (5 s, real) has not fired, so only the guard can refuse the press.
+  test("a press at the exact expiry is refused by the press itself, before the timer has run", async () => {
+    rig = makeRig();
+    let skewMs = 0;
+    await rig.startServe({ service: { now: () => Date.now() + skewMs } });
+    const { client, threadId } = await session("sess-pk-000f", "release");
+    const pending = client.requestChoice("Pick", [["Alpha"], ["Beta"]], 5_000);
+    const { message, data } = await untilPicker(threadId);
+    // Past the 5 s the prompt was given; the real timer still has about 5 s to go.
+    skewMs = 5_001;
+    press(threadId, data[0] as string, message.messageId);
+    await until(() => current(message.messageId).text.includes("Expired at"), "the expiry edit made by the press");
+    expect(current(message.messageId).text).not.toContain("Chosen");
+    expect(current(message.messageId).inlineKeyboard).toBeUndefined();
+    // The shell is never told of a choice: its own wait runs out on its own clock, so drop it here.
+    await client.drop();
+    expect(await pending).toBeUndefined();
   });
 
   test("a press for an id the server never issued edits the stale message and nothing else", async () => {

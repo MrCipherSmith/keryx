@@ -150,6 +150,26 @@ function split(line: string): { token: string; args: string } {
   return { token: bare, args };
 }
 
+/**
+ * True when a "/" line is addressed to another bot (`/model@otherbot`) rather than to this one. A line
+ * with no `@suffix`, or with this bot's own (any case, `@` and all), is not. Pure; false when the
+ * bot's name is not known, so a command is never dropped on a guess.
+ */
+export function isAddressedToOtherBot(line: string, botUsername: string | undefined): boolean {
+  if (botUsername === undefined || botUsername.length === 0) {
+    return false;
+  }
+  const head = line.trim().split(/\s/, 1)[0] ?? "";
+  if (!head.startsWith("/")) {
+    return false;
+  }
+  const at = head.indexOf("@");
+  if (at === -1) {
+    return false;
+  }
+  return head.slice(at + 1).toLowerCase() !== botUsername.replace(/^@/, "").toLowerCase();
+}
+
 function refuse(command: string, reason: string, known: boolean): GatewayDecision {
   return { kind: "refuse", command, reason, known };
 }

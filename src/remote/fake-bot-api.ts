@@ -61,6 +61,8 @@ export interface FakeSentMessage {
   /** Set when the message was sent (or edited into) a rich message; `text` is then empty. */
   richMessage?: InputRichMessage;
   inlineKeyboard?: InlineKeyboard;
+  /** Set when the message was sent with `force_reply` (flow 401). */
+  forceReply?: { placeholder?: string };
   at: number;
 }
 
@@ -302,10 +304,13 @@ export class FakeBotApi implements BotApi {
   }
 
   /** Simulate an operator or an attacker writing in a topic. */
-  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number }): BotUpdate {
+  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number; replyToMessageId?: number; replyToText?: string }): BotUpdate {
     const message = {
       message_id: ++this.messageSeq,
       ...(input.threadId === undefined ? {} : { message_thread_id: input.threadId }),
+      ...(input.replyToMessageId === undefined
+        ? {}
+        : { reply_to_message: { message_id: input.replyToMessageId, ...(input.replyToText === undefined ? {} : { text: input.replyToText }) } }),
       from: { id: input.fromId },
       chat: { id: input.chatId ?? this.chatId },
       date: Math.floor(this.now() / 1000),
@@ -577,6 +582,7 @@ export class FakeBotApi implements BotApi {
       text: params.text,
       ...(params.parseMode === undefined ? {} : { parseMode: params.parseMode }),
       ...(params.inlineKeyboard === undefined ? {} : { inlineKeyboard: params.inlineKeyboard }),
+      ...(params.forceReply === undefined ? {} : { forceReply: params.forceReply }),
       at: this.now(),
     });
     return { message_id: messageId };

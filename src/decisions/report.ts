@@ -12,7 +12,7 @@
 import { ARMS, type Arm } from "./arms";
 import { effectiveArm, isLegacy } from "./legacy";
 import { buildQualityMatrix, renderQualityMatrix, type QualityMatrix, type QualityRecord } from "./quality";
-import { oneLine } from "./text";
+import { MAX_OPERATOR_TEXT_LENGTH, oneLine } from "./text";
 import type { AnswerRecord, DecisionMode, DecisionRecord, OpenRecord, ReasonRecord } from "./types";
 
 export interface Tally {
@@ -36,6 +36,26 @@ export interface DeviationRow {
   reason?: string;
   /** Where a backfilled decision came from (e.g. "poll 17"). */
   source?: string;
+}
+
+/**
+ * Flow 401: a live decision whose current answer is the operator's own text, or that carries a reason
+ * (a reason can be attached to a picked option too, and to a decision that followed the recommendation).
+ * The text and the reason are printed in full, never in the 300-character display form.
+ */
+export interface AnnotatedRow {
+  id: string;
+  flow: string | null;
+  stage: string;
+  question: string;
+  /** The short display form of the current answer. */
+  chose: string;
+  /** True when the current answer is the operator's own text, not one of the options. */
+  own: boolean;
+  /** The own answer in full (redacted, up to 2000 characters, a visible marker when cut). */
+  text?: string;
+  /** The reason in full (redacted, up to 2000 characters, a visible marker when cut). */
+  reason?: string;
 }
 
 /** The historical decisions imported after the fact, kept apart from the live ones. */
@@ -107,6 +127,8 @@ export interface DecisionsReport {
   byMode: Record<DecisionMode, Tally>;
   byStage: Array<{ stage: string; ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number }>;
   deviations: DeviationRow[];
+  /** Flow 401: decisions answered with the operator's own text, or carrying a reason, in full. */
+  annotated: AnnotatedRow[];
   /** Questions that looked irreversible (matched the list, carried an action tag, or were flagged by the caller). */
   irreversible: number;
   /** Questions that would have been blind but were asked the ordinary way because they looked irreversible. */
@@ -306,6 +328,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
     byMode: { ordinary: emptyTally(), partial: emptyTally(), blind: emptyTally() },
     byStage: [],
     deviations: [],
+    annotated: [],
     irreversible: live.filter((open) => open.irreversible).length,
     blindRefused: live.filter((open) => open.blindRefused === true).length,
     inferredFlow: live.filter((open) => open.flow !== null && open.flowSource === "inferred").length,
@@ -341,13 +364,29 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
       continue;
     }
     report.answered += 1;
+    const current = list[list.length - 1] ?? first;
+    const note = reasons.get(open.id)?.reason;
+    const ownText = current.other === true && current.text !== undefined && current.text.length > 0 ? current.text : undefined;
+    if (ownText !== undefined || (note !== undefined && note.length > 0)) {
+      report.annotated.push({
+        id: open.id,
+        flow: open.flow,
+        stage: open.stage,
+        question: open.question,
+        chose: current.choice,
+        own: current.other === true,
+        ...(ownText !== undefined ? { text: ownText } : {}),
+        ...(note !== undefined && note.length > 0 ? { reason: note } : {}),
+      });
+    }
     times.push(first.timeToAnswerMs);
     if (list.length > 1) report.changed += 1;
     if (open.recommendation === null) {
       report.withoutRecommendation += 1;
       continue;
     }
-    const matched = first.choice === open.recommendation.optionId;
+    // an own answer is never "the recommended option", even when its words equal that option's id
+    const matched = first.other !== true && first.choice === open.recommendation.optionId;
     const stage = stageOf(open.stage);
     for (const tally of [report.byMode[open.mode], stage[open.mode]]) {
       tally.answered += 1;
@@ -401,6 +440,9 @@ function renderBackfilled(report: BackfilledReport): string[] {
   }
   return lines;
 }
+
+/** The stored own text and reason are already capped at 2000 characters plus a marker; render them whole. */
+const FULL_TEXT = MAX_OPERATOR_TEXT_LENGTH + 80;
 
 function rowText(row: ArmRow): string {
   const timing = row.medianMs === null ? "" : `, median ${seconds(row.medianMs)}`;
@@ -479,6 +521,17 @@ export function renderReport(report: DecisionsReport): string {
     lines.push(`    ${oneLine(dev.question)}`);
     lines.push(`    recommended ${oneLine(dev.recommended)}, chose ${oneLine(dev.chose)}`);
     lines.push(`    reason: ${dev.reason === undefined ? "(none given)" : oneLine(dev.reason)}`);
+  }
+  if (report.annotated.length > 0) {
+    lines.push("", `Own answers and reasons: ${report.annotated.length}`);
+    for (const row of report.annotated) {
+      const where = row.flow === null ? "project" : `flow ${oneLine(row.flow)}`;
+      lines.push(`  ${oneLine(row.id)} [${where}, ${oneLine(row.stage)}]`);
+      lines.push(`    ${oneLine(row.question)}`);
+      if (row.text !== undefined) lines.push(`    own answer: ${oneLine(row.text, FULL_TEXT)}`);
+      else lines.push(`    chose ${oneLine(row.chose)}`);
+      if (row.reason !== undefined) lines.push(`    reason: ${oneLine(row.reason, FULL_TEXT)}`);
+    }
   }
   lines.push("", ...renderArms(report));
   const legacyLines = renderLegacy(report.legacy);

@@ -481,7 +481,8 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "decisions",
     group: "Automation",
-    summary: "Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind).",
+    summary:
+      "Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). A question also takes your own text: the last row \"Свой ответ…\" in the shell, the \"✍ Свой ответ\" button in Telegram, and Tab after an option adds a typed reason.",
   },
   {
     kind: "cli",
@@ -548,7 +549,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/decisions",
     group: "Automation",
-    summary: "Recommendation journal report: match share by mode and stage, and the deviations with their reasons.",
+    summary: "Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row).",
   },
   {
     kind: "slash",
@@ -566,7 +567,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/remote-control",
     group: "Automation",
-    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name|off|status].",
+    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status].",
   },
   {
     kind: "slash",

@@ -125,6 +125,18 @@ export type DelegateOutcome =
   | { readonly ok: true; readonly runId: string; readonly label: string; readonly result: StructuredSubagentResult }
   | { readonly ok: false; readonly reason: string };
 
+/**
+ * The line the shell prints when `/delegate` ends, and whether the command counts as failed. A
+ * refusal and a run that ended in error both fail; the topic's reaction follows `failed`
+ * (review of flow 387, L-2).
+ */
+export function delegateReport(agentId: string, outcome: DelegateOutcome): { text: string; failed: boolean } {
+  if (!outcome.ok) {
+    return { text: `◇ /delegate refused: ${outcome.reason}\n`, failed: true };
+  }
+  return { text: `◇ ${agentId} ${outcome.result.status}: ${outcome.result.output}\n`, failed: outcome.result.isError === true };
+}
+
 /** Per-run bookkeeping the store deliberately does not carry. */
 interface RunControl {
   /** Cleared — not deleted — when the run ends, so a dead handle is never written to. */

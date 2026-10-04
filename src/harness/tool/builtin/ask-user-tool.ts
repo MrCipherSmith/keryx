@@ -31,7 +31,14 @@ export interface AskUserRequest {
   source?: string;
 }
 
-export type AskUserFn = (request: AskUserRequest) => Promise<string>;
+/**
+ * Flow 401: what the host answers with. A bare string is an option id (or typed freeform text that
+ * is no option's id), as it always was. `own` is the operator's own answer; `option` is a picked
+ * option with a typed reason. A structural copy of the decisions core's `AskAnswer`.
+ */
+export type AskUserAnswer = string | { kind: "option"; choice: string; reason?: string } | { kind: "own"; text: string };
+
+export type AskUserFn = (request: AskUserRequest) => Promise<AskUserAnswer>;
 
 /**
  * What the model is told about `ask_user`. It says what each field means and nothing about how the host presents a
@@ -124,7 +131,7 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
       }
       try {
         const reason = typeof input.recommendationReason === "string" ? input.recommendationReason.trim() : "";
-        const chosen = await ask({
+        const given = await ask({
           question,
           options,
           ...(reason.length > 0 && options.some((o) => o.recommended === true) ? { recommendationReason: reason } : {}),
@@ -132,10 +139,20 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
           ...(typeof input.action === "string" && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
           ...(input.irreversible === true ? { irreversible: true } : {}),
         });
+        if (typeof given !== "string" && given.kind === "own") {
+          const text = given.text.trim();
+          if (text.length === 0) return { output: "User gave an empty own answer; ask again if an answer is needed.", isError: true };
+          // said outright, so the model cannot take it for a pick: this is the operator's own answer, not one of the options
+          return { output: `User gave their OWN answer (none of the offered options): ${text}`, isError: false };
+        }
+        const chosen = typeof given === "string" ? given : given.choice;
+        const operatorReason = typeof given !== "string" && given.reason !== undefined && given.reason.trim().length > 0 ? given.reason.trim() : undefined;
         const match = options.find((o) => o.id === chosen);
         if (match !== undefined) {
           return {
-            output: `User selected id="${match.id}" label="${match.label}"${match.recommended === true ? " (recommended)" : ""}`,
+            output:
+              `User selected id="${match.id}" label="${match.label}"${match.recommended === true ? " (recommended)" : ""}` +
+              (operatorReason === undefined ? "" : `. The user's reason: ${operatorReason}`),
             isError: false,
           };
         }

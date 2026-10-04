@@ -20,6 +20,7 @@
 // Nothing here prints the shell token or reads it: that stays in `client.ts`.
 
 import { redactSensitiveText } from "../security/service";
+import type { AskUserAnswer, AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
 import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
 import type { NormalizedMessage } from "../harness/provider/types";
@@ -80,7 +81,7 @@ export type RemoteClientLike = Pick<
   RemoteClient,
   "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
 > &
-  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
+  Partial<Pick<RemoteClient, "askChoice" | "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
 
 /** What the topic answered to one approval (flow 396). */
 export interface RemoteApprovalAnswer {
@@ -140,7 +141,7 @@ export interface RemoteBridgeOptions {
   approvalTimeoutMs?: number;
   /** A command still running after this long says so in the topic (flow 387). */
   commandRunningNoticeMs?: number;
-  /** A command still running after this long is stopped and reported. */
+  /** After this long the topic stops waiting for a command and is told so; nothing is cancelled, and the topic hears how it ended. */
   commandLimitMs?: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs?: number;
@@ -309,7 +310,12 @@ export class RemoteBridge {
           return undefined;
         }
         try {
-          return await client.requestChoice(text, rows, timeoutMs, forUserId);
+          if (client.askChoice === undefined) {
+            return await client.requestChoice(text, rows, timeoutMs, forUserId);
+          }
+          const answer = await client.askChoice(text, rows, timeoutMs, forUserId === undefined ? {} : { forUserId });
+          if (answer.kind === "none" && answer.refusal !== undefined) return { refused: answer.refusal };
+          return answer.kind === "index" ? answer.index : undefined;
         } catch {
           return undefined;
         }
@@ -864,6 +870,45 @@ export class RemoteBridge {
       answer.decision === "allow" ? `${answer.always ? "allowed (always)" : "allowed"} in the topic${by}` : `denied${by === "" ? " (or no answer)" : by}`,
     );
     return answer;
+  }
+
+  /**
+   * Put an `ask_user` question of the running Telegram turn in the topic (flow 401): one button per option
+   * and the own-answer button. The answer is the option id, the person's own text, or `undefined` when nobody
+   * answered there (timeout, no connection, closed): the dock keeps the question open in that case. `signal`
+   * ends the topic question when the dock answered first; abort it with the reason "cancelled" when the turn
+   * stopped. Approvals never come through here.
+   */
+  async askUser(req: AskUserRequest, signal?: AbortSignal): Promise<AskUserAnswer | undefined> {
+    const client = this.client;
+    if (client === undefined || !client.connected) {
+      return undefined;
+    }
+    const lines = [req.question, ""];
+    req.options.forEach((option, index) => {
+      lines.push(`${index + 1}. ${option.label}${option.recommended === true ? " (recommended)" : ""}${option.description.length > 0 ? ` - ${option.description}` : ""}`);
+    });
+    const text = composeReply(lines.join("\n"));
+    const rows = req.options.map((option, index) => [`${index + 1}. ${option.label}`]);
+    const timeoutMs = this.options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs;
+    const forUserId = this.telegramTurnUserId;
+    this.push("command", "ask_user question asked in the topic");
+    try {
+      if (client.askChoice === undefined) {
+        const index = await client.requestChoice(text, rows, timeoutMs, forUserId);
+        return index === undefined ? undefined : req.options[index]?.id;
+      }
+      const got = await client.askChoice(text, rows, timeoutMs, {
+        own: true,
+        ...(forUserId === undefined ? {} : { forUserId }),
+        ...(signal === undefined ? {} : { signal }),
+      });
+      if (got.kind === "own") return { kind: "own", text: got.text };
+      if (got.kind === "index") return req.options[got.index]?.id;
+      return undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Tell the topic whether an "Always" press became a saved rule (flow 396). Best effort. */

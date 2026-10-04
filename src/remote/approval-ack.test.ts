@@ -398,8 +398,10 @@ function fakeServe(dir: string, order: string[] = []): FakeServe {
           await state.beforeApprovalResponse?.();
           return json(200, { approvalId: "ap0000000000aa", expiresAt: Date.now() + 60_000 });
         case "approval-ack": {
-          state.acks.push(JSON.parse(await request.text()) as { sessionId: string; approvalId: string; applied?: boolean });
+          // Logged at fetch entry, before any await: an ack the client posts before it said the line
+          // shows up ahead of that line, however the body read below is scheduled (flow 397 review T-3).
           state.log.push("ack");
+          state.acks.push(JSON.parse(await request.text()) as { sessionId: string; approvalId: string; applied?: boolean });
           if (state.throwAcks) {
             throw new Error("connection reset");
           }

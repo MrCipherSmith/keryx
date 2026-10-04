@@ -127,7 +127,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
 | `keryx permissions` | The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
-| `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). |
+| `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). A question also takes your own text: the last row "Свой ответ…" in the shell, the "✍ Свой ответ" button in Telegram, and Tab after an option adds a typed reason. |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
@@ -142,10 +142,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/permissions` | The saved shell rules (what Always remembered): honoured or not, session grants — remove one. |
 | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
 | `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
-| `/decisions` | Recommendation journal report: match share by mode and stage, and the deviations with their reasons. |
+| `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row). |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
-| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
+| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. |
 | `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 | `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |

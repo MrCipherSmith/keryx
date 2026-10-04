@@ -7,7 +7,7 @@
 // UI callers pass `enqueue: false` to cancel immediately.
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
-import { choiceDisplayLabel, initialChoiceSelection, showComposerChoice, type ChoiceOption } from "./composer-choice";
+import { choiceDisplayLabel, initialChoiceSelection, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<
@@ -345,6 +345,118 @@ otuiTest("AC2: with nothing preselected Enter answers nothing; Down then Enter p
   expect(settled).toBeUndefined();
   h.mockInput.pressArrow("down");
   await h.flush();
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("a");
+  h.destroy();
+});
+
+// Flow 401: the own-answer row, the text step and the reason key (AC1, AC2, AC3).
+const OWN_OPTIONS = [
+  { id: "a", label: "Option A", description: "the safe one", recommended: true },
+  { id: "b", label: "Option B", description: "the quick one" },
+];
+const ownRequest = () => ({
+  title: "Which way?",
+  cancelId: "__cancel__",
+  options: OWN_OPTIONS,
+  ownAnswer: {},
+});
+
+/** Down to the last row (the own row) and Enter: the text input is open. */
+async function openOwnInput(h: Awaited<ReturnType<typeof mountChrome>>): Promise<void> {
+  await h.flush();
+  h.mockInput.pressArrow("down");
+  h.mockInput.pressArrow("down");
+  h.mockInput.pressEnter();
+  await h.flush();
+}
+
+otuiTest("AC1: the last row is 'Свой ответ…', Enter on it opens a text input, Enter sends the typed text", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, ownRequest());
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("Свой ответ…");
+  await openOwnInput(h);
+  expect(h.captureCharFrame()).toContain("Your own answer");
+  await h.mockInput.typeText("do it the third way");
+  await h.flush();
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "own", text: "do it the third way" });
+  expect(h.chrome.dock.visible).toBe(false);
+  h.destroy();
+});
+
+otuiTest("AC1: Esc in the text input goes back to the options; a second Esc cancels the question", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: unknown;
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, ownRequest()).then((result) => {
+    settled = result;
+    return result;
+  });
+  await openOwnInput(h);
+  await h.mockInput.typeText("half a thought");
+  h.mockInput.pressEscape();
+  // a lone Esc is held back briefly by the key parser (it could start an escape sequence)
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  await h.flush();
+  expect(settled).toBeUndefined();
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Свой ответ…");
+  expect(frame).toContain("Tab = pick + reason");
+  expect(frame).not.toContain("Your own answer —");
+  h.mockInput.pressEscape();
+  expect(await pending).toEqual({ kind: "id", id: "__cancel__" });
+  h.destroy();
+});
+
+otuiTest("AC2: an empty or whitespace-only text is refused and the input stays open", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: unknown;
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, ownRequest()).then((result) => {
+    settled = result;
+    return result;
+  });
+  await openOwnInput(h);
+  h.mockInput.pressEnter();
+  await h.mockInput.typeText("   ");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(settled).toBeUndefined();
+  expect(h.chrome.dock.visible).toBe(true);
+  expect(h.captureCharFrame()).toContain("Type something first");
+  await h.mockInput.typeText("x");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "own", text: "x" });
+  h.destroy();
+});
+
+otuiTest("AC3: Tab on a highlighted option opens the same input with that option fixed, and Enter returns option plus reason", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, ownRequest());
+  await h.flush();
+  h.mockInput.pressArrow("down"); // Option B
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(h.captureCharFrame()).toContain('Reason for "Option B"');
+  await h.mockInput.typeText("the deadline is Friday");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "reason", id: "b", reason: "the deadline is Friday" });
+  h.destroy();
+});
+
+otuiTest("a menu without ownAnswer has no own row and no Tab key (approvals and slash pickers keep their old shape)", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Allow?", cancelId: "deny", options: OWN_OPTIONS });
+  await h.flush();
+  expect(h.captureCharFrame()).not.toContain("Свой ответ");
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(h.captureCharFrame()).not.toContain("Reason for");
   h.mockInput.pressEnter();
   expect(await pending).toBe("a");
   h.destroy();

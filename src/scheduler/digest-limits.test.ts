@@ -363,6 +363,44 @@ describe("AC7: gh runs with the account the path chooses", () => {
     expect(env2["GH_ACCOUNT"]).toBe("personal");
   });
 
+  test("S-2: only an allowlist of the operator's environment reaches gh, never a token or an unrelated secret", () => {
+    const env2 = ghEnvForProject(env.root, {
+      PATH: "/usr/bin",
+      HOME: "/home/someone",
+      GH_CONFIG_DIR: "/home/someone/.config/gh-work",
+      GH_WORK_ROOT: "/home/someone/work",
+      LC_ALL: "C.UTF-8",
+      XDG_CONFIG_HOME: "/home/someone/.config",
+      HTTPS_PROXY: "http://proxy.local:3128",
+      GH_TOKEN: "ghp_AbCdEf0123456789AbCdEf0123456789AbCd",
+      GITHUB_TOKEN: "ghp_ZyXwVu0123456789ZyXwVu0123456789ZyXw",
+      GH_ENTERPRISE_TOKEN: "enterprise-token",
+      ANTHROPIC_API_KEY: "sk-ant-not-for-gh",
+      FOO_SECRET: "hunter2",
+      TELEGRAM_BOT_TOKEN: "123:abc",
+    });
+    expect(Object.keys(env2).sort()).toEqual(
+      ["GH_ACCOUNT", "GH_CONFIG_DIR", "GH_WORK_ROOT", "HOME", "HTTPS_PROXY", "LC_ALL", "PATH", "XDG_CONFIG_HOME"].sort(),
+    );
+    expect(env2["GH_ACCOUNT"]).toBe("personal");
+  });
+
+  test("S-2: the env of a real run's gh calls carries no token from serve's environment, only the account", async () => {
+    counter += 1;
+    name = await addDigestSchedule(env, { name: `acct-${counter}` });
+    const fake = gh();
+    const grantedEnv = { PATH: process.env["PATH"], GH_TOKEN: "ghp_AbCdEf0123456789AbCdEf0123456789AbCd", GITHUB_TOKEN: "x", FOO_SECRET: "y", GH_ACCOUNT: "work" };
+    await runDigest(env, name, { runGh: fake.run, summarize: fakeSummary().summarize, now: clock.now, sink, grantedEnv });
+    expect(fake.calls.length).toBeGreaterThan(0);
+    for (const call of fake.calls) {
+      expect(call.env["GH_TOKEN"]).toBeUndefined();
+      expect(call.env["GITHUB_TOKEN"]).toBeUndefined();
+      expect(call.env["FOO_SECRET"]).toBeUndefined();
+      expect(call.env["GH_ACCOUNT"]).toBe("personal");
+      expect(call.env["PATH"]).toBe(process.env["PATH"]);
+    }
+  });
+
   test("ghAccountForPath: under ~/work is work; a sibling that only shares the prefix, the home itself and ~/worker are not", async () => {
     const home = path.join(env.aside, "home");
     const work = path.join(home, "work");

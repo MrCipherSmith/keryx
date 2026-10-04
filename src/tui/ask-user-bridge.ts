@@ -15,7 +15,7 @@ export function setAskUserHost(fn: AskUserFn | undefined): void {
 
 export async function invokeAskUserHost(
   request: Parameters<AskUserFn>[0],
-): Promise<string> {
+): ReturnType<AskUserFn> {
   if (host === undefined) {
     return "__cancel__";
   }
@@ -123,5 +123,6 @@ export async function journaledPick(cwd: string, spec: JournaledPick, show: Pick
     ...(spec.recommendationReason !== undefined ? { recommendationReason: spec.recommendationReason } : {}),
     source: spec.source,
   });
-  return chosen === CANCEL_ANSWER ? spec.cancelId : chosen;
+  // the pick dialog above only ever answers with a string
+  return typeof chosen !== "string" || chosen === CANCEL_ANSWER ? spec.cancelId : chosen;
 }

@@ -10,7 +10,7 @@ import { appendJournal, resolveFlowDir } from "../flow/store";
 import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm } from "./arms";
 import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
-import { oneLine } from "./text";
+import { MAX_OPERATOR_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 import type {
   AnswerInput,
   AnswerRecord,
@@ -164,8 +164,10 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
   if (open === undefined) throw new Error(`no open decision with id ${input.id}`);
   if (open.backfilled === true) throw new Error(`decision ${open.id} is a backfilled historical record; its answer is not changed`);
   const other = input.other === true;
-  // a free-form answer is the human's own words: one line, capped, so it cannot forge a journal.md or report line
-  const choice = other ? oneLine(input.choice) : input.choice.trim();
+  // a free-form answer is the human's own words: redacted and one line, so it cannot forge a journal.md or report line or
+  // carry a secret into one. `text` keeps it in full (flow 401); `choice` is the short display form of the same text (300 characters).
+  const text = other ? storedOperatorText(input.choice) : undefined;
+  const choice = text !== undefined ? oneLine(text) : input.choice.trim();
   if (choice.length === 0) throw new Error("decisions answer needs a choice");
   if (!other && !open.options.some((option) => option.id === choice)) {
     throw new Error(`"${choice}" is not one of the options of decision ${input.id}. Choose one of: ${open.options.map((option) => option.id).join(", ")}`);
@@ -187,11 +189,13 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
     timeToAnswerMs: Number.isFinite(timeToAnswerMs) ? timeToAnswerMs : 0,
     changed: prior > 0,
     ...(other ? { other: true } : {}),
+    ...(text !== undefined && text.length > 0 ? { text } : {}),
   };
   await appendRecord(input.cwd, record);
 
   const recommendation = open.recommendation;
-  const matched = recommendation === null ? null : recommendation.optionId === choice;
+  // an own answer is never "the recommended option", even when its words equal that option's id
+  const matched = recommendation === null ? null : !other && recommendation.optionId === choice;
   const deviation = matched === false;
   await journalToFlow(input.cwd, open, record, matched);
   return {
@@ -227,9 +231,11 @@ export async function recordReason(
   if (open.backfilled === true) throw new Error(`decision ${id} is a backfilled historical record; its reason is not changed`);
   // `replace` is the human adding or changing the reason later (`/decisions reason <why>`): the latest record wins in the report.
   if (options.replace !== true && records.some((r) => r.kind === "reason" && r.id === id)) return false;
-  const reason = text === undefined ? "" : oneLine(text);
+  // flow 401: redacted, one line, kept in full up to 2000 characters (a visible marker when cut)
+  const reason = text === undefined ? "" : storedOperatorText(text);
   const record: ReasonRecord = { kind: "reason", id, at: now().toISOString(), ...(reason.length > 0 ? { reason } : {}) };
   await appendRecord(cwd, record);
+  if (reason.length > 0) await journalReasonToFlow(cwd, open, record.at, reason);
   return true;
 }
 
@@ -244,7 +250,7 @@ async function journalToFlow(cwd: string, open: OpenRecord, answer: AnswerRecord
   try {
     const dir = await resolveFlowDir(cwd, open.flow);
     const verdict = matched === null ? "no recommendation" : matched ? "followed the recommendation" : `recommended ${open.recommendation?.optionId ?? "?"}`;
-    const changed = answer.changed ? " (changed answer)" : "";
+    const changed = `${answer.changed ? " (changed answer)" : ""}${answer.other === true ? " (own answer)" : ""}`;
     await appendJournal(
       cwd,
       dir,
@@ -253,5 +259,20 @@ async function journalToFlow(cwd: string, open: OpenRecord, answer: AnswerRecord
     );
   } catch {
     // the project-wide journal already has the record; a flow that cannot be found is not an error here
+  }
+}
+
+/**
+ * Flow 401: a reason is one line in the flow's journal.md too, with the question id, so the flow's
+ * own file says why the operator chose what they chose. Same rules as `journalToFlow`: never
+ * throws, and an inferred flow is a guess that stays out of the flow's file.
+ */
+async function journalReasonToFlow(cwd: string, open: OpenRecord, at: string, reason: string): Promise<void> {
+  if (open.flow === null || open.flowSource === "inferred") return;
+  try {
+    const dir = await resolveFlowDir(cwd, open.flow);
+    await appendJournal(cwd, dir, at, `decision ${open.id} [${oneLine(open.stage)}] reason: ${oneLine(reason, MAX_OPERATOR_TEXT_LENGTH + 80)}`);
+  } catch {
+    // the project-wide journal already has the record
   }
 }

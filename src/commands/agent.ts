@@ -4312,7 +4312,7 @@ export async function offerRoundLimitReset(
   if (deps.askUser === undefined) {
     return "cancel";
   }
-  let chosen: string;
+  let chosen: Awaited<ReturnType<AskUserFn>>;
   try {
     chosen = await deps.askUser({
       question: `Tool-loop round limit reached this turn: ${roundState.round}/${roundState.maxRounds} rounds. What should I do?`,
@@ -4336,7 +4336,10 @@ export async function offerRoundLimitReset(
   } catch {
     return "cancel";
   }
-  if (chosen !== "reset") {
+  // flow 401: the dock may answer with an object (a pick plus a reason) or an own answer; only a
+  // pick of "reset" continues, an own answer is not one of the two choices and cancels
+  const choice = typeof chosen === "string" ? chosen : chosen.kind === "option" ? chosen.choice : undefined;
+  if (choice !== "reset") {
     return "cancel";
   }
   roundState.maxRounds += resolveAgentMaxRounds();

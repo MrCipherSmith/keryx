@@ -8,6 +8,7 @@
 // `onOpen`), and the host runs the same code the typed command runs.
 
 import { parseHistoryArgs } from "../remote/history";
+import { historyArgsOf } from "../remote/history-host";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
@@ -62,7 +63,7 @@ export function isHistoryCommand(line: string): boolean {
  * to. The usage error still reads the same as in the full-screen shell.
  */
 export function readlineHistoryText(line: string): string {
-  const parsed = parseHistoryArgs(line.trim().split(/\s+/).slice(1).join(" "));
+  const parsed = parseHistoryArgs(historyArgsOf(line));
   if (!parsed.ok) return `${parsed.message}\n`;
   return "/history posts to the Telegram topic of remote control, which starts only in the full-screen shell (run `keryx shell`, then /remote-control <name>). Here it is off.\n";
 }
@@ -205,6 +206,12 @@ export type PresentRemoteOptions = {
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
+  /**
+   * Subscribe to the bridge's change notices (a decision confirmed or aged out, a state change):
+   * the open modal repaints on each, so "Approvals not confirmed: N" appears and clears without a
+   * keypress. Returns the unsubscribe, called when the modal closes.
+   */
+  subscribeChange?: (listener: () => void) => () => void;
 };
 
 function paint(otui: unknown, renderer: unknown, body: unknown, id: string, content: string): { content: string } | undefined {
@@ -237,6 +244,7 @@ export function presentRemoteControl(
   let current = "status";
   const nodes = new Map<string, { content: string }>();
   let unsubscribeKey: (() => void) | undefined;
+  let unsubscribeChange: (() => void) | undefined = undefined;
   /** What the last `h` press says: that it is posting, or why nothing was posted. Shown in the status tab. */
   let historyNote: string | undefined;
   let postingHistory = false;
@@ -278,9 +286,13 @@ export function presentRemoteControl(
     onClose: () => {
       closed = true;
       unsubscribeKey?.();
+      unsubscribeChange?.();
     },
   });
   if (handle === undefined) return undefined;
+  unsubscribeChange = options.subscribeChange?.(() => {
+    if (!closed) repaint();
+  });
   if (options.onKeypress !== undefined) {
     unsubscribeKey = options.onKeypress((key) => {
       const token = key.name || key.sequence;

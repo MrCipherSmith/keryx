@@ -143,9 +143,42 @@ The same two steps from a shell are `keryx decisions answer <id> --choice <id>`
 again and `keryx decisions reason <id> --text "<why>"`. An answer must be one of
 the options (a free-form `ask_user` answer is recorded as such). Journal lines
 that cannot be read are skipped and the report says how many. Free text you type
-(a free-form answer, a reason) is collapsed to one line of at most 300 characters,
-when it is written and again when it is shown, so it cannot add lines to a flow's
-`journal.md` or to the report.
+is collapsed to one line when it is written and again when it is shown, so it
+cannot add lines to a flow's `journal.md` or to the report. The short display form
+of a choice stays at 300 characters; your own answer and your reason are kept
+longer, as the next section says.
+
+## Your own answer and a typed reason
+
+A question with options always has a way out of the options. In the keryx shell
+the dock's **last row is `Свой ответ…`** (own answer): Enter opens a text input,
+Enter sends it, Esc goes back to the list. An empty or whitespace-only text is
+refused and the input stays open. The text goes to the agent as **your own answer**,
+not as one of the options, and the transcript shows it after the question.
+
+To say why you picked an option, highlight it and press **Tab** instead of Enter
+(the dock's hint line says `Tab = pick + reason`). The same input opens with the
+option fixed, and what you type is stored as the reason for that choice. The
+deviation question ("why did you not take the recommendation?") also takes typed
+text. In Telegram the question has a **`✍ Свой ответ`** button: press it, then
+reply to the message it posts (see
+[Drive keryx remotely](drive-keryx-remotely.md)). Approvals (Allow, Deny, modes,
+grants) have none of this: typed text never approves anything.
+
+What is stored:
+
+- the own text and the reason are kept up to **2000 characters**; a longer one ends
+  with a visible `[truncated: N more characters]` marker;
+- both are redacted when they are written, so a token-shaped string never reaches
+  the journal, a flow's `journal.md` or the report;
+- a reason is appended to the flow's `journal.md` as one line with the question id;
+- `keryx decisions report` (text and `--json`, under `annotated`) lists every
+  own answer and every reason **in full** in a section "Own answers and reasons";
+- the `/decisions` modal shows the same lines, and the sidebar row marks how many
+  decisions carry an own answer or a reason with `✍N`.
+
+An own answer is never counted as following the recommendation, even when its
+words happen to equal an option's id.
 
 ## The report
 
@@ -170,6 +203,7 @@ It prints, from the journal alone (plus the quality ratings, below):
 - the recommendation-quality matrix (see "Rating the recommendation");
 - the match share by stage;
 - every deviation with its reason (`(none given)` when you gave none);
+- your own answers and typed reasons, in full (see above);
 - how many questions **looked irreversible** and how many of those would have been
   blind but were asked the ordinary way because of it (`blind refused`), overall
   and per stage. A high count on questions that were really ordinary means the

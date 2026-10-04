@@ -13,7 +13,9 @@
 
 import type { NormalizedMessage } from "../harness/provider/types";
 import { isOperatorMessage } from "../session/compact";
-import { redactSensitiveText } from "../security/service";
+import { looksLikeSecret, redactSensitiveText } from "../security/service";
+
+export { looksLikeSecret };
 
 /** How many messages `/history` posts when no number is given, and the automatic restore posts. */
 export const HISTORY_DEFAULT_COUNT = 10;
@@ -101,27 +103,6 @@ const ROLE_LABEL: Record<HistoryRole, string> = { user: "You", agent: "Agent" };
 
 /** What a restored message that looks like a secret is replaced by. */
 export const HISTORY_SECRET_PLACEHOLDER = "[сообщение скрыто: похоже на секрет]";
-
-const BOT_TOKEN_SHAPE = /\d{6,}:[A-Za-z0-9_-]{30,}/;
-// base64url runs from 32; a standard-base64 run (`+`, `/`) only from 40, because a URL path or a
-// file path is a long run of letters, digits and slashes too and a 32-byte token is 43 characters.
-const TOKEN_RUN = /[A-Za-z0-9_-]{32,}|[A-Za-z0-9+/]{40,}={0,2}/g;
-
-/**
- * Whether `text` carries something that looks like a credential. The shared redactor catches the
- * shapes it knows (and mangles a Telegram bot token's number as a phone), so a pasted token can
- * come through whole or half. A restored turn is old text nobody is looking at: when in doubt it
- * is hidden, not posted. Two shapes: a Telegram bot token (`123456789:AAH…`), and any bare run of
- * 32 or more token characters (40 for the `+` and `/` alphabet) that mixes upper case, lower case and digits (a base64url or base64
- * secret; a hex hash is lower case only, a word has no digits, so neither matches). Pure.
- */
-export function looksLikeSecret(text: string): boolean {
-  if (BOT_TOKEN_SHAPE.test(text)) return true;
-  for (const run of text.match(TOKEN_RUN) ?? []) {
-    if (/[a-z]/.test(run) && /[A-Z]/.test(run) && /\d/.test(run)) return true;
-  }
-  return false;
-}
 
 /**
  * One restored message as the topic reads it: a role label, then the text. Redacted first and

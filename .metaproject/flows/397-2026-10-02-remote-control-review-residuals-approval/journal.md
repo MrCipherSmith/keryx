@@ -14,3 +14,14 @@
 - 2026-10-02T20:24:19.726Z - task-done: T6: Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)
 - 2026-10-02T20:43:48.851Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/867 (base: main)
 - 2026-10-02T20:43:49.039Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-03T18:15:17.493Z - ac-confirmed: AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:17.903Z - ac-confirmed: AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:18.259Z - ac-confirmed: AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:18.657Z - ac-confirmed: AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:19.041Z - ac-confirmed: AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:19.444Z - ac-confirmed: AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-04T10:11:14.140Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-04T10:11:16.600Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/867 (warning: PR is not a draft) (base: main)
+- 2026-10-04T11:08:31.279Z - completing
+- 2026-10-04T11:08:37.311Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-04T11:08:37.312Z - done: all gates passed

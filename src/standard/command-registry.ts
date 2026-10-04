@@ -1290,13 +1290,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions answer",
     summary:
       "Record the human's choice (one of the options) for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether " +
-      "the human should be asked for an optional reason (once; this command does not wait for it). A second answer for the same id is kept as a changed answer.",
+      "the human should be asked for an optional reason (once; this command does not wait for it). A second answer for the same id is kept as a changed answer. " +
+      "With --other the choice is the human's own typed text (kept up to 2000 characters, redacted); in the keryx shell that is the last row \"Свой ответ…\" of the question, and in Telegram the \"✍ Свой ответ\" button and a reply to the box it posts.",
     intent: ["decisions answer", "record the human's choice", "записать выбор человека"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "the decision id printed by `decisions open`" },
       { name: "choice", type: "string", required: true, desc: "the option id the human chose" },
       { name: "other", type: "bool", required: false, desc: "the choice is the human's own words, not an option (a free-form answer)" },
-      { name: "reason", type: "string", required: false, desc: "the human's reason for deviating, if given with the answer" },
+      { name: "reason", type: "string", required: false, desc: "the human's reason for the choice, if given with the answer (a deviation, or a picked option with a typed reason)" },
       { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
     ],
     json: true,
@@ -1322,7 +1323,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions report",
     summary:
       "Match share between the human's choice and the agent's recommendation, by mode (ordinary, blind) and by stage, " +
-      "with every deviation and its reason. Backfilled (imported, historical) decisions are reported in a block of their own and never counted in the live shares or the time to answer. Deterministic, no model.",
+      "with every deviation and its reason, and the human's own answers and typed reasons in full (also in --json, under `annotated`). Backfilled (imported, historical) decisions are reported in a block of their own and never counted in the live shares or the time to answer. Deterministic, no model.",
     intent: ["decisions report", "отчёт по рекомендациям", "how often does the human follow the recommendation", "blind mode results"],
     args: [
       { name: "json", type: "bool", required: false, desc: "print the report as JSON (with a `backfilled` section)" },
