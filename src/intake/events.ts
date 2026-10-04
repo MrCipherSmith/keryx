@@ -13,7 +13,7 @@
 // and one `board` source from the product index -> `board:<id>`.
 
 import { identityOf, sameIdentity, type VerifiedFile } from "../trigger/granted-binary";
-import { buildGrantedArgv, grantedToolSpec } from "../trigger/granted-tools";
+import { buildGrantedArgv, ghReadOnlyProblem, grantedToolSpec, INTAKE_TOOL_IDS } from "../trigger/granted-tools";
 import type { GrantedCallRecord } from "../trigger/record";
 import { readBoard } from "../scheduler/digest-board";
 import type { GhRunner } from "../scheduler/digest-gh";
@@ -212,6 +212,17 @@ export async function collectIntakeEvents(input: IntakeCollectInput): Promise<In
     const spec = grantedToolSpec(toolId);
     if (spec === undefined) {
       failures.push({ source, detail: `tool ${toolId} is not in the catalogue` });
+      return undefined;
+    }
+    // Intake runs only the tools it was built for, and only while each is still a read-only `gh` command: a catalogue
+    // entry that gained a mutating verb, or one that was never meant for intake, is refused before anything is spawned.
+    if (!INTAKE_TOOL_IDS.includes(toolId)) {
+      failures.push({ source, detail: `refused — tool ${toolId} is not one of the tools intake may run` });
+      return undefined;
+    }
+    const readOnly = ghReadOnlyProblem(spec);
+    if (readOnly.length > 0) {
+      failures.push({ source, detail: `refused — ${readOnly.join("; ")}` });
       return undefined;
     }
     const built = buildGrantedArgv(spec, { repo, limit: String(input.rows) }, input.repos);

@@ -41,6 +41,7 @@ class World {
   cards: IntakeCardSummary[];
   paused = false;
   enabled = true;
+  configured = true;
   statusReads = 0;
   decisions: Array<{ root: string; id: string; action: IntakeAction; options: IntakeDecideOptions }> = [];
   pauseCalls: boolean[] = [];
@@ -55,12 +56,17 @@ class World {
     const waiting = this.cards.filter((c) => c.state === "sent" || c.state === "failed");
     const deferred = this.cards.filter((c) => c.state === "decided" && c.choice === "later");
     const decided = this.cards.filter((c) => (c.state === "decided" && c.choice !== "later") || c.state === "taken");
-    const line = !this.enabled
+    const line = !this.configured
+      ? "Intake: не настроен"
+      : !this.enabled
       ? "Intake: выкл"
       : this.paused
         ? `Intake: ${waiting.length} ждут | пауза`
         : `Intake: ${waiting.length} ждут | следующий опрос 12:05`;
     return {
+      configured: this.configured,
+      ...(this.configured ? {} : { disabledReason: "intake не настроен в этом проекте: создайте .metaproject/data/intake/config.json" }),
+      problems: [],
       enabled: this.enabled,
       paused: this.paused,
       waiting: waiting.length,
@@ -103,7 +109,7 @@ class World {
   polls = 0;
   poll = async (): Promise<IntakePollResult> => {
     this.polls += 1;
-    return { runId: "r1", outcome: "ok", detail: "найдено 1 событие", baseline: false, newEvents: 1, cardIds: [], sent: 1, collapsed: 0, held: 0, failures: [], costUsd: 0 };
+    return { runId: "r1", outcome: "ok", detail: "найдено 1 событие", baseline: false, newEvents: 1, cardIds: [], sent: 1, collapsed: 0, held: 0, failures: [], notes: [], costUsd: 0 };
   };
 }
 
@@ -163,6 +169,14 @@ test("projectIntakePanel: the row is status.line; off, paused and waiting read d
   for (const row of narrow.rows) expect(row.length).toBeLessThanOrEqual(14);
   expect(narrow.rows.join(" ")).toContain("Intake");
   expect(projectIntakePanel(undefined, 40).rows).toHaveLength(1);
+});
+
+test("L2: a project with no intake config shows no sidebar row at all", () => {
+  const world = new World([]);
+  world.configured = false;
+  const panel = projectIntakePanel(world.snapshot(), 200);
+  expect(panel.rows).toEqual([]);
+  expect(panel.role).toBe("muted");
 });
 
 test("the tabs are Ждут, Решённые, Отложенные, События, and the keys map onto what a card offers", () => {
@@ -233,6 +247,26 @@ otuiTest("the sidebar row shows status.line, and follows pause and off", async (
     await timer.fire();
     await settle(h);
     expect(sidebar.projection().rows.join(" ")).toContain("выкл");
+  } finally {
+    sidebar.dispose();
+    h.destroy();
+  }
+});
+
+otuiTest("L2: with no config the row is hidden and /intake says how to enable it instead of opening", async () => {
+  const h = await mountChrome(OTUI!);
+  const world = new World([]);
+  world.configured = false;
+  const notices: string[] = [];
+  const { sidebar } = mount(h, world, notices);
+  try {
+    await settle(h);
+    expect(sidebar.projection().rows).toEqual([]);
+    await sidebar.show();
+    expect(sidebar.openModal()).toBeUndefined();
+    expect(notices.join("")).toContain("не настроен");
+    expect(notices.join("")).toContain("config.json");
+    expect(world.polls).toBe(0);
   } finally {
     sidebar.dispose();
     h.destroy();

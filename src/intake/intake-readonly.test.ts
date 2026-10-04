@@ -15,6 +15,8 @@ import {
   INTAKE_TOOL_IDS,
   type GrantedToolSpec,
 } from "../trigger/granted-tools";
+import { startLimits } from "../scheduler/digest-limits";
+import { collectIntakeEvents } from "./events";
 import { runIntakePoll } from "./poll";
 import { FakeGh, FakeSink, REPO, TestClock, depsFor, fakeAssessor, issuesJson, local, ownPrsJson, reviewsJson, runsJson, setupIntakeEnv, testConfig, takeBaseline, type IntakeTestEnv } from "./intake.test-helpers";
 
@@ -44,6 +46,15 @@ describe("the intake tools are read-only (AC14)", () => {
   test("the four intake tools exist in the catalogue", () => {
     expect([...INTAKE_TOOL_IDS].sort()).toEqual(["gh.issue.assigned", "gh.pr.comments", "gh.pr.review-requested", "gh.run.failed"]);
     expect(INTAKE_SPECS).toHaveLength(INTAKE_TOOL_IDS.length);
+  });
+
+  test("the allowlist is exactly the three groups and their reading verbs, and nothing is added without this test changing", () => {
+    expect(GH_READONLY_ALLOWLIST).toEqual({ pr: ["list", "view", "checks"], issue: ["list", "view"], run: ["list"] });
+  });
+
+  test("every entry of the whole catalogue passes the read-only check, so a mutating entry cannot sit in it unseen", () => {
+    expect(GRANTED_TOOL_CATALOGUE.length).toBeGreaterThanOrEqual(INTAKE_TOOL_IDS.length);
+    for (const spec of GRANTED_TOOL_CATALOGUE) expect({ id: spec.id, problems: ghReadOnlyProblem(spec) }).toEqual({ id: spec.id, problems: [] });
   });
 
   test("every intake tool passes the read-only check and loads clean", () => {
@@ -108,6 +119,68 @@ describe("a mutating or non-allowlisted entry fails (AC14)", () => {
     expect(ghReadOnlyProblem(tampered).join("\n")).toContain("--body");
     const retargeted: GrantedToolSpec = { ...real, argv: (v) => ["issue", "edit", ...real.argv(v).slice(2)] };
     expect(ghReadOnlyProblem(retargeted).length).toBeGreaterThan(0);
+  });
+});
+
+describe("the collector refuses before it spawns (AC14)", () => {
+  async function collect(): Promise<{ readonly calls: number; readonly argvs: readonly (readonly string[])[]; readonly failures: readonly string[] }> {
+    let calls = 0;
+    const argvs: (readonly string[])[] = [];
+    const limits = startLimits({ maxSeconds: 60, memoryLimitMb: 100_000 });
+    try {
+      const result = await collectIntakeEvents({
+        projectRoot: "/fake/projects/keryx",
+        repos: [REPO],
+        rows: 30,
+        bin: "/usr/bin/gh",
+        stats: [],
+        cwd: "/fake/projects/keryx",
+        env: {},
+        runGh: async (call) => {
+          calls += 1;
+          argvs.push(call.argv);
+          return { ok: true, stdout: "[]", detail: "", exitCode: 0 };
+        },
+        limits,
+      });
+      // The fake root has no flow board; that failure is not what these tests are about.
+      return { calls, argvs, failures: result.failures.map((f) => f.detail).filter((d) => !d.includes("board")) };
+    } finally {
+      limits.dispose();
+    }
+  }
+
+  test("an intake tool that gained a mutating verb is never run", async () => {
+    const catalogue = GRANTED_TOOL_CATALOGUE as GrantedToolSpec[];
+    const index = catalogue.findIndex((s) => s.id === "gh.issue.assigned");
+    const real = catalogue[index]!;
+    catalogue[index] = { ...real, argv: (v) => ["issue", "close", ...real.argv(v).slice(2)] };
+    try {
+      const seen = await collect();
+      expect(seen.failures.filter((f) => f.startsWith("refused")).length).toBeGreaterThan(0);
+      expect(seen.argvs.some((a) => a[0] === "issue")).toBe(false);
+      // The other tools still ran: only the tampered one was held back.
+      expect(seen.calls).toBeGreaterThan(0);
+    } finally {
+      catalogue[index] = real;
+    }
+    const clean = await collect();
+    expect(clean.failures).toEqual([]);
+    expect(clean.calls).toBeGreaterThanOrEqual(3);
+  });
+
+  test("a tool id that is not one of intake's own is never run, even from the catalogue", async () => {
+    const ids = INTAKE_TOOL_IDS as string[];
+    const index = ids.indexOf("gh.issue.assigned");
+    ids.splice(index, 1);
+    try {
+      const before = await collect();
+      expect(before.failures.some((f) => f.includes("is not one of the tools intake may run"))).toBe(true);
+      expect(before.argvs.some((a) => a[0] === "issue")).toBe(false);
+    } finally {
+      ids.splice(index, 0, "gh.issue.assigned");
+    }
+    expect((await collect()).failures).toEqual([]);
   });
 });
 

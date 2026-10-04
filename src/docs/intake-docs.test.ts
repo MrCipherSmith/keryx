@@ -73,7 +73,10 @@ describe("AC22: the guide", () => {
       expect(row.test(guide)).toBe(true);
     }
     expect(guide).toContain(`| \`repos\` | \`${JSON.stringify(DEFAULT_INTAKE_CONFIG.repos)}\` |`);
-    expect(guide).toContain(`| \`topic\` | \`${DEFAULT_INTAKE_CONFIG.topic}\` |`);
+    // the topic is not a setting any more: the table has no such row, and the guide says a stored one is ignored
+    expect(guide).not.toContain("| `topic` |");
+    expect("topic" in DEFAULT_INTAKE_CONFIG).toBe(false);
+    expect(guide).toContain("A `topic` key in an old config file is ignored");
     expect(guide).toContain(`"startHour": ${DEFAULT_INTAKE_CONFIG.quietHours.startHour}`);
     expect(guide).toContain(`"endHour": ${DEFAULT_INTAKE_CONFIG.quietHours.endHour}`);
   });
@@ -82,6 +85,9 @@ describe("AC22: the guide", () => {
     const guide = await read(GUIDE);
     expect(guide).toContain(".metaproject/data/intake/config.json");
     expect(guide).toContain("off until you opt in");
+    expect(guide).toContain("refuses with a one-line");
+    expect(DEFAULT_INTAKE_CONFIG.enabled).toBe(false);
+    expect(DEFAULT_INTAKE_CONFIG.repos).toEqual([]);
     expect(guide).toContain("Take button is not shown");
     expect(guide).toContain("allowTakeInWork");
     expect(guide).toContain("keryx intake pause");

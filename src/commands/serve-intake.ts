@@ -4,16 +4,15 @@
 // `serve-digest.ts` connects the digest: the project roots to look in, serve's own Telegram hub as the delivery
 // path (never a second bot client), and the press handler registered on that hub.
 //
-// OFF BY DEFAULT. The stored defaults of intake say `enabled: true` (so `keryx intake poll` works on a bare
-// project), but a serve that polled GitHub and wrote to a topic for every project of the machine because nobody said
-// no would be a surprise. A project takes part in the serve tick only when it HAS an intake config file and that
-// file is enabled: a person opted in.
+// OFF BY DEFAULT, everywhere. The stored defaults say `enabled: false` and no repositories, and a manual
+// `keryx intake poll` refuses the same way: a project takes part only when it HAS an intake config file that is
+// enabled and names repositories. A serve that polled GitHub and wrote to a topic for every project of the machine
+// because nobody said no would be a surprise.
 
-import { access } from "node:fs/promises";
 import path from "node:path";
 import { createDefaultIntakeAssessor } from "../intake/assess";
 import { createIntakeCardSink } from "../intake/card";
-import { intakeConfigPath, readIntakeConfig } from "../intake/config";
+import { intakeDisabledReason, readIntakeConfigFile } from "../intake/config";
 import { recoverIntakeTaking, type IntakeActionDeps } from "../intake/actions";
 import { runIntakeTick, type IntakeDeps } from "../intake/poll";
 import { createIntakePressHandler, type IntakePressHub } from "../intake/press";
@@ -35,7 +34,7 @@ export interface ServeIntakeOptions {
   /** Test seams. Defaults: the real roots, the real model, the real flow and ci-triage ports. */
   readonly roots?: () => readonly string[];
   readonly assessor?: (root: string) => IntakeAssessor;
-  readonly sink?: (hub: ServeIntakeHub, topic: string) => IntakeCardSink;
+  readonly sink?: (hub: ServeIntakeHub) => IntakeCardSink;
   readonly actionDeps?: IntakeActionDeps;
   readonly pollDeps?: IntakeDeps;
   readonly now?: () => Date;
@@ -53,20 +52,14 @@ export interface ServeIntake {
 
 export const SERVE_INTAKE_EVERY_MS = 30_000;
 
-/** True when the project opted in: an intake config file exists and is enabled. */
+/** True when the project opted in: an intake config file exists, is enabled and names repositories. */
 export async function intakeOptedIn(root: string): Promise<boolean> {
-  try {
-    await access(intakeConfigPath(root));
-  } catch {
-    return false;
-  }
-  return (await readIntakeConfig(root)).enabled;
+  return intakeDisabledReason(await readIntakeConfigFile(root)) === undefined;
 }
 
 export function createServeIntake(options: ServeIntakeOptions): ServeIntake {
   const everyMs = options.everyMs ?? SERVE_INTAKE_EVERY_MS;
   const rootsNow = (): string[] => [...new Set((options.roots?.() ?? serveDigestRoots(options.cwd)).map((r) => path.resolve(r)))];
-  const recovered = new Set<string>();
   let registeredOn: ServeIntakeHub | undefined;
   let stopTimer: (() => void) | undefined;
   let running: Promise<void> | undefined;
@@ -94,14 +87,13 @@ export function createServeIntake(options: ServeIntakeOptions): ServeIntake {
 
     for (const root of optedIn) {
       try {
-        // A press that was accepted before a restart is never repeated: it is adopted or marked for review, once.
-        if (!recovered.has(root)) {
-          recovered.add(root);
-          const n = await recoverIntakeTaking(root, { ...(options.actionDeps !== undefined ? { deps: options.actionDeps } : {}), ...(options.now !== undefined ? { now: options.now } : {}) });
-          if (n > 0) notice(`intake: ${n} card(s) were mid-action at the last stop; check them in the Intake tab`);
-        }
-        const config = await readIntakeConfig(root);
-        const sink = options.sink?.(hub, config.topic) ?? createIntakeCardSink(hub, config.topic);
+        // A press accepted by a process that then died is never repeated: it is adopted or marked for review. Every
+        // tick, not once per start: a claim younger than the longest port timeout is left alone (it may be a live
+        // press, in the TUI or here), so a claim whose owner died is picked up on the first tick after it ages out.
+        const n = await recoverIntakeTaking(root, { ...(options.actionDeps !== undefined ? { deps: options.actionDeps } : {}), ...(options.now !== undefined ? { now: options.now } : {}) });
+        if (n > 0) notice(`intake: ${n} card(s) were mid-action when a process stopped; check them in the Intake tab`);
+        const config = (await readIntakeConfigFile(root)).config;
+        const sink = options.sink?.(hub) ?? createIntakeCardSink(hub);
         await runIntakeTick(root, { ...options.pollDeps, config, sink, assess: options.assessor?.(root) ?? createDefaultIntakeAssessor(root) });
       } catch (error) {
         notice(`intake of ${root} failed: ${error instanceof Error ? error.message : String(error)}`);

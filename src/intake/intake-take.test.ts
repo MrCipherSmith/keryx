@@ -3,7 +3,7 @@
 // written to GitHub, and the journal says who took it, when, from which card and on whose suggestion.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { decideIntakeCard } from "./actions";
 import { FakePressHub, PROJECT, OWNER, makeFakes, pressFor, seedCard } from "./intake-actions.test-helpers";
@@ -41,7 +41,9 @@ describe("take (AC6)", () => {
     const flow = fakes.flows.flows[0]!;
     expect(flow.journal).toHaveLength(1);
     expect(flow.journal[0]!.at).toBe(now.toISOString());
-    expect(flow.journal[0]!.line).toContain("take by 4242");
+    expect(flow.journal[0]!.line).toContain("take by telegram");
+    // S9: the journal is committed with the project; a Telegram user id never goes into it.
+    expect(flow.journal[0]!.line).not.toContain("4242");
     expect(flow.journal[0]!.line).toContain(`card ${card.id}`);
     expect(flow.journal[0]!.line).toContain("suggestion take");
     expect(flow.journal[0]!.line).toContain("agent-proposal");
@@ -65,6 +67,13 @@ describe("take (AC6)", () => {
     const savedPath = process.env["PATH"];
     process.env["PATH"] = `${env.aside}${path.delimiter}${savedPath ?? ""}`;
     try {
+      // Positive control: a `gh` looked up on this PATH IS the logging shim, so were the decision to start one, the
+      // log below would exist. Nothing here spawns it; the decision path is also scanned for any way to reach gh.
+      expect(Bun.which("gh", { PATH: process.env["PATH"] ?? "" })).toBe(env.ghBin);
+      for (const file of ["actions.ts", "press.ts", "ports.ts"]) {
+        const code = readFileSync(path.join(import.meta.dir, file), "utf8");
+        expect(code).not.toMatch(/granted-tools|child_process|\brunGh\b|\bBun\.(spawn|\$)/);
+      }
       const card = await seedCard(env.root);
       const fakes = makeFakes();
       await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
@@ -82,7 +91,7 @@ describe("take (AC6)", () => {
     const hub = new FakePressHub();
     const handler = createIntakePressHandler({ hub, roots: () => [env.root], actionDeps: fakes.deps, now: () => local(10, 42) });
     const reply = await handler(pressFor(card, "take"));
-    expect(reply).toEqual({ text: "Взято в работу: flow 412" });
+    expect(reply).toEqual({ text: "Взято в работу: flow 412", edited: true });
     expect(hub.edits).toHaveLength(1);
     expect(hub.edits[0]).toMatchObject({ messageId: card.messageId });
     expect(hub.edits[0]!.text).toContain("✅ взято 10:42, flow 412");

@@ -15,7 +15,7 @@ import { intakeDataDir } from "./config";
 import type { IntakeCardContent, IntakeCardState, IntakeCardView, IntakeLedgerCard, IntakeLedgerRecord, IntakeState } from "./types";
 import { INTAKE_ACTIONS, INTAKE_CARD_STATES } from "./types";
 
-const SEEN_CAP = 5000;
+export const INTAKE_SEEN_CAP = 5000;
 const RECENT_CAP = 60;
 
 export const intakeLedgerPath = (root: string): string => path.join(intakeDataDir(root), "ledger.jsonl");
@@ -53,7 +53,7 @@ export function overflowCardId(seed: string): string {
 // ---- state ---------------------------------------------------------------------------
 
 export function emptyIntakeState(): IntakeState {
-  return { version: 1, paused: false, seen: {}, baselined: [], delivery: {}, recent: [] };
+  return { version: 1, paused: false, seen: {}, baselined: [], delivery: {}, recent: [], pendingEdits: {} };
 }
 
 function parseState(text: string): IntakeState {
@@ -72,6 +72,10 @@ function parseState(text: string): IntakeState {
         if (d !== null && typeof d["attempts"] === "number" && typeof d["nextAt"] === "string") delivery[k] = { attempts: d["attempts"], nextAt: d["nextAt"] };
       }
     }
+    const pendingEdits: Record<string, string> = {};
+    if (typeof raw["pendingEdits"] === "object" && raw["pendingEdits"] !== null) {
+      for (const [k, v] of Object.entries(raw["pendingEdits"] as Record<string, unknown>)) if (typeof v === "string") pendingEdits[k] = v;
+    }
     const lastStatus = raw["lastStatus"] as Record<string, unknown> | undefined;
     return {
       ...base,
@@ -83,6 +87,7 @@ function parseState(text: string): IntakeState {
       delivery,
       ...(lastStatus !== undefined && typeof lastStatus["text"] === "string" && typeof lastStatus["at"] === "string" ? { lastStatus: { text: lastStatus["text"], at: lastStatus["at"] } } : {}),
       recent: Array.isArray(raw["recent"]) ? (raw["recent"] as IntakeState["recent"]).slice(-RECENT_CAP) : [],
+      pendingEdits,
     };
   } catch {
     return emptyIntakeState();
@@ -97,12 +102,23 @@ export async function readIntakeState(root: string): Promise<IntakeState> {
   }
 }
 
+/**
+ * Record items as seen NOW. A key already present is moved to the end, so the order of `seen` is the order of the last
+ * time each item was seen and the cap evicts the item not seen for the longest, not the one that was added first.
+ */
+export function markIntakeSeen(seen: Readonly<Record<string, string>>, updates: Readonly<Record<string, string>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(seen)) if (!(k in updates)) out[k] = v;
+  for (const [k, v] of Object.entries(updates)) out[k] = v;
+  return out;
+}
+
 /** Read-modify-write the state under its lock. `fn` must be synchronous or await nothing that locks. */
 export async function updateIntakeState(root: string, fn: (state: IntakeState) => IntakeState): Promise<IntakeState> {
   return locked(root, stateLockPath(root), async () => {
     const next = fn(await readIntakeState(root));
     const keys = Object.keys(next.seen);
-    const seen = keys.length > SEEN_CAP ? Object.fromEntries(keys.slice(keys.length - SEEN_CAP).map((k) => [k, next.seen[k]!])) : next.seen;
+    const seen = keys.length > INTAKE_SEEN_CAP ? Object.fromEntries(keys.slice(keys.length - INTAKE_SEEN_CAP).map((k) => [k, next.seen[k]!])) : next.seen;
     const out: IntakeState = { ...next, seen, recent: next.recent.slice(-RECENT_CAP) };
     await writeFileAtomic(intakeStatePath(root), `${JSON.stringify(out, null, 2)}\n`);
     return out;
@@ -129,28 +145,35 @@ function line(record: IntakeLedgerRecord): string {
 }
 
 /**
- * Put a new card in the registry and write its `queued` record. Returns false, and writes nothing, when a card with
- * that id exists: the same event can never produce a second card (a crash between this and the state write is healed
- * by the next poll finding the card already there).
+ * Put a new card in the ledger and the registry. Returns false, and writes nothing, when the card is already complete
+ * (in both): the same event can never produce a second card.
+ *
+ * The ledger line is written FIRST, because a card is visible only through the ledger. A crash between the two writes
+ * leaves a ledger line with no registry entry (invisible, and the event is still unseen, so the next poll calls this
+ * again), and a card in the registry with no ledger line (a card written by the older order) is completed here too.
+ * Either half-card is healed on the next call, and no event is lost.
  */
 export async function registerIntakeCard(root: string, content: IntakeCardContent): Promise<boolean> {
   return locked(root, ledgerLockPath(root), async () => {
     const cards = await readIntakeCards(root);
-    if (cards[content.id] !== undefined) return false;
-    await writeCards(root, { ...cards, [content.id]: content });
-    await appendFile(
-      intakeLedgerPath(root),
-      line({
-        v: 1,
-        at: content.createdAt,
-        cardId: content.id,
-        eventKey: content.eventKey,
-        kind: content.kind,
-        state: "queued",
-        ...(content.suggestion !== undefined ? { suggestion: content.suggestion } : {}),
-      }),
-      "utf8",
-    );
+    const inLedger = (await readIntakeLedger(root)).some((r) => r.cardId === content.id);
+    if (cards[content.id] !== undefined && inLedger) return false;
+    if (!inLedger) {
+      await appendFile(
+        intakeLedgerPath(root),
+        line({
+          v: 1,
+          at: content.createdAt,
+          cardId: content.id,
+          eventKey: content.eventKey,
+          kind: content.kind,
+          state: "queued",
+          ...(content.suggestion !== undefined ? { suggestion: content.suggestion } : {}),
+        }),
+        "utf8",
+      );
+    }
+    if (cards[content.id] === undefined) await writeCards(root, { ...cards, [content.id]: content });
     return true;
   });
 }
@@ -197,6 +220,8 @@ export async function readIntakeLedger(root: string): Promise<IntakeLedgerRecord
 }
 
 const DECISION_FIELDS = ["choice", "decidedBy", "decidedAt", "timeToAnswerMs", "remindAt"] as const;
+/** The Telegram message a card was sent as: a card put back in `queued` or `sent` is a NEW message, so the old ids go. */
+const MESSAGE_FIELDS = ["chatId", "messageId"] as const;
 
 /** Fold the ledger into one entry per card, by the rules in `IntakeLedgerCard`. Order: first record first. */
 export function foldIntakeLedger(records: readonly IntakeLedgerRecord[]): IntakeLedgerCard[] {
@@ -207,7 +232,7 @@ export function foldIntakeLedger(records: readonly IntakeLedgerRecord[]): Intake
       card = { cardId: rec.cardId, eventKey: rec.eventKey, kind: rec.kind, state: rec.state, reminded: false, createdAt: rec.at, updatedAt: rec.at };
       cards.set(rec.cardId, card);
     }
-    if (rec.state === "queued" || rec.state === "sent") for (const f of DECISION_FIELDS) delete card[f];
+    if (rec.state === "queued" || rec.state === "sent") for (const f of [...DECISION_FIELDS, ...MESSAGE_FIELDS]) delete card[f];
     card.state = rec.state;
     card.updatedAt = rec.at;
     if (rec.suggestion !== undefined) card.suggestion = rec.suggestion;
@@ -291,5 +316,22 @@ export async function appendIntakeIfState(root: string, cardId: string, expected
 export async function appendIntakeRecord(root: string, record: Omit<IntakeLedgerRecord, "v">): Promise<void> {
   await locked(root, ledgerLockPath(root), async () => {
     await appendFile(intakeLedgerPath(root), line({ v: 1, ...record }), "utf8");
+  });
+}
+
+// ---- edits of the Telegram card made from another surface ---------------------------------------
+
+/** A decision taken in the TUI or the CLI: the card in Telegram still shows its buttons until serve edits it. */
+export async function queueIntakeCardEdit(root: string, cardId: string, statusLine: string): Promise<void> {
+  await updateIntakeState(root, (s) => ({ ...s, pendingEdits: { ...s.pendingEdits, [cardId]: statusLine } }));
+}
+
+/** Forget a pending edit once it has been applied (or when it no longer applies). */
+export async function clearIntakeCardEdits(root: string, cardIds: readonly string[]): Promise<void> {
+  if (cardIds.length === 0) return;
+  await updateIntakeState(root, (s) => {
+    const next = { ...s.pendingEdits };
+    for (const id of cardIds) delete next[id];
+    return { ...s, pendingEdits: next };
   });
 }

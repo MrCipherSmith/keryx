@@ -112,7 +112,7 @@ import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
-import { mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
+import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
@@ -4112,7 +4112,8 @@ export async function launchTuiAgentShell(opts: {
         status: `${sel.provider}/${sel.model}`,
         footerHint: FOOTER_IDLE,
         placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
-        commands: commandsForMode("agent"),
+        // Flow 403: `/intake` is listed only in a project that has an intake config; typed by hand it still answers.
+        commands: commandsForMode("agent").filter((c) => c.name !== "/intake" || intakeConfiguredSync(opts.session?.cwd ?? process.cwd())),
         headerMeta: "↑0 ↓0",
         // Closure-only: `permissionMode` is declared later in this function —
         // TDZ is a call-time concern for a closure (the same pattern as the
@@ -4120,7 +4121,8 @@ export async function launchTuiAgentShell(opts: {
         permissionMode: () => permissionMode,
         // The shared registry stays the single source of truth for the dropdown,
         // resolved through THIS surface's mode so the wording is agent-mode's.
-        filterCommands: (query) => filterCommands(query, "agent"),
+        filterCommands: (query) =>
+          filterCommands(query, "agent").filter((c) => c.name !== "/intake" || intakeConfiguredSync(opts.session?.cwd ?? process.cwd())),
         ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
       });
     } finally {

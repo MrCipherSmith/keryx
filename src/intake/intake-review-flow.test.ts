@@ -27,7 +27,8 @@ describe("review-flow (AC9)", () => {
     expect(call.input.issueUrl).toBeUndefined();
     expect(call.input.source).toBe(`${card.content.url} card ${card.id}`);
     expect(fakes.flows.flows[0]!.description).toEqual([`Pull request: ${card.content.url}`]);
-    expect(fakes.flows.flows[0]!.journal[0]!.line).toContain("review-flow by 4242");
+    expect(fakes.flows.flows[0]!.journal[0]!.line).toContain("review-flow by telegram");
+    expect(fakes.flows.flows[0]!.journal[0]!.line).not.toContain("4242");
     expect(await readIntakeCardView(env.root, card.id)).toMatchObject({ state: "taken", choice: "review-flow", flowId: "412" });
   });
 

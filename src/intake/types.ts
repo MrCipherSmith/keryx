@@ -167,8 +167,6 @@ export interface IntakeConfig {
   /** `owner/name` of every repository to poll. */
   readonly repos: readonly string[];
   readonly intervalMinutes: number;
-  /** The service topic the cards go to. */
-  readonly topic: string;
   readonly quietHours: IntakeQuietHours;
   readonly cardsPerHour: number;
   readonly buttonTtlHours: number;
@@ -200,6 +198,8 @@ export interface IntakeState {
   readonly lastStatus?: { readonly text: string; readonly at: string };
   /** The most recent poll events, newest last, for the events tab. */
   readonly recent: readonly IntakeRecentEvent[];
+  /** card id -> the status line to put under the Telegram card, for a decision made in the TUI or the CLI. */
+  readonly pendingEdits: Readonly<Record<string, string>>;
 }
 
 export interface IntakeRecentEvent {
@@ -247,6 +247,8 @@ export interface IntakePollResult {
   readonly failures: readonly IntakeFailure[];
   readonly costUsd: number;
   readonly stoppedBy?: IntakeStopReason;
+  /** Things that were true of the run without failing it (the budget was reached and the rest was sent unassessed). */
+  readonly notes: readonly string[];
   readonly statusLine?: string;
   readonly reportPath?: string;
   /** The `GH_ACCOUNT` the run asked gh for. */
@@ -264,6 +266,11 @@ export interface IntakeCardSink {
   sendCard(card: IntakeCardView): Promise<IntakeSendResult>;
   /** A one-line status in the same topic (a stopped run, a gh failure). Failure to send it is never an error of the run. */
   sendStatus(text: string): Promise<{ readonly ok: boolean }>;
+  /**
+   * Re-render an already sent card in place (an overflow card whose count grew, a card decided in the TUI or the CLI).
+   * `ok: false` means the card has no message id yet or Telegram refused; the caller keeps the edit pending.
+   */
+  editCard?(card: IntakeCardView, status?: string): Promise<{ readonly ok: boolean }>;
 }
 
 export interface IntakeAssessInput {
@@ -303,7 +310,13 @@ export interface IntakeCardSummary {
 
 /** The one object the sidebar line, the `/intake` modal, the readline text and `keryx intake status` read. */
 export interface IntakeStatus {
+  /** False when the project has no intake config file: the surfaces hide intake there. */
+  readonly configured: boolean;
   readonly enabled: boolean;
+  /** Why intake cannot run here (no file, switched off, no repositories); absent when it can. */
+  readonly disabledReason?: string;
+  /** What is wrong with the config file (a missing `repos`, a legacy `topic` key). */
+  readonly problems: readonly string[];
   readonly paused: boolean;
   /** Cards sent and waiting for a decision. */
   readonly waiting: number;
@@ -318,7 +331,7 @@ export interface IntakeStatus {
   readonly quiet: boolean;
   readonly repos: readonly string[];
   readonly ghAccount: GhAccount;
-  /** `Intake: <N ждут> | следующий опрос <время> | пауза | выкл`. */
+  /** `Intake: <N ждут> | следующий опрос <время> | пауза | выкл | не настроен`. */
   readonly line: string;
   readonly tabs: {
     readonly waiting: readonly IntakeCardSummary[];

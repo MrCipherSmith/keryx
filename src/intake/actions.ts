@@ -9,9 +9,10 @@
 // Nothing here writes to GitHub, and nothing freezes acceptance criteria: a created flow stays `initializing`.
 
 import { redactSensitiveText } from "../security/service";
+import { ghEnvForProject } from "../scheduler/digest-gh";
 import { inQuietHours, readIntakeConfig } from "./config";
-import { type IntakeCiTriagePort, type IntakeFlowPort, type IntakeProjectFinder, intakeDefaultPorts } from "./ports";
-import { appendIntakeIfState, readIntakeCardView, readIntakeCardViews } from "./store";
+import { INTAKE_LONGEST_PORT_TIMEOUT_MS, type IntakeCiTriagePort, type IntakeFlowPort, type IntakeProjectFinder, intakeDefaultPorts } from "./ports";
+import { appendIntakeIfState, queueIntakeCardEdit, readIntakeCardView, readIntakeCardViews } from "./store";
 import { INTAKE_ACTIONS_BY_KIND, INTAKE_OPEN_STATES, type IntakeAction, type IntakeCardState, type IntakeCardView, type IntakeConfig } from "./types";
 
 export interface IntakeActionDeps {
@@ -20,13 +21,20 @@ export interface IntakeActionDeps {
   /** `owner/name` to the project root that holds a clone of it. */
   readonly projectFor?: IntakeProjectFinder;
   readonly config?: IntakeConfig;
+  /** The environment the work-root check reads (`GH_WORK_ROOT`). Default `process.env`. */
+  readonly env?: Record<string, string | undefined>;
 }
 
 export interface IntakeDecideOptions {
-  /** A Telegram user id, or `tui`. */
+  /** A Telegram user id, `tui` or `cli`. */
   readonly decidedBy: string;
   readonly now?: Date;
   readonly deps?: IntakeActionDeps;
+  /**
+   * Who puts the decision on the Telegram card. A button press edits the card itself (`caller`); any other surface
+   * (the default) leaves a pending edit that the serve ticker applies, so the card never keeps live buttons.
+   */
+  readonly cardEdit?: "caller" | "queue";
 }
 
 export interface IntakeDecideResult {
@@ -48,6 +56,27 @@ const REMIND_STEP_MS = 15 * 60_000;
 const hhmm = (at: Date): string => `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 
 const refuse = (message: string): IntakeDecideResult => ({ ok: false, message });
+
+/** Who decided, as it is written into a committed journal: never a Telegram user id. */
+export function surfaceOf(decidedBy: string): string {
+  if (/^\d+$/.test(decidedBy)) return "telegram";
+  return decidedBy === "cli" ? "cli" : decidedBy === "tui" ? "tui" : "telegram";
+}
+
+const WORK_REFUSAL: Readonly<Partial<Record<IntakeAction, string>>> = {
+  take: "«Взять в работу» отключено для рабочих репозиториев",
+  "review-flow": "«Открыть ревью-flow» отключено для рабочих репозиториев",
+};
+
+/** The stored `takeAllowed` was decided when the card was made; the project and the config may differ now. */
+async function workRefusal(action: IntakeAction, project: string | undefined, root: string, deps: IntakeActionDeps): Promise<string | undefined> {
+  const message = WORK_REFUSAL[action];
+  if (message === undefined || project === undefined) return undefined;
+  const account = ghEnvForProject(project, deps.env ?? process.env)["GH_ACCOUNT"];
+  if (account !== "work") return undefined;
+  const config = deps.config ?? (await readIntakeConfig(root));
+  return config.allowTakeInWork ? undefined : message;
+}
 
 function whyNotOpen(state: IntakeCardState | undefined): string {
   switch (state) {
@@ -80,6 +109,15 @@ function reasonText(text: string): string {
 }
 
 export async function decideIntakeCard(root: string, cardId: string, action: IntakeAction, options: IntakeDecideOptions): Promise<IntakeDecideResult> {
+  const result = await decide(root, cardId, action, options);
+  // A decision made anywhere but on the Telegram card itself leaves the card's buttons live: queue the edit.
+  if (result.ok && result.statusLine !== undefined && options.cardEdit !== "caller") {
+    await queueIntakeCardEdit(root, cardId, result.statusLine).catch(() => undefined);
+  }
+  return result;
+}
+
+async function decide(root: string, cardId: string, action: IntakeAction, options: IntakeDecideOptions): Promise<IntakeDecideResult> {
   const now = options.now ?? new Date();
   const at = now.toISOString();
   const clock = (): Date => now;
@@ -98,6 +136,19 @@ export async function decideIntakeCard(root: string, cardId: string, action: Int
   const decided = { choice: action, decidedBy: options.decidedBy, decidedAt: at } as const;
 
   if (action === "take" || action === "review-flow" || action === "ci-triage") {
+    // The project is looked up BEFORE the claim only to apply the work-root rule at press time (a card sent before
+    // `allowTakeInWork` was switched off, or whose repository maps to a clone under the work root, must not run).
+    // A failing lookup is left to the action, which reports it inside its own try.
+    let project: string | undefined;
+    if (view.repo !== undefined && action !== "ci-triage") {
+      try {
+        project = await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo);
+      } catch {
+        project = undefined;
+      }
+    }
+    const refused = await workRefusal(action, project, root, deps);
+    if (refused !== undefined) return refuse(refused);
     const claim = await appendIntakeIfState(root, cardId, INTAKE_OPEN_STATES, { state: "taking", ...decided }, clock);
     if (!claim.ok) return refuse(whyNotOpen(claim.state));
     return action === "ci-triage" ? runCiTriage(root, view, options, deps, clock) : runFlow(root, view, action, options, deps, clock);
@@ -139,11 +190,12 @@ async function runFlow(
   const now = clock();
   const at = now.toISOString();
   if (view.repo === undefined || view.url === undefined) return fail(root, view, clock, "the card has no repository or link");
-  const project = await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo);
-  if (project === undefined) return fail(root, view, clock, `no project of yours has a clone of ${view.repo}`);
-  const flows = deps.flows ?? intakeDefaultPorts().flows();
   const source = `${view.url} card ${view.id}`;
+  // Every lookup of a port is inside the try: whatever throws ends in `failed`, never in a card stuck in `taking`.
   try {
+    const project = await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo);
+    if (project === undefined) return fail(root, view, clock, `no project of yours has a clone of ${view.repo}`);
+    const flows = deps.flows ?? intakeDefaultPorts().flows();
     // A press that died after the flow was made must not make a second one: adopt it.
     let flow = await flows.findByCard(project, view.id);
     if (flow === undefined) {
@@ -154,7 +206,7 @@ async function runFlow(
     }
     const suggestion = view.suggestion !== undefined ? `, suggestion ${view.suggestion}` : "";
     await flows
-      .journal(project, flow.dir, at, `intake: ${action} by ${options.decidedBy} at ${at}, card ${view.id}${suggestion}, origin agent-proposal, source ${view.url}`)
+      .journal(project, flow.dir, at, `intake: ${action} by ${surfaceOf(options.decidedBy)} at ${at}, card ${view.id}${suggestion}, origin agent-proposal, source ${view.url}`)
       .catch(() => undefined);
     await appendIntakeIfState(root, view.id, ["taking"], { state: "taken", choice: action, decidedBy: options.decidedBy, decidedAt: at, flowId: flow.flowId }, clock);
     const time = hhmm(now);
@@ -169,8 +221,8 @@ async function runFlow(
 async function runCiTriage(root: string, view: IntakeCardView, options: IntakeDecideOptions, deps: IntakeActionDeps, clock: () => Date): Promise<IntakeDecideResult> {
   const now = clock();
   if (view.repo === undefined) return fail(root, view, clock, "the card has no repository");
-  const project = (await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo)) ?? root;
   try {
+    const project = (await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo)) ?? root;
     const result = await (deps.ciTriage ?? intakeDefaultPorts().ciTriage()).run(project, { repo: view.repo, runId: view.ref, timeoutMs: CI_TRIAGE_TIMEOUT_MS, maxBytes: CI_TRIAGE_MAX_BYTES });
     if (!result.ok) return fail(root, view, clock, result.reason);
     await appendIntakeIfState(root, view.id, ["taking"], { state: "decided", choice: "ci-triage", decidedBy: options.decidedBy, decidedAt: now.toISOString() }, clock);
@@ -182,13 +234,17 @@ async function runCiTriage(root: string, view: IntakeCardView, options: IntakeDe
 }
 
 /**
- * Serve start: a card left in `taking` means serve died between accepting a press and finishing it. Nothing is
+ * A card left in `taking` (past the longest port timeout) means a process died between accepting a press and finishing it. Nothing is
  * repeated. A flow made for the card is adopted (`taken`); otherwise the card goes to `failed` with a reason, which
  * shows it for review and lets a human press again (a second press adopts a flow that did get made).
  */
 export async function recoverIntakeTaking(root: string, options: { readonly deps?: IntakeActionDeps; readonly now?: () => Date } = {}): Promise<number> {
   const clock = options.now ?? (() => new Date());
-  const stuck = (await readIntakeCardViews(root)).filter((c) => c.state === "taking");
+  // A claim younger than the longest port timeout may belong to a press that is still running (a live TUI press, or
+  // serve's own): leave it alone. It is picked up on a later pass if its process really died.
+  const cutoff = clock().getTime() - INTAKE_LONGEST_PORT_TIMEOUT_MS;
+  const stuck = (await readIntakeCardViews(root)).filter((c) => c.state === "taking" && Date.parse(c.updatedAt) <= cutoff);
+  if (stuck.length === 0) return 0;
   const flows = options.deps?.flows ?? intakeDefaultPorts().flows();
   const projectFor = options.deps?.projectFor ?? intakeDefaultPorts().projectFor(root);
   for (const card of stuck) {

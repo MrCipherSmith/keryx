@@ -12,7 +12,8 @@ import type { SentMessageInfo } from "../remote/outbound-queue";
 import type { InlineKeyboard } from "../remote/types";
 import { decideIntakeCard, type IntakeActionDeps } from "./actions";
 import { parseIntakeCallbackData, plainText, renderIntakeCard } from "./card";
-import { intakeDataDir, readIntakeConfig } from "./config";
+import { INTAKE_SERVICE_TOPIC } from "../remote/protocol";
+import { intakeDataDir } from "./config";
 import { appendIntakeIfState, ensureIntakeDataIgnored, readIntakeCardView } from "./store";
 import type { IntakeCardView } from "./types";
 
@@ -57,6 +58,20 @@ async function adoptIds(root: string, view: IntakeCardView, press: IntakeCallbac
   await appendIntakeIfState(root, view.id, ["sent"], { state: "sent", at: view.sentAt, chatId: String(press.chatId), messageId: String(press.messageId) });
 }
 
+/** The line under a card whose buttons are dead: the card is no longer open, so it must not look pressable. */
+async function settledStatus(root: string, cardId: string): Promise<string | undefined> {
+  const view = await readIntakeCardView(root, cardId);
+  switch (view?.state) {
+    case "expired":
+      return "⌛ кнопки истекли";
+    case "decided":
+    case "taken":
+      return view.flowId !== undefined ? `уже решено, flow ${view.flowId}` : "уже решено";
+    default:
+      return undefined;
+  }
+}
+
 function fenced(text: string): string {
   return `\`\`\`\n${text.replace(/```/g, "'''")}\n\`\`\``;
 }
@@ -76,13 +91,25 @@ export function createIntakePressHandler(deps: IntakePressDeps): IntakeCallbackH
       }
       if (view.messageId === undefined) await adoptIds(root, view, press);
       const at = now();
-      const result = await decideIntakeCard(root, view.id, parsed.action, { decidedBy: String(press.fromId), now: at, ...(deps.actionDeps !== undefined ? { deps: deps.actionDeps } : {}) });
-      if (result.statusLine !== undefined) await deps.hub.editServiceMessage(press.chatId, press.messageId, renderIntakeCard(view, result.statusLine));
-      if (result.detail !== undefined) {
-        const topic = (await readIntakeConfig(root)).topic;
-        await deps.hub.sendToServiceTopic(topic, `Разбор CI ${plainText(view.repo ?? "", 80)} run ${plainText(view.ref, 40)}\n${fenced(result.detail)}`);
+      // The press edits the card itself (`caller`), so the decision does not also leave a pending edit for serve.
+      const result = await decideIntakeCard(root, view.id, parsed.action, {
+        decidedBy: String(press.fromId),
+        now: at,
+        cardEdit: "caller",
+        ...(deps.actionDeps !== undefined ? { deps: deps.actionDeps } : {}),
+      });
+      let edited = false;
+      if (result.statusLine !== undefined) {
+        edited = await deps.hub.editServiceMessage(press.chatId, press.messageId, renderIntakeCard(view, result.statusLine));
+      } else if (!result.ok) {
+        // A refused press on a card that is settled (expired, or decided somewhere else) must not leave live buttons.
+        const status = await settledStatus(root, view.id);
+        if (status !== undefined) edited = await deps.hub.editServiceMessage(press.chatId, press.messageId, renderIntakeCard(view, status));
       }
-      return { text: result.message };
+      if (result.detail !== undefined) {
+        await deps.hub.sendToServiceTopic(INTAKE_SERVICE_TOPIC, `Разбор CI ${plainText(view.repo ?? "", 80)} run ${plainText(view.ref, 40)}\n${fenced(result.detail)}`);
+      }
+      return { text: result.message, edited };
     } catch {
       return { text: "Не получилось обработать нажатие" };
     }

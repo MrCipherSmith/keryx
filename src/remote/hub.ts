@@ -71,6 +71,11 @@ export interface IntakeCallbackPress {
 /** What the handler says back: `text` is shown to the operator as the button's toast. */
 export interface IntakeCallbackReply {
   text?: string;
+  /**
+   * The handler already put the outcome on the card itself. When the button had to be answered early (the handler
+   * was slow), a reply that is not `edited` is posted to the topic so the result is never lost.
+   */
+  edited?: boolean;
 }
 
 export type IntakeCallbackHandler = (press: IntakeCallbackPress) => Promise<IntakeCallbackReply | undefined>;
@@ -184,6 +189,12 @@ interface TrackedMessage {
 const MAX_EVENTS = 50;
 /** How long a callback acknowledgement may take before it is abandoned. It is never worth holding anything for. */
 const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
+/** Flow 403: a press whose handler is still running after this long is answered with an "accepted" toast. */
+export const INTAKE_EARLY_ACK_MS = 2_500;
+export const INTAKE_EARLY_ACK_TEXT = "Принято, выполняю…";
+/** A hung handler (a port that never returns) must not wedge the press forever: longer than every port timeout. */
+export const INTAKE_HANDLER_TIMEOUT_MS = 180_000;
+const HANDLER_TIMED_OUT = Symbol("handler-timed-out");
 
 function describeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
@@ -846,13 +857,47 @@ export class RemoteHub {
       return;
     }
     void (async () => {
+      // Telegram stops waiting for a callback answer after a few seconds, and a take can run for minutes: once the
+      // handler is slow, the button is answered with a short "accepted" and the result goes into the topic instead.
+      let answered = false;
+      const answer = (text?: string): void => {
+        if (answered) {
+          return;
+        }
+        answered = true;
+        this.answerCallback(press.callbackQueryId, text);
+      };
+      const early = this.timers.setTimeout(() => answer(INTAKE_EARLY_ACK_TEXT), INTAKE_EARLY_ACK_MS);
+      let hardTimer: unknown;
+      const hard = new Promise<typeof HANDLER_TIMED_OUT>((resolve) => {
+        hardTimer = this.timers.setTimeout(() => resolve(HANDLER_TIMED_OUT), INTAKE_HANDLER_TIMEOUT_MS);
+      });
       let reply: IntakeCallbackReply | undefined;
       try {
-        reply = await handler(press);
+        const running = Promise.resolve().then(() => handler(press));
+        // If the timeout wins, the handler's own late failure must not become an unhandled rejection.
+        running.catch(() => undefined);
+        const outcome = await Promise.race([running, hard]);
+        if (outcome === HANDLER_TIMED_OUT) {
+          this.event("delivery-failed", `intake press ${press.updateId}: the handler did not finish within ${INTAKE_HANDLER_TIMEOUT_MS / 1000} s`);
+        } else {
+          reply = outcome;
+        }
       } catch (error) {
         this.event("delivery-failed", `intake press ${press.updateId}: ${describeError(error)}`);
+      } finally {
+        this.timers.clearTimeout(early);
+        this.timers.clearTimeout(hardTimer);
       }
-      this.answerCallback(press.callbackQueryId, reply?.text);
+      if (!answered) {
+        answer(reply?.text);
+        return;
+      }
+      // The button was answered early. The result still has to reach the operator, unless the handler already put it
+      // on the card itself.
+      if (reply?.text !== undefined && reply.text.length > 0 && reply.edited !== true) {
+        await this.sendToServiceTopic(INTAKE_SERVICE_TOPIC, reply.text).catch(() => undefined);
+      }
     })();
   }
 
@@ -1014,6 +1059,8 @@ export class RemoteHub {
         return undefined;
       }
       this.event("update-unrouted", `update ${update.update_id}: no session in topic ${threadId}`);
+      // A press on a button of another service topic reaches no handler, but the button must stop spinning.
+      if (query !== undefined && service !== undefined) this.answerCallback(query.id);
       return undefined;
     }
     const key = nameKey(record.name);

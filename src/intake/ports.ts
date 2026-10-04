@@ -3,7 +3,10 @@
 //   - the FLOW port creates a flow with `keryx flow init` in the project a repository belongs to;
 //   - the CI-TRIAGE port runs the advisory `keryx review ci-triage` on one failed run;
 //   - `projectFor` finds that project from `owner/name`, through the user's project registry.
-// The real ports start processes, so they live in src/commands/intake-ports.ts and serve installs them here.
+// The real ports start processes, so they live in src/commands/intake-ports.ts and serve, the CLI and the TUI install them here.
+
+/** The longest a port may run (`flow init` 90 s, ci-triage 120 s) plus a grace period: a `taking` claim younger than this may be alive. */
+export const INTAKE_LONGEST_PORT_TIMEOUT_MS = 150_000;
 
 export type IntakeFlowInit = { readonly ok: true; readonly flowId: string; readonly dir: string } | { readonly ok: false; readonly reason: string };
 
@@ -55,6 +58,6 @@ export function installIntakeDefaultPorts(ports: IntakeDefaultPorts | undefined)
 
 /** The ports a decision uses when none are injected. Nothing is installed in a test, so a missing injection fails loudly. */
 export function intakeDefaultPorts(): IntakeDefaultPorts {
-  if (installed === undefined) throw new Error("intake: no default ports installed; serve installs them and tests inject fakes");
+  if (installed === undefined) throw new Error("intake: no default ports installed; serve, the CLI and the TUI install them and tests inject fakes");
   return installed;
 }

@@ -26,11 +26,13 @@ import { backoffMs, DELIVERY_MAX_ATTEMPTS } from "../scheduler/digest-delivery";
 import { defaultGhRunner, ghEnvForProject, type GhAccount, type GhRunner } from "../scheduler/digest-gh";
 import { startLimits, type DigestLimitDeps } from "../scheduler/digest-limits";
 import { pinGrantedBinary, resolveOnPath, verifyGrantedBinary, type VerifiedFile } from "../trigger/granted-binary";
-import { inQuietHours, intakeDataDir, readIntakeConfig } from "./config";
+import { inQuietHours, intakeDataDir, intakeDisabledReason, readIntakeConfig, readIntakeConfigFile } from "./config";
 import { collectIntakeEvents, type IntakeCollectResult } from "./events";
 import {
   appendIntakeIfState,
   cardIdFor,
+  clearIntakeCardEdits,
+  markIntakeSeen,
   ensureIntakeDataIgnored,
   overflowCardId,
   readIntakeCardView,
@@ -101,7 +103,7 @@ function newRunId(now: Date): string {
 }
 
 function emptyResult(runId: string, outcome: IntakeRunOutcome, detail: string): IntakePollResult {
-  return { runId, outcome, detail, baseline: false, newEvents: 0, cardIds: [], sent: 0, collapsed: 0, held: 0, failures: [], costUsd: 0 };
+  return { runId, outcome, detail, baseline: false, newEvents: 0, cardIds: [], sent: 0, collapsed: 0, held: 0, failures: [], notes: [], costUsd: 0 };
 }
 
 // ---- cards ---------------------------------------------------------------------------------
@@ -135,7 +137,14 @@ function cardContent(event: IntakeEvent, assessed: { assessment?: string; sugges
 export async function runIntakePoll(root: string, deps: IntakeDeps = {}): Promise<IntakePollResult> {
   const now = deps.now ?? (() => new Date());
   const runId = deps.runId?.() ?? newRunId(now());
-  const config = deps.config ?? (await readIntakeConfig(root));
+  let config = deps.config;
+  if (config === undefined) {
+    // Intake is opt-in: no config file, a switched-off file or a file without repositories polls nothing.
+    const file = await readIntakeConfigFile(root);
+    const why = intakeDisabledReason(file);
+    if (why !== undefined) return emptyResult(runId, "skipped", why);
+    config = file.config;
+  }
   if (!config.enabled) return emptyResult(runId, "skipped", "intake is disabled in its config");
   if (config.repos.length === 0) return emptyResult(runId, "skipped", "no repository is configured for intake");
   const state = await readIntakeState(root);
@@ -175,6 +184,7 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
   let stopReason: string | undefined;
   let stoppedBy: IntakeStopReason | undefined;
   const modelFailures = new Map<string, number>();
+  const notes: string[] = [];
 
   const parent = await ensureScratchParent(agentTaskScratchParent(env));
   let scratch: string | undefined;
@@ -210,6 +220,8 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
     const newlyBaselined: string[] = [];
     const found: IntakeEvent[] = [];
     const seenUpdates: Record<string, string> = {};
+    // Items read again and unchanged are touched, so the cap of `seen` never drops one that is still listed.
+    const touched: Record<string, string> = {};
     let baselineReads = 0;
     for (const read of collected.reads) {
       if (!baselined.has(read.source)) {
@@ -222,6 +234,7 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
         const before = state.seen[e.key];
         // A board entry that MOVED is news; a ticket, review, run or comment that merely changed `updatedAt` is not.
         if (before === undefined || (e.kind === "board" && before !== e.stamp)) found.push(e);
+        else touched[e.key] = before;
       }
     }
     baseline = collected.reads.length > 0 && baselineReads === collected.reads.length;
@@ -231,7 +244,9 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
     // --- assess, register -------------------------------------------------------------------
     const known = await readIntakeCards(root);
     const recent: IntakeState["recent"][number][] = [];
-    const assess = deps.assess !== undefined && config.budgetUsd > 0 ? deps.assess : undefined;
+    let assess = deps.assess !== undefined && config.budgetUsd > 0 ? deps.assess : undefined;
+    let budgetReached = false;
+    let unassessed = 0;
     for (const event of found) {
       if (limits.signal.aborted) break;
       const id = cardIdFor(event.key, event.stamp);
@@ -241,6 +256,7 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
         continue;
       }
       let assessed: { assessment?: string; suggestion?: string } = {};
+      if (budgetReached) unassessed += 1;
       if (assess !== undefined) {
         try {
           const result = await assess({ event, allowed: INTAKE_ACTIONS_BY_KIND[event.kind] as readonly IntakeAction[], signal: limits.signal, remainingUsd: Math.max(0, config.budgetUsd - costUsd) });
@@ -251,8 +267,12 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
           const reason = error instanceof Error ? error.message : String(error);
           modelFailures.set(reason, (modelFailures.get(reason) ?? 0) + 1);
         }
-        // Over budget the run stops; events not yet carded stay unseen, so the next poll cards them.
-        if (costUsd >= config.budgetUsd) limits.spendStopped();
+        // Over budget the model is not called again, but the run goes on: every remaining event is still carded, without
+        // an assessment. A budget stop is a note on the run, never a failure of it.
+        if (costUsd >= config.budgetUsd) {
+          assess = undefined;
+          budgetReached = true;
+        }
       }
       const content = cardContent(event, assessed, config, account, startedAt);
       await registerIntakeCard(root, content);
@@ -261,10 +281,13 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
       recent.push({ at: startedAt.toISOString(), key: event.key, kind: event.kind, cardId: content.id });
     }
     for (const [reason, count] of modelFailures) failures.push({ source: "model", detail: `${count} assessment(s) failed: ${reason}` });
+    if (budgetReached) {
+      notes.push(`model budget of $${config.budgetUsd.toFixed(2)} reached; ${unassessed} remaining event(s) were sent without an assessment`);
+    }
 
     await updateIntakeState(root, (s) => ({
       ...s,
-      seen: { ...s.seen, ...seenUpdates },
+      seen: markIntakeSeen(s.seen, { ...touched, ...seenUpdates }),
       baselined: [...new Set([...s.baselined, ...newlyBaselined])],
       recent: [...s.recent, ...recent],
     }));
@@ -297,7 +320,7 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
     outcome === "ok"
       ? baseline
         ? "baseline taken — nothing was reported"
-        : `${newEvents} new event(s), ${cardIds.length} card(s)`
+        : `${newEvents} new event(s), ${cardIds.length} card(s)${notes.length > 0 ? ` (${notes.join("; ")})` : ""}`
       : `run failed: ${why}`;
 
   const reportPath = await writeReport(root, {
@@ -312,6 +335,7 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
     budgetUsd: config.budgetUsd,
     calls: collected.calls.map((c) => `${c.tool} → ${c.ok ? "ok" : `failed (exit ${c.exitCode ?? "?"})`}`),
     failures,
+    notes,
     cards: cardIds.length,
     flushed,
     env,
@@ -337,6 +361,7 @@ async function pollLocked(root: string, config: IntakeConfig, deps: IntakeDeps, 
     collapsed: flushed.collapsed,
     held: flushed.held,
     failures,
+    notes,
     costUsd,
     ...(stoppedBy !== undefined ? { stoppedBy } : {}),
     ...(statusLine !== undefined ? { statusLine } : {}),
@@ -359,6 +384,7 @@ interface ReportInput {
   readonly budgetUsd: number;
   readonly calls: readonly string[];
   readonly failures: readonly IntakeFailure[];
+  readonly notes: readonly string[];
   readonly cards: number;
   readonly flushed: { readonly sent: number; readonly collapsed: number; readonly held: number };
   readonly env: Record<string, string | undefined>;
@@ -383,6 +409,10 @@ async function writeReport(root: string, r: ReportInput): Promise<string | undef
     "## Failures",
     "",
     ...(r.failures.length === 0 ? ["- none"] : r.failures.map((f) => `- ${f.source}: ${f.detail}`)),
+    "",
+    "## Notes",
+    "",
+    ...(r.notes.length === 0 ? ["- none"] : r.notes.map((n) => `- ${n}`)),
     "",
   ];
   try {
@@ -490,6 +520,8 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
     }
   }
 
+  if (deps.sink?.editCard !== undefined) await applyPendingEdits(root, deps.sink, failures);
+
   const folded = await readIntakeLedgerCards(root);
   const queued = folded.filter((c) => c.state === "queued").sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
   const base = { expired, reminded, failures };
@@ -505,11 +537,16 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
 
   const ledger = await readIntakeLedger(root);
   const since = at.getTime() - HOUR_MS;
-  const sentThisHour = ledger.filter((r) => r.state === "sent" && r.kind !== "overflow" && Date.parse(r.at) > since).length;
+  // Cards, not records: a press that adopted the ids of a card appends one more `sent` line for the SAME send.
+  const sentThisHour = new Set(ledger.filter((r) => r.state === "sent" && r.kind !== "overflow" && Date.parse(r.at) > since).map((r) => r.cardId)).size;
   const allowance = Math.max(0, config.cardsPerHour - sentThisHour);
 
   let sent = 0;
   const deliver = async (cardId: string): Promise<boolean> => {
+    // The buttons live `buttonTtlHours` from the moment the card goes out, not from the moment it was made: a card held
+    // through quiet hours or a serve outage must not be sent already expired.
+    const expiresAt = new Date(now().getTime() + config.buttonTtlHours * HOUR_MS).toISOString();
+    await updateIntakeCard(root, cardId, (card) => ({ ...card, expiresAt }));
     const view = await readIntakeCardView(root, cardId);
     if (view === undefined) return false;
     let outcome: Awaited<ReturnType<IntakeCardSink["sendCard"]>>;
@@ -519,12 +556,21 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
       outcome = { ok: false, reason: error instanceof Error ? error.message : String(error) };
     }
     if (outcome.ok) {
-      await appendIntakeIfState(root, cardId, ["queued"], {
-        state: "sent",
-        at: now().toISOString(),
-        ...(outcome.chatId !== undefined ? { chatId: outcome.chatId } : {}),
-        ...(outcome.messageId !== undefined ? { messageId: outcome.messageId } : {}),
-      });
+      // The message is out. If the ledger cannot say so, that is a failure of the run, not a sent card.
+      let recorded = false;
+      try {
+        const appended = await appendIntakeIfState(root, cardId, ["queued"], {
+          state: "sent",
+          at: now().toISOString(),
+          ...(outcome.chatId !== undefined ? { chatId: outcome.chatId } : {}),
+          ...(outcome.messageId !== undefined ? { messageId: outcome.messageId } : {}),
+        });
+        recorded = appended.ok;
+        if (!appended.ok) failures.push({ source: "delivery", detail: `card ${cardId}: sent, but the ledger refused the record (the card is ${appended.state ?? "unknown"})` });
+      } catch (error) {
+        failures.push({ source: "delivery", detail: `card ${cardId}: sent, but the ledger could not be written: ${error instanceof Error ? error.message : String(error)}` });
+      }
+      if (!recorded) return false;
       await updateIntakeState(root, (s) => {
         const { [cardId]: _gone, ...rest } = s.delivery;
         return { ...s, delivery: rest };
@@ -552,18 +598,33 @@ async function flushLocked(root: string, deps: IntakeDeps): Promise<IntakeFlushR
   let collapsed = 0;
   let overflowId: string | undefined;
   if (over.length > 0) {
-    const recentOverflow = [...ledger].reverse().find((r) => r.kind === "overflow" && r.state === "sent" && Date.parse(r.at) > since);
+    // Fold into an overflow card that already exists: one still waiting to be sent (its delivery failed or is backing
+    // off), else the latest one sent within the hour. A second overflow card is made only when there is neither.
+    const overflows = (await readIntakeLedgerCards(root)).filter((c) => c.kind === "overflow");
+    const waiting = overflows.find((c) => c.state === "queued");
+    const live = overflows
+      .filter((c) => c.state === "sent" && Date.parse(c.sentAt ?? c.updatedAt) > since)
+      .sort((a, b) => (b.sentAt ?? b.updatedAt).localeCompare(a.sentAt ?? a.updatedAt))[0];
+    const target = waiting ?? live;
     const ids = over.map((c) => c.cardId);
-    if (recentOverflow !== undefined) {
-      overflowId = recentOverflow.cardId;
+    if (target !== undefined) {
+      overflowId = target.cardId;
       for (const id of ids) {
-        const r = await appendIntakeIfState(root, id, ["queued"], { state: "collapsed", at: at.toISOString(), collapsedInto: recentOverflow.cardId });
+        const r = await appendIntakeIfState(root, id, ["queued"], { state: "collapsed", at: at.toISOString(), collapsedInto: target.cardId });
         if (r.ok) collapsed += 1;
       }
-      await updateIntakeCard(root, recentOverflow.cardId, (card) => {
+      await updateIntakeCard(root, target.cardId, (card) => {
         const all = [...(card.collapsedIds ?? []), ...ids];
         return { ...card, collapsedIds: all, title: `ещё ${all.length} событий`, ref: String(all.length) };
       });
+      // A card already in Telegram says "ещё N": it is edited when N grows.
+      if (target.state === "sent" && deps.sink?.editCard !== undefined) {
+        const view = await readIntakeCardView(root, target.cardId);
+        if (view !== undefined && view.messageId !== undefined) {
+          const edited = await deps.sink.editCard(view).catch(() => ({ ok: false }));
+          if (!edited.ok) failures.push({ source: "delivery", detail: `overflow card ${target.cardId}: could not update its count in Telegram` });
+        }
+      }
     } else {
       overflowId = overflowCardId(`${at.toISOString()}|${ids.join(",")}`);
       const first = contents[ids[0]!];
@@ -608,4 +669,30 @@ export async function runIntakeTick(root: string, deps: IntakeDeps = {}): Promis
   const poll = await runIntakePoll(root, withConfig);
   // The poll flushed on its own unless it was refused before it started.
   return poll.outcome === "skipped" ? { poll, flush: await flushIntakeCards(root, withConfig) } : { poll, flush: NOTHING };
+}
+
+/**
+ * A decision made in the TUI or the CLI leaves a pending edit; here serve puts it on the Telegram card (best effort:
+ * a card with no message id has nothing to edit, and a refused edit is tried again on the next tick).
+ */
+async function applyPendingEdits(root: string, sink: IntakeCardSink, failures: IntakeFailure[]): Promise<void> {
+  const pending = Object.entries((await readIntakeState(root)).pendingEdits);
+  if (pending.length === 0) return;
+  const done: string[] = [];
+  for (const [cardId, status] of pending) {
+    const view = await readIntakeCardView(root, cardId);
+    if (view === undefined || view.messageId === undefined) {
+      done.push(cardId);
+      continue;
+    }
+    let ok = false;
+    try {
+      ok = (await sink.editCard!(view, status)).ok;
+    } catch {
+      ok = false;
+    }
+    if (ok) done.push(cardId);
+    else failures.push({ source: "delivery", detail: `card ${cardId}: the decision could not be shown on the Telegram card yet; it is retried` });
+  }
+  await clearIntakeCardEdits(root, done);
 }

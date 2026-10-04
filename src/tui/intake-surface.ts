@@ -8,7 +8,10 @@
 // `decidedBy: "tui"`. A card another surface already decided is never decided again: the modal reads the status
 // afresh before it calls the door and tells the operator what happened instead.
 
+import { existsSync } from "node:fs";
+import { ensureRealIntakePorts } from "../commands/intake-ports";
 import { decideIntakeCard } from "../intake/actions";
+import { intakeConfigPath } from "../intake/config";
 import { runIntakePoll } from "../intake/poll";
 import { buildIntakeStatus, setIntakePaused } from "../intake/status";
 import type { IntakeAction, IntakeCardSummary, IntakePollResult, IntakeRecentEvent, IntakeStatus } from "../intake/types";
@@ -79,12 +82,27 @@ interface ResolvedDeps {
   readonly poll: () => Promise<IntakePollResult>;
 }
 
+/** True when the project has an intake config file; without one the sidebar row and the `/` menu entry stay hidden. */
+export function intakeConfiguredSync(root: string): boolean {
+  try {
+    return existsSync(intakeConfigPath(root));
+  } catch {
+    return false;
+  }
+}
+
+/** The default door: the real flow and ci-triage ports are installed on first use, so a press never meets "no ports". */
+const decideWithRealPorts: typeof decideIntakeCard = (root, cardId, action, options) => {
+  ensureRealIntakePorts();
+  return decideIntakeCard(root, cardId, action, options);
+};
+
 function resolveDeps(deps: IntakeSurfaceDeps): ResolvedDeps {
   const { root } = deps;
   return {
     root,
     status: deps.status ?? (() => buildIntakeStatus(root)),
-    decide: deps.decide ?? decideIntakeCard,
+    decide: deps.decide ?? decideWithRealPorts,
     setPaused: deps.setPaused ?? ((paused) => setIntakePaused(root, paused)),
     poll: deps.poll ?? (() => runIntakePoll(root, { manual: true })),
   };
@@ -151,6 +169,8 @@ function eventLine(e: IntakeRecentEvent): string {
 export function intakeStatusText(status: IntakeStatus): string {
   const lines = [
     status.line,
+    ...(status.disabledReason !== undefined && !status.configured ? [`  ${status.disabledReason}`] : []),
+    ...status.problems.map((p) => `  внимание: ${p}`),
     `  включён: ${status.enabled ? "да" : "нет"}${status.paused ? " (пауза)" : ""}${status.quiet ? "; сейчас тихие часы" : ""}`,
     `  ждут решения: ${status.waiting}; в очереди на отправку: ${status.queued}; отложено: ${status.deferred}; решено: ${status.decided}`,
     `  репозитории: ${status.repos.join(", ") || "не заданы"}; аккаунт GitHub по пути проекта: ${status.ghAccount}`,
@@ -227,6 +247,8 @@ function fit(text: string, width: number): string {
 
 export function projectIntakePanel(status: IntakeStatus | undefined, width: number): IntakePanelProjection {
   if (status === undefined) return { rows: [fit("Intake: …", width)], role: "muted" };
+  // A project with no intake config has nothing to show: no row at all, not a permanent "off".
+  if (!status.configured) return { rows: [], role: "muted" };
   const parts = status.line.split(" | ");
   // keep the row short enough for the sidebar: `Intake: N ждут` on the first row, the rest under it
   const rows = parts.length > 1 && status.line.length > width ? parts.map((part) => fit(part, width)) : [fit(status.line, width)];
@@ -496,7 +518,7 @@ export function mountIntakeSidebar(options: IntakeSidebarOptions): IntakeSidebar
   const inputBlocked =
     options.inputBlocked ?? ((): boolean => (chrome as { keyboardOwnedElsewhere?: () => boolean }).keyboardOwnedElsewhere?.() === true);
 
-  const box = new core.BoxRenderable(r, { id: "sb-intake", flexDirection: "column", flexShrink: 0, marginTop: 1 });
+  const box = new core.BoxRenderable(r, { id: "sb-intake", flexDirection: "column", flexShrink: 0 });
   (options.parent as { add(child: unknown): void }).add(box);
   let modal: IntakeModalHandle | undefined;
   let current: IntakeStatus | undefined;
@@ -516,6 +538,7 @@ export function mountIntakeSidebar(options: IntakeSidebarOptions): IntakeSidebar
       box.add(
         new core.TextRenderable(r, {
           id: `sb-intake-row-${index}`,
+          ...(index === 0 ? { marginTop: 1 } : {}),
           content: new core.StyledText([index === 0 ? roleChunk(core, projected.role, row) : dimChunk(core, row)]),
           onMouseDown: () => {
             void show();
@@ -547,6 +570,11 @@ export function mountIntakeSidebar(options: IntakeSidebarOptions): IntakeSidebar
   const show = async (): Promise<IntakeModalHandle | undefined> => {
     await refresh();
     if (disposed || current === undefined) return undefined;
+    if (!current.configured) {
+      // No config file: there is no modal to open, only a one-line way to turn intake on.
+      notice(`${current.disabledReason ?? current.line}\n`);
+      return undefined;
+    }
     modal?.close({ restoreFocus: false });
     modal = openIntake(core, chrome, {
       root: deps.root,

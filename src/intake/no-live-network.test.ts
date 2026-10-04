@@ -14,6 +14,9 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { FakeGh, TestClock, depsFor, local, setupIntakeEnv, testConfig } from "./intake.test-helpers";
+import { runIntakePoll } from "./poll";
+import { readIntakeState } from "./store";
 
 const INTAKE_DIR = import.meta.dir;
 const SRC_DIR = path.resolve(INTAKE_DIR, "..");
@@ -157,9 +160,11 @@ describe("the intake tests cannot reach GitHub, Telegram or a model", () => {
         "intake-ci-triage.test.ts",
         "intake-dedupe.test.ts",
         "intake-decline-later.test.ts",
+        "intake-delivery-integrity.test.ts",
         "intake-events.test.ts",
         "intake-failures.test.ts",
         "intake-limits-accounts.test.ts",
+        "intake-no-ports.test.ts",
         "intake-press-guards.test.ts",
         "intake-quiet-limits.test.ts",
         "intake-readonly.test.ts",
@@ -169,6 +174,7 @@ describe("the intake tests cannot reach GitHub, Telegram or a model", () => {
         "intake-status.test.ts",
         "intake-take-failure.test.ts",
         "intake-take.test.ts",
+        "intake-work-root.test.ts",
       ].sort(),
     );
     expect(helpers.map((entry) => path.basename(entry.name))).toContain("intake.test-helpers.ts");
@@ -226,6 +232,27 @@ describe("the intake tests cannot reach GitHub, Telegram or a model", () => {
     }
   });
 
+  test("the intake tests that live outside src/intake (TUI, hub callback route, CLI ports) are held to the same rules", () => {
+    const outside = [
+      load(path.join(SRC_DIR, "tui", "intake-surface.test.ts")),
+      load(path.join(SRC_DIR, "remote", "intake-callback-route.test.ts")),
+      load(path.join(SRC_DIR, "commands", "intake-ports.test.ts")),
+    ];
+    expect(outside.map((entry) => path.basename(entry.name))).toEqual(["intake-surface.test.ts", "intake-callback-route.test.ts", "intake-ports.test.ts"]);
+    for (const entry of outside) {
+      const code = stripComments(entry.text);
+      // the ports test runs local `sh` children on purpose (it tests the process runner); everything else may not spawn
+      const spawnsLocally = path.basename(entry.name) === "intake-ports.test.ts";
+      const found = testViolations(entry.text).filter((v) => !(spawnsLocally && /child_process|Bun/.test(v)));
+      expect({ file: entry.name, found }).toEqual({ file: entry.name, found: [] });
+      expect(code).not.toMatch(/\bdefaultGhRunner\b|\bdefaultAssess\w*\b|\bdefaultMakeProvider\b/);
+      expect(importedSpecifiers(code).filter(isRealClientSpecifier)).toEqual([]);
+      for (const name of POLL_ENTRY_POINTS) {
+        for (const argument of callArguments(entry.text, name)) expect(argument).toMatch(/\bdeps\b|\bdepsFor\(/);
+      }
+    }
+  });
+
   test("the test environment points HOME away from the developer's, so no stored key or gh login is read", () => {
     const code = stripComments(helpers.find((entry) => entry.name.endsWith("intake.test-helpers.ts"))?.text ?? "");
     expect(code).toContain('process.env["HOME"] = home');
@@ -256,12 +283,34 @@ describe("the intake modules reach the world only through their seams", () => {
     }
   });
 
-  test("gh and the clock are the injected runGh and now, defaulting to the one digest gh runner and the wall clock", () => {
+  test("gh is the injected runGh, defaulting to the one digest gh runner", () => {
     const poll = production.find((entry) => entry.name.endsWith("poll.ts"));
     const code = stripComments(poll?.text ?? "");
-    expect(code).toContain("runGh: deps.runGh ?? defaultGhRunner");
-    expect(code).toContain("deps.now ?? (() => new Date())");
+    expect(code).toMatch(/runGh:\s*deps\.runGh\s*\?\?\s*defaultGhRunner/);
     expect(importedSpecifiers(code)).toContain("../scheduler/digest-gh");
+  });
+
+  test("the clock is the injected now, and the wall clock only when none is injected (behaviour, not source text)", async () => {
+    const injected = await setupIntakeEnv();
+    const wall = await setupIntakeEnv();
+    try {
+      for (const e of [injected, wall]) e.setBoard([{ id: "F1", title: "A flow", status: "open" }]);
+      const fixed = local(12);
+      const clock = new TestClock(fixed);
+      await runIntakePoll(injected.root, depsFor(injected, { gh: new FakeGh(), clock, config: testConfig() }));
+      expect((await readIntakeState(injected.root)).lastPollAt).toBe(fixed.toISOString());
+
+      const before = Date.now();
+      const { now: _injectedNow, ...rest } = depsFor(wall, { gh: new FakeGh(), clock: new TestClock(fixed), config: testConfig() });
+      void _injectedNow;
+      await runIntakePoll(wall.root, rest);
+      const stamp = Date.parse((await readIntakeState(wall.root)).lastPollAt ?? "");
+      expect(stamp).toBeGreaterThanOrEqual(before);
+      expect(stamp).toBeLessThanOrEqual(Date.now());
+    } finally {
+      await injected.teardown();
+      await wall.teardown();
+    }
   });
 });
 

@@ -1,6 +1,6 @@
 // Flow 403: the real ports behind a card decision. They live outside src/intake because they start processes (keryx
-// itself and git), and the intake modules are scanned to stay free of any process or socket module. Serve installs
-// them once; every intake test injects fakes instead.
+// itself and git), and the intake modules are scanned to stay free of any process or socket module. Serve, the TUI
+// and the `keryx intake` commands install them; every intake test injects fakes instead.
 
 import { spawn, spawnSync } from "node:child_process";
 import { appendFile, readFile, readdir, rm } from "node:fs/promises";
@@ -11,10 +11,11 @@ import {
   type IntakeFlowPort,
   type IntakeProjectFinder,
   installIntakeDefaultPorts,
+  intakeDefaultPorts,
 } from "../intake/ports";
 import { normalizeRemoteUrl } from "../learning/identity";
 import { listProjects } from "../lib/project-registry";
-import { ghAccountForPath } from "../scheduler/digest-gh";
+import { ghEnvForProject } from "../scheduler/digest-gh";
 import { redactSensitiveText } from "../security/service";
 import { invocationArgv, resolveKeryxInvocation } from "../trigger/schedule";
 
@@ -26,42 +27,93 @@ function lastLine(text: string): string {
   return redactSensitiveText(lines[lines.length - 1] ?? "").slice(0, 160);
 }
 
-interface Captured {
+export interface Captured {
   readonly code: number | null;
   readonly timedOut: boolean;
   readonly stdout: string;
   readonly stderr: string;
 }
 
-/** Run keryx itself and keep at most `maxBytes` of each stream. */
-function runKeryx(args: readonly string[], cwd: string, timeoutMs: number, maxBytes: number): Promise<Captured> {
-  const argv = [...invocationArgv(resolveKeryxInvocation()), ...args];
-  const env = { ...process.env, GH_ACCOUNT: ghAccountForPath(cwd) };
+/** Runs keryx with these arguments in a project; the real one spawns a process, a test passes a fake. */
+export type KeryxRunner = (args: readonly string[], cwd: string, timeoutMs: number, maxBytes: number) => Promise<Captured>;
+
+/** After the child has exited, how long its output pipes are waited for before a grandchild holding them is cut loose. */
+const PIPE_GRACE_MS = 500;
+
+/**
+ * The environment of the keryx child: the same allowlist the digest's gh calls get (no GH_TOKEN, GITHUB_TOKEN or any
+ * other secret of the host, so the account the path chose cannot be overridden) plus keryx's own non-secret settings.
+ */
+export function intakeChildEnv(cwd: string, base: Record<string, string | undefined> = process.env): Record<string, string | undefined> {
+  const env = ghEnvForProject(cwd, base);
+  for (const [name, value] of Object.entries(base)) {
+    if (value !== undefined && name.startsWith("KERYX_") && !/TOKEN|SECRET|KEY|PASSWORD|CREDENTIAL/i.test(name)) env[name] = value;
+  }
+  return env;
+}
+
+/**
+ * Run a process and keep at most `maxBytes` of each stream. The child leads its own process group: on a timeout the
+ * whole group is killed, and the promise settles shortly after the child EXITS, not when every pipe closes, so a
+ * grandchild that inherited the pipes can neither hang the caller nor keep a card in `taking`.
+ */
+export function runProcess(
+  argv: readonly string[],
+  options: { readonly cwd: string; readonly env: Record<string, string | undefined>; readonly timeoutMs: number; readonly maxBytes: number; readonly graceMs?: number },
+): Promise<Captured> {
+  const graceMs = options.graceMs ?? PIPE_GRACE_MS;
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
     let timedOut = false;
-    const child = spawn(argv[0]!, argv.slice(1), { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    let settled = false;
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    const child = spawn(argv[0]!, argv.slice(1), { cwd: options.cwd, env: options.env as NodeJS.ProcessEnv, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    const killGroup = (): void => {
+      try {
+        if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
+      } catch {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // already gone
+        }
+      }
+    };
+    const finish = (code: number | null, extra = ""): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (grace !== undefined) clearTimeout(grace);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve({ code, timedOut, stdout: stdout.slice(0, options.maxBytes), stderr: `${stderr}${extra}`.slice(0, options.maxBytes) });
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGKILL");
-    }, timeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => {
-      if (stdout.length < maxBytes) stdout += chunk.toString("utf8");
+      killGroup();
+    }, options.timeoutMs);
+    child.stdout?.on("data", (chunk: Buffer) => {
+      if (stdout.length < options.maxBytes) stdout += chunk.toString("utf8");
     });
-    child.stderr.on("data", (chunk: Buffer) => {
-      if (stderr.length < maxBytes) stderr += chunk.toString("utf8");
+    child.stderr?.on("data", (chunk: Buffer) => {
+      if (stderr.length < options.maxBytes) stderr += chunk.toString("utf8");
     });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ code: null, timedOut, stdout, stderr: `${stderr}${error.message}` });
+    child.on("error", (error) => finish(null, error.message));
+    child.on("exit", (code) => {
+      grace = setTimeout(() => {
+        // The pipes are still open: a grandchild holds them. Cut it loose and report what the child said.
+        killGroup();
+        finish(code);
+      }, graceMs);
     });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ code, timedOut, stdout: stdout.slice(0, maxBytes), stderr: stderr.slice(0, maxBytes) });
-    });
+    child.on("close", (code) => finish(code));
   });
 }
+
+/** Run keryx itself. */
+const runKeryx: KeryxRunner = (args, cwd, timeoutMs, maxBytes) =>
+  runProcess([...invocationArgv(resolveKeryxInvocation()), ...args], { cwd, env: intakeChildEnv(cwd), timeoutMs, maxBytes });
 
 async function flowDirs(projectRoot: string): Promise<string[]> {
   try {
@@ -90,32 +142,59 @@ async function cleanup(projectRoot: string, created: readonly string[], cardId: 
   }
 }
 
-export function createDefaultFlowPort(options: { timeoutMs?: number } = {}): IntakeFlowPort {
+/** One `flow init` at a time per project: two presses at once must not each see the other's new directory. */
+const initChains = new Map<string, Promise<unknown>>();
+
+function inProject<T>(projectRoot: string, fn: () => Promise<T>): Promise<T> {
+  const key = path.resolve(projectRoot);
+  const previous = initChains.get(key) ?? Promise.resolve();
+  const next = previous.then(fn, fn);
+  const tail = next.catch(() => undefined);
+  initChains.set(key, tail);
+  void tail.then(() => {
+    if (initChains.get(key) === tail) initChains.delete(key);
+  });
+  return next;
+}
+
+export function createDefaultFlowPort(options: { timeoutMs?: number; run?: KeryxRunner } = {}): IntakeFlowPort {
   const timeoutMs = options.timeoutMs ?? 90_000;
+  const run = options.run ?? runKeryx;
   return {
-    async init(projectRoot, input) {
-      const cardId = /card ([a-z0-9]+)$/.exec(input.source)?.[1] ?? input.source;
-      const before = new Set(await flowDirs(projectRoot));
-      const args = [
-        "flow",
-        "init",
-        ...(input.issueUrl !== undefined ? ["--issue", input.issueUrl] : []),
-        ...(input.title !== undefined ? ["--title", input.title] : []),
-        "--origin",
-        "agent-proposal",
-        "--source",
-        input.source,
-      ];
-      const run = await runKeryx(args, projectRoot, timeoutMs, 64_000);
-      const created = (await flowDirs(projectRoot)).filter((d) => !before.has(d));
-      if (run.timedOut || run.code !== 0) {
-        await cleanup(projectRoot, created, cardId);
-        const why = run.timedOut ? "timed out" : lastLine(run.stderr) || lastLine(run.stdout) || `exit ${run.code ?? "none"}`;
-        return { ok: false, reason: `flow init failed: ${why}` };
-      }
-      const dir = created.find((d) => d.length > 0);
-      if (dir === undefined) return { ok: false, reason: "flow init finished but no flow directory appeared" };
-      return { ok: true, flowId: flowIdOf(dir), dir };
+    init(projectRoot, input) {
+      return inProject(projectRoot, async () => {
+        const cardId = /card ([a-z0-9]+)$/.exec(input.source)?.[1] ?? input.source;
+        const before = new Set(await flowDirs(projectRoot));
+        const args = [
+          "flow",
+          "init",
+          ...(input.issueUrl !== undefined ? ["--issue", input.issueUrl] : []),
+          ...(input.title !== undefined ? ["--title", input.title] : []),
+          "--origin",
+          "agent-proposal",
+          "--source",
+          input.source,
+        ];
+        const result = await run(args, projectRoot, timeoutMs, 64_000);
+        const created = (await flowDirs(projectRoot)).filter((d) => !before.has(d));
+        if (result.timedOut || result.code !== 0) {
+          await cleanup(projectRoot, created, cardId);
+          const why = result.timedOut ? "timed out" : lastLine(result.stderr) || lastLine(result.stdout) || `exit ${result.code ?? "none"}`;
+          return { ok: false as const, reason: `flow init failed: ${why}` };
+        }
+        // Only the directory whose origin names THIS card is this card's flow: a flow the operator made at the same
+        // moment, or one another press made, is not adopted.
+        let dir: string | undefined;
+        for (const candidate of created) {
+          const source = await sourceOf(projectRoot, candidate);
+          if (source !== undefined && source.includes(cardId)) {
+            dir = candidate;
+            break;
+          }
+        }
+        if (dir === undefined) return { ok: false as const, reason: "flow init finished but no flow directory for this card appeared" };
+        return { ok: true as const, flowId: flowIdOf(dir), dir };
+      });
     },
     async findByCard(projectRoot, cardId) {
       for (const dir of await flowDirs(projectRoot)) {
@@ -176,4 +255,16 @@ export function createDefaultProjectFinder(intakeRoot: string): IntakeProjectFin
 /** Make the real ports the defaults of `decideIntakeCard` and `recoverIntakeTaking`. */
 export function installRealIntakePorts(): void {
   installIntakeDefaultPorts({ flows: () => createDefaultFlowPort(), ciTriage: () => createDefaultCiTriagePort(), projectFor: (root) => createDefaultProjectFinder(root) });
+}
+
+/**
+ * The entry points that decide a card without serve (the TUI modal, the `keryx intake` commands) call this first: it
+ * installs the real ports unless something (serve, a test) already installed ports of its own.
+ */
+export function ensureRealIntakePorts(): void {
+  try {
+    intakeDefaultPorts();
+  } catch {
+    installRealIntakePorts();
+  }
 }

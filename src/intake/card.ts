@@ -6,6 +6,7 @@
 // else: no URL, no title. What a press DOES is read from the card registry, never from the press.
 
 import type { ServiceSendResult } from "../remote/hub";
+import { INTAKE_SERVICE_TOPIC } from "../remote/protocol";
 import type { SentMessageInfo } from "../remote/outbound-queue";
 import type { InlineKeyboard } from "../remote/types";
 import { INTAKE_ACTIONS, type IntakeAction, type IntakeCardKind, type IntakeCardSink, type IntakeCardView, type IntakeSendResult } from "./types";
@@ -107,15 +108,28 @@ export function intakeKeyboard(card: IntakeCardView): InlineKeyboard {
 /** The part of the hub the sink uses; a test passes a fake. */
 export interface IntakeSinkHub {
   sendToServiceTopic(name: string, text: string, options?: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void }): Promise<ServiceSendResult>;
+  editServiceMessage?(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard): Promise<boolean>;
 }
 
 /**
- * The poll's Telegram path. A card that Telegram took at once reports its chat and message ids; one the durable
- * queue holds for a retry is still `ok` (it WILL go out) but has no message id yet, and the press handler adopts
- * the ids of the first press on it.
+ * The poll's Telegram path. Everything goes to the ONE topic `INTAKE_SERVICE_TOPIC`: it is not configurable, because
+ * it is the topic the hub accepts presses from. A card that Telegram took at once reports its chat and message ids;
+ * one the durable queue holds for a retry is still `ok` (it WILL go out) but has no message id yet, and the press
+ * handler adopts the ids of the first press on it.
  */
-export function createIntakeCardSink(hub: IntakeSinkHub, topic: string): IntakeCardSink {
+export function createIntakeCardSink(hub: IntakeSinkHub): IntakeCardSink {
+  const topic = INTAKE_SERVICE_TOPIC;
   return {
+    async editCard(card: IntakeCardView, status?: string): Promise<{ readonly ok: boolean }> {
+      if (hub.editServiceMessage === undefined || card.chatId === undefined || card.messageId === undefined) return { ok: false };
+      const chatId = Number(card.chatId);
+      const messageId = Number(card.messageId);
+      if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(messageId)) return { ok: false };
+      // A card with a status line is settled: no buttons. Without one (an overflow count that grew) it keeps its own.
+      const keyboard = status === undefined ? intakeKeyboard(card) : undefined;
+      const ok = await hub.editServiceMessage(chatId, messageId, renderIntakeCard(card, status), keyboard !== undefined && keyboard.length > 0 ? keyboard : undefined);
+      return { ok };
+    },
     async sendCard(card: IntakeCardView): Promise<IntakeSendResult> {
       let sent: SentMessageInfo | undefined;
       const keyboard = intakeKeyboard(card);

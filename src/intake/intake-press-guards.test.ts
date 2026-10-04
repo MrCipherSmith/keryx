@@ -8,6 +8,7 @@ import path from "node:path";
 import { decideIntakeCard } from "./actions";
 import { intakeDataDir } from "./config";
 import { CHAT_ID, FakePressHub, makeFakes, pressFor, seedCard } from "./intake-actions.test-helpers";
+import { until } from "../remote/remote.test-helpers";
 import { local, setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
 import { INTAKE_REJECTED_PRESSES_FILE, createIntakePressHandler } from "./press";
 import { readIntakeCardView, readIntakeLedger } from "./store";
@@ -30,19 +31,22 @@ describe("repeat and expired presses (AC11)", () => {
     const card = await seedCard(env.root);
     const { handler, fakes, hub } = handlerFor();
     expect((await handler(pressFor(card, "take")))?.text).toContain("flow 412");
-    expect(await handler(pressFor(card, "take", { updateId: 2 }))).toEqual({ text: "уже решено" });
-    expect(await handler(pressFor(card, "decline", { updateId: 3 }))).toEqual({ text: "уже решено" });
+    expect(await handler(pressFor(card, "take", { updateId: 2 }))).toMatchObject({ text: "уже решено", edited: true });
+    expect(await handler(pressFor(card, "decline", { updateId: 3 }))).toMatchObject({ text: "уже решено", edited: true });
     expect(fakes.flows.initCalls).toHaveLength(1);
-    expect(hub.edits).toHaveLength(1);
+    // the take edited the card once; each refused press re-edits it to the settled line, so no live buttons stay
+    expect(hub.edits.at(-1)?.text).toContain("уже решено");
+    expect(hub.edits.at(-1)?.keyboard ?? []).toEqual([]);
   });
 
   test("a press after the buttons expired says expired, marks the card expired and does nothing", async () => {
     const card = await seedCard(env.root, { ttlHours: 24 });
-    const { handler, fakes } = handlerFor(makeFakes(), local(10, 0, 7));
-    expect(await handler(pressFor(card, "take"))).toEqual({ text: "истекло" });
+    const { handler, fakes, hub } = handlerFor(makeFakes(), local(10, 0, 7));
+    expect(await handler(pressFor(card, "take"))).toMatchObject({ text: "истекло", edited: true });
+    expect(hub.edits.at(-1)?.text).toContain("кнопки истекли");
     expect(fakes.flows.initCalls).toEqual([]);
     expect((await readIntakeCardView(env.root, card.id))!.state).toBe("expired");
-    expect(await handler(pressFor(card, "take", { updateId: 2 }))).toEqual({ text: "истекло" });
+    expect(await handler(pressFor(card, "take", { updateId: 2 }))).toMatchObject({ text: "истекло" });
   });
 
   test("an unknown card and unreadable data get a short answer and change nothing", async () => {
@@ -63,15 +67,15 @@ describe("concurrent presses (AC11)", () => {
     });
     const { handler } = handlerFor(fakes);
     const first = handler(pressFor(card, "take"));
-    const second = handler(pressFor(card, "take", { updateId: 2 }));
-    await Bun.sleep(20);
+    // Condition, not a delay: the first press is inside flow init, held at the gate, so the card is in `taking`.
+    await until(() => fakes.flows.initCalls.length === 1, "first press inside flow init");
+    // The second press arrives while the first is in flight: it is refused at once, without waiting for the gate.
+    expect(await handler(pressFor(card, "take", { updateId: 2 }))).toMatchObject({ text: "уже выполняется" });
+    expect(fakes.flows.initCalls).toHaveLength(1);
     open();
-    const replies = (await Promise.all([first, second])).map((r) => r?.text);
+    expect((await first)?.text).toContain("flow 412");
     expect(fakes.flows.initCalls).toHaveLength(1);
     expect(fakes.flows.flows).toHaveLength(1);
-    expect(replies.filter((t) => t?.includes("flow 412"))).toHaveLength(1);
-    // whether the second press read the card in `taking` or already `taken` depends on scheduling; both refuse
-    expect(replies.filter((t) => t === "уже выполняется" || t === "уже решено")).toHaveLength(1);
   });
 
   test("a take and a decline at once: exactly one wins", async () => {

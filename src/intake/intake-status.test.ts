@@ -142,6 +142,8 @@ describe("keryx intake", () => {
   }
 
   test("pause, status --json, resume", async () => {
+    await env.teardown();
+    env = await setupIntakeEnv({ config: {} });
     expect(await run(["pause"])).toContain("на паузе");
     const paused = JSON.parse(await run(["status", "--json"])) as { paused: boolean; line: string };
     expect(paused.paused).toBe(true);
@@ -167,8 +169,34 @@ describe("keryx intake", () => {
     env = await setupIntakeEnv({ config: { enabled: false } });
     const result = JSON.parse(await run(["poll", "--json"])) as { outcome: string; detail: string };
     expect(result.outcome).toBe("skipped");
-    expect(result.detail).toContain("disabled");
+    expect(result.detail).toContain("выключен");
     expect(process.exitCode).toBe(0);
+  });
+
+  test("L2: a project with no config file is not polled by hand either; the refusal is one line that says how to enable it", async () => {
+    // setupIntakeEnv() writes no config file: this is the default state of every project.
+    const out = await run(["poll"]);
+    expect(out.trim().split("\n")).toHaveLength(1);
+    expect(out).toContain("skipped");
+    expect(out).toContain("intake не настроен");
+    expect(out).toContain(".metaproject/data/intake/config.json");
+    expect(out).toContain('"enabled": true');
+    const json = JSON.parse(await run(["poll", "--json"])) as { outcome: string; cardIds: string[]; reportPath?: string };
+    expect(json.outcome).toBe("skipped");
+    expect(json.cardIds).toEqual([]);
+    // nothing was started: no poll state, no report
+    expect(json.reportPath).toBeUndefined();
+    expect((await readIntakeState(env.root)).lastPollAt).toBeUndefined();
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("L2: the status of a project with no config file says it is not configured and how to enable it", async () => {
+    const text = await run(["status"]);
+    expect(text).toContain("intake не настроен");
+    expect(text).toContain("включён: нет");
+    const status = JSON.parse(await run(["status", "--json"])) as { configured: boolean; enabled: boolean; disabledReason?: string };
+    expect(status).toMatchObject({ configured: false, enabled: false });
+    expect(status.disabledReason).toContain("config.json");
   });
 
   test("an unknown subcommand is refused", async () => {

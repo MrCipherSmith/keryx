@@ -60,7 +60,7 @@ export async function setupIntakeEnv(options: { config?: Partial<IntakeConfig> }
   await chmod(ghBin, 0o755);
   if (options.config !== undefined) {
     await mkdir(path.join(root, ".metaproject", "data", "intake"), { recursive: true });
-    await writeFile(path.join(root, ".metaproject", "data", "intake", "config.json"), JSON.stringify({ ...DEFAULT_INTAKE_CONFIG, repos: [REPO], ...options.config }), "utf8");
+    await writeFile(path.join(root, ".metaproject", "data", "intake", "config.json"), JSON.stringify({ ...DEFAULT_INTAKE_CONFIG, enabled: true, repos: [REPO], ...options.config }), "utf8");
   }
   const logged: string[] = [];
   const realLog = console.log;
@@ -246,12 +246,23 @@ export class FakeSink implements IntakeCardSink {
   /** One entry is consumed per card send attempt; an empty list means every send succeeds. */
   script: IntakeSendResult[] = [];
   statusOk = true;
+  /** Every edit of a card already in Telegram, with the status line it was given (none keeps the buttons). */
+  readonly edits: { readonly card: IntakeCardView; readonly status?: string }[] = [];
+  editOk = true;
+  /** Runs while a send is in flight, after the card was read and before the sink answers. */
+  onSend: ((card: IntakeCardView) => Promise<void> | void) | undefined;
   private n = 0;
 
   async sendCard(card: IntakeCardView): Promise<IntakeSendResult> {
+    if (this.onSend !== undefined) await this.onSend(card);
     const next = this.script.shift() ?? { ok: true as const, chatId: "-100", messageId: String(++this.n) };
     if (next.ok) this.cards.push(card);
     return next;
+  }
+
+  async editCard(card: IntakeCardView, status?: string): Promise<{ ok: boolean }> {
+    if (this.editOk) this.edits.push({ card, ...(status !== undefined ? { status } : {}) });
+    return { ok: this.editOk };
   }
 
   async sendStatus(text: string): Promise<{ ok: boolean }> {
@@ -285,7 +296,7 @@ export function depsFor(env: IntakeTestEnv, parts: { gh: FakeGh; clock: TestCloc
   };
 }
 
-export const testConfig = (patch: Partial<IntakeConfig> = {}): IntakeConfig => ({ ...DEFAULT_INTAKE_CONFIG, repos: [REPO], ...patch });
+export const testConfig = (patch: Partial<IntakeConfig> = {}): IntakeConfig => ({ ...DEFAULT_INTAKE_CONFIG, enabled: true, repos: [REPO], ...patch });
 
 /** The first poll of a project only takes a baseline; this runs it and moves the clock past the poll interval. */
 export async function takeBaseline(root: string, deps: IntakeDeps, clock: TestClock): Promise<IntakePollResult> {

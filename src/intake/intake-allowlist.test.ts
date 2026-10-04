@@ -9,7 +9,6 @@ import { setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
 import { createIntakePressHandler } from "./press";
 import { appendIntakeRecord, readIntakeCardView } from "./store";
 import { type Harness, makeHarness, OWNER_ID, STRANGER_ID, until } from "../remote/remote.test-helpers";
-import { INTAKE_SERVICE_TOPIC } from "../remote/protocol";
 import { renderIntakeCard } from "./card";
 
 let env: IntakeTestEnv;
@@ -34,7 +33,7 @@ async function setup() {
 
   const card = await seedCard(env.root, { delivered: false, assessment: "Small bug." });
   const view = (await readIntakeCardView(env.root, card.id))!;
-  const sent = await createIntakeCardSink(hub, INTAKE_SERVICE_TOPIC).sendCard(view);
+  const sent = await createIntakeCardSink(hub).sendCard(view);
   if (!sent.ok || sent.chatId === undefined || sent.messageId === undefined) throw new Error("card was not sent");
   await appendIntakeRecord(env.root, { at: view.createdAt, cardId: card.id, eventKey: view.eventKey, kind: "issue", state: "sent", chatId: sent.chatId, messageId: sent.messageId });
   const message = h.api.sent.find((m) => m.messageId === Number(sent.messageId))!;
@@ -45,10 +44,14 @@ describe("allowlist (AC13)", () => {
   test("a press from a stranger reaches nobody: no decision, no flow, no edit", async () => {
     const { card, fakes, message, data } = await setup();
     h.api.pushCallback({ fromId: STRANGER_ID, data, threadId: message.messageThreadId!, messageId: message.messageId });
-    await Bun.sleep(50);
-    expect(fakes.flows.initCalls).toEqual([]);
-    expect(h.api.edits).toEqual([]);
-    expect((await readIntakeCardView(env.root, card.id))!.state).toBe("sent");
+    // Updates are handled in order, so the operator's press behind it is a positive fence: once it has been decided the
+    // stranger's press has been through the hub, and everything it could have done is already visible.
+    h.api.pushCallback({ fromId: OWNER_ID, data, threadId: message.messageThreadId!, messageId: message.messageId });
+    await until(() => fakes.flows.initCalls.length === 1, "operator take");
+    await until(() => h.api.edits.length === 1, "operator edit");
+    expect(fakes.flows.initCalls).toHaveLength(1);
+    expect(h.api.edits).toHaveLength(1);
+    expect((await readIntakeCardView(env.root, card.id))!.decidedBy).toBe(String(OWNER_ID));
   });
 
   test("a press from the operator takes the card and edits it in place without buttons", async () => {
@@ -69,9 +72,9 @@ describe("allowlist (AC13)", () => {
   test("the stranger's press is the only difference: the same card is still takeable by the operator afterwards", async () => {
     const { card, fakes, message, data } = await setup();
     h.api.pushCallback({ fromId: STRANGER_ID, data, threadId: message.messageThreadId!, messageId: message.messageId });
-    await Bun.sleep(50);
     h.api.pushCallback({ fromId: OWNER_ID, data, threadId: message.messageThreadId!, messageId: message.messageId });
-    await until(() => fakes.flows.initCalls.length === 1, "operator take");
-    expect((await readIntakeCardView(env.root, card.id))!.decidedBy).toBe(String(OWNER_ID));
+    await until(() => (h.api.answeredCallbacks as readonly { text?: string }[]).some((c) => c.text?.includes("flow 412") === true), "operator toast");
+    expect(fakes.flows.initCalls).toHaveLength(1);
+    expect(await readIntakeCardView(env.root, card.id)).toMatchObject({ state: "taken", decidedBy: String(OWNER_ID) });
   });
 });

@@ -4,7 +4,7 @@
 // `buildIntakeStatus` returns; none of them computes a count of its own.
 
 import { ghEnvForProject, type GhAccount } from "../scheduler/digest-gh";
-import { inQuietHours, readIntakeConfig } from "./config";
+import { inQuietHours, intakeDisabledReason, readIntakeConfigFile } from "./config";
 import { nextIntakePollAt } from "./poll";
 import { readIntakeCardViews, readIntakeState, updateIntakeState } from "./store";
 import type { IntakeCardSummary, IntakeCardView, IntakeConfig, IntakeStatus } from "./types";
@@ -49,7 +49,8 @@ const newestFirst = (a: IntakeCardView, b: IntakeCardView): number => b.updatedA
 export async function buildIntakeStatus(root: string, deps: IntakeStatusDeps = {}): Promise<IntakeStatus> {
   const now = (deps.now ?? (() => new Date()))();
   const env = deps.env ?? process.env;
-  const config = deps.config ?? (await readIntakeConfig(root));
+  const file = deps.config !== undefined ? { present: true, config: deps.config, problems: [] as readonly string[] } : await readIntakeConfigFile(root);
+  const config = file.config;
   const state = await readIntakeState(root);
   // An overflow card is a courtesy message: the cards it folded are what a human decides on.
   const views = (await readIntakeCardViews(root)).filter((c) => c.kind !== "overflow").sort(newestFirst);
@@ -61,14 +62,20 @@ export async function buildIntakeStatus(root: string, deps: IntakeStatusDeps = {
   const nextPollAt = nextIntakePollAt(config, state);
   const ghAccount: GhAccount = ghEnvForProject(root, env)["GH_ACCOUNT"] === "work" ? "work" : "personal";
 
-  const line = !config.enabled
-    ? "Intake: выкл"
-    : state.paused
-      ? `Intake: ${waiting.length} ждут | пауза`
-      : `Intake: ${waiting.length} ждут | следующий опрос ${clock(nextPollAt)}`;
+  const disabledReason = intakeDisabledReason(file);
+  const line = !file.present
+    ? "Intake: не настроен"
+    : !config.enabled
+      ? "Intake: выкл"
+      : state.paused
+        ? `Intake: ${waiting.length} ждут | пауза`
+        : `Intake: ${waiting.length} ждут | следующий опрос ${clock(nextPollAt)}`;
 
   return {
+    configured: file.present,
     enabled: config.enabled,
+    ...(disabledReason !== undefined ? { disabledReason } : {}),
+    problems: file.problems,
     paused: state.paused,
     waiting: waiting.length,
     queued: queued.length,

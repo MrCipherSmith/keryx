@@ -2489,8 +2489,9 @@ keryx intake report [--json]
 
 `--json` prints the same data as JSON for `status`, `list`, `poll` and `report`.
 
-Intake is off for a project until `.metaproject/data/intake/config.json` exists and is not
-disabled; `keryx serve` skips every other project. The settings, the Telegram buttons, the
+Intake is off for a project until `.metaproject/data/intake/config.json` exists, says
+`"enabled": true` and lists `repos`; `keryx serve` skips every other project and `poll` refuses with
+a one-line how to enable it. `status` shows the same line. The settings, the Telegram buttons, the
 `/intake` modal in `keryx shell` and the limits are described in the guide.
 
 ---

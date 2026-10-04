@@ -4,12 +4,14 @@
 //   list     the cards, newest first
 //   pause    stop the automatic poll (cards already queued still go out)
 //   resume   start it again
-//   poll     one poll now, even while paused; new cards are queued and go out with the next serve tick
+//   poll     one poll now, even while paused (not in a project without an enabled intake config, which refuses with how
+//            to enable it); new cards are queued and go out with the next serve tick
 //   report   what the cards were worth: decisions, answer times, match with the suggestion, card -> flow -> PR
 //
 // Nothing here writes to GitHub. A poll reads through the granted read-only gh tools.
 
 import { runIntakePoll } from "../intake/poll";
+import { ensureRealIntakePorts } from "./intake-ports";
 import { buildIntakeReport, formatIntakeReport } from "../intake/report";
 import { buildIntakeStatus, setIntakePaused } from "../intake/status";
 import { readIntakeCardViews } from "../intake/store";
@@ -20,6 +22,8 @@ const SUBCOMMANDS = ["status", "list", "pause", "resume", "poll", "report"] as c
 function formatStatus(status: IntakeStatus): string {
   const lines = [
     status.line,
+    ...(status.disabledReason !== undefined && !status.configured ? [`  ${status.disabledReason}`] : []),
+    ...status.problems.map((p) => `  внимание: ${p}`),
     `  включён: ${status.enabled ? "да" : "нет"}${status.paused ? " (пауза)" : ""}${status.quiet ? "; сейчас тихие часы" : ""}`,
     `  ждут решения: ${status.waiting}; в очереди на отправку: ${status.queued}; отложено: ${status.deferred}; решено: ${status.decided}`,
     `  репозитории: ${status.repos.join(", ") || "не заданы"}; аккаунт GitHub по пути проекта: ${status.ghAccount}`,
@@ -69,6 +73,8 @@ export async function intakeCommand(args: string[] = []): Promise<void> {
     return;
   }
   const root = process.cwd();
+  // Any subcommand may end up deciding a card or recovering one: the real flow and ci-triage ports are installed first.
+  ensureRealIntakePorts();
 
   if (sub === "status") {
     const status = await buildIntakeStatus(root);

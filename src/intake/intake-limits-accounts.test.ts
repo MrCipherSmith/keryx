@@ -24,7 +24,7 @@ describe("the budget (AC16)", () => {
     expect(testConfig().budgetUsd).toBe(0.5);
   });
 
-  test("a run that reaches the budget stops, says so, and leaves the rest for the next poll", async () => {
+  test("a run that reaches the budget does not abort: the rest are carded without an assessment, and the run says so", async () => {
     const gh = new FakeGh();
     const clock = new TestClock(local(12));
     const sink = new FakeSink();
@@ -32,25 +32,27 @@ describe("the budget (AC16)", () => {
     const deps = depsFor(env, { gh, clock, sink, assess: dear.assess, config: testConfig() });
     await takeBaseline(env.root, deps, clock);
     gh.set("issue", threeIssues());
-    const stopped = await runIntakePoll(env.root, deps);
-    expect(stopped.outcome).toBe("failed");
-    expect(stopped.stoppedBy).toBe("spend");
-    expect(stopped.detail).toContain("spend cap reached");
+    const run = await runIntakePoll(env.root, deps);
+    // The budget ends the model calls, not the run: no failure, no abort, nothing left for later.
+    expect(run.outcome).toBe("ok");
+    expect(run.stoppedBy).toBeUndefined();
     expect(dear.inputs).toHaveLength(2);
-    expect(stopped.costUsd).toBeCloseTo(0.6, 5);
-    expect(stopped.cardIds).toHaveLength(2);
-    expect(stopped.statusLine).toContain("опрос остановлен");
-    expect(sink.statuses.join("\n")).toContain("spend cap reached");
-    const report = await readFile(path.join(env.root, stopped.reportPath!), "utf8");
-    expect(report).toContain("run failed: spend cap reached");
+    expect(run.costUsd).toBeCloseTo(0.6, 5);
+    expect(run.cardIds).toHaveLength(3);
+    expect(run.notes.join("\n")).toContain("model budget of $0.50 reached; 1 remaining event(s) were sent without an assessment");
+    const views = await readIntakeCardViews(env.root);
+    expect(views).toHaveLength(3);
+    expect(views.filter((v) => v.assessment === undefined || v.assessment === "")).toHaveLength(1);
+    const report = await readFile(path.join(env.root, run.reportPath!), "utf8");
+    expect(report).toContain("## Notes");
+    expect(report).toContain("without an assessment");
     expect(report).toContain("model cost: $0.6000 of $0.50");
 
+    // the next poll has nothing left over from this one
     clock.advance(11 * 60_000);
-    const cheap = fakeAssessor({ costUsd: 0.01 });
-    const next = await runIntakePoll(env.root, depsFor(env, { gh, clock, sink, assess: cheap.assess, config: testConfig() }));
+    const next = await runIntakePoll(env.root, depsFor(env, { gh, clock, sink, assess: fakeAssessor({ costUsd: 0.01 }).assess, config: testConfig() }));
     expect(next.outcome).toBe("ok");
-    expect(next.cardIds).toHaveLength(1);
-    expect(await readIntakeCardViews(env.root)).toHaveLength(3);
+    expect(next.cardIds).toHaveLength(0);
   });
 
   test("the model is told what is left of the budget", async () => {

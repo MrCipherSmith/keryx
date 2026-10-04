@@ -2,6 +2,7 @@
 // own buttons. Ticket text is untrusted: it is redacted and cut before the model sees it, and nothing the model or
 // the ticket says can add a link, a button or markup to the card.
 
+import { INTAKE_SERVICE_TOPIC } from "../remote/protocol";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createIntakeAssessor, parseAssessment, type IntakeModelCall, type IntakeModelRequest } from "./assess";
 import { createIntakeCardSink, plainText, renderIntakeCard } from "./card";
@@ -140,18 +141,40 @@ describe("the card text (AC4)", () => {
     const hub = new FakePressHub();
     const card = await seedCard(env.root, { assessment: "Looks small." });
     const view = (await readIntakeCardView(env.root, card.id))!;
-    const result = await createIntakeCardSink(hub, "Intake").sendCard(view);
+    const result = await createIntakeCardSink(hub).sendCard(view);
     expect(result).toMatchObject({ ok: true, chatId: expect.any(String), messageId: expect.any(String) });
     expect(hub.sends).toHaveLength(1);
     expect(hub.sends[0]!.topic).toBe("Intake");
     expect(hub.sends[0]!.keyboard).toHaveLength(1);
   });
 
+  test("S4: the sink has one topic, the one the hub accepts presses from", async () => {
+    const hub = new FakePressHub();
+    const view = (await readIntakeCardView(env.root, (await seedCard(env.root)).id))!;
+    await createIntakeCardSink(hub).sendCard(view);
+    await createIntakeCardSink(hub).sendStatus("hello");
+    expect(hub.sends.map((m) => m.topic)).toEqual([INTAKE_SERVICE_TOPIC, INTAKE_SERVICE_TOPIC]);
+  });
+
+  test("editCard edits the message in place: a status line drops the buttons, none keeps them, no ids is not ok", async () => {
+    const hub = new FakePressHub();
+    const card = await seedCard(env.root, { assessment: "Small." });
+    const view = (await readIntakeCardView(env.root, card.id))!;
+    expect(await createIntakeCardSink(hub).editCard!(view, "👍 принято 10:42")).toEqual({ ok: true });
+    expect(hub.edits[0]!.text).toContain("👍 принято 10:42");
+    expect(hub.edits[0]!.keyboard).toBeUndefined();
+    expect(await createIntakeCardSink(hub).editCard!(view)).toEqual({ ok: true });
+    expect(hub.edits[1]!.keyboard).toHaveLength(1);
+    const noIds = (await readIntakeCardView(env.root, (await seedCard(env.root, { withoutIds: true })).id))!;
+    expect(await createIntakeCardSink(hub).editCard!(noIds, "x")).toEqual({ ok: false });
+    expect(hub.edits).toHaveLength(2);
+  });
+
   test("a card the durable queue holds is ok without ids; a refused send is not ok", async () => {
     const view = (await readIntakeCardView(env.root, (await seedCard(env.root)).id))!;
     const queued = { sendToServiceTopic: async () => ({ ok: true as const, state: "queued" as const, threadId: 1 }) };
-    expect(await createIntakeCardSink(queued, "Intake").sendCard(view)).toEqual({ ok: true });
+    expect(await createIntakeCardSink(queued).sendCard(view)).toEqual({ ok: true });
     const refused = { sendToServiceTopic: async () => ({ ok: false as const, reason: "not connected" }) };
-    expect(await createIntakeCardSink(refused as never, "Intake").sendCard(view)).toMatchObject({ ok: false });
+    expect(await createIntakeCardSink(refused as never).sendCard(view)).toMatchObject({ ok: false });
   });
 });
