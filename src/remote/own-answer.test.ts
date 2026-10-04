@@ -12,7 +12,7 @@ import type { ChoiceAnswer, RemoteClient } from "./client";
 import { saveRemoteConfig } from "./config";
 import { FakeBotApi, type FakeSentMessage } from "./fake-bot-api";
 import { OutboundQueue } from "./outbound-queue";
-import { OWN_ANSWER_BUTTON_LABEL, OWN_ANSWER_WINDOW_MS, parseOwnCallback } from "./protocol";
+import { OWN_ANSWER_BUTTON_LABEL, OWN_ANSWER_WINDOW_MS, ownCallbackData, parseChoiceCallback, parseOwnCallback } from "./protocol";
 import { makeRig, type Rig } from "./remote.http.test-helpers";
 import { FAKE_CHAT_ID, OWNER_ID, settle, testConfig, until } from "./remote.test-helpers";
 
@@ -122,6 +122,22 @@ describe("press, reply, resolve (AC4)", () => {
     const first = rows[0]?.[0];
     rig.api.pushCallback({ fromId: OWNER_ID, data: first?.callback_data as string, threadId, messageId: prompt.messageId });
     expect(await pending).toEqual({ kind: "index", index: 0 });
+  });
+
+  test("a question asked without the own flag cannot be armed, even with a forged own callback", async () => {
+    rig = makeRig();
+    lines = [];
+    await rig.startServe();
+    const { client, threadId } = await session("sess-own-0003", "release");
+    const pending = resolved(client.askChoice("Which way?", OPTIONS, 5_000, { forUserId: OWNER_ID }));
+    const prompt = await untilPrompt(threadId);
+    expect(ownButton(prompt)).toBeUndefined();
+    const first = (prompt.inlineKeyboard ?? [])[0]?.[0]?.callback_data as string;
+    const promptId = parseChoiceCallback(first)?.promptId as string;
+    rig.api.pushCallback({ fromId: OWNER_ID, data: ownCallbackData(promptId), threadId, messageId: prompt.messageId });
+    await settle();
+    expect(armedMessages(threadId)).toEqual([]);
+    expect(pending.value()).toBeUndefined();
   });
 
   test("the ForceReply survives a restart of the outbound queue", async () => {
@@ -238,6 +254,24 @@ describe("only the reply to the armed message resolves (AC5)", () => {
     reply(threadId, "answer for A", armedA.messageId);
     await until(() => first.value() !== undefined, "A answered");
     expect(first.value()).toEqual({ kind: "own", text: "answer for A" });
+  });
+
+  test("a reply posted in another session's topic to this session's box resolves nothing", async () => {
+    rig = makeRig();
+    lines = [];
+    await rig.startServe();
+    const one = await session("sess-own-0019", "release");
+    const two = await session("sess-own-0020", "other");
+    const pending = resolved(one.client.askChoice("Which way?", OPTIONS, 5_000, { own: true }));
+    const prompt = await untilPrompt(one.threadId);
+    const armed = await pressOwn(one.threadId, prompt);
+    reply(two.threadId, "from the wrong topic", armed.messageId);
+    await settle();
+    await settle();
+    expect(pending.value()).toBeUndefined();
+    expect(lines).toEqual([]);
+    reply(one.threadId, "from the right topic", armed.messageId);
+    await until(() => pending.value() !== undefined, "the answer");
   });
 
   test("an empty reply is not an answer", async () => {
