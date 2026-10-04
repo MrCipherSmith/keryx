@@ -224,7 +224,7 @@ that it is off.
   same token meets a conflict from Telegram and stops polling for good instead of
   taking updates from the first.
 - **Two secrets, two route tables.** The `/v1/remote/*` routes (`register`,
-  `deregister`, `heartbeat`, `reply`, `approval`, `approval-ack`, `ack`, and `GET stream`) accept
+  `deregister`, `heartbeat`, `reply`, `approval`, `approval-ack`, `prompt`, `prompt-close`, `ack`, and `GET stream`) accept
   the shell token only, from a loopback connection. The serve bearer token does
   not reach them, and the shell token reaches nothing else. The shell token is
   new every time `serve` starts and the shell re-reads it on each request, so
@@ -452,6 +452,41 @@ or a name, so it cannot be forged or replayed. It is bound to the session, the
 message and the person it was sent to, expires, and is never mixed up with an
 approval button. After a press, the message is edited in place to show what was
 chosen and the buttons go away; approval messages are edited the same way.
+
+**Questions from the agent, and your own answer.** When a turn that started from
+Telegram makes the agent ask a question with options (`ask_user`), the question is
+shown in the topic with one button per option and a last button, **`✍ Свой ответ`**
+(own answer). It is shown in the shell's dock at the same time, and the first answer
+wins: the other place is closed, and the topic message is edited to say it was
+answered in the shell, or the dock says it was answered in Telegram. A question from
+a turn typed in the shell, and the pickers behind `/model`, `/connect` and `/resume`,
+have no own-answer button.
+
+- Press `✍ Свой ответ` and keryx posts a message that asks you to reply to it. Reply
+  to **that message** (Telegram's Reply, not a new line) with your text. The text is
+  returned to the agent as your own answer, not as an option, and the question
+  message shows it. The reply must come from the same person who was asked.
+- The binding is the replied-to message and the person, never "the next message":
+  a reply to some other message, a reply from another person, or a reply posted in
+  another session's topic resolves nothing. A reply to the box never starts a turn.
+  A line you type without replying is an ordinary line for the agent, as before.
+- Pressing the button gives you at least **5 minutes** to type (the option buttons
+  keep their own timeout, `choiceTimeoutMs`, 2 minutes by default). A reply after the
+  window, or after the question was answered elsewhere, resolves nothing, and the
+  topic says once that the question is no longer open.
+- Approvals (Allow, Deny, Always, `/mode`, grants) have no such path: typing "yes" or
+  "allow", as an own answer or as a reply, never approves anything. Only the
+  approval's own button does.
+- The own text and a reason are kept in the recommendation journal up to 2000
+  characters (a cut one ends with a visible `[truncated: N more characters]` marker)
+  and are redacted first, so a token-shaped string never reaches the journal, a
+  flow's `journal.md` or the report. See the
+  [recommendation journal](recommendation-journal.md#your-own-answer-and-a-typed-reason).
+
+The shell and `serve` keep the box in memory: if `serve` restarts while a box is
+waiting, a reply to it is taken as an ordinary line. The shell closes a question on
+`serve` with the loopback route `prompt-close` when it was answered in the dock or the
+turn was stopped.
 
 **Approval answers are confirmed by the shell.** When you press Allow or Deny,
 `serve` writes the answer to the shell's stream and waits 5 seconds for the shell
