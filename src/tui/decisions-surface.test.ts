@@ -391,15 +391,16 @@ test("without the new fields the summary falls back to the older modes and says 
 test("flow 400 (AC17-AC21): the arm summary carries reasons, the ineligible line and the progress, and degrades without them", () => {
   const full = {
     ...ARM_REPORT,
-    reasons: { agreement: { decisions: 4, named: 1 }, deviation: { decisions: 3, named: 2 }, requested: { answered: 5, medianMs: 12_000 }, notRequested: { answered: 9, medianMs: 4200 } },
+    reasons: { agreement: { decisions: 4, named: 1 }, deviation: { decisions: 3, named: 2 }, deviationNotAsked: 2, requested: { answered: 5, medianMs: 12_000 }, notRequested: { answered: 9, medianMs: 4200 } },
     ineligible: { decisions: 3, answered: 2 },
     progress: { ac11: { decisions: 17, decisionsTarget: 20, blind: 4, blindTarget: 5, met: false }, perArm: { threshold: 150, counts: { A: 40, B: 20, C: 21, D: 19 }, met: false } },
   };
   const summary = summarizeArms(full);
-  expect(summary.extras.reasons).toEqual({ agreement: { decisions: 4, named: 1 }, deviation: { decisions: 3, named: 2 }, requestedMs: 12_000, notRequestedMs: 4200 });
+  expect(summary.extras.reasons).toEqual({ agreement: { decisions: 4, named: 1 }, deviation: { decisions: 3, named: 2 }, deviationNotAsked: 2, requestedMs: 12_000, notRequestedMs: 4200 });
   const text = armsSummaryText(summary);
-  expect(text).toContain("Reasons named: agreement 25% (1/4) (one-third subsample), deviation 67% (2/3)");
-  expect(text).toContain("Median time to answer: reason requested 12s, not requested 4.2s");
+  expect(text).toContain("Reasons named: agreement 25% (1/4) (asked on the one-third subsample), deviation 67% (2/3) (asked where the surface can prompt)");
+  expect(text).toContain("Deviations never asked (a surface that cannot prompt): 2, not in the share");
+  expect(text).toContain("Median time to answer, eligible questions where the surface can prompt: reason requested 12s, not requested 4.2s");
   expect(text).toContain("Not in the comparison (ineligible): 3, 2 answered");
   expect(text).toContain("Progress, flow 392 AC11: 17/20 decisions, 4/5 blind");
   expect(text).toContain("Progress per arm (threshold 150): A 40, B 20, C 21, D 19");

@@ -7,7 +7,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
-import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm, reasonSubsample, recordEligible } from "./arms";
+import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm, REASON_SUBSAMPLE_ENV, reasonSubsample, reasonSubsampleOff, recordEligible } from "./arms";
 import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
@@ -65,12 +65,7 @@ function findOpenTwin(records: readonly DecisionRecord[], hash: string): OpenRec
   return undefined;
 }
 
-/** The environment variable that turns the reason subsample off: nobody is asked on agreement, and `reasonRequested` is false. */
-export const REASON_SUBSAMPLE_ENV = "KERYX_DECISIONS_REASON_SUBSAMPLE";
-
-function reasonSubsampleOff(): boolean {
-  return (process.env[REASON_SUBSAMPLE_ENV] ?? "").trim().toLowerCase() === "off";
-}
+export { REASON_SUBSAMPLE_ENV };
 
 export async function openDecision(input: OpenInput): Promise<OpenResult> {
   const now = (input.now ?? (() => new Date()))();
@@ -146,6 +141,7 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     forced: choice.forced,
     eligible,
     reasonRequested,
+    reasonPrompt: input.reasonPrompt !== false,
     channel,
     order,
     showMark,

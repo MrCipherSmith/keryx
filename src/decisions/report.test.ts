@@ -411,3 +411,140 @@ describe("AC21: progress toward flow 392 AC11 and toward the per-arm threshold",
     expect(renderReport(buildReport(await readRecords(root), 0, { settings }))).toContain("threshold 2 reversible questions");
   });
 });
+
+// Review of the AC17-AC21 delta: F-001, F-002, F-004, F-005.
+
+/** One decision on a chosen surface (reasonPrompt), with a pinned reason draw, answered after `ms`. */
+async function decideOn(input: { prompt: boolean; requested: boolean; follow: boolean; ms: number; irreversible?: boolean; reason?: string }): Promise<string> {
+  reasonCounter += 1;
+  const seq = seqFor(input.requested, reasonCounter * 10);
+  const id = `s-${reasonCounter}`;
+  const at = new Date(Date.UTC(2026, 9, 3, 18, reasonCounter % 60, 0));
+  await openDecision({
+    cwd: root,
+    id,
+    question: `Surface ${reasonCounter}?`,
+    options: OPTIONS,
+    recommendation: { optionId: "o0", reason: "simplest" },
+    arm: "B",
+    salt: "test-salt",
+    seq,
+    reasonPrompt: input.prompt,
+    ...(input.irreversible === true ? { irreversible: true } : {}),
+    now: () => at,
+  });
+  await answerDecision({ cwd: root, id, choice: input.follow ? "o0" : "o1", now: () => new Date(at.getTime() + input.ms) });
+  if (input.reason !== undefined) await recordReason(root, id, input.reason);
+  return id;
+}
+
+describe("F-001: a deviation counts in the reasons share only where the surface could ask", () => {
+  test("the open record keeps whether the surface prompts, and a deviation on a picker is counted apart, not in the share", async () => {
+    await decideOn({ prompt: true, requested: false, follow: false, ms: 1000, reason: "slow" });
+    await decideOn({ prompt: true, requested: false, follow: false, ms: 1000 });
+    await decideOn({ prompt: false, requested: false, follow: false, ms: 1000 });
+    await decideOn({ prompt: false, requested: false, follow: false, ms: 1000 });
+    await decideOn({ prompt: false, requested: false, follow: false, ms: 1000 });
+
+    const opens = (await readRecords(root)).filter((r): r is OpenRecord => r.kind === "open");
+    expect(opens.map((o) => o.reasonPrompt)).toEqual([true, true, false, false, false]);
+    const { reasons } = await report();
+    // before the fix the three picker deviations sat in the denominator: 1/5
+    expect(reasons.deviation).toEqual({ decisions: 2, named: 1 });
+    expect(reasons.deviationNotAsked).toBe(3);
+    const text = renderReport(await report());
+    expect(text).toMatch(/deviation\s+50% \(1\/2\)\s+\(asked on every surface that can prompt\)/);
+    expect(text).toContain("not asked  3 deviations on a surface that never prompts");
+    expect(text).not.toContain("always asked");
+  });
+
+  test("a record from before the field counts as promptable", async () => {
+    await decideOn({ prompt: true, requested: false, follow: false, ms: 1000, reason: "old" });
+    const records = await readRecords(root);
+    const old = records.map((r) => {
+      if (r.kind !== "open") return r;
+      const { reasonPrompt: _prompt, ...rest } = r;
+      return rest;
+    });
+    const built = buildReport(old);
+    expect(built.reasons.deviation).toEqual({ decisions: 1, named: 1 });
+    expect(built.reasons.deviationNotAsked).toBe(0);
+  });
+});
+
+describe("F-002: the time to answer compares the same population on both sides", () => {
+  test("forced irreversible questions and picker menus are in neither median", async () => {
+    await decideOn({ prompt: true, requested: true, follow: true, ms: 10_000 });
+    await decideOn({ prompt: true, requested: false, follow: true, ms: 2000 });
+    await decideOn({ prompt: true, requested: false, follow: true, ms: 4000 });
+    const before = (await report()).reasons;
+    expect(before.requested).toEqual({ answered: 1, medianMs: 10_000 });
+    expect(before.notRequested).toEqual({ answered: 2, medianMs: 3000 });
+
+    // a forced irreversible question and two picker answers, all slow: they used to pad the "not requested" side
+    await decideOn({ prompt: true, requested: false, follow: true, ms: 500_000, irreversible: true });
+    await decideOn({ prompt: false, requested: false, follow: true, ms: 600_000 });
+    await decideOn({ prompt: false, requested: false, follow: true, ms: 700_000 });
+    const after = (await report()).reasons;
+    expect(after.requested).toEqual(before.requested);
+    expect(after.notRequested).toEqual(before.notRequested);
+    expect(renderReport(await report())).toContain("eligible questions on a surface that can prompt: reason requested 10.0s (1 answered), not requested 3.0s (2 answered)");
+  });
+});
+
+describe("F-004: `open` does not reveal the reason subsample before the question is shown", () => {
+  async function run(args: string[]): Promise<string> {
+    const cwd = process.cwd();
+    process.chdir(root);
+    const lines: string[] = [];
+    const log = spyOn(console, "log").mockImplementation((...a: unknown[]) => void lines.push(a.join(" ")));
+    try {
+      await decisionsCommand(args);
+    } finally {
+      log.mockRestore();
+      process.chdir(cwd);
+    }
+    return lines.join("\n");
+  }
+
+  const OPEN = ["open", "--question", "Which way?", "--option", "o0=First", "--option", "o1=Second", "--recommend", "o0", "--reason", "simplest", "--stage", "design", "--flow", "400"];
+
+  test("neither the JSON nor the text of `open` carries reasonRequested or a hint about the subsample", async () => {
+    const json = await run([...OPEN, "--json"]);
+    expect(Object.keys(JSON.parse(json))).not.toContain("reasonRequested");
+    expect(json).not.toContain("reasonRequested");
+    const text = await run([...OPEN.map((a) => (a === "Which way?" ? "Another way?" : a))]);
+    expect(text).not.toContain("subsample");
+    expect(text).not.toContain("optional reason");
+    // it is still decided and written on the record, before the question is shown
+    const opens = (await readRecords(root)).filter((r): r is OpenRecord => r.kind === "open");
+    expect(opens.every((o) => typeof o.reasonRequested === "boolean")).toBe(true);
+  });
+
+  test("`answer` is where the caller learns it: a matched answer asks for a reason exactly when the record says so", async () => {
+    for (const [i, requested] of [true, false].entries()) {
+      const id = `cli-${i}`;
+      await openDecision({ cwd: root, id, question: `CLI ${i}?`, options: OPTIONS, recommendation: { optionId: "o0", reason: "r" }, arm: "B", salt: "test-salt", seq: seqFor(requested, 50_000 + i * 100) });
+      const answered = JSON.parse(await run(["answer", id, "--choice", "o0", "--json"]));
+      expect(answered).toMatchObject({ matched: true, askReason: requested });
+    }
+    const text = await run(["answer", "cli-0", "--choice", "o1"]);
+    expect(text).not.toContain("reason subsample");
+    const inSample = `cli-text`;
+    await openDecision({ cwd: root, id: inSample, question: "CLI text?", options: OPTIONS, recommendation: { optionId: "o0", reason: "r" }, arm: "B", salt: "test-salt", seq: seqFor(true, 60_000) });
+    expect(await run(["answer", inSample, "--choice", "o0"])).toContain("This decision is in the reason subsample");
+  });
+});
+
+describe("F-005: the settings block names the environment switch", () => {
+  test("with KERYX_DECISIONS_REASON_SUBSAMPLE=off the report says so; unset, the subsample is on", async () => {
+    await decideReason({ requested: true, follow: true });
+    const on = await report();
+    expect(on.settings.reasonSubsampleOff).toBe(false);
+    expect(renderReport(on)).toContain("Reason subsample: on (one third of the eligible questions).");
+    process.env[REASON_SUBSAMPLE_ENV] = "off";
+    const off = await report();
+    expect(off.settings.reasonSubsampleOff).toBe(true);
+    expect(renderReport(off)).toContain("Reason subsample: off (KERYX_DECISIONS_REASON_SUBSAMPLE)");
+  });
+});

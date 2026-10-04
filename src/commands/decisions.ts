@@ -117,16 +117,18 @@ async function runOpen(args: string[]): Promise<void> {
     // the report cuts by channel, and "Telegram" and "telegram" must be one channel
     channel: optionValue(args, "--channel")?.trim().toLowerCase(),
   });
+  // reasonRequested is left out of what `open` prints: it is revealed only after the answer (`answer`), so the agent
+  // cannot tell before the question is shown which questions are in the reason subsample.
+  const { reasonRequested: _hidden, ...shown } = result;
   const labels = new Map(options.map((option) => [option.id, option]));
   const ordered = result.order.map((id) => ({ id, label: labels.get(id)?.label ?? id, description: labels.get(id)?.description }));
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...result, options: ordered }, null, 2));
+    console.log(JSON.stringify({ ...shown, options: ordered }, null, 2));
     return;
   }
   console.log(`decision ${result.id}`);
   console.log(`mode: ${result.mode}${result.blindRefused ? " (blind refused: an irreversible action)" : ""}`);
   console.log(`arm: ${result.arm}${result.forced ? " (forced: an irreversible action)" : ""}, channel: ${result.channel}`);
-  console.log(`ask for an optional reason after the answer, whatever it is: ${result.reasonRequested ? "yes (reason subsample)" : "only on a deviation"}`);
   console.log(`start with the recommended option highlighted: ${result.preselected ? "yes" : "no"}`);
   console.log(`show the "recommended" mark: ${result.showMark ? "yes" : "no"}`);
   console.log("display order:");
@@ -324,7 +326,8 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            whether this question is in the reason subsample (a deterministic third
            of the eligible questions, by a hash of the seed and the position): the
            human is then asked for an optional reason after the answer even when
-           the choice matched. Every record carries "eligible" (false exactly when
+           the choice matched. \`open\` does not print that, so the caller cannot tell
+           beforehand; \`answer\` says it. Every record carries "eligible" (false exactly when
            the arm is a forced A). A question about a release, a delete or
            a push (the strong irreversible terms, English and Russian, such as
            release, ship, rollout, promote, publish to npm, tag a version,
@@ -363,8 +366,12 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            ("legacy"; --exclude-legacy leaves them out of every number), and
            prints the recommendation-quality matrix (see rate). It also shows the
            share of named reasons for agreement (the reason subsample only) and
-           deviation, the median time to answer where a reason was requested and
-           where it was not, the ineligible questions on a line of their own,
+           for deviation (asked on every surface that can prompt; a deviation
+           on a surface that never prompts, such as a picker menu, is counted
+           apart as "not asked", not in the share), the median time to answer
+           where a reason was requested and where it was not (eligible questions
+           on a surface that can prompt, so both sides are the same population),
+           the ineligible questions on a line of their own,
            the progress toward flow 392 AC11 (20 decisions, 5 blind) and toward
            the per-arm threshold, and the arm weights in use.
            Backfilled decisions (see import) are reported in a separate block

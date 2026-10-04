@@ -61,6 +61,12 @@ export interface OpenRecord {
    */
   reasonRequested?: boolean;
   /**
+   * Whether the surface that asked the question can take a free-text reason at all (false for a picker menu, which
+   * never prompts). Written from `OpenInput.reasonPrompt` on every new record. Absent on an older record: read it as
+   * true (promptable). The report counts a deviation in the reasons share only on a promptable record.
+   */
+  reasonPrompt?: boolean;
+  /**
    * Flow 400: true for a record from before the arms (no seeded assignment, so it is not part of the randomized
    * comparison). `import` stamps it on the records it writes; a record already on disk without `arm` is read as
    * legacy through `stampLegacy` (the journal file is append-only and is not rewritten).

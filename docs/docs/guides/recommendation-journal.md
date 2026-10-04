@@ -192,8 +192,10 @@ explains an agreement. So a **deterministic one-third of the eligible questions*
 also asks for a reason when you *did* follow the recommendation. The subsample is a
 hash of the repository's seed and the position of the question, independent of the
 arm: it is chosen and written on the record (`reasonRequested`) **before the
-question is shown**, so the agent and you cannot tell which questions it will be.
-The prompt comes after the answer, whether or not the choice matched.
+question is shown**, so the agent and you cannot tell which questions it will be:
+`keryx decisions open` does not print it either, and `keryx decisions answer` says it
+only once the choice is recorded. The prompt comes after the answer, whether or not
+the choice matched.
 
 - It is the **same prompt** as the one after a deviation: the dock's free-text row
   from the section above (in Telegram, the same reply-to-the-message step), not a
@@ -204,9 +206,11 @@ The prompt comes after the answer, whether or not the choice matched.
 - A question is **eligible** (`eligible: true` on the record) unless it is
   irreversible, an action or a match of the irreversible list (`forced: true`);
   ineligible questions are never in the subsample. A surface that cannot take free
-  text (a plain picker) is left out of it too.
+  text (a plain picker) is left out of it too, and its record says so
+  (`reasonPrompt: false`): it never prompts, not even after a deviation.
 - `KERYX_DECISIONS_REASON_SUBSAMPLE=off` turns the subsample off (the tests use it);
-  a deviation is still asked.
+  a deviation is still asked. The report's settings block says so
+  (`Reason subsample: off (KERYX_DECISIONS_REASON_SUBSAMPLE)`).
 
 ## The report
 
@@ -228,19 +232,25 @@ It prints, from the journal alone (plus the quality ratings, below):
   totals, as before, and never appear in the arm and channel tables.
   `--exclude-legacy` leaves them, and the imported historical records, out of every
   number and block;
-- the share of **named reasons**, separately for agreement and for deviation. A
-  deviation always asks, so every one counts; an agreement only asks inside the
-  reason subsample, so only those count (the others were never asked). Next to it, the
-  median time to answer for the decisions where a reason was requested and for the
-  rest, on the `tui` channel;
+- the share of **named reasons**, separately for agreement and for deviation. Only
+  decisions that could be asked count: a deviation asks wherever the surface can
+  prompt, so every one of those counts; an agreement only asks inside the reason
+  subsample, so only those count (the others were never asked). A deviation on a
+  surface that never prompts (a picker menu) was never asked either: it is counted
+  apart as "not asked" and stays out of the share. Next to it, the median time to
+  answer for the decisions where a reason was requested and for the rest, on the
+  `tui` channel and over the same population: eligible questions on a surface that
+  can prompt (forced irreversible questions and picker menus are in neither);
 - the **ineligible** questions (irreversible, an action or a match of the irreversible
   list) on a line of their own, outside the arm comparison;
 - **progress** toward flow 392 AC11 (20 answered decisions, 5 of them blind) and toward
   the per-arm threshold: reversible, answered questions with a recommendation per arm,
   against `perArmThreshold` in `.metaproject/decisions.config.json` (150 by default,
   a positive whole number);
-- the arm weights in use, and a `Config:` line when `decisions.config.json` could not
-  be used and the defaults were taken instead;
+- the arm weights and the per-arm threshold in use, each saying whether it comes from
+  `decisions.config.json` or is the default, the reason subsample (on, or off through
+  `KERYX_DECISIONS_REASON_SUBSAMPLE`), and a `Config:` line naming what in
+  `decisions.config.json` could not be used and fell back to a default;
 - the recommendation-quality matrix (see "Rating the recommendation");
 - the match share by stage;
 - every deviation with its reason (`(none given)` when you gave none);

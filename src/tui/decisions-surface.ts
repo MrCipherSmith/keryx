@@ -155,7 +155,7 @@ export interface ArmsShare {
 
 export interface ArmsExtras {
   /** Share of named reasons on agreement (the reason subsample only) and on deviation; null when the report has none. */
-  reasons: { agreement: ArmsShare; deviation: ArmsShare; requestedMs: number | null; notRequestedMs: number | null } | null;
+  reasons: { agreement: ArmsShare; deviation: ArmsShare; deviationNotAsked: number; requestedMs: number | null; notRequestedMs: number | null } | null;
   /** Questions outside the arm comparison (irreversible, an action or a blind.ts match). */
   ineligible: { decisions: number; answered: number } | null;
   progress: { decisions: number; decisionsTarget: number; blind: number; blindTarget: number; threshold: number; counts: Array<[string, number]> } | null;
@@ -185,6 +185,7 @@ function summarizeExtras(report: { reasons?: unknown; ineligible?: unknown; prog
     ? {
         agreement: readShare(report.reasons["agreement"]),
         deviation: readShare(report.reasons["deviation"]),
+        deviationNotAsked: whole(report.reasons["deviationNotAsked"]),
         requestedMs: isObject(report.reasons["requested"]) ? maybeMs(report.reasons["requested"]["medianMs"]) : null,
         notRequestedMs: isObject(report.reasons["notRequested"]) ? maybeMs(report.reasons["notRequested"]["medianMs"]) : null,
       }
@@ -303,11 +304,12 @@ function shareText(share: ArmsShare): string {
 function extrasLines(extras: ArmsExtras): string[] {
   const lines: string[] = [];
   if (extras.reasons !== null) {
-    const { agreement, deviation, requestedMs, notRequestedMs } = extras.reasons;
+    const { agreement, deviation, deviationNotAsked, requestedMs, notRequestedMs } = extras.reasons;
     lines.push(
       "",
-      `Reasons named: agreement ${shareText(agreement)} (one-third subsample), deviation ${shareText(deviation)}`,
-      `Median time to answer: reason requested ${duration(requestedMs)}, not requested ${duration(notRequestedMs)}`,
+      `Reasons named: agreement ${shareText(agreement)} (asked on the one-third subsample), deviation ${shareText(deviation)} (asked where the surface can prompt)`,
+      ...(deviationNotAsked > 0 ? [`Deviations never asked (a surface that cannot prompt): ${deviationNotAsked}, not in the share`] : []),
+      `Median time to answer, eligible questions where the surface can prompt: reason requested ${duration(requestedMs)}, not requested ${duration(notRequestedMs)}`,
     );
   }
   if (extras.ineligible !== null) lines.push(`Not in the comparison (ineligible): ${extras.ineligible.decisions}, ${extras.ineligible.answered} answered`);

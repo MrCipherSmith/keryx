@@ -9,7 +9,7 @@
 // the human changed after the reveal is contaminated by the reveal, so the
 // change is counted on its own line and never moves the share.
 
-import { ARMS, defaultSettings, recordEligible, type Arm, type ArmWeights, type DecisionsSettings } from "./arms";
+import { ARMS, defaultSettings, REASON_SUBSAMPLE_ENV, reasonSubsampleOff, recordEligible, type Arm, type ArmWeights, type DecisionsSettings } from "./arms";
 import { effectiveArm, isLegacy } from "./legacy";
 import { buildQualityMatrix, renderQualityMatrix, type QualityMatrix, type QualityRecord } from "./quality";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine } from "./text";
@@ -111,16 +111,23 @@ export interface ReasonShare {
 
 /**
  * Flow 400 (AC18): who names a reason. The randomized live decisions with a recommendation and an answer, every channel.
- * The first answer decides agreement or deviation. A deviation always gets the prompt, so every one is counted; an
- * agreement only gets it in the one-third subsample (`reasonRequested`), so only those are counted: the others were
- * never asked, and counting them would only dilute the share.
+ * The first answer decides agreement or deviation. Both shares count only the decisions that were put to a surface able
+ * to ask: a deviation always gets the prompt there, an agreement only in the one-third subsample (`reasonRequested`).
+ * A decision whose surface never prompts (`reasonPrompt: false`, a picker menu) could not be asked for a reason, so it is
+ * in neither share; a deviation of that kind is counted apart in `deviationNotAsked`.
  */
 export interface ReasonStats {
   agreement: ReasonShare;
   deviation: ReasonShare;
-  /** Median time to the first answer on the headline channel, for the decisions where a reason was requested ... */
+  /** Deviations whose surface never prompts for a reason: not in `deviation`, because they were never asked. */
+  deviationNotAsked: number;
+  /**
+   * Median time to the first answer on the headline channel, for the decisions where a reason was requested. Both
+   * timings cover the same population: eligible questions on a surface that can prompt (not forced irreversible ones, not
+   * picker menus) ...
+   */
   requested: TimingStats;
-  /** ... and for the others (randomized, with a recommendation), so the two can be read side by side. */
+  /** ... and for the ones in that population where it was not requested, so the two can be read side by side. */
   notRequested: TimingStats;
 }
 
@@ -138,12 +145,19 @@ export interface ProgressReport {
   perArm: { threshold: number; counts: Record<Arm, number>; met: boolean };
 }
 
-/** The settings the report was built with (AC19): `invalid` names what in decisions.config.json was unusable. */
+/**
+ * The settings the report was built with (AC19): `invalid` names what in decisions.config.json was unusable. The weights
+ * and the threshold each say whether the configuration file set them (`...Configured`, usable) apart from `configured`
+ * (anything set at all). `reasonSubsampleOff` is true when KERYX_DECISIONS_REASON_SUBSAMPLE turns the subsample off.
+ */
 export interface SettingsReport {
   weights: ArmWeights;
   perArmThreshold: number;
   configured: boolean;
+  weightsConfigured: boolean;
+  thresholdConfigured: boolean;
   invalid: string[];
+  reasonSubsampleOff: boolean;
 }
 
 /** Flow 392 AC11 bars. */
@@ -316,17 +330,25 @@ function timingOf(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerR
   return { answered: times.length, medianMs: median(times) };
 }
 
+/** A decision whose surface can ask for a reason: an older record without the field counts as promptable. */
+function promptable(open: OpenRecord): boolean {
+  return open.reasonPrompt !== false;
+}
+
 function buildReasons(
   compared: readonly OpenRecord[],
   headline: readonly OpenRecord[],
   firstOf: (id: string) => AnswerRecord | undefined,
   reasons: ReadonlyMap<string, ReasonRecord>,
 ): ReasonStats {
+  const askable = headline.filter((open) => recordEligible(open) && promptable(open));
   const out: ReasonStats = {
     agreement: { decisions: 0, named: 0 },
     deviation: { decisions: 0, named: 0 },
-    requested: timingOf(headline.filter((open) => open.reasonRequested === true), firstOf),
-    notRequested: timingOf(headline.filter((open) => open.reasonRequested !== true), firstOf),
+    deviationNotAsked: 0,
+    // the same population on both sides: eligible, on a surface that can prompt, so the only difference is the request
+    requested: timingOf(askable.filter((open) => open.reasonRequested === true), firstOf),
+    notRequested: timingOf(askable.filter((open) => open.reasonRequested !== true), firstOf),
   };
   for (const open of compared) {
     const first = firstOf(open.id);
@@ -334,6 +356,11 @@ function buildReasons(
     const matched = first.other !== true && first.choice === open.recommendation.optionId;
     // an agreement outside the subsample was never asked: it has no share to report
     if (matched && open.reasonRequested !== true) continue;
+    // a deviation on a surface that never prompts was never asked either: counted apart, not in the share
+    if (!matched && !promptable(open)) {
+      out.deviationNotAsked += 1;
+      continue;
+    }
     const share = matched ? out.agreement : out.deviation;
     share.decisions += 1;
     const text = reasons.get(open.id)?.reason;
@@ -462,7 +489,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
       answered: randomized.filter((open) => !recordEligible(open) && firstAnswer(open.id) !== undefined).length,
     },
     progress: { ac11: { decisions: 0, decisionsTarget: AC11_DECISIONS, blind: 0, blindTarget: AC11_BLIND, met: false }, perArm: { threshold: settings.perArmThreshold, counts: { A: 0, B: 0, C: 0, D: 0 }, met: false } },
-    settings: { weights: { ...settings.weights }, perArmThreshold: settings.perArmThreshold, configured: settings.configured, invalid: [...settings.invalid] },
+    settings: { weights: { ...settings.weights }, perArmThreshold: settings.perArmThreshold, configured: settings.configured, weightsConfigured: settings.weightsConfigured, thresholdConfigured: settings.thresholdConfigured, invalid: [...settings.invalid], reasonSubsampleOff: reasonSubsampleOff() },
     skipped,
   };
   const stages = new Map<string, { ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number }>();
@@ -606,8 +633,11 @@ function renderReasons(report: DecisionsReport): string[] {
   return [
     "Reasons named (share of the decisions that named one):",
     `  agreement  ${sharePct(report.reasons.agreement)}  (asked only on the one-third reason subsample, reasonRequested)`,
-    `  deviation  ${sharePct(report.reasons.deviation)}  (always asked)`,
-    `Median time to answer, channel ${oneLine(report.headlineChannel, 40)}: reason requested ${timingText(report.reasons.requested)}, not requested ${timingText(report.reasons.notRequested)}.`,
+    `  deviation  ${sharePct(report.reasons.deviation)}  (asked on every surface that can prompt)`,
+    ...(report.reasons.deviationNotAsked > 0
+      ? [`  not asked  ${report.reasons.deviationNotAsked} deviation${report.reasons.deviationNotAsked === 1 ? "" : "s"} on a surface that never prompts (a picker menu): not in the share`]
+      : []),
+    `Median time to answer, channel ${oneLine(report.headlineChannel, 40)}, eligible questions on a surface that can prompt: reason requested ${timingText(report.reasons.requested)}, not requested ${timingText(report.reasons.notRequested)}.`,
   ];
 }
 
@@ -622,9 +652,16 @@ function renderProgress(report: DecisionsReport): string[] {
 }
 
 function renderSettings(settings: SettingsReport): string[] {
-  const lines = [`Arm weights: ${weightsText(settings.weights)} (${settings.configured && settings.invalid.length === 0 ? "from .metaproject/decisions.config.json" : "defaults"}).`];
+  const file = ".metaproject/decisions.config.json";
+  const lines = [
+    `Arm weights: ${weightsText(settings.weights)} (${settings.weightsConfigured ? `from ${file}` : "defaults"}).`,
+    `Per-arm threshold: ${settings.perArmThreshold} (${settings.thresholdConfigured ? `from ${file}` : "default"}).`,
+    settings.reasonSubsampleOff
+      ? `Reason subsample: off (${REASON_SUBSAMPLE_ENV}); only a deviation is asked for a reason.`
+      : "Reason subsample: on (one third of the eligible questions).",
+  ];
   if (settings.invalid.length > 0) {
-    lines.push(`Config: .metaproject/decisions.config.json is not fully usable (${settings.invalid.map((problem) => oneLine(problem, 120)).join("; ")}); the defaults are used for what is unusable.`);
+    lines.push(`Config: ${file} is not fully usable (${settings.invalid.map((problem) => oneLine(problem, 120)).join("; ")}); the defaults are used for what is unusable.`);
   }
   return lines;
 }

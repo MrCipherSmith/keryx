@@ -140,6 +140,14 @@ export function chooseArm(input: ArmChoiceInput): ArmChoice {
   return { arm: drawn, seed: assigned.seed, forced: false, drawn };
 }
 
+/** The environment variable that turns the reason subsample off: nobody is asked on agreement, and `reasonRequested` is false. */
+export const REASON_SUBSAMPLE_ENV = "KERYX_DECISIONS_REASON_SUBSAMPLE";
+
+/** True when KERYX_DECISIONS_REASON_SUBSAMPLE is `off` (any case, trimmed); any other value, or none, leaves it on. */
+export function reasonSubsampleOff(): boolean {
+  return (process.env[REASON_SUBSAMPLE_ENV] ?? "").trim().toLowerCase() === "off";
+}
+
 /** The share of eligible questions that get the optional "why" prompt whatever the answer (AC17). */
 export const REASON_SUBSAMPLE_SHARE = 1 / 3;
 
@@ -196,12 +204,16 @@ export interface DecisionsSettings {
   perArmThreshold: number;
   /** True when decisions.config.json set `arms` or `perArmThreshold` (usable or not). */
   configured: boolean;
+  /** True only when the file's `arms` block was present AND usable: the weights come from the file, not the defaults. */
+  weightsConfigured: boolean;
+  /** True only when the file's `perArmThreshold` was present AND usable. */
+  thresholdConfigured: boolean;
   /** What in the config was unusable and fell back to a default; empty when nothing was. */
   invalid: string[];
 }
 
 export function defaultSettings(): DecisionsSettings {
-  return { weights: { ...DEFAULT_ARM_WEIGHTS }, perArmThreshold: DEFAULT_PER_ARM_THRESHOLD, configured: false, invalid: [] };
+  return { weights: { ...DEFAULT_ARM_WEIGHTS }, perArmThreshold: DEFAULT_PER_ARM_THRESHOLD, configured: false, weightsConfigured: false, thresholdConfigured: false, invalid: [] };
 }
 
 /** The settings out of a parsed decisions.config.json. Anything unusable falls back to its default and is named. */
@@ -216,11 +228,14 @@ export function readSettings(parsed: unknown): DecisionsSettings {
   const checked = checkArmWeights(config.arms);
   settings.weights = checked.weights;
   if (checked.problem !== undefined) settings.invalid.push(checked.problem);
+  else if (config.arms !== undefined) settings.weightsConfigured = true;
   if (config.perArmThreshold !== undefined) {
     settings.configured = true;
     const value = config.perArmThreshold;
-    if (typeof value === "number" && Number.isInteger(value) && value > 0) settings.perArmThreshold = value;
-    else settings.invalid.push("perArmThreshold must be a positive whole number");
+    if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+      settings.perArmThreshold = value;
+      settings.thresholdConfigured = true;
+    } else settings.invalid.push("perArmThreshold must be a positive whole number");
   }
   return settings;
 }

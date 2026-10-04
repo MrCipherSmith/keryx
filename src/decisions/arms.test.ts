@@ -158,16 +158,16 @@ describe("AC19: arm weights and the per-arm threshold from .metaproject/decision
   test("the defaults are A 0.4, B 0.2, C 0.2, D 0.2 and a threshold of 150, with nothing configured", async () => {
     expect(DEFAULT_ARM_WEIGHTS).toEqual({ A: 0.4, B: 0.2, C: 0.2, D: 0.2 });
     expect(DEFAULT_PER_ARM_THRESHOLD).toBe(150);
-    expect(await loadDecisionsSettings(root)).toEqual({ weights: DEFAULT_ARM_WEIGHTS, perArmThreshold: 150, configured: false, invalid: [] });
+    expect(await loadDecisionsSettings(root)).toEqual({ weights: DEFAULT_ARM_WEIGHTS, perArmThreshold: 150, configured: false, weightsConfigured: false, thresholdConfigured: false, invalid: [] });
   });
 
   test("a configured file sets the weights and the threshold, and the report shows them", async () => {
     await writeFile(configPath(), JSON.stringify({ arms: { A: 0.7, B: 0.1, C: 0.1, D: 0.1 }, perArmThreshold: 40 }), "utf8");
     const settings = await loadDecisionsSettings(root);
-    expect(settings).toEqual({ weights: { A: 0.7, B: 0.1, C: 0.1, D: 0.1 }, perArmThreshold: 40, configured: true, invalid: [] });
+    expect(settings).toEqual({ weights: { A: 0.7, B: 0.1, C: 0.1, D: 0.1 }, perArmThreshold: 40, configured: true, weightsConfigured: true, thresholdConfigured: true, invalid: [] });
     await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, salt: "s", seq: 1 });
     const report = await loadReport(root);
-    expect(report.settings).toEqual(settings);
+    expect(report.settings).toMatchObject(settings);
     expect(report.progress.perArm.threshold).toBe(40);
     const text = renderReport(report);
     expect(text).toContain("Arm weights: A 0.7, B 0.1, C 0.1, D 0.1 (from .metaproject/decisions.config.json).");
@@ -206,6 +206,33 @@ describe("AC19: arm weights and the per-arm threshold from .metaproject/decision
       expect(settings.perArmThreshold).toBe(150);
       expect(settings.invalid).toEqual(["perArmThreshold must be a positive whole number"]);
     }
+  });
+
+  test("F-003: weights and threshold each say where they come from, so one set alone never labels the other", async () => {
+    // only the threshold is configured: the weights are still the defaults, and the report must not say otherwise
+    await writeFile(configPath(), JSON.stringify({ perArmThreshold: 40 }), "utf8");
+    const onlyThreshold = await loadDecisionsSettings(root);
+    expect(onlyThreshold).toMatchObject({ configured: true, weightsConfigured: false, thresholdConfigured: true, invalid: [] });
+    await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, salt: "s", seq: 1 });
+    const a = renderReport(await loadReport(root));
+    expect(a).toContain("Arm weights: A 0.4, B 0.2, C 0.2, D 0.2 (defaults).");
+    expect(a).toContain("Per-arm threshold: 40 (from .metaproject/decisions.config.json).");
+
+    // valid weights with an invalid threshold: the weights are from the file, the threshold is a default, and it is named
+    await writeFile(configPath(), JSON.stringify({ arms: { A: 0.7, B: 0.1, C: 0.1, D: 0.1 }, perArmThreshold: 0 }), "utf8");
+    const mixed = await loadDecisionsSettings(root);
+    expect(mixed).toMatchObject({ weightsConfigured: true, thresholdConfigured: false, perArmThreshold: 150 });
+    const b = renderReport(await loadReport(root));
+    expect(b).toContain("Arm weights: A 0.7, B 0.1, C 0.1, D 0.1 (from .metaproject/decisions.config.json).");
+    expect(b).toContain("Per-arm threshold: 150 (default).");
+    expect(b).toContain("perArmThreshold must be a positive whole number");
+
+    // invalid weights with a valid threshold: the other way round
+    await writeFile(configPath(), JSON.stringify({ arms: { A: -1 }, perArmThreshold: 12 }), "utf8");
+    const c = renderReport(await loadReport(root));
+    expect(c).toContain("Arm weights: A 0.4, B 0.2, C 0.2, D 0.2 (defaults).");
+    expect(c).toContain("Per-arm threshold: 12 (from .metaproject/decisions.config.json).");
+    expect(c).toContain("arms.A must be a non-negative number");
   });
 
   test("assignment stays deterministic: the same (salt, seq, weights) is the same arm, whatever the config says elsewhere", async () => {
