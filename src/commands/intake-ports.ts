@@ -5,7 +5,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { appendFile, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { appendJournal, flowsRoot } from "../flow/store";
+import { appendJournal, flowsRoot } from "../flow/service";
 import {
   type IntakeCiTriagePort,
   type IntakeFlowPort,
@@ -13,7 +13,7 @@ import {
   installIntakeDefaultPorts,
   intakeDefaultPorts,
 } from "../intake/ports";
-import { normalizeRemoteUrl } from "../learning/identity";
+import { normalizeRemoteUrl } from "../learning/service";
 import { listProjects } from "../lib/project-registry";
 import { ghEnvForProject } from "../scheduler/digest-gh";
 import { redactSensitiveText } from "../security/service";

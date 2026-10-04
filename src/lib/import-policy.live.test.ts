@@ -247,8 +247,11 @@ const AVOIDABLE_SLACK = 15;
  * `service.ts`. Its one door into the product module is closed on purpose — the
  * digest asks a reader that `commands/product.ts` registers, because only that file
  * may read the product index.
+ *
+ * `intake` joined in flow 403 with only unavoidable edges: it reuses the granted-tool
+ * runner and binary pinning from `src/trigger/`, which has no `service.ts`.
  */
-const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "mcp", "scheduler", "session", "tui"];
+const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "intake", "mcp", "scheduler", "session", "tui"];
 
 let cached: Awaited<ReturnType<typeof checkImportPolicy>> | undefined;
 async function report() {

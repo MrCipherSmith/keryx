@@ -263,6 +263,11 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `src/remote/command-gateway.ts`). It holds only tests, reads the markdown files, and imports a
   // client-zone module, so it is a client-zone leaf; nothing imports it.
   { segment: "docs", zone: "client" },
+  // Work intake (flow 403): the serve-side poller that turns GitHub issues, reviews, CI runs and
+  // comments into Telegram cards and runs the card actions. It builds ON the flow 295 agent-task
+  // and the remote hub, owns no project state beyond its own cards/ledger/state files, and only
+  // `commands/` and `tui/` import it, so it is a client-zone leaf like `scheduler`.
+  { segment: "intake", zone: "client" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

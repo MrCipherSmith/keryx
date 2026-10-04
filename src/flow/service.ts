@@ -65,6 +65,8 @@ export { CONFIRMATION_CAVEAT } from "./confirm-token";
 // the zone's internals (import policy, rule 2 — `client-imports-core-internal`
 // only excuses a `service.ts` target).
 export { acPath, assertAcIntact, readFlow, resolveFlowDir } from "./store";
+// Flow 403: the intake ports append the take card's journal line and locate the flows root.
+export { appendJournal, flowsRoot } from "./store";
 // The closed-flow "uncommitted state" note, reached through this facade by the CLI.
 export { uncommittedFlowStateNote, uncommittedFlowStateNotes } from "./uncommitted-state";
 // Acceptance layer W0: the verification-kind vocabulary, re-exported so the CLI,
