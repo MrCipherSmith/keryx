@@ -576,7 +576,9 @@ test("AC5: the status block and the sidebar row show the unconfirmed-approvals c
 
 // ---- history (flow 399) -----------------------------------------------------------
 
-const POSTED_AT = new Date(2026, 9, 3, 6, 52, 11).getTime();
+// The surface prints event times in UTC (`clock`), so the fixture is a UTC instant: built in local
+// time it reads 17:52 under TZ=Pacific/Auckland and the tests below fail on an unchanged tree.
+const POSTED_AT = Date.UTC(2026, 9, 3, 6, 52, 11);
 
 test("history status line: not posted yet, then how many and when, and how it got there", () => {
   expect(formatHistoryStatus(ON)).toContain("not posted yet");

@@ -40,7 +40,9 @@
 //     part) is written as stacked "Header: value" lines, the same form the text modes use for a long row,
 //     and the header is not repeated for it; the next row that fits starts a table again. Only one
 //     cell, or one stacked line, longer than a whole part is cut: at a space in the second half of the
-//     part when there is one, at the limit otherwise.
+//     part when there is one, at the limit otherwise. Neither cut is made where the rest of the line
+//     would start with block syntax (`# `, `- `, `1. `, `>`, a fence), so a cell never turns into a
+//     heading or a list item in the next part.
 
 import { BULLET, ORDERED, QUOTE, RULE, RULE_LENGTH } from "./format-blocks";
 import { stackedRowLines, type TableMatch, tableAt, tableCosts } from "./format-table";
@@ -130,10 +132,21 @@ function fenceOverhead(fence: Fence | undefined): number {
   return fence === undefined ? 0 : fence.header.length + 1 + (fence.marker.length + 1);
 }
 
+// What opens a block when it is the first thing of a line: a heading, a list item, a quote, a fence, a rule.
+const BLOCK_START = /[ \t]*(?:#{1,6}[ \t]|[-*][ \t]|\d{1,9}[.)][ \t]|>|`{3}|~{3}|-{3})/y;
+
+/** Whether the text from `at` on opens a block (sticky: nothing is copied, a long line is not sliced per candidate cut). */
+function startsBlock(text: string, at: number): boolean {
+  BLOCK_START.lastIndex = at;
+  return BLOCK_START.test(text);
+}
+
 /**
  * Cut `text` to at most `max` units, preferring the last space, never inside a surrogate pair. A space
  * at or before `minCut` is ignored, so a line that starts with a short label ("a: ...") is not cut
- * right after it.
+ * right after it. The rest of the line becomes the first line of the next part, so a cut is never made
+ * where the rest would start with block syntax ("# ", "- ", "1. ", ">", a fence): a long cell or
+ * paragraph that happens to carry ` # tail` must not turn into a heading in the second part.
  */
 function cutAt(text: string, max: number, minCut = 0): number {
   if (text.length <= max) {
@@ -141,12 +154,19 @@ function cutAt(text: string, max: number, minCut = 0): number {
   }
   for (let index = max; index > minCut; index -= 1) {
     const ch = text[index - 1] as string;
-    if (ch === " " || ch === "\t") {
+    if ((ch === " " || ch === "\t") && !startsBlock(text, index)) {
       return index;
     }
   }
-  const code = text.charCodeAt(max - 1);
-  return code >= 0xd800 && code <= 0xdbff ? max - 1 : max;
+  let cut = max;
+  for (; cut > 1; cut -= 1) {
+    const code = text.charCodeAt(cut - 1);
+    const splitsPair = code >= 0xd800 && code <= 0xdbff;
+    if (!splitsPair && !startsBlock(text, cut)) {
+      break;
+    }
+  }
+  return cut;
 }
 
 /** Pieces of one line, cut so that each fits `capacity`; `blocks` is what the first piece adds. */
