@@ -11,12 +11,12 @@
   "title": "Recommendation journal v2: arms, reasons, coverage, quality",
   "status": "implemented",
   "createdAt": "2026-10-03T19:20:13.037Z",
-  "updatedAt": "2026-10-03T20:50:28.907Z",
+  "updatedAt": "2026-10-04T11:45:52.173Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:2a60774bbe085736c8de3433fff358b1cdffb0115898795c2ea092bb8ec1184e",
+  "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417",
   "acConfirmed": {},
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/875"
@@ -140,6 +140,31 @@
       "at": "2026-10-03T20:50:28.907Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-04T11:45:50.331Z",
+      "event": "ac-updated",
+      "detail": "AC17: \"(new)\" -> \"Every eligible question whose hash of seed and seq falls in the one-third subsample gets an optional \"why\" prompt after the answer whether or not the choice matched the recommendation; the subsample is chosen deterministically and recorded before display (`reasonRequested`, `reason` on the record). [verify: exec `bun test src/decisions/reasons.test.ts`]\" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)"
+    },
+    {
+      "at": "2026-10-04T11:45:50.816Z",
+      "event": "ac-updated",
+      "detail": "AC18: \"(new)\" -> \"The report and `--json` show the share of named reasons separately for agreement and deviation, and the median `timeToAnswerMs` separately for `reasonRequested` decisions; `export` carries `reasonRequested` and whether a reason was named but never the reason text. [verify: exec `bun test src/decisions/report.test.ts`]\" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)"
+    },
+    {
+      "at": "2026-10-04T11:45:51.278Z",
+      "event": "ac-updated",
+      "detail": "AC19: \"(new)\" -> \"Arm weights are read from `.metaproject/decisions.config.json` with defaults A 0.4, B 0.2, C 0.2, D 0.2; an invalid config falls back to the defaults and the report says so; assignment stays deterministic. [verify: exec `bun test src/decisions/arms.test.ts`]\" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)"
+    },
+    {
+      "at": "2026-10-04T11:45:51.734Z",
+      "event": "ac-updated",
+      "detail": "AC20: \"(new)\" -> \"Each record carries `eligible` (false exactly when `forced` is true); the report shows ineligible questions on a separate line outside the arm comparison; records without the field are still read. [verify: exec `bun test src/decisions/report.test.ts`]\" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)"
+    },
+    {
+      "at": "2026-10-04T11:45:52.173Z",
+      "event": "ac-updated",
+      "detail": "AC21: \"(new)\" -> \"The report shows progress toward flow 392 AC11 (20 decisions, 5 blind) and toward the per-arm threshold (default 150 reversible questions, configurable). [verify: exec `bun test src/decisions/report.test.ts`]\" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)"
     }
   ],
   "acKinds": {
@@ -204,6 +229,26 @@
     },
     "AC16": {
       "kind": "judged"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/decisions/reasons.test.ts"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "bun test src/decisions/report.test.ts"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "bun test src/decisions/arms.test.ts"
+    },
+    "AC20": {
+      "kind": "exec",
+      "check": "bun test src/decisions/report.test.ts"
+    },
+    "AC21": {
+      "kind": "exec",
+      "check": "bun test src/decisions/report.test.ts"
     }
   },
   "baseBranch": "main"
