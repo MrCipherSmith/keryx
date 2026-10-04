@@ -17,14 +17,28 @@
 
 import { describe, expect, test } from "bun:test";
 import { checkRichMessage, FakeBotApi } from "./fake-bot-api";
-import { formatReply, renderedLength } from "./format";
-import { renderTelegramHtml } from "./format-html";
+import { formatReply } from "./format";
+import { checkTelegramHtml, renderTelegramHtml } from "./format-html";
 import { renderPlainText } from "./format-plain";
 import { containsTable, renderRichMessage } from "./format-rich";
 import { MAX_TABLE_COLUMNS, MAX_TABLE_ROW_COST, tableAt, tableLayout } from "./format-table";
 import { firstStep, type RenderFallback, RenderingState, sendRendered } from "./rendering";
 import { type InputRichBlock, RICH_LIMITS, type RichBlockTableCell, type RichText } from "./rich-types";
 import { BotApiError } from "./types";
+
+/**
+ * The length of a message part as Telegram counts it, measured on what the renderers actually produce
+ * and not with `renderedLength`, the production estimate the splitter packs by (a bound checked with
+ * the function that sets it would hide a defect in that function): the visible text of the HTML
+ * message after its entities are parsed, and the plain fallback; the longer of the two.
+ */
+function sentLength(part: string): number {
+  const checked = checkTelegramHtml(renderTelegramHtml(part));
+  if (!checked.ok) {
+    throw new Error(`the part does not render as Telegram HTML: ${checked.reason}`);
+  }
+  return Math.max(checked.text.length, renderPlainText(part).length);
+}
 
 function tableOf(text: string): Extract<InputRichBlock, { type: "table" }> {
   const block = renderRichMessage(text).blocks.find((candidate) => candidate.type === "table");
@@ -233,7 +247,7 @@ describe("AC5: a table too large for one message", () => {
     parts.forEach((part, index) => {
       expect(part.startsWith(`(${index + 1}/${parts.length})\n| id | note |\n|---|---|\n`)).toBe(true);
       // Counted as rendered: the aligned layout of a part can be shorter than its source text.
-      expect(renderedLength(part)).toBeLessThanOrEqual(4096);
+      expect(sentLength(part)).toBeLessThanOrEqual(4096);
     });
     expect(parts.flatMap(bodyOf)).toEqual(Array.from({ length: 160 }, (_, index) => rowText(index)));
   });
@@ -261,7 +275,7 @@ describe("AC5: a table too large for one message", () => {
     const rows = 1500;
     const source = columnSource(rows);
     // As rendered it fits one message, so only the block budget can split it.
-    expect(renderedLength(source)).toBeLessThan(4096);
+    expect(sentLength(source)).toBeLessThan(4096);
     const parts = formatReply(source);
     expect(parts).toHaveLength(Math.ceil(rows / ROWS_PER_PART));
     const seen: string[] = [];
@@ -346,7 +360,7 @@ describe("AC5: a table too large for one message", () => {
     expect(parts[0]).toContain("before\n");
     expect(parts[parts.length - 1]?.endsWith("after")).toBe(true);
     for (const part of parts) {
-      expect(renderedLength(part)).toBeLessThanOrEqual(4096);
+      expect(sentLength(part)).toBeLessThanOrEqual(4096);
     }
   });
   describe("a row larger than a message", () => {
@@ -359,7 +373,7 @@ describe("AC5: a table too large for one message", () => {
         expect(parts.length).toBeGreaterThan(1);
         for (const part of parts) {
           expect(part.length).toBeLessThanOrEqual(4096);
-          expect(renderedLength(part)).toBeLessThanOrEqual(4096);
+          expect(sentLength(part)).toBeLessThanOrEqual(4096);
           // The header row of the table is not a part of its own, nor repeated for the oversized row.
           expect(part).not.toContain("| a | b |");
           expect(part).not.toContain("|---|");
@@ -414,5 +428,54 @@ describe("AC5: a table too large for one message", () => {
       expect(parts).toEqual([`a: 1\nb: ${note}`]);
       expect(checkRichMessage(renderRichMessage(parts[0] as string))).toBeUndefined();
     });
+  });
+});
+
+describe("flow 399 S-1: a cut never makes the next part start with block syntax", () => {
+  const BLOCK_START = /^[ \t]*(?:#{1,6}[ \t]|[-*][ \t]|\d{1,9}[.)][ \t]|>|`{3}|~{3}|-{3})/;
+  const label = (part: string): string => part.replace(/^\(\d+\/\d+\)\n/, "");
+  const tails: Array<[string, string]> = [
+    ["a heading", "# tail"],
+    ["a bullet", "- tail"],
+    ["an ordered item", "1. tail"],
+    ["a quote", "> tail"],
+    ["a fence", "```js"],
+    ["a rule", "---"],
+  ];
+
+  // The cell is an unbroken run with a space and the block syntax right where the part ends: the last
+  // space of the line is the cut, and the rest would be `# tail`. The lengths scan the window around the
+  // limit, since the exact column depends on the label and the part number.
+  for (const [what, tail] of tails) {
+    test(`a stacked cell line cut before ${what} does not open it in the next part`, () => {
+      let cuts = 0;
+      for (let length = 4060; length <= 4100; length += 1) {
+        const parts = formatReply(`| a | b |\n|---|---|\n| k | ${"x".repeat(length)} ${tail} |\n`);
+        if (parts.length < 2) continue;
+        cuts += 1;
+        for (const part of parts.slice(1)) {
+          expect(BLOCK_START.test(label(part))).toBe(false);
+        }
+        // Nothing is lost by moving the cut: every character is still in some part (a part is trimmed at
+        // its edges, so the blank at the cut itself is not counted).
+        const all = parts.map(label).join("");
+        expect(all.split("x").length - 1).toBe(length);
+        expect(all.replace(/\s/g, "")).toContain(tail.replace(/\s/g, ""));
+      }
+      expect(cuts).toBeGreaterThan(0);
+    });
+  }
+
+  test("a long paragraph cut before ` # tail` does not turn into a heading either", () => {
+    let cuts = 0;
+    for (let length = 4080; length <= 4110; length += 1) {
+      const parts = formatReply(`${"y".repeat(length)} # tail\n`);
+      if (parts.length < 2) continue;
+      cuts += 1;
+      for (const part of parts.slice(1)) {
+        expect(BLOCK_START.test(label(part))).toBe(false);
+      }
+    }
+    expect(cuts).toBeGreaterThan(0);
   });
 });
