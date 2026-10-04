@@ -244,7 +244,7 @@ export function presentRemoteControl(
   let current = "status";
   const nodes = new Map<string, { content: string }>();
   let unsubscribeKey: (() => void) | undefined;
-  let unsubscribeChange: (() => void) | undefined;
+  let unsubscribeChange: (() => void) | undefined = undefined;
   /** What the last `h` press says: that it is posting, or why nothing was posted. Shown in the status tab. */
   let historyNote: string | undefined;
   let postingHistory = false;
