@@ -989,10 +989,21 @@ export class RemoteHub {
     this.react(message, state);
     if (state === "working") {
       this.startTyping(record);
-    } else if (state === "done" || state === "failed") {
+    } else if ((state === "done" || state === "failed") && !this.anotherWorking(record, message)) {
+      // A slash command that settles must not end the typing of a turn that is still running.
       this.stopTyping(record);
     }
     return true;
+  }
+
+  /** True when a different message of the record's topic is still being worked on. */
+  private anotherWorking(record: RemoteSessionRecord, except: TrackedMessage): boolean {
+    for (const other of this.tracked.values()) {
+      if (other !== except && other.threadId === record.threadId && other.chatId === record.chatId && other.state === "working") {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The shell is gone: stop typing, and a message it was still working on is marked failed. */
