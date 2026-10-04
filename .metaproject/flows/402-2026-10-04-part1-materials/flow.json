@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "402",
+  "slug": "part1-materials",
+  "title": "Part 1 article materials: protocol, counts script, contribution log, pilot export",
+  "status": "in-progress",
+  "createdAt": "2026-10-04T13:12:49.686Z",
+  "updatedAt": "2026-10-04T13:24:47.602Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ff2c199401815dc079f2128c925f11f5a7c84400d606c92549d4460fb5dde96b",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "напиши промт, что нужно конкретно в keryx",
+    "source": "operator request of 2026-10-04 relayed through the flow prompt keryx-flow-prompt-part1-materials.md; channel messages 182981 and 182996, 2026-10-04T13:08-13:10Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "snapshot, counts and protocol files in docs/research/role-blurring-part1"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "contribution log with 12 verified verbatim quotes"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "README, 47-record text-free export, part1-materials test"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "self-review: files, counts, privacy search, tests"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-04T13:12:49.686Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-04T13:14:08.104Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-04T13:14:08.520Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-04T13:24:47.018Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-04T13:24:47.208Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-04T13:24:47.411Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-04T13:24:47.602Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/docs/part1-materials.test.ts"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/docs/part1-materials.test.ts"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/docs/part1-materials.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/docs/part1-materials.test.ts"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  }
+}
