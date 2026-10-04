@@ -406,6 +406,13 @@ Line numbers are deliberately absent. Pinning them here would reproduce, in
 the guard against fragile text assertions, the exact fragility it guards
 against. They live in the detail files, which assert nothing.
 
+`decisions/coverage.test.ts` (flow 400) is listed because it parses both god-files
+with the TypeScript compiler API to check that every picker that chooses how work
+proceeds goes through `journaledPick` with a known decision source and passes the
+dismiss id as the cancel id. It reads syntax, not offsets or counts, so a mechanical
+split that moves a picker together with its call still passes; P2 should point it at
+the new files rather than convert it.
+
 ```text
 commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-bus.test.ts | commands/shell.ts | 2
@@ -414,6 +421,7 @@ commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-starting-line.test.ts | commands/shell.ts | 1
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
 commands/shell.test.ts | commands/shell.ts | 5
+decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2
