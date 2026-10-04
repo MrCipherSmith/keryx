@@ -183,6 +183,23 @@ export const GRANTED_TOOL_CATALOGUE: readonly GrantedToolSpec[] = [
       "databaseId,displayTitle,status,conclusion,headBranch,event,createdAt,url",
     ],
   },
+  // Flow 403: the two reads work intake adds. Both stay inside `gh issue list` / `gh pr list`.
+  {
+    id: "gh.issue.assigned",
+    tool: "gh_issue_assigned",
+    program: "gh",
+    description: "List open issues of a granted repository that are assigned to the operator (read-only, `gh issue list --assignee @me`).",
+    params: { repo: repoParam, limit: limitParam },
+    argv: (v) => ["issue", "list", "--repo", v["repo"]!, "--assignee", "@me", "--state", "open", "--limit", v["limit"]!, "--json", `${ISSUE_FIELDS},body`],
+  },
+  {
+    id: "gh.pr.comments",
+    tool: "gh_pr_comments",
+    program: "gh",
+    description: "List the operator's own open pull requests of a granted repository with their comments (read-only, `gh pr list --author @me`).",
+    params: { repo: repoParam, limit: limitParam },
+    argv: (v) => ["pr", "list", "--repo", v["repo"]!, "--author", "@me", "--state", "open", "--limit", v["limit"]!, "--json", "number,title,author,updatedAt,url,headRefName,comments"],
+  },
 ];
 
 /**
@@ -237,6 +254,9 @@ const GH_MUTATING_WORDS: readonly string[] = [
 
 /** The catalogue ids the scheduled digest may be granted. */
 export const DIGEST_TOOL_IDS: readonly string[] = ["gh.pr.list", "gh.issue.list", "gh.pr.review-requested", "gh.run.failed"];
+
+/** Flow 403: the catalogue ids a work-intake poll runs, in the order it runs them (own PRs first: failed CI is matched against their branches). */
+export const INTAKE_TOOL_IDS: readonly string[] = ["gh.pr.comments", "gh.issue.assigned", "gh.pr.review-requested", "gh.run.failed"];
 
 /**
  * Flow 389 (AC3): every reason a catalogue entry is NOT a read-only, repo-bound,
