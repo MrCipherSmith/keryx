@@ -104,7 +104,7 @@ describe("a question serve refuses (review of flow 387, L-4)", () => {
     const open = Array.from({ length: 8 }, (_, index) => client.requestChoice(`Open ${index}`, [["Yes"], ["No"]], 5_000));
     await until(() => rig.api.sentTo(threadId).filter((message) => message.inlineKeyboard !== undefined).length === 8, "eight pickers in the topic");
     const ninth = await client.askChoice("One too many", [["Yes"], ["No"]], 5_000);
-    expect(ninth.index).toBeUndefined();
+    expect(ninth.kind).toBe("none");
     expect(ninth.refusal ?? "").toMatch(/too many/i);
     // The plain wrapper keeps its old contract: no answer.
     expect(await client.requestChoice("And again", [["Yes"]], 5_000)).toBeUndefined();
@@ -117,7 +117,7 @@ describe("a question serve refuses (review of flow 387, L-4)", () => {
     await rig.startServe();
     const { client } = await session("sess-pk-0013", "release");
     const answer = await client.askChoice("Anyone?", [["Yes"]], 300);
-    expect(answer.index).toBeUndefined();
+    expect(answer.kind).toBe("none");
     expect(answer.refusal).toBeUndefined();
   });
 });

@@ -65,13 +65,18 @@ export interface AnswerRecord {
   changed: boolean;
   /** True when the answer is the human's own words, not one of the options (a free-form answer). */
   other?: boolean;
+  /**
+   * Flow 401: the own answer in full (redacted, one line, up to 2000 characters, a visible marker when cut).
+   * `choice` keeps the short display form of the same text. Present only when `other` is true.
+   */
+  text?: string;
 }
 
 export interface ReasonRecord {
   kind: "reason";
   id: string;
   at: string;
-  /** Absent when the human answered the one question with nothing. */
+  /** Absent when the human answered the one question with nothing. Flow 401: kept in full (redacted, up to 2000 characters). */
   reason?: string;
 }
 

@@ -15,7 +15,7 @@ export function setAskUserHost(fn: AskUserFn | undefined): void {
 
 export async function invokeAskUserHost(
   request: Parameters<AskUserFn>[0],
-): Promise<string> {
+): ReturnType<AskUserFn> {
   if (host === undefined) {
     return "__cancel__";
   }

@@ -56,7 +56,27 @@ export interface ComposerChoiceRequest {
    * are never delayed: refusing, or a deliberate click, is always safe.
    */
   acceptDelayMs?: number;
+  /**
+   * Flow 401: offer the operator a way to answer in their own words. Adds a last row
+   * ("Свой ответ…") that opens a text input (Enter sends, Esc goes back to the list), and makes Tab on a
+   * highlighted option open the same input with that option fixed, so what is typed is the reason for
+   * the pick. Only the detailed form ({@link showComposerChoiceDetailed}) can return either result; a
+   * menu without this field (an approval, a mode picker, a slash-command picker) has neither row nor key.
+   */
+  ownAnswer?: { label?: string };
 }
+
+/**
+ * What the dock resolved with. `id` is an option (or `cancelId`) exactly as before; `own` is the text of
+ * the operator's own answer; `reason` is a picked option plus the reason typed for it (flow 401).
+ */
+export type ComposerChoiceResult =
+  | { kind: "id"; id: string }
+  | { kind: "own"; text: string }
+  | { kind: "reason"; id: string; reason: string };
+
+/** The row that opens the own-answer input. Not an option id anyone can pick: it is never returned. */
+const OWN_ROW_ID = "\u0000own-answer";
 
 /** See {@link ComposerChoiceRequest.acceptDelayMs}. */
 export const DEFAULT_ACCEPT_DELAY_MS = 400;
@@ -176,11 +196,24 @@ export async function showComposerChoice(
   dock: Box,
   request: ComposerChoiceRequest,
 ): Promise<string> {
+  const result = await showComposerChoiceDetailed(otui, r, dock, request);
+  // only a menu that asked for `ownAnswer` can produce the other kinds; a caller that did not is never handed one
+  return result.kind === "id" ? result.id : result.kind === "reason" ? result.id : request.cancelId;
+}
+
+/** {@link showComposerChoice} that also reports an own answer or a reason (flow 401). */
+export async function showComposerChoiceDetailed(
+  otui: OpenTui,
+  r: Renderer,
+  dock: Box,
+  request: ComposerChoiceRequest,
+): Promise<ComposerChoiceResult> {
+  const cancelled: ComposerChoiceResult = { kind: "id", id: request.cancelId };
   const enqueue = request.enqueue !== false;
   if (!enqueue && dockBusy(dock)) {
     debugEvent("choice.busy-cancel", { title: request.title });
     request.onBusy?.();
-    return request.cancelId;
+    return cancelled;
   }
   const queuedAt = Date.now();
   debugEvent("choice.request", { title: request.title, waitingBehind: dockDepth.get(dock) ?? 0 });
@@ -189,7 +222,7 @@ export async function showComposerChoice(
   try {
     if (request.signal?.aborted === true) {
       debugEvent("choice.aborted-before-open", { title: request.title });
-      return request.cancelId;
+      return cancelled;
     }
     return await presentComposerChoice(otui, r, dock, request);
   } finally {
@@ -202,7 +235,7 @@ function presentComposerChoice(
   r: Renderer,
   dock: Box,
   request: ComposerChoiceRequest,
-): Promise<string> {
+): Promise<ComposerChoiceResult> {
   // Reentrancy guard: every choice menu in this shell shares one `dock`, and
   // each call below mounts its own rows AND wires its own global keypress
   // listener directly onto the renderer. Nothing stops a second call from
@@ -215,13 +248,26 @@ function presentComposerChoice(
   if (dock.visible === true) {
     debugEvent("choice.dock-already-visible", { title: request.title });
     request.onBusy?.();
-    return Promise.resolve(request.cancelId);
+    return Promise.resolve({ kind: "id", id: request.cancelId });
   }
   return new Promise((resolve) => {
+    const ownEnabled = request.ownAnswer !== undefined;
     const options = request.options.map((o) => ({
       ...o,
       displayLabel: o.recommended === true ? `(Recommended) ${o.label}` : o.label,
     }));
+    if (ownEnabled) {
+      options.push({
+        id: OWN_ROW_ID,
+        label: request.ownAnswer?.label ?? "Свой ответ…",
+        description: "Type your own answer instead of choosing an option",
+        displayLabel: request.ownAnswer?.label ?? "Свой ответ…",
+      });
+    }
+    /** The text step: the own answer (no fixed option) or the reason for the option that was fixed. */
+    let textStep: { fixed: string | undefined } | undefined;
+    let ownInput: InstanceType<OpenTui["InputRenderable"]> | undefined;
+    let ownNote: Text | undefined;
 
     const recommendedIdx = options.findIndex((o) => o.recommended === true);
     let selected = recommendedIdx >= 0 ? recommendedIdx : 0;
@@ -243,11 +289,16 @@ function presentComposerChoice(
       subtitleLines.length > 1 || (subtitleLines[0]?.length ?? 0) > SUBTITLE_INLINE_MAX_CHARS;
     const subtitleRows = Math.min(Math.max(subtitleLines.length, 1), MAX_SUBTITLE_ROWS);
 
+    const listHint = `${hasScrollableSubtitle ? "↑/↓ Enter · Esc · ctrl+o scroll cmd" : "↑/↓ Enter · Esc"}${ownEnabled ? " · Tab = pick + reason" : ""}`;
     const title = new otui.TextRenderable(r, {
       id: `ch-title-${Date.now()}`,
-      content: otui.t`${boldChunk(otui, request.title)} ${dimChunk(otui, hasScrollableSubtitle ? "↑/↓ Enter · Esc · ctrl+o scroll cmd" : "↑/↓ Enter · Esc")}`,
+      content: otui.t`${boldChunk(otui, request.title)} ${dimChunk(otui, listHint)}`,
     });
     dock.add(title);
+    const paintTitle = (): void => {
+      const hint = textStep === undefined ? listHint : "Enter send · Esc back";
+      title.content = otui.t`${boldChunk(otui, request.title)} ${dimChunk(otui, hint)}`;
+    };
 
     let subtitleScroll: ScrollBox | undefined;
     let subtitleLine: Text | undefined;
@@ -314,15 +365,101 @@ function presentComposerChoice(
     const onAbort = (): void => {
       finish(request.cancelId, "abort");
     };
-    const finish = (id: string, via = "key"): void => {
+    const settle = (result: ComposerChoiceResult, via: string): void => {
       if (settled) {
         return;
       }
       settled = true;
-      debugEvent("choice.finish", { title: request.title, id, via, openMs: Date.now() - openedAt });
+      // the typed text is never logged: only that a text step ended, and how
+      debugEvent("choice.finish", {
+        title: request.title,
+        id: result.kind === "own" ? "(own answer)" : result.id,
+        kind: result.kind,
+        via,
+        openMs: Date.now() - openedAt,
+      });
       cleanup();
-      resolve(id);
+      resolve(result);
     };
+    const finish = (id: string, via = "key"): void => {
+      if (id === OWN_ROW_ID) {
+        openTextStep(undefined);
+        return;
+      }
+      settle({ kind: "id", id }, via);
+    };
+    const mountedExtras = (): Array<Box | Text | InstanceType<OpenTui["InputRenderable"]>> => [
+      ...(ownInput !== undefined ? [ownInput] : []),
+      ...(ownNote !== undefined ? [ownNote] : []),
+    ];
+    /** Swap the list for the text input. `fixed` is the picked option (a reason), or undefined (an own answer). */
+    function openTextStep(fixed: string | undefined): void {
+      if (settled || textStep !== undefined) {
+        return;
+      }
+      textStep = { fixed };
+      optionsScroll.visible = false;
+      const picked = fixed === undefined ? undefined : options.find((o) => o.id === fixed);
+      ownNote = new otui.TextRenderable(r, {
+        id: `ch-own-note-${Date.now()}`,
+        content: otui.t`${dimChunk(otui, picked === undefined ? "Your own answer — Enter sends, Esc goes back to the options" : `Reason for "${picked.label}" — Enter sends, Esc goes back to the options`)}`,
+      });
+      ownInput = new otui.InputRenderable(r, { id: `ch-own-input-${Date.now()}`, value: "", marginTop: 0 });
+      dock.add(ownNote);
+      dock.add(ownInput);
+      paintTitle();
+      ownInput.focus();
+      debugEvent("choice.text-step", { title: request.title, fixed: fixed ?? null });
+    }
+    function closeTextStep(): void {
+      if (textStep === undefined) {
+        return;
+      }
+      textStep = undefined;
+      try {
+        ownInput?.blur();
+        for (const node of mountedExtras()) {
+          dock.remove(node);
+        }
+      } catch {
+        // best-effort
+      }
+      const gone = mountedExtras();
+      ownInput = undefined;
+      ownNote = undefined;
+      setTimeout(() => {
+        for (const node of gone) {
+          try {
+            node.destroyRecursively();
+          } catch {
+            // already gone
+          }
+        }
+      }, 0);
+      optionsScroll.visible = true;
+      paintTitle();
+      paintOptions();
+      optionsScroll.focus();
+    }
+    /** Enter in the text step: whitespace-only text is refused and the input stays open. */
+    function submitTextStep(): void {
+      const step = textStep;
+      const typed = ownInput?.value ?? "";
+      if (step === undefined) {
+        return;
+      }
+      if (typed.trim().length === 0) {
+        if (ownNote !== undefined) {
+          ownNote.content = otui.t`${roleChunk(otui, "attention", "Type something first — an empty answer is not sent (Esc goes back)")}`;
+        }
+        return;
+      }
+      if (step.fixed === undefined) {
+        settle({ kind: "own", text: typed.trim() }, "own-text");
+      } else {
+        settle({ kind: "reason", id: step.fixed, reason: typed.trim() }, "reason-text");
+      }
+    }
 
     for (const [i, o] of options.entries()) {
       const rowId = `ch-opt-${i}-${Date.now()}`;
@@ -384,8 +521,11 @@ function presentComposerChoice(
         ...(subtitleLine !== undefined ? [subtitleLine] : []),
         ...contextLines,
         optionsScroll,
+        ...mountedExtras(),
       ];
       try {
+        // blur first: a delayed duplicate key can otherwise still reach the input after it is detached
+        ownInput?.blur();
         for (const node of mounted) {
           dock.remove(node);
         }
@@ -416,8 +556,37 @@ function presentComposerChoice(
       if (!key.ctrl && typeof key.sequence === "string" && key.sequence.length === 1 && key.sequence >= " ") {
         lastTypedAt = Date.now();
       }
+      if (textStep !== undefined) {
+        // the text step: Esc goes back to the list (it does NOT cancel the question), Enter sends, every
+        // other key belongs to the input, which has the focus. No accept-delay here: the operator is
+        // deliberately typing into this input, unlike the Enter that approves a dialog.
+        if (key.name === "escape") {
+          closeTextStep();
+        } else if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
+          submitTextStep();
+        } else {
+          return;
+        }
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
       if (key.name === "escape") {
         finish(request.cancelId, "escape");
+        key.preventDefault();
+        key.stopPropagation();
+        return;
+      }
+      if (ownEnabled && key.name === "tab") {
+        const target = options[selected];
+        if (target !== undefined && target.id !== OWN_ROW_ID) {
+          const now = Date.now();
+          if (now - openedAt >= acceptDelayMs && now - lastTypedAt >= acceptDelayMs) {
+            openTextStep(target.id);
+          }
+        } else if (target !== undefined) {
+          openTextStep(undefined);
+        }
         key.preventDefault();
         key.stopPropagation();
         return;

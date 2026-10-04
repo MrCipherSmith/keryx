@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerDecision, loadReport, openDecision, reportText } from "../decisions/service";
+import { answerDecision, journalAsk, loadReport, openDecision, reportText } from "../decisions/service";
 import { findAgentCommand } from "../commands/agent-commands";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { formatDecisionsLines, isDecisionsCommand, mountDecisionsSidebar, parseDecisionsCommand, presentDecisions, projectDecisionsPanel, routeDecisionsCommand, runDecisionsFollowup } from "./decisions-surface";
@@ -119,6 +119,84 @@ test("the report modal shows the same lines the CLI report prints", async () => 
   expect(title).toBe("/decisions");
   expect(painted?.content).toContain("By stage:");
   expect(painted?.content).toContain("ordinary");
+});
+
+// flow 401, AC11: the modal marks and prints in full an own answer and a picked option with a reason
+const OWN_TEXT = `neither of them: split it in two, ship the schema first. ${"Long tail. ".repeat(40)}`.trim();
+const PICKED_REASON = "the deadline is Friday and B is the quick one";
+
+async function seedOwnAndReason(): Promise<void> {
+  const ask = journalAsk(
+    async (request) =>
+      request.question.includes("Why?")
+        ? { kind: "own", text: "no reason worth a line" }
+        : request.question.startsWith("Which approach")
+          ? { kind: "own", text: OWN_TEXT }
+          : { kind: "option", choice: "b", reason: PICKED_REASON },
+    { cwd: root, random: () => 0.9 },
+  );
+  const options = [
+    { id: "a", label: "Option A", description: "the safe one", recommended: true },
+    { id: "b", label: "Option B", description: "the quick one" },
+  ];
+  await ask({ question: "Which approach?", options });
+  await ask({ question: "Which release train?", options });
+}
+
+test("the modal shows an own answer and a picked option with its reason, both in full (AC11)", async () => {
+  await seedOwnAndReason();
+  const text = await reportText(root);
+  let painted: { content: string } | undefined;
+  const open: OpenModalFn = (_otui, _chrome, input) => {
+    input.renderTab?.("report", { add: () => undefined } as never, undefined as never);
+    return { close: () => undefined } as never;
+  };
+  class FakeText {
+    content: string;
+    constructor(_r: unknown, opts: { id: string; content: string }) {
+      this.content = opts.content;
+      painted = { content: opts.content };
+    }
+  }
+  expect(presentDecisions(open, { TextRenderable: FakeText }, {}, { text, visibleRows: 200 })).toBeDefined();
+  const content = painted?.content ?? "";
+  expect(content).toContain("Own answers and reasons: 2");
+  expect(content).toContain("own answer: neither of them: split it in two");
+  expect(content).toContain(OWN_TEXT.slice(-60));
+  expect(content).toContain("    chose b\n    reason: " + PICKED_REASON);
+  expect(content).toContain(`reason: ${PICKED_REASON}`);
+});
+
+test("projectDecisionsPanel marks decisions with own text or a reason, and stays within the sidebar (AC11)", () => {
+  const marked = projectDecisionsPanel(5, SIDEBAR_TEXT_WIDTH, 0, 2);
+  expect(marked.text).toContain("5 decisions");
+  expect(marked.text).toContain("✍2");
+  expect(marked.text.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+  expect(projectDecisionsPanel(5, SIDEBAR_TEXT_WIDTH, 0, 0).text).not.toContain("✍");
+  expect(projectDecisionsPanel(5, 6, 0, 2).text.length).toBeLessThanOrEqual(11);
+});
+
+otuiTest("the sidebar row carries the mark when the journal holds an own answer and a reason (AC11)", async () => {
+  await seedOwnAndReason();
+  const h = await mountChrome(OTUI!);
+  const timer = manualInterval();
+  const sidebar = mountDecisionsSidebar({
+    otui: OTUI!.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    width: SIDEBAR_TEXT_WIDTH,
+    cwd: root,
+    onKeypress: keypressSource(h.renderer),
+    interval: timer.interval,
+  });
+  try {
+    await sidebar.refresh();
+    await settle(h);
+    expect(textOf(findById(h.chrome.sidebarTop, "sb-decisions-row"))).toContain("✍2");
+  } finally {
+    sidebar.dispose();
+    h.destroy();
+  }
 });
 
 function mount(h: Awaited<ReturnType<typeof mountChrome>>, state: { n: number }) {

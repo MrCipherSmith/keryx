@@ -36,6 +36,8 @@ export interface OutboundEntry {
   threadId?: number;
   text: string;
   keyboard?: InlineKeyboard;
+  /** Flow 401: the reply box opens on this message. Durable, so a restart still sends it as a prompt. */
+  forceReply?: { placeholder?: string };
   createdAt: number;
 }
 
@@ -53,6 +55,8 @@ export interface OutboundMessage {
   threadId?: number;
   text: string;
   keyboard?: InlineKeyboard;
+  /** Flow 401: send with `force_reply` (rides on the last part, like the keyboard). */
+  forceReply?: { placeholder?: string };
   /**
    * Called once, in memory only, after the LAST part (the one that carries the keyboard) was
    * sent. Not durable: a restart resends the entry without it, and the caller must cope.
@@ -102,6 +106,9 @@ function parseEntry(value: unknown): OutboundEntry | undefined {
     return undefined;
   }
   if (raw.keyboard !== undefined && !Array.isArray(raw.keyboard)) {
+    return undefined;
+  }
+  if (raw.forceReply !== undefined && (typeof raw.forceReply !== "object" || raw.forceReply === null)) {
     return undefined;
   }
   return raw as unknown as OutboundEntry;
@@ -161,6 +168,7 @@ export class OutboundQueue {
         ...(message.threadId === undefined ? {} : { threadId: message.threadId }),
         text,
         ...(message.keyboard === undefined || index !== parts.length - 1 ? {} : { keyboard: message.keyboard }),
+        ...(message.forceReply === undefined || index !== parts.length - 1 ? {} : { forceReply: message.forceReply }),
         createdAt: this.now(),
       };
       if (message.onSent !== undefined && index === parts.length - 1) {
@@ -237,6 +245,7 @@ export class OutboundQueue {
             text: entry.text,
             ...(entry.threadId === undefined ? {} : { messageThreadId: entry.threadId }),
             ...(entry.keyboard === undefined ? {} : { inlineKeyboard: entry.keyboard }),
+            ...(entry.forceReply === undefined ? {} : { forceReply: entry.forceReply }),
           },
           { state: this.rendering, onFallback: (fallback) => this.onFallback(entry, fallback) },
         );

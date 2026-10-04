@@ -68,6 +68,7 @@ export { redactSensitiveText } from "./redact";
 export { detectSecrets } from "./detect/secrets";
 export { detectEntropy, looksSecretShaped, looksSecretShapedIn } from "./detect/entropy";
 export { appendIncident } from "./incidents";
+export { looksLikeSecret } from "./secret-shape";
 /**
  * F-REG-F3 (flow 355 review round): the outbound check must honour
  * `backends.entropy.enabled` the same way `redactSensitiveText` does now —
