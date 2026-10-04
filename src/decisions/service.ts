@@ -50,6 +50,11 @@ export async function decisionCount(cwd: string): Promise<number> {
   return (await loadReport(cwd)).total;
 }
 
+/** How many live decisions carry the operator's own text or a typed reason (flow 401). */
+export async function annotatedCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).annotated.length;
+}
+
 /** How many backfilled (imported, historical) decisions the journal holds. */
 export async function backfilledCount(cwd: string): Promise<number> {
   return (await loadReport(cwd)).backfilled.total;

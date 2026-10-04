@@ -6,7 +6,7 @@
 // Opening it never writes: it reads the journal and refuses nothing.
 
 import { findAgentCommand } from "../commands/agent-commands";
-import { backfilledCount, changeAnswer, decisionCount, giveReason, oneLine, reportText, resolveFlowContext } from "../decisions/service";
+import { annotatedCount, backfilledCount, changeAnswer, decisionCount, giveReason, oneLine, reportText, resolveFlowContext } from "../decisions/service";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalChrome, type ModalHandle as HostModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -18,6 +18,8 @@ type OpenTui = typeof import("@opentui/core");
 
 export const DECISIONS_COMMAND = "/decisions";
 export const DECISIONS_POLL_MS = 5000;
+/** The sidebar mark for decisions answered with the operator's own text or carrying a typed reason. */
+export const OWN_MARK = "✍";
 
 export const DECISIONS_FOOTER = [
   { key: "↑/↓", label: "scroll" },
@@ -185,13 +187,16 @@ export interface DecisionsPanelProjection {
 }
 
 /** One row, and only once the journal holds a decision: zero rows otherwise. */
-export function projectDecisionsPanel(count: number, width: number, backfilled = 0): DecisionsPanelProjection {
+export function projectDecisionsPanel(count: number, width: number, backfilled = 0, annotated = 0): DecisionsPanelProjection {
   if (count <= 0 && backfilled <= 0) return { visible: false, text: "" };
   // live decisions first; the backfilled (historical) ones are shown apart, never added into the live count
   const live = count > 0 ? `${count} decision${count === 1 ? "" : "s"}` : "";
   const before = backfilled > 0 ? `${count > 0 ? " + " : ""}${backfilled} before` : "";
   const label = `${live}${before}`;
-  const candidates = [`${label} · /decisions`, label];
+  // flow 401: a decision answered in the operator's own words, or carrying a typed reason, is marked ✍N;
+  // the modal lists each of them in full
+  const marked = annotated > 0 ? `${label} ${OWN_MARK}${annotated}` : label;
+  const candidates = [`${marked} · /decisions`, marked, `${label} · /decisions`, label];
   const text = candidates.find((candidate) => candidate.length <= width) ?? label.slice(0, Math.max(1, width));
   return { visible: true, text };
 }
@@ -213,6 +218,8 @@ export interface DecisionsSidebarOptions {
   count?: () => Promise<number>;
   /** Test seam: how many backfilled (historical) decisions the journal holds. */
   backfilled?: () => Promise<number>;
+  /** Test seam: how many live decisions carry the operator's own text or a typed reason. */
+  annotated?: () => Promise<number>;
   interval?: (tick: () => Promise<void>, ms: number) => () => void;
   pollMs?: number;
 }
@@ -251,6 +258,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
   const r = chrome.renderer as never;
   const count = options.count ?? (() => decisionCount(options.cwd));
   const backfilledTotal = options.backfilled ?? (() => backfilledCount(options.cwd));
+  const annotatedTotal = options.annotated ?? (() => annotatedCount(options.cwd));
   const box = new core.BoxRenderable(r, { id: "sb-decisions", flexDirection: "column", flexShrink: 0 });
   (options.parent as { add(child: unknown): void }).add(box);
   let modal: HostModalHandle | undefined;
@@ -303,7 +311,13 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     } catch {
       before = 0;
     }
-    projected = projectDecisionsPanel(n, options.width, before);
+    let marked: number;
+    try {
+      marked = await annotatedTotal();
+    } catch {
+      marked = 0;
+    }
+    projected = projectDecisionsPanel(n, options.width, before, marked);
     paint();
   };
 
