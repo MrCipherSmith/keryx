@@ -39,6 +39,8 @@ export interface CommandHarnessOptions {
   choiceTimeoutMs?: number;
   /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
   runTimeoutMs?: number;
+  /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */
+  refuseChoice?: string;
   /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */
   askApproval?: NonNullable<RemoteClientLike["askApproval"]>;
 }
@@ -112,6 +114,7 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
         reportState: async (updateId: number, state: MessageState) => {
           fake.reported.push([updateId, state]);
         },
+        ...(opts.refuseChoice !== undefined ? { askChoice: async () => ({ index: undefined, refusal: opts.refuseChoice as string }) } : {}),
         requestChoice: (text: string, rows: string[][], timeoutMs: number) =>
           new Promise<number | undefined>((resolve) => {
             fake.choices.push({ text, rows, timeoutMs, answer: resolve });

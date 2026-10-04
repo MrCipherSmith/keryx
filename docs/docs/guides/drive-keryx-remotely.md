@@ -499,7 +499,8 @@ was refused and why.
 `main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a
 short notice if it takes a while. A command from the topic never cancels the turn
 you are running in the shell: one that outlasts the limit is only no longer waited
-for, the topic is told it is still running in the shell, and it is left alone.
+for, the topic is told it is still running in the shell, and it is left alone; when it
+ends, the topic is told how it ended and what it printed.
 
 **`/new` and `/clear` keep the topic.** The topic stays bound to the running shell,
 gets one separator line (`--- new session ---`), and the session history records

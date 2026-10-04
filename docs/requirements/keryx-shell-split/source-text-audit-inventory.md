@@ -435,6 +435,7 @@ tui/boot-animation.test.ts | tui/tui-shell.ts | 2
 tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
 tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
+tui/external-operator.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1

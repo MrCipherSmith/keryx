@@ -2,7 +2,7 @@
 // Anything else answers "not available remotely" with the reason, and nothing runs.
 
 import { describe, expect, it } from "bun:test";
-import { classifyRemoteCommand, menuNamesAreValid, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from "./command-gateway";
+import { classifyRemoteCommand, isAddressedToOtherBot, menuNamesAreValid, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from "./command-gateway";
 import { commandHarness, waitFor } from "./command.test-helpers";
 
 const ALLOWED_TEXT = ["/help", "/status", "/doctor", "/new", "/compact", "/think expand", "/goal", "/queue", "/reasoning", "/theme dark", "/plan"];
@@ -33,6 +33,13 @@ const REFUSED_LINES: Array<[string, string]> = [
   ["/think collapse", "think"],
 ];
 
+/** Refused commands whose reason is written in the gateway's own switch, not in REMOTE_REFUSED. */
+const INLINE_REASONS: Record<string, string> = {
+  "remote-control": "it would delete this topic; turn it off in the shell",
+  theme: "bare /theme opens a picker",
+  think: "use /think auto, expand or hide",
+};
+
 describe("the allowlist (AC1)", () => {
   it("lets each text command through to the shell", () => {
     for (const line of ALLOWED_TEXT) {
@@ -49,6 +56,18 @@ describe("the allowlist (AC1)", () => {
   it("accepts the menu spelling and a bot suffix", () => {
     expect(classifyRemoteCommand("/Status@keryx_bot")).toEqual({ kind: "run", command: "status", line: "/status" });
     expect(classifyRemoteCommand("/external_agents").kind).toBe("run");
+  });
+
+  it("tells a command for another bot from one for this bot (isAddressedToOtherBot)", () => {
+    expect(isAddressedToOtherBot("/model@otherbot", "keryx_bot")).toBe(true);
+    expect(isAddressedToOtherBot("/model@otherbot some args", "keryx_bot")).toBe(true);
+    expect(isAddressedToOtherBot("/model@Keryx_Bot", "keryx_bot")).toBe(false);
+    expect(isAddressedToOtherBot("/model@keryx_bot", "@keryx_bot")).toBe(false);
+    expect(isAddressedToOtherBot("/model", "keryx_bot")).toBe(false);
+    expect(isAddressedToOtherBot("/note to a@b.c", "keryx_bot")).toBe(false);
+    expect(isAddressedToOtherBot("plain text@someone", "keryx_bot")).toBe(false);
+    // Not knowing the bot's name never drops a command.
+    expect(isAddressedToOtherBot("/model@otherbot", undefined)).toBe(false);
   });
 
   it("refuses a command that is on no list, with a reason, and marks it unknown", () => {
@@ -89,6 +108,14 @@ describe("commands refused remotely (AC8)", () => {
       if (decision.kind === "refuse") {
         expect(decision.command).toBe(name);
         expect(decision.reason.length).toBeGreaterThan(5);
+        // The reason is the command's own, not the generic "not on the list" one an unknown name gets.
+        expect(decision.known).toBe(true);
+        const inline = INLINE_REASONS[name];
+        if (inline !== undefined) {
+          expect(decision.reason).toContain(inline);
+        } else {
+          expect(decision.reason).toBe(REMOTE_REFUSED[name] ?? "(no entry in REMOTE_REFUSED)");
+        }
       }
     });
 

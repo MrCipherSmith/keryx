@@ -80,7 +80,7 @@ export type RemoteClientLike = Pick<
   RemoteClient,
   "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
 > &
-  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
+  Partial<Pick<RemoteClient, "askChoice" | "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
 
 /** What the topic answered to one approval (flow 396). */
 export interface RemoteApprovalAnswer {
@@ -140,7 +140,7 @@ export interface RemoteBridgeOptions {
   approvalTimeoutMs?: number;
   /** A command still running after this long says so in the topic (flow 387). */
   commandRunningNoticeMs?: number;
-  /** A command still running after this long is stopped and reported. */
+  /** After this long the topic stops waiting for a command and is told so; nothing is cancelled, and the topic hears how it ended. */
   commandLimitMs?: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs?: number;
@@ -309,7 +309,11 @@ export class RemoteBridge {
           return undefined;
         }
         try {
-          return await client.requestChoice(text, rows, timeoutMs, forUserId);
+          if (client.askChoice === undefined) {
+            return await client.requestChoice(text, rows, timeoutMs, forUserId);
+          }
+          const answer = await client.askChoice(text, rows, timeoutMs, forUserId);
+          return answer.refusal !== undefined && answer.index === undefined ? { refused: answer.refusal } : answer.index;
         } catch {
           return undefined;
         }

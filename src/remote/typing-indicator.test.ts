@@ -128,6 +128,34 @@ describe("the typing indicator (AC19)", () => {
     expect(h.api.chatActions.length).toBe(2);
   });
 
+  test("a message that settles while another turn of the topic still works does not stop the typing", async () => {
+    const { hub, sessionId, threadId } = await topic();
+    const turn = await received(threadId, "long turn");
+    const slash = await received(threadId, "/status");
+    hub.messageState(sessionId, turn, "working");
+    await until(() => h.api.chatActions.length === 1, "typing");
+    hub.messageState(sessionId, slash, "working");
+    hub.messageState(sessionId, slash, "done");
+    await h.clock.advance(TYPING_REFRESH_MS * 3);
+    expect(h.api.chatActions.length).toBeGreaterThan(1);
+    // The turn itself ends: now the indicator stops.
+    hub.messageState(sessionId, turn, "done");
+    const seen = h.api.chatActions.length;
+    await h.clock.advance(TYPING_REFRESH_MS * 3);
+    expect(h.api.chatActions.length).toBe(seen);
+  });
+
+  test("a failed message that settles while another turn works does not stop the typing either", async () => {
+    const { hub, sessionId, threadId } = await topic();
+    const turn = await received(threadId, "long turn");
+    const other = await received(threadId, "/doctor");
+    hub.messageState(sessionId, turn, "working");
+    await until(() => h.api.chatActions.length === 1, "typing");
+    hub.messageState(sessionId, other, "failed");
+    await h.clock.advance(TYPING_REFRESH_MS * 2);
+    expect(h.api.chatActions.length).toBeGreaterThan(1);
+  });
+
   test("two topics type independently", async () => {
     const a = await topic("a");
     const b = await topic("b");

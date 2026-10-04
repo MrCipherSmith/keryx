@@ -25,7 +25,7 @@ import { checkName, defaultNameCandidates, nameKey } from "./naming";
 import { OutboundQueue, type SentMessageInfo } from "./outbound-queue";
 import { editRendered, type RenderFallback, RenderingState, type RenderingSnapshot, sendRendered } from "./rendering";
 import { DEFAULT_RENDER_MODE, type RenderMode } from "./rendering-mode";
-import { remoteMenu } from "./command-gateway";
+import { isAddressedToOtherBot, remoteMenu } from "./command-gateway";
 import { isReactionForbidden, MAX_TRACKED_MESSAGES, REACTION_FOR_STATE, type ReactionState, STATE_CALL_TIMEOUT_MS, TYPING_REFRESH_MS } from "./message-state";
 import type { MessageState } from "./protocol";
 import { type PollerStatus, UpdatePoller } from "./poller";
@@ -209,6 +209,8 @@ export class RemoteHub {
   private readonly typing = new Map<string, unknown>();
   /** The bot may not react in this group: reactions are off for good and only typing is left. */
   private reactionsOff = false;
+  /** This bot's own username (getMe), learned at start; unknown means no command is dropped for its @suffix. */
+  private botUsername: string | undefined;
 
   constructor(options: RemoteHubOptions) {
     this.api = options.api;
@@ -292,6 +294,7 @@ export class RemoteHub {
   /** Begin polling, sweeping and flushing; redeliver whatever a previous run left behind. */
   async start(): Promise<void> {
     this.stopped = false;
+    await this.learnBotUsername();
     this.poller.start();
     this.sweepTimer = this.timers.setInterval(() => {
       void this.sweep();
@@ -301,6 +304,23 @@ export class RemoteHub {
       void this.dispatch(nameKey(record.name));
     }
     await this.publishCommandMenu();
+  }
+
+  /** Ask the Bot API who this bot is, once and briefly. A failure leaves the name unknown; nothing else depends on it. */
+  private async learnBotUsername(): Promise<void> {
+    if (this.botUsername !== undefined) {
+      return;
+    }
+    let timer: unknown;
+    const timeout = new Promise<undefined>((resolve) => {
+      timer = this.timers.setTimeout(() => resolve(undefined), STATE_CALL_TIMEOUT_MS);
+    });
+    const call = this.api.getMe().then(
+      (identity) => identity.username,
+      () => undefined,
+    );
+    this.botUsername = await Promise.race([call, timeout]);
+    this.timers.clearTimeout(timer);
   }
 
   /**
@@ -892,6 +912,11 @@ export class RemoteHub {
       if (typeof message.text !== "string" || message.text.length === 0) {
         return undefined;
       }
+      if (isAddressedToOtherBot(message.text, this.botUsername)) {
+        // In a group with several bots, /model@otherbot is that bot's command, not this session's.
+        this.event("update-unrouted", `update ${update.update_id}: command addressed to another bot`);
+        return undefined;
+      }
       const appended = this.inbound.append(key, { ...base, kind: "text", text: message.text, messageId: message.message_id });
       if (appended.added) {
         // The first thing the sender sees: the message was received. Fire and forget.
@@ -989,10 +1014,21 @@ export class RemoteHub {
     this.react(message, state);
     if (state === "working") {
       this.startTyping(record);
-    } else if (state === "done" || state === "failed") {
+    } else if ((state === "done" || state === "failed") && !this.anotherWorking(record, message)) {
+      // A slash command that settles must not end the typing of a turn that is still running.
       this.stopTyping(record);
     }
     return true;
+  }
+
+  /** True when a different message of the record's topic is still being worked on. */
+  private anotherWorking(record: RemoteSessionRecord, except: TrackedMessage): boolean {
+    for (const other of this.tracked.values()) {
+      if (other !== except && other.threadId === record.threadId && other.chatId === record.chatId && other.state === "working") {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The shell is gone: stop typing, and a message it was still working on is marked failed. */
