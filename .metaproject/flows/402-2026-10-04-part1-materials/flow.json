@@ -9,9 +9,9 @@
   "id": "402",
   "slug": "part1-materials",
   "title": "Part 1 article materials: protocol, counts script, contribution log, pilot export",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-04T13:12:49.686Z",
-  "updatedAt": "2026-10-04T14:54:26.123Z",
+  "updatedAt": "2026-10-04T15:26:25.036Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/885"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -145,6 +145,11 @@
       "at": "2026-10-04T14:54:26.123Z",
       "event": "ac-updated",
       "detail": "AC5: \"Every row of `contribution-log.md` has the form `YYYY-MM-DD · source · «verbatim quote» · what changed in the article`, and the quote is found verbatim in the named source. A row without a findable quote is not written. The log holds at least the rows the prompt names that have a findable quote, and the README or the flow journal lists each named decision for which no quote was found. [verify: judged]\" -> \"Every row of `contribution-log.md` has the form `YYYY-MM-DD · source · «verbatim quote» · what changed in the article`, and the quote is found verbatim in the named source (a channel message id, or the operator's export of the article draft comment threads, `draft-comments-export.md`, supplied 2026-10-04). A row without a findable quote is not written, and a row whose quote would reveal the operator's employer, team repositories or working hours is held back and listed by number in the flow journal for the operator to decide. [verify: judged]\" (Operator supplied the draft comment export in message 183166; add its source and the privacy hold rule consistent with AC7)"
+    },
+    {
+      "at": "2026-10-04T15:26:25.036Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/885 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -176,5 +181,6 @@
     "AC8": {
       "kind": "judged"
     }
-  }
+  },
+  "baseBranch": "main"
 }

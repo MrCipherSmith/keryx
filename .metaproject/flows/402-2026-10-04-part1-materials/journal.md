@@ -26,3 +26,4 @@ Reason for all rows: privacy rule AC5/AC7. The filter was a case-insensitive sub
 - chat table rows 2, 3, 5, 7, 10
 
 Comments rows 7 and 9 matched only through their place cell (the filter was applied to it as an extension of the instruction); the operator may release them.
+- 2026-10-04T15:26:25.036Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/885 (warning: PR is not a draft) (base: main)
