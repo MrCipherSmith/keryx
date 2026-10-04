@@ -114,7 +114,7 @@ describe("commands refused remotely (AC8)", () => {
         if (inline !== undefined) {
           expect(decision.reason).toContain(inline);
         } else {
-          expect(decision.reason).toBe(REMOTE_REFUSED[name]);
+          expect(decision.reason).toBe(REMOTE_REFUSED[name] ?? "(no entry in REMOTE_REFUSED)");
         }
       }
     });
