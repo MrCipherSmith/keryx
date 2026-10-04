@@ -13,8 +13,7 @@
 
 import type { NormalizedMessage } from "../harness/provider/types";
 import { isOperatorMessage } from "../session/compact";
-import { redactSensitiveText } from "../security/service";
-import { looksLikeSecret } from "../security/secret-shape";
+import { looksLikeSecret, redactSensitiveText } from "../security/service";
 
 export { looksLikeSecret };
 
