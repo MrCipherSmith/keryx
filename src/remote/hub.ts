@@ -27,7 +27,7 @@ import { editRendered, type RenderFallback, RenderingState, type RenderingSnapsh
 import { DEFAULT_RENDER_MODE, type RenderMode } from "./rendering-mode";
 import { isAddressedToOtherBot, remoteMenu } from "./command-gateway";
 import { isReactionForbidden, MAX_TRACKED_MESSAGES, REACTION_FOR_STATE, type ReactionState, STATE_CALL_TIMEOUT_MS, TYPING_REFRESH_MS } from "./message-state";
-import type { MessageState } from "./protocol";
+import { INTAKE_SERVICE_TOPIC, isIntakeCallbackData, type MessageState } from "./protocol";
 import { type PollerStatus, UpdatePoller } from "./poller";
 import { ServiceTopics } from "./service-topics";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
@@ -55,6 +55,33 @@ export interface CallbackDelivery {
   threadId: number;
   fromId: number;
 }
+
+/** A button press on a card in the service topic "Intake" (flow 403), already checked by the hub. */
+export interface IntakeCallbackPress {
+  updateId: number;
+  callbackQueryId: string;
+  chatId: number;
+  threadId: number;
+  messageId: number;
+  fromId: number;
+  /** Starts with `in:` and is at most 64 bytes. */
+  data: string;
+}
+
+/** What the handler says back: `text` is shown to the operator as the button's toast. */
+export interface IntakeCallbackReply {
+  text?: string;
+  /**
+   * The handler already put the outcome on the card itself. When the button had to be answered early (the handler
+   * was slow), a reply that is not `edited` is posted to the topic so the result is never lost.
+   */
+  edited?: boolean;
+}
+
+export type IntakeCallbackHandler = (press: IntakeCallbackPress) => Promise<IntakeCallbackReply | undefined>;
+
+/** Telegram's limit on the text of a callback answer. */
+const MAX_CALLBACK_ANSWER_CHARS = 200;
 
 /** What the hub needs from the shell side. Both must reject when the line was not taken. */
 export interface RemoteConsumer {
@@ -162,6 +189,12 @@ interface TrackedMessage {
 const MAX_EVENTS = 50;
 /** How long a callback acknowledgement may take before it is abandoned. It is never worth holding anything for. */
 const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
+/** Flow 403: a press whose handler is still running after this long is answered with an "accepted" toast. */
+export const INTAKE_EARLY_ACK_MS = 2_500;
+export const INTAKE_EARLY_ACK_TEXT = "Принято, выполняю…";
+/** A hung handler (a port that never returns) must not wedge the press forever: longer than every port timeout. */
+export const INTAKE_HANDLER_TIMEOUT_MS = 180_000;
+const HANDLER_TIMED_OUT = Symbol("handler-timed-out");
 
 function describeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
@@ -198,6 +231,10 @@ export class RemoteHub {
   private readonly rendering: RenderingState;
   /** Flow 389: topics that belong to keryx itself (the digest), kept apart from the session registry. */
   private readonly serviceTopics: ServiceTopics;
+  /** Flow 403: where presses on intake cards go; none registered means they are acknowledged and dropped. */
+  private intakeHandler: IntakeCallbackHandler | undefined;
+  /** Presses `route` took for intake during one `receive`; run after the batch is on disk. */
+  private intakePresses: IntakeCallbackPress[] = [];
   /** Flow 389: why an outbound entry was dropped, by id, so a caller that queued it can report it. */
   private readonly droppedReasons = new Map<string, string>();
   private readonly journal: RejectedJournal;
@@ -564,7 +601,11 @@ export class RemoteHub {
    * retries it), or a failure (the topic could not be created, or Telegram refused the text for
    * good). A topic Telegram no longer has is forgotten, so the next send creates it again.
    */
-  async sendToServiceTopic(name: string, text: string): Promise<ServiceSendResult> {
+  async sendToServiceTopic(
+    name: string,
+    text: string,
+    options: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void } = {},
+  ): Promise<ServiceSendResult> {
     const checked = checkName(name);
     if (!checked.ok) {
       return { ok: false, reason: `invalid topic name: ${checked.reason}` };
@@ -586,7 +627,12 @@ export class RemoteHub {
     if (!topic.ok) {
       return { ok: false, reason: topic.reason };
     }
-    return this.sendTracked(this.config.chatId, topic.threadId, text, checked.name);
+    return this.sendTracked(this.config.chatId, topic.threadId, text, checked.name, options);
+  }
+
+  /** Flow 403: where presses on intake cards go. A later call replaces the handler; `undefined` removes it. */
+  registerIntakeCallbackHandler(handler: IntakeCallbackHandler | undefined): void {
+    this.intakeHandler = handler;
   }
 
   /**
@@ -601,8 +647,20 @@ export class RemoteHub {
     return this.sendTracked(record.chatId, record.threadId, text);
   }
 
-  private async sendTracked(chatId: number, threadId: number, text: string, serviceTopic?: string): Promise<ServiceSendResult> {
-    const entries = this.outbound.enqueue({ chatId, threadId, text });
+  private async sendTracked(
+    chatId: number,
+    threadId: number,
+    text: string,
+    serviceTopic?: string,
+    options: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void } = {},
+  ): Promise<ServiceSendResult> {
+    const entries = this.outbound.enqueue({
+      chatId,
+      threadId,
+      text,
+      ...(options.keyboard === undefined ? {} : { keyboard: options.keyboard }),
+      ...(options.onSent === undefined ? {} : { onSent: options.onSent }),
+    });
     if (entries.length === 0) {
       return { ok: false, reason: "the message was empty" };
     }
@@ -660,6 +718,32 @@ export class RemoteHub {
     }
   }
 
+  /**
+   * Flow 403: edit a message the bot sent into a SERVICE topic (an intake card after a decision). The text is
+   * redacted like every outbound text; with no `keyboard` the buttons are gone. A press replayed on a settled
+   * card ("message is not modified") counts as done. Returns false when Telegram refused the edit.
+   */
+  async editServiceMessage(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard): Promise<boolean> {
+    try {
+      await editRendered(
+        this.api,
+        { chatId, messageId, text: redactSensitiveText(text), ...(keyboard === undefined ? {} : { inlineKeyboard: keyboard }) },
+        { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, " (service topic)", "edited") },
+      );
+      return true;
+    } catch (error) {
+      if (isNotModified(error)) {
+        return true;
+      }
+      try {
+        await this.api.editMessageReplyMarkup({ chatId, messageId });
+      } catch {
+        // Already gone or unchanged: the decision is in the ledger either way.
+      }
+      return false;
+    }
+  }
+
   /** Try to send everything queued. Safe to call at any time. */
   async flushOutbound(): Promise<void> {
     const result = await this.outbound.flush();
@@ -691,6 +775,7 @@ export class RemoteHub {
     return this.serial(async () => {
       const touched = new Set<string>();
       const callbacks: string[] = [];
+      this.intakePresses = [];
       const dropped = new Map<string, number>();
       const ordered = [...updates].sort((a, b) => a.update_id - b.update_id);
       const top = this.offset.highest;
@@ -734,6 +819,9 @@ export class RemoteHub {
       for (const id of callbacks) {
         this.answerCallback(id);
       }
+      for (const press of this.intakePresses.splice(0)) {
+        this.runIntakePress(press);
+      }
       for (const key of touched) {
         void this.dispatch(key);
       }
@@ -745,18 +833,79 @@ export class RemoteHub {
    * this runs inside the serial lock's turn and a slow Bot API must never hold up
    * the poller or the lifecycle, so nothing waits for it.
    */
-  private answerCallback(callbackQueryId: string): void {
+  private answerCallback(callbackQueryId: string, text?: string): void {
     let timer: unknown;
     const timeout = new Promise<void>((resolve) => {
       timer = this.timers.setTimeout(resolve, ANSWER_CALLBACK_TIMEOUT_MS);
     });
-    const answered = this.api.answerCallbackQuery({ callbackQueryId }).then(
+    const shown = text === undefined || text.length === 0 ? undefined : redactSensitiveText(text).slice(0, MAX_CALLBACK_ANSWER_CHARS);
+    const answered = this.api.answerCallbackQuery({ callbackQueryId, ...(shown === undefined ? {} : { text: shown }) }).then(
       () => undefined,
       () => undefined,
     );
     void Promise.race([answered, timeout]).finally(() => {
       this.timers.clearTimeout(timer);
     });
+  }
+
+  /** Run the intake handler outside the serial lock and answer the press with what it says. A throw answers with no text. */
+  private runIntakePress(press: IntakeCallbackPress): void {
+    const handler = this.intakeHandler;
+    if (handler === undefined) {
+      this.event("update-unrouted", `update ${press.updateId}: intake press with no handler registered`);
+      this.answerCallback(press.callbackQueryId);
+      return;
+    }
+    void (async () => {
+      // Telegram stops waiting for a callback answer after a few seconds, and a take can run for minutes: once the
+      // handler is slow, the button is answered with a short "accepted" and the result goes into the topic instead.
+      let answered = false;
+      const answer = (text?: string): void => {
+        if (answered) {
+          return;
+        }
+        answered = true;
+        this.answerCallback(press.callbackQueryId, text);
+      };
+      const early = this.timers.setTimeout(() => answer(INTAKE_EARLY_ACK_TEXT), INTAKE_EARLY_ACK_MS);
+      let hardTimer: unknown;
+      const hard = new Promise<typeof HANDLER_TIMED_OUT>((resolve) => {
+        hardTimer = this.timers.setTimeout(() => resolve(HANDLER_TIMED_OUT), INTAKE_HANDLER_TIMEOUT_MS);
+      });
+      let reply: IntakeCallbackReply | undefined;
+      try {
+        const running = Promise.resolve().then(() => handler(press));
+        // If the timeout wins, the handler's own late failure must not become an unhandled rejection.
+        running.catch(() => undefined);
+        const outcome = await Promise.race([running, hard]);
+        if (outcome === HANDLER_TIMED_OUT) {
+          this.event("delivery-failed", `intake press ${press.updateId}: the handler did not finish within ${INTAKE_HANDLER_TIMEOUT_MS / 1000} s`);
+          // The press itself keeps running (a queued `flow init` can outlast this timeout): when it finishes, its result
+          // still goes to the topic, so the operator is never left without an answer.
+          void running
+            .then(async (late) => {
+              if (late?.text !== undefined && late.text.length > 0 && late.edited !== true) await this.sendToServiceTopic(INTAKE_SERVICE_TOPIC, late.text).catch(() => undefined);
+            })
+            .catch(() => undefined);
+        } else {
+          reply = outcome;
+        }
+      } catch (error) {
+        this.event("delivery-failed", `intake press ${press.updateId}: ${describeError(error)}`);
+      } finally {
+        this.timers.clearTimeout(early);
+        this.timers.clearTimeout(hardTimer);
+      }
+      if (!answered) {
+        answer(reply?.text);
+        return;
+      }
+      // The button was answered early. The result still has to reach the operator, unless the handler already put it
+      // on the card itself.
+      if (reply?.text !== undefined && reply.text.length > 0 && reply.edited !== true) {
+        await this.sendToServiceTopic(INTAKE_SERVICE_TOPIC, reply.text).catch(() => undefined);
+      }
+    })();
   }
 
   // ---- internals -----------------------------------------------------------
@@ -911,7 +1060,14 @@ export class RemoteHub {
     }
     const record = this.registry.byThread(origin.chat.id, threadId);
     if (record === undefined) {
+      const service = this.serviceTopics.byThread(origin.chat.id, threadId);
+      if (query !== undefined && service !== undefined && nameKey(service.name) === nameKey(INTAKE_SERVICE_TOPIC)) {
+        this.routeIntakePress(update.update_id, query, fromId, threadId);
+        return undefined;
+      }
       this.event("update-unrouted", `update ${update.update_id}: no session in topic ${threadId}`);
+      // A press on a button of another service topic reaches no handler, but the button must stop spinning.
+      if (query !== undefined && service !== undefined) this.answerCallback(query.id);
       return undefined;
     }
     const key = nameKey(record.name);
@@ -951,6 +1107,21 @@ export class RemoteHub {
       callback: { id: query.id, data: query.data, ...(query.message === undefined ? {} : { messageId: query.message.message_id }) },
     });
     return { key, dropped: appended.dropped, callbackQueryId: query.id };
+  }
+
+  /**
+   * Flow 403: a press in the "Intake" topic. The sender (allowlist) and the chat were checked by
+   * `route`; here the press must also be on a message of this topic and carry intake data. Anything
+   * else is logged by update id, with no text, and acknowledged so the button stops spinning.
+   */
+  private routeIntakePress(updateId: number, query: NonNullable<BotUpdate["callback_query"]>, fromId: number, threadId: number): void {
+    const messageId = query.message?.message_id;
+    if (typeof messageId !== "number" || !isIntakeCallbackData(query.data)) {
+      this.event("update-unrouted", `update ${updateId}: not an intake press in topic ${threadId}`);
+      this.answerCallback(query.id);
+      return;
+    }
+    this.intakePresses.push({ updateId, callbackQueryId: query.id, chatId: this.config.chatId, threadId, messageId, fromId, data: query.data });
   }
 
   // ---- message state: reactions and typing (flow 387, AC18 to AC20) ------------

@@ -78,6 +78,7 @@ import {
   type ReplyBody,
   RESERVED_CALLBACK_PREFIX,
   RESERVED_CHOICE_PREFIX,
+  RESERVED_INTAKE_PREFIX,
   type SessionBody,
   SSE_KEEPALIVE_FRAME,
   type StatusEvent,
@@ -629,6 +630,9 @@ export class RemoteHttpSurface {
         }
         if (data.startsWith(RESERVED_CHOICE_PREFIX)) {
           return { ok: false, message: `button data may not start with "${RESERVED_CHOICE_PREFIX}" (reserved for pickers).` };
+        }
+        if (data.startsWith(RESERVED_INTAKE_PREFIX)) {
+          return { ok: false, message: `button data may not start with "${RESERVED_INTAKE_PREFIX}" (reserved for work intake).` };
         }
         out.push({ text: redactSensitiveText(text), callback_data: data });
       }

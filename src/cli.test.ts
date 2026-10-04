@@ -222,6 +222,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx permissions list [--json] | remove <number|pattern>\n",
     "                                               The saved shell rules an Always answer left behind; take one back\n",
     "  permissions The saved shell rules (what Always remembered): list them, remove one\n",
+    // Flow 403: `keryx intake`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    "  keryx intake status|list|pause|resume|poll|report [--json]\n",
+    "                                               GitHub work intake: tickets, reviews, failed CI, PR comments and board\n",
+    "                                               movement as Telegram cards; report = decisions, answer times, card -> flow -> PR\n",
+    "  intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

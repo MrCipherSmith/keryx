@@ -86,6 +86,11 @@ export type BusyDispatchTarget =
    */
   | "channels"
   /**
+   * `/intake` (flow 403): the GitHub work intake. It reads the intake store and decides a card through
+   * the same door as a Telegram button, never touching the main turn, so it works while one runs.
+   */
+  | "intake"
+  /**
    * `/remote-policy` (flow 396): the saved Telegram defaults. It edits a file and the bridge's own copy;
    * it never touches the main turn or the shell's mode, so it works while a turn runs.
    */
@@ -157,6 +162,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/remote-control") return "remote-control";
   if (commandName === "/history") return "history";
   if (commandName === "/channels") return "channels";
+  if (commandName === "/intake") return "intake";
   if (commandName === "/remote-policy") return "remote-policy";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";

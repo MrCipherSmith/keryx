@@ -2460,6 +2460,42 @@ regenerate-and-reinstall of the line.
 
 ---
 
+## intake
+
+Take work in from GitHub as cards in Telegram. `keryx serve` polls the repositories you
+list for tickets assigned to you, review requests, failed CI on your own pull requests,
+comments on your pull requests, and movement on the flow board, and sends each new event as
+a card with buttons. This command is your view of that: what is waiting, the cards, and the
+pause switch. Nothing it does writes to GitHub. The full picture is in the
+[work intake guide](guides/work-intake.md).
+
+```
+keryx intake status [--json]
+keryx intake list [--json]
+keryx intake pause
+keryx intake resume
+keryx intake poll [--json]
+keryx intake report [--json]
+```
+
+| Subcommand | What it does |
+|---|---|
+| `status` | Whether intake is on or paused, how many cards wait, are queued, deferred or decided, the repositories, the GitHub account the project path selects, the time of the last poll and its outcome. |
+| `list` | The cards, newest first: id, state, kind, repository, title and the choice made. |
+| `pause` | Stops the automatic poll. Cards already queued still go out, and buttons already in Telegram still work. |
+| `resume` | Starts the automatic poll again. |
+| `poll` | One poll now, even while paused. New cards are queued and go out with the next serve tick. Exits with code 1 when the poll failed. |
+| `report` | What the cards were worth: cards per kind, decisions, median time to answer, how often you chose what the assessor suggested, and the card, flow and pull request chain. |
+
+`--json` prints the same data as JSON for `status`, `list`, `poll` and `report`.
+
+Intake is off for a project until `.metaproject/data/intake/config.json` exists, says
+`"enabled": true` and lists `repos`; `keryx serve` skips every other project and `poll` refuses with
+a one-line how to enable it. `status` shows the same line. The settings, the Telegram buttons, the
+`/intake` modal in `keryx shell` and the limits are described in the guide.
+
+---
+
 ## schedule
 
 Scheduled agent tasks, run in the background. You describe a task and a cadence,

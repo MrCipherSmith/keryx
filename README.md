@@ -180,6 +180,7 @@ alike, whichever agent runtime happens to be open.
 | Judge readiness | Normalized health reports and a quality gate over lint, types, tests, coverage, complexity |
 | Coordinate work | Versioned task flows, managed review packages, generated agent skills |
 | Keep agents inside boundaries | Deterministic secret / PII / prompt-injection scanning, redaction, policy gate, OS sandbox |
+| Take work in from GitHub | Tickets assigned to you, review requests, failed CI and PR comments arrive as Telegram cards with buttons, read-only toward GitHub ([guide](docs/docs/guides/work-intake.md)) |
 | Run an agent at all | A first-party harness on top of all of the above: durable sessions, allow/ask/deny policy, child agents, evidence-gated completion |
 
 ## A typical agent workflow

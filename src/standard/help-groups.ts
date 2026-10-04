@@ -486,6 +486,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "intake",
+    group: "Automation",
+    summary: "GitHub work intake: tickets, review requests, failed CI, PR comments and board movement as cards in Telegram; status, pause, poll by hand, and a usefulness report.",
+  },
+  {
+    kind: "cli",
     name: "product",
     group: "Automation",
     summary: "The product's intent as a derived index, and the intents closed in code that nobody looked back at.",
@@ -580,6 +586,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/channels",
     group: "Automation",
     summary: "Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status].",
+  },
+  {
+    kind: "slash",
+    name: "/intake",
+    group: "Automation",
+    summary: "GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status|list|pause|resume|poll].",
   },
   {
     kind: "slash",

@@ -62,6 +62,7 @@ import { assembleSubmitTurn } from "../lib/serve-runner";
 import { localMachineName } from "../remote/naming";
 import { openRemoteService } from "../remote/service";
 import { createServeDigestTicker } from "./serve-digest";
+import { createServeIntake } from "./serve-intake";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 // ---------------------------------------------------------------------------
@@ -293,6 +294,13 @@ async function runServe(args: string[]): Promise<void> {
   });
   digestTicker.start();
 
+  // Flow 403: GitHub work reaches Telegram as cards from here. Off for a project until it has an enabled intake config.
+  const intake = createServeIntake({
+    hub: () => remoteService.hub(),
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+  intake.start();
+
   await new Promise<void>((resolve) => {
     let draining = false;
     const finish = (): void => {
@@ -301,8 +309,7 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void digestTicker
-        .stop()
+      void Promise.all([digestTicker.stop(), intake.stop()])
         .then(() => listener.drain())
         .then(() => remoteService.stop())
         .then(() => {

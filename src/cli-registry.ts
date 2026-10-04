@@ -79,6 +79,7 @@ import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
+import { intakeCommand, printIntakeHelp } from "./commands/intake";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
 import { productCommand, readDigestBoard } from "./commands/product";
 import { registerBoardReader } from "./scheduler/digest-board";
@@ -181,6 +182,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   schedule: scheduleCommand,
   governance: governanceCommand,
   decisions: decisionsCommand,
+  intake: intakeCommand,
   product: productCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
@@ -411,6 +413,9 @@ export const USAGE_BODY = `Usage:
                                                recommendation before showing it, the human's choice after;
                                                report = match share by mode and stage, deviations (no model);
                                                import = earlier decisions from a JSON-lines file, kept apart
+  keryx intake status|list|pause|resume|poll|report [--json]
+                                               GitHub work intake: tickets, reviews, failed CI, PR comments and board
+                                               movement as Telegram cards; report = decisions, answer times, card -> flow -> PR
   keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
   keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
@@ -499,6 +504,7 @@ Commands:
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
   decisions Recommendation journal: every agent question with options, what was recommended, what the human chose
+  intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report
   product   The product's intent as a derived index, and the intents closed in code that nobody looked back at
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
@@ -622,6 +628,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   ["serve-mcp", () => printServeMcpHelp()],
   ["governance", () => printGovernanceHelp()],
   ["decisions", () => printDecisionsHelp()],
+  ["intake", () => printIntakeHelp()],
   ["hooks", () => printHooksHelp()],
   ["bundle", () => printBundleHelp()],
   ["learn", () => printLearnHelp()],

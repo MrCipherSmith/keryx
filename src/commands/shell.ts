@@ -117,6 +117,7 @@ import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
+import { isIntakeCommand, readlineIntakeText } from "../tui/intake-surface";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -274,6 +275,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/reviews",
   "/remote-control",
   "/channels",
+  "/intake",
   "/rendering",
   "/remote-policy",
   "/trail",
@@ -2701,6 +2703,9 @@ export async function runAgentRepl(
       } else if (isChannelsCommand(command)) {
         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));
+      } else if (isIntakeCommand(command)) {
+        // Flow 403: the same status and cards as the full-screen modal, as text; a decision is a Telegram button.
+        agentIo.onSystem?.(await readlineIntakeText(line, { root: sessionCwd }));
       } else if (isRenderingCommand(command)) {
         // Flow 395: same text as the full-screen shell and the /settings row, no modal needed.
         agentIo.onSystem?.(runRenderingCommand(rest));

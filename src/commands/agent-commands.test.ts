@@ -47,6 +47,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/remote-control",
     "/history",
     "/channels",
+    "/intake",
     "/rendering",
     "/remote-policy",
     "/trail",
@@ -185,6 +186,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/remote-control",
     "/history",
     "/channels",
+    "/intake",
     "/rendering",
     "/remote-policy",
     "/trail",
@@ -346,6 +348,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/remote-control",
     "/history",
     "/channels",
+    "/intake",
     "/rendering",
     "/remote-policy",
     "/trail",
@@ -441,6 +444,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   // is ambiguous rather than dangerous. Pinned so the pair is a decision on
   // record, not a surprise the next person rediscovers at the prompt.
   expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual([
+    "/intake",
     "/integrate",
     "/interrupt",
   ]);
@@ -457,6 +461,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/settings",
   ]);
   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
+    "/intake",
     "/integrate",
     "/interrupt",
   ]);

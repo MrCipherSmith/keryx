@@ -3,6 +3,14 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+- **Work intake from GitHub (flow 403).** `keryx serve` polls the repositories listed in `.metaproject/data/intake/config.json` for tickets assigned to you, review requests, failed CI on your own pull requests, comments on them and board movement, and sends each new event as a card with buttons in the Telegram topic "Intake". Take opens a flow from the ticket, review opens a review flow, CI cards run a read-only triage, and Later reminds once. The first poll is a baseline, events are deduplicated, nothing goes out in quiet hours, at most six cards an hour are sent with an overflow card for the rest, and a work repository never offers Take. A model assessment is bounded by a per-run dollar budget, and the whole feature is read-only toward GitHub. `keryx intake status|list|pause|resume|poll|report`, an `/intake` modal and a sidebar line in `keryx shell`. Intake is off by default: a project takes part only when its intake config exists, is enabled and names repositories (a manual poll refuses otherwise, and the sidebar line and `/intake` menu entry are hidden). The cards always go to the topic "Intake" (the `topic` setting is gone), the model budget ends the assessments but not the poll, a decision in the TUI or a refused press edits the Telegram card, a slow action is acknowledged at once and finished by an edit, and a press is re-checked against the work-repository rule at press time. Guide: `docs/docs/guides/work-intake.md`.
+
+### Fixed
+- **Work intake, second review pass (flow 403).** A press that waits in the queue behind other `flow init` runs is no longer marked failed by a restart-recovery pass: the claim of a live press is skipped in its own process and refreshed every 30 seconds for other processes. When the card was moved out of `taking` while the flow was being made, the press now says that the flow exists and that pressing again adopts it, instead of announcing a success, and a reply that arrives after the hard timeout is still posted to the topic. `Разобрать` (CI triage) works with `OPENROUTER_API_KEY`: that one credential, and no other secret, is passed to the triage child. A pending Telegram edit that is refused five times, or is older than a day, is dropped and said once in the run report. A ledger line with no card content no longer takes a slot of the hourly cap and is retired as expired after a button's lifetime. A `flow init` or triage child is killed together with its process group when serve or the TUI exits or is stopped with Ctrl-C.
+
 ## [0.3.73] — 2026-10-04
 This release also carries 0.3.69 to 0.3.72, which were bumped on main but never published: the `v0.3.69` release run failed in the test gate and 0.3.70 to 0.3.72 were never tagged. The last version on npm before this one is 0.3.68, and their entries are below.
 
