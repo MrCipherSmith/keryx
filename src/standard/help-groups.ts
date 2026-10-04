@@ -589,6 +589,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/intake",
+    group: "Automation",
+    summary: "GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status|list|pause|resume|poll].",
+  },
+  {
+    kind: "slash",
     name: "/rendering",
     group: "Automation",
     summary: "How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto|rich|html|plain].",

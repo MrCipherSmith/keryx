@@ -201,6 +201,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 403: the GitHub work intake. The full-screen shell opens a modal; the readline REPL prints
+    // the same status as text.
+    name: "/intake",
+    description: "GitHub work intake: cards waiting for a decision, pause, poll by hand: /intake [status|list|pause|resume|poll]",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 395: how replies are written for Telegram (tables, lists, the fallback chain). Also a
     // row of /settings and a line of /channels; works in the readline REPL as text.
     name: "/rendering",

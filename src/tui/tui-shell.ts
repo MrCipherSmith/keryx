@@ -112,6 +112,7 @@ import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+import { mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
@@ -3821,6 +3822,7 @@ export async function launchTuiAgentShell(opts: {
   let liveChannelsPanel: ChannelsPanelHandle | undefined;
   const channelsClient = new ChannelsClient();
   let liveApprovals: ApprovalsSidebar | undefined;
+  let liveIntake: IntakeSidebar | undefined;
   let liveDecisions: DecisionsSidebar | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
@@ -3924,6 +3926,7 @@ export async function launchTuiAgentShell(opts: {
         // (this callback is synchronous); the `finally` below awaits the same call.
         void remoteBridge?.disable();
         liveApprovals?.dispose();
+        liveIntake?.dispose();
         liveDecisions?.dispose();
         liveExternalDiff?.dispose();
         liveOps?.dispose();
@@ -4468,6 +4471,17 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveApprovals = approvals;
+    // Flow 403 (AC19): `Intake: N ждут | следующий опрос ЧЧ:ММ | пауза | выкл`; a click opens `/intake`.
+    const intake = mountIntakeSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      root: opts.session?.cwd ?? process.cwd(),
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveIntake = intake;
     // Flow 392 (AC8): one row, only once the recommendation journal holds a decision.
     const decisionsPanel = mountDecisionsSidebar({
       otui,
@@ -8273,6 +8287,10 @@ export async function launchTuiAgentShell(opts: {
             routeApprovalsCommand(line, true, approvals);
             return;
           }
+          case "intake": {
+            routeIntakeCommand(line, intake);
+            return;
+          }
           case "permissions": {
             runPermissionsCommand(line);
             return;
@@ -8696,6 +8714,9 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (routeIntakeCommand(line, intake)) {
           return;
         }
         if (command.name === PERMISSIONS_COMMAND) {
@@ -10053,6 +10074,7 @@ export async function launchTuiAgentShell(opts: {
     liveSchedules?.dispose();
     liveReviewsPanel?.dispose();
     liveApprovals?.dispose();
+    liveIntake?.dispose();
     liveDecisions?.dispose();
     liveExternalDiff?.dispose();
     liveOps?.dispose();
