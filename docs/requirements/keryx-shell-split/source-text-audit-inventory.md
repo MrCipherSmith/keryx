@@ -395,6 +395,21 @@ wiring can be mounted under, replace the counts with a test that runs a turn thr
 it and observes the bridge. The guard counts call sites and pins no line number, so
 moving code does not fail it.
 
+### Added by flow 399 (topic history restore), review T-2
+
+The same file holds a second reader of `tui/tui-shell.ts`, inside the same site
+count: `flow 399 T-2` counts eight lines that join the history restore to the shell.
+They are `sessionEntryOf(opened.resumed)`, the assignment of `sessionResumed` and the
+`sessionEntered(...)` call for a resumed session, the same pair for `/new`
+(`NEW_SESSION_ENTRY`), `bridge.historyForCommand(historyArgsOf(line))` for the
+`/history` command, and the two bridge host members `history` and `sessionResumed`.
+The logic behind them is pure and tested (`remote/history-host.ts`, `remote/history.ts`,
+`remote/shell-bridge.ts`); what only the closure holds is the wiring, and deleting one
+line leaves every behavioural test green while the restore stops. The same conversion
+applies: when the session-entry and command paths of `launchTuiAgentShell` can be
+mounted, replace the counts with a test that enters a session and observes the topic.
+It pins no line number.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this

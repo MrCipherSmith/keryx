@@ -380,3 +380,28 @@ test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-que
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
   expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
 });
+
+// Flow 399 review (T-2): the topic-history restore is pure logic (`history-host.ts`, `history.ts`,
+// `shell-bridge.ts`, each with its own tests) joined to the shell by eight lines the closure alone can
+// hold. Delete one and every behavioural test stays green while the restore silently stops: no session
+// entry kind reaches the bridge, `/history` is never routed, or the bridge reads an empty history. Same
+// convention as above: count call sites, never pin a line number.
+test("flow 399 T-2: tui-shell.ts still feeds the session entry and the history into the bridge", () => {
+  const source = readFileSync(SHELL_SOURCE, "utf8");
+  const expected: Array<[string, number]> = [
+    // A session opened from the picker: the entry is resumed or new, and the bridge learns which.
+    ["sessionEntryOf(opened.resumed)", 1],
+    ["sessionResumed = entry.resumed;", 1],
+    ["remoteBridge.sessionEntered(entry.kind)", 1],
+    // A fresh session started with /new.
+    ["sessionResumed = NEW_SESSION_ENTRY.resumed;", 1],
+    ["remoteBridge.sessionEntered(NEW_SESSION_ENTRY.kind)", 1],
+    // The /history command typed in the topic.
+    ["bridge.historyForCommand(historyArgsOf(line))", 1],
+    // The bridge's reads: what the session says so far, and whether it was resumed.
+    ["history: () => (archive.length > 0 ? archive : history),", 1],
+    ["sessionResumed: () => sessionResumed,", 1],
+  ];
+  const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
+  expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
+});
