@@ -463,7 +463,12 @@ session reconnected), the ack says so and the message ends "Not applied at <time
 shell was no longer waiting for this question, so the Allow from user N changed
 nothing."; the shell's transcript says the same and never says it allowed anything.
 A shell older than this field sends an ack without it, which means only that the frame
-was received, and the message ends "Allowed" as before. Without it the message ends "Sent to the shell at <time>, not confirmed;
+was received, and the message ends "Allowed" as before, so an older shell can
+over-report: it says Allowed even when it applied nothing, and only a current shell
+produces the "Not applied" ending. Like every shell route, the ack is authorised by the
+shared shell token and names its session in the body: `serve` refuses an id that was
+sent to another session, but anyone holding the token can ack for a session it names.
+Without it the message ends "Sent to the shell at <time>, not confirmed;
 the shell denies by itself if it did not receive it." and the short reply says the
 answer was sent but not confirmed. That wording is about an answer the shell never
 received: its own approval question then times out as a denial. An Allow that the

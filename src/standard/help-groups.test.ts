@@ -364,6 +364,18 @@ describe("the approval ack is documented where operators look", () => {
     });
   }
 
+  // Flow 397 review S-1: the ack trusts the session id in its body under the shared shell token, and an
+  // older shell (no `applied`) is read as received-only, so it over-reports Allowed. Both are stated, and
+  // the behaviour is pinned in approval-ack.test.ts ("an ack with no applied field ...", "an ack from another session ...").
+  for (const file of ["docs/docs/guides/drive-keryx-remotely.md", "docs/docs/cli-reference.md"]) {
+    test(`S-1: ${file} states that an older shell over-reports Allowed and that the ack is authorised by the shared shell token`, () => {
+      const text = read(file).replace(/\s+/g, " ");
+      expect(text).toContain("over-report");
+      expect(text).toMatch(/shared shell token/);
+      expect(text).toMatch(/older shell|shell older than/);
+    });
+  }
+
   // Flow 397 review T-4: the bump is read from the release notes, not from a number that goes stale. The
   // entry that tells the approval ack sits under a version above 0.3.66 (main when the flow merged), and
   // package.json is at or past that version, so a missing or lowered bump fails at any later release.
