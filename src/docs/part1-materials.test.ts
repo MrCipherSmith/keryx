@@ -25,7 +25,12 @@ const FILES = [
 // the exact bytes: any edit to the file changes the digest, and a later change has to be a new version.
 const PROTOCOL_V2_SHA256 = "4ea9dde3b7cd9be948a3bc1fc3b08c70d49c84e2754ce5a6f9d4c5b975f2a5fe";
 
-const RATING_KEYS = ["rater", "quality", "model", "cleanContext", "modelAgree", "at"];
+const PINNED_EXPORT_FIELDS = [
+  "answered", "answeredAt", "arm", "backfilled", "changes", "channel", "chosenIndex", "deviation", "eligible",
+  "forced", "hasRecommendation", "legacy", "openedAt", "optionCount", "order", "other", "preselected", "ratings",
+  "reasonNamed", "reasonRequested", "recommendedIndex", "ref", "seed", "stage", "timeToAnswerMs",
+];
+const RATING_KEYS =["rater", "quality", "model", "cleanContext", "modelAgree", "at"];
 const FORBIDDEN_KEYS = ["question", "options", "reason", "ownAnswer", "answer", "text", "note", "label", "description"];
 const FORBIDDEN_TERMS = ["frontend", "backend", "board", "process-metrics"];
 
@@ -47,12 +52,14 @@ describe("the part 1 materials directory (flow 402)", () => {
   it("exports only allow-listed keys, with no field that could carry text", () => {
     const lines = read("decisions-export-2026-10-04.jsonl").split("\n").filter((line) => line.trim() !== "");
     expect(lines.length).toBeGreaterThan(0);
-    const allowed = EXPORT_FIELDS as readonly string[];
+    expect([...EXPORT_FIELDS].sort()).toEqual([...PINNED_EXPORT_FIELDS].sort());
     for (const line of lines) {
       const row = JSON.parse(line) as Record<string, unknown>;
-      for (const key of Object.keys(row)) {
-        expect(allowed).toContain(key);
+      for (const [key, value] of Object.entries(row)) {
+        expect(PINNED_EXPORT_FIELDS).toContain(key);
         expect(FORBIDDEN_KEYS).not.toContain(key);
+        if (typeof value === "string") expect(value.length).toBeLessThanOrEqual(80);
+        else expect(["number", "boolean", "object"]).toContain(typeof value);
       }
       const ratings = Array.isArray(row.ratings) ? (row.ratings as Record<string, unknown>[]) : [];
       for (const rating of ratings) {
