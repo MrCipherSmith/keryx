@@ -22,8 +22,8 @@
 
 Reason for all rows: privacy rule AC5/AC7. The filter was a case-insensitive substring match over the place, quote and change cells; one further chat row named in the brief is also held whole (it is among the chat rows listed below).
 
-- comments table rows 7, 9, 16, 20, 25, 27, 29
-- chat table rows 2, 3, 5, 7, 10
+- comments table rows 16, 20, 25, 27, 29
+- chat table rows 2, 3, 7, 10
 
-Comments rows 7 and 9 matched only through their place cell (the filter was applied to it as an extension of the instruction); the operator may release them.
+Comments rows 7 and 9 matched only through their place cell. The operator released both on 2026-10-04 (poll 80), and they were added to the log, which now has 47 rows; chat row 5 was released later the same day (poll 81), making 48.
 - 2026-10-04T15:26:25.036Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/885 (warning: PR is not a draft) (base: main)

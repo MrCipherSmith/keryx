@@ -40,7 +40,11 @@ Quotes are in the language they were written in (Russian). The source of each ro
 
 2026-10-03 · article draft comment, §1, описание keryx, 07:06 UTC · «Сходи в https://github.com/MrCipherSmith/keryx посмотри о чем проект, и сформулируй точнее описание - как минимум это проект о управлении, разработке, менеджменте, организации памяти и тп. тебе нужно в теже несколько слов уместить описание (что бы он выглядел сильно и рекламировался в этой статье сам себя)» · The description of keryx was rewritten from its README.
 
+2026-10-03 · article draft comment, §1, роли в команде, 07:09 UTC · «замени на проджект или продукт менеджер, дизайнер,» · The list of roles was changed to project or product manager and designer.
+
 2026-10-03 · article draft comment, §2, 07:13 UTC · «выдели эту часть жирным - или как-то с акцентируй» · The claim "when trying is cheaper than discussing, discussion disappears" was emphasized.
+
+2026-10-03 · article draft comment, §1, роли в команде, 10:47 UTC · «Оставь только дизайнера, продукты у нас вообще не понятно чем занимаются» · Only the designer was kept in the example of role blurring.
 
 2026-10-04 · article draft comment, §2, 04:05 UTC · «Сегодня уже сентябрь 2026, нужно поискать свежие данные» · The industry background was rebuilt on 2025–2026 sources (LinearB, Sonar, DORA, Carta, Stripe).
 
@@ -83,6 +87,8 @@ Quotes are in the language they were written in (Russian). The source of each ro
 2026-10-03 · operator session decision · «Ознакомься с ревью, проанализируй его, давай обсудим в чате как и что исправлять и там где будет блок описания кто работал над статьей, добавь рецензент GPT-6 Astra» · Work on the Astra review began; the review is mentioned in the contribution block.
 
 2026-10-03 · operator session decision · «Не надо использовать весь опыт керикс так откровенно… не шокировать цифрами. Можно использовать как изменился подход и что теперь стало проверяемым.» · Tone of §3.1: the change of approach, not self-criticism by figures.
+
+2026-10-04 · operator session decision · «Посмотри предварительные данные Process Metric Snapshot. Учти что упоминание ботов это боты которые через самого гитхаба, они не очень были эффективны, сейчас все запускают агентов сами в основном Claude» · The reading of "agent" in the team data: bots that act through GitHub itself are a separate, less effective kind, and most work now runs through agents launched by people.
 
 2026-10-04 · operator session decision · «Продолжение, давай без карты» · §3.2 was written without a role map; the only distinction is human versus agent.
 
