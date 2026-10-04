@@ -9,59 +9,22 @@
   "id": "389",
   "slug": "scheduled-digest",
   "title": "Scheduled agent: GitHub and board digest on a schedule",
-  "status": "ready",
+  "status": "implemented",
   "createdAt": "2026-10-02T04:37:18.590Z",
-  "updatedAt": "2026-10-03T18:15:00.151Z",
+  "updatedAt": "2026-10-04T10:58:03.945Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026",
-  "acConfirmed": {
-    "AC1": {
-      "at": "2026-10-03T18:14:55.946Z"
-    },
-    "AC2": {
-      "at": "2026-10-03T18:14:56.312Z"
-    },
-    "AC3": {
-      "at": "2026-10-03T18:14:56.716Z"
-    },
-    "AC4": {
-      "at": "2026-10-03T18:14:57.119Z"
-    },
-    "AC5": {
-      "at": "2026-10-03T18:14:57.522Z"
-    },
-    "AC6": {
-      "at": "2026-10-03T18:14:57.881Z"
-    },
-    "AC7": {
-      "at": "2026-10-03T18:14:58.290Z"
-    },
-    "AC8": {
-      "at": "2026-10-03T18:14:58.671Z"
-    },
-    "AC9": {
-      "at": "2026-10-03T18:14:59.007Z"
-    },
-    "AC10": {
-      "at": "2026-10-03T18:14:59.385Z"
-    },
-    "AC11": {
-      "at": "2026-10-03T18:14:59.775Z"
-    },
-    "AC12": {
-      "at": "2026-10-03T18:15:00.151Z"
-    }
-  },
+  "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649",
+  "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/848"
   },
   "owner": {
-    "value": "Aleksandr",
+    "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "outcomeAuthor": "human",
   "tasks": [
@@ -70,7 +33,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -78,14 +41,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -93,14 +58,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -108,14 +75,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -123,7 +92,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged in PR #848 before the flow state was recorded; this closes the state only"
     }
   ],
   "history": [
@@ -205,6 +176,45 @@
       "at": "2026-10-03T18:15:00.151Z",
       "event": "ac-confirmed",
       "detail": "AC12 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-04T10:14:32.603Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-04T10:14:32.876Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-04T10:14:33.171Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-04T10:14:33.515Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-04T10:14:48.736Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-04T10:14:51.342Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/848 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-04T10:15:05.999Z",
+      "event": "owner-changed",
+      "detail": "Aleksandr -> MrCipherSmith (Standing rule: the owner of every keryx flow is MrCipherSmith)"
+    },
+    {
+      "at": "2026-10-04T10:58:03.945Z",
+      "event": "ac-updated",
+      "detail": "AC9 named src/docs/scheduled-digest-docs.test.ts; the test lives at src/scheduler/scheduled-digest-docs.test.ts (review finding T-3, operator approved the correction in poll 75). Confirmations voided; operator re-confirms."
     }
   ],
   "acKinds": {
@@ -242,7 +252,7 @@
     },
     "AC9": {
       "kind": "exec",
-      "check": "bun test src/docs/scheduled-digest-docs.test.ts"
+      "check": "bun test src/scheduler/scheduled-digest-docs.test.ts"
     },
     "AC10": {
       "kind": "invariant",
@@ -393,5 +403,6 @@
       "criterion": "AC12",
       "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
