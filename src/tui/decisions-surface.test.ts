@@ -388,6 +388,30 @@ test("without the new fields the summary falls back to the older modes and says 
   expect(noSplit).not.toContain("Arm A, split:");
 });
 
+test("flow 400 (AC17-AC21): the arm summary carries reasons, the ineligible line and the progress, and degrades without them", () => {
+  const full = {
+    ...ARM_REPORT,
+    reasons: { agreement: { decisions: 4, named: 1 }, deviation: { decisions: 3, named: 2 }, requested: { answered: 5, medianMs: 12_000 }, notRequested: { answered: 9, medianMs: 4200 } },
+    ineligible: { decisions: 3, answered: 2 },
+    progress: { ac11: { decisions: 17, decisionsTarget: 20, blind: 4, blindTarget: 5, met: false }, perArm: { threshold: 150, counts: { A: 40, B: 20, C: 21, D: 19 }, met: false } },
+  };
+  const summary = summarizeArms(full);
+  expect(summary.extras.reasons).toEqual({ agreement: { decisions: 4, named: 1 }, deviation: { decisions: 3, named: 2 }, requestedMs: 12_000, notRequestedMs: 4200 });
+  const text = armsSummaryText(summary);
+  expect(text).toContain("Reasons named: agreement 25% (1/4) (one-third subsample), deviation 67% (2/3)");
+  expect(text).toContain("Median time to answer: reason requested 12s, not requested 4.2s");
+  expect(text).toContain("Not in the comparison (ineligible): 3, 2 answered");
+  expect(text).toContain("Progress, flow 392 AC11: 17/20 decisions, 4/5 blind");
+  expect(text).toContain("Progress per arm (threshold 150): A 40, B 20, C 21, D 19");
+  // an older report has none of it: the modal is the old table, and junk fields never throw
+  const old = armsSummaryText(summarizeArms(ARM_REPORT));
+  expect(old).not.toContain("Reasons named");
+  expect(old).not.toContain("Progress");
+  for (const junk of [{ reasons: 5, ineligible: "x", progress: [] }, { reasons: {}, progress: { ac11: {}, perArm: {} } }]) {
+    expect(() => armsSummaryText(summarizeArms({ ...ARM_REPORT, ...junk }))).not.toThrow();
+  }
+});
+
 test("projectArmsPanel: hidden without data or on the old modes, one row that fits the sidebar otherwise", () => {
   expect(projectArmsPanel(summarizeArms({}), SIDEBAR_TEXT_WIDTH)).toEqual({ visible: false, text: "" });
   expect(projectArmsPanel(summarizeArms({ byMode: { ordinary: { answered: 3, matched: 3 } } }), SIDEBAR_TEXT_WIDTH).visible).toBe(false);

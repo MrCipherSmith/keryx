@@ -5,7 +5,8 @@
 //           it; it says blind or ordinary, the order to show and whether to mark
 //   answer  record the human's choice; it returns the reveal and whether the
 //           human should be asked for a reason (once, optional; the command itself
-//           does not wait, the caller asks). A second answer is a changed answer.
+//           does not wait, the caller asks): on a deviation, and on the deterministic
+//           one-third reason subsample whatever the answer. A second answer is a changed answer.
 //   reason  record the optional reason (the latest one wins when it is changed)
 //   report  deterministic summary, no model: match share by mode and stage,
 //           deviations with their reasons; backfilled decisions in a block apart
@@ -125,6 +126,7 @@ async function runOpen(args: string[]): Promise<void> {
   console.log(`decision ${result.id}`);
   console.log(`mode: ${result.mode}${result.blindRefused ? " (blind refused: an irreversible action)" : ""}`);
   console.log(`arm: ${result.arm}${result.forced ? " (forced: an irreversible action)" : ""}, channel: ${result.channel}`);
+  console.log(`ask for an optional reason after the answer, whatever it is: ${result.reasonRequested ? "yes (reason subsample)" : "only on a deviation"}`);
   console.log(`start with the recommended option highlighted: ${result.preselected ? "yes" : "no"}`);
   console.log(`show the "recommended" mark: ${result.showMark ? "yes" : "no"}`);
   console.log("display order:");
@@ -155,7 +157,10 @@ async function runAnswer(args: string[]): Promise<void> {
     console.log(result.matched ? "the human followed the recommendation" : "the human chose differently");
   }
   console.log(`time to answer: ${(result.timeToAnswerMs / 1000).toFixed(1)}s`);
-  if (askReason) console.log(`the human may add an optional reason (offer it once, and do not hold the answer for it): keryx decisions reason ${result.id} --text "<reason>"`);
+  if (askReason) {
+    const why = result.deviation ? "" : " This decision is in the reason subsample, so it is offered even though the choice matched.";
+    console.log(`the human may add an optional reason (offer it once, and do not hold the answer for it): keryx decisions reason ${result.id} --text "<reason>".${why}`);
+  }
 }
 
 async function runReason(args: string[]): Promise<void> {
@@ -310,9 +315,17 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
   open     puts the question in one of four arms, seeded from a per-repository
            salt (A 40%: agent order, mark shown, recommended preselected; B 20%:
            mark shown, nothing preselected; C 20%: shuffled, mark shown; D 20%:
-           blind, no mark, shuffled; weights under "arms" in decisions.config.json),
+           blind, no mark, shuffled; weights under "arms" in decisions.config.json,
+           any non-negative numbers, an unusable block falls back to these defaults
+           and the report says so; "perArmThreshold" there sets the per-arm bar,
+           default 150),
            and prints the arm, the order to show, whether to mark the recommendation
-           and whether to preselect it. A question about a release, a delete or
+           and whether to preselect it. It also decides, before anything is shown,
+           whether this question is in the reason subsample (a deterministic third
+           of the eligible questions, by a hash of the seed and the position): the
+           human is then asked for an optional reason after the answer even when
+           the choice matched. Every record carries "eligible" (false exactly when
+           the arm is a forced A). A question about a release, a delete or
            a push (the strong irreversible terms, English and Russian, such as
            release, ship, rollout, promote, publish to npm, tag a version,
            выпустить, залить, отправить в прод, накатить, git reset --hard,
@@ -330,7 +343,8 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            2000 characters), prints the recommendation (the reveal) and the
            time to answer. A second answer for the same id is a changed answer:
            both are kept. After a deviation it says the human should be asked
-           for a reason, once; the command does not wait, the caller asks, and
+           for a reason, once (also for a decision in the reason subsample, whatever
+           the choice); the command does not wait, the caller asks, and
            the reason can come later through \`reason\`. In the TUI the reason
            is asked once and the tool result waits for it (an empty answer
            releases the wait); /decisions reason <why> and /decisions change
@@ -347,7 +361,12 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            arms A and B are one row, because a poll cannot preselect), shows
            the records from before the arms in a block of their own
            ("legacy"; --exclude-legacy leaves them out of every number), and
-           prints the recommendation-quality matrix (see rate).
+           prints the recommendation-quality matrix (see rate). It also shows the
+           share of named reasons for agreement (the reason subsample only) and
+           deviation, the median time to answer where a reason was requested and
+           where it was not, the ineligible questions on a line of their own,
+           the progress toward flow 392 AC11 (20 decisions, 5 blind) and toward
+           the per-arm threshold, and the arm weights in use.
            Backfilled decisions (see import) are reported in a separate block
            "до (историческое, дозаполнено задним числом)" and never counted in
            the live shares or in the time to answer. --line prints ONE line in
@@ -368,8 +387,9 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            model label is skipped.
   export   prints one JSON object per decision (--format json for an array)
            with structure only: arm, seed, preselected, the display order as
-           positions, channel, forced, legacy, deviation, quality ratings and
-           times. No question, no option text, no reason, no note: a test
+           positions, channel, forced, eligible, reasonRequested, whether a reason
+           was named (reasonNamed), legacy, deviation, quality ratings and
+           times. No question, no option text, no reason text, no note: a test
            holds it to that. --since <date> and --exclude-legacy narrow it.
   import   loads historical decisions from a JSON-lines file, one per line:
              {"id","at","flow","stage","question","options":[{"id","label"}],

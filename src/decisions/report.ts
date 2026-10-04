@@ -9,7 +9,7 @@
 // the human changed after the reveal is contaminated by the reveal, so the
 // change is counted on its own line and never moves the share.
 
-import { ARMS, type Arm } from "./arms";
+import { ARMS, defaultSettings, recordEligible, type Arm, type ArmWeights, type DecisionsSettings } from "./arms";
 import { effectiveArm, isLegacy } from "./legacy";
 import { buildQualityMatrix, renderQualityMatrix, type QualityMatrix, type QualityRecord } from "./quality";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine } from "./text";
@@ -103,11 +103,60 @@ export interface LegacyReport {
   matchShare: number | null;
 }
 
+/** How many decisions, and how many of them named a reason. */
+export interface ReasonShare {
+  decisions: number;
+  named: number;
+}
+
+/**
+ * Flow 400 (AC18): who names a reason. The randomized live decisions with a recommendation and an answer, every channel.
+ * The first answer decides agreement or deviation. A deviation always gets the prompt, so every one is counted; an
+ * agreement only gets it in the one-third subsample (`reasonRequested`), so only those are counted: the others were
+ * never asked, and counting them would only dilute the share.
+ */
+export interface ReasonStats {
+  agreement: ReasonShare;
+  deviation: ReasonShare;
+  /** Median time to the first answer on the headline channel, for the decisions where a reason was requested ... */
+  requested: TimingStats;
+  /** ... and for the others (randomized, with a recommendation), so the two can be read side by side. */
+  notRequested: TimingStats;
+}
+
+/** Flow 400 (AC20): the questions outside the arm comparison (`eligible: false`: irreversible, an action or a blind.ts match). */
+export interface IneligibleReport {
+  decisions: number;
+  answered: number;
+}
+
+/** Flow 400 (AC21): where the journal stands against the two bars it is read against. */
+export interface ProgressReport {
+  /** Flow 392 AC11: at least 20 answered decisions, at least 5 of them blind. */
+  ac11: { decisions: number; decisionsTarget: number; blind: number; blindTarget: number; met: boolean };
+  /** Per arm: answered, eligible, randomized decisions with a recommendation, against the configured threshold. */
+  perArm: { threshold: number; counts: Record<Arm, number>; met: boolean };
+}
+
+/** The settings the report was built with (AC19): `invalid` names what in decisions.config.json was unusable. */
+export interface SettingsReport {
+  weights: ArmWeights;
+  perArmThreshold: number;
+  configured: boolean;
+  invalid: string[];
+}
+
+/** Flow 392 AC11 bars. */
+export const AC11_DECISIONS = 20;
+export const AC11_BLIND = 5;
+
 export interface ReportOptions {
   /** Leave the legacy records (before the arms, and the imported historical ones) out of every number and block. */
   excludeLegacy?: boolean;
   /** Recommendation quality ratings (see quality.ts); absent means none. */
   quality?: readonly QualityRecord[];
+  /** Arm weights and the per-arm threshold (see `loadDecisionsSettings`); absent means the defaults. */
+  settings?: DecisionsSettings;
 }
 
 /** Time to answer of the live decisions only: a backfilled record stores 0 because the time is unknown. */
@@ -149,6 +198,10 @@ export interface DecisionsReport {
   /** True when the report was built with the legacy records left out. */
   excludeLegacy: boolean;
   quality: QualityMatrix;
+  reasons: ReasonStats;
+  ineligible: IneligibleReport;
+  progress: ProgressReport;
+  settings: SettingsReport;
   /** Journal lines that were unreadable or malformed and left out of every number above. */
   skipped: number;
 }
@@ -188,7 +241,7 @@ function buildBackfilled(
     out.answered += 1;
     if (open.recommendation === null) continue;
     out.matchTally.answered += 1;
-    if (first.choice === open.recommendation.optionId) {
+    if (first.other !== true && first.choice === open.recommendation.optionId) {
       out.matchTally.matched += 1;
       continue;
     }
@@ -220,7 +273,7 @@ function armRow(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerRec
     times.push(first.timeToAnswerMs);
     if (open.recommendation === null) continue;
     row.tally.answered += 1;
-    if (first.choice === open.recommendation.optionId) row.tally.matched += 1;
+    if (first.other !== true && first.choice === open.recommendation.optionId) row.tally.matched += 1;
   }
   row.medianMs = median(times);
   return row;
@@ -254,6 +307,64 @@ function channelRows(opens: readonly OpenRecord[], channel: string, firstOf: (id
   return rows.filter((row) => row.row.decisions > 0);
 }
 
+function timingOf(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerRecord | undefined): TimingStats {
+  const times: number[] = [];
+  for (const open of opens) {
+    const first = firstOf(open.id);
+    if (first !== undefined) times.push(first.timeToAnswerMs);
+  }
+  return { answered: times.length, medianMs: median(times) };
+}
+
+function buildReasons(
+  compared: readonly OpenRecord[],
+  headline: readonly OpenRecord[],
+  firstOf: (id: string) => AnswerRecord | undefined,
+  reasons: ReadonlyMap<string, ReasonRecord>,
+): ReasonStats {
+  const out: ReasonStats = {
+    agreement: { decisions: 0, named: 0 },
+    deviation: { decisions: 0, named: 0 },
+    requested: timingOf(headline.filter((open) => open.reasonRequested === true), firstOf),
+    notRequested: timingOf(headline.filter((open) => open.reasonRequested !== true), firstOf),
+  };
+  for (const open of compared) {
+    const first = firstOf(open.id);
+    if (first === undefined || open.recommendation === null) continue;
+    const matched = first.other !== true && first.choice === open.recommendation.optionId;
+    // an agreement outside the subsample was never asked: it has no share to report
+    if (matched && open.reasonRequested !== true) continue;
+    const share = matched ? out.agreement : out.deviation;
+    share.decisions += 1;
+    const text = reasons.get(open.id)?.reason;
+    if (text !== undefined && text.length > 0) share.named += 1;
+  }
+  return out;
+}
+
+function buildProgress(
+  report: Pick<DecisionsReport, "answered" | "byMode">,
+  compared: readonly OpenRecord[],
+  firstOf: (id: string) => AnswerRecord | undefined,
+  threshold: number,
+): ProgressReport {
+  const counts: Record<Arm, number> = { A: 0, B: 0, C: 0, D: 0 };
+  for (const open of compared) {
+    if (recordEligible(open) && firstOf(open.id) !== undefined) counts[effectiveArm(open)] += 1;
+  }
+  const blind = report.byMode.blind.answered;
+  return {
+    ac11: {
+      decisions: report.answered,
+      decisionsTarget: AC11_DECISIONS,
+      blind,
+      blindTarget: AC11_BLIND,
+      met: report.answered >= AC11_DECISIONS && blind >= AC11_BLIND,
+    },
+    perArm: { threshold, counts, met: ARMS.every((arm) => counts[arm] >= threshold) },
+  };
+}
+
 function buildLegacy(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerRecord | undefined): LegacyReport {
   const out: LegacyReport = {
     total: opens.length,
@@ -269,7 +380,7 @@ function buildLegacy(opens: readonly OpenRecord[], firstOf: (id: string) => Answ
     if (first === undefined) continue;
     out.answered += 1;
     if (open.recommendation === null) continue;
-    const matched = first.choice === open.recommendation.optionId;
+    const matched = first.other !== true && first.choice === open.recommendation.optionId;
     const arm = effectiveArm(open) === "D" ? out.byArm.D : out.byArm.A;
     for (const tally of [out.matchTally, arm]) {
       tally.answered += 1;
@@ -301,6 +412,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
   }
 
   const excludeLegacy = options.excludeLegacy === true;
+  const settings = options.settings ?? defaultSettings();
   // a backfilled record is legacy by definition (imported after the fact, never drawn by the arms)
   const kept = excludeLegacy ? opens.filter((open) => open.backfilled !== true && !isLegacy(open)) : opens;
   const live = kept.filter((open) => open.backfilled !== true);
@@ -316,7 +428,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
   const known = new Map<string, boolean | null>();
   for (const open of kept) {
     const first = firstAnswer(open.id);
-    known.set(open.id, first === undefined || open.recommendation === null ? null : first.choice === open.recommendation.optionId);
+    known.set(open.id, first === undefined || open.recommendation === null ? null : first.other !== true && first.choice === open.recommendation.optionId);
   }
 
   const report: DecisionsReport = {
@@ -344,6 +456,13 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
     legacy: excludeLegacy ? buildLegacy([], firstAnswer) : buildLegacy(live.filter((open) => isLegacy(open)), firstAnswer),
     excludeLegacy,
     quality: buildQualityMatrix(options.quality ?? [], known),
+    reasons: buildReasons(compared, headline, firstAnswer, reasons),
+    ineligible: {
+      decisions: randomized.filter((open) => !recordEligible(open)).length,
+      answered: randomized.filter((open) => !recordEligible(open) && firstAnswer(open.id) !== undefined).length,
+    },
+    progress: { ac11: { decisions: 0, decisionsTarget: AC11_DECISIONS, blind: 0, blindTarget: AC11_BLIND, met: false }, perArm: { threshold: settings.perArmThreshold, counts: { A: 0, B: 0, C: 0, D: 0 }, met: false } },
+    settings: { weights: { ...settings.weights }, perArmThreshold: settings.perArmThreshold, configured: settings.configured, invalid: [...settings.invalid] },
     skipped,
   };
   const stages = new Map<string, { ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number }>();
@@ -409,6 +528,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
     }
   }
   report.timing = { answered: times.length, medianMs: median(times) };
+  report.progress = buildProgress(report, compared, firstAnswer, settings.perArmThreshold);
   report.byStage = [...stages.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([stage, tallies]) => ({ stage, ...tallies }));
@@ -469,6 +589,46 @@ function renderArms(report: DecisionsReport): string[] {
   return lines;
 }
 
+function weightsText(weights: ArmWeights): string {
+  return ARMS.map((arm) => `${arm} ${weights[arm]}`).join(", ");
+}
+
+function sharePct(part: ReasonShare): string {
+  if (part.decisions === 0) return "n/a";
+  return `${Math.round((part.named / part.decisions) * 100)}% (${part.named}/${part.decisions})`;
+}
+
+function timingText(stats: TimingStats): string {
+  return stats.medianMs === null ? `n/a (${stats.answered} answered)` : `${seconds(stats.medianMs)} (${stats.answered} answered)`;
+}
+
+function renderReasons(report: DecisionsReport): string[] {
+  return [
+    "Reasons named (share of the decisions that named one):",
+    `  agreement  ${sharePct(report.reasons.agreement)}  (asked only on the one-third reason subsample, reasonRequested)`,
+    `  deviation  ${sharePct(report.reasons.deviation)}  (always asked)`,
+    `Median time to answer, channel ${oneLine(report.headlineChannel, 40)}: reason requested ${timingText(report.reasons.requested)}, not requested ${timingText(report.reasons.notRequested)}.`,
+  ];
+}
+
+function renderProgress(report: DecisionsReport): string[] {
+  const { ac11, perArm } = report.progress;
+  const counts = ARMS.map((arm) => `${arm} ${perArm.counts[arm]}`).join(", ");
+  return [
+    "Progress:",
+    `  flow 392 AC11: ${ac11.decisions}/${ac11.decisionsTarget} decisions, ${ac11.blind}/${ac11.blindTarget} blind (${ac11.met ? "reached" : "not reached yet"})`,
+    `  per arm, threshold ${perArm.threshold} reversible questions with a recommendation, answered: ${counts} (${perArm.met ? "reached" : "not reached yet"})`,
+  ];
+}
+
+function renderSettings(settings: SettingsReport): string[] {
+  const lines = [`Arm weights: ${weightsText(settings.weights)} (${settings.configured && settings.invalid.length === 0 ? "from .metaproject/decisions.config.json" : "defaults"}).`];
+  if (settings.invalid.length > 0) {
+    lines.push(`Config: .metaproject/decisions.config.json is not fully usable (${settings.invalid.map((problem) => oneLine(problem, 120)).join("; ")}); the defaults are used for what is unusable.`);
+  }
+  return lines;
+}
+
 function renderLegacy(report: LegacyReport): string[] {
   if (report.total === 0) return [];
   return [
@@ -484,9 +644,13 @@ function seconds(ms: number): string {
 
 export function renderReport(report: DecisionsReport): string {
   const skippedLine = report.skipped > 0 ? `Skipped ${report.skipped} unreadable journal record${report.skipped === 1 ? "" : "s"}.` : undefined;
-  if (report.total === 0 && report.backfilled.total === 0) return skippedLine === undefined ? "No decisions recorded yet." : `No decisions recorded yet.\n${skippedLine}`;
+  const configLines = report.settings.invalid.length > 0 ? renderSettings(report.settings) : [];
+  if (report.total === 0 && report.backfilled.total === 0) {
+    return ["No decisions recorded yet.", ...configLines, ...(skippedLine === undefined ? [] : [skippedLine])].join("\n");
+  }
   if (report.total === 0) {
     const lines = ["No live decisions recorded yet.", "", ...renderBackfilled(report.backfilled)];
+    if (configLines.length > 0) lines.push("", ...configLines);
     if (skippedLine !== undefined) lines.push("", skippedLine);
     return lines.join("\n");
   }
@@ -534,6 +698,13 @@ export function renderReport(report: DecisionsReport): string {
     }
   }
   lines.push("", ...renderArms(report));
+  lines.push(
+    "",
+    `Not in the arm comparison (ineligible: irreversible, an action or a blind.ts match, always arm A): ${report.ineligible.decisions} decision${report.ineligible.decisions === 1 ? "" : "s"}, ${report.ineligible.answered} answered.`,
+  );
+  lines.push("", ...renderReasons(report));
+  lines.push("", ...renderProgress(report));
+  lines.push("", ...renderSettings(report.settings));
   const legacyLines = renderLegacy(report.legacy);
   if (legacyLines.length > 0) lines.push("", ...legacyLines);
   if (report.excludeLegacy) lines.push("", "Legacy records (before the arms, and the imported historical ones) are left out of this report.");

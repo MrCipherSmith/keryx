@@ -414,3 +414,56 @@ describe("S-2: every exported field is validated at run time", () => {
     expect(rows.map((r) => r.ref)).toEqual([exportRef("s2")]);
   });
 });
+
+describe("AC18: the export carries reasonRequested and whether a reason was named, never the reason text", () => {
+  async function open(id: string, seq: number, extra: { irreversible?: boolean } = {}): Promise<void> {
+    await openDecision({ cwd: root, id, question: `Question ${id}?`, options: [{ id: "x", label: "X" }, { id: "y", label: "Y" }], recommendation: { optionId: "x", reason: "why" }, arm: "B", salt: "export-salt", seq, ...extra });
+  }
+
+  test("eligible, reasonRequested and reasonNamed are structure, and the reason text itself is not in the output", async () => {
+    // find one position in and one out of the reason subsample, for this salt
+    const { assignArm, reasonSubsample } = await import("./arms");
+    const find = (inSample: boolean): number => {
+      for (let seq = 1; seq < 1000; seq += 1) if (reasonSubsample(assignArm("export-salt", seq).seed, seq) === inSample) return seq;
+      throw new Error("no such position");
+    };
+    const saved = process.env["KERYX_DECISIONS_REASON_SUBSAMPLE"];
+    delete process.env["KERYX_DECISIONS_REASON_SUBSAMPLE"];
+    try {
+      await open("asked-named", find(true));
+      await answerDecision({ cwd: root, id: "asked-named", choice: "x" });
+      await recordReason(root, "asked-named", "REASONTEXT-unique-words-here");
+      await open("asked-silent", find(true));
+      await answerDecision({ cwd: root, id: "asked-silent", choice: "y" });
+      await recordReason(root, "asked-silent", undefined);
+      await open("not-asked", find(false));
+      await answerDecision({ cwd: root, id: "not-asked", choice: "x" });
+      await open("forced", find(true), { irreversible: true });
+      await answerDecision({ cwd: root, id: "forced", choice: "y" });
+    } finally {
+      if (saved === undefined) delete process.env["KERYX_DECISIONS_REASON_SUBSAMPLE"];
+      else process.env["KERYX_DECISIONS_REASON_SUBSAMPLE"] = saved;
+    }
+    expect(EXPORT_FIELDS).toContain("eligible");
+    expect(EXPORT_FIELDS).toContain("reasonRequested");
+    expect(EXPORT_FIELDS).toContain("reasonNamed");
+
+    const rows = await loadExport(root);
+    expect(rows).toHaveLength(4);
+    const flags = rows.map((row) => [row.eligible, row.reasonRequested, row.reasonNamed]);
+    // the rows are in journal order: named, silent, not asked, forced
+    expect(flags).toEqual([
+      [true, true, true],
+      [true, true, false],
+      [true, false, false],
+      [false, false, false],
+    ]);
+    for (const format of ["jsonl", "json"] as const) {
+      const text = renderExport(rows, format);
+      expect(text).not.toContain("REASONTEXT");
+      expect(text).not.toContain("unique-words");
+      expect(text).toContain('"reasonRequested"');
+      expect(text).toContain('"reasonNamed"');
+    }
+  });
+});

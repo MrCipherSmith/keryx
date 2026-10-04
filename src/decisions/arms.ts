@@ -140,32 +140,110 @@ export function chooseArm(input: ArmChoiceInput): ArmChoice {
   return { arm: drawn, seed: assigned.seed, forced: false, drawn };
 }
 
+/** The share of eligible questions that get the optional "why" prompt whatever the answer (AC17). */
+export const REASON_SUBSAMPLE_SHARE = 1 / 3;
+
+/**
+ * Whether the decision at (seed, seq) is in the reason subsample: a hash of the two, so the same decision is in or out
+ * on every run, and the draw is independent of the arm (which comes from a different hash of the salt). Pure.
+ */
+export function reasonSubsample(seed: number, seq: number): boolean {
+  const digest = createHash("sha256").update(`reason:${seed}:${seq}`).digest();
+  return digest.readUInt32BE(0) / 4294967296 < REASON_SUBSAMPLE_SHARE;
+}
+
+/** Whether a record is in the randomized comparison: its own `eligible`, else (an older record) the complement of `forced`. */
+export function recordEligible(record: { forced?: boolean | undefined; eligible?: boolean | undefined }): boolean {
+  return record.eligible ?? record.forced !== true;
+}
+
+export interface WeightsCheck {
+  weights: ArmWeights;
+  /** Set when the `arms` block was unusable and the defaults were taken whole. */
+  problem?: string;
+}
+
 /**
  * Weights from the `arms` key of decisions.config.json: any non-negative finite
- * number per arm, normalised on use. A missing key keeps its default; an
- * unusable block (negative, non-numeric, all zero) falls back to the defaults whole.
+ * number per arm, normalised on use. A missing block or key keeps its default; an
+ * unusable block (negative, non-numeric, all zero) falls back to the defaults whole,
+ * and says why.
  */
-export function parseArmWeights(raw: unknown): ArmWeights {
-  if (raw === null || typeof raw !== "object") return { ...DEFAULT_ARM_WEIGHTS };
+export function checkArmWeights(raw: unknown): WeightsCheck {
+  const fallback = (problem: string): WeightsCheck => ({ weights: { ...DEFAULT_ARM_WEIGHTS }, problem });
+  if (raw === undefined) return { weights: { ...DEFAULT_ARM_WEIGHTS } };
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return fallback('"arms" must be an object of arm weights');
   const given = raw as Record<string, unknown>;
   const weights: ArmWeights = { ...DEFAULT_ARM_WEIGHTS };
   for (const arm of ARMS) {
     const value = given[arm];
     if (value === undefined) continue;
-    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return { ...DEFAULT_ARM_WEIGHTS };
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return fallback(`arms.${arm} must be a non-negative number`);
     weights[arm] = value;
   }
-  return ARMS.reduce((sum, arm) => sum + weights[arm], 0) > 0 ? weights : { ...DEFAULT_ARM_WEIGHTS };
+  return ARMS.reduce((sum, arm) => sum + weights[arm], 0) > 0 ? { weights } : fallback('"arms" weights must not all be zero');
+}
+
+export function parseArmWeights(raw: unknown): ArmWeights {
+  return checkArmWeights(raw).weights;
+}
+
+/** Reversible questions with a recommendation, per arm, that make a per-arm comparison worth reading. */
+export const DEFAULT_PER_ARM_THRESHOLD = 150;
+
+export interface DecisionsSettings {
+  weights: ArmWeights;
+  perArmThreshold: number;
+  /** True when decisions.config.json set `arms` or `perArmThreshold` (usable or not). */
+  configured: boolean;
+  /** What in the config was unusable and fell back to a default; empty when nothing was. */
+  invalid: string[];
+}
+
+export function defaultSettings(): DecisionsSettings {
+  return { weights: { ...DEFAULT_ARM_WEIGHTS }, perArmThreshold: DEFAULT_PER_ARM_THRESHOLD, configured: false, invalid: [] };
+}
+
+/** The settings out of a parsed decisions.config.json. Anything unusable falls back to its default and is named. */
+export function readSettings(parsed: unknown): DecisionsSettings {
+  const settings = defaultSettings();
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    settings.invalid.push("the file is not a JSON object");
+    return settings;
+  }
+  const config = parsed as { arms?: unknown; perArmThreshold?: unknown };
+  if (config.arms !== undefined) settings.configured = true;
+  const checked = checkArmWeights(config.arms);
+  settings.weights = checked.weights;
+  if (checked.problem !== undefined) settings.invalid.push(checked.problem);
+  if (config.perArmThreshold !== undefined) {
+    settings.configured = true;
+    const value = config.perArmThreshold;
+    if (typeof value === "number" && Number.isInteger(value) && value > 0) settings.perArmThreshold = value;
+    else settings.invalid.push("perArmThreshold must be a positive whole number");
+  }
+  return settings;
+}
+
+/** The settings of the repository `cwd`: defaults when there is no config file, defaults plus a note when it is unusable. */
+export async function loadDecisionsSettings(cwd: string): Promise<DecisionsSettings> {
+  let text: string;
+  try {
+    text = await readFile(configFile(cwd), "utf8");
+  } catch {
+    return defaultSettings();
+  }
+  try {
+    return readSettings(JSON.parse(text));
+  } catch {
+    const settings = defaultSettings();
+    settings.invalid.push("the file is not valid JSON");
+    return settings;
+  }
 }
 
 export async function loadArmWeights(cwd: string): Promise<ArmWeights> {
-  try {
-    const parsed: unknown = JSON.parse(await readFile(configFile(cwd), "utf8"));
-    const arms = parsed !== null && typeof parsed === "object" ? (parsed as { arms?: unknown }).arms : undefined;
-    return parseArmWeights(arms);
-  } catch {
-    return { ...DEFAULT_ARM_WEIGHTS };
-  }
+  return (await loadDecisionsSettings(cwd)).weights;
 }
 
 /** The pre-0.3.72 salt file inside the repository: read only to migrate it, never written. */

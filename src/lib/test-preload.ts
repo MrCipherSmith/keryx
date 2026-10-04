@@ -54,6 +54,14 @@ process.env.XDG_CONFIG_HOME = root;
 // An env var is only present if something actually ran this file first.
 process.env.KERYX_TEST_CONFIG_ROOT = root;
 
+// The decisions journal asks for an optional reason on a deterministic third of the questions, chosen from a
+// hash of the per-repository salt (flow 400). The salt is random per fixture, so a test that expects "a followed
+// recommendation shows no prompt" would fail one run in three. Off by default here; a test of the subsample
+// itself deletes the variable (src/decisions/reasons.test.ts) and picks its draw with the `salt` and `seq` seams.
+if (process.env.KERYX_DECISIONS_REASON_SUBSAMPLE === undefined) {
+  process.env.KERYX_DECISIONS_REASON_SUBSAMPLE = "off";
+}
+
 // Default the lifecycle-hook runtime OFF for every test (flow 306, W6, T16).
 //
 // `buildShellHookRuntime`/`buildRemoteHookRuntime`/ACP's hook wiring spawn the

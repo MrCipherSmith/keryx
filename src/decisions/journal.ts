@@ -7,7 +7,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
-import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm } from "./arms";
+import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm, reasonSubsample, recordEligible } from "./arms";
 import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
@@ -43,6 +43,8 @@ function resultOf(record: OpenRecord): OpenResult {
     seed: record.seed ?? 0,
     preselected: record.preselected ?? false,
     forced: record.forced ?? false,
+    eligible: recordEligible(record),
+    reasonRequested: record.reasonRequested === true,
     channel: record.channel ?? DEFAULT_CHANNEL,
     order: record.order,
     showMark: record.showMark ?? record.mode === "ordinary",
@@ -61,6 +63,13 @@ function findOpenTwin(records: readonly DecisionRecord[], hash: string): OpenRec
     if (questionHash(r.question, r.options.map((option) => option.id)) === hash) return r;
   }
   return undefined;
+}
+
+/** The environment variable that turns the reason subsample off: nobody is asked on agreement, and `reasonRequested` is false. */
+export const REASON_SUBSAMPLE_ENV = "KERYX_DECISIONS_REASON_SUBSAMPLE";
+
+function reasonSubsampleOff(): boolean {
+  return (process.env[REASON_SUBSAMPLE_ENV] ?? "").trim().toLowerCase() === "off";
 }
 
 export async function openDecision(input: OpenInput): Promise<OpenResult> {
@@ -110,6 +119,10 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
   const preselected = factors.preselect && recommendation !== null;
   const channel = input.channel !== undefined && input.channel.trim().length > 0 ? oneLine(input.channel) : DEFAULT_CHANNEL;
   const blindRefused = recommendation !== null && irreversible && choice.drawn === "D";
+  // AC20: eligible is the exact complement of forced. AC17: the reason subsample is a deterministic hash of (seed, seq),
+  // decided here, before the question is shown; a surface that cannot take free text (reasonPrompt false) is left out.
+  const eligible = !choice.forced;
+  const reasonRequested = eligible && input.reasonPrompt !== false && !reasonSubsampleOff() && reasonSubsample(choice.seed, seq);
 
   const record: OpenRecord = {
     kind: "open",
@@ -131,6 +144,8 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     seq,
     preselected,
     forced: choice.forced,
+    eligible,
+    reasonRequested,
     channel,
     order,
     showMark,
@@ -148,6 +163,8 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     seed: choice.seed,
     preselected,
     forced: choice.forced,
+    eligible,
+    reasonRequested,
     channel,
     order,
     showMark,
@@ -178,7 +195,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
   const hasReason = records.some((r) => r.kind === "reason" && r.id === input.id);
   const recommendedId = open.recommendation?.optionId;
   // The reason is offered once per decision: an earlier deviation already offered it.
-  const alreadyOffered = priorAnswers.some((r) => recommendedId !== undefined && r.choice !== recommendedId);
+  const alreadyOffered = priorAnswers.some((r) => (recommendedId !== undefined && r.choice !== recommendedId) || (open.reasonRequested === true && prior > 0));
   const timeToAnswerMs = Math.max(0, now.getTime() - Date.parse(open.at));
   const record: AnswerRecord = {
     kind: "answer",
@@ -208,7 +225,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
     matched,
     deviation,
     timeToAnswerMs: record.timeToAnswerMs,
-    askReason: deviation && !hasReason && !alreadyOffered,
+    askReason: (deviation || open.reasonRequested === true) && !hasReason && !alreadyOffered,
     flow: open.flow,
   };
 }

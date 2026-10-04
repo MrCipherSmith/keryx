@@ -4,7 +4,8 @@
 // shows the question it opens a journal record (so the recommendation is on disk
 // first), and in blind mode it hides the mark and shuffles the options. After the
 // answer it records the choice and reveals the recommendation. On a deviation it
-// asks the human ONCE for an optional reason and the tool result waits for it (no
+// asks the human ONCE for an optional reason (also on a deterministic one-third of the
+// other questions, whatever the answer: `reasonRequested`) and the tool result waits for it (no
 // timeout; an empty answer is recorded as absent and releases the wait): that is
 // the one deliberate wait, by operator decision. The reason can also be added or
 // changed later with `/decisions reason <why>`. A blind answer can be changed after
@@ -187,6 +188,8 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         random: deps.random,
         arm: deps.arm,
         channel: deps.channel,
+        // a picker that cannot take free text cannot ask the reason either, so it is left out of the reason subsample
+        reasonPrompt: deps.askReason !== false,
         source: request.source ?? deps.source ?? DECISION_SOURCES.askUser,
         now: deps.now,
       });
@@ -227,7 +230,8 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         // flow 401: the operator typed a reason with the pick, so there is nothing left to ask; the latest reason wins
         await recordReason(deps.cwd, opened.id, reasonGiven, deps.now, { replace: true });
       } else if (result.askReason && deps.askReason !== false) {
-        await askReasonOnce(ask, deps, opened.id);
+        // the same prompt for a deviation and for the reason subsample (AC17): it is the flow-401 free-text row, not a second prompt
+        await askReasonOnce(ask, deps, opened.id, result.deviation);
       }
     } catch (cause) {
       note(deps, `decision journal: could not record the answer (${cause instanceof Error ? cause.message : String(cause)})`);
@@ -242,11 +246,11 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
  * it releases the wait and counts as the one ask. `/decisions reason <why>` can still
  * add or change a reason later. A failure to record is a note, never an error.
  */
-async function askReasonOnce(ask: AskFn, deps: JournalAskDeps, id: string): Promise<void> {
+async function askReasonOnce(ask: AskFn, deps: JournalAskDeps, id: string, deviation: boolean): Promise<void> {
   let text: string | undefined;
   try {
     const answer = await ask({
-      question: "You chose differently from the recommendation. Why? (optional, asked once)",
+      question: deviation ? "You chose differently from the recommendation. Why? (optional, asked once)" : "Why this choice? (optional, asked once)",
       options: [
         { id: SKIP_REASON, label: "No reason", description: "Leave it empty" },
         { id: LATER_REASON, label: "Not now", description: "Skip; you will not be asked again for this question (add one later with /decisions reason <why>)" },

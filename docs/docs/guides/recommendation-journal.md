@@ -43,7 +43,11 @@ assignment can be replayed:
 | D (blind) | shuffled | hidden | no | 0.2 |
 
 Change the weights under `arms` in `.metaproject/decisions.config.json`, for example
-`{ "arms": { "A": 0.4, "B": 0.2, "C": 0.2, "D": 0.2 } }`. In arm D the recommended
+`{ "arms": { "A": 0.4, "B": 0.2, "C": 0.2, "D": 0.2 } }`. A weight is any
+non-negative number (they are normalised), and the draw stays a pure function of the
+salt and the position, so an assignment can still be replayed. A weights block that
+cannot be used (a negative or non-numeric weight, all zeros, not an object) is
+ignored: the defaults are used and the report says so in a `Config:` line. In arm D the recommended
 option carries no "recommended" mark and the options come in random order. Your
 answer is recorded, and then the recommendation is revealed. After a deviation in any
 arm the transcript names the recommended option and its reason; in arm D it does so
@@ -119,8 +123,9 @@ recommend, рекоменд, preferred and suggested in a label, a description o
 ## Changing your mind, and giving a reason
 
 After you answer, the transcript shows the reveal and tells you what you can still
-do. The one thing the journal waits for is the reason after a deviation: when you
-chose something other than the recommendation, keryx asks you **once** why, and the
+do. The one thing the journal waits for is the reason: when you
+chose something other than the recommendation, and on a deterministic third of the
+other questions (next section), keryx asks you **once** why, and the
 tool result waits for your answer (there is no timeout). The reason is optional: an
 empty answer, "No reason" or "Not now" is recorded as absent and releases the wait,
 and you are not asked again for that decision. Nothing else waits.
@@ -180,6 +185,29 @@ What is stored:
 An own answer is never counted as following the recommendation, even when its
 words happen to equal an option's id.
 
+## A reason on one question in three
+
+Asking only after a deviation would show who explains a disagreement and never who
+explains an agreement. So a **deterministic one-third of the eligible questions**
+also asks for a reason when you *did* follow the recommendation. The subsample is a
+hash of the repository's seed and the position of the question, independent of the
+arm: it is chosen and written on the record (`reasonRequested`) **before the
+question is shown**, so the agent and you cannot tell which questions it will be.
+The prompt comes after the answer, whether or not the choice matched.
+
+- It is the **same prompt** as the one after a deviation: the dock's free-text row
+  from the section above (in Telegram, the same reply-to-the-message step), not a
+  second kind of prompt. Only the wording differs ("Why this choice?" instead of
+  "You chose differently from the recommendation. Why?"). A reason you already typed
+  with the pick (Tab) counts, and nothing more is asked.
+- It is asked once and is optional, like every reason.
+- A question is **eligible** (`eligible: true` on the record) unless it is
+  irreversible, an action or a match of the irreversible list (`forced: true`);
+  ineligible questions are never in the subsample. A surface that cannot take free
+  text (a plain picker) is left out of it too.
+- `KERYX_DECISIONS_REASON_SUBSAMPLE=off` turns the subsample off (the tests use it);
+  a deviation is still asked.
+
 ## The report
 
 ```text
@@ -200,6 +228,19 @@ It prints, from the journal alone (plus the quality ratings, below):
   totals, as before, and never appear in the arm and channel tables.
   `--exclude-legacy` leaves them, and the imported historical records, out of every
   number and block;
+- the share of **named reasons**, separately for agreement and for deviation. A
+  deviation always asks, so every one counts; an agreement only asks inside the
+  reason subsample, so only those count (the others were never asked). Next to it, the
+  median time to answer for the decisions where a reason was requested and for the
+  rest, on the `tui` channel;
+- the **ineligible** questions (irreversible, an action or a match of the irreversible
+  list) on a line of their own, outside the arm comparison;
+- **progress** toward flow 392 AC11 (20 answered decisions, 5 of them blind) and toward
+  the per-arm threshold: reversible, answered questions with a recommendation per arm,
+  against `perArmThreshold` in `.metaproject/decisions.config.json` (150 by default,
+  a positive whole number);
+- the arm weights in use, and a `Config:` line when `decisions.config.json` could not
+  be used and the defaults were taken instead;
 - the recommendation-quality matrix (see "Rating the recommendation");
 - the match share by stage;
 - every deviation with its reason (`(none given)` when you gave none);
@@ -214,7 +255,9 @@ counted separately, because it was given after the reveal.
 
 In the shell the same report is `/decisions`, and the sidebar shows a
 `N decisions · /decisions` row once the journal holds a record; clicking it opens
-the report. `/decisions` works while a turn is running.
+the report. `/decisions arms` (or a click on the arms row) opens the arm summary: the
+share per arm, the reasons named, the ineligible line and the progress. `/decisions`
+works while a turn is running.
 
 ## Importing earlier decisions
 
@@ -332,7 +375,9 @@ keryx decisions export [--since <date>] [--format jsonl|json] [--exclude-legacy]
 One row per decision with its **structure only**: arm, seed, preselected, forced,
 legacy, channel, the display order as option positions (never ids), the position of
 the recommended and the chosen option, whether you deviated, how many times you
-changed the answer, the quality ratings and the times. There is no question text, no
+changed the answer, whether the question was `eligible`, whether a reason was
+requested (`reasonRequested`) and whether one was named (`reasonNamed`, a yes or no,
+never the words), the quality ratings and the times. There is no question text, no
 option label or description, no reason and no note; the decision id is replaced by a
 short hash, and a stage, channel or model name is kept only when it is a plain
 identifier. A test plants strings in every text field and fails if one reaches the
@@ -365,7 +410,8 @@ Read the numbers with these limits in mind:
 
 - Journaling itself never blocks or delays a question: a journaling failure is
   shown as a one-line note in the transcript and the question goes on. The single
-  deliberate wait is the optional reason prompt after a deviation (see above).
+  deliberate wait is the optional reason prompt after a deviation, or inside the
+  one-in-three reason subsample (see above).
 - The tool-permission picker (allow / deny a tool call) is not journaled; it is
   an approval, not a question with a recommendation.
 - It judges nothing and gates nothing; the report is a mirror.

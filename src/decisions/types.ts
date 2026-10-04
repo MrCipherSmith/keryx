@@ -49,6 +49,18 @@ export interface OpenRecord {
   /** True when the arm is A only because the question is irreversible, an action, or matched blind.ts. Every other A is false. */
   forced?: boolean;
   /**
+   * Flow 400 (AC20): whether the question is part of the randomized arm comparison: false exactly when `forced` is true.
+   * Absent on a record from before the field: read it as `forced !== true`.
+   */
+  eligible?: boolean;
+  /**
+   * Flow 400 (AC17): the human is asked for an optional "why" after the answer, whether or not the choice matched the
+   * recommendation. True for an eligible question whose hash of `seed` and `seq` falls in the one-third subsample, and
+   * only when the surface can take free text. Decided and written BEFORE the question is shown. Absent on an older
+   * record (read as false). A deviation prompts for a reason in any case; this adds the same prompt on agreement.
+   */
+  reasonRequested?: boolean;
+  /**
    * Flow 400: true for a record from before the arms (no seeded assignment, so it is not part of the randomized
    * comparison). `import` stamps it on the records it writes; a record already on disk without `arm` is read as
    * legacy through `stampLegacy` (the journal file is append-only and is not rewritten).
@@ -130,6 +142,11 @@ export interface OpenInput {
   channel?: string | undefined;
   /** The surface that asked it (see `DECISION_SOURCES`); recorded as `source` on the open record. */
   source?: string | undefined;
+  /**
+   * False when the surface cannot take free text (a picker menu): the reason is then never asked, so the question is
+   * left out of the reason subsample (`reasonRequested: false`). True by default.
+   */
+  reasonPrompt?: boolean | undefined;
   /** Test seam: the shuffle's random source in [0, 1). The arm itself is seeded, never drawn from this. */
   random?: (() => number) | undefined;
   /** Test seam: take this arm as the draw. An irreversible question is still moved to A with `forced: true`. */
@@ -151,6 +168,10 @@ export interface OpenResult {
   preselected: boolean;
   /** True when the arm is A because the question is irreversible (see OpenRecord.forced). */
   forced: boolean;
+  /** False exactly when `forced` is true (see OpenRecord.eligible). */
+  eligible: boolean;
+  /** Whether the human is to be asked for a reason after the answer, matched or not (see OpenRecord.reasonRequested). */
+  reasonRequested: boolean;
   channel: string;
   /** Option ids in display order. */
   order: string[];
@@ -184,7 +205,8 @@ export interface AnswerResult {
   timeToAnswerMs: number;
   /**
    * True when the human should now be asked, ONCE, for an optional reason: a
-   * deviation, no reason on file, and no earlier answer already offered it. In the
+   * deviation or a `reasonRequested` decision (flow 400, AC17), no reason on file,
+   * and no earlier answer already offered it. In the
    * TUI `ask_user` path the tool result waits for it (an empty answer releases the
    * wait); the `answer` command itself does not wait.
    */

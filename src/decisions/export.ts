@@ -22,7 +22,7 @@
 // counts are returned in the summary (`exportSummaryLine`), never mixed into the rows.
 
 import { createHash } from "node:crypto";
-import { ARMS, type Arm } from "./arms";
+import { ARMS, recordEligible, type Arm } from "./arms";
 import { effectiveArm, isLegacy } from "./legacy";
 import { QUALITIES, readQuality, type Quality, type QualityRecord, type Rater } from "./quality";
 import { WORK_DECISION_SOURCES } from "./sources";
@@ -53,6 +53,12 @@ export interface ExportRow {
   optionCount: number;
   channel: string;
   forced: boolean;
+  /** False exactly when `forced` is true; an older record without the field reads as `!forced`. */
+  eligible: boolean;
+  /** The human was asked for a reason whatever the answer (the one-third subsample); false on an older record. */
+  reasonRequested: boolean;
+  /** Whether a reason was named (never the reason's text). */
+  reasonNamed: boolean;
   legacy: boolean;
   backfilled: boolean;
   stage: string;
@@ -183,6 +189,9 @@ export const EXPORT_FIELDS: readonly (keyof ExportRow)[] = [
   "optionCount",
   "channel",
   "forced",
+  "eligible",
+  "reasonRequested",
+  "reasonNamed",
   "legacy",
   "backfilled",
   "stage",
@@ -232,6 +241,7 @@ export function buildExportWithSummary(
   const check = new Validator();
   const opens: OpenRecord[] = [];
   const answers = new Map<string, AnswerRecord[]>();
+  const named = new Set<string>();
   const seen = new Set<string>();
   for (const record of records) {
     if (typeof record.id !== "string" || record.id.length === 0) {
@@ -251,6 +261,10 @@ export function buildExportWithSummary(
       const list = answers.get(record.id) ?? [];
       list.push(record);
       answers.set(record.id, list);
+    } else if (record.kind === "reason") {
+      // the latest reason record wins, as in the report; only the fact that a reason was named is kept, never its text
+      if (typeof record.reason === "string" && record.reason.length > 0) named.add(record.id);
+      else named.delete(record.id);
     }
   }
   const rows: ExportRow[] = [];
@@ -280,6 +294,9 @@ export function buildExportWithSummary(
       optionCount: open.options.length,
       channel: exportChannel(open),
       forced: open.forced === true,
+      eligible: recordEligible({ forced: open.forced === true, eligible: typeof open.eligible === "boolean" ? open.eligible : undefined }),
+      reasonRequested: open.reasonRequested === true,
+      reasonNamed: named.has(open.id),
       legacy,
       backfilled: open.backfilled === true,
       stage: inVocabulary(open.stage, EXPORT_STAGES),

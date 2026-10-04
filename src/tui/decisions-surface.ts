@@ -144,6 +144,67 @@ export interface ArmsSummary {
   armA: ArmsSummaryRow[];
   /** The other channels, each in its own cut (Telegram has arms A and B merged into one row). */
   channels: ArmsSummaryChannel[];
+  /** Flow 400 (AC17-AC21): reasons, ineligible questions and progress, when the report carries them. */
+  extras: ArmsExtras;
+}
+
+export interface ArmsShare {
+  decisions: number;
+  named: number;
+}
+
+export interface ArmsExtras {
+  /** Share of named reasons on agreement (the reason subsample only) and on deviation; null when the report has none. */
+  reasons: { agreement: ArmsShare; deviation: ArmsShare; requestedMs: number | null; notRequestedMs: number | null } | null;
+  /** Questions outside the arm comparison (irreversible, an action or a blind.ts match). */
+  ineligible: { decisions: number; answered: number } | null;
+  progress: { decisions: number; decisionsTarget: number; blind: number; blindTarget: number; threshold: number; counts: Array<[string, number]> } | null;
+}
+
+function whole(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function maybeMs(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readShare(value: unknown): ArmsShare {
+  const v = (value ?? {}) as { decisions?: unknown; named?: unknown };
+  const decisions = whole(v.decisions);
+  return { decisions, named: Math.min(whole(v.named), decisions) };
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** The AC17-AC21 blocks of a report, each one null when the report predates it. */
+function summarizeExtras(report: { reasons?: unknown; ineligible?: unknown; progress?: unknown }): ArmsExtras {
+  const reasons = isObject(report.reasons)
+    ? {
+        agreement: readShare(report.reasons["agreement"]),
+        deviation: readShare(report.reasons["deviation"]),
+        requestedMs: isObject(report.reasons["requested"]) ? maybeMs(report.reasons["requested"]["medianMs"]) : null,
+        notRequestedMs: isObject(report.reasons["notRequested"]) ? maybeMs(report.reasons["notRequested"]["medianMs"]) : null,
+      }
+    : null;
+  const ineligible = isObject(report.ineligible) ? { decisions: whole(report.ineligible["decisions"]), answered: whole(report.ineligible["answered"]) } : null;
+  let progress: ArmsExtras["progress"] = null;
+  if (isObject(report.progress) && isObject(report.progress["ac11"]) && isObject(report.progress["perArm"])) {
+    const ac11 = report.progress["ac11"];
+    const perArm = report.progress["perArm"];
+    const counts = isObject(perArm["counts"]) ? perArm["counts"] : {};
+    progress = {
+      decisions: whole(ac11["decisions"]),
+      decisionsTarget: whole(ac11["decisionsTarget"]),
+      blind: whole(ac11["blind"]),
+      blindTarget: whole(ac11["blindTarget"]),
+      threshold: whole(perArm["threshold"]),
+      counts: ARMS.map((arm): [string, number] => [arm, whole(counts[arm])]),
+    };
+  }
+  return { reasons, ineligible, progress };
 }
 
 function nonNegative(value: unknown): number {
@@ -188,7 +249,11 @@ export function summarizeArms(report: unknown): ArmsSummary {
     byMode?: Record<string, unknown>;
     headlineChannel?: unknown;
     byChannel?: unknown;
+    reasons?: unknown;
+    ineligible?: unknown;
+    progress?: unknown;
   };
+  const extras = summarizeExtras(r);
   const channel = typeof r.headlineChannel === "string" && r.headlineChannel.length > 0 ? oneLine(r.headlineChannel, 40) : "tui";
   const channels: ArmsSummaryChannel[] = [];
   if (Array.isArray(r.byChannel)) {
@@ -208,10 +273,10 @@ export function summarizeArms(report: unknown): ArmsSummary {
     if (r.armA !== undefined && r.armA !== null && typeof r.armA === "object") {
       armA.push(cellRow("A-free", "A drawn", r.armA.free), cellRow("A-forced", "A forced (irreversible)", r.armA.forced));
     }
-    return { basis: "arms", channel, rows: ARMS.map((arm) => cellRow(arm, armLabel(arm), byArm[arm])), armA, channels };
+    return { basis: "arms", channel, rows: ARMS.map((arm) => cellRow(arm, armLabel(arm), byArm[arm])), armA, channels, extras };
   }
   const byMode = r.byMode ?? {};
-  return { basis: "modes", channel, rows: MODE_LABELS.map(([key, label]) => cellRow(key, label, { tally: byMode[key] })), armA: [], channels: [] };
+  return { basis: "modes", channel, rows: MODE_LABELS.map(([key, label]) => cellRow(key, label, { tally: byMode[key] })), armA: [], channels: [], extras };
 }
 
 function pct(share: number | null): string {
@@ -230,6 +295,32 @@ function armsTableLine(row: ArmsSummaryRow, labelWidth: number): string {
   return `${cells.join("  ")}  ${duration(row.medianMs)}`;
 }
 
+function shareText(share: ArmsShare): string {
+  return share.decisions === 0 ? "-" : `${Math.round((share.named / share.decisions) * 100)}% (${share.named}/${share.decisions})`;
+}
+
+/** The reasons, ineligible and progress lines under the arm table; nothing for a report that has none of them. */
+function extrasLines(extras: ArmsExtras): string[] {
+  const lines: string[] = [];
+  if (extras.reasons !== null) {
+    const { agreement, deviation, requestedMs, notRequestedMs } = extras.reasons;
+    lines.push(
+      "",
+      `Reasons named: agreement ${shareText(agreement)} (one-third subsample), deviation ${shareText(deviation)}`,
+      `Median time to answer: reason requested ${duration(requestedMs)}, not requested ${duration(notRequestedMs)}`,
+    );
+  }
+  if (extras.ineligible !== null) lines.push(`Not in the comparison (ineligible): ${extras.ineligible.decisions}, ${extras.ineligible.answered} answered`);
+  if (extras.progress !== null) {
+    const p = extras.progress;
+    lines.push(
+      `Progress, flow 392 AC11: ${p.decisions}/${p.decisionsTarget} decisions, ${p.blind}/${p.blindTarget} blind`,
+      `Progress per arm (threshold ${p.threshold}): ${p.counts.map(([arm, n]) => `${arm} ${n}`).join(", ")}`,
+    );
+  }
+  return lines;
+}
+
 /** The modal body: the arm table, the A split when the report has it, and a plain note when it degraded. */
 export function armsSummaryText(summary: ArmsSummary): string {
   const rows = [...summary.rows, ...summary.armA, ...summary.channels.flatMap((entry) => entry.rows)];
@@ -240,6 +331,7 @@ export function armsSummaryText(summary: ArmsSummary): string {
   if (summary.armA.length > 0) lines.push("", "Arm A, split:", ...summary.armA.map((row) => armsTableLine(row, width)));
   for (const entry of summary.channels) lines.push("", `Channel ${entry.channel}:`, ...entry.rows.map((row) => armsTableLine(row, width)));
   lines.push("", "share = first answers that matched the recommendation, out of the answered ones that had one.");
+  lines.push(...extrasLines(summary.extras));
   if (summary.basis === "modes") lines.push("The per-arm split (A, B, C, D) needs a journal report with arm data; the older modes are shown instead.");
   return lines.join("\n");
 }

@@ -3,6 +3,7 @@
 // import-zone ratchet counts any other reach as an avoidable bypass).
 
 import { buildReport, renderReport, renderReportLine, type DecisionsReport, type ReportOptions } from "./report";
+import { loadDecisionsSettings } from "./arms";
 import { readQuality } from "./quality";
 import { readJournal } from "./store";
 
@@ -14,7 +15,7 @@ export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
-export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, LegacyReport, ReportOptions, Tally, TimingStats } from "./report";
+export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";
 export { effectiveArm, isLegacy, stampLegacy } from "./legacy";
 export {
   MODEL_LABEL,
@@ -49,7 +50,7 @@ export type {
 /** Read the journal and fold it into the report. Never throws: a missing file is an empty report. */
 export async function loadReport(cwd: string, options: Omit<ReportOptions, "quality"> = {}): Promise<DecisionsReport> {
   const { records, skipped } = await readJournal(cwd);
-  return buildReport(records, skipped, { ...options, quality: await readQuality(cwd) });
+  return buildReport(records, skipped, { ...options, quality: await readQuality(cwd), settings: options.settings ?? (await loadDecisionsSettings(cwd)) });
 }
 
 /** The report as text, the same lines `keryx decisions report` prints. */

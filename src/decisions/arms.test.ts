@@ -8,19 +8,24 @@ import {
   ARMS,
   ARM_FACTORS,
   DEFAULT_ARM_WEIGHTS,
+  DEFAULT_PER_ARM_THRESHOLD,
   armOfMode,
   assignArm,
   chooseArm,
   loadArmWeights,
+  loadDecisionsSettings,
   loadRepoSalt,
   modeOfArm,
   parseArmWeights,
   pickArm,
+  readSettings,
   saltFile,
   seedFile,
   type Arm,
 } from "./arms";
 import { openDecision } from "./journal";
+import { renderReport } from "./report";
+import { loadReport } from "./service";
 import { readRecords } from "./store";
 import type { OpenRecord } from "./types";
 
@@ -144,6 +149,88 @@ describe("AC1: the weights come from decisions.config.json", () => {
     const opened = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, salt: "s", seq: 1 });
     expect(opened.arm).toBe("D");
     expect(opened.mode).toBe("blind");
+  });
+});
+
+const configPath = (): string => path.join(root, ".metaproject", "decisions.config.json");
+
+describe("AC19: arm weights and the per-arm threshold from .metaproject/decisions.config.json", () => {
+  test("the defaults are A 0.4, B 0.2, C 0.2, D 0.2 and a threshold of 150, with nothing configured", async () => {
+    expect(DEFAULT_ARM_WEIGHTS).toEqual({ A: 0.4, B: 0.2, C: 0.2, D: 0.2 });
+    expect(DEFAULT_PER_ARM_THRESHOLD).toBe(150);
+    expect(await loadDecisionsSettings(root)).toEqual({ weights: DEFAULT_ARM_WEIGHTS, perArmThreshold: 150, configured: false, invalid: [] });
+  });
+
+  test("a configured file sets the weights and the threshold, and the report shows them", async () => {
+    await writeFile(configPath(), JSON.stringify({ arms: { A: 0.7, B: 0.1, C: 0.1, D: 0.1 }, perArmThreshold: 40 }), "utf8");
+    const settings = await loadDecisionsSettings(root);
+    expect(settings).toEqual({ weights: { A: 0.7, B: 0.1, C: 0.1, D: 0.1 }, perArmThreshold: 40, configured: true, invalid: [] });
+    await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, salt: "s", seq: 1 });
+    const report = await loadReport(root);
+    expect(report.settings).toEqual(settings);
+    expect(report.progress.perArm.threshold).toBe(40);
+    const text = renderReport(report);
+    expect(text).toContain("Arm weights: A 0.7, B 0.1, C 0.1, D 0.1 (from .metaproject/decisions.config.json).");
+    expect(text).not.toContain("not fully usable");
+  });
+
+  test("an invalid config falls back to the defaults and the report says so", async () => {
+    for (const bad of [{ arms: { A: -1 } }, { arms: { A: "x" } }, { arms: { A: 0, B: 0, C: 0, D: 0 } }, { arms: [1, 2] }]) {
+      await writeFile(configPath(), JSON.stringify(bad), "utf8");
+      const settings = await loadDecisionsSettings(root);
+      expect(settings.weights).toEqual(DEFAULT_ARM_WEIGHTS);
+      expect(settings.invalid).toHaveLength(1);
+    }
+    await writeFile(configPath(), JSON.stringify({ arms: { A: -1 }, perArmThreshold: 0 }), "utf8");
+    await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, salt: "s", seq: 1 });
+    const report = await loadReport(root);
+    expect(report.settings).toMatchObject({ weights: DEFAULT_ARM_WEIGHTS, perArmThreshold: 150, configured: true });
+    expect(report.settings.invalid).toHaveLength(2);
+    const text = renderReport(report);
+    expect(text).toContain("Arm weights: A 0.4, B 0.2, C 0.2, D 0.2 (defaults).");
+    expect(text).toMatch(/Config: \.metaproject\/decisions\.config\.json is not fully usable \(.*arms\.A.*perArmThreshold.*\)/);
+  });
+
+  test("a file that is not JSON, or not an object, is named too, in an empty journal as well", async () => {
+    await writeFile(configPath(), "{ not json", "utf8");
+    expect((await loadDecisionsSettings(root)).invalid).toEqual(["the file is not valid JSON"]);
+    expect(renderReport(await loadReport(root))).toContain("not fully usable (the file is not valid JSON)");
+    expect(readSettings(null).invalid).toEqual(["the file is not a JSON object"]);
+    expect(readSettings([]).invalid).toEqual(["the file is not a JSON object"]);
+  });
+
+  test("perArmThreshold must be a positive whole number", () => {
+    expect(readSettings({ perArmThreshold: 25 })).toMatchObject({ perArmThreshold: 25, invalid: [] });
+    for (const bad of [0, -3, 1.5, "10", null]) {
+      const settings = readSettings({ perArmThreshold: bad });
+      expect(settings.perArmThreshold).toBe(150);
+      expect(settings.invalid).toEqual(["perArmThreshold must be a positive whole number"]);
+    }
+  });
+
+  test("assignment stays deterministic: the same (salt, seq, weights) is the same arm, whatever the config says elsewhere", async () => {
+    await writeFile(configPath(), JSON.stringify({ arms: { A: 0.4, B: 0.2, C: 0.2, D: 0.2 }, perArmThreshold: 5 }), "utf8");
+    const weights = await loadArmWeights(root);
+    expect(weights).toEqual(DEFAULT_ARM_WEIGHTS);
+    // the golden pairs of AC1 do not move
+    expect(assignArm("golden-salt", 1, weights)).toEqual({ arm: "B", seed: 4019443924 });
+    expect(assignArm("golden-salt", 5, weights)).toEqual({ arm: "A", seed: 2549695323 });
+    expect(assignArm("other-salt", 2, weights)).toEqual({ arm: "A", seed: 846608942 });
+    // and an invalid config leaves them where they were
+    await writeFile(configPath(), "[]", "utf8");
+    const fallback = await loadArmWeights(root);
+    for (let seq = 1; seq <= 30; seq += 1) expect(assignArm("golden-salt", seq, fallback)).toEqual(assignArm("golden-salt", seq));
+    const first = await openDecision({ cwd: root, id: "x", question: "Which colour?", options: OPTIONS, recommendation: REC, salt: "golden-salt", seq: 1 });
+    expect(first.arm).toBe("B");
+  });
+
+  test("the configured weights change who is drawn, and the share follows them", async () => {
+    const heavy = { A: 0.1, B: 0.1, C: 0.1, D: 0.7 };
+    const runs = 3000;
+    const counts = tally("share-check", runs, heavy);
+    expect(counts.D / runs).toBeGreaterThan(0.65);
+    expect(counts.D / runs).toBeLessThan(0.75);
+    expect(tally("share-check", runs, heavy)).toEqual(counts);
   });
 });
 
