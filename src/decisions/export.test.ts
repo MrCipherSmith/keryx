@@ -198,12 +198,12 @@ describe("AC14: what the export does carry", () => {
       [open("x")],
       [
         { seq: 1, decisionId: "x", rater: "human", quality: "good", note: "NOTE-secret-rating-note", at: "2026-10-03T11:00:00.000Z" },
-        { seq: 1, decisionId: "x", rater: "model", quality: "bad", model: "m-1", cleanContext: true, modelAgree: false, at: "2026-10-03T12:00:00.000Z" },
+        { seq: 1, decisionId: "x", rater: "model", quality: "bad", model: "claude-sonnet-5", cleanContext: true, modelAgree: false, at: "2026-10-03T12:00:00.000Z" },
       ],
     );
     expect(rows[0]?.ratings).toEqual([
       { rater: "human", quality: "good", at: "2026-10-03T11:00:00.000Z" },
-      { rater: "model", quality: "bad", model: "m-1", cleanContext: true, modelAgree: false, at: "2026-10-03T12:00:00.000Z" },
+      { rater: "model", quality: "bad", model: "claude-sonnet-5", cleanContext: true, modelAgree: false, at: "2026-10-03T12:00:00.000Z" },
     ]);
   });
 
@@ -280,6 +280,35 @@ describe("T-7: stage, channel and model are exported only from a closed vocabula
   test("a model label that is too long, upper-case or has other characters is other", () => {
     for (const model of ["Claude-Opus", "m_1", "x".repeat(41), "has space", ""]) {
       expect(MODEL_ID.test(model)).toBe(false);
+    }
+  });
+
+  test("a lowercase, dashed or hex secret in the model field is other: only a known model family passes", () => {
+    const secrets = [
+      "sk-live-secretleak0123456789",
+      "ghp-abcdef0123456789abcdef0123456789abcd",
+      "hunter2",
+      "password-is-hunter2",
+      "0123456789abcdef0123456789abcdef",
+      "claude-0123456789abcdef0123456789",
+      "gpt-4123456789012",
+    ];
+    const rows = buildExport(
+      [openLine("s1", {}) as unknown as OpenRecord],
+      secrets.map((model, i) => ({ seq: i + 1, decisionId: "s1", rater: "model" as const, quality: "good" as const, model, at: "2026-10-03T12:00:00.000Z" })),
+    );
+    expect(rows[0]?.ratings.map((r) => r.model)).toEqual(secrets.map(() => "other"));
+    for (const secret of secrets) expect(renderExport(rows)).not.toContain(secret);
+    for (const model of ["claude-haiku-4-5-20251001", "gpt-4o-mini", "gemini-2.5-pro", "deepseek-r1-distill-llama-70b"]) {
+      const kept = buildExport([openLine("k1", {}) as unknown as OpenRecord], [{ seq: 1, decisionId: "k1", rater: "model", quality: "good", model, at: "2026-10-03T12:00:00.000Z" }]);
+      expect(kept[0]?.ratings[0]?.model).toBe(model);
+    }
+  });
+
+  test("every source the journal writes itself is a stage the export keeps", () => {
+    for (const source of ["round-limit", "tui-wiki-enrich", "tui-queue-route", "tui-session-lease", "ask_user"]) {
+      const rows = buildExport([openLine("src-1", { stage: source }) as unknown as OpenRecord], []);
+      expect(rows[0]?.stage).toBe(source);
     }
   });
 

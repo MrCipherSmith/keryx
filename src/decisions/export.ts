@@ -25,6 +25,7 @@ import { createHash } from "node:crypto";
 import { ARMS, type Arm } from "./arms";
 import { effectiveArm, isLegacy } from "./legacy";
 import { QUALITIES, readQuality, type Quality, type QualityRecord, type Rater } from "./quality";
+import { WORK_DECISION_SOURCES } from "./sources";
 import { readJournal } from "./store";
 import type { AnswerRecord, DecisionRecord, OpenRecord } from "./types";
 
@@ -103,18 +104,28 @@ export const EXPORT_STAGES: readonly string[] = [
   "unspecified",
   "design",
   "plan",
+  ...WORK_DECISION_SOURCES,
   OTHER,
 ];
 
 export const EXPORT_CHANNELS: readonly string[] = ["tui", "telegram", OTHER];
 
-/** A model id as providers write it: lowercase letters, digits, dots and dashes, up to 40 characters. */
-export const MODEL_ID = /^[a-z0-9][a-z0-9.-]{0,39}$/;
+/** The model families a rating can name. A model id outside these is not exported: an id-shaped secret must not pass as a model. */
+export const MODEL_FAMILIES: readonly string[] = [
+  "claude", "gpt", "o1", "o3", "o4", "gemini", "gemma", "llama", "mistral", "mixtral", "codestral", "qwen",
+  "deepseek", "minimax", "glm", "kimi", "grok", "command", "phi",
+];
+
+/** A model id as providers write it: a known family, then lowercase letters, digits, dots and dashes, up to 40 characters. */
+export const MODEL_ID = new RegExp(`^(?:${MODEL_FAMILIES.join("|")})[a-z0-9.-]{0,38}$`);
+
+/** A long unbroken token is a key or a hash, never a model version. */
+const TOKEN_SHAPED = /[a-z0-9]{16,}|\d{10,}/;
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
 
 const inVocabulary = (value: unknown, vocabulary: readonly string[]): string => (typeof value === "string" && vocabulary.includes(value) ? value : OTHER);
-const exportModel = (value: unknown): string => (typeof value === "string" && MODEL_ID.test(value) ? value : OTHER);
+const exportModel = (value: unknown): string => (typeof value === "string" && MODEL_ID.test(value) && !TOKEN_SHAPED.test(value) ? value : OTHER);
 
 /** What the export dropped or blanked because the journal held something outside the allow-list. */
 export interface ExportSummary {
