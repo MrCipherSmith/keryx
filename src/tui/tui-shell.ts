@@ -373,7 +373,8 @@ import {
 } from "./tui-session-lease";
 import { askUserSessionId, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import type { AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
+import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
@@ -5766,7 +5767,7 @@ export async function launchTuiAgentShell(opts: {
     const askUserInteractive = async (req: {
       question: string;
       options: Array<{ id: string; label: string; description: string; recommended?: boolean }>;
-    }): Promise<string> => {
+    }): Promise<AskUserAnswer> => {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask");
       setBusyPhase("waiting for your answer (menu above input)");
@@ -5778,11 +5779,13 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
         }),
       );
-      const chosen = await chrome.withOverlay(() =>
-        showComposerChoice(otui, r, chrome.dock, {
+      const result = await chrome.withOverlay(() =>
+        showComposerChoiceDetailed(otui, r, chrome.dock, {
           title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
-          subtitle: "Pick an option · Esc cancels",
+          subtitle: "Pick an option, or type your own answer · Esc cancels",
           cancelId: "__cancel__",
+          // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
+          ownAnswer: {},
           onOpen: () => chrome.blurComposer(),
           signal: foregroundOperation.signal,
           options: req.options.map(
@@ -5796,12 +5799,24 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
       input.focus();
-      if (chosen !== "__cancel__") {
+      const chosen = result.kind === "id" ? result.id : result.kind === "reason" ? result.id : "";
+      if (result.kind === "own") {
+        // shown right after the question breadcrumb, in full: it is the answer the agent now acts on
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `aska${uid++}`,
+            content: otui.t`${roleChunk(otui, "ok", "→ ✍")} ${dimChunk(otui, result.text)}`,
+          }),
+        );
+      } else if (chosen !== "__cancel__") {
         const picked = req.options.find((o) => o.id === chosen);
         transcript.add(
           new otui.TextRenderable(r, {
             id: `aska${uid++}`,
-            content: otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)}`,
+            content:
+              result.kind === "reason"
+                ? otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)} ${dimChunk(otui, `— ${result.reason}`)}`
+                : otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)}`,
           }),
         );
       } else {
@@ -5813,7 +5828,9 @@ export async function launchTuiAgentShell(opts: {
         );
       }
       setMainAgent("running", "waiting");
-      return chosen;
+      if (result.kind === "own") return { kind: "own", text: result.text };
+      if (result.kind === "reason") return { kind: "option", choice: result.id, reason: result.reason };
+      return result.id;
     };
     setAskUserHost(askUserInteractive);
     // Flow 392: the blind-mode reveal lands in the transcript, right after the answer.
