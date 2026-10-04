@@ -52,7 +52,7 @@ describe("the part 1 materials directory (flow 402)", () => {
   it("exports only allow-listed keys, with no field that could carry text", () => {
     const lines = read("decisions-export-2026-10-04.jsonl").split("\n").filter((line) => line.trim() !== "");
     expect(lines.length).toBeGreaterThan(0);
-    expect([...EXPORT_FIELDS].sort()).toEqual([...PINNED_EXPORT_FIELDS].sort());
+    expect([...(EXPORT_FIELDS as readonly string[])].sort()).toEqual([...PINNED_EXPORT_FIELDS].sort());
     for (const line of lines) {
       const row = JSON.parse(line) as Record<string, unknown>;
       for (const [key, value] of Object.entries(row)) {
