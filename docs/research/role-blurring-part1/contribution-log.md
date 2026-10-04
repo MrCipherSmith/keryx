@@ -88,6 +88,8 @@ Quotes are in the language they were written in (Russian). The source of each ro
 
 2026-10-03 · operator session decision · «Не надо использовать весь опыт керикс так откровенно… не шокировать цифрами. Можно использовать как изменился подход и что теперь стало проверяемым.» · Tone of §3.1: the change of approach, not self-criticism by figures.
 
+2026-10-04 · operator session decision · «Посмотри предварительные данные Process Metric Snapshot. Учти что упоминание ботов это боты которые через самого гитхаба, они не очень были эффективны, сейчас все запускают агентов сами в основном Claude» · The reading of "agent" in the team data: bots that act through GitHub itself are a separate, less effective kind, and most work now runs through agents launched by people.
+
 2026-10-04 · operator session decision · «Продолжение, давай без карты» · §3.2 was written without a role map; the only distinction is human versus agent.
 
 2026-10-04 · operator session decision · «тогда меня план, делай упор на астру, кстати, отметь о качестве рецензий агентов в болке соавторства в конце статьи, и переписывай и русскую и английскую версию» · Plan of edits after the Astra review; an assessment of review quality in the contribution block; draft 6.

@@ -28,7 +28,7 @@ The script reads only `.metaproject/flows/*` and writes `part1-counts.json` to t
 - `protocol-part2.md`: the protocol for part 2, version 2, fixed 2026-10-04. Later changes are made as a new version with a new row in its version table, not as an edit of the text.
 - `part1-counts.py`: the counting script, unchanged.
 - `part1-counts.json`: the script output at `04809f4f`.
-- `contribution-log.md`: dated operator decisions that changed the direction of the article, with verbatim quotes (47 rows).
+- `contribution-log.md`: dated operator decisions that changed the direction of the article, with verbatim quotes (48 rows).
 - `decisions-export-2026-10-04.jsonl`: the recommendation journal exported without text, produced by `keryx decisions export --since 2026-10-02T00:00:00Z`.
 
 ## Counts at the snapshot
@@ -51,4 +51,4 @@ The count differs from the 37 decisions named in the protocol. The export comman
 
 ## Contribution log
 
-`contribution-log.md` has 47 rows: the first twelve come from operator messages in the working session, the rest from the operator's export of draft comments of 2026-10-04. Some decisions are withheld from the log at the author's discretion, and decisions without a findable quote are not logged.
+`contribution-log.md` has 48 rows: the first twelve come from operator messages in the working session, the rest from the operator's export of draft comments of 2026-10-04. Some decisions are withheld from the log at the author's discretion, and decisions without a findable quote are not logged.
