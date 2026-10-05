@@ -8,3 +8,4 @@
 - 2026-10-05T17:15:40.489Z - task-done: T1: Collect remaining context
 - 2026-10-05T17:15:40.936Z - task-done: T2: Implement per plan
 - 2026-10-05T17:15:41.388Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-05T17:16:24.356Z - task-done: T4: Self-review and prepare draft PR

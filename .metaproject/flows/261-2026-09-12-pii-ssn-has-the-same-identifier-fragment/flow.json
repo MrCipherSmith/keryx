@@ -9,7 +9,7 @@
   "title": "pii.ssn has the same identifier-fragment hole the phone pattern had",
   "status": "in-progress",
   "createdAt": "2026-09-12T13:17:27.561Z",
-  "updatedAt": "2026-10-05T17:15:41.388Z",
+  "updatedAt": "2026-10-05T17:16:24.356Z",
   "source": {
     "type": "description",
     "ref": null
@@ -73,7 +73,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -81,7 +81,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -122,6 +123,11 @@
       "at": "2026-10-05T17:15:41.388Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-05T17:16:24.356Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "owner": {
