@@ -26,3 +26,11 @@
 - 2026-10-04T18:28:05.921Z - frozen: 25 criteria; checksum recorded
 - 2026-10-04T18:28:06.112Z - started
 - 2026-10-04T21:04:35.029Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/889 (warning: PR is not a draft)
+- 2026-10-05T08:09:14.466Z - task-done: T5: Polling and events: five kinds, keys, baseline, dedupe, quiet hours, limits, failures (AC1-3,14-17,21)
+- 2026-10-05T08:09:14.946Z - task-done: T6: Registry and report: ledger, keryx intake CLI, report --json (AC20)
+- 2026-10-05T08:09:15.385Z - task-done: T7: Hub route for the Intake service topic (AC18)
+- 2026-10-05T08:09:15.839Z - task-done: T8: Cards and buttons: model call without tools, redaction, HTML, callback_data (AC4-5)
+- 2026-10-05T08:09:16.363Z - task-done: T9: Actions: take, decline/skip/ignore/understood, later, review-flow, ci-triage, press guards, restart (AC6-13)
+- 2026-10-05T08:09:16.831Z - task-done: T10: TUI surfaces: side panel, /intake modal, menu, slash command, readline, one status object (AC19)
+- 2026-10-05T08:09:17.335Z - task-done: T11: Documentation: README, cli-reference, wiki, commands-by-task, docs site, CHANGELOG (AC22)
+- 2026-10-05T08:09:17.784Z - task-done: T12: Verify: targeted tests for every part green; invariants AC14 and AC21 fail on a planted mutation
