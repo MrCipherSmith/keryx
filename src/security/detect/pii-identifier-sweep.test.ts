@@ -63,9 +63,8 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
   // run can sit inside a longer hyphenated token. Flow 261 decided it the way flow
   // 260 decided phone: a false negative leaks an SSN, a false positive only
   // corrupts an identifier, so the run is redacted unless the segment IMMEDIATELY
-  // next to it is a real hash (hex, 16+ chars, at least one a-f). A label
-  // (`ssn` / `social`) in the token, just before it, or in the same sentence just
-  // after it overrides that.
+  // next to it is a real hash (hex, EXACTLY 32/40/64 chars, at least one a-f).
+  // An SSN label within 64 characters either side, or in the token, overrides that.
   const ssnValues = (input: string) => detectPii(input).filter((m) => m.policyId === "pii.ssn").map((m) => m.value);
   const SSN = "123-45-6789";
   const md5 = "d41d8cd98f00b204e9800998ecf8427e";
@@ -78,10 +77,37 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues("a-123-45-6789")).toEqual([SSN]);
   });
 
-  test("an SSN-shaped run directly beside a real hash is left alone", () => {
-    expect(ssnValues("build-f53fd8cbab7a47fd-123-45-6789")).toEqual([]);
-    expect(ssnValues("123-45-6789-f53fd8cbab7a47fd")).toEqual([]);
-    expect(ssnValues("event-901131d838b17aac-123-45-6789-open")).toEqual([]);
+  test("an SSN-shaped run directly beside an exact-length hash is left alone", () => {
+    expect(ssnValues(`build-${md5}-123-45-6789`)).toEqual([]);
+    expect(ssnValues(`123-45-6789-${sha1}`)).toEqual([]);
+    expect(ssnValues(`event-${sha256}-123-45-6789-open`)).toEqual([]);
+  });
+
+  test("a 16-hex neighbour no longer suppresses", () => {
+    expect(ssnValues("build-f53fd8cbab7a47fd-123-45-6789")).toEqual([SSN]);
+    expect(ssnValues("123-45-6789-f53fd8cbab7a47fd")).toEqual([SSN]);
+    expect(ssnValues("event-901131d838b17aac-123-45-6789-open")).toEqual([SSN]);
+  });
+
+  test("crafted 16-hex prefixes cannot launder a real SSN", () => {
+    expect(ssnValues("cafebabecafebabe-078-05-1120")).toEqual(["078-05-1120"]);
+    expect(ssnValues('{"id":"cafebabecafebabe-078-05-1120"}')).toEqual(["078-05-1120"]);
+    expect(ssnValues("1234567890123456e-078-05-1120")).toEqual(["078-05-1120"]);
+  });
+
+  test("hex runs of 31 and 33 characters beside the SSN are redacted, 32 is not", () => {
+    const hex = (n: number) => "a1b2c3d4".repeat(20).slice(0, n);
+    for (const n of [16, 24, 31, 33, 41, 63, 65, 128]) {
+      expect(ssnValues(`${hex(n)}-${SSN}`)).toEqual([SSN]);
+      expect(ssnValues(`${SSN}-${hex(n)}`)).toEqual([SSN]);
+    }
+    expect(ssnValues(`${hex(31)}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${hex(33)}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${hex(32)}-${SSN}`)).toEqual([]);
+  });
+
+  test("a 32-char all-digit run is not a hash", () => {
+    expect(ssnValues(`${"1".repeat(32)}-${SSN}`)).toEqual([SSN]);
   });
 
   test("md5 (32), sha1 (40) and sha256 (64) neighbours are all suppressed, on either side", () => {
@@ -129,41 +155,215 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
   test("a label right after the token vetoes suppression; a distant one does not", () => {
     expect(ssnValues(`${md5}-${SSN} is the SSN`)).toEqual([SSN]);
     expect(ssnValues(`${SSN}-${md5} (social)`)).toEqual([SSN]);
-    expect(ssnValues(`${md5}-${SSN} and then a long unrelated sentence that mentions the ssn`)).toEqual([]);
-    expect(ssnValues(`${md5}-${SSN}.\nthe ssn is elsewhere`)).toEqual([]);
-    expect(ssnValues(`${md5}-${SSN}\nssn`)).toEqual([]);
-    expect(ssnValues(`${md5}-${SSN}. ssn`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN} ${"unrelated ".repeat(8)}the ssn`)).toEqual([]);
   });
 
-  test("lookahead window is exactly 24 characters after the token", () => {
-    // The window is `content.slice(tokenEnd, tokenEnd + 24)`: a label vetoes only if
-    // it ends at or before character 24 after the token; one more character and it
-    // is cut off, so the neighbouring hash suppresses.
-    for (const label of ["ssn", "social"]) {
-      const at24 = " ".repeat(24 - label.length) + label;
-      const at25 = " ".repeat(25 - label.length) + label;
-      expect(at24).toHaveLength(24);
-      expect(at25).toHaveLength(25);
-      expect(ssnValues(`${md5}-${SSN}${at24}`)).toEqual([SSN]);
-      expect(ssnValues(`${md5}-${SSN}${at25}`)).toEqual([]);
-      expect(ssnValues(`${SSN}-${md5}${at24}`)).toEqual([SSN]);
-      expect(ssnValues(`${SSN}-${md5}${at25}`)).toEqual([]);
+  test("a label after a sentence break or newline still vetoes", () => {
+    expect(ssnValues(`${md5}-078-05-1120. SSN of the above`)).toEqual(["078-05-1120"]);
+    expect(ssnValues(`${md5}-078-05-1120 (this is the employee's social security number)`)).toEqual(["078-05-1120"]);
+    expect(ssnValues(`${md5}-${SSN}.\nthe ssn is elsewhere`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN}\nssn`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN}. ssn`)).toEqual([SSN]);
+    expect(ssnValues(`Ref. no. 5. ${sha1}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`SSN. ${sha1}-${SSN}`)).toEqual([SSN]);
+  });
+
+  test("every label form vetoes an exact-length hash neighbour, before or after", () => {
+    const labels = [
+      "SS#",
+      "ss#:",
+      "NSS",
+      "nss:",
+      "СНИЛС",
+      "снилс",
+      "Sozialversicherungsnummer",
+      "sozialversicherungsnummer:",
+      "S.S.N.",
+      "s.s.n",
+      "Soc. Sec. No.",
+      "Soc Sec No",
+      "soc sec no.",
+      "social security number",
+      "Social Security Number:",
+      "ssn",
+      "social",
+    ];
+    for (const digest of [md5, sha1, sha256]) {
+      for (const label of labels) {
+        expect(ssnValues(`${label} ${digest}-${SSN}`)).toEqual([SSN]);
+        expect(ssnValues(`${digest}-${SSN} ${label}`)).toEqual([SSN]);
+        expect(ssnValues(`${SSN}-${digest} ${label}`)).toEqual([SSN]);
+        expect(ssnValues(`${label} ${SSN}-${digest}`)).toEqual([SSN]);
+      }
     }
   });
 
-  test("lookbehind window is exactly 32 characters before the token", () => {
-    // The window is `content.slice(tokenStart - 32, tokenStart)`: a label that STARTS
-    // 32 characters before the token still vetoes; starting at 33 it is cut off.
-    for (const label of ["ssn", "social"]) {
-      const at32 = label + " ".repeat(32 - label.length);
-      const at33 = label + " ".repeat(33 - label.length);
-      expect(at32).toHaveLength(32);
-      expect(at33).toHaveLength(33);
-      expect(ssnValues(`${at32}${md5}-${SSN}`)).toEqual([SSN]);
-      expect(ssnValues(`${at33}${md5}-${SSN}`)).toEqual([]);
-      expect(ssnValues(`${at32}${SSN}-${md5}`)).toEqual([SSN]);
-      expect(ssnValues(`${at33}${SSN}-${md5}`)).toEqual([]);
+  test("label forms beyond the basic list also veto, incl. separators, accents and invisible characters", () => {
+    const labels = [
+      "SS #",
+      "SS#",
+      "S S N",
+      "S-S-N",
+      "S. S. N.",
+      "S .S .N",
+      "SS number",
+      "SS no",
+      "SS-Nr",
+      "Sozialversicherung",
+      "Sozialversicherungsnr.",
+      "SV-Nummer",
+      "Versicherungsnummer",
+      "N.S.S.",
+      "N S S",
+      "Soc.Sec.#",
+      "Soc. Sec. #",
+      "Soc. Sec. No.",
+      "numéro de sécu",
+      "numero de securite sociale",
+      "Numéro de Sécurité Sociale",
+      "ＳＳＮ",
+      "S­SN",
+      "s​sn:",
+      "s‌s‍n",
+      "﻿SSN",
+      "so­cial security number",
+      "SŚN",
+    ];
+    for (const label of labels) {
+      expect(ssnValues(`${label} ${md5}-${SSN}`)).toEqual([SSN]);
+      expect(ssnValues(`${md5}-${SSN} ${label}`)).toEqual([SSN]);
+      expect(ssnValues(`${SSN}-${md5} ${label}`)).toEqual([SSN]);
+      expect(ssnValues(`${label}: ${SSN}-${md5}`)).toEqual([SSN]);
     }
+  });
+
+  const vetoesEverywhere = (label: string) => {
+    expect(ssnValues(`${label} ${md5}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN} ${label}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${md5} ${label}`)).toEqual([SSN]);
+    expect(ssnValues(`${label}: ${SSN}-${md5}`)).toEqual([SSN]);
+  };
+
+  test("astral styled labels (math bold, monospace, sans) veto: the fold runs per code point", () => {
+    for (const label of ["𝐒𝐒𝐍", "𝚂𝚂𝙽", "𝗦𝗦𝗡", "𝐬𝐬𝐧", "𝐬𝐨𝐜𝐢𝐚𝐥", "𝚜𝚘𝚌𝚒𝚊𝚕", "𝗦𝗢𝗖𝗜𝗔𝗟", "𝐒𝐨𝐜. 𝐒𝐞𝐜. 𝐍𝐨."]) {
+      vetoesEverywhere(label);
+    }
+  });
+
+  test("invisible and bidi characters inside a label do not defeat it", () => {
+    const invisibles = ["‎", "‏", "‪", "‮", "⁠", "⁢", "⁤", "᠎", "ㅤ", "\u{E0001}", "\u{E0041}", "­", "​", "﻿"];
+    for (const mark of invisibles) {
+      vetoesEverywhere(`S${mark}S${mark}N`);
+      vetoesEverywhere(`so${mark}cial`);
+    }
+  });
+
+  test("S/S/N, S:S:N and up to 12 separators between the letters of a short label veto", () => {
+    for (const label of [
+      "S/S/N",
+      "S:S:N",
+      "s|s|n",
+      "S\\S\\N",
+      `S${"/".repeat(9)}S N`,
+      `S${"/".repeat(12)}S${"/".repeat(12)}N`,
+      `S${" ".repeat(12)}S${":".repeat(12)}#`,
+      `Soc${"/".repeat(12)}Sec`,
+      `N${".".repeat(9)}S${".".repeat(9)}S`,
+      `SV${"/".repeat(10)}N`,
+    ]) {
+      vetoesEverywhere(label);
+    }
+  });
+
+  test("a gap wider than 12 separators, or letters between them, is not a label", () => {
+    for (const text of [`S${"/".repeat(13)}S${"/".repeat(13)}N`, "S-x-S-x-N", "S1S1N"]) {
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+    }
+  });
+
+  test("Cyrillic and Greek lookalike labels veto", () => {
+    for (const label of ["ЅЅN", "ѕѕn", "ΣΣN", "ΣΣΝ", "σσν", "ѕосіаӏ", "ѕοciαl", "ѕοϲιαl", "Ѕоc. Ѕеc. Nо."]) {
+      vetoesEverywhere(label);
+    }
+  });
+
+  test("a label still vetoes when it starts at the 63rd character and the window holds non-ASCII text", () => {
+    for (const label of ["ssn", "𝐬𝐬𝐧", "Sozialversicherungsnummer", "numero  de  secu"]) {
+      for (const [start, vetoes] of [
+        [63, true],
+        [64, false],
+      ] as const) {
+        const expected = vetoes ? [SSN] : [];
+        expect(ssnValues(`${md5}-${SSN} é${" ".repeat(start - 2)}${label}`)).toEqual(expected);
+        expect(ssnValues(`${SSN}-${md5} é${" ".repeat(start - 2)}${label}`)).toEqual(expected);
+      }
+    }
+  });
+
+  test("window offsets count UTF-16 units, so astral characters before a label do not shift it", () => {
+    const wide = "𝐱".repeat(31);
+    expect(ssnValues(`${md5}-${SSN}${wide} ssn`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN}${wide}  ssn`)).toEqual([]);
+  });
+
+  test("ordinary words, accented or styled, near an exact-length hash still leave the SSN alone", () => {
+    for (const text of ["résumé", "naïve café", "日本語の文章", "𝐡𝐞𝐥𝐥𝐨 𝐰𝐨𝐫𝐥𝐝", "Привет мир", "Όμηρος", "a/b/c", "s/n"]) {
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+      expect(ssnValues(`${text} ${SSN}-${sha1}`)).toEqual([]);
+    }
+  });
+
+  test("ordinary words and spaced letters that are not labels do not veto", () => {
+    for (const text of ["class number", "the bus snores", "this snow", "ref sn"]) {
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+    }
+  });
+
+  test("a label starting inside the 64-character window vetoes even when it ends beyond it", () => {
+    const labels = ["social security number", "Sozialversicherungsnummer", "Soc. Sec. No."];
+    for (const label of labels) {
+      for (const start of [1, 50, 63]) {
+        const gap = " ".repeat(start);
+        expect(ssnValues(`${md5}-${SSN}${gap}${label}`)).toEqual([SSN]);
+        expect(ssnValues(`${SSN}-${md5}${gap}${label}`)).toEqual([SSN]);
+      }
+    }
+    expect(ssnValues(`${md5}-${SSN}${" ".repeat(60)}social security number`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN}${" ".repeat(50)}Sozialversicherungsnummer`)).toEqual([SSN]);
+  });
+
+  test("lookahead window: a label starting at 63 characters after the token vetoes, at 64 or 65 it does not", () => {
+    for (const label of ["ssn", "social", "social security number", "Sozialversicherungsnummer"]) {
+      for (const [start, vetoes] of [
+        [63, true],
+        [64, false],
+        [65, false],
+      ] as const) {
+        const tail = `${" ".repeat(start)}${label}`;
+        const expected = vetoes ? [SSN] : [];
+        expect(ssnValues(`${md5}-${SSN}${tail}`)).toEqual(expected);
+        expect(ssnValues(`${SSN}-${md5}${tail}`)).toEqual(expected);
+      }
+    }
+  });
+
+  test("lookbehind window: a label starting 63 or 64 characters before the token vetoes, at 65 it does not", () => {
+    for (const label of ["ssn", "social", "social security number"]) {
+      for (const [distance, vetoes] of [
+        [63, true],
+        [64, true],
+        [65, false],
+      ] as const) {
+        const head = `${label}${" ".repeat(distance - label.length)}`;
+        expect(head).toHaveLength(distance);
+        const expected = vetoes ? [SSN] : [];
+        expect(ssnValues(`${head}${md5}-${SSN}`)).toEqual(expected);
+        expect(ssnValues(`${head}${SSN}-${md5}`)).toEqual(expected);
+      }
+    }
+    const german = `Sozialversicherungsnummer${" ".repeat(63 - 25)}`;
+    expect(german).toHaveLength(63);
+    expect(ssnValues(`${german}${md5}-${SSN}`)).toEqual([SSN]);
   });
 
   test("a repeated SSN is judged at its own offset, not at the first occurrence", () => {
@@ -175,6 +375,27 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
   test("a truncated token never buys suppression", () => {
     const long = `${"a1b2c3d4-".repeat(30)}${SSN}`;
     expect(ssnValues(long)).toEqual([SSN]);
+  });
+
+  test("a real adjacent hash does not suppress when the token before the SSN exceeds the scan window", () => {
+    const filler = "x".repeat(200);
+    expect(ssnValues(`${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${filler}-${md5}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${filler}-${sha256}-${SSN}`)).toEqual([SSN]);
+  });
+
+  test("a token between 100 and 192 characters is fully scanned, so its adjacent hash still suppresses", () => {
+    const filler = "x".repeat(120);
+    expect(ssnValues(`${filler}-${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${SSN}-${md5}-${filler}`)).toEqual([]);
+    expect(ssnValues(`${filler}-${sha256}-${SSN}`)).toEqual([]);
+  });
+
+  test("a real adjacent hash does not suppress when the token after the SSN exceeds the scan window", () => {
+    const filler = "x".repeat(200);
+    expect(ssnValues(`${SSN}-${md5}`)).toEqual([]);
+    expect(ssnValues(`${SSN}-${md5}-${filler}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${sha256}-${filler}`)).toEqual([SSN]);
   });
 
   test("BOUNDARY — a bare SSN, a labelled SSN and one in a hyphenated sentence are still detected", () => {
