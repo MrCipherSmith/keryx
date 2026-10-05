@@ -11,7 +11,7 @@
   "title": "Work intake: GitHub events as Telegram cards with buttons",
   "status": "implemented",
   "createdAt": "2026-10-04T18:26:11.875Z",
-  "updatedAt": "2026-10-04T21:04:35.029Z",
+  "updatedAt": "2026-10-05T08:09:17.784Z",
   "source": {
     "type": "description",
     "ref": null
@@ -106,7 +106,7 @@
       "id": "T5",
       "title": "Polling and events: five kinds, keys, baseline, dedupe, quiet hours, limits, failures (AC1-3,14-17,21)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -116,13 +116,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Work exists in main (src/intake poll/events/dedupe/quiet-limits/failures); bun test src/intake covers AC1-3,14-17,21: 289 pass, 0 fail at a9bb7628"
     },
     {
       "id": "T6",
       "title": "Registry and report: ledger, keryx intake CLI, report --json (AC20)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -132,13 +134,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Registry/ledger (src/intake/store.ts), keryx intake CLI (src/commands/intake.ts), report (intake-report.test.ts) present in main; tests pass at a9bb7628"
     },
     {
       "id": "T7",
       "title": "Hub route for the Intake service topic (AC18)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -148,13 +152,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Hub route present (src/remote/hub.ts intakeHandler); src/remote/intake-callback-route.test.ts passes at a9bb7628"
     },
     {
       "id": "T8",
       "title": "Cards and buttons: model call without tools, redaction, HTML, callback_data (AC4-5)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -165,13 +171,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Cards and buttons present (src/intake/card.ts); intake-card and intake-buttons tests pass at a9bb7628"
     },
     {
       "id": "T9",
       "title": "Actions: take, decline/skip/ignore/understood, later, review-flow, ci-triage, press guards, restart (AC6-13)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T8"
@@ -182,13 +190,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Actions present (take, decline/later, review-flow, ci-triage, press guards, allowlist, restart); their tests pass at a9bb7628"
     },
     {
       "id": "T10",
       "title": "TUI surfaces: side panel, /intake modal, menu, slash command, readline, one status object (AC19)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -198,13 +208,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "TUI surfaces present (src/tui/intake-surface.ts, command-registry intake entries); src/tui/intake-surface.test.ts passes at a9bb7628"
     },
     {
       "id": "T11",
       "title": "Documentation: README, cli-reference, wiki, commands-by-task, docs site, CHANGELOG (AC22)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9",
         "T10"
@@ -215,13 +227,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Docs present (docs/docs/guides/work-intake.md and others); src/docs/intake-docs.test.ts passes at a9bb7628"
     },
     {
       "id": "T12",
       "title": "Verify: targeted tests for every part green; invariants AC14 and AC21 fail on a planted mutation",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -236,7 +250,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "bun test src/intake src/remote/intake-callback-route.test.ts src/tui/intake-surface.test.ts src/docs/intake-docs.test.ts: 289 pass, 0 fail; AC14 and AC21 invariants present (intake-readonly, no-live-network)"
     },
     {
       "id": "T13",
@@ -339,6 +355,46 @@
       "at": "2026-10-04T21:04:35.029Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/889 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-05T08:09:14.466Z",
+      "event": "task-done",
+      "detail": "T5: Polling and events: five kinds, keys, baseline, dedupe, quiet hours, limits, failures (AC1-3,14-17,21)"
+    },
+    {
+      "at": "2026-10-05T08:09:14.946Z",
+      "event": "task-done",
+      "detail": "T6: Registry and report: ledger, keryx intake CLI, report --json (AC20)"
+    },
+    {
+      "at": "2026-10-05T08:09:15.385Z",
+      "event": "task-done",
+      "detail": "T7: Hub route for the Intake service topic (AC18)"
+    },
+    {
+      "at": "2026-10-05T08:09:15.839Z",
+      "event": "task-done",
+      "detail": "T8: Cards and buttons: model call without tools, redaction, HTML, callback_data (AC4-5)"
+    },
+    {
+      "at": "2026-10-05T08:09:16.363Z",
+      "event": "task-done",
+      "detail": "T9: Actions: take, decline/skip/ignore/understood, later, review-flow, ci-triage, press guards, restart (AC6-13)"
+    },
+    {
+      "at": "2026-10-05T08:09:16.831Z",
+      "event": "task-done",
+      "detail": "T10: TUI surfaces: side panel, /intake modal, menu, slash command, readline, one status object (AC19)"
+    },
+    {
+      "at": "2026-10-05T08:09:17.335Z",
+      "event": "task-done",
+      "detail": "T11: Documentation: README, cli-reference, wiki, commands-by-task, docs site, CHANGELOG (AC22)"
+    },
+    {
+      "at": "2026-10-05T08:09:17.784Z",
+      "event": "task-done",
+      "detail": "T12: Verify: targeted tests for every part green; invariants AC14 and AC21 fail on a planted mutation"
     }
   ],
   "acKinds": {
