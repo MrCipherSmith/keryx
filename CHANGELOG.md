@@ -5,6 +5,11 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.77] — 2026-10-05
+
+### Fixed
+- **Granted `gh` JSON keeps its ids through the PII scrub (#903).** An 11-digit run or comment id matched the phone detector and was written as `[REDACTED:phone]`, so the JSON no longer parsed and `keryx intake poll` reported `gh did not answer with JSON` for the CI source. When a granted command's stdout is one JSON document, bare numbers and the digits of github.com URL ids are held aside for the detector pass and restored after it; every string value, including titles and comment bodies, is still scanned and masked, and numbers under secret-looking keys stay visible to the detector. The digest reader gets the same fix.
+
 ## [0.3.76] — 2026-10-05
 
 ### Added
