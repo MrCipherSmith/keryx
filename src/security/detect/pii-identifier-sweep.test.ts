@@ -135,6 +135,37 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues(`${md5}-${SSN}. ssn`)).toEqual([]);
   });
 
+  test("lookahead window is exactly 24 characters after the token", () => {
+    // The window is `content.slice(tokenEnd, tokenEnd + 24)`: a label vetoes only if
+    // it ends at or before character 24 after the token; one more character and it
+    // is cut off, so the neighbouring hash suppresses.
+    for (const label of ["ssn", "social"]) {
+      const at24 = " ".repeat(24 - label.length) + label;
+      const at25 = " ".repeat(25 - label.length) + label;
+      expect(at24).toHaveLength(24);
+      expect(at25).toHaveLength(25);
+      expect(ssnValues(`${md5}-${SSN}${at24}`)).toEqual([SSN]);
+      expect(ssnValues(`${md5}-${SSN}${at25}`)).toEqual([]);
+      expect(ssnValues(`${SSN}-${md5}${at24}`)).toEqual([SSN]);
+      expect(ssnValues(`${SSN}-${md5}${at25}`)).toEqual([]);
+    }
+  });
+
+  test("lookbehind window is exactly 32 characters before the token", () => {
+    // The window is `content.slice(tokenStart - 32, tokenStart)`: a label that STARTS
+    // 32 characters before the token still vetoes; starting at 33 it is cut off.
+    for (const label of ["ssn", "social"]) {
+      const at32 = label + " ".repeat(32 - label.length);
+      const at33 = label + " ".repeat(33 - label.length);
+      expect(at32).toHaveLength(32);
+      expect(at33).toHaveLength(33);
+      expect(ssnValues(`${at32}${md5}-${SSN}`)).toEqual([SSN]);
+      expect(ssnValues(`${at33}${md5}-${SSN}`)).toEqual([]);
+      expect(ssnValues(`${at32}${SSN}-${md5}`)).toEqual([SSN]);
+      expect(ssnValues(`${at33}${SSN}-${md5}`)).toEqual([]);
+    }
+  });
+
   test("a repeated SSN is judged at its own offset, not at the first occurrence", () => {
     expect(ssnValues(`${SSN}-${SSN}`)).toEqual([SSN, SSN]);
     expect(ssnValues(`${SSN}-${md5}-${SSN}`)).toEqual([]);
