@@ -237,6 +237,82 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
+  const vetoesEverywhere = (label: string) => {
+    expect(ssnValues(`${label} ${md5}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN} ${label}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${md5} ${label}`)).toEqual([SSN]);
+    expect(ssnValues(`${label}: ${SSN}-${md5}`)).toEqual([SSN]);
+  };
+
+  test("astral styled labels (math bold, monospace, sans) veto: the fold runs per code point", () => {
+    for (const label of ["𝐒𝐒𝐍", "𝚂𝚂𝙽", "𝗦𝗦𝗡", "𝐬𝐬𝐧", "𝐬𝐨𝐜𝐢𝐚𝐥", "𝚜𝚘𝚌𝚒𝚊𝚕", "𝗦𝗢𝗖𝗜𝗔𝗟", "𝐒𝐨𝐜. 𝐒𝐞𝐜. 𝐍𝐨."]) {
+      vetoesEverywhere(label);
+    }
+  });
+
+  test("invisible and bidi characters inside a label do not defeat it", () => {
+    const invisibles = ["‎", "‏", "‪", "‮", "⁠", "⁢", "⁤", "᠎", "ㅤ", "\u{E0001}", "\u{E0041}", "­", "​", "﻿"];
+    for (const mark of invisibles) {
+      vetoesEverywhere(`S${mark}S${mark}N`);
+      vetoesEverywhere(`so${mark}cial`);
+    }
+  });
+
+  test("S/S/N, S:S:N and up to 12 separators between the letters of a short label veto", () => {
+    for (const label of [
+      "S/S/N",
+      "S:S:N",
+      "s|s|n",
+      "S\\S\\N",
+      `S${"/".repeat(9)}S N`,
+      `S${"/".repeat(12)}S${"/".repeat(12)}N`,
+      `S${" ".repeat(12)}S${":".repeat(12)}#`,
+      `Soc${"/".repeat(12)}Sec`,
+      `N${".".repeat(9)}S${".".repeat(9)}S`,
+      `SV${"/".repeat(10)}N`,
+    ]) {
+      vetoesEverywhere(label);
+    }
+  });
+
+  test("a gap wider than 12 separators, or letters between them, is not a label", () => {
+    for (const text of [`S${"/".repeat(13)}S${"/".repeat(13)}N`, "S-x-S-x-N", "S1S1N"]) {
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+    }
+  });
+
+  test("Cyrillic and Greek lookalike labels veto", () => {
+    for (const label of ["ЅЅN", "ѕѕn", "ΣΣN", "ΣΣΝ", "σσν", "ѕосіаӏ", "ѕοciαl", "ѕοϲιαl", "Ѕоc. Ѕеc. Nо."]) {
+      vetoesEverywhere(label);
+    }
+  });
+
+  test("a label still vetoes when it starts at the 63rd character and the window holds non-ASCII text", () => {
+    for (const label of ["ssn", "𝐬𝐬𝐧", "Sozialversicherungsnummer", "numero  de  secu"]) {
+      for (const [start, vetoes] of [
+        [63, true],
+        [64, false],
+      ] as const) {
+        const expected = vetoes ? [SSN] : [];
+        expect(ssnValues(`${md5}-${SSN} é${" ".repeat(start - 2)}${label}`)).toEqual(expected);
+        expect(ssnValues(`${SSN}-${md5} é${" ".repeat(start - 2)}${label}`)).toEqual(expected);
+      }
+    }
+  });
+
+  test("window offsets count UTF-16 units, so astral characters before a label do not shift it", () => {
+    const wide = "𝐱".repeat(31);
+    expect(ssnValues(`${md5}-${SSN}${wide} ssn`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN}${wide}  ssn`)).toEqual([]);
+  });
+
+  test("ordinary words, accented or styled, near an exact-length hash still leave the SSN alone", () => {
+    for (const text of ["résumé", "naïve café", "日本語の文章", "𝐡𝐞𝐥𝐥𝐨 𝐰𝐨𝐫𝐥𝐝", "Привет мир", "Όμηρος", "a/b/c", "s/n"]) {
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+      expect(ssnValues(`${text} ${SSN}-${sha1}`)).toEqual([]);
+    }
+  });
+
   test("ordinary words and spaced letters that are not labels do not veto", () => {
     for (const text of ["class number", "the bus snores", "this snow", "ref sn"]) {
       expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
