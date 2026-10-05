@@ -20,3 +20,4 @@
 - 2026-10-05T18:36:39.785Z - completing
 - 2026-10-05T18:36:44.105Z - completion-attempt-recorded: attempt 1: passed
 - 2026-10-05T18:36:44.106Z - done: all gates passed
+- 2026-10-05T19:40:00.000Z - review-records-note: the four review rounds in reviews/ (...-pull-906, -r02, -r03, -r04) were RECONSTRUCTED from transcripts by the closing agent, not recorded at the time: the head commit was inferred, fields were added afterwards, and the verifier named in -r04 (flow261closeout-verifier) is a self-named label, not a separate review-verifier run. At the operator's request (helyx 186203) a second, real review of the merged guard ran; its rounds, fixes (PR #909) and verifier are tracked in flow 410, not in this package, so this flow's completion check stays as it was.
