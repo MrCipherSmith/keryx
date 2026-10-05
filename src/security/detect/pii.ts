@@ -399,7 +399,7 @@ const SSN_LABEL = new RegExp(
   "iu",
 );
 const LABEL_TAIL = 64; // the longest label folds to far fewer characters; bounds the work past the window
-const ASCII_ONLY = /^[\x00-\x7f]*$/;
+const ASCII_ONLY = /^\p{ASCII}*$/u;
 
 // Iterates code points so astral characters fold too; offsets maps each folded character to its UTF-16 index in `text`.
 function foldForLabel(text: string, labelStartLimit: number): { folded: string; offsets: number[] } {
