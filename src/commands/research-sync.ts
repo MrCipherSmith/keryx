@@ -12,7 +12,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { loadExportWithSummary, loadReport, renderExport } from "../decisions/service";
+import { pathExists } from "../lib/fs";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
+import { scheduleResearchSync, unscheduleResearchSync } from "../scheduler/research-sync-job";
 import { formatRunTime, reasonLine, renderFailureStatus, renderStatus } from "./research-sync-status";
 
 const run = promisify(execFile);
@@ -238,13 +240,61 @@ export async function readLastSyncRun(root: string): Promise<string | null> {
 
 export function printResearchHelp(): void {
   helpTitle("keryx research", "keep the Part 1 materials current");
-  helpUsage(["keryx research sync", "keryx research --help"]);
+  helpUsage(["keryx research sync", "keryx research sync --schedule daily", "keryx research sync --unschedule", "keryx research --help"]);
   helpOptions([
     {
       flag: "sync",
       desc: `Run from the repository root. Refreshes ${CATALOG_DIR}: ${LATEST_COUNTS} (the unchanged ${COUNTS_SCRIPT} at HEAD), ${LATEST_EXPORT} (the text-free decisions export from 2026-10-02) and ${STATUS_FILE} (run time, HEAD, counts now against the snapshot, journal summary). Writes only those files, only when their content changed; no commit, no branch, no pull request. A failed run leaves the previous -latest files as they were and writes the reason into ${STATUS_FILE}.`,
     },
+    {
+      flag: "sync --schedule daily",
+      desc: "Run from the repository root. Creates the daily entry: a running `keryx serve` then runs the sync once per UTC day from this directory (a restart the same day does not run it again; a failed run is shown as a notice in serve and is not retried until the next day). It does not run the sync now. Needs the catalog directory.",
+    },
+    {
+      flag: "sync --unschedule",
+      desc: "Removes the daily entry and the record of its last run. A sync already written stays as it is.",
+    },
   ]);
+}
+
+const SYNC_USAGE = "keryx research sync [--schedule daily | --unschedule]";
+
+/** `keryx research sync --schedule daily` and `--unschedule`: the daily entry a running `keryx serve` acts on. */
+async function researchScheduleCommand(rest: string[]): Promise<void> {
+  const fail = (message: string): void => {
+    console.error(`  ${style.red(symbols.cross)} ${message}`);
+    process.exitCode = 1;
+  };
+  let schedule: string | undefined;
+  let unschedule = false;
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i] as string;
+    if (arg === "--unschedule") {
+      unschedule = true;
+    } else if (arg === "--schedule") {
+      const value = rest[i + 1];
+      if (value === undefined || value.startsWith("-")) return fail(`--schedule needs a value: daily. Usage: ${SYNC_USAGE}`);
+      schedule = value;
+      i += 1;
+    } else if (arg.startsWith("--schedule=")) {
+      schedule = arg.slice("--schedule=".length);
+    } else {
+      return fail(`keryx research sync: unknown argument ${JSON.stringify(arg.slice(0, 40))}. Usage: ${SYNC_USAGE}`);
+    }
+  }
+  if (schedule !== undefined && unschedule) return fail("--schedule and --unschedule cannot be used together.");
+  if (schedule !== undefined && schedule !== "daily") return fail(`--schedule takes "daily" only (got ${JSON.stringify(schedule.slice(0, 40))}).`);
+
+  const root = process.cwd();
+  if (unschedule) {
+    const { removed } = await unscheduleResearchSync(root);
+    console.log(`  ${style.green(symbols.ok)} ${removed ? "Daily research sync removed" : "No daily research sync was scheduled"}`);
+    return;
+  }
+  if (!(await pathExists(path.join(root, CATALOG_DIR)))) return fail(`run from the repository root: ${CATALOG_DIR} not found`);
+  const { created } = await scheduleResearchSync(root);
+  console.log(`  ${style.green(symbols.ok)} ${created ? "Daily research sync scheduled" : "Daily research sync is already scheduled"}`);
+  note("keryx serve runs it once per UTC day, from this directory; stop it with: keryx research sync --unschedule");
 }
 
 export async function researchCommand(args: string[] = []): Promise<void> {
@@ -263,9 +313,9 @@ export async function researchCommand(args: string[] = []): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  if (args.length > 1) {
-    console.error(`  ${style.red(symbols.cross)} keryx research sync takes no arguments.`);
-    process.exitCode = 1;
+  const rest = args.slice(1);
+  if (rest.length > 0) {
+    await researchScheduleCommand(rest);
     return;
   }
   const root = process.cwd();

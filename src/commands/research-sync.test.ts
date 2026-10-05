@@ -362,7 +362,15 @@ describe("AC8: a failed run", () => {
   });
 
   test("the sync sources hold no commit call, no staging, no hook registration and no hourly logic", async () => {
-    const sources = ["research-sync.ts", "research-sync-status.ts"].map((name) => ({ name, body: readFileSync(path.join(import.meta.dir, name), "utf8") }));
+    // The daily job (flow 404, AC8) is part of the sync code. `serve-research-sync.ts` is the one place that owns the
+    // repeating timer serve needs to look at the clock, so only it is exempt from the timer rule.
+    const sourceFiles = [
+      path.join(import.meta.dir, "research-sync.ts"),
+      path.join(import.meta.dir, "research-sync-status.ts"),
+      path.join(import.meta.dir, "..", "scheduler", "research-sync-job.ts"),
+      path.join(import.meta.dir, "serve-research-sync.ts"),
+    ];
+    const sources = sourceFiles.map((file) => ({ name: path.basename(file), body: readFileSync(file, "utf8") }));
     const banned: Array<[string, RegExp]> = [
       ["git commit", /git\s+commit|["']commit["']/],
       ["git add", /git\s+add|["']add["']/],
@@ -371,8 +379,14 @@ describe("AC8: a failed run", () => {
       ["an hourly or timer schedule", /setInterval|hourly|\bcron\b/i],
     ];
     for (const { name, body } of sources) {
-      for (const [what, pattern] of banned) expect(`${name}: ${what}: ${pattern.test(body)}`).toBe(`${name}: ${what}: false`);
+      for (const [what, pattern] of banned) {
+        if (name === "serve-research-sync.ts" && what === "an hourly or timer schedule") continue;
+        expect(`${name}: ${what}: ${pattern.test(body)}`).toBe(`${name}: ${what}: false`);
+      }
     }
+    // The timer in serve looks once every few minutes and runs nothing hourly: the only interval is the check.
+    const serveBody = sources.find((s) => s.name === "serve-research-sync.ts")?.body ?? "";
+    expect(/hourly|\bcron\b/i.test(serveBody)).toBe(false);
   });
 });
 
@@ -410,6 +424,53 @@ describe("the command", () => {
     const second = await run(root, "research", "sync");
     expect(second.code).toBe(0);
     expect(await readFile(inCatalog(LATEST_COUNTS), "utf8")).toBe(text(LATEST_COUNTS));
+  });
+
+  test("`--schedule daily` creates the daily entry without running the sync; `--unschedule` takes it away", async () => {
+    const entry = path.join(root, ".metaproject", "data", "research-sync", "schedule.json");
+    const help = await run(root, "research", "--help");
+    for (const text of ["keryx research sync --schedule daily", "keryx research sync --unschedule"]) expect(help.stdout).toContain(text);
+
+    const created = await run(root, "research", "sync", "--schedule", "daily");
+    expect(created.code).toBe(0);
+    expect(created.stdout).toContain("Daily research sync scheduled");
+    expect(existsSync(entry)).toBe(true);
+    // Creating the entry runs nothing: no -latest file, no status page.
+    for (const name of SYNC_FILES) expect(existsSync(inCatalog(name))).toBe(false);
+
+    const again = await run(root, "research", "sync", "--schedule=daily");
+    expect(again.code).toBe(0);
+    expect(again.stdout).toContain("already scheduled");
+
+    const removed = await run(root, "research", "sync", "--unschedule");
+    expect(removed.code).toBe(0);
+    expect(removed.stdout).toContain("Daily research sync removed");
+    expect(existsSync(entry)).toBe(false);
+    const nothing = await run(root, "research", "sync", "--unschedule");
+    expect(nothing.code).toBe(0);
+    expect(nothing.stdout).toContain("No daily research sync was scheduled");
+  });
+
+  test("bad schedule arguments fail with one line on stderr and create nothing", async () => {
+    const entry = path.join(root, ".metaproject", "data", "research-sync", "schedule.json");
+    for (const args of [["--schedule"], ["--schedule", "hourly"], ["--schedule", "daily", "--unschedule"], ["--bogus"], ["daily"]]) {
+      const result = await run(root, "research", "sync", ...args);
+      expect(`${args.join(" ")}: ${result.code}`).toBe(`${args.join(" ")}: 1`);
+      expect(result.stderr.trim().split("\n")).toHaveLength(1);
+    }
+    expect(existsSync(entry)).toBe(false);
+  });
+
+  test("`--schedule daily` outside the repository root fails and writes nothing", async () => {
+    const empty = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-research-empty-")));
+    try {
+      const result = await run(empty, "research", "sync", "--schedule", "daily");
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("run from the repository root");
+      expect(readdirSync(empty)).toEqual([]);
+    } finally {
+      await rm(empty, { recursive: true, force: true });
+    }
   });
 
   test("from a directory that is not the root it exits non-zero with one line on stderr", async () => {

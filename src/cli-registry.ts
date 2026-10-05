@@ -419,6 +419,8 @@ export const USAGE_BODY = `Usage:
                                                GitHub work intake: tickets, reviews, failed CI, PR comments and board
                                                movement as Telegram cards; report = decisions, answer times, card -> flow -> PR
   keryx research sync                          Refresh the Part 1 materials: counts at HEAD, text-free decisions export, sync-status.md (no commit)
+  keryx research sync --schedule daily | --unschedule
+                                               Run that sync once a day inside keryx serve (the daily entry), or take the entry away
   keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
   keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)

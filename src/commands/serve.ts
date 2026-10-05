@@ -62,6 +62,7 @@ import { assembleSubmitTurn } from "../lib/serve-runner";
 import { localMachineName } from "../remote/naming";
 import { openRemoteService } from "../remote/service";
 import { createServeDigestTicker } from "./serve-digest";
+import { createServeResearchSync } from "./serve-research-sync";
 import { createServeIntake } from "./serve-intake";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
@@ -301,6 +302,13 @@ async function runServe(args: string[]): Promise<void> {
   });
   intake.start();
 
+  // Flow 404: the Part 1 materials sync runs once a day from here, for a project that opted in with
+  // `keryx research sync --schedule daily`. A failed run is a notice line, never a stop of serve.
+  const researchSync = createServeResearchSync({
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+  researchSync.start();
+
   await new Promise<void>((resolve) => {
     let draining = false;
     const finish = (): void => {
@@ -309,7 +317,7 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void Promise.all([digestTicker.stop(), intake.stop()])
+      void Promise.all([digestTicker.stop(), intake.stop(), researchSync.stop()])
         .then(() => listener.drain())
         .then(() => remoteService.stop())
         .then(() => {
