@@ -290,6 +290,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/tasks",
+    group: "Working in keryx shell",
+    summary: "List supervised shell tasks — /tasks [output <task_id> [cursor] | kill <task_id>].",
+  },
+  {
+    kind: "slash",
     name: "/interrupt",
     group: "Working in keryx shell",
     summary: "Interrupt the running main agent turn.",
