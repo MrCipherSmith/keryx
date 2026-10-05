@@ -101,7 +101,7 @@ export async function setupIntakeEnv(options: { config?: Partial<IntakeConfig> }
   };
 }
 
-function setBoardReader(entries: readonly { id: string; title: string; status: string; closedAt?: string | null; verdict?: string }[] | "absent"): void {
+export function setBoardReader(entries: readonly { id: string; title: string; status: string; closedAt?: string | null; verdict?: string }[] | "absent"): void {
   registerBoardReader(async (): Promise<BoardSource> => {
     if (entries === "absent") return { state: "absent" };
     return { state: "present", entries: entries.map((e) => ({ id: e.id, title: e.title, status: e.status, closedAt: e.closedAt ?? null, verdict: e.verdict ?? "" })), chains: [] };

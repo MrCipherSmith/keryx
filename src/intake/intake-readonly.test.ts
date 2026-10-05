@@ -15,10 +15,11 @@ import {
   INTAKE_TOOL_IDS,
   type GrantedToolSpec,
 } from "../trigger/granted-tools";
+import { registerBoardReader } from "../scheduler/digest-board";
 import { startLimits } from "../scheduler/digest-limits";
 import { collectIntakeEvents } from "./events";
 import { runIntakePoll } from "./poll";
-import { FakeGh, FakeSink, REPO, TestClock, depsFor, fakeAssessor, issuesJson, local, ownPrsJson, reviewsJson, runsJson, setupIntakeEnv, testConfig, takeBaseline, type IntakeTestEnv } from "./intake.test-helpers";
+import { FakeGh, FakeSink, REPO, TestClock, depsFor, fakeAssessor, issuesJson, local, ownPrsJson, reviewsJson, runsJson, setBoardReader, setupIntakeEnv, testConfig, takeBaseline, type IntakeTestEnv } from "./intake.test-helpers";
 
 function render(spec: GrantedToolSpec, repo: string, other: string): readonly string[] {
   const values: Record<string, string> = {};
@@ -123,6 +124,9 @@ describe("a mutating or non-allowlisted entry fails (AC14)", () => {
 });
 
 describe("the collector refuses before it spawns (AC14)", () => {
+  beforeEach(() => setBoardReader([]));
+  afterEach(() => registerBoardReader(undefined));
+
   async function collect(): Promise<{ readonly calls: number; readonly argvs: readonly (readonly string[])[]; readonly failures: readonly string[] }> {
     let calls = 0;
     const argvs: (readonly string[])[] = [];
