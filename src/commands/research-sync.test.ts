@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { appendFile, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -19,6 +19,7 @@ import {
   LATEST_COUNTS,
   LATEST_EXPORT,
   STATUS_FILE,
+  namesOffLimits,
   readLastSyncRun,
   runResearchSync,
   type SyncDeps,
@@ -408,6 +409,38 @@ describe("AC8: a failed run", () => {
     expect(page).toContain("Последний успешный запуск (last successful run, UTC): 2026-10-05 04:00 UTC");
     expect(page).toContain("Решений (decisions): 5;");
     expect(before.status).toContain("Состояние (status): ok");
+  });
+
+  test("a rename that fails on the second file restores the first, so the trio stays of one generation", async () => {
+    await seedJournal();
+    const counts = (flows: number): string => JSON.stringify({ commit: "abc", generated_at: "2026-10-05T04:00Z", flows });
+    const fakeHead = async (): Promise<string> => "h".repeat(40);
+    await sync({ runCounts: async () => counts(1), headHash: fakeHead });
+    const before = { counts: text(LATEST_COUNTS), exported: text(LATEST_EXPORT) };
+    await appendJournal([openLine("fresh", "2026-10-04T09:00:00.000Z"), answerLine("fresh", "2026-10-04T09:00:05.000Z")]);
+
+    const outcome = await runResearchSync({
+      root,
+      now: () => T2,
+      runCounts: async () => counts(2),
+      headHash: fakeHead,
+      renameStaged: async (from, to) => {
+        if (path.basename(to) === LATEST_EXPORT) throw new Error("rename denied");
+        await rename(from, to);
+      },
+    });
+    expect(outcome).toEqual({ ok: false, reason: "rename denied", changed: [] });
+    expect(text(LATEST_COUNTS)).toBe(before.counts);
+    expect(text(LATEST_EXPORT)).toBe(before.exported);
+    expect(readdirSync(path.join(root, CATALOG_DIR)).filter((name) => name.includes(".tmp-"))).toEqual([]);
+    expect(text(STATUS_FILE)).toContain("Состояние (status): ошибка (failed): rename denied");
+  });
+
+  test("the off-limits check matches whole words: dashboard passes, a standalone board does not", () => {
+    expect(namesOffLimits("the dashboard and the keyboard")).toBe(false);
+    expect(namesOffLimits("a board")).toBe(true);
+    expect(namesOffLimits("Board, frontend-app, process-metrics")).toBe(true);
+    expect(namesOffLimits("my_board")).toBe(true);
   });
 
   test("a counts result that is not JSON fails the run and writes nothing but the reason", async () => {
