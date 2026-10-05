@@ -11,6 +11,7 @@
 - Entire local journal exported without a since filter; original open seq and arm retained. Numeric seed field removed to satisfy AC2; seed file only hashed, never exported.
 - Privacy verification: export allow-list checked; seed, question/option/reason text fields absent; local username and paths absent.
 - This machine is not the final collector. No merged/latest/snapshot/status files changed.
+- Collection agent: Keryx agent (openai-codex/gpt-6.1-sol). This identifies the export agent, not the writers of the recorded decisions.
 
 ## Export command
 
