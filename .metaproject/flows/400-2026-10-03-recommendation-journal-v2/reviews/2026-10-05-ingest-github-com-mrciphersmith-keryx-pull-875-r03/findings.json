@@ -1,0 +1,94 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "findOpenTwin matches any still-unanswered open record with the same question hash, with no age or session bound, so an old unanswered open (a crashed or abandoned session) is reused by a later identical question.",
+    "impact": "The new question inherits the old id, arm and seed, and timeToAnswerMs is measured from the old open.at, which inflates the median time to answer and pins one question to one arm forever.",
+    "suggested_fix": "Bound the twin lookup to the same session and a short window, or close an open that was never answered when its session ends.",
+    "evidence": "Fixed in d55650ec (PR 893, merged 2b537de0): twin lookup bounded to the same session and OPEN_TWIN_MAX_AGE_MS (1 hour).",
+    "confidence": "medium",
+    "file": "src/decisions/journal.ts",
+    "line": 58,
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-875-r02#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Clean extract of 2b537de0: `bun test src/decisions/idempotent-open.test.ts src/decisions/export.test.ts` -> 32 pass, 0 fail; journal.ts has OPEN_TWIN_MAX_AGE_MS (line 58) and the twin lookup skips opens older than it or from another session.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in d55650ec (PR 893, merged as 2b537de0): twin lookup bounded to the same session and one hour."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "seq is computed from an unlocked read (records.filter(open).length + 1), so two opens racing in two processes can read the same count and take the same seq.",
+    "impact": "Both get the same seed and therefore the same arm and the same reason-subsample draw, which breaks the independence of the randomisation for concurrent questions.",
+    "suggested_fix": "Compute seq inside the journal lock that appendRecord takes, or derive the seed from the decision id as well as the seq.",
+    "evidence": "Fixed in d55650ec (PR 893, merged 2b537de0): twin lookup, seq allocation and append run under withJournalLock.",
+    "confidence": "medium",
+    "file": "src/decisions/journal.ts",
+    "line": 100,
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-875-r02#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Clean extract of 2b537de0: `bun test src/decisions/idempotent-open.test.ts` -> pass; journal.ts imports withJournalLock and takes the lock around twin lookup, seq allocation and appendRecord.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in d55650ec (PR 893, merged as 2b537de0): twin lookup, seq allocation and append run under withJournalLock."
+    }
+  },
+  {
+    "id": "F-002b",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "seq is computed from an unlocked read (records.filter(open).length + 1), so two opens racing in two processes can read the same count and take the same seq.",
+    "impact": "Both get the same seed and therefore the same arm and the same reason-subsample draw, which breaks the independence of the randomisation for concurrent questions.",
+    "suggested_fix": "Compute seq inside the journal lock that appendRecord takes, or derive the seed from the decision id as well as the seq.",
+    "evidence": "Fixed in d55650ec (PR 893, merged 2b537de0): twin lookup, seq allocation and append run under withJournalLock.",
+    "confidence": "medium",
+    "file": "src/decisions/journal.ts",
+    "line": 106,
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-875#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Clean extract of 2b537de0: `bun test src/decisions/idempotent-open.test.ts` -> pass; journal.ts imports withJournalLock and takes the lock around twin lookup, seq allocation and appendRecord.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in d55650ec (PR 893, merged as 2b537de0): twin lookup, seq allocation and append run under withJournalLock."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "ISO_UTC accepted only a trailing Z, so a record whose timestamp carried a numeric UTC offset was exported with openedAt null.",
+    "impact": "decisions export --since dropped such records as unreadable (47 records without the window, 37 with it).",
+    "suggested_fix": "Parse the offset form and write it in UTC.",
+    "evidence": "Fixed in b59fb36a (ancestor of 2b537de0): toUtcIso accepts ISO_OFFSET and normalises to UTC.",
+    "confidence": "high",
+    "file": "src/decisions/export.ts",
+    "line": 131,
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-875-r02#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Clean extract of 2b537de0: `bun test src/decisions/export.test.ts` -> pass; export.ts line 134 ISO_OFFSET and toUtcIso (line 141) normalise numeric offsets to UTC.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in b59fb36a (ancestor of 2b537de0): toUtcIso accepts numeric UTC offsets and normalises to UTC."
+    }
+  }
+]

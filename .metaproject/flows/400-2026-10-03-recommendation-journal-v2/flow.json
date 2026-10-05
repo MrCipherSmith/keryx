@@ -9,9 +9,9 @@
   "id": "400",
   "slug": "recommendation-journal-v2",
   "title": "Recommendation journal v2: arms, reasons, coverage, quality",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-03T19:20:13.037Z",
-  "updatedAt": "2026-10-05T05:46:41.429Z",
+  "updatedAt": "2026-10-05T07:20:11.057Z",
   "source": {
     "type": "description",
     "ref": null
@@ -355,6 +355,20 @@
       "at": "2026-10-05T05:46:41.429Z",
       "event": "ac-confirmed",
       "detail": "AC21: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T07:20:04.769Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -672,6 +686,76 @@
         "source": "`--signed-by` flag"
       },
       "criterion": "AC21",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417",
+      "headCommit": "46f49243919066dc9299334431d3bf4e49fb7782"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "21 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "400-2026-10-03-recommendation-journal-v2 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
     }
   ]
