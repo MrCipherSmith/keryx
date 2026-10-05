@@ -5,6 +5,18 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.76] — 2026-10-05
+
+### Added
+- **Shell task controls (flow 406).** `/tasks` exposes supervised shell tasks and their controls, with matching help and command documentation.
+- **Visible subagent preparation.** The shell displays preparation progress before a subagent starts; external dispatch hooks are used only for external runtimes.
+
+### Fixed
+- **Shell smoke diagnostics and presentation (flow 406, #901).** Routing reports why a route is skipped, unknown slash-command help is collapsible, and usage displays distinguish cached input from uncached input. Queue and transcript behavior is covered by additional regression tests.
+- **Command catalog parity.** `/tasks` is included in the shared help catalog, command-order tests and documentation.
+
+These changes passed PR CI. Repeat manual shell acceptance and measurements of subagent startup and input load remain pending; this release does not claim measured performance improvements.
+
 ## [0.3.75] — 2026-10-05
 This release also carries 0.3.74, which was bumped on main and tagged but never published: the `v0.3.74` release run failed in the test gate, where the whole suite shares one process. Two intake tests leaked state into later suites (an environment restore in the wrong order, and a board reader registered by another suite); both are fixed here. The last version on npm before this one is 0.3.73.
 
