@@ -193,6 +193,45 @@ describe("AC14: what the export does carry", () => {
     expect(buildExport(records, [], { excludeLegacy: true }).map((r) => r.ref)).toEqual([exportRef("old"), exportRef("new")]);
   });
 
+  test("AC1 (flow 404): --since compares every timestamp form as an instant, and still drops one that cannot be read", () => {
+    // the window opens at 2026-10-02T00:00:00Z; each form has one record just before it and one just after
+    const at: [string, string][] = [
+      ["z-before", "2026-10-01T23:59:59Z"],
+      ["z-after", "2026-10-02T00:00:01Z"],
+      ["utc0-before", "2026-10-01T23:59:59+00:00"],
+      ["utc0-after", "2026-10-02T00:00:01+00:00"],
+      ["plus3-before", "2026-10-02T02:59:59+03:00"], // 2026-10-01T23:59:59Z
+      ["plus3-after", "2026-10-02T03:00:01+03:00"], // 2026-10-02T00:00:01Z
+      ["minus5-before", "2026-10-01T18:59:59-05:00"], // 2026-10-01T23:59:59Z
+      ["minus5-after", "2026-10-01T19:00:01-05:00"], // 2026-10-02T00:00:01Z, though the written date is 1 October
+      ["unreadable", "not a time"],
+    ];
+    const records = at.map(([id, time]) => open(id, { at: time }));
+    const since = new Date("2026-10-02T00:00:00Z");
+    const rows = buildExport(records, [], { since });
+    expect(rows.map((r) => r.ref)).toEqual(["z-after", "utc0-after", "plus3-after", "minus5-after"].map(exportRef));
+    // an offset time is written as the same instant in UTC
+    expect(rows.map((r) => r.openedAt)).toEqual(["2026-10-02T00:00:01Z", "2026-10-02T00:00:01.000Z", "2026-10-02T00:00:01.000Z", "2026-10-02T00:00:01.000Z"]);
+    // without a window nothing is dropped for its form: every record but the unreadable one has an instant
+    expect(buildExport(records).filter((r) => r.openedAt === null).map((r) => r.ref)).toEqual([exportRef("unreadable")]);
+  });
+
+  test("AC1 (flow 404): a record at exactly the window's opening instant is kept, in every timestamp form", () => {
+    // `since` is inclusive: a `<` turned into `<=` would drop these four, the instant itself written four ways
+    const at: [string, string][] = [
+      ["edge-z", "2026-10-02T00:00:00Z"],
+      ["edge-utc0", "2026-10-02T00:00:00+00:00"],
+      ["edge-plus3", "2026-10-02T03:00:00+03:00"],
+      ["edge-minus5", "2026-10-01T19:00:00-05:00"],
+    ];
+    const rows = buildExport(
+      at.map(([id, time]) => open(id, { at: time })),
+      [],
+      { since: new Date("2026-10-02T00:00:00Z") },
+    );
+    expect(rows.map((r) => r.ref)).toEqual(at.map(([id]) => exportRef(id)));
+  });
+
   test("the ratings are joined to the decision by the hash and keep only structure", () => {
     const rows = buildExport(
       [open("x")],
@@ -404,7 +443,8 @@ describe("S-2: every exported field is validated at run time", () => {
       ],
     );
     expect(rows.map((r) => r.seed)).toEqual([null, null, null, 7, 7, 0]);
-    expect(rows.map((r) => r.openedAt)).toEqual(["2026-10-03T10:00:00.000Z", "2026-10-03T10:00:00.000Z", "2026-10-03T10:00:00.000Z", null, null, "2026-10-03T10:00:00.000Z"]);
+    // n4 has no zone (not an instant) and is blanked; n5 has an offset and is written in UTC
+    expect(rows.map((r) => r.openedAt)).toEqual(["2026-10-03T10:00:00.000Z", "2026-10-03T10:00:00.000Z", "2026-10-03T10:00:00.000Z", null, "2026-10-03T08:00:00.000Z", "2026-10-03T10:00:00.000Z"]);
     expect(rows.map((r) => r.timeToAnswerMs)).toEqual([null, null, null, null, null, 0]);
     expect(rows[5]?.ratings).toEqual([{ rater: "model", quality: "good", modelAgree: true, at: null }]);
   });

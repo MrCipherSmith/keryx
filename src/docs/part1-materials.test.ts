@@ -21,6 +21,10 @@ const FILES = [
   "protocol-part2.md",
 ];
 
+// Flow 404: the three files `keryx research sync` writes next to them. They may be absent (before the first
+// sync), and nothing else may join the directory.
+const SYNC_FILES = ["decisions-export-latest.jsonl", "part1-counts-latest.json", "sync-status.md"];
+
 // Version 2 of the protocol, copied unchanged from the operator's attachment. The comparison is by digest of
 // the exact bytes: any edit to the file changes the digest, and a later change has to be a new version.
 const PROTOCOL_V2_SHA256 = "4ea9dde3b7cd9be948a3bc1fc3b08c70d49c84e2754ce5a6f9d4c5b975f2a5fe";
@@ -35,8 +39,8 @@ const FORBIDDEN_KEYS = ["question", "options", "reason", "ownAnswer", "answer", 
 const FORBIDDEN_TERMS = ["frontend", "backend", "board", "process-metrics"];
 
 describe("the part 1 materials directory (flow 402)", () => {
-  it("holds the six files and nothing else", () => {
-    expect(readdirSync(DIR).sort()).toEqual([...FILES].sort());
+  it("holds the six files and nothing else, apart from the files the sync writes", () => {
+    expect(readdirSync(DIR).filter((name) => !SYNC_FILES.includes(name)).sort()).toEqual([...FILES].sort());
   });
 
   it("keeps the protocol byte-equal to version 2, with version rows for 1 and 2", () => {

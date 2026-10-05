@@ -162,6 +162,7 @@ describe("the digest tests cannot reach GitHub, Telegram or a model", () => {
         "digest-schedule.test.ts",
         "digest-surface.test.ts",
         "digest-tools-readonly.test.ts",
+        "research-sync-job.test.ts",
         "scheduled-digest-docs.test.ts",
       ].sort(),
     );

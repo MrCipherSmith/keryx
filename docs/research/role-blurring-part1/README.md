@@ -31,6 +31,10 @@ The script reads only `.metaproject/flows/*` and writes `part1-counts.json` to t
 - `contribution-log.md`: dated operator decisions that changed the direction of the article, with verbatim quotes (48 rows).
 - `decisions-export-2026-10-04.jsonl`: the recommendation journal exported without text, produced by `keryx decisions export --since 2026-10-02T00:00:00Z`.
 
+## Latest files
+
+`part1-counts-latest.json`, `decisions-export-latest.jsonl` and `sync-status.md` are written by `keryx research sync`, not by hand, and they move on: they hold the same counts and the same text-free export as the snapshot files, recomputed from the current `HEAD` and the current journal. They are not the snapshot. Commit `04809f4f` with `part1-counts.json` and `decisions-export-2026-10-04.jsonl` stays the only base of the numbers in the article; the `-latest` files serve part 2 and the claude.ai document "Материалы к части 1 / Part 1 materials", and a difference between them and the snapshot is drift, not a correction. To refresh them, run `keryx research sync` from the repository root (it also runs once a day when the `keryx serve` scheduler is on and the entry is enabled with `keryx research sync --schedule daily`); it writes only those three files, changes a file only when its content changed, and makes no commit, no branch and no pull request. The date and time of the last run is the `Запуск (run, UTC)` line at the top of `sync-status.md`, and the keryx TUI shows it in the sidebar row "Материалы части 1".
+
 ## Counts at the snapshot
 
 No discrepancy with the article at `04809f4f`: 383 units of work, 3175 criteria, 3062 confirmed, 44 units since the baseline, outcome author agent 18 and human 11, origin human-request 9 and agent-finding 1, 159 reviewed units over 368 rounds, 2544 findings (175 blocking), verdicts 1623 refuted, 329 confirmed, 15 unverifiable, 577 without a verdict, and of the refuted 1546 acted-on, 49 dismissed-incorrect, 28 without a decision.

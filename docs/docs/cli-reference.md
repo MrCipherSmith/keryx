@@ -2083,6 +2083,31 @@ decisions are never "the latest": a bare `/decisions change` skips them, and the
 
 ---
 
+## research
+
+Keeps the materials behind part 1 of the research article current. The catalog is
+`docs/research/role-blurring-part1/`; its snapshot files (`part1-counts.json`,
+`decisions-export-2026-10-04.jsonl`) stay as they are, and the `-latest` files
+next to them are refreshed by the command.
+
+```
+keryx research sync
+keryx research --help
+```
+
+| Subcommand | Description |
+|---|---|
+| `sync` | Run from the repository root. Writes `part1-counts-latest.json` (the unchanged `part1-counts.py` over the flows committed at `HEAD`), `decisions-export-latest.jsonl` (the text-free decisions export from 2026-10-02 on, the same as `keryx decisions export`) and `sync-status.md` (the UTC time of the run, the `HEAD` hash, the counts of the snapshot next to the counts now, the journal summary and the number of rows in `contribution-log.md`). A file is rewritten only when its content changed, so a second run with no new data changes only the run time in `sync-status.md`. It makes no commit, no branch and no pull request. Takes no arguments. When it fails, the previous `-latest` files are left as they were and the reason is written into `sync-status.md`; the exit code is `1`. |
+| `--help`, `-h` | Print `research` usage and exit. |
+
+The daily run is a scheduler entry: when the `keryx serve` scheduler is on and the
+entry is enabled, the same command runs once a day (see [schedule](#schedule)). The
+date and time of the last run is the `Запуск (run, UTC)` line of `sync-status.md`;
+in the TUI it is the sidebar row "Материалы части 1" (shown only in a checkout that has the
+catalog; "ещё не запускалась" before the first run).
+
+---
+
 ## update
 
 Refresh managed "service" files (templates, manifests, skills, hooks, dashboard)
