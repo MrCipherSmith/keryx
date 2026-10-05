@@ -63,8 +63,9 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
   // run can sit inside a longer hyphenated token. Flow 261 decided it the way flow
   // 260 decided phone: a false negative leaks an SSN, a false positive only
   // corrupts an identifier, so the run is redacted unless the segment IMMEDIATELY
-  // next to it is a real hash (hex, 16+ chars, at least one a-f; a UUID token also
-  // counts). A label (`ssn` / `social`) in or just before the token overrides that.
+  // next to it is a real hash (hex, 16+ chars, at least one a-f). A label
+  // (`ssn` / `social`) in the token, just before it, or in the same sentence just
+  // after it overrides that.
   const ssnValues = (input: string) => detectPii(input).filter((m) => m.policyId === "pii.ssn").map((m) => m.value);
   const SSN = "123-45-6789";
   const md5 = "d41d8cd98f00b204e9800998ecf8427e";
@@ -87,7 +88,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     for (const digest of [md5, sha1, sha256]) {
       expect(ssnValues(`${digest}-${SSN}`)).toEqual([]);
       expect(ssnValues(`${SSN}-${digest}`)).toEqual([]);
-      expect(ssnValues(`file_${digest}_${SSN}.bin`)).toEqual([]);
+      expect(ssnValues(`file-${digest}-${SSN}-v2`)).toEqual([]);
     }
   });
 
@@ -123,6 +124,15 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     ]) {
       expect(ssnValues(input)).toEqual([SSN]);
     }
+  });
+
+  test("a label right after the token vetoes suppression; a distant one does not", () => {
+    expect(ssnValues(`${md5}-${SSN} is the SSN`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${md5} (social)`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN} and then a long unrelated sentence that mentions the ssn`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN}.\nthe ssn is elsewhere`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN}\nssn`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN}. ssn`)).toEqual([]);
   });
 
   test("a repeated SSN is judged at its own offset, not at the first occurrence", () => {
