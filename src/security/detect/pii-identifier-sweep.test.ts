@@ -22,10 +22,9 @@
 //                    boundary, and `isValidIban` checks mod-97.
 //   pii.credit-card  can span a hyphenated digit run, but `isValidCreditCard`
 //                    (Luhn) rejects what is not a card number.
-//   pii.ssn          `\b\d{3}-\d{2}-\d{4}\b` can sit inside a hyphenated token,
-//                    and `isValidSsn` only range-checks. See the case below:
-//                    this is the one place the same weakness is REACHABLE, and
-//                    it is asserted rather than glossed.
+//   pii.ssn          `\b\d{3}-\d{2}-\d{4}\b` can sit inside a hyphenated token.
+//                    It is the one rule where the same weakness was reachable and
+//                    flow 261 gave it the phone rule's guard; see the block below.
 //   pii.ip           dotted quads / colon groups; `isValidIp` range-checks.
 
 import { describe, expect, test } from "bun:test";
@@ -59,25 +58,39 @@ describe("no PII rule fires on an identifier", () => {
   });
 });
 
-describe("the one rule where the same shape is reachable, stated rather than glossed", () => {
+describe("pii.ssn follows the phone rule (flow 261)", () => {
   // `pii.ssn` is bounded by `\b`, which a hyphen also satisfies, so an SSN-shaped
-  // run CAN sit inside a longer hyphenated token. It is not the defect flow 260
-  // repaired — no identifier in this codebase produced one — but the weakness is
-  // the same shape, so it is pinned here: if a future change makes this fire,
-  // the sweep says so instead of the next intermittent CI failure.
-  //
-  // Tracked as flow 261. This assertion records the gap; it does not endorse it,
-  // and whoever closes 261 replaces it with whatever that flow decides.
-  test("an SSN-shaped run inside a hyphenated identifier is detected today", () => {
-    const found = detectPii("release-123-45-6789-hotfix").filter((m) => m.policyId === "pii.ssn");
-    // Documented as-is. Changing this is a product decision about SSN recall,
-    // not a side effect of the phone fix — which is why the phone guard was
-    // written for `pii.phone` alone.
-    expect(found.map((m) => m.value)).toEqual(["123-45-6789"]);
+  // run can sit inside a longer hyphenated token. Flow 261 decided it the way flow
+  // 260 decided phone: a false negative leaks an SSN, a false positive only
+  // corrupts an identifier, so the run is redacted unless the surroundings are
+  // POSITIVE hex-identifier evidence (a UUID, a digest, a hash-prefixed id).
+  const ssnValues = (input: string) => detectPii(input).filter((m) => m.policyId === "pii.ssn").map((m) => m.value);
+
+  test("an SSN-shaped run in an ambiguous hyphenated identifier is still redacted", () => {
+    expect(ssnValues("release-123-45-6789-hotfix")).toEqual(["123-45-6789"]);
+    expect(ssnValues("contact-123-45-6789-primary")).toEqual(["123-45-6789"]);
+    expect(ssnValues("a-123-45-6789")).toEqual(["123-45-6789"]);
   });
 
-  test("BOUNDARY — and a bare SSN is of course still detected", () => {
-    const found = detectPii("ssn 123-45-6789").filter((m) => m.policyId === "pii.ssn");
-    expect(found.map((m) => m.value)).toEqual(["123-45-6789"]);
+  test("an SSN-shaped run next to a hex or hash identifier part is left alone", () => {
+    expect(ssnValues("build-a1b2c3d4-123-45-6789")).toEqual([]);
+    expect(ssnValues("123-45-6789-f53fd8cbab7a47fd")).toEqual([]);
+    expect(ssnValues("event-901131d838b17aac-123-45-6789-open")).toEqual([]);
+  });
+
+  test("a date-like or all-digit neighbour is not hex evidence", () => {
+    expect(ssnValues("20260912-123-45-6789")).toEqual(["123-45-6789"]);
+  });
+
+  test("a truncated token never buys suppression", () => {
+    const long = `${"a1b2c3d4-".repeat(12)}123-45-6789`;
+    expect(ssnValues(long)).toEqual(["123-45-6789"]);
+  });
+
+  test("BOUNDARY — a bare SSN, a labelled SSN and one in a hyphenated sentence are still detected", () => {
+    expect(ssnValues("ssn 123-45-6789")).toEqual(["123-45-6789"]);
+    expect(ssnValues("ssn: 123-45-6789")).toEqual(["123-45-6789"]);
+    expect(ssnValues("my number - 123-45-6789 - is private")).toEqual(["123-45-6789"]);
+    expect(ssnValues("SSN=123-45-6789.")).toEqual(["123-45-6789"]);
   });
 });

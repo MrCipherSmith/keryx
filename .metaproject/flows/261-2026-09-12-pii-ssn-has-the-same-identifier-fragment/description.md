@@ -49,3 +49,7 @@ phone case in a way that may not transfer:
 - The remaining PII rules — the same round checked them and found no other rule
   reachable by this shape; that check is recorded in
   `src/security/detect/pii-identifier-sweep.test.ts`.
+
+## Decision
+
+Decided by the operator, poll 93, 2026-10-05: treat SSN as flow 260 treated phone. An SSN-shaped run inside a longer identifier is redacted when the evidence is ambiguous; it is left alone only on positive hash or hex-identifier evidence. Reason: the SSN false negative leaks more than a corrupted identifier costs.

@@ -372,6 +372,11 @@ export function detectPii(content: string): DetectorMatch[] {
           continue;
         }
       }
+      // Flow 261: an SSN-shaped run gets the same identifier-fragment guard as the
+      // phone rule, in the same direction — suppressed only on positive hex evidence.
+      if (rule.policyId === "pii.ssn" && isIdentifierFragment(content, m.index, m.index + m[0].length)) {
+        continue;
+      }
       // E4: gate structured-PII candidates by their checksum/range validator.
       if (rule.validate && !rule.validate(value)) {
         continue;
