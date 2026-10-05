@@ -342,7 +342,6 @@ const SSN_TOKEN_SCAN_LIMIT = 192;
 const SSN_HASH_MAX_LENGTH = 128;
 const SSN_LABEL = /ssn|social/i;
 const SSN_LABEL_LOOKBEHIND = 32;
-const ALNUM_CHAR = /[0-9A-Za-z]/;
 
 function isSsnHashRun(segment: string): boolean {
   return (
