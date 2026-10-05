@@ -34,3 +34,4 @@
 - 2026-10-05T08:09:16.831Z - task-done: T10: TUI surfaces: side panel, /intake modal, menu, slash command, readline, one status object (AC19)
 - 2026-10-05T08:09:17.335Z - task-done: T11: Documentation: README, cli-reference, wiki, commands-by-task, docs site, CHANGELOG (AC22)
 - 2026-10-05T08:09:17.784Z - task-done: T12: Verify: targeted tests for every part green; invariants AC14 and AC21 fail on a planted mutation
+- 2026-10-05T08:46:02.142Z - task-done: T13: Independent review, fix all findings, draft PR, green CI, merge

@@ -11,7 +11,7 @@
   "title": "Work intake: GitHub events as Telegram cards with buttons",
   "status": "implemented",
   "createdAt": "2026-10-04T18:26:11.875Z",
-  "updatedAt": "2026-10-05T08:09:17.784Z",
+  "updatedAt": "2026-10-05T08:46:02.142Z",
   "source": {
     "type": "description",
     "ref": null
@@ -258,7 +258,7 @@
       "id": "T13",
       "title": "Independent review, fix all findings, draft PR, green CI, merge",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11",
         "T12"
@@ -269,7 +269,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent review of PR 889 recorded in two rounds (first round plus r02 at 3f80f9a1); F-001 and F-002 fixed in 5a8c877f (PR 896, merge 3f80f9a1), refuted by the verifier and acted-on; CI green, PRs 889 and 896 merged"
     }
   ],
   "history": [
@@ -395,6 +397,11 @@
       "at": "2026-10-05T08:09:17.784Z",
       "event": "task-done",
       "detail": "T12: Verify: targeted tests for every part green; invariants AC14 and AC21 fail on a planted mutation"
+    },
+    {
+      "at": "2026-10-05T08:46:02.142Z",
+      "event": "task-done",
+      "detail": "T13: Independent review, fix all findings, draft PR, green CI, merge"
     }
   ],
   "acKinds": {
