@@ -71,4 +71,28 @@ describe("the work-repository rule at press time (AC16)", () => {
     expect(reply?.text).toContain("отключено для рабочих репозиториев");
     expect(fakes.flows.initCalls).toEqual([]);
   });
+
+  for (const [action, kind] of [["take", "issue"], ["review-flow", "review"]] as const) {
+    test(`${action} is refused when the project lookup throws before the claim (F-001): nothing starts, the card stays open`, async () => {
+      const card = await seedCard(env.root, { kind, account: "personal", takeAllowed: true });
+      const fakes = makeFakes();
+      let calls = 0;
+      const deps: IntakeActionDeps = {
+        ...fakes.deps,
+        // fails once (the pre-claim lookup) and then answers, the way a transient registry error does
+        projectFor: (repo) => {
+          calls += 1;
+          if (calls === 1) throw new Error("registry unreadable");
+          return fakes.deps.projectFor?.(repo);
+        },
+        env: { GH_WORK_ROOT: WORK_ROOT },
+        config: testConfig({ allowTakeInWork: false }),
+      };
+      const result = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), deps });
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("не удалось определить проект");
+      expect(fakes.flows.initCalls).toEqual([]);
+      expect((await readIntakeCardView(env.root, card.id))?.state).toBe("sent");
+    });
+  }
 });

@@ -2,8 +2,8 @@
 // `taking` adopts a flow that was made for it, or goes to `failed` with a reason, and a later press is idempotent.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { decideIntakeCard, recoverIntakeTaking } from "./actions";
-import { makeFakes, seedCard } from "./intake-actions.test-helpers";
+import { decideIntakeCard, recoverIntakeTaking, type IntakeActionDeps } from "./actions";
+import { OTHER_REPO, makeFakes, seedCard } from "./intake-actions.test-helpers";
 import { INTAKE_LONGEST_PORT_TIMEOUT_MS } from "./ports";
 import { local, setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
 import { appendIntakeIfState, readIntakeCardView } from "./store";
@@ -63,6 +63,22 @@ describe("restart in `taking` (AC13)", () => {
     const view = (await readIntakeCardView(env.root, card.id))!;
     expect(view.state).toBe("failed");
     expect(view.reason).toContain("interrupted");
+  });
+
+  test("a project lookup that throws fails that card only; the cards after it are still recovered (F-002)", async () => {
+    const first = await seedCard(env.root, { repo: OTHER_REPO });
+    const second = await seedCard(env.root);
+    for (const card of [first, second]) await appendIntakeIfState(env.root, card.id, INTAKE_OPEN_STATES, { state: "taking", choice: "take", decidedBy: "4242" });
+    const fakes = makeFakes();
+    const projectFor: NonNullable<IntakeActionDeps["projectFor"]> = (repo) => {
+      if (repo === OTHER_REPO) throw new Error("registry unreadable");
+      return fakes.deps.projectFor?.(repo);
+    };
+    expect(await recoverIntakeTaking(env.root, { deps: { ...fakes.deps, projectFor }, now: later })).toBe(2);
+    const view = (await readIntakeCardView(env.root, first.id))!;
+    expect(view.state).toBe("failed");
+    expect(view.reason).toContain("interrupted");
+    expect((await readIntakeCardView(env.root, second.id))?.state).toBe("failed");
   });
 
   test("a press after the restart does not make a second flow: it adopts the first", async () => {
