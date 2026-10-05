@@ -1,6 +1,7 @@
 // AC7/AC11 (flow 403): a decision that cannot reach its ports must not throw out of `decideIntakeCard` and must not
-// leave the card in `taking`. Without ports installed (a surface that forgot to install them) the press ends `failed`
-// and the card can be pressed again once they are there.
+// leave the card in `taking`. Without ports installed (a surface that forgot to install them) take and review-flow are
+// refused before the claim (the work-root rule cannot be applied without a project), ci-triage ends `failed`; either way
+// the card can be pressed again once they are there.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { decideIntakeCard } from "./actions";
@@ -25,12 +26,12 @@ describe("a decision with no ports installed (S3)", () => {
     ["review-flow", "review"],
     ["ci-triage", "ci"],
   ] as const) {
-    test(`${action} resolves with a refusal, the card ends failed, and a repeat press works once ports exist`, async () => {
+    test(`${action} resolves with a refusal, the card is not left taking, and a repeat press works once ports exist`, async () => {
       const card = await seedCard(env.root, { kind });
       const first = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), deps: {} });
       expect(first.ok).toBe(false);
       expect(first.message.length).toBeGreaterThan(0);
-      expect((await readIntakeCardView(env.root, card.id))?.state).toBe("failed");
+      expect((await readIntakeCardView(env.root, card.id))?.state).toBe(action === "ci-triage" ? "failed" : "sent");
 
       const fakes = makeFakes();
       const again = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), deps: fakes.deps });

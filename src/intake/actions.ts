@@ -148,13 +148,13 @@ async function decide(root: string, cardId: string, action: IntakeAction, option
   if (action === "take" || action === "review-flow" || action === "ci-triage") {
     // The project is looked up BEFORE the claim only to apply the work-root rule at press time (a card sent before
     // `allowTakeInWork` was switched off, or whose repository maps to a clone under the work root, must not run).
-    // A failing lookup is left to the action, which reports it inside its own try.
+    // A failing lookup refuses the press: with no project the work-root rule cannot be applied, so it fails closed.
     let project: string | undefined;
     if (view.repo !== undefined && action !== "ci-triage") {
       try {
         project = await (deps.projectFor ?? intakeDefaultPorts().projectFor(root))(view.repo);
       } catch {
-        project = undefined;
+        return refuse("не удалось определить проект репозитория, попробуйте ещё раз");
       }
     }
     const refused = await workRefusal(action, project, root, deps);
@@ -281,7 +281,12 @@ export async function recoverIntakeTaking(root: string, options: { readonly deps
   for (const card of stuck) {
     let found: { flowId: string } | undefined;
     if (card.choice !== "ci-triage" && card.repo !== undefined) {
-      const project = await projectFor(card.repo);
+      let project: string | undefined;
+      try {
+        project = await projectFor(card.repo);
+      } catch {
+        project = undefined;
+      }
       if (project !== undefined) found = await flows.findByCard(project, card.id).catch(() => undefined);
     }
     if (found !== undefined) await appendIntakeIfState(root, card.id, ["taking"], { state: "taken", flowId: found.flowId, ...(card.choice !== undefined ? { choice: card.choice } : {}) }, clock);
