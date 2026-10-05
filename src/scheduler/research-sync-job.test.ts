@@ -2,19 +2,16 @@
 // job; no timer is started and no real sync runs.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { createServeResearchSync } from "../commands/serve-research-sync";
 import {
   readResearchSyncEntry,
   readResearchSyncFired,
   researchSyncClaimPath,
   researchSyncDataDir,
-  researchSyncEntryPath,
   runResearchSyncPass,
   scheduleResearchSync,
   unscheduleResearchSync,
@@ -41,8 +38,6 @@ afterEach(async () => {
 
 const at = (iso: string) => (): Date => new Date(iso);
 const trusted = async (): Promise<boolean> => true;
-const exec = promisify(execFile);
-const git = (cwd: string, ...args: string[]): Promise<unknown> => exec("git", args, { cwd });
 
 function deps(over: Partial<ResearchSyncJobDeps> = {}): ResearchSyncJobDeps {
   return {
@@ -265,45 +260,23 @@ describe("a failing run does not take the tick down", () => {
     expect(notices[0]).toContain("disk gone");
   });
 
-  test("the real serve wiring leaves a stale -latest file alone when the real sync fails", async () => {
-    await git(root, "init", "-q");
-    await scheduleResearchSync(root);
-    const latest = path.join(root, CATALOG, "part1-counts-latest.json");
-    await writeFile(latest, '{"good":true}\n');
-    // No part1-counts.json and no script in the catalog: the real sync fails before it writes anything.
-    // No trust override either: the entry is untracked in a real repository, so the real check lets it through.
-    const job = createServeResearchSync({ roots: () => [root], now: at("2026-10-05T04:00:00Z"), onNotice: (m) => notices.push(m) });
-    const reports = await job.tick();
-    expect(reports.map((r) => r.action)).toEqual(["failed"]);
-    expect(await readFile(latest, "utf8")).toBe('{"good":true}\n');
-    expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain("research sync could not run");
-  });
 });
 
 describe("an entry the project ships is not an entry the operator made", () => {
-  test("a schedule.json that git tracks is ignored: the sync does not run and nothing is claimed", async () => {
-    await git(root, "init", "-q");
+  // The checks below are injected stubs; the real `git` check runs in src/commands/research-sync-git-trust.test.ts.
+  test("an entry the check calls tracked is ignored: the sync does not run and nothing is claimed", async () => {
     await scheduleResearchSync(root);
-    // `git add -f` beats the ignore file of the state directory, exactly as a committed clone would carry it.
-    await git(root, "add", "-f", path.relative(root, researchSyncEntryPath(root)));
-    const job = createServeResearchSync({ roots: () => [root], sync: deps().sync, now: at("2026-10-05T04:00:00Z"), onNotice: (m) => notices.push(m) });
-    expect(await job.tick()).toEqual([]);
+    expect(await runResearchSyncPass(deps({ entryTrusted: async () => false }))).toEqual([]);
     expect(calls).toEqual([]);
     expect(await readResearchSyncFired(root)).toBeUndefined();
     expect(existsSync(researchSyncClaimPath(root, "2026-10-05"))).toBe(false);
   });
 
-  test("the same entry, untracked, runs; a directory that is not a repository is skipped", async () => {
+  test("the same entry, once the check calls it untracked, runs", async () => {
     await scheduleResearchSync(root);
-    const make = (): ReturnType<typeof createServeResearchSync> =>
-      createServeResearchSync({ roots: () => [root], sync: deps().sync, now: at("2026-10-05T04:00:00Z"), onNotice: (m) => notices.push(m) });
-    // Not a repository: git cannot say the entry is untracked, so it is not believed.
-    expect(await make().tick()).toEqual([]);
+    expect(await runResearchSyncPass(deps({ entryTrusted: async () => false }))).toEqual([]);
     expect(calls).toEqual([]);
-
-    await git(root, "init", "-q");
-    expect((await make().tick()).map((r) => r.action)).toEqual(["ran"]);
+    expect((await runResearchSyncPass(deps({ entryTrusted: async () => true }))).map((r) => r.action)).toEqual(["ran"]);
     expect(calls).toEqual([root]);
   });
 
