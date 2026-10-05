@@ -200,7 +200,8 @@ async function runImport(args: string[]): Promise<void> {
 function parseSince(args: readonly string[], sub: string): Date | undefined {
   const raw = optionValue([...args], "--since");
   if (raw === undefined) return undefined;
-  const at = new Date(raw);
+  // a date and a time with no zone would read as the local time of the machine: the journal times are instants, so read it as UTC
+  const at = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(raw) ? `${raw}Z` : raw);
   if (!Number.isFinite(at.getTime())) throw new Error(`keryx decisions ${sub}: --since "${raw}" is not a date (use 2026-10-01 or an ISO time)`);
   return at;
 }

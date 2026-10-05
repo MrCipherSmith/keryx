@@ -492,6 +492,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "research",
+    group: "Automation",
+    summary: "Part 1 materials: sync refreshes the -latest counts, the text-free decisions export and the status page next to the catalog; no commit, only when the content changed.",
+  },
+  {
+    kind: "cli",
     name: "product",
     group: "Automation",
     summary: "The product's intent as a derived index, and the intents closed in code that nobody looked back at.",

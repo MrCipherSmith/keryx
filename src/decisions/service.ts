@@ -27,7 +27,7 @@ export {
   renderQualityMatrix,
 } from "./quality";
 export type { BlindModelResult, ModelCallFn, ModelCallRequest, ModelCallResult, Quality, QualityMatrix, QualityRecord } from "./quality";
-export { buildExport, exportSummaryLine, loadExport, loadExportWithSummary, renderExport } from "./export";
+export { EXPORT_FIELDS, buildExport, exportSummaryLine, loadExport, loadExportWithSummary, renderExport } from "./export";
 export type { ExportFormat, ExportOptions, ExportRow } from "./export";
 export { importBackfill, renderImportResult } from "./import";
 export type { ImportResult } from "./import";

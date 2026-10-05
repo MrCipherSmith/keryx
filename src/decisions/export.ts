@@ -16,7 +16,7 @@
 //     otherwise they become "other": an identifier-shaped secret is as much a leak as prose.
 //
 // The allow-list is also enforced at run time, not only by the types. A journal line is a file
-// a person can edit, so every exported value is validated: a timestamp must be ISO-8601 UTC, a
+// a person can edit, so every exported value is validated: a timestamp must be ISO-8601 (an offset is written in UTC), a
 // seed and a count must be non-negative integers, an arm one of A, B, C or D, a flag a real
 // boolean. An invalid field becomes null; a record whose id or arm is invalid is skipped. The
 // counts are returned in the summary (`exportSummaryLine`), never mixed into the rows.
@@ -130,6 +130,22 @@ const TOKEN_SHAPED = /[a-z0-9]{16,}|\d{10,}/;
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
 
+/** The same shape with a numeric UTC offset in place of the `Z` (`+03:00`, `-05:00`, `+00:00`). */
+const ISO_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?[+-]\d{2}:\d{2}$/;
+
+/**
+ * A journal timestamp as ISO-8601 UTC, or null when it is not one. A `Z` time is kept byte for byte; a time with
+ * a numeric offset names the same instant and is written in UTC, so every form is compared as an instant (an offset
+ * time was once blanked here, and a `--since` window then dropped it as unreadable).
+ */
+function toUtcIso(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return null;
+  if (ISO_UTC.test(value)) return value;
+  return ISO_OFFSET.test(value) ? new Date(at).toISOString() : null;
+}
+
 const inVocabulary = (value: unknown, vocabulary: readonly string[]): string => (typeof value === "string" && vocabulary.includes(value) ? value : OTHER);
 const exportModel = (value: unknown): string => (typeof value === "string" && MODEL_ID.test(value) && !TOKEN_SHAPED.test(value) ? value : OTHER);
 
@@ -160,7 +176,10 @@ class Validator {
   }
 
   timestamp(value: unknown): string | null {
-    return this.pick(value, (v): v is string => typeof v === "string" && ISO_UTC.test(v) && Number.isFinite(Date.parse(v)));
+    if (value === undefined || value === null) return null;
+    const iso = toUtcIso(value);
+    if (iso === null) this.blanked += 1;
+    return iso;
   }
 
   count(value: unknown): number | null {

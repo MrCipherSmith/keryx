@@ -227,6 +227,9 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "                                               GitHub work intake: tickets, reviews, failed CI, PR comments and board\n",
     "                                               movement as Telegram cards; report = decisions, answer times, card -> flow -> PR\n",
     "  intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report\n",
+    // Flow 404: `keryx research sync`, a brand-new verb, so a USAGE_BODY line and a Commands: summary row.
+    "  keryx research sync                          Refresh the Part 1 materials: counts at HEAD, text-free decisions export, sync-status.md (no commit)\n",
+    "  research  Part 1 materials: sync the -latest counts, the decisions export and the status page\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

@@ -80,6 +80,7 @@ import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
 import { intakeCommand, printIntakeHelp } from "./commands/intake";
+import { researchCommand, printResearchHelp } from "./commands/research-sync";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
 import { productCommand, readDigestBoard } from "./commands/product";
 import { registerBoardReader } from "./scheduler/digest-board";
@@ -183,6 +184,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   governance: governanceCommand,
   decisions: decisionsCommand,
   intake: intakeCommand,
+  research: researchCommand,
   product: productCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
@@ -416,6 +418,7 @@ export const USAGE_BODY = `Usage:
   keryx intake status|list|pause|resume|poll|report [--json]
                                                GitHub work intake: tickets, reviews, failed CI, PR comments and board
                                                movement as Telegram cards; report = decisions, answer times, card -> flow -> PR
+  keryx research sync                          Refresh the Part 1 materials: counts at HEAD, text-free decisions export, sync-status.md (no commit)
   keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
   keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
@@ -505,6 +508,7 @@ Commands:
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
   decisions Recommendation journal: every agent question with options, what was recommended, what the human chose
   intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report
+  research  Part 1 materials: sync the -latest counts, the decisions export and the status page
   product   The product's intent as a derived index, and the intents closed in code that nobody looked back at
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
@@ -629,6 +633,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   ["governance", () => printGovernanceHelp()],
   ["decisions", () => printDecisionsHelp()],
   ["intake", () => printIntakeHelp()],
+  ["research", () => printResearchHelp()],
   ["hooks", () => printHooksHelp()],
   ["bundle", () => printBundleHelp()],
   ["learn", () => printLearnHelp()],

@@ -58,6 +58,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
     reason:
       "the saved shell rules (flow 396): removing one changes what runs without asking, a consent decision that must stay with the human at a terminal and never be a callable operation for the agent the rules gate",
   },
+  {
+    verb: "research",
+    reason:
+      "rewrites three files in the Part 1 materials catalog from the repository itself and runs a script and archive tools (flow 404); a scheduled maintenance job for the operator, not an operation an agent calls for a result",
+  },
   { verb: "dash", reason: "alias of dashboard open; opens a browser, no machine-consumable result" },
   { verb: "dashboard", reason: "build writes a human artifact and open launches a browser; neither is an agent operation" },
   {
