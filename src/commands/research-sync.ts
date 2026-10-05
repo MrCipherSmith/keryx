@@ -32,7 +32,10 @@ const COUNTS_TIMEOUT_MS = 120_000;
 /** git and tar are quick; a child that has not answered in this long is hung. */
 const TOOL_TIMEOUT_MS = 60_000;
 /** Nothing the sync writes may name the operator's team repositories (flow 404, AC7). */
-const OFF_LIMITS = /frontend|backend|board|process-metrics/i;
+const OFF_LIMITS = /(?<![a-z0-9])(?:frontend|backend|board|process-metrics)(?![a-z0-9])/i;
+
+/** Whole words only: "dashboard" or "keyboard" is not the word "board". */
+export const namesOffLimits = (text: string): boolean => OFF_LIMITS.test(text);
 
 export interface SyncDeps {
   /** The repository root: the directory the command was run from. */
@@ -43,6 +46,8 @@ export interface SyncDeps {
   headHash?: (root: string) => Promise<string>;
   /** Test seam: how a staged file is written before the renames. Default `writeFile`. */
   writeStaged?: (file: string, content: string) => Promise<void>;
+  /** Test seam: how a staged file replaces its target. Default `rename`. */
+  renameStaged?: (from: string, to: string) => Promise<void>;
 }
 
 export interface SyncOutcome {
@@ -182,7 +187,7 @@ async function compute(deps: Required<SyncDeps>): Promise<Computed> {
 
   const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows });
   for (const text of [countsText, exportText, statusText]) {
-    if (OFF_LIMITS.test(text)) throw new SyncError("output names a repository that must not appear");
+    if (namesOffLimits(text)) throw new SyncError("output names a repository that must not appear");
   }
   return { countsText, countsKept, exportText, statusText };
 }
@@ -195,7 +200,7 @@ async function recordFailure(root: string, runAt: Date, reason: string): Promise
 }
 
 export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
-  const deps: Required<SyncDeps> = { now: () => new Date(), runCounts, headHash, writeStaged: (file, content) => writeFile(file, content, "utf8"), ...input };
+  const deps: Required<SyncDeps> = { now: () => new Date(), runCounts, headHash, writeStaged: (file, content) => writeFile(file, content, "utf8"), renameStaged: rename, ...input };
   const { root } = deps;
   const runAt = deps.now();
   let computed: Computed;
@@ -218,7 +223,8 @@ export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
   // that changed is written to a temp file first (a failure here has touched nothing that matters), and only then
   // are the temp files renamed in a row.
   const changed: string[] = [];
-  const staged: Array<{ name: string; file: string; temp: string }> = [];
+  const staged: Array<{ name: string; file: string; temp: string; previous: string | null }> = [];
+  const renamed: typeof staged = [];
   try {
     const targets: Array<[string, string]> = [
       [LATEST_COUNTS, computed.countsText],
@@ -227,17 +233,29 @@ export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
     ];
     for (const [name, content] of targets) {
       const file = catalogFile(root, name);
-      if ((await readIfExists(file)) === content) continue;
-      const item = { name, file, temp: `${file}.tmp-${process.pid}` };
+      const previous = await readIfExists(file);
+      if (previous === content) continue;
+      const item = { name, file, temp: `${file}.tmp-${process.pid}`, previous };
       staged.push(item);
       await deps.writeStaged(item.temp, content);
     }
     for (const item of staged) {
-      await rename(item.temp, item.file);
+      await deps.renameStaged(item.temp, item.file);
+      renamed.push(item);
       changed.push(path.join(CATALOG_DIR, item.name));
     }
   } catch (error) {
     for (const item of staged) await rm(item.temp, { force: true });
+    // A rename that failed part-way would leave the files of different generations: put the old content back.
+    for (const item of renamed) {
+      try {
+        if (item.previous === null) await rm(item.file, { force: true });
+        else await writeFile(item.file, item.previous, "utf8");
+      } catch {
+        // Best effort; the reason below still reaches the caller.
+      }
+    }
+    changed.length = 0;
     const reason = reasonLine(error, root);
     try {
       await recordFailure(root, runAt, reason);
