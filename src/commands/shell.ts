@@ -164,6 +164,8 @@ import { renderGroupedNamedHelp } from "../standard/service";
 // Flow 266 (AC8): the demote EFFECT lives with the registry, not with either
 // shell, so both dispatch into the same rule instead of growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
+import { runTasksCommand } from "../tui/tasks-command";
+import { formatUsageLine } from "../tui/usage-format";
 import {
   type AgentDeps,
   type AgentIO,
@@ -1629,20 +1631,8 @@ function describeSearchProviders(
 
 /** A dim `↑in ↓out tokens` summary, or "" when the provider reported nothing. */
 function formatUsage(usage: NormalizedUsage | undefined): string {
-  if (usage === undefined) {
-    return "";
-  }
-  const parts: string[] = [];
-  if (usage.inputTokens !== undefined) {
-    parts.push(`↑${usage.inputTokens}`);
-  }
-  if (usage.outputTokens !== undefined) {
-    parts.push(`↓${usage.outputTokens}`);
-  }
-  if (parts.length === 0) {
-    return "";
-  }
-  return style.dim(`${parts.join(" ")} tokens`);
+  const line = usage === undefined ? undefined : formatUsageLine(usage);
+  return line === undefined ? "" : style.dim(line);
 }
 
 /**
@@ -2839,6 +2829,8 @@ export async function runAgentRepl(
             );
           }
         }
+      } else if (command === "/tasks") {
+        agentIo.onSystem?.(await runTasksCommand(rest, deps.jobRegistry));
       } else if (command === "/demote") {
         // Flow 266 (AC8). Parse and effect are both shared with the TUI; only
         // the reporting is this shell's own. Demote never stops the command —

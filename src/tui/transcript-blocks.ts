@@ -865,6 +865,8 @@ export function createAssistantMessageStream(
 export type BlockTone = "dim" | "cyan" | "red";
 
 export interface BlockViewOptions {
+  /** Short body visible while collapsed; full text remains available on expand. */
+  collapsedPreview?: string;
   /** Trailing hint in the header while the block is COLLAPSED, e.g. `ctrl+o`. */
   hint?: string;
   /**
@@ -1036,6 +1038,10 @@ export function createBlockView(
     render: (state, opts = {}) => {
       paintHeader(state, opts.focused === true);
       if (state.collapsed) {
+        if (options.collapsedPreview !== undefined) {
+          showBody(options.collapsedPreview);
+          return;
+        }
         dropBody();
         return;
       }

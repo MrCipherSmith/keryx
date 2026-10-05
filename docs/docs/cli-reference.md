@@ -7091,3 +7091,12 @@ judgment (`/goal <text> [--workspace <id>] [--auto [N]]`, or `harness run
 wrap-up proposal without a manual `propose` call. Operator guides:
 [Shared Agent Context](./guides/shared-agent-context.md),
 [`/goal`](./guides/goal.md).
+
+## Session shell task commands (flow 406)
+
+Both shell surfaces support `/tasks`, `/tasks output <task_id> [cursor]`, and
+`/tasks kill <task_id>`. Output reads report `next_cursor` without consuming
+the agent's reader. Kill stops the supervised process group without a model
+turn. These commands operate only on tasks tracked by this session.
+In the TUI, unknown slash commands display a collapsible available-command
+list with an eight-line preview (Ctrl+O, then Enter to expand).

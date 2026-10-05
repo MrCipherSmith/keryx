@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "406",
+  "slug": "shell-smoke-fixes",
+  "title": "Shell smoke findings: reliable routing, queue and convenient UX",
+  "status": "in-progress",
+  "createdAt": "2026-10-05T10:52:56.568Z",
+  "updatedAt": "2026-10-05T11:09:17.250Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f8808fc72a2be42bebc5d5c9f99e8bc7dd2ff36726d06c55d017c9a1a647f6ef",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-05T11:09:17.250Z",
+            "outcome": "started",
+            "detail": "Investigate six smoke findings; operator requires CI-only test execution and draft PR, no merge"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-05T10:52:56.568Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-05T11:00:57.800Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-05T11:00:57.994Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-05T11:01:24.834Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"Зафиксируй это где-то в документации, и запускай фло с эффектом: замечания исправлены и к ним больше не возвращаемся, работать удобнее\"; source: interactive keryx shell; operator request after manual smoke test 2026-10-05 (Operator explicitly requested a new flow to fix the recorded shell smoke findings)"
+    },
+    {
+      "at": "2026-10-05T11:09:17.250Z",
+      "event": "task-attempt",
+      "detail": "T1: started (attempt 1) — Investigate six smoke findings; operator requires CI-only test execution and draft PR, no merge"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Зафиксируй это где-то в документации, и запускай фло с эффектом: замечания исправлены и к ним больше не возвращаемся, работать удобнее",
+    "source": "interactive keryx shell; operator request after manual smoke test 2026-10-05"
+  }
+}

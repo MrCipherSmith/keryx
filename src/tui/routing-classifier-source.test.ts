@@ -127,3 +127,24 @@ test("renderRoutingSidebarValue: off/on text", () => {
   expect(renderRoutingSidebarValue(true, 3, "quick")).toBe("on · 3 routed (last: quick)");
   expect(renderRoutingSidebarValue(true, 0)).toBe("on · 0 routed");
 });
+
+test("flow 406: the Russian smoke greeting routes to configured quick without a classifier request", async () => {
+  const cwd = tmpDir();
+  await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, {
+    quick: { kind: "model", providerId: "anthropic", modelId: "claude-quick" },
+  });
+  const result = await runRoutingClassifierForTurn("Привет! Ответь одним словом.", {
+    enabled: true,
+    jevEnabled: false,
+    cwd,
+    detected: [{ name: "anthropic", models: ["claude-session", "claude-quick"] }],
+    sessionProvider: "anthropic",
+    sessionModel: "claude-session",
+    env: {},
+    userConfigDir: cwd,
+    fetch: (async () => { throw new Error("unexpected classifier request"); }) as typeof fetch,
+  });
+  expect(result?.category).toBe("quick");
+  expect(result?.routed).toEqual({ providerId: "anthropic", modelId: "claude-quick" });
+  expect(result && renderRoutingTagLine(result)).toBe("[quick -> anthropic/claude-quick] (deterministic 100%)");
+});

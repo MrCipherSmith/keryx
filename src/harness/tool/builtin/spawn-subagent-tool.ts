@@ -977,6 +977,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         });
       };
 
+      // Visible before routing/configuration or model-tier awaits; not a claim
+      // that admission or provider startup has already completed.
+      emitFleetEvent({ kind: "upsert", id: workerId, label, status: "running",
+        detail: "preparing", task,
+        ...(isExternalRuntimeRequest ? { runtime: "external" as const,
+          ...(typeof Reflect.get(input.runtime as object, "agent") === "string"
+            ? { agentId: Reflect.get(input.runtime as object, "agent") as string } : {}) } : {}),
+      });
+      // Setup failures must also terminate the newly visible preparing row.
+      // Inner paths retain ownership of reservation/slate cleanup.
+      try {
       const parent = deps.getParentModel();
       const detected = deps.getDetectedProviders();
       const session = { providerId: parent.providerId, modelId: parent.modelId };
@@ -1936,6 +1947,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         await foldChildSlateAndCleanup("incomplete");
         await fireSubagentStop("Error");
         return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
+      }
+      } catch (cause) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "setup-error", task });
+        // Preserve the original setup error for the tool runner rather than
+        // fabricating a child result from a configuration/provider failure.
+        throw cause;
       }
     },
   };

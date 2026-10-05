@@ -490,3 +490,20 @@ Stated here rather than left to be discovered:
   `claude` 2.1.280 and `agy` 1.2.12 (codex-cli: failure path only; Gemini: not at
   all) — see
   [what this deliberately does not do](#what-this-deliberately-does-not-do).
+
+## Shell smoke fixes (flow 406)
+
+- `/tasks` lists this session's supervised shell tasks in both TUI and readline.
+  `/tasks output <task_id> [cursor]` reads retained output without consuming the
+  agent's cursor and reports `next_cursor`; `/tasks kill <task_id>` stops the
+  process group. Unknown or already-finished tasks report registry errors.
+- Unknown slash commands in the TUI show available commands in a collapsible
+  block with an eight-line preview. Use Ctrl+O, then Enter to expand.
+- Routing reports a manual `/model` pin or fallback instead of silently using
+  the session model. These notices do not change external-provider policy.
+- Usage lines show reported cache-read/cache-write counters. `uncached` is
+  derived only when both counters are present; missing counters mean unknown,
+  not zero. Token counts alone are not a price calculation.
+- Subagent preparation is visible before configuration/model setup awaits;
+  setup failures terminate the fleet row. Startup latency reduction is not
+  claimed without measurement.

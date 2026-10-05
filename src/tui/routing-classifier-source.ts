@@ -129,6 +129,12 @@ export async function runRoutingClassifierForTurn(
   return { classification, category, assignment: resolved.assignment };
 }
 
+/** An enabled route must never silently look successful while falling back. */
+export function renderRoutingFallbackLine(result: RoutingClassifierTurnResult | undefined): string {
+  if (result === undefined) return "[route fallback: no classifier category; using session model]";
+  return `[route fallback: ${result.category} -> ${describeAssignment(result.assignment)}; using session model]`;
+}
+
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
