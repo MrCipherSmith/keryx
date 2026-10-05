@@ -9,9 +9,9 @@
   "id": "404",
   "slug": "part1-materials-sync",
   "title": "Синхронизация материалов части 1",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-04T21:05:14.705Z",
-  "updatedAt": "2026-10-05T04:07:48.246Z",
+  "updatedAt": "2026-10-05T04:36:48.430Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/891"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -323,6 +323,11 @@
       "at": "2026-10-05T04:07:48.246Z",
       "event": "task-done",
       "detail": "T9: Independent review and fixes"
+    },
+    {
+      "at": "2026-10-05T04:36:48.430Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/891 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -363,5 +368,6 @@
     "AC10": {
       "kind": "judged"
     }
-  }
+  },
+  "baseBranch": "main"
 }

@@ -27,3 +27,7 @@
 - 2026-10-05T03:55:08.549Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-10-05T03:55:08.744Z - task-done: T4: Self-review and prepare draft PR
 - 2026-10-05T04:07:48.246Z - task-done: T9: Independent review and fixes
+- 2026-10-05T04:36:00.000Z - note: PR 891 merged as 4d72ba0a. First real `keryx research sync` run at 2026-10-05 04:35 UTC on that HEAD, status ok, journal 47 decisions (the --since 2026-10-02 export holds 77 lines). Snapshot files part1-counts.json and decisions-export-2026-10-04.jsonl unchanged (git diff empty); git status lists only part1-counts-latest.json, decisions-export-latest.jsonl, sync-status.md.
+- 2026-10-05T04:37:00.000Z - note: AC7 word search (case-insensitive, frontend|backend|board|process-metrics) over docs/research/role-blurring-part1/ after the sync: 0 files, nothing found.
+- 2026-10-05T04:38:00.000Z - note: AC10 done: section "Текущее состояние / Live status" created in the claude.ai document "Материалы к части 1 / Part 1 materials" right after "Статус / Status" (it did not exist yet), RU and EN, content from sync-status.md; no other block touched (rev 21 to 22).
+- 2026-10-05T04:36:48.430Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/891 (warning: PR is not a draft) (base: main)
