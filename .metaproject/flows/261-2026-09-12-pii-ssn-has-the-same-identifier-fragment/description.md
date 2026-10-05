@@ -49,3 +49,9 @@ phone case in a way that may not transfer:
 - The remaining PII rules — the same round checked them and found no other rule
   reachable by this shape; that check is recorded in
   `src/security/detect/pii-identifier-sweep.test.ts`.
+
+## Decision
+
+Decided by the operator, poll 93, 2026-10-05: treat SSN as flow 260 treated phone. An SSN-shaped run inside a longer identifier is redacted when the evidence is ambiguous; it is left alone only on positive hash or hex-identifier evidence. Reason: the SSN false negative leaks more than a corrupted identifier costs.
+
+Rule after review of PR #906: suppression needs a real hash (hex, 16+ chars with at least one a-f, covering md5, sha1 and sha256) in the segment immediately adjacent to the SSN. A label (`ssn` or `social`) in the token, just before it, or in the same sentence within 24 characters after it overrides suppression. Short hex-looking neighbours such as `deadbeef` or `E1234567` are not evidence.
