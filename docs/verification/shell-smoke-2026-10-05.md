@@ -57,3 +57,10 @@ failures, and help preview/expand/collapse. No local tests or builds were run
 (operator requirement); CI is the automated gate. Runtime startup latency,
 request cost/composition, and operator convenience still need measurements
 and repeated manual evidence. Those acceptance criteria are not marked passed.
+
+## Remote CI follow-up — PR #901
+
+Draft PR: https://github.com/MrCipherSmith/keryx/pull/901. No local tests/builds were run.
+Commit `714ef64e4`: the only failing core test was the generated commands-by-task
+page missing the `/tasks` row. The page is now synchronized; the next remote CI
+result is pending. Manual acceptance and latency/input-load measurements remain open.
