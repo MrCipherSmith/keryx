@@ -329,8 +329,9 @@ function isIdentifierFragment(content: string, matchStart: number, matchEnd: num
 // redact unless there is positive evidence — but the evidence is stricter,
 // because an SSN leak is worse than a phone leak. Suppression needs ALL of:
 //   - the match sits inside a longer `[0-9A-Za-z_-]` token, fully scanned;
-//   - no SSN label (`ssn`, `social`, `SS#`, `NSS`, `СНИЛС`, ...) in that token or
-//     within 64 characters before or after it, sentence breaks included;
+//   - no SSN label (`ssn`, `social`, `SS #`, `S-S-N`, `NSS`, `СНИЛС`, ...) in that
+//     token or STARTING within 64 characters before or after it, sentence breaks
+//     included, read after NFKC / invisible-character / accent folding;
 //   - the segment IMMEDIATELY adjacent to the SSN (across one `-`; `\b` never
 //     matches next to `_`) is a hash of exactly 32, 40 or 64 hex characters
 //     (md5, sha1, sha256) with at least one a-f. Any other hex run is a prefix
@@ -340,9 +341,45 @@ function isIdentifierFragment(content: string, matchStart: number, matchEnd: num
 /** Wide enough that a sha256 (64) on either side never truncates the scan. */
 const SSN_TOKEN_SCAN_LIMIT = 192;
 const SSN_HASH_LENGTHS: ReadonlySet<number> = new Set([32, 40, 64]);
-const SSN_LABEL =
-  /ssn|social|ss#|nss|снилс|sozialversicherungsnummer|s\.\s*s\.\s*n|soc\.?\s*sec\.?\s*no/iu;
 const SSN_LABEL_WINDOW = 64;
+const LABEL_SEP = "[\\s.\\-_]{0,8}";
+// Matched against folded text (NFKC, invisibles and accents removed).
+const SSN_LABEL = new RegExp(
+  [
+    "ssn|social|nss|снилс|sozialversicherung|versicherungsn(?:ummer|r)|numero\\s+de\\s+secu",
+    `soc${LABEL_SEP}sec`,
+    `(?<![a-z])(?:s${LABEL_SEP}s${LABEL_SEP}[n#]|n${LABEL_SEP}s${LABEL_SEP}s|sv${LABEL_SEP}n)`,
+  ].join("|"),
+  "iu",
+);
+const LABEL_INVISIBLE = /[­​-‍⁠﻿]/gu;
+const LABEL_MARKS = /\p{M}/gu;
+
+function foldForLabel(text: string): { folded: string; offsets: number[] } {
+  let folded = "";
+  const offsets: number[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const piece = (text[i] as string)
+      .replace(LABEL_INVISIBLE, "")
+      .normalize("NFKC")
+      .normalize("NFD")
+      .replace(LABEL_MARKS, "");
+    folded += piece;
+    for (let k = 0; k < piece.length; k += 1) {
+      offsets.push(i);
+    }
+  }
+  return { folded, offsets };
+}
+
+// A label vetoes when it STARTS within 64 characters of the token (or inside it).
+function hasSsnLabelNear(content: string, tokenStart: number, tokenEnd: number): boolean {
+  const base = Math.max(0, tokenStart - SSN_LABEL_WINDOW);
+  const region = content.slice(base, Math.min(content.length, tokenEnd + 2 * SSN_LABEL_WINDOW));
+  const { folded, offsets } = foldForLabel(region);
+  const hit = SSN_LABEL.exec(folded);
+  return hit !== null && base + (offsets[hit.index] as number) < tokenEnd + SSN_LABEL_WINDOW;
+}
 
 function isSsnHashRun(segment: string): boolean {
   return SSN_HASH_LENGTHS.has(segment.length) && /^[0-9A-Fa-f]+$/.test(segment) && /[A-Fa-f]/.test(segment);
@@ -369,13 +406,7 @@ function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: 
     return false; // The match IS the token.
   }
   // A label overrides everything: the token, or the text just before it, says this is an SSN.
-  if (SSN_LABEL.test(content.slice(tokenStart, tokenEnd))) {
-    return false;
-  }
-  if (SSN_LABEL.test(content.slice(Math.max(0, tokenStart - SSN_LABEL_WINDOW), tokenStart))) {
-    return false;
-  }
-  if (SSN_LABEL.test(content.slice(tokenEnd, tokenEnd + SSN_LABEL_WINDOW))) {
+  if (hasSsnLabelNear(content, tokenStart, tokenEnd)) {
     return false;
   }
   // Split at the match's actual offset, never at the first textual occurrence.
