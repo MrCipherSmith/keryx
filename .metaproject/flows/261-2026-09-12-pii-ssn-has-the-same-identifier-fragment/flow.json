@@ -7,17 +7,38 @@
   "id": "261",
   "slug": "pii-ssn-has-the-same-identifier-fragment",
   "title": "pii.ssn has the same identifier-fragment hole the phone pattern had",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-12T13:17:27.561Z",
-  "updatedAt": "2026-10-05T17:16:24.356Z",
+  "updatedAt": "2026-10-05T18:36:44.106Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-05T18:26:38.861Z",
+      "note": "operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean"
+    },
+    "AC2": {
+      "at": "2026-10-05T18:26:39.047Z",
+      "note": "operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean"
+    },
+    "AC3": {
+      "at": "2026-10-05T18:26:39.237Z",
+      "note": "operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean"
+    },
+    "AC4": {
+      "at": "2026-10-05T18:26:39.420Z",
+      "note": "operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean"
+    },
+    "AC5": {
+      "at": "2026-10-05T18:26:39.611Z",
+      "note": "operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/906"
   },
   "tasks": [
     {
@@ -128,6 +149,50 @@
       "at": "2026-10-05T17:16:24.356Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-05T18:26:38.675Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/906 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-05T18:26:38.861Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-05T18:26:39.047Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-05T18:26:39.237Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-05T18:26:39.421Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-05T18:26:39.611Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: operator confirmed via poll 95 (2026-10-05T18:26Z); PR 906 merged 7b93fc97, CI green, independent review clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-05T18:36:39.785Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-05T18:36:44.105Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-05T18:36:44.106Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "owner": {
@@ -155,5 +220,138 @@
     "AC5": {
       "kind": "unclassified"
     }
+  },
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-05T18:26:38.861Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620"
+    },
+    {
+      "at": "2026-10-05T18:26:39.047Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620"
+    },
+    {
+      "at": "2026-10-05T18:26:39.237Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620"
+    },
+    {
+      "at": "2026-10-05T18:26:39.420Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620"
+    },
+    {
+      "at": "2026-10-05T18:26:39.611Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620"
+    },
+    {
+      "at": "2026-10-05T18:36:44.106Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620",
+      "headCommit": "7b93fc97"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-05T18:36:44.105Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7b93fc97 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "7b93fc97 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "folder-committed",
+          "status": "skipped",
+          "detail": "folder-committed gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 4 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:a9c87c4a29deff33b15354033f539734d79e8521fb6f0011d820bcc0bc540620"
+    }
+  ],
+  "merged": {
+    "commit": "7b93fc97",
+    "ref": "origin/main",
+    "at": "2026-10-05T18:36:44.106Z"
   }
 }
