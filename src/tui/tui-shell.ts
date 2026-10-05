@@ -3825,7 +3825,7 @@ export async function launchTuiAgentShell(opts: {
   let liveApprovals: ApprovalsSidebar | undefined;
   let liveIntake: IntakeSidebar | undefined;
   let liveDecisions: DecisionsSidebar | undefined;
-let liveResearchSync: ResearchSyncPanelHandle | undefined;
+  let liveResearchSync: ResearchSyncPanelHandle | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level

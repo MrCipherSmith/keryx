@@ -11,12 +11,16 @@
 // reason is in `sync-status.md` (the sync writes it) and in serve's notice line (this job reports it). A run that
 // fails, or throws, never escapes the tick: serve keeps running.
 //
+// The entry is only believed when git does not track it (`entryTrusted`, injected): a cloned repository can commit
+// its own entry and counts script, and serve must not run what the operator never switched on. Two serve processes
+// share the day through an exclusive claim file, and a sync that outlives its deadline is recorded as failed.
+//
 // It only runs where the Part 1 catalog directory exists (this is keryx's own repository feature); in any other
 // project the entry is ignored without a word. The clock, the roots, the sync and the catalog test are all
 // injected, so a test drives this with a fake clock and a fake sync and never starts a timer. This file touches
 // git in no way and reacts to no event: the only trigger is the tick that serve gives it.
 
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, pathExists, writeFileAtomic } from "../lib/fs";
 
@@ -26,6 +30,11 @@ export function researchSyncDataDir(projectRoot: string): string {
 
 export const researchSyncEntryPath = (projectRoot: string): string => path.join(researchSyncDataDir(projectRoot), "schedule.json");
 export const researchSyncFiredPath = (projectRoot: string): string => path.join(researchSyncDataDir(projectRoot), "fired.json");
+/** One small file per UTC day, created exclusively: the first process to create it owns the day. */
+export const researchSyncClaimPath = (projectRoot: string, day: string): string => path.join(researchSyncDataDir(projectRoot), `claim-${day}`);
+const CLAIM_PREFIX = "claim-";
+/** No sync may hold a tick (or serve's drain) longer than this. */
+export const RESEARCH_SYNC_DEADLINE_MS = 5 * 60_000;
 
 export interface ResearchSyncEntry {
   readonly version: 1;
@@ -109,7 +118,33 @@ export async function unscheduleResearchSync(projectRoot: string): Promise<{ rem
   const had = await pathExists(researchSyncEntryPath(projectRoot));
   await rm(researchSyncEntryPath(projectRoot), { force: true });
   await rm(researchSyncFiredPath(projectRoot), { force: true });
+  for (const name of await claimFiles(projectRoot)) await rm(path.join(researchSyncDataDir(projectRoot), name), { force: true });
   return { removed: had };
+}
+
+async function claimFiles(projectRoot: string): Promise<string[]> {
+  try {
+    return (await readdir(researchSyncDataDir(projectRoot))).filter((name) => name.startsWith(CLAIM_PREFIX));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Claim the UTC day for this process. `wx` makes the creation exclusive, so of two serve processes that look at the
+ * same moment exactly one gets `true`. Claims of earlier days are removed afterwards; they have no further use.
+ */
+async function claimDay(projectRoot: string, day: string, at: Date): Promise<boolean> {
+  try {
+    await writeFile(researchSyncClaimPath(projectRoot, day), `${JSON.stringify({ pid: process.pid, claimedAt: at.toISOString() })}\n`, { flag: "wx" });
+  } catch (error) {
+    if ((error as { code?: unknown }).code === "EEXIST") return false;
+    throw error;
+  }
+  for (const name of await claimFiles(projectRoot)) {
+    if (name !== `${CLAIM_PREFIX}${day}`) await rm(path.join(researchSyncDataDir(projectRoot), name), { force: true });
+  }
+  return true;
 }
 
 export type ResearchSyncAction = "ran" | "failed" | "waiting";
@@ -128,6 +163,14 @@ export interface ResearchSyncJobDeps {
   readonly sync: (root: string) => Promise<{ readonly ok: boolean; readonly reason?: string }>;
   /** True when the Part 1 catalog directory exists under `root`; a project without it is skipped without a word. */
   readonly hasCatalog: (root: string) => Promise<boolean>;
+  /**
+   * True only when the entry file may be believed: it is NOT tracked by git in that project. A cloned repository can
+   * commit its own `schedule.json` (and its own counts script), and serve would then run code its owner never opted
+   * into; an entry made by `--schedule daily` is untracked. On any doubt the answer is false and the project is skipped.
+   */
+  readonly entryTrusted: (root: string) => Promise<boolean>;
+  /** Longest a single sync may take before it is recorded as failed. Default {@link RESEARCH_SYNC_DEADLINE_MS}. */
+  readonly deadlineMs?: number;
   readonly now?: () => Date;
   readonly onNotice?: (message: string) => void;
 }
@@ -155,20 +198,43 @@ export async function runResearchSyncPass(deps: ResearchSyncJobDeps): Promise<Re
   return reports;
 }
 
+async function trusted(root: string, deps: ResearchSyncJobDeps): Promise<boolean> {
+  try {
+    return await deps.entryTrusted(root);
+  } catch {
+    return false;
+  }
+}
+
+/** The sync, or a rejection once `ms` have passed. The timer is cleared the moment the sync settles. */
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`sync did not finish within ${Math.max(1, Math.round(ms / 1000))} s`)), ms);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  return Promise.race([work, late]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
 async function passOne(root: string, deps: ResearchSyncJobDeps, now: () => Date): Promise<ResearchSyncReport | undefined> {
   if ((await readResearchSyncEntry(root)) === undefined) return undefined;
   if (!(await deps.hasCatalog(root))) return undefined;
+  if (!(await trusted(root, deps))) return undefined;
   const at = now();
   const day = utcDay(at);
   const fired = await readResearchSyncFired(root);
   if (fired?.day === day) return { root, action: "waiting", day };
 
-  // Claim the day BEFORE the run: a second tick, or a restarted serve, now sees it taken.
+  // Claim the day BEFORE the run: a second tick, a second serve, or a restarted serve now sees it taken. The claim
+  // is an exclusive file creation, so two processes that read `fired.json` at the same moment still start one run.
+  if (!(await claimDay(root, day, at))) return { root, action: "waiting", day };
   await writeFired(root, { version: 1, day, claimedAt: at.toISOString() });
   let ok = false;
   let reason: string | undefined;
   try {
-    const outcome = await deps.sync(root);
+    const outcome = await withDeadline(deps.sync(root), deps.deadlineMs ?? RESEARCH_SYNC_DEADLINE_MS);
     ok = outcome.ok;
     reason = outcome.ok ? undefined : (outcome.reason ?? "unknown error");
   } catch (error) {

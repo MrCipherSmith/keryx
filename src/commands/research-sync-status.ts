@@ -65,7 +65,7 @@ function journalSummary(report: DecisionsReport): string[] {
     `- Отклонения (deviations): ${report.deviations.length}; с причиной (with a reason): ${withReason}; без причины (without a reason): ${report.deviations.length - withReason}`,
     `- Исключено как необратимые (excluded-irreversible): ${report.ineligible.decisions}`,
     `- Прогресс к порогу P7 (${threshold} обратимых вопросов на плечо, reversible questions per arm): ${arms}; порог достигнут (met): ${met ? "да (yes)" : "нет (no)"}`,
-    `- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений ${ac11.decisions}/${ac11.decisionsTarget}, слепых ${ac11.blind}/${ac11.blindTarget}; ${ac11.met ? "выполнено (met)" : "не выполнено (not met)"}`,
+    `- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений ${ac11.decisions}/${ac11.decisionsTarget}, слепых ${ac11.blind}/${ac11.blindTarget}; ${ac11.met ? "числа достигнуты (numeric targets met)" : "числа не достигнуты (numeric targets not met)"}`,
   ];
 }
 

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -9,14 +9,14 @@
   "id": "404",
   "slug": "part1-materials-sync",
   "title": "Синхронизация материалов части 1",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-10-04T21:05:14.705Z",
-  "updatedAt": "2026-10-04T21:05:14.705Z",
+  "updatedAt": "2026-10-05T04:07:48.246Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -37,34 +37,331 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [
+        "T2",
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Fix decisions export --since for numeric UTC offsets (AC1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "keryx research sync command: counts, export, sync-status.md, tests (AC2-AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Daily scheduler entry, failed-run safety (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "README paragraph, docs site, help, TUI last-sync line (AC9)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Independent review and fixes",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-10-04T21:05:14.705Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-05T03:33:12.036Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-05T03:33:12.229Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-05T03:33:17.186Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The keryx local scheduler runs `keryx research sync` once a day; the daily entry is created by a documented command, a run that fails leaves the previous `-latest` files untouched and writes the reason into `sync-status.md`, and there is no event hook and no hourly commit logic anywhere in the sync code. [verify: exec for the entry and the failed-run behaviour, `keryx ctx rg` for the absence of hooks]\" -> \"The keryx local scheduler (the serve-side ticker of flow 389) runs `keryx research sync` once a day; the daily entry is created by a documented command, a run that fails leaves the previous `-latest` files untouched and writes the reason into `sync-status.md`, and there is no event hook and no hourly commit logic anywhere in the sync code (a test scans the sync sources for hook registrations and commit calls). [verify: exec `bun test src/commands/research-sync.test.ts`]\" (AC8 verify marker must name one exec command; operator approved scope 2026-10-05, nothing confirmed yet)"
+    },
+    {
+      "at": "2026-10-05T03:33:24.226Z",
+      "event": "task-added",
+      "detail": "T5: Fix decisions export --since for numeric UTC offsets (AC1)"
+    },
+    {
+      "at": "2026-10-05T03:33:24.419Z",
+      "event": "task-added",
+      "detail": "T6: keryx research sync command: counts, export, sync-status.md, tests (AC2-AC7)"
+    },
+    {
+      "at": "2026-10-05T03:33:24.609Z",
+      "event": "task-added",
+      "detail": "T7: Daily scheduler entry, failed-run safety (AC8)"
+    },
+    {
+      "at": "2026-10-05T03:33:24.800Z",
+      "event": "task-added",
+      "detail": "T8: README paragraph, docs site, help, TUI last-sync line (AC9)"
+    },
+    {
+      "at": "2026-10-05T03:33:24.990Z",
+      "event": "task-added",
+      "detail": "T9: Independent review and fixes"
+    },
+    {
+      "at": "2026-10-05T03:33:25.178Z",
+      "event": "task-depends-set",
+      "detail": "T2: dependsOn T1 (was empty) — AC3 needs the fixed --since"
+    },
+    {
+      "at": "2026-10-05T03:33:25.369Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T2 (was empty) — schedules the command from T2"
+    },
+    {
+      "at": "2026-10-05T03:33:25.560Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T2, T3 (was empty) — documents the finished command"
+    },
+    {
+      "at": "2026-10-05T03:33:25.753Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T4 (was empty) — review after implementation"
+    },
+    {
+      "at": "2026-10-05T03:34:47.000Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T1 (was T4) — fix --since first, per operator decision"
+    },
+    {
+      "at": "2026-10-05T03:34:47.205Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T5 (was empty) — AC3 needs the fixed --since"
+    },
+    {
+      "at": "2026-10-05T03:34:47.399Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T6 (was empty) — schedules the command from T6"
+    },
+    {
+      "at": "2026-10-05T03:34:47.589Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T6, T7 (was empty) — documents the finished command"
+    },
+    {
+      "at": "2026-10-05T03:34:47.779Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T8 (was empty) — review after implementation"
+    },
+    {
+      "at": "2026-10-05T03:34:47.973Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-05T03:48:45.699Z",
+      "event": "task-done",
+      "detail": "T5: Fix decisions export --since for numeric UTC offsets (AC1)"
+    },
+    {
+      "at": "2026-10-05T03:48:46.146Z",
+      "event": "task-done",
+      "detail": "T6: keryx research sync command: counts, export, sync-status.md, tests (AC2-AC7)"
+    },
+    {
+      "at": "2026-10-05T03:55:07.945Z",
+      "event": "task-done",
+      "detail": "T7: Daily scheduler entry, failed-run safety (AC8)"
+    },
+    {
+      "at": "2026-10-05T03:55:08.138Z",
+      "event": "task-done",
+      "detail": "T8: README paragraph, docs site, help, TUI last-sync line (AC9)"
+    },
+    {
+      "at": "2026-10-05T03:55:08.355Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-05T03:55:08.549Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-05T03:55:08.744Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-05T04:07:48.246Z",
+      "event": "task-done",
+      "detail": "T9: Independent review and fixes"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/decisions/export.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync.test.ts"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync.test.ts"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "judged"
+    }
+  }
 }

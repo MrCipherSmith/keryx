@@ -216,6 +216,22 @@ describe("AC14: what the export does carry", () => {
     expect(buildExport(records).filter((r) => r.openedAt === null).map((r) => r.ref)).toEqual([exportRef("unreadable")]);
   });
 
+  test("AC1 (flow 404): a record at exactly the window's opening instant is kept, in every timestamp form", () => {
+    // `since` is inclusive: a `<` turned into `<=` would drop these four, the instant itself written four ways
+    const at: [string, string][] = [
+      ["edge-z", "2026-10-02T00:00:00Z"],
+      ["edge-utc0", "2026-10-02T00:00:00+00:00"],
+      ["edge-plus3", "2026-10-02T03:00:00+03:00"],
+      ["edge-minus5", "2026-10-01T19:00:00-05:00"],
+    ];
+    const rows = buildExport(
+      at.map(([id, time]) => open(id, { at: time })),
+      [],
+      { since: new Date("2026-10-02T00:00:00Z") },
+    );
+    expect(rows.map((r) => r.ref)).toEqual(at.map(([id]) => exportRef(id)));
+  });
+
   test("the ratings are joined to the decision by the hash and keep only structure", () => {
     const rows = buildExport(
       [open("x")],

@@ -1,3 +1,29 @@
 # Flow Journal
 
 - 2026-10-04T21:05:14.705Z - flow created
+- 2026-10-05T03:33:12.036Z - frozen: 10 criteria; checksum recorded
+- 2026-10-05T03:33:12.229Z - started
+- 2026-10-05T03:33:17.186Z - ac-updated: AC8: "The keryx local scheduler runs `keryx research sync` once a day; the daily entry is created by a documented command, a run that fails leaves the previous `-latest` files untouched and writes the reason into `sync-status.md`, and there is no event hook and no hourly commit logic anywhere in the sync code. [verify: exec for the entry and the failed-run behaviour, `keryx ctx rg` for the absence of hooks]" -> "The keryx local scheduler (the serve-side ticker of flow 389) runs `keryx research sync` once a day; the daily entry is created by a documented command, a run that fails leaves the previous `-latest` files untouched and writes the reason into `sync-status.md`, and there is no event hook and no hourly commit logic anywhere in the sync code (a test scans the sync sources for hook registrations and commit calls). [verify: exec `bun test src/commands/research-sync.test.ts`]" (AC8 verify marker must name one exec command; operator approved scope 2026-10-05, nothing confirmed yet)
+- 2026-10-05T03:33:24.226Z - task-added: T5: Fix decisions export --since for numeric UTC offsets (AC1)
+- 2026-10-05T03:33:24.419Z - task-added: T6: keryx research sync command: counts, export, sync-status.md, tests (AC2-AC7)
+- 2026-10-05T03:33:24.609Z - task-added: T7: Daily scheduler entry, failed-run safety (AC8)
+- 2026-10-05T03:33:24.800Z - task-added: T8: README paragraph, docs site, help, TUI last-sync line (AC9)
+- 2026-10-05T03:33:24.990Z - task-added: T9: Independent review and fixes
+- 2026-10-05T03:33:25.178Z - task-depends-set: T2: dependsOn T1 (was empty) — AC3 needs the fixed --since
+- 2026-10-05T03:33:25.369Z - task-depends-set: T3: dependsOn T2 (was empty) — schedules the command from T2
+- 2026-10-05T03:33:25.560Z - task-depends-set: T4: dependsOn T2, T3 (was empty) — documents the finished command
+- 2026-10-05T03:33:25.753Z - task-depends-set: T5: dependsOn T4 (was empty) — review after implementation
+- 2026-10-05T03:34:47.000Z - task-depends-set: T5: dependsOn T1 (was T4) — fix --since first, per operator decision
+- 2026-10-05T03:34:47.205Z - task-depends-set: T6: dependsOn T5 (was empty) — AC3 needs the fixed --since
+- 2026-10-05T03:34:47.399Z - task-depends-set: T7: dependsOn T6 (was empty) — schedules the command from T6
+- 2026-10-05T03:34:47.589Z - task-depends-set: T8: dependsOn T6, T7 (was empty) — documents the finished command
+- 2026-10-05T03:34:47.779Z - task-depends-set: T9: dependsOn T8 (was empty) — review after implementation
+- 2026-10-05T03:34:47.973Z - task-done: T1: Collect remaining context
+- 2026-10-05T03:48:45.699Z - task-done: T5: Fix decisions export --since for numeric UTC offsets (AC1)
+- 2026-10-05T03:48:46.146Z - task-done: T6: keryx research sync command: counts, export, sync-status.md, tests (AC2-AC7)
+- 2026-10-05T03:55:07.945Z - task-done: T7: Daily scheduler entry, failed-run safety (AC8)
+- 2026-10-05T03:55:08.138Z - task-done: T8: README paragraph, docs site, help, TUI last-sync line (AC9)
+- 2026-10-05T03:55:08.355Z - task-done: T2: Implement per plan
+- 2026-10-05T03:55:08.549Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-05T03:55:08.744Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-05T04:07:48.246Z - task-done: T9: Independent review and fixes

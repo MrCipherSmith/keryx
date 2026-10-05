@@ -40,6 +40,20 @@ describe("projectResearchSyncRow", () => {
     expect(projectResearchSyncRow({ catalog: false, status: null }, SIDEBAR_TEXT_WIDTH).visible).toBe(false);
   });
 
+  test("escapes terminal control sequences on the run line, in an ok page and in a failed one", () => {
+    // OSC (set window title, BEL-terminated), CSI (clear screen, cursor home), a bare ESC, DEL and a C1 control.
+    const hostile = "\u001b]0;pwned\u0007\u001b[2J\u001b[H\u001bX\u007f\u009b31m2026-10-05 03:52 UTC";
+    for (const state of ["ok", "ошибка (failed): x"]) {
+      const status = `# Текущее состояние / Live status\n\nЗапуск (run, UTC): ${hostile}\n\nСостояние (status): ${state}\n`;
+      const row = projectResearchSyncRow({ catalog: true, status }, 200);
+      expect(row.visible).toBe(true);
+      // eslint-disable-next-line no-control-regex
+      expect(/[\u0000-\u001f\u007f-\u009f]/.test(row.text)).toBe(false);
+      expect(row.text).toContain("2026-10-05 03:52 UTC");
+      expect(row.text).toContain("\\x1b");
+    }
+  });
+
   test("says it has not run when the status page is missing or has no run line", () => {
     for (const snapshot of [{ catalog: true, status: null }, { catalog: true, status: "# Текущее состояние / Live status\n" }] satisfies ResearchSyncSnapshot[]) {
       const row = projectResearchSyncRow(snapshot, SIDEBAR_TEXT_WIDTH);

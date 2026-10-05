@@ -29,6 +29,8 @@ const CONTRIBUTION_LOG = "contribution-log.md";
 /** The export starts where the frozen snapshot's journal data starts. */
 export const EXPORT_SINCE = new Date(Date.UTC(2026, 9, 2));
 const COUNTS_TIMEOUT_MS = 120_000;
+/** git and tar are quick; a child that has not answered in this long is hung. */
+const TOOL_TIMEOUT_MS = 60_000;
 /** Nothing the sync writes may name the operator's team repositories (flow 404, AC7). */
 const OFF_LIMITS = /frontend|backend|board|process-metrics/i;
 
@@ -39,6 +41,8 @@ export interface SyncDeps {
   /** The text of the `part1-counts.json` the unchanged script produces at HEAD. */
   runCounts?: (root: string) => Promise<string>;
   headHash?: (root: string) => Promise<string>;
+  /** Test seam: how a staged file is written before the renames. Default `writeFile`. */
+  writeStaged?: (file: string, content: string) => Promise<void>;
 }
 
 export interface SyncOutcome {
@@ -63,10 +67,12 @@ async function readIfExists(file: string): Promise<string | null> {
 
 async function tool(command: string, args: string[], options: { cwd: string; env?: NodeJS.ProcessEnv; timeout?: number }, label: string): Promise<string> {
   try {
-    const { stdout } = await run(command, args, { ...options, maxBuffer: 16 * 1024 * 1024 });
+    const { stdout } = await run(command, args, { timeout: TOOL_TIMEOUT_MS, ...options, killSignal: "SIGKILL", maxBuffer: 16 * 1024 * 1024 });
     return String(stdout);
   } catch (error) {
-    const code = (error as { code?: unknown }).code;
+    const failed = error as { code?: unknown; killed?: unknown };
+    if (failed.killed === true) throw new SyncError(`${label} timed out`);
+    const code = failed.code;
     throw new SyncError(`${label} failed${code === undefined ? "" : ` (${String(code)})`}`);
   }
 }
@@ -189,7 +195,7 @@ async function recordFailure(root: string, runAt: Date, reason: string): Promise
 }
 
 export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
-  const deps: Required<SyncDeps> = { now: () => new Date(), runCounts, headHash, ...input };
+  const deps: Required<SyncDeps> = { now: () => new Date(), runCounts, headHash, writeStaged: (file, content) => writeFile(file, content, "utf8"), ...input };
   const { root } = deps;
   const runAt = deps.now();
   let computed: Computed;
@@ -208,7 +214,11 @@ export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
     return { ok: false, reason, changed: [] };
   }
 
+  // Phase two, in two steps so the three files stay of one generation as far as a filesystem allows: every file
+  // that changed is written to a temp file first (a failure here has touched nothing that matters), and only then
+  // are the temp files renamed in a row.
   const changed: string[] = [];
+  const staged: Array<{ name: string; file: string; temp: string }> = [];
   try {
     const targets: Array<[string, string]> = [
       [LATEST_COUNTS, computed.countsText],
@@ -216,9 +226,18 @@ export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
       [STATUS_FILE, computed.statusText],
     ];
     for (const [name, content] of targets) {
-      if (await writeIfChanged(catalogFile(root, name), content)) changed.push(path.join(CATALOG_DIR, name));
+      const file = catalogFile(root, name);
+      if ((await readIfExists(file)) === content) continue;
+      const item = { name, file, temp: `${file}.tmp-${process.pid}` };
+      staged.push(item);
+      await deps.writeStaged(item.temp, content);
+    }
+    for (const item of staged) {
+      await rename(item.temp, item.file);
+      changed.push(path.join(CATALOG_DIR, item.name));
     }
   } catch (error) {
+    for (const item of staged) await rm(item.temp, { force: true });
     const reason = reasonLine(error, root);
     try {
       await recordFailure(root, runAt, reason);
@@ -248,7 +267,7 @@ export function printResearchHelp(): void {
     },
     {
       flag: "sync --schedule daily",
-      desc: "Run from the repository root. Creates the daily entry: a running `keryx serve` then runs the sync once per UTC day from this directory (a restart the same day does not run it again; a failed run is shown as a notice in serve and is not retried until the next day). It does not run the sync now. Needs the catalog directory.",
+      desc: "Run from the repository root. Creates the daily entry: a running `keryx serve` then runs the sync once per UTC day from this directory (a restart the same day does not run it again; a failed run is shown as a notice in serve and is not retried until the next day). It does not run the sync now. Needs the catalog directory. Serve ignores an entry that git tracks, so one committed into a clone is never acted on.",
     },
     {
       flag: "sync --unschedule",

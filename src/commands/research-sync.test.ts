@@ -12,6 +12,7 @@ import { appendFile, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { exportRef } from "../decisions/export";
 import { EXPORT_FIELDS, journalFile } from "../decisions/service";
 import {
   CATALOG_DIR,
@@ -29,8 +30,10 @@ const REAL_CATALOG = path.join(REAL, CATALOG_DIR);
 const CLI = path.join(REAL, "src", "cli.ts");
 
 const SNAPSHOT_FILES = ["part1-counts.json", "decisions-export-2026-10-04.jsonl", "part1-counts.py"];
-const CATALOG_COPY = [...SNAPSHOT_FILES, "README.md", "contribution-log.md", "protocol-part2.md"];
 const SYNC_FILES = [LATEST_COUNTS, LATEST_EXPORT, STATUS_FILE];
+// Every file of the real catalog except what the sync itself generates: a file added to the catalog later is copied
+// into the fixture too, so the kept-out-term check of AC7 reaches it without anyone editing this list.
+const CATALOG_COPY = readdirSync(REAL_CATALOG).filter((name) => !SYNC_FILES.includes(name));
 
 // The script is run unchanged: its digest is pinned, so editing it (even to make the sync easier) fails here.
 const SCRIPT_SHA256 = "145a3d74fb19d986299f2a9c691533b71eff8e78628dddc1930525169769ba3a";
@@ -52,6 +55,11 @@ const hasPython = (() => {
     return false;
   }
 })();
+
+// A missing python3 must not turn AC2 to AC8 into silent skips where the checks are meant to run.
+test("python3 is available wherever CI runs these tests", () => {
+  if (process.env.CI !== undefined && process.env.CI !== "") expect(hasPython).toBe(true);
+});
 
 const T1 = new Date("2026-10-05T04:00:00Z");
 const T2 = new Date("2026-10-06T04:00:30Z");
@@ -194,7 +202,26 @@ describe("AC2 and AC3: what a run writes", () => {
     const snapshotRow = JSON.parse((readFileSync(inCatalog("decisions-export-2026-10-04.jsonl"), "utf8").split("\n")[0]) as string) as Record<string, unknown>;
     const rows = text(LATEST_EXPORT).split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(text(LATEST_EXPORT).endsWith("\n")).toBe(true);
+    expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(Object.keys(row)).toEqual(Object.keys(snapshotRow));
+  });
+
+  test.skipIf(!hasPython)("the counts are those of HEAD, not of the working tree: an uncommitted flow and an uncommitted edit are not counted", async () => {
+    // Added after the commit, never staged: only a count taken from the tree would see them.
+    const flow = path.join(root, ".metaproject", "flows", "003-gamma");
+    await mkdir(flow, { recursive: true });
+    await writeFile(path.join(flow, "acceptance-criteria.md"), "## Criteria\n\n- AC1: new [verify: exec `true`]\n- AC2: new\n- AC3: new\n");
+    await writeFile(path.join(flow, "flow.json"), JSON.stringify({ status: "done", createdAt: "2026-10-04", acConfirmed: { AC1: "x" } }));
+    await appendFile(path.join(root, ".metaproject", "flows", "001-alpha", "acceptance-criteria.md"), "- AC3: edited but not committed\n");
+    expect(await git(root, "status", "--porcelain")).toContain("003-gamma");
+
+    await seedJournal();
+    expect((await sync()).ok).toBe(true);
+    const latest = JSON.parse(text(LATEST_COUNTS)) as Record<string, unknown>;
+    expect(latest.flows).toBe(2);
+    expect(latest.acceptance_criteria).toBe(4);
+    expect(latest.acceptance_criteria_confirmed).toBe(1);
+    expect(latest.verify_tags).toEqual({ exec: 2, untagged: 2 });
   });
 
   test.skipIf(!hasPython)("--since compares every timestamp form as an instant: two are kept, three are dropped", async () => {
@@ -237,6 +264,9 @@ describe("AC5: the status page", () => {
     for (const label of ["Решений (decisions): 5; с рекомендацией (with a recommendation): 5", "(matches, normal)", "(matches, blind)", "с причиной (with a reason)", "без причины (without a reason)", "(excluded-irreversible)", "порогу P7", "AC11 флоу 392"]) {
       expect(page).toContain(label);
     }
+    // AC11 of flow 392 also needs two weeks of use and an operator's judgement: the page reports numbers, not the verdict.
+    expect(page).toMatch(/числа (не )?достигнуты \(numeric targets (not )?met\)/);
+    expect(page).not.toContain("выполнено");
     expect(await readLastSyncRun(root)).toBe("2026-10-05 04:00 UTC");
   });
 });
@@ -310,6 +340,8 @@ describe("AC8: a failed run", () => {
     await seedJournal();
     await sync();
     const before = { counts: text(LATEST_COUNTS), exported: text(LATEST_EXPORT), status: text(STATUS_FILE) };
+    // New journal data the failing run would have exported: a -latest file written too early would hold this row.
+    await appendJournal([openLine("fresh", "2026-10-04T09:00:00.000Z"), answerLine("fresh", "2026-10-04T09:00:05.000Z")]);
 
     const outcome = await runResearchSync({
       root,
@@ -322,8 +354,10 @@ describe("AC8: a failed run", () => {
     expect(outcome.changed).toEqual([]);
     expect(text(LATEST_COUNTS)).toBe(before.counts);
     expect(text(LATEST_EXPORT)).toBe(before.exported);
+    expect(text(LATEST_EXPORT)).not.toContain(exportRef("fresh"));
 
     const page = text(STATUS_FILE);
+    expect(page).toContain("Решений (decisions): 5;");
     const reasonLines = page.split("\n").filter((line) => line.startsWith("Состояние (status): "));
     expect(reasonLines).toEqual(["Состояние (status): ошибка (failed): counts script failed in ."]);
     expect(page).not.toContain("stack frame");
@@ -338,6 +372,42 @@ describe("AC8: a failed run", () => {
     expect(text(STATUS_FILE)).toContain("Последний успешный запуск (last successful run, UTC): 2026-10-05 04:00 UTC");
     expect(text(STATUS_FILE)).toContain("ошибка (failed): again");
     expect(text(LATEST_COUNTS)).toBe(before.counts);
+  });
+
+  test("a write that fails on the second file leaves the previous trio as it was, and no temp file behind", async () => {
+    await seedJournal();
+    const counts = (flows: number): string => JSON.stringify({ commit: "abc", generated_at: "2026-10-05T04:00Z", flows });
+    const fakeHead = async (): Promise<string> => "h".repeat(40);
+    await sync({ runCounts: async () => counts(1), headHash: fakeHead });
+    const before = { counts: text(LATEST_COUNTS), exported: text(LATEST_EXPORT), status: text(STATUS_FILE) };
+    // Everything differs now: other counts, one more export row, another run time.
+    await appendJournal([openLine("fresh", "2026-10-04T09:00:00.000Z"), answerLine("fresh", "2026-10-04T09:00:05.000Z")]);
+
+    const written: string[] = [];
+    const outcome = await runResearchSync({
+      root,
+      now: () => T2,
+      runCounts: async () => counts(2),
+      headHash: fakeHead,
+      writeStaged: async (file, content) => {
+        if (path.basename(file).startsWith(LATEST_EXPORT)) throw new Error("disk full");
+        written.push(path.basename(file));
+        await writeFile(file, content, "utf8");
+      },
+    });
+    // The counts file was staged before the failure; it must not have been renamed over the old one.
+    expect(written.some((name) => name.startsWith(LATEST_COUNTS))).toBe(true);
+    expect(outcome).toEqual({ ok: false, reason: "disk full", changed: [] });
+    expect(text(LATEST_COUNTS)).toBe(before.counts);
+    expect(text(LATEST_EXPORT)).toBe(before.exported);
+    expect(readdirSync(path.join(root, CATALOG_DIR)).filter((name) => name.includes(".tmp-"))).toEqual([]);
+
+    // The status page is the one place the reason goes; the data below it is the last good run's.
+    const page = text(STATUS_FILE);
+    expect(page).toContain("Состояние (status): ошибка (failed): disk full");
+    expect(page).toContain("Последний успешный запуск (last successful run, UTC): 2026-10-05 04:00 UTC");
+    expect(page).toContain("Решений (decisions): 5;");
+    expect(before.status).toContain("Состояние (status): ok");
   });
 
   test("a counts result that is not JSON fails the run and writes nothing but the reason", async () => {
@@ -362,25 +432,43 @@ describe("AC8: a failed run", () => {
   });
 
   test("the sync sources hold no commit call, no staging, no hook registration and no hourly logic", async () => {
-    // The daily job (flow 404, AC8) is part of the sync code. `serve-research-sync.ts` is the one place that owns the
-    // repeating timer serve needs to look at the clock, so only it is exempt from the timer rule.
-    const sourceFiles = [
-      path.join(import.meta.dir, "research-sync.ts"),
-      path.join(import.meta.dir, "research-sync-status.ts"),
-      path.join(import.meta.dir, "..", "scheduler", "research-sync-job.ts"),
-      path.join(import.meta.dir, "serve-research-sync.ts"),
+    // The daily job (flow 404, AC8) is part of the sync code, and so are the places that wire it in: the serve
+    // composition root, the TUI panel and the registry. Whole files are scanned where they belong to the sync; in
+    // `serve.ts` and `cli-registry.ts` only the lines that name the research sync are, so the rest of those files
+    // cannot cause a false alarm. `serve-research-sync.ts` is the one place that owns the repeating timer serve needs
+    // to look at the clock, so only it is exempt from the timer rule; the TUI panel's once-a-minute read-only poll is
+    // a timer too, and is the second (and last) exemption.
+    const here = import.meta.dir;
+    const whole = [
+      path.join(here, "research-sync.ts"),
+      path.join(here, "research-sync-status.ts"),
+      path.join(here, "..", "scheduler", "research-sync-job.ts"),
+      path.join(here, "serve-research-sync.ts"),
+      path.join(here, "..", "tui", "research-sync-panel.ts"),
     ];
-    const sources = sourceFiles.map((file) => ({ name: path.basename(file), body: readFileSync(file, "utf8") }));
+    const researchLines = (file: string): string => readFileSync(file, "utf8").split("\n").filter((line) => /research/i.test(line)).join("\n");
+    const sources = [
+      ...whole.map((file) => ({ name: path.basename(file), body: readFileSync(file, "utf8") })),
+      { name: "serve.ts (research lines)", body: researchLines(path.join(here, "serve.ts")) },
+      { name: "cli-registry.ts (research lines)", body: researchLines(path.join(here, "..", "cli-registry.ts")) },
+    ];
+    // The extraction really found the wiring, so an emptied block cannot pass the scan by being empty.
+    expect(sources.find((s) => s.name.startsWith("serve.ts"))?.body).toContain("createServeResearchSync");
+    expect(sources.find((s) => s.name.startsWith("cli-registry.ts"))?.body).toContain("researchCommand");
     const banned: Array<[string, RegExp]> = [
-      ["git commit", /git\s+commit|["']commit["']/],
-      ["git add", /git\s+add|["']add["']/],
+      ["a git history call", /git\s+(push|branch|tag|stash|commit|add)\b|["'](push|branch|tag|stash|commit|add)["']/],
       ["a commit call", /\bcommit\s*\(/],
+      ["a pull request", /\bgh\s+pr\b|["']pr["']\s*,\s*["'](create|merge)["']/],
+      ["a file watcher", /\bfs\.watch\b|\bwatchFile\b|(?<![\w.])watch\s*\(|\.watch\s*\(|chokidar/],
+      ["a process hook registration", /process\.(on|once|addListener)\s*\(/],
       ["a hook registration", /registerHook|installHook|addHook|\bhooks?\.(on|register|add|install)\b|post-commit|\.git\/hooks|PostToolUse/],
-      ["an hourly or timer schedule", /setInterval|hourly|\bcron\b/i],
+      ["an hourly or cron wording", /hourly|\bcron\b/i],
+      ["a repeating timer", /setInterval/],
     ];
+    const timerExempt = new Set(["serve-research-sync.ts", "research-sync-panel.ts"]);
     for (const { name, body } of sources) {
       for (const [what, pattern] of banned) {
-        if (name === "serve-research-sync.ts" && what === "an hourly or timer schedule") continue;
+        if (timerExempt.has(name) && what === "a repeating timer") continue;
         expect(`${name}: ${what}: ${pattern.test(body)}`).toBe(`${name}: ${what}: false`);
       }
     }
@@ -421,9 +509,15 @@ describe("the command", () => {
     expect(first.code).toBe(0);
     const status = (await git(root, "status", "--porcelain", "--untracked-files=all")).split("\n").filter(Boolean).sort();
     expect(status).toEqual(SYNC_FILES.map((name) => `?? ${CATALOG_DIR}/${name}`).sort());
+    // What the first run wrote, byte for byte, taken before the second run starts.
+    const afterFirst = new Map(SYNC_FILES.map((name) => [name, text(name)] as const));
     const second = await run(root, "research", "sync");
     expect(second.code).toBe(0);
-    expect(await readFile(inCatalog(LATEST_COUNTS), "utf8")).toBe(text(LATEST_COUNTS));
+    expect(await readFile(inCatalog(LATEST_COUNTS), "utf8")).toBe(afterFirst.get(LATEST_COUNTS) as string);
+    expect(await readFile(inCatalog(LATEST_EXPORT), "utf8")).toBe(afterFirst.get(LATEST_EXPORT) as string);
+    // The status page may differ in its run line only (the two runs can fall in different minutes).
+    expect(withoutRunLine(await readFile(inCatalog(STATUS_FILE), "utf8"))).toBe(withoutRunLine(afterFirst.get(STATUS_FILE) as string));
+    expect(second.stdout).toContain("Research sync done");
   });
 
   test("`--schedule daily` creates the daily entry without running the sync; `--unschedule` takes it away", async () => {

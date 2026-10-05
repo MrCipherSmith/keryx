@@ -6,6 +6,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { CATALOG_DIR, STATUS_FILE } from "../commands/research-sync";
 import { isFailureStatus, readRunLine } from "../commands/research-sync-status";
+import { terminalSafe } from "../lib/terminal-safe";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { onThemeChange, type TextRole } from "./theme";
 import { dimChunk, roleChunk } from "./theme-text";
@@ -38,7 +39,9 @@ function fit(text: string, width: number): string {
 /** Nothing outside a checkout with the catalog; "ещё не запускалась" until the first run; the run time after. */
 export function projectResearchSyncRow(snapshot: ResearchSyncSnapshot, width: number): ResearchSyncRow {
   if (!snapshot.catalog) return { visible: false, text: "", role: "muted" };
-  const run = snapshot.status === null ? null : readRunLine(snapshot.status);
+  // The page is a file in the working tree: whatever is on its run line is escaped before it reaches the terminal.
+  const raw = snapshot.status === null ? null : readRunLine(snapshot.status);
+  const run = raw === null ? null : terminalSafe(raw).text;
   if (snapshot.status === null || run === null || run.length === 0) return { visible: true, text: fit(NEVER, width), role: "muted" };
   if (isFailureStatus(snapshot.status)) return { visible: true, text: fit(`ошибка ${run}`, width), role: "error" };
   return { visible: true, text: fit(run, width), role: "ok" };
