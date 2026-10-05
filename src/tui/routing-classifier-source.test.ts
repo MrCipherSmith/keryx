@@ -142,7 +142,7 @@ test("flow 406: the Russian smoke greeting routes to configured quick without a 
     sessionModel: "claude-session",
     env: {},
     userConfigDir: cwd,
-    fetch: (async () => { throw new Error("unexpected classifier request"); }) as typeof fetch,
+    fetch: (async () => { throw new Error("unexpected classifier request"); }) as unknown as typeof fetch,
   });
   expect(result?.category).toBe("quick");
   expect(result?.routed).toEqual({ providerId: "anthropic", modelId: "claude-quick" });
