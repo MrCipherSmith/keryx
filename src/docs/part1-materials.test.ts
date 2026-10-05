@@ -4,13 +4,17 @@
 
 import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { EXPORT_FIELDS } from "../decisions/export";
 
 const ROOT = path.resolve(import.meta.dir, "..", "..");
 const DIR = path.join(ROOT, "docs", "research", "role-blurring-part1");
 const read = (name: string): string => readFileSync(path.join(DIR, name), "utf8");
+const isDir = (name: string): boolean => statSync(path.join(DIR, name)).isDirectory();
+/** Every file under the directory, relative to it, subdirectories included. */
+const allFiles = (dir = ""): string[] =>
+  readdirSync(path.join(DIR, dir)).flatMap((name) => (isDir(path.join(dir, name)) ? allFiles(path.join(dir, name)) : [path.join(dir, name)]));
 
 const FILES = [
   "README.md",
@@ -24,6 +28,10 @@ const FILES = [
 // Flow 404: the three files `keryx research sync` writes next to them. They may be absent (before the first
 // sync), and nothing else may join the directory.
 const SYNC_FILES = ["decisions-export-latest.jsonl", "part1-counts-latest.json", "sync-status.md"];
+
+// Besides those, two subdirectories: `raw/` holds one text-free export per machine (`decisions-<host>.jsonl`, written
+// by the sync from that machine's journal) with a note per machine, and `requests/` holds the operator's requests.
+const SUBDIRS = ["raw", "requests"];
 
 // Version 2 of the protocol, copied unchanged from the operator's attachment. The comparison is by digest of
 // the exact bytes: any edit to the file changes the digest, and a later change has to be a new version.
@@ -39,8 +47,10 @@ const FORBIDDEN_KEYS = ["question", "options", "reason", "ownAnswer", "answer", 
 const FORBIDDEN_TERMS = ["frontend", "backend", "board", "process-metrics"];
 
 describe("the part 1 materials directory (flow 402)", () => {
-  it("holds the six files and nothing else, apart from the files the sync writes", () => {
-    expect(readdirSync(DIR).filter((name) => !SYNC_FILES.includes(name)).sort()).toEqual([...FILES].sort());
+  it("holds the six files and nothing else, apart from the files the sync writes and the two subdirectories", () => {
+    const names = readdirSync(DIR).filter((name) => !SYNC_FILES.includes(name));
+    expect(names.filter((name) => !isDir(name)).sort()).toEqual([...FILES].sort());
+    expect(names.filter(isDir).every((name) => SUBDIRS.includes(name))).toBe(true);
   });
 
   it("keeps the protocol byte-equal to version 2, with version rows for 1 and 2", () => {
@@ -72,8 +82,19 @@ describe("the part 1 materials directory (flow 402)", () => {
     }
   });
 
+  it("keeps every machine's raw export free of words and of the seed", () => {
+    const allowed = [...PINNED_EXPORT_FIELDS.filter((key) => key !== "seed"), "seq", "seqDerived", "host", "seedHash"];
+    for (const name of allFiles("raw").filter((file) => file.endsWith(".jsonl"))) {
+      for (const line of read(name).split("\n").filter((row) => row.trim() !== "")) {
+        const row = JSON.parse(line) as Record<string, unknown>;
+        for (const key of Object.keys(row)) expect(`${name}: ${allowed.includes(key)}`).toBe(`${name}: true`);
+        expect(typeof row.host === "string" && typeof row.seedHash === "string" && row.seedHash.startsWith(row.host)).toBe(true);
+      }
+    }
+  });
+
   it("names none of the terms kept out of the directory", () => {
-    for (const name of readdirSync(DIR)) {
+    for (const name of allFiles()) {
       const text = read(name).toLowerCase();
       for (const term of FORBIDDEN_TERMS) expect(`${name}: ${text.includes(term)}`).toBe(`${name}: false`);
     }

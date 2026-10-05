@@ -25,6 +25,24 @@ export interface StatusInput {
   latest: Record<string, unknown>;
   report: DecisionsReport;
   contributionRows: number;
+  /** The merged journal of every machine; the two lines about it are left out when absent. */
+  machines?: MachinesSummary;
+}
+
+export interface MachinesSummary {
+  perHost: Array<{ host: string; count: number }>;
+  total: number;
+  withRecommendation: number;
+  /** Rows that are not backfilled. */
+  live: number;
+}
+
+function machinesSummary(machines: MachinesSummary): string[] {
+  const perHost = machines.perHost.length === 0 ? "нет (none)" : machines.perHost.map((item) => `${item.host} ${item.count}`).join(", ");
+  return [
+    `- Машин в журнале (machines in the journal): ${machines.perHost.length}; записей по машинам (records per machine): ${perHost}`,
+    `- Решений во всех машинах (decisions, all machines): ${machines.total}; с рекомендацией (with a recommendation): ${machines.withRecommendation}; живых, не backfilled (live, not backfilled): ${machines.live}`,
+  ];
 }
 
 function cell(value: unknown): string {
@@ -87,6 +105,7 @@ export function renderStatus(input: StatusInput): string {
     "## Журнал решений (decisions journal)",
     "",
     ...journalSummary(input.report),
+    ...(input.machines === undefined ? [] : machinesSummary(input.machines)),
     "",
   ].join("\n");
 }

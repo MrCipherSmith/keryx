@@ -52,5 +52,5 @@ After the sync change of this branch, `keryx research sync` writes this file its
 ## Verification
 
 - Row fields checked against the allow-list of host fa7c0ca1 plus `seqDerived`: no other keys; no `seed`; `host` and `seedHash` present on every row; `(host, seq)` unique (122 of 122).
-- Scan for the local username, `/home/`, `@`, the team-repository words of flow 404 and the question, option, reason and text keys: 0 matches.
+- Scan for the local username, home-directory path prefixes, e-mail markers, the team-repository words of flow 404 and the text-bearing keys (question, options, reason, text): 0 matches.
 - Collection agent: Keryx agent. It identifies the export agent, not the writers of the recorded decisions.
