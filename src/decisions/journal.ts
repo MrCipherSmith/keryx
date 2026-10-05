@@ -9,7 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
 import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm, REASON_SUBSAMPLE_ENV, reasonSubsample, reasonSubsampleOff, recordEligible } from "./arms";
 import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
-import { appendRecord, readRecords } from "./store";
+import { appendRecord, readRecords, withJournalLock } from "./store";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 import type {
   AnswerInput,
@@ -54,12 +54,22 @@ function resultOf(record: OpenRecord): OpenResult {
   };
 }
 
-/** The still-unanswered open record of this repository that asks the same question, if any (one scan of the journal). */
-function findOpenTwin(records: readonly DecisionRecord[], hash: string): OpenRecord | undefined {
+/** An unanswered open older than this is abandoned, not the question now being asked again. */
+export const OPEN_TWIN_MAX_AGE_MS = 60 * 60 * 1000;
+
+/**
+ * The still-unanswered open record of this repository that asks the same question, from the same session and
+ * not older than `OPEN_TWIN_MAX_AGE_MS`, if any (one scan of the journal). A stale or foreign open is never
+ * reused: it would hand the new question an old arm and an old `open.at`, which skews time to answer.
+ */
+function findOpenTwin(records: readonly DecisionRecord[], hash: string, session: string | undefined, now: Date): OpenRecord | undefined {
   const answered = new Set<string>();
   for (const r of records) if (r.kind === "answer") answered.add(r.id);
   for (const r of records) {
     if (r.kind !== "open" || r.backfilled === true || answered.has(r.id)) continue;
+    if ((r.session ?? undefined) !== (session !== undefined && session.length > 0 ? session : undefined)) continue;
+    const age = now.getTime() - Date.parse(r.at);
+    if (!Number.isFinite(age) || age > OPEN_TWIN_MAX_AGE_MS) continue;
     if (questionHash(r.question, r.options.map((option) => option.id)) === hash) return r;
   }
   return undefined;
@@ -84,10 +94,23 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     throw new Error(`the recommended option "${recommendation.optionId}" is not one of the options`);
   }
 
+  // The twin lookup, the seq and the append are one read-then-append: under the journal lock, so two concurrent
+  // opens neither share a seq (and with it an arm) nor both miss each other's twin.
+  return withJournalLock(input.cwd, () => openLocked(input, now, random, question, ids, recommendation));
+}
+
+async function openLocked(
+  input: OpenInput,
+  now: Date,
+  random: () => number,
+  question: string,
+  ids: ReadonlySet<string>,
+  recommendation: NonNullable<OpenInput["recommendation"]> | null,
+): Promise<OpenResult> {
   // Idempotent per question: asking the same question again while it is still unanswered returns the arm already
   // drawn for it, so repeating `open` cannot re-roll the arm. Once it is answered, the next open is a new decision.
   const records = await readRecords(input.cwd);
-  const twin = findOpenTwin(records, questionHash(question, [...ids]));
+  const twin = findOpenTwin(records, questionHash(question, [...ids]), input.session, now);
   if (twin !== undefined) return resultOf(twin);
 
   const config = await loadDecisionsConfig(input.cwd);

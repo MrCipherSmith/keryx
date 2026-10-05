@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { assignArm, loadRepoSalt } from "./arms";
-import { answerDecision, openDecision } from "./journal";
+import { answerDecision, OPEN_TWIN_MAX_AGE_MS, openDecision } from "./journal";
 import { readRecords } from "./store";
 
 let root: string;
@@ -68,5 +68,35 @@ describe("idempotent open", () => {
     // and that one is open again: a repeat returns it, not a third
     expect((await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC })).id).toBe(next.id);
     expect((await readRecords(root)).filter((r) => r.kind === "open")).toHaveLength(2);
+  });
+
+  test("an unanswered open older than the age limit is not reused: the repeat is a new decision", async () => {
+    const t0 = new Date("2026-10-05T08:00:00.000Z");
+    const first = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, now: () => t0 });
+    const soon = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, now: () => new Date(t0.getTime() + OPEN_TWIN_MAX_AGE_MS - 1000) });
+    expect(soon.id).toBe(first.id);
+    const late = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, now: () => new Date(t0.getTime() + OPEN_TWIN_MAX_AGE_MS + 1000) });
+    expect(late.id).not.toBe(first.id);
+    expect((await readRecords(root)).filter((r) => r.kind === "open")).toHaveLength(2);
+  });
+
+  test("an open of another session is not reused", async () => {
+    const first = await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, session: "s1" });
+    expect((await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, session: "s1" })).id).toBe(first.id);
+    expect((await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, session: "s2" })).id).not.toBe(first.id);
+    expect((await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC })).id).not.toBe(first.id);
+  });
+
+  test("concurrent opens of different questions get distinct, consecutive seqs", async () => {
+    const questions = Array.from({ length: 12 }, (_, i) => `Question ${i}?`);
+    await Promise.all(questions.map((question) => openDecision({ cwd: root, question, options: OPTIONS, recommendation: REC })));
+    const seqs = (await readRecords(root)).filter((r) => r.kind === "open").map((r) => (r as { seq: number }).seq);
+    expect([...seqs].sort((a, b) => a - b)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+  });
+
+  test("concurrent opens of the same question write one record", async () => {
+    const results = await Promise.all(Array.from({ length: 8 }, () => openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC })));
+    expect(new Set(results.map((r) => r.id)).size).toBe(1);
+    expect((await readRecords(root)).filter((r) => r.kind === "open")).toHaveLength(1);
   });
 });
