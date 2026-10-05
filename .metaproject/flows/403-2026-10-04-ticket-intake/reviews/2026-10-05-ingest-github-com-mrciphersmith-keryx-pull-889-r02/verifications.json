@@ -1,0 +1,17 @@
+{
+  "verifier": "review-verifier",
+  "verifications": [
+    {
+      "finding": "F-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 3f80f9a1 (fix in 5a8c877f), clean `git archive` extract: `bun test src/intake/intake-work-root.test.ts src/intake/intake-restart.test.ts src/intake/intake-no-ports.test.ts` -> 23 pass, 0 fail, 93 expect() calls. The added tests (take and review-flow with a projectFor that throws on the first call, GH_WORK_ROOT set, allowTakeInWork false) assert the press is refused with 'не удалось определить проект', flows.init is never called and the card stays `sent`; the same tests fail on the parent 33ee7e7c. decide() now returns refuse(...) from the catch instead of setting project to undefined."
+    },
+    {
+      "finding": "F-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 3f80f9a1 (fix in 5a8c877f), clean extract: `bun test src/intake` -> 243 pass, 0 fail, 1408 expect() calls. The added restart test seeds two stuck `taking` cards, makes projectFor throw for the first one's repository and asserts recoverIntakeTaking returns 2, the first card is `failed` with the 'interrupted' reason and the second card is still recovered; it fails on the parent 33ee7e7c with the thrown 'registry unreadable'. recoverIntakeTaking now wraps the lookup in a per-card try/catch."
+    }
+  ]
+}
