@@ -324,6 +324,74 @@ function isIdentifierFragment(content: string, matchStart: number, matchEnd: num
   return [...before.split(/[-_]/), ...after.split(/[-_]/)].some(isHexIdentifierRun);
 }
 
+// ---------------------------------------------------------------------------
+// SSN identifier-fragment guard (flow 261). Same direction as the phone guard —
+// redact unless there is positive evidence — but the evidence is stricter,
+// because an SSN leak is worse than a phone leak. Suppression needs ALL of:
+//   - the match sits inside a longer `[0-9A-Za-z_-]` token, fully scanned;
+//   - no `ssn` / `social` label in that token or just before it;
+//   - the alphanumeric run IMMEDIATELY adjacent to the SSN (across one `-`/`_`)
+//     is a real hash: hex, 16+ characters, at least one a-f (md5 32, sha1 40,
+//     sha256 64 all qualify), or the whole token is a UUID. A short hex-looking
+//     neighbour (`deadbeef`, `1234567e`, `E1234567`, `20260912a`) is not evidence.
+// ---------------------------------------------------------------------------
+
+/** Wide enough that a sha256 (64) on either side never truncates the scan. */
+const SSN_TOKEN_SCAN_LIMIT = 192;
+/** Longest adjacent run accepted as a digest (sha512 is 128 hex characters). */
+const SSN_HASH_MAX_LENGTH = 128;
+const SSN_LABEL = /ssn|social/i;
+const SSN_LABEL_LOOKBEHIND = 32;
+const ALNUM_CHAR = /[0-9A-Za-z]/;
+
+function isSsnHashRun(segment: string): boolean {
+  return (
+    segment.length >= 16 &&
+    segment.length <= SSN_HASH_MAX_LENGTH &&
+    /^[0-9A-Fa-f]+$/.test(segment) &&
+    /[A-Fa-f]/.test(segment)
+  );
+}
+
+function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: number): boolean {
+  let tokenStart = matchStart;
+  const floor = Math.max(0, matchStart - SSN_TOKEN_SCAN_LIMIT);
+  while (tokenStart > floor && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) {
+    tokenStart -= 1;
+  }
+  let tokenEnd = matchEnd;
+  const ceiling = Math.min(content.length, matchEnd + SSN_TOKEN_SCAN_LIMIT);
+  while (tokenEnd < ceiling && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) {
+    tokenEnd += 1;
+  }
+  const truncated =
+    (tokenStart === floor && tokenStart > 0 && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) ||
+    (tokenEnd === ceiling && tokenEnd < content.length && IDENTIFIER_CHAR.test(content[tokenEnd] as string));
+  if (truncated) {
+    return false; // Evidence incomplete → redact.
+  }
+  if (tokenStart === matchStart && tokenEnd === matchEnd) {
+    return false; // The match IS the token.
+  }
+  // A label overrides everything: the token, or the text just before it, says this is an SSN.
+  if (SSN_LABEL.test(content.slice(tokenStart, tokenEnd))) {
+    return false;
+  }
+  if (SSN_LABEL.test(content.slice(Math.max(0, tokenStart - SSN_LABEL_LOOKBEHIND), tokenStart))) {
+    return false;
+  }
+  if (UUID_TOKEN.test(content.slice(tokenStart, tokenEnd))) {
+    return true;
+  }
+  // Split at the match's actual offset, never at the first textual occurrence.
+  const before = content.slice(tokenStart, matchStart);
+  const after = content.slice(matchEnd, tokenEnd);
+  if (/[-_]$/.test(before) && isSsnHashRun(before.slice(0, -1).split(/[-_]/).pop() as string)) {
+    return true;
+  }
+  return /^[-_]/.test(after) && isSsnHashRun(after.slice(1).split(/[-_]/)[0] as string);
+}
+
 function hasPhoneSeparatorShape(value: string): boolean {
   if (/\s{2,}/.test(value)) {
     return false;
@@ -372,9 +440,8 @@ export function detectPii(content: string): DetectorMatch[] {
           continue;
         }
       }
-      // Flow 261: an SSN-shaped run gets the same identifier-fragment guard as the
-      // phone rule, in the same direction — suppressed only on positive hex evidence.
-      if (rule.policyId === "pii.ssn" && isIdentifierFragment(content, m.index, m.index + m[0].length)) {
+      // Flow 261: an SSN-shaped run is suppressed only beside a real adjacent hash, never when labelled.
+      if (rule.policyId === "pii.ssn" && isSsnIdentifierFragment(content, m.index, m.index + m[0].length)) {
         continue;
       }
       // E4: gate structured-PII candidates by their checksum/range validator.

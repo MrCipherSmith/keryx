@@ -62,35 +62,84 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
   // `pii.ssn` is bounded by `\b`, which a hyphen also satisfies, so an SSN-shaped
   // run can sit inside a longer hyphenated token. Flow 261 decided it the way flow
   // 260 decided phone: a false negative leaks an SSN, a false positive only
-  // corrupts an identifier, so the run is redacted unless the surroundings are
-  // POSITIVE hex-identifier evidence (a UUID, a digest, a hash-prefixed id).
+  // corrupts an identifier, so the run is redacted unless the segment IMMEDIATELY
+  // next to it is a real hash (hex, 16+ chars, at least one a-f; a UUID token also
+  // counts). A label (`ssn` / `social`) in or just before the token overrides that.
   const ssnValues = (input: string) => detectPii(input).filter((m) => m.policyId === "pii.ssn").map((m) => m.value);
+  const SSN = "123-45-6789";
+  const md5 = "d41d8cd98f00b204e9800998ecf8427e";
+  const sha1 = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
+  const sha256 = "901131d838b17aac0f7885b81e03cbdc9f5157a00343d30ab22083685ed1416a";
 
   test("an SSN-shaped run in an ambiguous hyphenated identifier is still redacted", () => {
-    expect(ssnValues("release-123-45-6789-hotfix")).toEqual(["123-45-6789"]);
-    expect(ssnValues("contact-123-45-6789-primary")).toEqual(["123-45-6789"]);
-    expect(ssnValues("a-123-45-6789")).toEqual(["123-45-6789"]);
+    expect(ssnValues("release-123-45-6789-hotfix")).toEqual([SSN]);
+    expect(ssnValues("contact-123-45-6789-primary")).toEqual([SSN]);
+    expect(ssnValues("a-123-45-6789")).toEqual([SSN]);
   });
 
-  test("an SSN-shaped run next to a hex or hash identifier part is left alone", () => {
-    expect(ssnValues("build-a1b2c3d4-123-45-6789")).toEqual([]);
+  test("an SSN-shaped run directly beside a real hash is left alone", () => {
+    expect(ssnValues("build-f53fd8cbab7a47fd-123-45-6789")).toEqual([]);
     expect(ssnValues("123-45-6789-f53fd8cbab7a47fd")).toEqual([]);
     expect(ssnValues("event-901131d838b17aac-123-45-6789-open")).toEqual([]);
   });
 
-  test("a date-like or all-digit neighbour is not hex evidence", () => {
-    expect(ssnValues("20260912-123-45-6789")).toEqual(["123-45-6789"]);
+  test("md5 (32), sha1 (40) and sha256 (64) neighbours are all suppressed, on either side", () => {
+    for (const digest of [md5, sha1, sha256]) {
+      expect(ssnValues(`${digest}-${SSN}`)).toEqual([]);
+      expect(ssnValues(`${SSN}-${digest}`)).toEqual([]);
+      expect(ssnValues(`file_${digest}_${SSN}.bin`)).toEqual([]);
+    }
+  });
+
+  test("a short or hex-looking neighbour is not evidence", () => {
+    for (const input of [
+      "build-a1b2c3d4-123-45-6789",
+      "deadbeef-123-45-6789",
+      "1234567e-123-45-6789",
+      "ssn-12345678a-123-45-6789",
+      "E1234567-123-45-6789",
+      "20260912a-123-45-6789",
+      "case-1234567e-123-45-6789",
+      "20260912-123-45-6789",
+    ]) {
+      expect(ssnValues(input)).toEqual([SSN]);
+    }
+  });
+
+  test("a hash that is not adjacent to the SSN does not suppress it", () => {
+    expect(ssnValues(`${md5}-foo-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-foo-${md5}`)).toEqual([SSN]);
+  });
+
+  test("a label in or just before the token overrides a hash neighbour", () => {
+    for (const input of [
+      "john-smith-ssn-123-45-6789-deadbeef",
+      "Employee-ID-deadbeef-SSN-123-45-6789",
+      "abcdef12-ssn-123-45-6789",
+      "SSN:123-45-6789-abcdef0123",
+      `ssn-${md5}-${SSN}`,
+      `${SSN}-${sha256}-social`,
+      `ssn: ${sha1}-${SSN}`,
+    ]) {
+      expect(ssnValues(input)).toEqual([SSN]);
+    }
+  });
+
+  test("a repeated SSN is judged at its own offset, not at the first occurrence", () => {
+    expect(ssnValues(`${SSN}-${SSN}`)).toEqual([SSN, SSN]);
+    expect(ssnValues(`${SSN}-${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${SSN}-foo-${SSN}-${md5}`)).toEqual([SSN]);
   });
 
   test("a truncated token never buys suppression", () => {
-    const long = `${"a1b2c3d4-".repeat(12)}123-45-6789`;
-    expect(ssnValues(long)).toEqual(["123-45-6789"]);
+    const long = `${"a1b2c3d4-".repeat(30)}${SSN}`;
+    expect(ssnValues(long)).toEqual([SSN]);
   });
 
   test("BOUNDARY — a bare SSN, a labelled SSN and one in a hyphenated sentence are still detected", () => {
-    expect(ssnValues("ssn 123-45-6789")).toEqual(["123-45-6789"]);
-    expect(ssnValues("ssn: 123-45-6789")).toEqual(["123-45-6789"]);
-    expect(ssnValues("my number - 123-45-6789 - is private")).toEqual(["123-45-6789"]);
-    expect(ssnValues("SSN=123-45-6789.")).toEqual(["123-45-6789"]);
+    expect(ssnValues("ssn 123-45-6789")).toEqual([SSN]);
+    expect(ssnValues("ssn: 123-45-6789")).toEqual([SSN]);
+    expect(ssnValues("my number - 123-45-6789 - is private")).toEqual([SSN]);
+    expect(ssnValues("SSN=123-45-6789.")).toEqual([SSN]);
   });
 });
