@@ -9,9 +9,9 @@
   "id": "403",
   "slug": "ticket-intake",
   "title": "Work intake: GitHub events as Telegram cards with buttons",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-04T18:26:11.875Z",
-  "updatedAt": "2026-10-04T18:28:06.112Z",
+  "updatedAt": "2026-10-04T21:04:35.029Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/889"
   },
   "baseBranch": "main",
   "owner": {
@@ -334,6 +334,11 @@
     {
       "at": "2026-10-04T18:28:06.112Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-04T21:04:35.029Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/889 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
