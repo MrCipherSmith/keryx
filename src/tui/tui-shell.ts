@@ -168,6 +168,7 @@ import { isJevProfileCommand, openJevProfile } from "./jev-profile-inspector";
 import { applyRecommendedJevProfileForShell, readJevProfileForShell, toggleJevProfileKeyForShell } from "../commands/review-jev-profile";
 import { renderTurnGuardNoticeLine } from "../review/turn-guard";
 import {
+  renderRoutingFallbackLine,
   renderRoutingSidebarValue,
   renderRoutingTagLine,
   runRoutingClassifierForTurn,
@@ -259,6 +260,8 @@ import {
 // Flow 266 (AC8): the demote EFFECT lives with the registry so both shells
 // dispatch into one rule rather than growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
+import { runTasksCommand } from "./tasks-command";
+import { formatUsageLine } from "./usage-format";
 import {
   applyThemeId,
   formatThemeList,
@@ -1057,16 +1060,8 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
       );
     },
     onUsage: (usage) => {
-      const parts: string[] = [];
-      if (usage.inputTokens !== undefined) {
-        parts.push(`↑${usage.inputTokens}`);
-      }
-      if (usage.outputTokens !== undefined) {
-        parts.push(`↓${usage.outputTokens}`);
-      }
-      if (parts.length > 0) {
-        append(otui.t`${dimChunk(otui, `${parts.join(" ")} tokens`)}`);
-      }
+      const line = formatUsageLine(usage);
+      if (line !== undefined) append(otui.t`${dimChunk(otui, line)}`);
     },
     onToolCall: (name, input) => {
       const args = summarizeToolArgs(input);
@@ -8491,6 +8486,10 @@ export async function launchTuiAgentShell(opts: {
           }
           return;
         }
+        if (command.name === "/tasks") {
+          trackCommandWork(() => runTasksCommand(line.slice(command.name.length), deps.jobRegistry).then((text) => io.onSystem?.(text)));
+          return;
+        }
         if (command.name === "/clear" || command.name === "/new") {
           // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
           // dir for a fresh one — archive whatever slate it was building
@@ -9169,6 +9168,12 @@ export async function launchTuiAgentShell(opts: {
         // says so; only a genuinely unknown token is "unknown" (S4 parity with
         // the readline surfaces).
         io.onSystem?.(describeUnavailableCommand(line, "agent") ?? `Unknown command: ${line}\n`);
+        const help = renderCommandHelp("agent");
+        addBlock({ kind: "output", fullText: help, summary: "Available commands", lineCount: help.trimEnd().split("\n").length }, {
+          hint: "ctrl+o · Enter to expand",
+          collapsedPreview: help.trimEnd().split("\n").slice(0, 8).join("\n"),
+          maxLines: 500,
+        });
         io.onSystem?.(helpText());
         return;
       }
@@ -9521,6 +9526,9 @@ export async function launchTuiAgentShell(opts: {
         // it).
         let deps = sessionDeps;
         let routingOutcome: RoutingClassifierTurnResult | undefined;
+        if (routingEnabled && sessionModelExplicit && origin === "operator") {
+          io.onSystem?.("[route skipped: manual /model selection pins this session]\n");
+        }
         if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {
           try {
             routingOutcome = await runRoutingClassifierForTurn(line, {
@@ -9556,7 +9564,10 @@ export async function launchTuiAgentShell(opts: {
             } catch {
               // fail-closed: a routed-deps build failure runs on the session's own model instead.
               deps = sessionDeps;
+              io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
+          } else {
+            io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
           }
         }
         // Flow 341 (AC3, wired to PR #737's classifier): captured

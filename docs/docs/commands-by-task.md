@@ -71,6 +71,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/expand` | Expand the last tool output block. |
 | `/status` | Show session identity, context window, limits, workspaces, and flows. |
 | `/queue` | Manage the main queue — /queue <remove\|edit\|force> [N] (N = qN position, default 1). |
+| `/tasks` | List supervised shell tasks — /tasks [output <task_id> [cursor] \| kill <task_id>]. |
 | `/interrupt` | Interrupt the running main agent turn. |
 | `/exit` | Leave the shell (/quit works too). |
 | `/game` | Games against the model — /game [seconds] raises the model-turn deadline. |

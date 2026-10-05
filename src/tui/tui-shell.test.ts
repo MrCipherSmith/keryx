@@ -1479,6 +1479,34 @@ otuiTest("entering nav mode and moving focus repaint the highlight WITHOUT rebui
   h.destroy();
 });
 
+otuiTest("flow406: collapsed help previews eight commands and expands the full list", async () => {
+  const otui = requireOtui();
+  const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 30 });
+  const transcript = new otui.core.BoxRenderable(renderer, { id: "help-transcript", flexGrow: 1, flexDirection: "column" });
+  renderer.root.add(transcript);
+  const commands = Array.from({ length: 12 }, (_, i) => `/command-${i + 1}`);
+  const state: BlockState = {
+    id: "help-preview", kind: "output", summary: "Available commands",
+    fullText: commands.join("\n"), lineCount: 12, collapsed: true,
+    retained: true, truncated: false,
+  };
+  const view = createBlockView(otui.core, renderer, transcript, state, {
+    collapsedPreview: commands.slice(0, 8).join("\n"), maxLines: 500,
+  });
+  view.render(state);
+  await flush();
+  expect(captureCharFrame()).toContain("/command-8");
+  expect(captureCharFrame()).not.toContain("/command-9");
+  view.render({ ...state, collapsed: false });
+  await flush();
+  expect(captureCharFrame()).toContain("/command-12");
+  view.render(state);
+  await flush();
+  expect(captureCharFrame()).not.toContain("/command-9");
+  view.destroy();
+  renderer.destroy();
+});
+
 otuiTest("a repaint whose body text CHANGED (an eviction) repaints in place, keeping the mounted renderables", async () => {
   const otui = requireOtui();
   const { core, counts } = countingCore(otui);

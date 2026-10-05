@@ -542,6 +542,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    name: "/tasks",
+    description: "Shell tasks — /tasks, /tasks output <task_id> [cursor], /tasks kill <task_id>",
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/demote",
     description: "Move a running foreground task to the background — /demote <task_id>",
     // Agent-only because chat mode has no tools and therefore no tasks — but

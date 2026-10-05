@@ -977,6 +977,24 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         });
       };
 
+      const externalRuntime = readExternalRuntimeRequest(input);
+      const externalAgentId =
+        externalRuntime === undefined || typeof externalRuntime.agent !== "string"
+          ? undefined
+          : externalRuntime.agent;
+      const externalMark =
+        externalRuntime !== undefined && deps.runExternal !== undefined
+          ? ({ runtime: "external", ...(externalAgentId === undefined ? {} : { agentId: externalAgentId }) } as const)
+          : ({} as const);
+      // Visible before routing/configuration or model-tier awaits; not a claim
+      // that admission or provider startup has already completed.
+      emitFleetEvent({ kind: "upsert", id: workerId, label, status: "running",
+        detail: "preparing", task,
+        ...externalMark,
+      });
+      // Setup failures must also terminate the newly visible preparing row.
+      // Inner paths retain ownership of reservation/slate cleanup.
+      try {
       const parent = deps.getParentModel();
       const detected = deps.getDetectedProviders();
       const session = { providerId: parent.providerId, modelId: parent.modelId };
@@ -1173,15 +1191,6 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // runtime from the moment it appears (package specification §8.2) — a row
       // that starts life looking native and is corrected later is a row the
       // operator has already read.
-      const externalRuntime = readExternalRuntimeRequest(input);
-      const externalAgentId =
-        externalRuntime === undefined || typeof externalRuntime.agent !== "string"
-          ? undefined
-          : externalRuntime.agent;
-      const externalMark =
-        externalRuntime !== undefined && deps.runExternal !== undefined
-          ? ({ runtime: "external", ...(externalAgentId === undefined ? {} : { agentId: externalAgentId }) } as const)
-          : ({} as const);
       emitFleetEvent({
         kind: "upsert",
         id: workerId,
@@ -1936,6 +1945,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         await foldChildSlateAndCleanup("incomplete");
         await fireSubagentStop("Error");
         return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
+      }
+      } catch (cause) {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "setup-error", task });
+        // Preserve the original setup error for the tool runner rather than
+        // fabricating a child result from a configuration/provider failure.
+        throw cause;
       }
     },
   };

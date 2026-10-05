@@ -1156,3 +1156,41 @@ test("flow 347 review R2-4: an interrupted wrap-up is never reported as Complete
   expect(subagentStatusForFinishReason("tool-call-budget")).toBe("BudgetExhausted");
   expect(subagentStatusForFinishReason("no-progress")).toBe("NoProgress");
 });
+
+
+test("flow 406: preparing is visible before model discovery and provider startup", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    getDetectedProviders: () => {
+      expect(events.some((e) => e.kind === "upsert" && e.detail === "preparing")).toBe(true);
+      return [{ name: "ollama" }];
+    },
+    makeProvider: () => {
+      expect(events.some((e) => e.kind === "upsert" && e.detail === "preparing")).toBe(true);
+      return stubProvider("ready");
+    },
+    onFleetEvent: (event) => events.push(event),
+  });
+  expect((await tool.invoke({ task: "Read-only startup probe" })).status).toBe("Completed");
+  expect(lastUpsert(events)?.status).toBe("done");
+});
+
+for (const stage of ["discovery", "provider"] as const) {
+  test(`flow 406: ${stage} failure terminates the preparing row`, async () => {
+    const events: SpawnSubagentFleetEvent[] = [];
+    const tool = createSpawnSubagentTool({
+      cwd: process.cwd(),
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      getDetectedProviders: () => {
+        if (stage === "discovery") throw new Error("startup probe failed");
+        return [{ name: "ollama" }];
+      },
+      makeProvider: () => { throw new Error("startup probe failed"); },
+      onFleetEvent: (event) => events.push(event),
+    });
+    await expect(tool.invoke({ task: "Read-only startup probe" })).rejects.toThrow("startup probe failed");
+    expect(lastUpsert(events)?.status).toBe("failed");
+  });
+}

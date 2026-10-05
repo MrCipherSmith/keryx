@@ -14,6 +14,8 @@ const CHITCHAT_RE =
 /** A word-count/character bound so a longer message that merely STARTS with a greeting is never misread as chit-chat. */
 const CHITCHAT_MAX_CHARS = 24;
 const CHITCHAT_MAX_WORDS = 4;
+// Exact smoke greeting, not arbitrary requests that merely start with a greeting.
+const RUSSIAN_CHITCHAT_RE = /^(?:привет|здравствуй|здравствуйте|спасибо|ок|да|нет)[.!?]*(?:\s+ответь одним словом[.!?]*)?$/i;
 
 /** The request explicitly names a review, a PR, or a pull request. */
 const REVIEW_RE = /\b(?:code\s+review|review(?:s|ed|ing)?|PRs?|pull\s+requests?)\b/i;
@@ -38,6 +40,7 @@ export function classifyDeterministic(line: string): RoutingCategory | undefined
   const trimmed = line.trim();
   if (trimmed.length === 0 || isSlashCommandLine(trimmed)) return undefined;
   if (REVIEW_RE.test(trimmed)) return "review";
+  if (RUSSIAN_CHITCHAT_RE.test(trimmed)) return "quick";
   const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
   if (trimmed.length <= CHITCHAT_MAX_CHARS && words.length <= CHITCHAT_MAX_WORDS && CHITCHAT_RE.test(trimmed)) {
     return "quick";
