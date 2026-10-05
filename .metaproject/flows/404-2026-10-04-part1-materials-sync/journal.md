@@ -31,3 +31,16 @@
 - 2026-10-05T04:37:00.000Z - note: AC7 word search (case-insensitive, frontend|backend|board|process-metrics) over docs/research/role-blurring-part1/ after the sync: 0 files, nothing found.
 - 2026-10-05T04:38:00.000Z - note: AC10 done: section "Текущее состояние / Live status" created in the claude.ai document "Материалы к части 1 / Part 1 materials" right after "Статус / Status" (it did not exist yet), RU and EN, content from sync-status.md; no other block touched (rev 21 to 22).
 - 2026-10-05T04:36:48.430Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/891 (warning: PR is not a draft) (base: main)
+- 2026-10-05T05:40:39.470Z - ac-confirmed: AC1: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:39.859Z - ac-confirmed: AC2: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:40.280Z - ac-confirmed: AC3: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:40.660Z - ac-confirmed: AC4: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:41.037Z - ac-confirmed: AC5: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:41.497Z - ac-confirmed: AC6: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:41.902Z - ac-confirmed: AC7: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:42.304Z - ac-confirmed: AC8: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:42.731Z - ac-confirmed: AC9: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T05:40:43.145Z - ac-confirmed: AC10: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T07:03:56.832Z - completing
+- 2026-10-05T07:04:03.697Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-05T07:04:03.698Z - done: all gates passed

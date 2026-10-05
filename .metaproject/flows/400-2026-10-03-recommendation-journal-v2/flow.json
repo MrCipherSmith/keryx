@@ -9,15 +9,100 @@
   "id": "400",
   "slug": "recommendation-journal-v2",
   "title": "Recommendation journal v2: arms, reasons, coverage, quality",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-03T19:20:13.037Z",
-  "updatedAt": "2026-10-04T11:45:52.173Z",
+  "updatedAt": "2026-10-05T07:20:11.057Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-05T05:46:37.495Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC2": {
+      "at": "2026-10-05T05:46:37.695Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC3": {
+      "at": "2026-10-05T05:46:37.891Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC4": {
+      "at": "2026-10-05T05:46:38.085Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC5": {
+      "at": "2026-10-05T05:46:38.281Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC6": {
+      "at": "2026-10-05T05:46:38.478Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC7": {
+      "at": "2026-10-05T05:46:38.673Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC8": {
+      "at": "2026-10-05T05:46:38.871Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC9": {
+      "at": "2026-10-05T05:46:39.066Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC10": {
+      "at": "2026-10-05T05:46:39.261Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC11": {
+      "at": "2026-10-05T05:46:39.459Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC12": {
+      "at": "2026-10-05T05:46:39.666Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC13": {
+      "at": "2026-10-05T05:46:39.860Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC14": {
+      "at": "2026-10-05T05:46:40.057Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC15": {
+      "at": "2026-10-05T05:46:40.253Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC16": {
+      "at": "2026-10-05T05:46:40.453Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC17": {
+      "at": "2026-10-05T05:46:40.649Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC18": {
+      "at": "2026-10-05T05:46:40.844Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC19": {
+      "at": "2026-10-05T05:46:41.039Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC20": {
+      "at": "2026-10-05T05:46:41.234Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    },
+    "AC21": {
+      "at": "2026-10-05T05:46:41.429Z",
+      "note": "Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/875"
   },
@@ -165,6 +250,125 @@
       "at": "2026-10-04T11:45:52.173Z",
       "event": "ac-updated",
       "detail": "AC21: \"(new)\" -> \"The report shows progress toward flow 392 AC11 (20 decisions, 5 blind) and toward the per-arm threshold (default 150 reversible questions, configurable). [verify: exec `bun test src/decisions/report.test.ts`]\" (Operator approved the v2 delta (poll 78, 2026-10-04): article prompt validation)"
+    },
+    {
+      "at": "2026-10-05T05:46:37.495Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:37.695Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:37.891Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:38.085Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:38.281Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:38.478Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:38.673Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:38.872Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:39.066Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:39.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:39.459Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:39.666Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:39.860Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:40.057Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:40.253Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:40.453Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:40.650Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:40.844Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:41.039Z",
+      "event": "ac-confirmed",
+      "detail": "AC19: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:41.234Z",
+      "event": "ac-confirmed",
+      "detail": "AC20: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:46:41.429Z",
+      "event": "ac-confirmed",
+      "detail": "AC21: Подтверждено оператором в канале (сообщение 184548, 2026-10-05); команду выполнил агент по указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T07:20:04.769Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -251,5 +455,308 @@
       "check": "bun test src/decisions/report.test.ts"
     }
   },
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-05T05:46:37.495Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:37.695Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:37.891Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:38.085Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:38.281Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:38.478Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:38.673Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:38.871Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:39.066Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:39.261Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:39.459Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:39.666Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:39.860Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:40.057Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:40.253Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:40.453Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:40.649Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC17",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:40.844Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC18",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:41.039Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC19",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:41.234Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC20",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T05:46:41.429Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC21",
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    },
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417",
+      "headCommit": "46f49243919066dc9299334431d3bf4e49fb7782"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-05T07:20:11.057Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "21 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "400-2026-10-03-recommendation-journal-v2 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:d27b764ded17672ab7562068eabf11ffab88e79e20b445c9e1c811fd63d9e417"
+    }
+  ]
 }

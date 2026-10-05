@@ -27,3 +27,14 @@ Reason for all rows: privacy rule AC5/AC7. The filter was a case-insensitive sub
 
 Comments rows 7 and 9 matched only through their place cell. The operator released both on 2026-10-04 (poll 80), and they were added to the log, which now has 47 rows; chat row 5 was released later the same day (poll 81), making 48.
 - 2026-10-04T15:26:25.036Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/885 (warning: PR is not a draft) (base: main)
+- 2026-10-05T06:57:32.722Z - ac-confirmed: AC1: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:32.918Z - ac-confirmed: AC2: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:33.117Z - ac-confirmed: AC3: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:33.311Z - ac-confirmed: AC4: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:33.511Z - ac-confirmed: AC5: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:33.706Z - ac-confirmed: AC6: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:33.898Z - ac-confirmed: AC7: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T06:57:34.095Z - ac-confirmed: AC8: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])
+- 2026-10-05T07:03:49.830Z - completing
+- 2026-10-05T07:03:56.577Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-05T07:03:56.577Z - done: all gates passed
