@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -9,27 +9,27 @@
   "id": "410",
   "slug": "pii-ssn-guard-second-review",
   "title": "PII: second review of the ssn identifier guard (rounds, fixes and verifier)",
-  "status": "initializing",
+  "status": "implemented",
   "createdAt": "2026-10-05T19:27:49.847Z",
-  "updatedAt": "2026-10-05T19:27:49.847Z",
+  "updatedAt": "2026-10-05T21:35:12.926Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:b7e6145fae33eb3f953b3d0f5198052e8163f843cc986e3addfd2b3d0beefdc3",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/909"
   },
   "owner": {
     "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "origin": {
     "kind": "human-request",
     "quote": "Тогда сделай строже",
-    "source": "helyx message 186203, 2026-10-05"
+    "source": "helyx 186203"
   },
   "tasks": [
     {
@@ -37,34 +37,138 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 909 merged (5d77115c): fixes and tests for the three review rounds"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 909 merged (5d77115c): fixes and tests for the three review rounds"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 909 merged (5d77115c): fixes and tests for the three review rounds"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-10-05T19:27:49.847Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-05T21:33:59.532Z",
+      "event": "owner-changed",
+      "detail": "MrCipherSmith -> MrCipherSmith (Operator-confirmed owner for keryx flows)"
+    },
+    {
+      "at": "2026-10-05T21:33:59.927Z",
+      "event": "origin-set",
+      "detail": "human-request; quote: \"Тогда сделай строже\"; source: helyx message 186203, 2026-10-05 -> human-request; quote: \"Тогда сделай строже\"; source: helyx 186203 (Operator asked for a stricter second review)"
+    },
+    {
+      "at": "2026-10-05T21:34:00.359Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-05T21:34:00.777Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-05T21:35:08.589Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-05T21:35:09.151Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-05T21:35:09.761Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-05T21:35:12.926Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/909 (warning: PR is not a draft) (base: main)"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    }
+  },
+  "baseBranch": "main"
 }
