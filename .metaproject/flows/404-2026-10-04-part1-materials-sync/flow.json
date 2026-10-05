@@ -9,15 +9,56 @@
   "id": "404",
   "slug": "part1-materials-sync",
   "title": "Синхронизация материалов части 1",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-04T21:05:14.705Z",
-  "updatedAt": "2026-10-05T04:36:48.430Z",
+  "updatedAt": "2026-10-05T07:04:03.698Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-05T05:40:39.470Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC2": {
+      "at": "2026-10-05T05:40:39.859Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC3": {
+      "at": "2026-10-05T05:40:40.280Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC4": {
+      "at": "2026-10-05T05:40:40.660Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC5": {
+      "at": "2026-10-05T05:40:41.036Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC6": {
+      "at": "2026-10-05T05:40:41.497Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC7": {
+      "at": "2026-10-05T05:40:41.902Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC8": {
+      "at": "2026-10-05T05:40:42.304Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC9": {
+      "at": "2026-10-05T05:40:42.730Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC10": {
+      "at": "2026-10-05T05:40:43.145Z",
+      "note": "Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/891"
   },
@@ -328,6 +369,70 @@
       "at": "2026-10-05T04:36:48.430Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/891 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-05T05:40:39.470Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:39.859Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:40.280Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:40.660Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:41.037Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:41.497Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:41.902Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:42.304Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:42.731Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T05:40:43.145Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Подтверждено оператором в канале (сообщение 184536, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T07:03:56.832Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-05T07:04:03.697Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-05T07:04:03.698Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -369,5 +474,187 @@
       "kind": "judged"
     }
   },
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-05T05:40:39.470Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:39.859Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:40.280Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:40.660Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:41.036Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:41.497Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:41.902Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:42.304Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:42.730Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T05:40:43.145Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    },
+    {
+      "at": "2026-10-05T07:04:03.698Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59",
+      "headCommit": "848fbbe0e024b55d0b3b381d858a7571ae71ad07"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-05T07:04:03.697Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "404-2026-10-04-part1-materials-sync is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:61dd0d42c0933f7f68d8141e4f394fe77ce5d494a78d67fb848f9f4e02d88b59"
+    }
+  ]
 }

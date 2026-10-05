@@ -1,0 +1,40 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The off-limits guard is a plain substring test (`board`, `frontend`, `backend`, `process-metrics`) over all three output texts, so any unrelated word that contains one of them makes the whole sync fail.",
+    "impact": "A future counts key or value such as `onboarding` or `dashboard` would fail every daily run, and a failed day is not retried until the next UTC day.",
+    "suggested_fix": "Match whole words, or limit the guard to the repository names it exists to keep out.",
+    "evidence": "OFF_LIMITS = /frontend|backend|board|process-metrics/i is applied to countsText, exportText and statusText in compute(); no current output matches it.",
+    "confidence": "medium",
+    "file": "src/commands/research-sync.ts",
+    "line": 35,
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-891-r02#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/commands/research-sync.ts line 35 defines OFF_LIMITS = /frontend|backend|board|process-metrics/i; lines 184-186 test it against countsText, exportText and statusText and throw SyncError on any match; it is a substring match with no word boundary.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Phase two renames the staged files one after another, so a rename that fails after an earlier one succeeded leaves the three files of different generations while the status page says the failed run changed nothing.",
+    "impact": "In that rare filesystem-level failure the earlier file is already replaced, which is not the 'previous -latest files untouched' behaviour AC8 states for a failed run.",
+    "suggested_fix": "Accept it and say so in the README, or keep a backup of each replaced file and restore it when a later rename fails.",
+    "evidence": "for (const item of staged) { await rename(item.temp, item.file); changed.push(...) } with the catch block only removing the remaining temp files; the header comment already says 'as far as a filesystem allows'.",
+    "confidence": "medium",
+    "file": "src/commands/research-sync.ts",
+    "line": 235,
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-891-r02#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/commands/research-sync.ts lines 235-238 rename each staged file in a loop and push to changed; the catch at lines 239-247 removes only the staged temp files, so a rename failure after the first success leaves earlier files replaced.",
+      "verifier": "review-verifier"
+    }
+  }
+]

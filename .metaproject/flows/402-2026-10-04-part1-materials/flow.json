@@ -9,15 +9,48 @@
   "id": "402",
   "slug": "part1-materials",
   "title": "Part 1 article materials: protocol, counts script, contribution log, pilot export",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-04T13:12:49.686Z",
-  "updatedAt": "2026-10-04T15:26:25.036Z",
+  "updatedAt": "2026-10-05T07:03:56.577Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-05T06:57:32.722Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC2": {
+      "at": "2026-10-05T06:57:32.918Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC3": {
+      "at": "2026-10-05T06:57:33.117Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC4": {
+      "at": "2026-10-05T06:57:33.311Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC5": {
+      "at": "2026-10-05T06:57:33.511Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC6": {
+      "at": "2026-10-05T06:57:33.706Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC7": {
+      "at": "2026-10-05T06:57:33.898Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    },
+    "AC8": {
+      "at": "2026-10-05T06:57:34.095Z",
+      "note": "Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/885"
   },
@@ -150,6 +183,60 @@
       "at": "2026-10-04T15:26:25.036Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/885 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-05T06:57:32.722Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:32.918Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:33.117Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:33.311Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:33.511Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:33.706Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:33.898Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T06:57:34.095Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Подтверждено оператором голосованием в канале (опрос 88, 2026-10-05); команду выполнил агент по прямому указанию оператора (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-10-05T07:03:49.830Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-05T07:03:56.577Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-05T07:03:56.577Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -182,5 +269,165 @@
       "kind": "judged"
     }
   },
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-05T06:57:32.722Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:32.918Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:33.117Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:33.311Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:33.511Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:33.706Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:33.898Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T06:57:34.095Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    },
+    {
+      "at": "2026-10-05T07:03:56.577Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80",
+      "headCommit": "e482a18798fcd134e1c59ba398abab9829de6ee2"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-05T07:03:56.577Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "402-2026-10-04-part1-materials is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:66eec57eeddf09ac884238ac7b2847194177641bf8180baf06d86d45ce556f80"
+    }
+  ]
 }
