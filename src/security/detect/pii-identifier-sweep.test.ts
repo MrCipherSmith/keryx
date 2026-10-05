@@ -177,6 +177,20 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues(long)).toEqual([SSN]);
   });
 
+  test("a real adjacent hash does not suppress when the token before the SSN exceeds the scan window", () => {
+    const filler = "x".repeat(200);
+    expect(ssnValues(`${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${filler}-${md5}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${filler}-${sha256}-${SSN}`)).toEqual([SSN]);
+  });
+
+  test("a real adjacent hash does not suppress when the token after the SSN exceeds the scan window", () => {
+    const filler = "x".repeat(200);
+    expect(ssnValues(`${SSN}-${md5}`)).toEqual([]);
+    expect(ssnValues(`${SSN}-${md5}-${filler}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${sha256}-${filler}`)).toEqual([SSN]);
+  });
+
   test("BOUNDARY — a bare SSN, a labelled SSN and one in a hyphenated sentence are still detected", () => {
     expect(ssnValues("ssn 123-45-6789")).toEqual([SSN]);
     expect(ssnValues("ssn: 123-45-6789")).toEqual([SSN]);
