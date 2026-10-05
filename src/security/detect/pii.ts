@@ -349,7 +349,7 @@ const LABEL_CONFUSABLES: ReadonlyMap<string, string> = new Map(
     n: "пην",
     o: "оο",
     c: "сϲ",
-    i: "іι",
+    i: "іιı",
     a: "аα",
     l: "ӏ",
     u: "υ",
@@ -359,16 +359,18 @@ const LABEL_CONFUSABLES: ReadonlyMap<string, string> = new Map(
     y: "уγ",
   }).flatMap(([latin, lookalikes]) => [...lookalikes].map((ch): [string, string] => [ch, latin])),
 );
-// Default-ignorable and format characters (LRM/RLM, bidi controls, U+2060-2064, U+180E, U+3164, tags, ZWSP...) plus combining marks.
-const LABEL_STRIP = /[\p{Default_Ignorable_Code_Point}\p{Cf}\p{M}]/gu;
+// Default-ignorable, format and control characters (LRM/RLM, bidi, U+2060-2064, U+180E, U+3164, tags, ZWSP, C0/C1...) plus combining marks.
+// Whitespace controls (\t-\r, NEL) stay: they are separators, not noise.
+const LABEL_STRIP = /(?![\t-\r\u0085])\p{Cc}|[\p{Default_Ignorable_Code_Point}\p{Cf}\p{M}]/gu;
 
 const FOLD_CACHE_LIMIT = 2048;
 const FOLD_PIECE_LIMIT = 4; // no label letter folds to more; a long compatibility expansion (U+FDFA) is only cost
 const foldCache = new Map<string, string>();
 
 function foldCodePoint(ch: string): string {
-  if (ch.charCodeAt(0) < 128) {
-    return ch;
+  const code = ch.charCodeAt(0);
+  if (code < 128) {
+    return code === 127 || (code < 32 && (code < 9 || code > 13)) ? "" : ch;
   }
   const cached = foldCache.get(ch);
   if (cached !== undefined) {
@@ -392,22 +394,31 @@ const LABEL_SEP = "[^\\p{L}\\p{N}]{0,12}";
 // Matched against folded text (NFKC, lowercase, invisibles and accents removed, lookalikes mapped to Latin).
 const SSN_LABEL = new RegExp(
   [
-    `ssn|social|nss|${[..."снилс"].map(foldCodePoint).join("")}|sozialversicherung|versicherungsn(?:ummer|r)|numero\\s+de\\s+secu`,
+    `ssn|soc${LABEL_SEP}ial|nss|${[..."снилс"].map(foldCodePoint).join("")}|sozial${LABEL_SEP}versicherung|versicherungsn(?:ummer|r)|numero${LABEL_SEP}de${LABEL_SEP}secu`,
     `soc${LABEL_SEP}sec`,
     `(?<![a-z])(?:s${LABEL_SEP}s${LABEL_SEP}[n#]|n${LABEL_SEP}s${LABEL_SEP}s|sv${LABEL_SEP}n)`,
   ].join("|"),
-  "iu",
+  "iug",
 );
 const LABEL_TAIL = 64; // the longest label folds to far fewer characters; bounds the work past the window
-const ASCII_ONLY = /^\p{ASCII}*$/u;
+const LABEL_LOOKBEHIND = 8; // context before the window so `(?<![a-z])` sees the character just outside it
+const PLAIN_ASCII = /^[\t-\r\u0020-\u007E]*$/;
 
 // Iterates code points so astral characters fold too; offsets maps each folded character to its UTF-16 index in `text`.
-function foldForLabel(text: string, labelStartLimit: number): { folded: string; offsets: number[] } {
+function foldForLabel(
+  text: string,
+  labelStartLimit: number,
+  windowStart: number,
+): { folded: string; offsets: number[]; windowFrom: number } {
   let folded = "";
   const offsets: number[] = [];
   let index = 0;
   let tailFrom = -1;
+  let windowFrom = -1;
   for (const ch of text) {
+    if (windowFrom < 0 && index >= windowStart) {
+      windowFrom = folded.length;
+    }
     if (index >= labelStartLimit) {
       tailFrom = tailFrom < 0 ? folded.length : tailFrom;
       if (folded.length - tailFrom >= LABEL_TAIL) {
@@ -421,21 +432,24 @@ function foldForLabel(text: string, labelStartLimit: number): { folded: string; 
     }
     index += ch.length;
   }
-  return { folded, offsets };
+  return { folded, offsets, windowFrom: windowFrom < 0 ? folded.length : windowFrom };
 }
 
-// A label vetoes when it STARTS within 64 characters of the token (or inside it).
+// A label vetoes when it STARTS within 64 characters of the token, either side inclusive (or inside it).
 function hasSsnLabelNear(content: string, tokenStart: number, tokenEnd: number): boolean {
   const base = Math.max(0, tokenStart - SSN_LABEL_WINDOW);
+  const from = Math.max(0, base - LABEL_LOOKBEHIND);
   const limit = tokenEnd + SSN_LABEL_WINDOW;
-  const region = content.slice(base, Math.min(content.length, tokenEnd + 2 * SSN_LABEL_WINDOW));
-  if (ASCII_ONLY.test(region)) {
+  const region = content.slice(from, Math.min(content.length, tokenEnd + 2 * SSN_LABEL_WINDOW));
+  if (PLAIN_ASCII.test(region)) {
+    SSN_LABEL.lastIndex = base - from;
     const hit = SSN_LABEL.exec(region);
-    return hit !== null && base + hit.index < limit;
+    return hit !== null && from + hit.index <= limit;
   }
-  const { folded, offsets } = foldForLabel(region, limit - base);
+  const { folded, offsets, windowFrom } = foldForLabel(region, limit - from, base - from);
+  SSN_LABEL.lastIndex = windowFrom;
   const hit = SSN_LABEL.exec(folded);
-  return hit !== null && base + (offsets[hit.index] as number) < limit;
+  return hit !== null && from + (offsets[hit.index] as number) <= limit;
 }
 
 function isSsnHashRun(segment: string): boolean {
@@ -453,9 +467,11 @@ function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: 
   while (tokenEnd < ceiling && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) {
     tokenEnd += 1;
   }
+  // The scan limit is per side and also a budget for the text around the match, so two long sides cannot both pass.
   const truncated =
     (tokenStart === floor && tokenStart > 0 && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) ||
-    (tokenEnd === ceiling && tokenEnd < content.length && IDENTIFIER_CHAR.test(content[tokenEnd] as string));
+    (tokenEnd === ceiling && tokenEnd < content.length && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) ||
+    tokenEnd - tokenStart - (matchEnd - matchStart) > SSN_TOKEN_SCAN_LIMIT;
   if (truncated) {
     return false; // Evidence incomplete → redact.
   }
