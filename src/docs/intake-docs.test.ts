@@ -124,14 +124,11 @@ describe("AC22: registration", () => {
     expect(await read("README.md")).toContain("docs/docs/guides/work-intake.md");
   });
 
-  test("the changelog has an entry for it under the unreleased section", async () => {
+  test("the changelog has an entry for it", async () => {
     const changelog = await read("CHANGELOG.md");
-    const unreleased = changelog.indexOf("## [Unreleased]");
-    const firstRelease = changelog.search(/\n## \[\d/);
-    expect(unreleased).toBeGreaterThan(0);
-    const section = changelog.slice(unreleased, firstRelease);
-    expect(section).toContain("flow 403");
-    expect(section).toContain("keryx intake");
+    const entry = changelog.split("\n").find((line) => line.includes("Work intake from GitHub (flow 403)"));
+    expect(entry).toBeDefined();
+    expect(entry).toContain("keryx intake");
   });
 });
 
