@@ -5,10 +5,12 @@ import type { DetectorMatch, SecuritySeverity } from "../types";
 // typed mask ("email"/"phone"/"address"/"name") so redaction is length-hiding and
 // typed per §10a.
 
+type Scanner = Pick<RegExp, "exec" | "lastIndex">;
+
 type Rule = {
   policyId: string;
   mask: string;
-  regex: RegExp;
+  regex: Scanner;
   severity: SecuritySeverity;
   confidence: number;
   valueGroup?: number;
@@ -97,11 +99,53 @@ export function isValidIp(value: string): boolean {
   return false;
 }
 
+// The plain email regex retries every word boundary of a long `[A-Za-z0-9._%+-]` run
+// that never reaches a valid domain, which is quadratic. Every start in a run shares
+// one `@` and one domain, so try the run once, from its first boundary.
+const EMAIL_FROM = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/y;
+const EMAIL_LOCAL_CHAR = /[A-Za-z0-9._%+-]/;
+const WORD_CHAR = /\w/;
+
+function isWordBoundary(content: string, index: number): boolean {
+  return WORD_CHAR.test(content[index - 1] ?? "") !== WORD_CHAR.test(content[index] ?? "");
+}
+
+function execEmail(content: string, from: number): RegExpExecArray | null {
+  let at = content.indexOf("@", from);
+  while (at !== -1) {
+    let start = at;
+    while (start > from && EMAIL_LOCAL_CHAR.test(content[start - 1] as string)) {
+      start -= 1;
+    }
+    while (start < at && !isWordBoundary(content, start)) {
+      start += 1;
+    }
+    if (start < at) {
+      EMAIL_FROM.lastIndex = start;
+      const m = EMAIL_FROM.exec(content);
+      if (m !== null) {
+        return m;
+      }
+    }
+    at = content.indexOf("@", at + 1);
+  }
+  return null;
+}
+
+const emailScanner: Scanner = {
+  lastIndex: 0,
+  exec(content) {
+    const m = execEmail(content, this.lastIndex);
+    this.lastIndex = m === null ? 0 : m.index + m[0].length;
+    return m;
+  },
+};
+
 const RULES: Rule[] = [
   {
     policyId: "pii.email",
     mask: "email",
-    regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    regex: emailScanner,
     severity: "medium",
     confidence: 0.85,
   },
@@ -127,7 +171,7 @@ const RULES: Rule[] = [
     mask: "name",
     // Only when context suggests user/customer identity.
     regex:
-      /\b(?:name\s+is|customer|client|user|patient|employee)\s*:?\s+([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g,
+      /\b(?:name\s+is|customer|client|user|patient|employee)(?:\s*:)?\s+([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g,
     severity: "low",
     confidence: 0.45,
     valueGroup: 1,
