@@ -53,7 +53,11 @@
     "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
     "evidence": "Reported by review-logic against 3aa5b61c. Not changed: this follows the operator rule to redact when ambiguous. Left OPEN for the operator to decide; the recorder does not dismiss it.",
     "confidence": "medium",
-    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#logic-R3-2"
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#logic-R3-2",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: operator, poll 99 (2026-10-05T22:28Z): accepted residual; the unanchored nss/social over-match gives a false redaction only (dnssec, libnss3, Jonsson, socialite next to a hash), no leak"
+    }
   },
   {
     "id": "sec-F-003",

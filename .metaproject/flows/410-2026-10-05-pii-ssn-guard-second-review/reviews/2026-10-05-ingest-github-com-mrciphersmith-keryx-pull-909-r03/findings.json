@@ -203,6 +203,10 @@
       "method": "execution",
       "evidence": "Fix 37d19f1c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group sep at head: the named shapes are fixed -- `S/S/N`, `S:S:N`, Cyrillic `ѕѕn`, `sоciаl` (Cyrillic о, а), Greek `σσν`, mixed `ѕsn`, and separator runs of 1, 2, 5 and 12 characters (`s...s...n`, `soc////ial`) all veto (1 finding). But long separator runs are STILL a bypass beyond the 12-character bound (LABEL_SEP `{0,12}`): `s`+13 dots+`s`+13 dots+`n md5-SSN` and the 20-dot form -> 0 findings (SSN suppressed), as does `soc`+13 slashes+`ial`. Probe expectations encoded that bound and matched (136 cases, 0 diverging), which is how the residual is visible rather than a surprise. So the finding's literal claim \"long separator runs defeat the label\" still reproduces above 12 separators; on 3aa5b61c group sep diverged on 9 of 16 including the 12-dot run. Cyrillic `ѕѕн` (н renders as H, not a lookalike of n) is suppressed by design and is listed only as INFO. Note: bound is deliberate (fix disposition: up to 12 separators); confirmed here as a measured residual, not a regression.",
       "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: operator, poll 99 (2026-10-05T22:28Z): the 12-separator bound is deliberate; recorded as an accepted residual"
     }
   },
   {
