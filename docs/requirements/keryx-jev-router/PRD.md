@@ -209,11 +209,6 @@ Table shape (both layers, same schema):
   `providers.ts:305-308`) when nothing more specific has resolved.
   Confirm this rule before Flow A ships (PLAN.md open question 1) — it
   repurposes a field that was not designed for this.
-  Flow 411 shell dispatch uses `resolveProviderDefaultModelId`, shared with
-  child requests, independently of `/model`. Before accepting a layer it
-  checks connection, model-list membership when reported, profile availability,
-  executor policy when supplied, and credentials. A rejected default falls
-  through project > user > derived > session, with a visible fallback reason.
 
 ## 6. Model profile discovery and derived default routing
 
@@ -587,15 +582,8 @@ real network call in a test).
 
 ### 9.3 Main-model classifier (`MainModelTaskClassifier`)
 
-Flow 411 updates the interactive shell contract: when enabled and usable,
-Jev is preferred; otherwise classification uses an independent sufficient
-model, not the current `/model` baseline. Candidates must be connected,
-available, chat-capable, credentialed and caller-authorized, with a confirmed
-standard/deep tier (not guessed/unknown). Prefer standard over deep, then
-profile priority, then stable provider/model IDs. With no sufficient candidate,
-skip model classification rather than silently trying the baseline.
-
-The fallback makes a small, structured call to the selected model —
+Used when Jev is not connected/enabled but classification is still wanted:
+a small, cheap, structured call to the **session's own current model** —
 "which one of these category names best fits this task? Answer with just
 the name." Kept deliberately minimal:
 
@@ -839,12 +827,6 @@ blog post on 2026-09-25:
   when a classification is actually requested), and cancellable/
   deduplicated the same way `NextStepSuggestionGate` already is
   (`src/tui/tui-shell.ts:3737-3742`).
-  Flow 411: JEV and the sufficient-model fallback share one monotonic
-  classification deadline (default 3s), not a fresh budget per stage.
-  When fallback exists, JEV gets at most half the original budget; fallback
-  gets only the remainder. Expiry aborts the active request/stream.
-  Foreground cancellation interrupts requests and retry backoff, prevents
-  fallback and executor dispatch, and ignores late classifier results.
 - R10: Task text sent to `JevTaskClassifier` is passed through
   `redactSensitiveText` (`src/security/redact.ts:128`) before assembly,
   verified by a test with planted secret/PII fixtures.

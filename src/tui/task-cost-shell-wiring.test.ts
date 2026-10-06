@@ -22,7 +22,7 @@ test("launchTuiAgentShell exists and this audit is anchored inside it", () => {
 test("io.onUsage is wrapped to sum THIS turn's own tokens, exactly once per dispatch, before runAgentTurn is called", () => {
   const wrapAt = SOURCE.indexOf("const prevOnUsageForCost = io.onUsage;", FN_START);
   expect(wrapAt).toBeGreaterThan(FN_START);
-  const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
+  const dispatchAt = SOURCE.indexOf("void runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(wrapAt);
   const between = SOURCE.slice(wrapAt, dispatchAt);
   expect(between).toContain("turnInputTokens += usage.inputTokens ?? 0;");
@@ -31,10 +31,8 @@ test("io.onUsage is wrapped to sum THIS turn's own tokens, exactly once per disp
 });
 
 test("recordTurnTaskCostBestEffort is called inside the turn's .finally(), fired with `void` (never awaited by the settle callback)", () => {
-  const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
-  expect(dispatchAt).toBeGreaterThan(FN_START);
-  const finallyAt = SOURCE.indexOf("})).finally(() => {", dispatchAt);
-  expect(finallyAt).toBeGreaterThan(dispatchAt);
+  const finallyAt = SOURCE.indexOf("}).finally(() => {", FN_START);
+  expect(finallyAt).toBeGreaterThan(FN_START);
   const callAt = SOURCE.indexOf("void recordTurnTaskCostBestEffort({", finallyAt);
   expect(callAt).toBeGreaterThan(finallyAt);
   const callEnd = SOURCE.indexOf("});", callAt);
@@ -55,7 +53,7 @@ test("turnCategory is captured unconditionally from routingOutcome?.category, ou
   const routingOutcomeDeclAt = SOURCE.indexOf("let routingOutcome: RoutingClassifierTurnResult | undefined;", FN_START);
   expect(routingOutcomeDeclAt).toBeGreaterThan(FN_START);
 
-  const routedBranchAt = SOURCE.indexOf("if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {", routingOutcomeDeclAt);
+  const routedBranchAt = SOURCE.indexOf("if (routingOutcome?.routed !== undefined) {", routingOutcomeDeclAt);
   expect(routedBranchAt).toBeGreaterThan(routingOutcomeDeclAt);
   // The routed-only branch's own fail-closed catch — the last thing inside it.
   const routedBranchFailClosedAt = SOURCE.indexOf(
@@ -71,7 +69,7 @@ test("turnCategory is captured unconditionally from routingOutcome?.category, ou
   // Declared AFTER the routed-only branch closes — unconditional, not nested inside it.
   expect(turnCategoryAt).toBeGreaterThan(routedBranchFailClosedAt);
 
-  const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
+  const dispatchAt = SOURCE.indexOf("void runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(turnCategoryAt);
 });
 

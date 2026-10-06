@@ -33,15 +33,13 @@ test("the tool-call/result/assistant-text collector hooks are wrapped exactly ON
 test("guardCollector.reset(line) runs BEFORE runAgentTurn is dispatched for that same line", () => {
   const resetAt = SOURCE.indexOf("guardCollector.reset(line);", FN_START);
   expect(resetAt).toBeGreaterThan(FN_START);
-  const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
+  const dispatchAt = SOURCE.indexOf("void runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
   expect(dispatchAt).toBeGreaterThan(resetAt);
 });
 
 test("AC2: the guard run is fired with `void` inside the turn's .finally() — never awaited, so it cannot delay the next prompt", () => {
-  const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
-  expect(dispatchAt).toBeGreaterThan(FN_START);
-  const finallyAt = SOURCE.indexOf("})).finally(() => {", dispatchAt);
-  expect(finallyAt).toBeGreaterThan(dispatchAt);
+  const finallyAt = SOURCE.indexOf("}).finally(() => {", FN_START);
+  expect(finallyAt).toBeGreaterThan(FN_START);
   const finallyEndAt = SOURCE.indexOf("\n      });\n", finallyAt); // the runAgentTurn(...).finally(() => { ... }) call's own close
   const finallyBody = SOURCE.slice(finallyAt, finallyEndAt > finallyAt ? finallyEndAt : SOURCE.length);
   expect(finallyBody).toContain("if (guardEnabled) {");
@@ -103,8 +101,8 @@ test("`turnSignal` is captured from `foregroundOperation.signal` BEFORE `foregro
   expect(settleAt).toBeGreaterThan(captureAt);
   // And it is what `runAgentTurn` is actually dispatched with (not a second,
   // unrelated read of the live signal).
-  const dispatchAt = SOURCE.indexOf("void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
-  const dispatchBlock = SOURCE.slice(dispatchAt, SOURCE.indexOf("})).finally(() => {", dispatchAt));
+  const dispatchAt = SOURCE.indexOf("void runAgentTurn(foregroundIo, deps, history, line, {", FN_START);
+  const dispatchBlock = SOURCE.slice(dispatchAt, SOURCE.indexOf("}).finally(() => {", dispatchAt));
   expect(dispatchBlock).toContain("signal: turnSignal,");
 });
 
