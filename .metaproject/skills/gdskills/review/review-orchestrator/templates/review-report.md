@@ -160,7 +160,7 @@ a tool, skill or model is unavailable; use `none` only when the run proves none.
 - **Subagents:** <dispatched subagents, their reviewer roles and actual models; or none when confirmed, otherwise not recorded>.
 - **Fallback:** <reviewer> via `general-purpose` because <native agent type unavailable | no bundled agent>. Or `none`.
 - **Not run:** <reviewer> — <short reason>. Or `none`.
-- **Selection:** <auto-detected scope | explicit flags | optional groups the user picked>
+- **Selection:** <explicit flags | start questions: reviewers <`--all` | narrowed to …>, counterpart <verified at <sha> | skipped: reason>, models <accepted | all deep | custom> | defaults (unattended)>
 - **Verification:** <mode>. Confirmed N, refuted N, unverifiable N, unverified N. Removed N (always 0 outside `filter`).
 - **Stage counts:** pre-filter dropped <files>/<blocks>/<lines> (or `not recorded`). Retained N.
 - **Context:** <job/context path, or none>

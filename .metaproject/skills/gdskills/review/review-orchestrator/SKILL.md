@@ -38,7 +38,7 @@ Review Orchestrator Progress:
 - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
 - [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing — and KEEP the `--json` file; `review ingest --blast-radius <file>` is refused without it
 - [ ] Step 4: Parse flags / auto-detect domain from scope
-- [ ] Step 5: Ask user to confirm optional convention reviewers (legacy/profile reviewers are flag-only, never prompted)
+- [ ] Step 5: Start questions, once, after Steps 1 and 3 — reviewers (default `--all`), counterpart verification (default on), model plan; unattended takes the defaults (SKILL.detail.md § "Start questions"; legacy/profile reviewers stay flag-only)
 - [ ] Step 5c: When `review.jev.select` is on, run `keryx review jev-select` over the finalized candidate set and drop its `skip` decisions from Wave A/B — see "Reviewer selection with Jev"
 - [ ] Step 6: Plan sub-agent dispatch and token budgets, and compute each dispatch's model with `keryx review tier` — never by hand
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
@@ -144,7 +144,7 @@ which of its inputs were recovered and which were never written down.
 | `context_doc` | string | no | Path to job context document (e.g., `.metaproject/jobs/<job>/ai/context.md`). |
 | `context_mode` | string | no | `none`, `light`, or `full`. Default: `light` for PR review, `none` for small path reviews. `full` may call `context-collector` before dispatch. |
 | `token_budget` | object | no | Optional budget controls: `{total, per_reviewer, diff_max_chars, file_max_chars}`. |
-| `model_strategy` | string | no | `ask` or `adaptive`. Default: `adaptive`; the model per dispatch is computed by `keryx review tier`, never chosen by hand (see Step 6). |
+| `model_strategy` | string | no | `ask` or `adaptive`. Default: `ask` in an interactive round (shown once as Start question 3), `adaptive` unattended; the model per dispatch is computed by `keryx review tier`, never chosen by hand (see Step 6). |
 | `managed_review` | object | no | Optional managed review mode: `{mode, target, target_ref, flow_id, reviewers}` where mode is `lightweight`, `attach-review`, `review-flow`, or `ingest`. |
 | `verification_mode` | string | no | `off`, `annotate`, or `filter`. Default `annotate` — verdicts are recorded and nothing is removed. See Wave C. |
 | `pr_comments` | object | no | `{enabled, max_replies_total, max_sentences_per_reply}`. Defaults: enabled when a PR exists, `30`, `2`. Collect every round, reply once at the end. See External PR comments. |
@@ -522,9 +522,9 @@ The rule that follows for reviewers, and that belongs in the dispatch prompt:
 > producer disproves, and a defect missed because the producer's actual default was
 > assumed rather than read.
 
-If the other repository is not available to you, record it as
-`state: unavailable` in `cross_repo` and leave the dependent findings at `info`.
-An unavailable producer is a result. Assuming one is not.
+If you cannot locate the producer, ask the operator where it is (Start question 2); record `state: unavailable` only when it cannot be read, and leave the dependent findings at `info`.
+An unavailable producer is a result. Assuming one is not. An input rule records the producer's full check set and is verified every round,
+paired PR or not — SKILL.detail.md § "Counterpart verification".
 
 A finding whose evidence lives in the producer sets `repo` on the finding itself.
 `file` and `line` alone name a path in the repository under review, so without
@@ -600,8 +600,8 @@ Context modes:
 - `full`: for large/high-risk PRs or user request. Invoke `context-collector` first, then pass the resulting context path and summary to reviewers.
 
 High-risk triggers for `full` recommendation:
-- Auth, permissions, API contracts, migrations, shared core, state management, graph/flow, security, performance-critical paths.
-- More than 20 changed source files or more than 2,000 changed lines.
+- Auth, permissions, API contracts, a client-side mirror of a server rule (validation, limit, permission, uniqueness, reserved names), migrations, shared core, state management, graph/flow, security, performance-critical paths.
+- More than 20 changed source files or more than 2,000 changed lines. Size never lowers depth below the risk class (SKILL.detail.md § "Depth floor").
 - Missing or ambiguous linked requirements.
 
 If `full` context would be useful but was not explicitly requested, ask once:
@@ -655,8 +655,8 @@ whether it is computed:
 
 | `model_strategy` | Behavior |
 |---|---|
-| `ask` | Present the `keryx review tier` model plan once before dispatch. |
-| `adaptive` (default) | Dispatch on the computed model directly; record the chosen model per reviewer in the final report metadata. |
+| `ask` (default, interactive) | Present the `keryx review tier` model plan once before dispatch — Start question 3; the operator may accept it, take all `deep`, or set it. |
+| `adaptive` (default, unattended) | Dispatch on the computed model directly; record the chosen model per reviewer in the final report metadata. |
 
 Rules:
 - Never write a model id into a dispatch by hand — paste the `model` block `keryx review tier` printed.
@@ -1052,30 +1052,30 @@ what to do with it: `SKILL.detail.md` beside this file, section "Project-local
 reviewers". A description saying another entry point dispatches it is its
 author's routing note, not a restriction.
 
-### Convention Reviewer Confirmation
+### Start questions (Step 5)
 
-When convention reviewers are auto-detected and the user did not explicitly pass
-`--project-conventions`, `--frontend-conventions`, `--testing-practices`, `--core-boundaries`,
-`--flow-graph`, or `--all`, ask before dispatch:
+Ask once, after the context pack (Step 1) and the scope (Step 3), in one interaction — one
+`AskUserQuestion` call on Claude Code, the lettered prompt in SKILL.detail.md elsewhere:
 
-```text
-I found local convention reviewers that match this review scope:
+1. **Reviewers** — default `--all`; detected convention reviewers are included. Narrowing
+   (tests only, one domain, custom) is the operator's explicit choice. Passed flags answer it.
+   Legacy/profile reviewers stay flag-only and are never prompted.
+2. **Counterpart** — show what the context pack found for the other side of the contract
+   (endpoints, mirrored rules, a paired PR, or "no link found") and a checkbox to verify it,
+   ON by default even with no link. If the round cannot locate that code, it asks where it is.
+   Verification is not limited to a paired PR: contracts and logic are re-read every round.
+3. **Models** — complexity, the per-role tier from `keryx review tier`, the model each tier
+   resolves to on this host; accept (default), all `deep`, or custom. Once per round.
 
-  A) Include all detected convention reviewers (recommended)
-  B) Choose individually
-  C) Skip convention reviewers for this run
+Unattended rounds ask nothing: `--all`, counterpart verified, computed models — recorded in
+`### How this review was run`. In a `job-orchestrator` pipeline the job setting
+`convention_reviewers` still answers question 1 (unresolved: include all detected reviewers
+and record that choice in the review scope).
 
-Detected:
-  - review-frontend-conventions: <why detected, or omit if not detected>
-  - review-testing-practices: <why detected, or omit if not detected>
-  - review-core-boundaries: <why detected, or omit if not detected>
-  - review-flow-graph: <why detected, or omit if not detected>
-```
-
-If the user chooses B, list only detected reviewers and ask for names to include/exclude.
-If the user does not answer and the review is part of an automated `job-orchestrator` pipeline,
-use the job setting `convention_reviewers` (default: `"ask"`; if still unresolved, include all
-detected reviewers and record that choice in the review scope).
+A gating round runs what these answers selected; a host that cannot dispatch subagents
+returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) instead of reviewing alone. Every
+round also carries the always-on obligations — SKILL.detail.md § "Depth floor",
+§ "Counterpart verification", § "Round obligations".
 
 ### Reviewer selection with Jev (`jev-select`) — advisory, before dispatch (Step 5c)
 
@@ -1185,7 +1185,7 @@ whoever reads the merge commit a year later reads the body. When `review.jev.con
 
 ## Dispatching Reviewers
 
-Dispatch selected reviewers in parallel when independent. Use waves when token budget is tight or when one reviewer needs another result:
+Dispatch selected reviewers in parallel when independent — this engine dispatches them itself; a host without a dispatch tool returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) and never reviews alone. Use waves when token budget is tight or when one reviewer needs another result:
 
 1. Wave A - core correctness/risk reviewers: logic, architecture, security/highload when selected.
 2. Wave B - domain reviewers: frontend/backend/testing/convention reviewers filtered to relevant files. `review-jev-rules` (flow 330), `review-jev-risk`/`review-jev-scenarios` (flow 332), `review-jev-docs`/`review-jev-comments` (flow 333), `review-jev-contract` (flow 335) also run here, CLI-engine not sub-agent, `"engine": "jev"` in `keryx review reviewers --json`, gated on their own opt-in and a resolvable Jev/OpenRouter credential — measured verdicts per reviewer (keep off by default, experimental, etc.) in `SKILL.detail.md` § "CLI-engine reviewers".
