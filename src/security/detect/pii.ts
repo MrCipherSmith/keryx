@@ -141,6 +141,48 @@ const emailScanner: Scanner = {
   },
 };
 
+// The plain phone regex restarts from every separator inside one long `[\d\s().-]` run and rescans
+// to its end each time, which is quadratic. Whether a start matches depends only on its run, so the
+// first valid start in a run that fails rules out the whole run, and one that matches leaves nothing
+// after its end.
+const PHONE_FROM = /(?<![\w.])(\+?\d[\d\s().-]{7,}\d)(?![\w.])/y;
+const PHONE_RUN_CHAR = /[\d\s().-]/;
+const PHONE_START_BLOCKER = /[\w.]/;
+const DIGIT = /\d/;
+
+export function execPhone(content: string, from: number): RegExpExecArray | null {
+  let pos = from;
+  while (pos < content.length) {
+    const digitAt = content[pos] === "+" ? pos + 1 : pos;
+    if (
+      !DIGIT.test(content[digitAt] ?? "") ||
+      (pos > 0 && PHONE_START_BLOCKER.test(content[pos - 1] as string))
+    ) {
+      pos += 1;
+      continue;
+    }
+    PHONE_FROM.lastIndex = pos;
+    const m = PHONE_FROM.exec(content);
+    if (m !== null) {
+      return m;
+    }
+    pos = digitAt + 1;
+    while (pos < content.length && PHONE_RUN_CHAR.test(content[pos] as string)) {
+      pos += 1;
+    }
+  }
+  return null;
+}
+
+const phoneScanner: Scanner = {
+  lastIndex: 0,
+  exec(content) {
+    const m = execPhone(content, this.lastIndex);
+    this.lastIndex = m === null ? 0 : m.index + m[0].length;
+    return m;
+  },
+};
+
 const RULES: Rule[] = [
   {
     policyId: "pii.email",
@@ -153,7 +195,7 @@ const RULES: Rule[] = [
     policyId: "pii.phone",
     mask: "phone",
     // International or grouped phone numbers with at least 9 digits of signal.
-    regex: /(?<![\w.])(\+?\d[\d\s().-]{7,}\d)(?![\w.])/g,
+    regex: phoneScanner,
     severity: "medium",
     confidence: 0.7,
     valueGroup: 1,
