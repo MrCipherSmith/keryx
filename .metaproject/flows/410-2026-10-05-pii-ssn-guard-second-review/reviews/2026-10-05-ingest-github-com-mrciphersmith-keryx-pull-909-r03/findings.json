@@ -224,6 +224,10 @@
       "method": "execution",
       "evidence": "Fix 37d19f1c (reduced). checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). Measured with perf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calling detectPii on identifier-fringed SSN candidates with non-ASCII neighbours (11 input shapes; best of 3). Relative growth reproduced: unit A (`x-SSN é ` repeated) at 160k chars: bf0ce9dce 13 ms -> 3aa5b61c 154 ms (about 10x, matching the finding's 10-20x) -> head 79 ms; linear at head (80k 32 ms, 160k 79 ms, 320k 156 ms). Heaviest shape (14 chained candidates per token, unit H) at 160k: bf0ce9dce 55 ms, 3aa5b61c 321 ms, head 207 ms (320k 413 ms, linear). The absolute figures in the finding could NOT be reproduced: the worst case I could build on 3aa5b61c was about 350 ms at 160k, not about 2 s, so no input of mine shows the claimed 2 s before the fix, and the claimed 292 ms after cannot be compared like for like. What was measured: head is 1.5x to 2x faster than 3aa5b61c, linear, with a worst case near 0.2 s per 160k chars; still about 4x to 6x above the pre-fold baseline (bf0ce9dce). Verdict unverifiable because the check could not distinguish the reported 2 s case from head.",
       "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in PR 912 (b6574aa8, linear email and name rules) and PR 913 (34226226, linear phone rule), both merged to main with green CI; scaling tests: pii-phone-linear-time.test.ts and the PR 912 tests; 160k characters before -> after: 123-45-6789- repeated 5276 ms -> 69 ms, 's.' repeated 7145 ms -> 2 ms, 'user' plus 160k spaces about 14 s -> 1 ms (PR 912); '-1.' repeated 5080 ms -> 5 ms (PR 913)"
     }
   },
   {
