@@ -1,6 +1,6 @@
 // Flow 338 (PR #737 review fix) — the routing classifier's wiring inside
 // `launchTuiAgentShell` (`tui-shell.ts`): the `/route` toggle's persistence
-// (merge-safety), the `/model`-wins-over-routing gate, and that a routed turn
+// (merge-safety), routing independent of `/model`, and that a routed turn
 // builds a FRESH `deps` object rather than mutating the session's own. Same
 // source-text-audit idiom `turn-guard-shell-wiring.test.ts` uses for logic
 // wired deep inside this un-launchable-headlessly function
@@ -33,25 +33,28 @@ test("/route's on/off toggle read-and-spreads the existing ShellConfig.routingCl
   expect(body).toContain("refreshRoutingSidebar();");
 });
 
-test("a turn only routes when routing is on, the session model was never explicitly picked this session, the turn is the operator's own, and the line is non-empty", () => {
+test("a turn routes when routing is on, the turn is the operator's own, and the line is non-empty regardless of /model", () => {
   const gateAt = SOURCE.indexOf(
-    'if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {',
+    'if (routingEnabled && origin === "operator" && line.trim().length > 0) {',
     FN_START,
   );
   expect(gateAt).toBeGreaterThan(FN_START);
 });
 
-test("an explicit /model or /connect pick sets sessionModelExplicit — PRD §9.5, an explicit switch always wins over classification for the rest of the session", () => {
+test("an explicit /model or /connect pick changes the baseline without pinning routing off", () => {
   const switchToAt = SOURCE.indexOf("const switchTo = async (ns: TuiSelection): Promise<void> => {", FN_START);
   expect(switchToAt).toBeGreaterThan(FN_START);
   const nextConstAt = SOURCE.indexOf("const switchTo", switchToAt + 1) > -1 ? SOURCE.indexOf("const switchTo", switchToAt + 1) : SOURCE.length;
   const body = SOURCE.slice(switchToAt, Math.min(switchToAt + 2000, nextConstAt));
-  expect(body).toContain("sessionModelExplicit = true;");
+  expect(body).toContain("currentSel = ns;");
+  expect(body).not.toContain("routingEnabled = false");
+  expect(SOURCE).not.toContain("sessionModelExplicit");
+  expect(SOURCE).not.toContain("manual /model selection pins this session");
 });
 
 test("a routed turn's deps are a FRESH object from a fresh makeAgentDeps call — the routed IIFE reassigns its own block-scoped `deps`, never `sessionDeps` (the outer session's own reference)", () => {
   const gateAt = SOURCE.indexOf(
-    'if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {',
+    'if (routingEnabled && origin === "operator" && line.trim().length > 0) {',
     FN_START,
   );
   expect(gateAt).toBeGreaterThan(FN_START);
@@ -69,4 +72,28 @@ test("a routed turn's deps are a FRESH object from a fresh makeAgentDeps call �
   expect(body).not.toContain("sessionDeps.provider =");
   expect(body).not.toContain("sessionDeps.model =");
   expect(body).not.toContain("Object.assign(sessionDeps");
+});
+
+
+test("flow411: captured turn signal cancels classification and gates executor dispatch", () => {
+  const start = SOURCE.indexOf("const turnSignal = foregroundOperation.signal;", FN_START);
+  const end = SOURCE.indexOf("foregroundOperation.settle(operation);", start);
+  expect(start).toBeGreaterThan(FN_START);
+  expect(end).toBeGreaterThan(start);
+  const body = SOURCE.slice(start, end);
+  expect(body).toContain("signal: turnSignal,");
+  expect(body).toContain("if (!turnSignal.aborted && routingOutcome?.routed !== undefined)");
+  expect(body).toContain("turnSignal.aborted ? Promise.resolve() : runAgentTurn(");
+  // Headless source audit only: the behavioral chain is exercised separately.
+});
+
+
+test("flow411: cancellation after routed preparation suppresses success and fallback diagnostics", () => {
+  const start = SOURCE.indexOf("// Preparation can settle after cancellation", FN_START);
+  expect(start).toBeGreaterThan(FN_START);
+  const end = SOURCE.indexOf("// Flow 341", start);
+  const body = SOURCE.slice(start, end);
+  expect(body).toContain("if (!turnSignal.aborted) {\n                routingRoutedCount += 1;");
+  expect(body).toContain('if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model');
+  expect(body).toContain("} else if (!turnSignal.aborted) {");
 });

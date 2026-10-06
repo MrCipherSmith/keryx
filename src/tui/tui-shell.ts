@@ -4998,14 +4998,7 @@ export async function launchTuiAgentShell(opts: {
     let routingEnabled = loadShellConfig().routingClassifier?.enabled === true;
     let routingRoutedCount = 0;
     let routingLastCategory: RoutingCategory | undefined;
-    /**
-     * PRD §9.5: an explicit `/model`/`/connect` switch always wins over
-     * classification. Scoped to THIS session's own live choices (the
-     * session's INITIAL model — auto-detected or read from a prior saved
-     * choice — is not itself a deliberate in-session pick) — `switchTo`
-     * below sets this the moment the operator actually picks a model.
-     */
-    let sessionModelExplicit = false;
+    // Flow 411: a manual model pick changes the baseline, not routing enablement.
     const refreshRoutingSidebar = (): void => {
       clearTranscriptChildren(sbRoute);
       if (!routingEnabled) return;
@@ -7603,9 +7596,8 @@ export async function launchTuiAgentShell(opts: {
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
-      // Flow 338 (PRD §9.5): an explicit `/model`/`/connect` pick always wins
-      // over automatic routing for the rest of this session.
-      sessionModelExplicit = true;
+      // Flow 411: `/model` and `/connect` change the fallback baseline;
+      // enabled category routing still applies to subsequent operator turns.
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
       deps = {
@@ -9499,17 +9491,8 @@ export async function launchTuiAgentShell(opts: {
       // synchronous (its existing contract — every other call site awaits
       // nothing from it).
       //
-      // The bound is NOT a flat `CLASSIFY_TURN_TIMEOUT_MS` (3s): `classifyTurn`
-      // (`../harness/decision/classify-turn.ts`) tries Jev, then — on ANY Jev
-      // failure/timeout — the main-model classifier, each stage independently
-      // raced against its own `CLASSIFY_TURN_TIMEOUT_MS` timer
-      // (`withTimeout`). Worst case (Jev hangs to its own timeout, THEN the
-      // main-model stage also hangs to its own timeout) is ~2x
-      // `CLASSIFY_TURN_TIMEOUT_MS` (~6s) before this IIFE falls back to the
-      // session's own model — deliberate: a slow/hanging Jev call should not
-      // starve the main-model fallback of its own full timeout budget. Still
-      // strictly bounded (never hangs indefinitely), just not by the single
-      // constant this comment used to claim.
+      // Flow 411: JEV and the independent fallback share one monotonic
+      // CLASSIFY_TURN_TIMEOUT_MS budget (3s), including cancellation.
       //
       // `sessionDeps` captures the OUTER (session) `deps` here, before the
       // IIFE's own block-scoped `deps` shadows the name below — a `const`
@@ -9525,14 +9508,13 @@ export async function launchTuiAgentShell(opts: {
         // (source-text audits in `turn-guard-shell-wiring.test.ts` key off
         // it).
         let deps = sessionDeps;
+        const turnSignal = foregroundOperation.signal;
         let routingOutcome: RoutingClassifierTurnResult | undefined;
-        if (routingEnabled && sessionModelExplicit && origin === "operator") {
-          io.onSystem?.("[route skipped: manual /model selection pins this session]\n");
-        }
-        if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {
+        if (routingEnabled && origin === "operator" && line.trim().length > 0) {
           try {
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
+              signal: turnSignal,
               // Flow 338 scoping note (routing-classifier-source.ts's own
               // header): Jev is tried whenever a credential resolves AND
               // routing itself is on — `/route on` IS the opt-in (PRD §9.2's
@@ -9547,7 +9529,7 @@ export async function launchTuiAgentShell(opts: {
           } catch {
             // fail-closed: classification must never block or fail the turn.
           }
-          if (routingOutcome?.routed !== undefined) {
+          if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
             try {
               deps = {
                 ...(await opts.makeAgentDeps({ provider: routingOutcome.routed.providerId, model: routingOutcome.routed.modelId }, liveSlateSession, busClientRef)),
@@ -9556,17 +9538,21 @@ export async function launchTuiAgentShell(opts: {
                 ...(sessionDeps.busAck !== undefined ? { busAck: sessionDeps.busAck } : {}),
                 ...(sessionDeps.busLeases !== undefined ? { busLeases: sessionDeps.busLeases } : {}),
               };
-              routingRoutedCount += 1;
-              routingLastCategory = routingOutcome.category;
-              refreshRoutingSidebar();
-              const tag = renderRoutingTagLine(routingOutcome);
-              if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+              // Preparation can settle after cancellation; do not report a
+              // successful route for an executor that will never dispatch.
+              if (!turnSignal.aborted) {
+                routingRoutedCount += 1;
+                routingLastCategory = routingOutcome.category;
+                refreshRoutingSidebar();
+                const tag = renderRoutingTagLine(routingOutcome);
+                if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+              }
             } catch {
               // fail-closed: a routed-deps build failure runs on the session's own model instead.
               deps = sessionDeps;
-              io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
+              if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
-          } else {
+          } else if (!turnSignal.aborted) {
             io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
           }
         }
@@ -9589,13 +9575,12 @@ export async function launchTuiAgentShell(opts: {
         // and by the time the guard's own deferred continuation (further down)
         // wakes up from its `await`, a NEW turn may already be active, whose
         // signal would say nothing about whether THIS turn was cancelled.
-        const turnSignal = foregroundOperation.signal;
-        void runAgentTurn(foregroundIo, deps, history, line, {
+        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {
         signal: turnSignal,
         ...(origin === "operator" ? {} : { origin }),
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
-      }).finally(() => {
+      })).finally(() => {
         foregroundOperation.settle(operation);
         // Flow 376: the reply of a Telegram-originated turn goes back to the topic
         // (a no-op for any other turn). Cancelled and failed turns say so there.

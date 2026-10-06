@@ -3809,7 +3809,13 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     // rather than reading `foregroundOperation.signal` inline at the call
     // site. Assert both halves: the capture is `foregroundOperation.signal`,
     // and the call site passes that same binding.
-    expect(source).toMatch(/const turnSignal = foregroundOperation\.signal;[\s\S]{0,250}runAgentTurn\([\s\S]{0,250}signal:\s*turnSignal/);
+    const start = source.indexOf("const turnSignal = foregroundOperation.signal;");
+    const end = source.indexOf("foregroundOperation.settle(operation);", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const turn = source.slice(start, end);
+    expect(turn).toContain("signal: turnSignal,");
+    expect(turn).toMatch(/turnSignal\.aborted \? Promise\.resolve\(\) : runAgentTurn\([\s\S]{0,250}signal:\s*turnSignal/);
     expect(source).toMatch(/wikiEnrich\([\s\S]{0,500}signal:\s*foregroundOperation\.signal/);
   });
 
