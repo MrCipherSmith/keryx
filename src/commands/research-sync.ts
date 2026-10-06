@@ -1,17 +1,19 @@
-// Flow 404: `keryx research sync` keeps three files next to the Part 1 materials current: the counts the
-// unchanged `part1-counts.py` produces now, the text-free decisions export from 2 October 2026 on, and
-// `sync-status.md`, the one page that says when it ran and where the numbers stand.
+// Flow 404: `keryx research sync` keeps the Part 1 materials next to it current: the counts the unchanged
+// `part1-counts.py` produces now, this machine's own text-free decisions export (`raw/decisions-<host>.jsonl`), the
+// merge of every machine's raw export (`decisions-export-latest.jsonl`), and `sync-status.md`, the one page that says
+// when it ran and where the numbers stand. The journal lives on one machine only, so each machine writes only its
+// own raw file and the merged file is rebuilt from all of `raw/`: machines no longer overwrite each other.
 //
 // Two phases, so a failure leaves the last good data alone: everything is computed in memory first, and only a
-// complete result is written. It runs from the repository root, writes only those three files, and never touches
+// complete result is written. It runs from the repository root, writes only those files, and never touches
 // git history: no commit, no branch, no pull request. The scheduler calls this command; nothing here hooks an event.
 
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { loadExportWithSummary, loadReport, renderExport } from "../decisions/service";
+import { loadReport, machineExport, machineFileName, mergeMachineRows, parseMachineRows, renderMachineRows, type MachineRow } from "../decisions/service";
 import { pathExists } from "../lib/fs";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 import { scheduleResearchSync, unscheduleResearchSync } from "../scheduler/research-sync-job";
@@ -26,8 +28,9 @@ export const LATEST_COUNTS = "part1-counts-latest.json";
 export const LATEST_EXPORT = "decisions-export-latest.jsonl";
 export const STATUS_FILE = "sync-status.md";
 const CONTRIBUTION_LOG = "contribution-log.md";
-/** The export starts where the frozen snapshot's journal data starts. */
-export const EXPORT_SINCE = new Date(Date.UTC(2026, 9, 2));
+/** One text-free export per machine, written by that machine's sync; the merged file is built from all of them. */
+export const RAW_DIR = "raw";
+const RAW_FILE = /^decisions-.+\.jsonl$/;
 const COUNTS_TIMEOUT_MS = 120_000;
 /** git and tar are quick; a child that has not answered in this long is hung. */
 const TOOL_TIMEOUT_MS = 60_000;
@@ -154,6 +157,30 @@ interface Computed {
   countsKept: boolean;
   exportText: string;
   statusText: string;
+  /** This machine's raw export, relative to the catalog, and its text; null when there is nothing to write. */
+  ownRaw: { name: string; text: string } | null;
+}
+
+/**
+ * Every raw export in the working tree, parsed and checked, with this machine's file replaced by the text just
+ * computed so the merge is of one generation. A file that fails its checks, or a pair seen twice, fails the run (every error in phase one is a failed run).
+ */
+async function rawFiles(root: string, ownRaw: { name: string; text: string } | null): Promise<Array<{ label: string; rows: MachineRow[] }>> {
+  let names: string[];
+  try {
+    names = (await readdir(catalogFile(root, RAW_DIR))).filter((name) => RAW_FILE.test(name));
+  } catch {
+    names = [];
+  }
+  const own = ownRaw === null ? null : path.posix.basename(ownRaw.name);
+  if (own !== null && !names.includes(own)) names.push(own);
+  const files: Array<{ label: string; rows: MachineRow[] }> = [];
+  for (const name of names.sort()) {
+    const body = name === own ? (ownRaw as { text: string }).text : await readFile(catalogFile(root, path.join(RAW_DIR, name)), "utf8");
+    const label = `${RAW_DIR}/${name}`;
+    files.push({ label, rows: parseMachineRows(body, label) });
+  }
+  return files;
 }
 
 /** Phase one: everything the three files will hold, computed in memory. Writes nothing. */
@@ -179,17 +206,25 @@ async function compute(deps: Required<SyncDeps>): Promise<Computed> {
   const countsText = countsKept && previousText !== null ? previousText : JSON.stringify(fresh, null, 2);
   const latest = countsKept && previous !== null ? previous : fresh;
 
-  const { rows } = await loadExportWithSummary(root, { since: EXPORT_SINCE });
-  const exportText = rows.length === 0 ? "" : `${renderExport(rows, "jsonl")}\n`;
+  const own = await machineExport(root);
+  const ownRaw = own === null || own.rows.length === 0 ? null : { name: `${RAW_DIR}/${machineFileName(own.host)}`, text: renderMachineRows(own.rows) };
+  const merged = mergeMachineRows(await rawFiles(root, ownRaw));
+  const exportText = renderMachineRows(merged.rows);
+  const machines = {
+    perHost: merged.perHost,
+    total: merged.rows.length,
+    withRecommendation: merged.rows.filter((row) => row.hasRecommendation === true).length,
+    live: merged.rows.filter((row) => row.backfilled !== true).length,
+  };
   const report = await loadReport(root);
   const log = (await readIfExists(catalogFile(root, CONTRIBUTION_LOG))) ?? "";
   const contributionRows = (log.match(/^\d{4}-\d{2}-\d{2} · /gm) ?? []).length;
 
-  const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows });
-  for (const text of [countsText, exportText, statusText]) {
+  const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows, machines });
+  for (const text of [countsText, exportText, statusText, ownRaw?.text ?? ""]) {
     if (namesOffLimits(text)) throw new SyncError("output names a repository that must not appear");
   }
-  return { countsText, countsKept, exportText, statusText };
+  return { countsText, countsKept, exportText, statusText, ownRaw };
 }
 
 /** After a failed run: the reason goes into the status page, and nothing else is written. */
@@ -227,6 +262,7 @@ export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
   const renamed: typeof staged = [];
   try {
     const targets: Array<[string, string]> = [
+      ...(computed.ownRaw === null ? [] : [[computed.ownRaw.name, computed.ownRaw.text] as [string, string]]),
       [LATEST_COUNTS, computed.countsText],
       [LATEST_EXPORT, computed.exportText],
       [STATUS_FILE, computed.statusText],
@@ -235,6 +271,7 @@ export async function runResearchSync(input: SyncDeps): Promise<SyncOutcome> {
       const file = catalogFile(root, name);
       const previous = await readIfExists(file);
       if (previous === content) continue;
+      if (name.startsWith(`${RAW_DIR}/`)) await mkdir(path.dirname(file), { recursive: true });
       const item = { name, file, temp: `${file}.tmp-${process.pid}`, previous };
       staged.push(item);
       await deps.writeStaged(item.temp, content);
@@ -281,7 +318,7 @@ export function printResearchHelp(): void {
   helpOptions([
     {
       flag: "sync",
-      desc: `Run from the repository root. Refreshes ${CATALOG_DIR}: ${LATEST_COUNTS} (the unchanged ${COUNTS_SCRIPT} at HEAD), ${LATEST_EXPORT} (the text-free decisions export from 2026-10-02) and ${STATUS_FILE} (run time, HEAD, counts now against the snapshot, journal summary). Writes only those files, only when their content changed; no commit, no branch, no pull request. A failed run leaves the previous -latest files as they were and writes the reason into ${STATUS_FILE}.`,
+      desc: `Run from the repository root. Refreshes ${CATALOG_DIR}: ${RAW_DIR}/decisions-<host>.jsonl (this machine's whole text-free decisions journal; skipped when the machine has no seed), ${LATEST_COUNTS} (the unchanged ${COUNTS_SCRIPT} at HEAD), ${LATEST_EXPORT} (the merge of every ${RAW_DIR}/decisions-*.jsonl, ordered by time, with globalSeq) and ${STATUS_FILE} (run time, HEAD, counts now against the snapshot, journal summary, machines and records per machine). Writes only those files, only when their content changed; no commit, no branch, no pull request. A failed run, including a duplicate (host, seq) or an invalid raw file, leaves the previous -latest files as they were and writes the reason into ${STATUS_FILE}.`,
     },
     {
       flag: "sync --schedule daily",

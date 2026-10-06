@@ -29,6 +29,8 @@ export {
 export type { BlindModelResult, ModelCallFn, ModelCallRequest, ModelCallResult, Quality, QualityMatrix, QualityRecord } from "./quality";
 export { EXPORT_FIELDS, buildExport, exportSummaryLine, loadExport, loadExportWithSummary, renderExport } from "./export";
 export type { ExportFormat, ExportOptions, ExportRow } from "./export";
+export { machineExport, machineFileName, mergeMachineRows, parseMachineRows, renderMachineRows } from "./machine-export";
+export type { MachineExport, MachineRow, MergedMachines } from "./machine-export";
 export { importBackfill, renderImportResult } from "./import";
 export type { ImportResult } from "./import";
 export { journalFile, resolveJournalFile } from "./store";
