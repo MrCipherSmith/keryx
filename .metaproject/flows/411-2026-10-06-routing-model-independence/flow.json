@@ -12,7 +12,7 @@
   "title": "Correct task routing: JEV fallback and assignments survive /model",
   "status": "in-progress",
   "createdAt": "2026-10-06T06:04:33.880Z",
-  "updatedAt": "2026-10-06T07:25:26.907Z",
+  "updatedAt": "2026-10-06T20:10:36.895Z",
   "source": {
     "type": "description",
     "ref": null
@@ -33,30 +33,49 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
       "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "evidenceRefs": [
+        ".metaproject/flows/411-2026-10-06-routing-model-independence/context.md",
+        ".metaproject/flows/411-2026-10-06-routing-model-independence/plan.md"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context and frozen plan collected; routing contract, baseline independence and evidence reviewed."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4",
+        "AC5",
+        "AC6",
+        "AC7",
+        "AC8"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/411-2026-10-06-routing-model-independence/journal.md",
+        "git:071702e41"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Routing implementation committed and pushed on isolated fix branch at 071702e41; provider-default, independent classifier, shared deadline and cancellation guard implemented. Not operator acceptance."
     },
     {
       "id": "T3",
@@ -66,8 +85,19 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-10-06T20:01:18.265Z",
+            "outcome": "blocked",
+            "detail": "Focused regression evidence: 319 tests / 1381 assertions and typecheck passed; ESLint/TypeScript health passed; 6/6 hermetic kernel PTY scenarios passed. Full ordinary-terminal bun run check exited 1: 491 failed, 76 errors. Diagnostic GitHub CI on fix branch has no verified passing result in this review; do not rerun full check locally. AC9/full release gate remains open."
+          },
+          {
+            "at": "2026-10-06T20:10:36.894Z",
+            "outcome": "blocked",
+            "detail": "Full diagnostic GitHub CI on 071702e41 completed FAILURE. Failed log saved in local .git/flow411-split/ci-failed.log; contains foreground prune-archive-wiring source regex failure, not yet a complete root-cause analysis. Focused evidence remains passing; full gate and AC9 open. Next full check stays on GitHub, not local."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -81,8 +111,42 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-10-06T20:01:18.914Z",
+            "outcome": "blocked",
+            "detail": "Independent reviews completed and findings fixed; PRD and smoke evidence updated. Draft PR is not recorded (pr.url is null); review/closure gates not accepted. Earlier journal statements saying no commit/push or CI launched are historical: routing and diagnostic workflow now reside on pushed fix branch 071702e41; research restored via ordinary revert 7ffa36d94."
+          },
+          {
+            "at": "2026-10-06T20:10:35.921Z",
+            "outcome": "blocked",
+            "detail": "Draft PR: https://github.com/MrCipherSmith/keryx/pull/917. Independent review evidence exists; final review/merge gates remain open. URL recorded in task/journal; implemented transition deferred until merge. AC11 unconfirmed; no release or npm publish."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "AC11: operator acceptance on updated released npm artifact in one session; two categories, two /model changes, unavailable JEV fallback, /route off latest baseline",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T3",
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-06T20:01:20.564Z",
+            "outcome": "blocked",
+            "detail": "AC11 remains UNCONFIRMED. Existing review/pty-evidence demonstrates real kernel TTY with fake JEV/executor, not operator participation or installed released npm artifact. No verified release/version/path evidence or operator transcript/confirmation is present. After separately approved release, record artifact provenance and operator-observed dispatch before/after two /model switches, sufficient fallback for a non-shortcut prompt with JEV unavailable, and latest baseline under /route off. Do not auto-confirm AC11."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -107,6 +171,46 @@
     {
       "at": "2026-10-06T07:25:26.907Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-06T20:01:16.193Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-06T20:01:16.682Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-06T20:01:18.266Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 1) — Focused regression evidence: 319 tests / 1381 assertions and typecheck passed; ESLint/TypeScript health passed; 6/6 hermetic kernel PTY scenarios passed. Full ordinary-terminal bun run check exited 1: 491 failed, 76 errors. Diagnostic GitHub CI on fix branch has no verified passing result in this review; do not rerun full check locally. AC9/full release gate remains open."
+    },
+    {
+      "at": "2026-10-06T20:01:18.914Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 1) — Independent reviews completed and findings fixed; PRD and smoke evidence updated. Draft PR is not recorded (pr.url is null); review/closure gates not accepted. Earlier journal statements saying no commit/push or CI launched are historical: routing and diagnostic workflow now reside on pushed fix branch 071702e41; research restored via ordinary revert 7ffa36d94."
+    },
+    {
+      "at": "2026-10-06T20:01:19.551Z",
+      "event": "task-added",
+      "detail": "T5: AC11: operator acceptance on updated released npm artifact in one session; two categories, two /model changes, unavailable JEV fallback, /route off latest baseline"
+    },
+    {
+      "at": "2026-10-06T20:01:20.565Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 1) — AC11 remains UNCONFIRMED. Existing review/pty-evidence demonstrates real kernel TTY with fake JEV/executor, not operator participation or installed released npm artifact. No verified release/version/path evidence or operator transcript/confirmation is present. After separately approved release, record artifact provenance and operator-observed dispatch before/after two /model switches, sufficient fallback for a non-shortcut prompt with JEV unavailable, and latest baseline under /route off. Do not auto-confirm AC11."
+    },
+    {
+      "at": "2026-10-06T20:10:35.922Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 2) — Draft PR: https://github.com/MrCipherSmith/keryx/pull/917. Independent review evidence exists; final review/merge gates remain open. URL recorded in task/journal; implemented transition deferred until merge. AC11 unconfirmed; no release or npm publish."
+    },
+    {
+      "at": "2026-10-06T20:10:36.895Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 2) — Full diagnostic GitHub CI on 071702e41 completed FAILURE. Failed log saved in local .git/flow411-split/ci-failed.log; contains foreground prune-archive-wiring source regex failure, not yet a complete root-cause analysis. Focused evidence remains passing; full gate and AC9 open. Next full check stays on GitHub, not local."
     }
   ],
   "acKinds": {
