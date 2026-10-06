@@ -5,7 +5,11 @@ import type { DetectorMatch, SecuritySeverity } from "../types";
 // typed mask ("email"/"phone"/"address"/"name") so redaction is length-hiding and
 // typed per §10a.
 
-type Scanner = Pick<RegExp, "exec" | "lastIndex">;
+// A scan result: `index` is where the match starts, `[0]` is its text and `[1]` an optional captured group.
+// A `RegExpExecArray` satisfies it, so rules backed by a plain regex and rules backed by a hand-written
+// linear scanner share one loop.
+type ScanMatch = { readonly index: number; readonly [group: number]: string | undefined };
+type Scanner = { lastIndex: number; exec(content: string): ScanMatch | null };
 
 type Rule = {
   policyId: string;
@@ -99,30 +103,62 @@ export function isValidIp(value: string): boolean {
   return false;
 }
 
-// The plain email regex retries every word boundary of a long `[A-Za-z0-9._%+-]` run
-// that never reaches a valid domain, which is quadratic. Every start in a run shares
-// one `@` and one domain, so try the run once, from its first boundary.
-const EMAIL_FROM = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/y;
-const EMAIL_LOCAL_CHAR = /[A-Za-z0-9._%+-]/;
-const WORD_CHAR = /\w/;
+// The plain email regex retries every word boundary of a long local-part run that never reaches a valid
+// domain, which is quadratic. Every start in a run shares one `@` and one domain, so try the run once, from
+// its first boundary. Letters, digits and marks are Unicode-aware (`user@bücher.example`, `jörg@example.de`);
+// the word boundary is therefore the Unicode one, not `\b`.
+// The ASCII flavour is the original rule. It still runs on text with non-ASCII characters, so an address that
+// the Unicode flavour reads as longer (`user@example.com` followed by `é`) is reported as it always was.
+type EmailFlavour = { from: RegExp; localChar: RegExp; wordChar: RegExp };
 
-function isWordBoundary(content: string, index: number): boolean {
-  return WORD_CHAR.test(content[index - 1] ?? "") !== WORD_CHAR.test(content[index] ?? "");
+const UNICODE_EMAIL: EmailFlavour = {
+  from: /(?:(?<=[\p{L}\p{N}\p{M}_])(?![\p{L}\p{N}\p{M}_])|(?<![\p{L}\p{N}\p{M}_])(?=[\p{L}\p{N}\p{M}_]))[\p{L}\p{N}\p{M}._%+-]+@[\p{L}\p{N}\p{M}.-]+\.[\p{L}\p{M}]{2,}(?![\p{L}\p{N}\p{M}_])/uy,
+  localChar: /[\p{L}\p{N}\p{M}._%+-]/u,
+  wordChar: /[\p{L}\p{N}\p{M}_]/u,
+};
+const ASCII_EMAIL: EmailFlavour = {
+  from: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/y,
+  localChar: /[A-Za-z0-9._%+-]/,
+  wordChar: /\w/,
+};
+
+function isWordBoundary(flavour: EmailFlavour, content: string, index: number): boolean {
+  return flavour.wordChar.test(wordCharBefore(content, index)) !== flavour.wordChar.test(wordCharAt(content, index));
 }
 
-function execEmail(content: string, from: number): RegExpExecArray | null {
+// The code point that ends at `index`, or "" at the start. `\p{L}` and friends match whole code points.
+function wordCharBefore(content: string, index: number): string {
+  if (index <= 0) {
+    return "";
+  }
+  const low = content.charCodeAt(index - 1);
+  if (low >= 0xdc00 && low <= 0xdfff && index >= 2) {
+    const high = content.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) {
+      return content.slice(index - 2, index);
+    }
+  }
+  return content[index - 1] as string;
+}
+
+function wordCharAt(content: string, index: number): string {
+  const code = content.codePointAt(index);
+  return code === undefined ? "" : String.fromCodePoint(code);
+}
+
+function execEmail(flavour: EmailFlavour, content: string, from: number): RegExpExecArray | null {
   let at = content.indexOf("@", from);
   while (at !== -1) {
     let start = at;
-    while (start > from && EMAIL_LOCAL_CHAR.test(content[start - 1] as string)) {
-      start -= 1;
+    while (start > from && flavour.localChar.test(wordCharBefore(content, start))) {
+      start -= wordCharBefore(content, start).length;
     }
-    while (start < at && !isWordBoundary(content, start)) {
-      start += 1;
+    while (start < at && !isWordBoundary(flavour, content, start)) {
+      start += wordCharAt(content, start).length;
     }
     if (start < at) {
-      EMAIL_FROM.lastIndex = start;
-      const m = EMAIL_FROM.exec(content);
+      flavour.from.lastIndex = start;
+      const m = flavour.from.exec(content);
       if (m !== null) {
         return m;
       }
@@ -132,20 +168,28 @@ function execEmail(content: string, from: number): RegExpExecArray | null {
   return null;
 }
 
-const emailScanner: Scanner = {
-  lastIndex: 0,
-  exec(content) {
-    const m = execEmail(content, this.lastIndex);
-    this.lastIndex = m === null ? 0 : m.index + m[0].length;
-    return m;
-  },
-};
+function emailScannerFor(flavour: EmailFlavour): Scanner {
+  return {
+    lastIndex: 0,
+    exec(content) {
+      const m = execEmail(flavour, content, this.lastIndex);
+      this.lastIndex = m === null ? 0 : m.index + m[0].length;
+      return m;
+    },
+  };
+}
+
+const emailScanner = emailScannerFor(UNICODE_EMAIL);
+const asciiEmailScanner = emailScannerFor(ASCII_EMAIL);
 
 // The plain phone regex restarts from every separator inside one long `[\d\s().-]` run and rescans
 // to its end each time, which is quadratic. Whether a start matches depends only on its run, so the
 // first valid start in a run that fails rules out the whole run, and one that matches leaves nothing
 // after its end.
-const PHONE_FROM = /(?<![\w.])(\+?\d[\d\s().-]{7,}\d)(?![\w.])/y;
+//
+// A sentence-final period does not make a number part of a longer token (`Phone: 415-555-0199.`), so the
+// match may be followed by `.` but not by `.` and a word character (`1.2.3.4`, `10.5.x`) or by a word character.
+const PHONE_FROM = /(?<![\w.])(\+?\d[\d\s().-]{7,}\d)(?!\w|\.\w)/y;
 const PHONE_RUN_CHAR = /[\d\s().-]/;
 const PHONE_START_BLOCKER = /[\w.]/;
 const DIGIT = /\d/;
@@ -174,12 +218,231 @@ export function execPhone(content: string, from: number): RegExpExecArray | null
   return null;
 }
 
-const phoneScanner: Scanner = {
+// Rejected-run rescan. A run such as `12345678 415-555-0199` is one regex match with too many digits, so the
+// whole of it was dropped and the number inside leaked. The rescan looks for shorter spans INSIDE one rejected
+// match and nowhere else, so the invariant above is untouched: a failed start still skips its whole run, and
+// a match still leaves nothing before its end. The rescan is linear because:
+//   - matches are disjoint, so each character is rescanned once per match;
+//   - a candidate is a window of whitespace-separated tokens that starts at one token and ends at another. Only
+//     the first token may be a country code or longer than a dialling group; every token after it must be a
+//     2-4 digit dialling group, and the window holds at most 15 digits, so it spans at most 8 tokens;
+//   - so each token is looked at by a bounded number of windows, and the first window that passes at a start
+//     is final (the rescan resumes after it).
+// A run with column alignment (2 or more blanks that are not a line break) is a table, as in `hasPhoneSeparatorShape`,
+// and is left unscanned; a line break between two numbers is a record separator, not alignment, so a window never
+// crosses one (a column of 2-digit numbers, one per line, is not a phone number).
+const PHONE_DIAL_GROUP = /^\(?\d{2,4}\)?(?:[-.]\d{2,4})*$/;
+const PHONE_FIRST_GROUP = /^\+?\d{1,4}$/;
+const WHITESPACE = /\s/;
+const LINE_BREAK = /[\n\r\u2028\u2029]/;
+const PHONE_MAX_DIGITS = 15;
+const PHONE_MIN_DIGITS = 9;
+
+function phoneVerdict(content: string, start: number, end: number): boolean {
+  const value = content.slice(start, end);
+  const digits = countDigits(value);
+  return (
+    digits >= PHONE_MIN_DIGITS &&
+    digits <= PHONE_MAX_DIGITS &&
+    hasPhoneSeparatorShape(value) &&
+    !containsCalendarDate(value) &&
+    !isIdentifierFragment(content, start, end)
+  );
+}
+
+type PhoneToken = {
+  start: number;
+  end: number;
+  coreStart: number; // first valid start (`+?\d` after a non-blocker), or -1
+  coreEnd: number; // just after the last digit, or 0
+  leadDigits: number; // digits before coreStart, which a window starting here does not count
+  digits: number;
+  lineBreakBefore: boolean; // a window never crosses a line break: a record separator is not part of a number
+};
+
+// Splits [from, to) into whitespace-separated tokens, or returns null for a run with column alignment.
+function phoneTokens(content: string, from: number, to: number): PhoneToken[] | null {
+  const tokens: PhoneToken[] = [];
+  let i = from;
+  while (i < to) {
+    const gapStart = i;
+    while (i < to && WHITESPACE.test(content[i] as string)) {
+      i += 1;
+    }
+    const lineBreakBefore = tokens.length > 0 && i > gapStart && LINE_BREAK.test(content.slice(gapStart, i));
+    if (tokens.length > 0 && i < to && i - gapStart >= 2 && !lineBreakBefore) {
+      return null;
+    }
+    if (i >= to) {
+      break;
+    }
+    const start = i;
+    let digits = 0;
+    let lastDigit = -1;
+    let coreStart = -1;
+    let leadDigits = 0;
+    while (i < to && !WHITESPACE.test(content[i] as string)) {
+      const isDigit = DIGIT.test(content[i] as string);
+      if (coreStart < 0) {
+        const startsHere =
+          (isDigit || (content[i] === "+" && i + 1 < to && DIGIT.test(content[i + 1] as string))) &&
+          (i === 0 || !PHONE_START_BLOCKER.test(content[i - 1] as string));
+        if (startsHere) {
+          coreStart = i;
+        } else if (isDigit) {
+          leadDigits += 1;
+        }
+      }
+      if (isDigit) {
+        digits += 1;
+        lastDigit = i;
+      }
+      i += 1;
+    }
+    tokens.push({ start, end: i, coreStart, coreEnd: lastDigit + 1, leadDigits, digits, lineBreakBefore });
+  }
+  return tokens;
+}
+
+function rescanPhoneRun(content: string, from: number, to: number): ScanMatch[] {
+  const tokens = phoneTokens(content, from, to);
+  const found: ScanMatch[] = [];
+  if (tokens === null) {
+    return found;
+  }
+  let first = 0;
+  while (first < tokens.length) {
+    const head = tokens[first] as PhoneToken;
+    if (head.coreStart < 0 || head.coreEnd <= head.coreStart) {
+      first += 1;
+      continue;
+    }
+    let digits = head.digits - head.leadDigits;
+    let best = digits >= PHONE_MIN_DIGITS && phoneVerdict(content, head.coreStart, head.coreEnd) ? first : -1;
+    // The first group of a longer window is a country code or a dialling group; the others are dialling groups.
+    const headGroup = content.slice(head.coreStart, head.end);
+    let extendable = PHONE_FIRST_GROUP.test(headGroup) || PHONE_DIAL_GROUP.test(headGroup);
+    for (let last = first + 1; last < tokens.length && extendable; last += 1) {
+      const tail = tokens[last] as PhoneToken;
+      digits += tail.digits;
+      if (digits > PHONE_MAX_DIGITS || tail.digits === 0 || tail.lineBreakBefore) {
+        break;
+      }
+      if (
+        digits >= PHONE_MIN_DIGITS &&
+        PHONE_DIAL_GROUP.test(content.slice(tail.start, tail.coreEnd)) &&
+        phoneVerdict(content, head.coreStart, tail.coreEnd)
+      ) {
+        best = last;
+      }
+      extendable = PHONE_DIAL_GROUP.test(content.slice(tail.start, tail.end));
+    }
+    if (best >= 0) {
+      const value = content.slice(head.coreStart, (tokens[best] as PhoneToken).coreEnd);
+      found.push({ index: head.coreStart, 0: value, 1: value });
+      first = best + 1;
+    } else {
+      first += 1;
+    }
+  }
+  return found;
+}
+
+const phoneScanner: Scanner & { pending: ScanMatch[]; cursor: number } = {
+  lastIndex: 0,
+  pending: [],
+  cursor: 0,
+  exec(content) {
+    for (;;) {
+      if (this.cursor < this.pending.length) {
+        return this.pending[this.cursor++] as ScanMatch;
+      }
+      this.pending = [];
+      this.cursor = 0;
+      const m = execPhone(content, this.lastIndex);
+      if (m === null) {
+        this.lastIndex = 0;
+        return null;
+      }
+      const end = m.index + m[0].length;
+      this.lastIndex = end;
+      if (phoneVerdict(content, m.index, end)) {
+        return m;
+      }
+      if (countDigits(m[0]) > PHONE_MAX_DIGITS) {
+        this.pending = rescanPhoneRun(content, m.index, end);
+      }
+    }
+  },
+};
+
+// `\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{1,4}){2,8}\b` backtracks over every way of cutting a long alphanumeric run into
+// groups of 1-4, so `XX00` + 40 letters + `-` repeated costs ~1 ms per 100 characters, and above ~250k characters
+// the engine gives up and returns null, which silently drops a valid IBAN that follows. This scanner returns
+// exactly what the regex would (the first match in backtracking priority: a space is taken whenever present,
+// groups are greedy, the last group is the longest that still ends on a word boundary) from a depth-first
+// search that remembers the failed (position, groups) states, so a start costs at most 45 x 9 states and the
+// whole scan is linear.
+const IBAN_START = /(?<!\w)[A-Z]{2}\d{2}/g;
+const IBAN_MAX_GROUPS = 8;
+const IBAN_STATES = (4 + IBAN_MAX_GROUPS * 5 + 1) * (IBAN_MAX_GROUPS + 1);
+const ibanFailed = new Uint32Array(IBAN_STATES);
+let ibanStamp = 0;
+
+function isIbanChar(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 48 && code <= 57);
+}
+
+function isAsciiWordChar(code: number): boolean {
+  return isIbanChar(code) || (code >= 97 && code <= 122) || code === 95;
+}
+
+// End of the first match whose `groups` groups end at `pos`, or -1.
+function ibanEnd(content: string, base: number, pos: number, groups: number): number {
+  const key = (pos - base) * (IBAN_MAX_GROUPS + 1) + groups;
+  if (ibanFailed[key] === ibanStamp) {
+    return -1;
+  }
+  if (groups < IBAN_MAX_GROUPS) {
+    const from = content.charCodeAt(pos) === 32 ? pos + 1 : pos;
+    let run = 0;
+    while (run < 4 && isIbanChar(content.charCodeAt(from + run))) {
+      run += 1;
+    }
+    for (let length = run; length >= 1; length -= 1) {
+      const end = ibanEnd(content, base, from + length, groups + 1);
+      if (end >= 0) {
+        return end;
+      }
+    }
+  }
+  if (groups >= 2 && !isAsciiWordChar(content.charCodeAt(pos))) {
+    return pos;
+  }
+  ibanFailed[key] = ibanStamp;
+  return -1;
+}
+
+const ibanScanner: Scanner = {
   lastIndex: 0,
   exec(content) {
-    const m = execPhone(content, this.lastIndex);
-    this.lastIndex = m === null ? 0 : m.index + m[0].length;
-    return m;
+    IBAN_START.lastIndex = this.lastIndex;
+    let m: RegExpExecArray | null;
+    while ((m = IBAN_START.exec(content)) !== null) {
+      ibanStamp += 1;
+      if (ibanStamp === 0xffffffff) {
+        ibanFailed.fill(0);
+        ibanStamp = 1;
+      }
+      const end = ibanEnd(content, m.index, m.index + 4, 0);
+      if (end >= 0) {
+        this.lastIndex = end;
+        return { index: m.index, 0: content.slice(m.index, end) };
+      }
+      IBAN_START.lastIndex = m.index + 1;
+    }
+    this.lastIndex = 0;
+    return null;
   },
 };
 
@@ -223,7 +486,7 @@ const RULES: Rule[] = [
   {
     policyId: "pii.iban",
     mask: "iban",
-    regex: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{1,4}){2,8}\b/g,
+    regex: ibanScanner,
     severity: "high",
     confidence: 0.9,
     validate: isValidIban,
@@ -239,7 +502,8 @@ const RULES: Rule[] = [
   {
     policyId: "pii.ssn",
     mask: "ssn",
-    regex: /\b\d{3}-\d{2}-\d{4}\b/g,
+    // Digit boundaries, not `\b`: `user_078-05-1120` and `x078-05-1120` are still an SSN. The identifier guard decides.
+    regex: /(?<![0-9])\d{3}-\d{2}-\d{4}(?![0-9])/g,
     severity: "high",
     confidence: 0.85,
     validate: isValidSsn,
@@ -483,6 +747,9 @@ const SSN_LABEL = new RegExp(
     `ssn|soc${LABEL_SEP}ial|nss|${[..."снилс"].map(foldCodePoint).join("")}|sozial${LABEL_SEP}versicherung|versicherungsn(?:ummer|r)|numero${LABEL_SEP}de${LABEL_SEP}secu`,
     `soc${LABEL_SEP}sec`,
     `(?<![a-z])(?:s${LABEL_SEP}s${LABEL_SEP}[n#]|n${LABEL_SEP}s${LABEL_SEP}s|sv${LABEL_SEP}n)`,
+    // Other tax and insurance identifiers an SSN-shaped number is written next to. `tin` must stand alone
+    // (not `routine`, `tinder`), and `national insurance` needs both words.
+    `(?<![a-z])(?:i?tin(?![a-z])|tax${LABEL_SEP}id(?:ent|(?![a-z])))|national${LABEL_SEP}insurance`,
   ].join("|"),
   "iug",
 );
@@ -597,58 +864,226 @@ function hasPhoneSeparatorShape(value: string): boolean {
   });
 }
 
-export function detectPii(content: string): DetectorMatch[] {
+function scanRule(content: string, rule: Rule): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
-  for (const rule of RULES) {
-    rule.regex.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = rule.regex.exec(content)) !== null) {
-      const group = rule.valueGroup ?? 0;
-      const value = m[group];
-      if (value === undefined || value.length === 0) {
-        continue;
-      }
-      // Guard the loose phone pattern: require enough digits and reject
-      // year-like or short runs.
-      if (rule.policyId === "pii.phone") {
-        const digits = countDigits(value);
-        if (digits < 9 || digits > 15) {
-          continue;
-        }
-        if (!hasPhoneSeparatorShape(value)) {
-          continue;
-        }
-        if (containsCalendarDate(value)) {
-          continue;
-        }
-        if (isIdentifierFragment(content, m.index, m.index + m[0].length)) {
-          continue;
-        }
-      }
-      // Flow 261: an SSN-shaped run is suppressed only beside a real adjacent hash, never when labelled.
-      if (rule.policyId === "pii.ssn" && isSsnIdentifierFragment(content, m.index, m.index + m[0].length)) {
-        continue;
-      }
-      // E4: gate structured-PII candidates by their checksum/range validator.
-      if (rule.validate && !rule.validate(value)) {
-        continue;
-      }
-      const start = group === 0 ? m.index : m.index + m[0].indexOf(value);
-      matches.push({
-        category: "pii",
-        policyId: rule.policyId,
-        severity: rule.severity,
-        confidence: rule.confidence,
-        start,
-        end: start + value.length,
-        value,
-        mask: rule.mask,
-        remediation: "Redact personal data before persisting or publishing.",
-      });
-      if (m.index === rule.regex.lastIndex) {
-        rule.regex.lastIndex += 1;
-      }
+  rule.regex.lastIndex = 0;
+  let m: ScanMatch | null;
+  while ((m = rule.regex.exec(content)) !== null) {
+    const group = rule.valueGroup ?? 0;
+    const value = m[group];
+    if (value === undefined || value.length === 0) {
+      continue;
+    }
+    // Phone candidates are judged (digit count, separator shape, dates, identifiers) inside `phoneScanner`.
+    // Flow 261: an SSN-shaped run is suppressed only beside a real adjacent hash, never when labelled.
+    if (rule.policyId === "pii.ssn" && isSsnIdentifierFragment(content, m.index, m.index + m[0]!.length)) {
+      continue;
+    }
+    // E4: gate structured-PII candidates by their checksum/range validator.
+    if (rule.validate && !rule.validate(value)) {
+      continue;
+    }
+    const start = group === 0 ? m.index : m.index + (m[0] as string).indexOf(value);
+    matches.push({
+      category: "pii",
+      policyId: rule.policyId,
+      severity: rule.severity,
+      confidence: rule.confidence,
+      start,
+      end: start + value.length,
+      value,
+      mask: rule.mask,
+      remediation: "Redact personal data before persisting or publishing.",
+    });
+    if (m.index === rule.regex.lastIndex) {
+      rule.regex.lastIndex += 1;
     }
   }
   return matches;
+}
+
+function scanRules(content: string): DetectorMatch[][] {
+  return RULES.map((rule) => scanRule(content, rule));
+}
+
+// ---------------------------------------------------------------------------
+// Normalised pass (SEC-F-004). The SSN, phone, card, IBAN and IP rules are ASCII, so `０７８-０５-１１２０`
+// (fullwidth), `٠٧٨-٠٥-١١٢٠` (Arabic-Indic), `078‑05‑1120` (U+2011), and a card or IBAN grouped with a no-break
+// space were all invisible to them. The content is scanned twice: as written (so everything found before is
+// still found, by construction) and as a normalised copy in which each such character is replaced by the ASCII
+// one it stands for. The copy has one unit per original code point at most, and a map from every unit back to
+// the original offset, so spans, redaction offsets and returned values always refer to the ORIGINAL text.
+// Only digits, dashes, spaces, dots, `@`, `+` and parentheses are folded: letters are left alone, so the
+// name and address rules, and the SSN label fold, see exactly what they saw before.
+// ---------------------------------------------------------------------------
+
+const NORMALIZE_CHUNK = 1 << 21;
+const NORMALIZE_OVERLAP = 512;
+const NORMALIZE_SKIP = 256; // a match starting this close to a chunk's start is the previous chunk's
+const NON_ASCII = /[\u0080-\uffff]/;
+const DECIMAL_DIGIT = /\p{Nd}/u;
+const digitValues = new Map<number, number>();
+
+// 0-9 for a non-ASCII decimal digit, else -1. Decimal digits come in aligned runs of ten, so the value is the
+// offset from the start of the contiguous run of `Nd` characters, modulo ten.
+function decimalDigitValue(codePoint: number): number {
+  if (codePoint < 0x660) {
+    return -1; // the first non-ASCII `Nd` is U+0660
+  }
+  const cached = digitValues.get(codePoint);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let value = -1;
+  if (DECIMAL_DIGIT.test(String.fromCodePoint(codePoint))) {
+    let runStart = codePoint;
+    while (runStart > 0 && DECIMAL_DIGIT.test(String.fromCodePoint(runStart - 1))) {
+      runStart -= 1;
+    }
+    value = (codePoint - runStart) % 10;
+  }
+  digitValues.set(codePoint, value);
+  return value;
+}
+
+// The one ASCII character a non-ASCII code point stands for in a number, or null to leave it alone.
+function foldNumberChar(code: number): string | null {
+  if (
+    code === 0xa0 || code === 0x1680 || (code >= 0x2000 && code <= 0x200a) || code === 0x2028 || code === 0x2029 ||
+    code === 0x202f || code === 0x205f || code === 0x3000 || code === 0xfeff
+  ) {
+    return " ";
+  }
+  if ((code >= 0x2010 && code <= 0x2015) || code === 0x2212 || code === 0x207b || code === 0x208b || code === 0xfe58 || code === 0xfe63 || code === 0xff0d) {
+    return "-";
+  }
+  if (code === 0x2024 || code === 0xfe52 || code === 0xff0e || code === 0x3002 || code === 0xff61) {
+    return ".";
+  }
+  if (code === 0xff20 || code === 0xfe6b) {
+    return "@";
+  }
+  if (code === 0xff0b || code === 0x207a || code === 0x208a || code === 0xfe62) {
+    return "+";
+  }
+  if (code === 0xff08 || code === 0x207d || code === 0x208d || code === 0xfe59) {
+    return "(";
+  }
+  if (code === 0xff09 || code === 0x207e || code === 0x208e || code === 0xfe5a) {
+    return ")";
+  }
+  const digit = decimalDigitValue(code);
+  return digit < 0 ? null : String(digit);
+}
+
+type NormalizedWindow = { text: string; origin: Int32Array };
+
+// `origin[i]` is the original index of the code point that produced unit `i`; `origin[text.length]` is `to`.
+function normalizeWindow(content: string, from: number, to: number): NormalizedWindow | null {
+  const origin = new Int32Array(to - from + 1);
+  const parts: string[] = [];
+  let length = 0;
+  let flushed = from;
+  let changed = false;
+  for (let i = from; i < to; ) {
+    const code = content.charCodeAt(i);
+    if (code < 128) {
+      origin[length++] = i;
+      i += 1;
+      continue;
+    }
+    const codePoint = content.codePointAt(i) as number;
+    const width = codePoint > 0xffff ? 2 : 1;
+    const folded = foldNumberChar(codePoint);
+    if (folded === null) {
+      for (let k = 0; k < width; k += 1) {
+        origin[length++] = i;
+      }
+    } else {
+      changed = true;
+      parts.push(content.slice(flushed, i), folded);
+      flushed = i + width;
+      origin[length++] = i;
+    }
+    i += width;
+  }
+  if (!changed) {
+    return null;
+  }
+  parts.push(content.slice(flushed, to));
+  origin[length] = to;
+  return { text: parts.join(""), origin: origin.subarray(0, length + 1) };
+}
+
+function toOriginal(window: NormalizedWindow, start: number, end: number): [number, number] {
+  let last = end;
+  while (last < window.origin.length - 1 && window.origin[last] === window.origin[last - 1]) {
+    last += 1; // never end between the halves of a surrogate pair
+  }
+  return [window.origin[start] as number, window.origin[last] as number];
+}
+
+function containedIn(spans: readonly DetectorMatch[], start: number, end: number): boolean {
+  let low = 0;
+  let high = spans.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if ((spans[mid] as DetectorMatch).start <= start) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  const candidate = spans[high];
+  return candidate !== undefined && candidate.start <= start && candidate.end >= end;
+}
+
+export function detectPii(content: string): DetectorMatch[] {
+  const perRule = scanRules(content);
+  if (NON_ASCII.test(content)) {
+    // An address the Unicode flavour reads differently (it ends at a letter or digit the ASCII rule stopped at)
+    // is still reported as the ASCII rule reported it.
+    const emailRule = RULES[0] as Rule;
+    const ascii = scanRule(content, { ...emailRule, regex: asciiEmailScanner });
+    const unicode = perRule[0] as DetectorMatch[];
+    const extraEmails = ascii.filter((match) => !containedIn(unicode, match.start, match.end));
+    if (extraEmails.length > 0) {
+      perRule[0] = [...unicode, ...extraEmails].sort((x, y) => x.start - y.start || y.end - x.end);
+    }
+    for (let from = 0; from < content.length; ) {
+      let start = from;
+      let to = Math.min(content.length, from + NORMALIZE_CHUNK);
+      if (start > 0 && (content.charCodeAt(start) & 0xfc00) === 0xdc00) {
+        start -= 1;
+      }
+      if (to < content.length && (content.charCodeAt(to - 1) & 0xfc00) === 0xd800) {
+        to += 1;
+      }
+      const window = normalizeWindow(content, start, to);
+      if (window !== null) {
+        const extra = scanRules(window.text);
+        extra.forEach((found, index) => {
+          const base = perRule[index] as DetectorMatch[];
+          const added: DetectorMatch[] = [];
+          for (const match of found) {
+            const [a, b] = toOriginal(window, match.start, match.end);
+            if (start > 0 && a < start + NORMALIZE_SKIP) {
+              continue;
+            }
+            if (!containedIn(base, a, b) && !containedIn(added, a, b)) {
+              added.push({ ...match, start: a, end: b, value: content.slice(a, b) });
+            }
+          }
+          if (added.length > 0) {
+            perRule[index] = [...base, ...added].sort((x, y) => x.start - y.start || y.end - x.end);
+          }
+        });
+      }
+      if (to >= content.length) {
+        break;
+      }
+      from = to - NORMALIZE_OVERLAP;
+    }
+  }
+  return perRule.flat();
 }
