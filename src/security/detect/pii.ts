@@ -675,22 +675,20 @@ function isIdentifierFragment(content: string, matchStart: number, matchEnd: num
 }
 
 // ---------------------------------------------------------------------------
-// SSN identifier-fragment guard (flow 261). Same direction as the phone guard —
-// redact unless there is positive evidence — but the evidence is stricter,
-// because an SSN leak is worse than a phone leak. Suppression needs ALL of:
-//   - the match sits inside a longer `[0-9A-Za-z_-]` token, fully scanned;
-//   - no SSN label (`ssn`, `social`, `SS #`, `S-S-N`, `NSS`, `СНИЛС`, ...) in that
-//     token or STARTING within 64 characters before or after it, sentence breaks
-//     included, read after NFKC / invisible-character / accent folding;
-//   - the segment IMMEDIATELY adjacent to the SSN (across one `-`; `\b` never
-//     matches next to `_`) is a hash of exactly 32, 40 or 64 hex characters
-//     (md5, sha1, sha256) with at least one a-f. Any other hex run is a prefix
-//     anyone can craft in front of a real SSN, so it is not evidence.
+// SSN identifier-fragment guard (flow 261, narrowed by SEC-F-005). A false negative leaks a person's
+// SSN, a false positive only corrupts an identifier, so an SSN-shaped value is redacted unless the
+// digits are part of a well-formed identifier itself: the match sits strictly INSIDE one fully scanned
+// UUID token (`8-4-4-4-12` hex) and no SSN label (`ssn`, `social`, `SS #`, `S-S-N`, `NSS`, `СНИЛС`,
+// `tax id`, `TIN`, ...) is in that token or STARTS within 64 characters before or after it, read after
+// NFKC / invisible-character / accent folding.
+//
+// A neighbouring hash is NOT evidence: `<hex>-078-05-1120`, `078-05-1120-<hex>` and `<hex>_078-05-1120`
+// are reported, because the digits are not part of the hash and anyone can put a hash next to an SSN
+// (the operator reversed the earlier "exact 32/40/64-hex neighbour" rule on 2026-10-06).
 // ---------------------------------------------------------------------------
 
 /** Wide enough that a sha256 (64) on either side never truncates the scan. */
 const SSN_TOKEN_SCAN_LIMIT = 192;
-const SSN_HASH_LENGTHS: ReadonlySet<number> = new Set([32, 40, 64]);
 const SSN_LABEL_WINDOW = 64;
 // Latin/Cyrillic/Greek lookalikes of the label letters (s n o c i a l u e r t y). Intentionally not exhaustive.
 const LABEL_CONFUSABLES: ReadonlyMap<string, string> = new Map(
@@ -805,10 +803,6 @@ function hasSsnLabelNear(content: string, tokenStart: number, tokenEnd: number):
   return hit !== null && from + (offsets[hit.index] as number) <= limit;
 }
 
-function isSsnHashRun(segment: string): boolean {
-  return SSN_HASH_LENGTHS.has(segment.length) && /^[0-9A-Fa-f]+$/.test(segment) && /[A-Fa-f]/.test(segment);
-}
-
 function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: number): boolean {
   let tokenStart = matchStart;
   const floor = Math.max(0, matchStart - SSN_TOKEN_SCAN_LIMIT);
@@ -831,17 +825,12 @@ function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: 
   if (tokenStart === matchStart && tokenEnd === matchEnd) {
     return false; // The match IS the token.
   }
-  // A label overrides everything: the token, or the text just before it, says this is an SSN.
-  if (hasSsnLabelNear(content, tokenStart, tokenEnd)) {
+  // Only a well-formed UUID token holds digits that belong to the identifier itself.
+  if (!UUID_TOKEN.test(content.slice(tokenStart, tokenEnd))) {
     return false;
   }
-  // Split at the match's actual offset, never at the first textual occurrence.
-  const before = content.slice(tokenStart, matchStart);
-  const after = content.slice(matchEnd, tokenEnd);
-  if (before.endsWith("-") && isSsnHashRun(before.slice(0, -1).split(/[-_]/).pop() as string)) {
-    return true;
-  }
-  return after.startsWith("-") && isSsnHashRun(after.slice(1).split(/[-_]/)[0] as string);
+  // A label overrides everything: the token, or the text just before it, says this is an SSN.
+  return !hasSsnLabelNear(content, tokenStart, tokenEnd);
 }
 
 function hasPhoneSeparatorShape(value: string): boolean {
@@ -875,7 +864,7 @@ function scanRule(content: string, rule: Rule): DetectorMatch[] {
       continue;
     }
     // Phone candidates are judged (digit count, separator shape, dates, identifiers) inside `phoneScanner`.
-    // Flow 261: an SSN-shaped run is suppressed only beside a real adjacent hash, never when labelled.
+    // Flow 261 / SEC-F-005: an SSN-shaped run is suppressed only strictly inside a UUID token, never when labelled.
     if (rule.policyId === "pii.ssn" && isSsnIdentifierFragment(content, m.index, m.index + m[0]!.length)) {
       continue;
     }

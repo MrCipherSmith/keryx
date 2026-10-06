@@ -45,7 +45,6 @@ describe("an SSN written with look-alike characters is detected (SEC-F-004)", ()
     expect(match?.start).toBe(5);
     expect(match?.end).toBe(content.length);
   });
-});
 
 describe("an SSN joined to a word character is detected (SEC-F-004)", () => {
   test("a letter or an underscore does not hide it", () => {
@@ -112,15 +111,11 @@ describe("the SSN identifier guard (SEC-F-005)", () => {
   const MD5 = "d41d8cd98f00b204e9800998ecf8427e";
   const SHA1 = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
 
-  test("the new labels keep an SSN next to a hash", () => {
+  test("an SSN next to a hash is reported with the new labels too", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: the labels no longer decide, the hash does not hide it.
     for (const label of ["tax id", "Tax ID:", "TIN", "tin:", "ITIN", "national insurance", "National Insurance no."]) {
       expect(values(`${label} ${MD5}-078-05-1120`, "pii.ssn")).toEqual(["078-05-1120"]);
     }
-  });
-
-  test("a word that merely contains tin is not a label", () => {
-    expect(values(`routine ${SHA1}-078-05-1120`, "pii.ssn")).toEqual([]);
-    expect(values(`tinder ${SHA1}-078-05-1120`, "pii.ssn")).toEqual([]);
   });
 
   test("an SSN joined to a hash by an underscore, or to a part of one, is reported", () => {
@@ -129,8 +124,11 @@ describe("the SSN identifier guard (SEC-F-005)", () => {
     expect(values(`${MD5.slice(0, 31)}-078-05-1120`, "pii.ssn")).toEqual(["078-05-1120"]);
   });
 
-  test("an SSN-shaped fragment hyphen-joined to a whole 32, 40 or 64 character hash stays suppressed", () => {
-    expect(values(`${MD5}-078-05-1120`, "pii.ssn")).toEqual([]);
-    expect(values(`078-05-1120-${SHA1}`, "pii.ssn")).toEqual([]);
+  test("an SSN-shaped value joined to a whole 32, 40 or 64 character hash is reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005 (this pinned the old suppression).
+    expect(values(`${MD5}-078-05-1120`, "pii.ssn")).toEqual(["078-05-1120"]);
+    expect(values(`078-05-1120-${SHA1}`, "pii.ssn")).toEqual(["078-05-1120"]);
+    expect(values(`${MD5}_078-05-1120`, "pii.ssn")).toEqual(["078-05-1120"]);
   });
+});
 });
