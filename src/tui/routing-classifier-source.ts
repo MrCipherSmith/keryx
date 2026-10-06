@@ -1,7 +1,6 @@
 // Flow 338 — the routing classifier's shell-side wiring: turns one user
 // request line into a routed provider/model, or `undefined` when nothing
-// should override the session's own model (routing off, a slash command, a
-// pinned session model, or every classifier stage came back empty).
+// should override the session's own model (routing off, a slash command, every classifier stage came back empty).
 //
 // `src/tui/` is a CLIENT zone and may import both the decision-layer
 // classifiers and the routing table freely — same shape `turn-guard-
@@ -17,6 +16,7 @@ import type { TaskClassifierUsage } from "../harness/decision/classifier";
 import {
   connectedPredicateFrom,
   describeAssignment,
+  describeRejectionNotice,
   resolveCategoryDetailed,
   ROUTING_CATEGORIES,
   type CategoryAssignment,
@@ -26,6 +26,12 @@ import {
 } from "../harness/routing/table";
 import { loadRoutingConfig, type RoutingConfigLocation } from "../harness/routing/config";
 import { deriveDefaultTable } from "../harness/routing/derive-default-table";
+import { resolveProviderDefaultModelId } from "../harness/routing/provider-default";
+import { selectClassifierModel } from "../harness/routing/classifier-model";
+import { hasCredential, type ProviderFactory } from "../harness/provider/single-turn";
+import { envWithSavedApiKeys } from "../lib/shell-config";
+import { redactSensitiveText } from "../security/service";
+import { resolveJevClassifierCredential } from "../harness/decision/jev-classifier";
 import { availablePredicateFromProfiles, loadModelProfiles } from "../harness/routing/model-profile";
 
 /**
@@ -44,6 +50,8 @@ const TURN_CLASSIFIER_CATEGORIES: readonly RoutingCategory[] = ROUTING_CATEGORIE
 export interface RoutingClassifierTurnOptions {
   readonly enabled: boolean;
   readonly jevEnabled: boolean;
+  /** Separate caller authorization for the JEV service; /external is still enforced by its client. */
+  readonly jevAllowed?: boolean;
   readonly cwd: string;
   readonly detected: readonly FlatPickerProvider[];
   readonly sessionProvider: string;
@@ -52,12 +60,21 @@ export interface RoutingClassifierTurnOptions {
   readonly userConfigDir?: string;
   readonly fetch?: typeof fetch;
   readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+  readonly providerFactory?: ProviderFactory;
+  /** Additional caller policy; denial excludes a model. */
+  readonly classifierAllowed?: (providerId: string, modelId: string) => boolean;
+  /** Executor policy, separate from classifier policy. */
+  readonly executorAllowed?: (providerId: string, modelId: string) => boolean;
 }
 
 export interface RoutingClassifierTurnResult {
   readonly classification: ClassifyTurnResult;
-  readonly category: RoutingCategory;
+  readonly category?: RoutingCategory;
+  readonly baseline?: { readonly providerId: string; readonly modelId: string };
   readonly assignment: CategoryAssignment;
+  /** First rejected provider-default target and safe failure reason. */
+  readonly fallbackReason?: string;
   /** `undefined` when the resolved assignment is `session-default` — nothing to route to, the session's own model applies unchanged. */
   readonly routed?: { readonly providerId: string; readonly modelId: string };
 }
@@ -82,57 +99,107 @@ export interface RoutingClassifierTurnResult {
  * strongest model for planning/review, one step down for
  * subagents/docs/unattended, the smallest for quick), not just to honor
  * explicit configuration. Returns `undefined` when routing is off, the line
- * is a slash command / pinned / empty-vocabulary case (`classifyTurn` itself
+ * is a slash command / empty-vocabulary case (`classifyTurn` itself
  * returns `undefined`), or every stage refused.
  */
 export async function runRoutingClassifierForTurn(
   line: string,
   opts: RoutingClassifierTurnOptions,
 ): Promise<RoutingClassifierTurnResult | undefined> {
+  if (opts.signal?.aborted) return undefined;
   if (!opts.enabled) return undefined;
 
+  const profiles = loadModelProfiles(opts.userConfigDir);
+  const env = envWithSavedApiKeys(opts.env ?? process.env);
+  const fallbackModel = selectClassifierModel(opts.detected, profiles, (providerId, modelId) =>
+    (opts.classifierAllowed?.(providerId, modelId) ?? true) &&
+    (opts.providerFactory !== undefined || hasCredential(providerId, env)),
+  );
   const classification = await classifyTurn(line, TURN_CLASSIFIER_CATEGORIES, {
-    jevEnabled: opts.jevEnabled,
-    sessionProvider: opts.sessionProvider,
-    sessionModel: opts.sessionModel,
+    jevEnabled: opts.jevEnabled && opts.jevAllowed !== false,
+    ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+    fallbackModel: fallbackModel ?? null,
+    ...(opts.providerFactory !== undefined ? { providerFactory: opts.providerFactory } : {}),
     ...(opts.env !== undefined ? { env: opts.env } : {}),
     ...(opts.fetch !== undefined ? { fetch: opts.fetch } : {}),
     timeoutMs: opts.timeoutMs ?? CLASSIFY_TURN_TIMEOUT_MS,
   });
-  if (classification === undefined || !classification.result.ok) return undefined;
+  if (opts.signal?.aborted) return undefined;
+  if (classification === undefined) return undefined;
+  const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
+  const skippedJev = opts.jevEnabled && opts.jevAllowed === false ? "jev: caller policy denied"
+    : opts.jevEnabled && resolveJevClassifierCredential(opts.env).key === undefined ? "jev: credentials unavailable" : undefined;
+  if (!classification.result.ok) {
+    const failures = classification.trace.flatMap(stage => stage.result.ok ? [] : [`${stage.source}: ${stage.result.reason}`]);
+    return { classification, baseline, assignment: { kind: "session-default" },
+      fallbackReason: redactSensitiveText([skippedJev, ...failures,
+        fallbackModel === undefined ? "no available authorized sufficient classifier" : undefined,
+        classification.result.reason].filter(Boolean).join("; ")) };
+  }
 
   const category = classification.result.category;
   const location: RoutingConfigLocation = { cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { userConfigDir: opts.userConfigDir } : {}) };
   const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
+  if (opts.signal?.aborted) return undefined;
   const connected = connectedPredicateFrom(opts.detected);
-  const profiles = loadModelProfiles(opts.userConfigDir);
   const available = availablePredicateFromProfiles(profiles);
+  let fallbackReason: string | undefined;
+  // Check the concrete default BEFORE accepting a layer, preserving the
+  // project > user > derived > session fallback order of the leaf resolver.
+  const connectedForTurn = (providerId: string, modelId?: string): boolean => {
+    if (modelId !== undefined) {
+      const reason = !connected(providerId, modelId) ? "model not connected"
+        : !available(providerId, modelId) ? "model unavailable"
+        : !(opts.executorAllowed?.(providerId, modelId) ?? true) ? "executor policy denied"
+        : undefined;
+      if (reason !== undefined) {
+        fallbackReason ??= `${providerId}/${modelId}: ${reason}`;
+        return false;
+      }
+      return true;
+    }
+    const defaultId = resolveProviderDefaultModelId(providerId);
+    const reason = !connected(providerId) ? "provider not connected"
+      : defaultId === undefined ? "no documented provider default"
+      : !connected(providerId, defaultId) ? "default model not connected"
+      : !available(providerId, defaultId) ? "default model unavailable"
+      : !(opts.executorAllowed?.(providerId, defaultId) ?? true) ? "executor policy denied"
+      : opts.providerFactory === undefined && !hasCredential(providerId, env) ? "credentials unavailable"
+      : undefined;
+    if (reason !== undefined) {
+      fallbackReason ??= `${providerId} (provider default): ${reason}`;
+      return false;
+    }
+    return true;
+  };
   // Flow 327's `derived` layer, built from the SAME provider list already on
   // hand (`opts.detected`, no extra probe) against the session's own
   // provider/model — the same shape `keryx routing list` and `/routing` use.
   const sessionProvider = opts.detected.find((p) => p.name === opts.sessionProvider);
   const models = sessionProvider?.models ?? [opts.sessionModel];
   const derived: RoutingTable = deriveDefaultTable(opts.sessionProvider, models, profiles, opts.sessionModel);
-  const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connected, available);
-
-  if (resolved.assignment.kind === "session-default") {
-    return { classification, category, assignment: resolved.assignment };
-  }
+  const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connectedForTurn, available);
+  fallbackReason ??= resolved.rejected === undefined ? skippedJev : describeRejectionNotice(resolved.rejected, resolved.assignment);
+  const stageFailures = classification.trace.flatMap(stage => stage.result.ok ? [] : [`${stage.source}: ${stage.result.reason}`]);
+  const reasons = [...new Set([skippedJev, ...stageFailures, fallbackReason].filter((reason): reason is string => reason !== undefined))];
+  fallbackReason = reasons.length === 0 ? undefined : redactSensitiveText(reasons.join("; "));
+  const result = { classification, category, baseline, assignment: resolved.assignment,
+    ...(fallbackReason !== undefined ? { fallbackReason: redactSensitiveText(fallbackReason) } : {}) };
+  if (resolved.assignment.kind === "session-default") return result;
   if (resolved.assignment.kind === "model") {
-    return { classification, category, assignment: resolved.assignment, routed: { providerId: resolved.assignment.providerId, modelId: resolved.assignment.modelId } };
+    return { ...result, routed: { providerId: resolved.assignment.providerId, modelId: resolved.assignment.modelId } };
   }
-  // "provider-default" — resolved to a concrete model id is the modal/CLI's
-  // job (`categoryAssignmentToChildModelRequest`); a turn-routing call site
-  // that cannot name a concrete model falls back to the session's own model
-  // rather than guessing one, same fail-closed spirit as every other stage
-  // in this chain.
-  return { classification, category, assignment: resolved.assignment };
+  // Same documented default as the CLI/child requests, never the baseline
+  // or an arbitrary live catalogue entry. Already checked above.
+  const modelId = resolveProviderDefaultModelId(resolved.assignment.providerId);
+  return modelId === undefined ? result : { ...result, routed: { providerId: resolved.assignment.providerId, modelId } };
 }
 
 /** An enabled route must never silently look successful while falling back. */
 export function renderRoutingFallbackLine(result: RoutingClassifierTurnResult | undefined): string {
   if (result === undefined) return "[route fallback: no classifier category; using session model]";
-  return `[route fallback: ${result.category} -> ${describeAssignment(result.assignment)}; using session model]`;
+  const target = result.baseline === undefined ? "session model" : `${result.baseline.providerId}/${result.baseline.modelId}`;
+  return redactSensitiveText(`[route fallback: ${result.category ?? "no classifier category"} -> ${describeAssignment(result.assignment)}${result.fallbackReason !== undefined ? `; ${result.fallbackReason}` : ""}; using ${target}]`);
 }
 
 function pct(n: number): string {
@@ -144,7 +211,7 @@ export function renderRoutingTagLine(result: RoutingClassifierTurnResult): strin
   if (result.routed === undefined) return undefined;
   const source = result.classification.result.ok ? result.classification.result.source : "none";
   const confidence = result.classification.result.ok ? ` ${pct(result.classification.result.confidence)}` : "";
-  return `[${result.category} -> ${result.routed.providerId}/${result.routed.modelId}] (${source}${confidence})`;
+  return `[${result.category} -> ${result.routed.providerId}/${result.routed.modelId}] (${source}${confidence}${result.fallbackReason !== undefined ? `; fallback: ${result.fallbackReason}` : ""})`;
 }
 
 /** AC9: the per-turn tag's usage detail line, when the classifying stage reached a real client. */

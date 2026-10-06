@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "mode": "path",
+  "contextLines": 20,
+  "files": [
+    "src/harness/routing/classifier-model.ts",
+    "src/harness/decision/classify-turn.ts",
+    "src/tui/routing-classifier-source.ts",
+    "src/tui/routing-classifier-source.test.ts",
+    "src/tui/routing-classifier-shell-wiring.test.ts"
+  ],
+  "regions": [],
+  "drops": [],
+  "counts": {
+    "filesSeen": 5,
+    "filesRetained": 5,
+    "filesDropped": 0,
+    "blocksSeen": 0,
+    "blocksRetained": 0,
+    "blocksDropped": 0,
+    "changedLinesRetained": 0,
+    "changedLinesDropped": 0,
+    "droppedByReason": {
+      "lockfile": 0,
+      "generated": 0,
+      "vendored": 0,
+      "snapshot": 0,
+      "minified": 0,
+      "binary": 0,
+      "whitespace-only": 0,
+      "comment-only": 0
+    }
+  }
+}
