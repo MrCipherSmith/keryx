@@ -59,12 +59,11 @@ describe("no PII rule fires on an identifier", () => {
 });
 
 describe("pii.ssn follows the phone rule (flow 261)", () => {
-  // `pii.ssn` is bounded by `\b`, which a hyphen also satisfies, so an SSN-shaped
-  // run can sit inside a longer hyphenated token. Flow 261 decided it the way flow
-  // 260 decided phone: a false negative leaks an SSN, a false positive only
-  // corrupts an identifier, so the run is redacted unless the segment IMMEDIATELY
-  // next to it is a real hash (hex, EXACTLY 32/40/64 chars, at least one a-f).
-  // An SSN label within 64 characters either side, or in the token, overrides that.
+  // `pii.ssn` is bounded by digit boundaries, so an SSN-shaped run can sit inside a longer hyphenated
+  // token. Flow 261 gave it the phone rule's guard: redact unless there is positive evidence that the
+  // digits belong to an identifier. The operator reversed poll 93 on 2026-10-06 (SEC-F-005): a hash
+  // NEXT to an SSN is not such evidence (anyone can put one there), so only a fragment strictly inside
+  // one well-formed UUID token is left alone, and an SSN label within 64 characters still overrides that.
   const ssnValues = (input: string) => detectPii(input).filter((m) => m.policyId === "pii.ssn").map((m) => m.value);
   const SSN = "123-45-6789";
   const md5 = "d41d8cd98f00b204e9800998ecf8427e";
@@ -77,10 +76,11 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues("a-123-45-6789")).toEqual([SSN]);
   });
 
-  test("an SSN-shaped run directly beside an exact-length hash is left alone", () => {
-    expect(ssnValues(`build-${md5}-123-45-6789`)).toEqual([]);
-    expect(ssnValues(`123-45-6789-${sha1}`)).toEqual([]);
-    expect(ssnValues(`event-${sha256}-123-45-6789-open`)).toEqual([]);
+  test("an SSN-shaped run directly beside an exact-length hash is reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
+    expect(ssnValues(`build-${md5}-123-45-6789`)).toEqual([SSN]);
+    expect(ssnValues(`123-45-6789-${sha1}`)).toEqual([SSN]);
+    expect(ssnValues(`event-${sha256}-123-45-6789-open`)).toEqual([SSN]);
   });
 
   test("a 16-hex neighbour no longer suppresses", () => {
@@ -95,7 +95,8 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues("1234567890123456e-078-05-1120")).toEqual(["078-05-1120"]);
   });
 
-  test("hex runs of 31 and 33 characters beside the SSN are redacted, 32 is not", () => {
+  test("hex runs of any length beside the SSN, 32 included, are reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const hex = (n: number) => "a1b2c3d4".repeat(20).slice(0, n);
     for (const n of [16, 24, 31, 33, 41, 63, 65, 128]) {
       expect(ssnValues(`${hex(n)}-${SSN}`)).toEqual([SSN]);
@@ -103,18 +104,19 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
     expect(ssnValues(`${hex(31)}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`${hex(33)}-${SSN}`)).toEqual([SSN]);
-    expect(ssnValues(`${hex(32)}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${hex(32)}-${SSN}`)).toEqual([SSN]);
   });
 
   test("a 32-char all-digit run is not a hash", () => {
     expect(ssnValues(`${"1".repeat(32)}-${SSN}`)).toEqual([SSN]);
   });
 
-  test("md5 (32), sha1 (40) and sha256 (64) neighbours are all suppressed, on either side", () => {
+  test("md5 (32), sha1 (40) and sha256 (64) neighbours are all reported, on either side", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const digest of [md5, sha1, sha256]) {
-      expect(ssnValues(`${digest}-${SSN}`)).toEqual([]);
-      expect(ssnValues(`${SSN}-${digest}`)).toEqual([]);
-      expect(ssnValues(`file-${digest}-${SSN}-v2`)).toEqual([]);
+      expect(ssnValues(`${digest}-${SSN}`)).toEqual([SSN]);
+      expect(ssnValues(`${SSN}-${digest}`)).toEqual([SSN]);
+      expect(ssnValues(`file-${digest}-${SSN}-v2`)).toEqual([SSN]);
     }
   });
 
@@ -131,6 +133,23 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     ]) {
       expect(ssnValues(input)).toEqual([SSN]);
     }
+  });
+
+  test("the three hash-adjacent shapes are reported, with and without a label", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005.
+    for (const digest of [md5, sha1, sha256]) {
+      for (const shape of [`${digest}-${SSN}`, `${SSN}-${digest}`, `${digest}_${SSN}`, `${SSN}_${digest}`]) {
+        expect(ssnValues(shape)).toEqual([SSN]);
+        expect(ssnValues(`ssn ${shape}`)).toEqual([SSN]);
+        expect(ssnValues(`${shape} tax id`)).toEqual([SSN]);
+        expect(ssnValues(`file-${shape}-v2`)).toEqual([SSN]);
+      }
+    }
+  });
+
+  test("a UUID, which holds no SSN-shaped fragment, still produces no finding", () => {
+    expect(ssnValues("730344f3-3668-4760-9056-bf7292686b67")).toEqual([]);
+    expect(ssnValues("urn:uuid:730344f3-3668-4760-9056-bf7292686b67")).toEqual([]);
   });
 
   test("a hash that is not adjacent to the SSN does not suppress it", () => {
@@ -152,19 +171,21 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("a label right after the token vetoes suppression; a distant one does not", () => {
+  test("a label right after the token, or a distant one, does not change the finding", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     expect(ssnValues(`${md5}-${SSN} is the SSN`)).toEqual([SSN]);
     expect(ssnValues(`${SSN}-${md5} (social)`)).toEqual([SSN]);
-    expect(ssnValues(`${md5}-${SSN} ${"unrelated ".repeat(8)}the ssn`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN} ${"unrelated ".repeat(8)}the ssn`)).toEqual([SSN]);
   });
 
-  test("a label after a sentence break or newline still vetoes", () => {
+  test("a label after a sentence break or newline does not change the finding", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     expect(ssnValues(`${md5}-078-05-1120. SSN of the above`)).toEqual(["078-05-1120"]);
     expect(ssnValues(`${md5}-078-05-1120 (this is the employee's social security number)`)).toEqual(["078-05-1120"]);
     expect(ssnValues(`${md5}-${SSN}.\nthe ssn is elsewhere`)).toEqual([SSN]);
     expect(ssnValues(`${md5}-${SSN}\nssn`)).toEqual([SSN]);
     expect(ssnValues(`${md5}-${SSN}. ssn`)).toEqual([SSN]);
-    expect(ssnValues(`Ref. no. 5. ${sha1}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`Ref. no. 5. ${sha1}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`SSN. ${sha1}-${SSN}`)).toEqual([SSN]);
   });
 
@@ -275,9 +296,10 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("a gap wider than 12 separators, or letters between them, is not a label", () => {
+  test("a gap wider than 12 separators, or letters between them, is not a label and the SSN is still reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const text of [`S${"/".repeat(13)}S${"/".repeat(13)}N`, "S-x-S-x-N", "S1S1N"]) {
-      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([SSN]);
     }
   });
 
@@ -287,35 +309,39 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("a label still vetoes when it starts 64 characters out and the window holds non-ASCII text, 65 does not", () => {
+  test("a label 64 or 65 characters out, with non-ASCII text in the window, does not change the finding", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const label of ["ssn", "𝐬𝐬𝐧", "Sozialversicherungsnummer", "numero  de  secu"]) {
-      for (const [start, vetoes] of [
+      for (const [start] of [
         [64, true],
         [65, false],
       ] as const) {
-        const expected = vetoes ? [SSN] : [];
+        const expected = [SSN];
         expect(ssnValues(`${md5}-${SSN} é${" ".repeat(start - 2)}${label}`)).toEqual(expected);
         expect(ssnValues(`${SSN}-${md5} é${" ".repeat(start - 2)}${label}`)).toEqual(expected);
       }
     }
   });
 
-  test("window offsets count UTF-16 units, so astral characters before a label do not shift it", () => {
+  test("window offsets count UTF-16 units, and the SSN is reported either way", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const wide = "𝐱".repeat(31);
     expect(ssnValues(`${md5}-${SSN}${wide}  ssn`)).toEqual([SSN]);
-    expect(ssnValues(`${md5}-${SSN}${wide}   ssn`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN}${wide}   ssn`)).toEqual([SSN]);
   });
 
-  test("ordinary words, accented or styled, near an exact-length hash still leave the SSN alone", () => {
+  test("ordinary words, accented or styled, near a hash leave the SSN reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const text of ["résumé", "naïve café", "日本語の文章", "𝐡𝐞𝐥𝐥𝐨 𝐰𝐨𝐫𝐥𝐝", "Привет мир", "Όμηρος", "a/b/c", "s/n"]) {
-      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
-      expect(ssnValues(`${text} ${SSN}-${sha1}`)).toEqual([]);
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([SSN]);
+      expect(ssnValues(`${text} ${SSN}-${sha1}`)).toEqual([SSN]);
     }
   });
 
-  test("ordinary words and spaced letters that are not labels do not veto", () => {
+  test("ordinary words and spaced letters that are not labels leave the SSN reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const text of ["class number", "the bus snores", "this snow", "ref sn"]) {
-      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([]);
+      expect(ssnValues(`${md5}-${SSN} ${text}`)).toEqual([SSN]);
     }
   });
 
@@ -332,31 +358,33 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues(`${md5}-${SSN}${" ".repeat(50)}Sozialversicherungsnummer`)).toEqual([SSN]);
   });
 
-  test("lookahead window: a label starting 63 or 64 characters after the token vetoes, at 65 it does not", () => {
+  test("lookahead window: the SSN is reported with a label 63, 64 or 65 characters after the token", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const label of ["ssn", "social", "social security number", "Sozialversicherungsnummer"]) {
-      for (const [start, vetoes] of [
+      for (const [start] of [
         [63, true],
         [64, true],
         [65, false],
       ] as const) {
         const tail = `${" ".repeat(start)}${label}`;
-        const expected = vetoes ? [SSN] : [];
+        const expected = [SSN];
         expect(ssnValues(`${md5}-${SSN}${tail}`)).toEqual(expected);
         expect(ssnValues(`${SSN}-${md5}${tail}`)).toEqual(expected);
       }
     }
   });
 
-  test("lookbehind window: a label starting 63 or 64 characters before the token vetoes, at 65 it does not", () => {
+  test("lookbehind window: the SSN is reported with a label 63, 64 or 65 characters before the token", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     for (const label of ["ssn", "social", "social security number"]) {
-      for (const [distance, vetoes] of [
+      for (const [distance] of [
         [63, true],
         [64, true],
         [65, false],
       ] as const) {
         const head = `${label}${" ".repeat(distance - label.length)}`;
         expect(head).toHaveLength(distance);
-        const expected = vetoes ? [SSN] : [];
+        const expected = [SSN];
         expect(ssnValues(`${head}${md5}-${SSN}`)).toEqual(expected);
         expect(ssnValues(`${head}${SSN}-${md5}`)).toEqual(expected);
       }
@@ -366,29 +394,33 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues(`${german}${md5}-${SSN}`)).toEqual([SSN]);
   });
 
-  test("a repeated SSN is judged at its own offset, not at the first occurrence", () => {
+  test("a repeated SSN is reported at each of its own offsets", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     expect(ssnValues(`${SSN}-${SSN}`)).toEqual([SSN, SSN]);
-    expect(ssnValues(`${SSN}-${md5}-${SSN}`)).toEqual([]);
-    expect(ssnValues(`${SSN}-foo-${SSN}-${md5}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${md5}-${SSN}`)).toEqual([SSN, SSN]);
+    expect(ssnValues(`${SSN}-foo-${SSN}-${md5}`)).toEqual([SSN, SSN]);
   });
 
-  test("a truncated token never buys suppression", () => {
+  test("a truncated token does not hide the SSN", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const long = `${"a1b2c3d4-".repeat(30)}${md5}-${SSN}`;
-    expect(ssnValues(`${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(long)).toEqual([SSN]);
   });
 
-  test("the scan limit also budgets both sides together, so two long sides cannot each pass", () => {
+  test("two long sides around a hash do not hide the SSN", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const x = "x".repeat(150);
     expect(ssnValues(`${x}-${md5}-${SSN}-${x}`)).toEqual([SSN]);
     expect(ssnValues(`${x}-${SSN}-${md5}-${x}`)).toEqual([SSN]);
-    expect(ssnValues(`${"x".repeat(60)}-${md5}-${SSN}-${"x".repeat(60)}`)).toEqual([]);
+    expect(ssnValues(`${"x".repeat(60)}-${md5}-${SSN}-${"x".repeat(60)}`)).toEqual([SSN]);
   });
 
-  test("scan limit boundary: 192 characters beside the SSN still suppress, 193 are redacted", () => {
+  test("scan limit boundary: 192 and 193 characters beside the SSN are both reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const side = (length: number) => length - 34;
     const cases: [number, string[]][] = [
-      [192, []],
+      [192, [SSN]],
       [193, [SSN]],
     ];
     for (const [length, expected] of cases) {
@@ -397,10 +429,11 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("a label at the window edge keeps its preceding character for the word-start check", () => {
+  test("a label at the window edge does not change the finding", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const gap = " ".repeat(59);
-    expect(ssnValues(`xs s n${gap}${md5}-${SSN}`)).toEqual([]);
-    expect(ssnValues(`és s n${gap}${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`xs s n${gap}${md5}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`és s n${gap}${md5}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(` s s n${gap}${md5}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`é s s n${gap}${md5}-${SSN}`)).toEqual([SSN]);
   });
@@ -424,28 +457,32 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("whitespace controls stay separators, they are not stripped into a label", () => {
-    expect(ssnValues(`${md5}-${SSN} class\nnumber`)).toEqual([]);
-    expect(ssnValues(`${md5}-${SSN} class\tnumber`)).toEqual([]);
+  test("whitespace controls stay separators and the SSN is reported", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
+    expect(ssnValues(`${md5}-${SSN} class\nnumber`)).toEqual([SSN]);
+    expect(ssnValues(`${md5}-${SSN} class\tnumber`)).toEqual([SSN]);
   });
 
-  test("a real adjacent hash does not suppress when the token before the SSN exceeds the scan window", () => {
+  test("a hash and a long token before the SSN do not hide it", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const filler = "x".repeat(200);
-    expect(ssnValues(`${md5}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${md5}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`${filler}-${md5}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`${filler}-${sha256}-${SSN}`)).toEqual([SSN]);
   });
 
-  test("a token between 100 and 192 characters is fully scanned, so its adjacent hash still suppresses", () => {
+  test("a token between 100 and 192 characters beside a hash does not hide the SSN", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const filler = "x".repeat(120);
-    expect(ssnValues(`${filler}-${md5}-${SSN}`)).toEqual([]);
-    expect(ssnValues(`${SSN}-${md5}-${filler}`)).toEqual([]);
-    expect(ssnValues(`${filler}-${sha256}-${SSN}`)).toEqual([]);
+    expect(ssnValues(`${filler}-${md5}-${SSN}`)).toEqual([SSN]);
+    expect(ssnValues(`${SSN}-${md5}-${filler}`)).toEqual([SSN]);
+    expect(ssnValues(`${filler}-${sha256}-${SSN}`)).toEqual([SSN]);
   });
 
-  test("a real adjacent hash does not suppress when the token after the SSN exceeds the scan window", () => {
+  test("a hash and a long token after the SSN do not hide it", () => {
+    // The operator reversed poll 93 on 2026-10-06 for SEC-F-005: a hash neighbour no longer suppresses an SSN.
     const filler = "x".repeat(200);
-    expect(ssnValues(`${SSN}-${md5}`)).toEqual([]);
+    expect(ssnValues(`${SSN}-${md5}`)).toEqual([SSN]);
     expect(ssnValues(`${SSN}-${md5}-${filler}`)).toEqual([SSN]);
     expect(ssnValues(`${SSN}-${sha256}-${filler}`)).toEqual([SSN]);
   });
