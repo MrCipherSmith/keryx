@@ -11,12 +11,12 @@
   "title": "PII: second review of the ssn identifier guard (rounds, fixes and verifier)",
   "status": "implemented",
   "createdAt": "2026-10-05T19:27:49.847Z",
-  "updatedAt": "2026-10-05T22:08:06.128Z",
+  "updatedAt": "2026-10-06T05:57:20.122Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:b7e6145fae33eb3f953b3d0f5198052e8163f843cc986e3addfd2b3d0beefdc3",
+  "acChecksum": "sha256:c795ea71cb872c8f211c772a29cad333d9b9245d03e20205bcf54f81a50b5da0",
   "acConfirmed": {},
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/909"
@@ -148,6 +148,11 @@
       "at": "2026-10-05T22:08:06.128Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-06T05:57:20.122Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"The phone rule is unchanged: the diff of `src/security/detect/pii.ts` against 7b93fc97 touches no phone code, and a differential on phone inputs matches.\" -> \"`detectPii` runs in time linear in input length for every rule, the phone rule included: scaling tests on very long inputs for the email, name and phone shapes fail when their fix is reverted, and a differential on phone, email and name inputs matches the pre-change rules span for span (PR #912 and the phone fix are merged).\" (Operator decision, poll 101 (2026-10-06T05:56Z): change AC5 and fix the quadratic phone rule inside flow 410 instead of leaving it as a residual.)"
     }
   ],
   "acKinds": {
