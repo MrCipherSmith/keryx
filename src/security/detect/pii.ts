@@ -511,7 +511,7 @@ const phoneScanner: Scanner & {
           return null;
         }
       }
-      const end = m.index + m[0].length;
+      const end = m.index + (m[0] ?? "").length;
       this.lastIndex = end;
       this.tailEnd = 0;
       if (phoneVerdict(content, m.index, end)) {
