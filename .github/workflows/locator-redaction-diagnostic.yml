@@ -41,12 +41,13 @@ jobs:
           s = p.read_text()
           anchor = '  if (matches.length === 0) {\n'
           assert s.count(anchor) == 1
+          s = 'import { writeSync as locatorDiagnosticWriteSync } from "node:fs";\n' + s
           observer = """  if (text.includes('dig-')) {
-            console.error('LOCATOR_DIAGNOSTIC ' + JSON.stringify({
+            locatorDiagnosticWriteSync(2, 'LOCATOR_DIAGNOSTIC ' + JSON.stringify({
               length: text.length,
               locatorOffset: text.indexOf('dig-'),
               matches: matches.map(m => ({start: m.start, end: m.end, mask: m.mask})),
-            }));
+            }) + '\\n');
           }
           """
           p.write_text(s.replace(anchor, observer + anchor))
