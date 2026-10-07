@@ -3,8 +3,8 @@ import { applyRedaction } from "../redact";
 import { detectPii } from "./pii";
 
 // SEC-F-004: the number rules are ASCII, so a number written with fullwidth or Arabic-Indic digits, a typographic
-// hyphen, an unusual space or a leading word character was invisible. SEC-F-005: the SSN guard must not be
-// defeatable by text next to the number, and must know the other tax and insurance labels.
+// hyphen, an unusual space or a leading word character was invisible. SEC-F-005: an SSN next to a hash, a tax
+// or insurance label or any identifier text is reported, because nothing suppresses the SSN rule.
 
 const found = (content: string, policyId: string) => detectPii(content).filter((match) => match.policyId === policyId);
 const values = (content: string, policyId: string) => found(content, policyId).map((match) => match.value);
@@ -45,6 +45,7 @@ describe("an SSN written with look-alike characters is detected (SEC-F-004)", ()
     expect(match?.start).toBe(5);
     expect(match?.end).toBe(content.length);
   });
+});
 
 describe("an SSN joined to a word character is detected (SEC-F-004)", () => {
   test("a letter or an underscore does not hide it", () => {
@@ -107,7 +108,7 @@ describe("a card, a phone number, an IBAN and an IP written with look-alikes are
   });
 });
 
-describe("the SSN identifier guard (SEC-F-005)", () => {
+describe("an SSN next to a hash or a label is reported (SEC-F-005)", () => {
   const MD5 = "d41d8cd98f00b204e9800998ecf8427e";
   const SHA1 = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
 
@@ -130,5 +131,4 @@ describe("the SSN identifier guard (SEC-F-005)", () => {
     expect(values(`078-05-1120-${SHA1}`, "pii.ssn")).toEqual(["078-05-1120"]);
     expect(values(`${MD5}_078-05-1120`, "pii.ssn")).toEqual(["078-05-1120"]);
   });
-});
 });
