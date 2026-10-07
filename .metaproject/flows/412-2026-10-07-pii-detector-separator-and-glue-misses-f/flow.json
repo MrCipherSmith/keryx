@@ -9,9 +9,9 @@
   "id": "412",
   "slug": "pii-detector-separator-and-glue-misses-f",
   "title": "PII detector: separator and glue misses found in review round 6",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-07T03:34:23.592Z",
-  "updatedAt": "2026-10-07T06:31:00.878Z",
+  "updatedAt": "2026-10-07T06:31:25.781Z",
   "source": {
     "type": "description",
     "ref": null
@@ -24,7 +24,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/921"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -120,6 +120,11 @@
       "at": "2026-10-07T06:31:00.878Z",
       "event": "ac-confirmed",
       "detail": "AC6: operator confirmed in poll 120 (2026-10-07): AC6 reworded with the UUID exception; backed by src/security/detect/pii-flow412-coverage.test.ts and the scaling tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T06:31:25.781Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/921 (base: main)"
     }
   ],
   "acKinds": {
@@ -154,5 +159,6 @@
       "criterion": "AC6",
       "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
