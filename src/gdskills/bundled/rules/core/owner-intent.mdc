@@ -1,0 +1,74 @@
+---
+description: "Who decides scope: a module owner's position outranks the author's own text. Use when filing a bug or follow-up issue, deciding whether a fix PR may change a shared pattern, checking whether a review question is already settled, or before every push, review re-request or status report on an open PR."
+alwaysApply: false
+---
+
+# Owner Intent
+
+## Purpose
+
+Keep the author of a change from becoming the authority on its scope. Each
+failure below has the same shape: text the author wrote — an issue, a PR body, a
+doc line added in the same PR — was treated as a decision, and the module
+owner's actual position was never read, so a fix grew into a new shared
+mechanism the owner had not asked for.
+
+"Owner" means whoever the repository names for that code or rule: a CODEOWNERS
+entry, the author of the owning spec, or the maintainer the triage procedure
+assigns.
+
+## When To Apply
+
+- Filing a bug, or a follow-up issue out of a review.
+- A fix or feature PR that adds or changes a pattern other code must adopt.
+- Deciding whether a question is "settled" — in a cycle check, a `disagree`
+  reply, or a fix plan.
+- Before every push, review re-request, or status report on an open PR.
+
+## Mandatory Behavior
+
+1. **A bug is behaviour a user can hit, with evidence.** Code that diverges from
+   a style or design rule is not a bug until the rule's owner has confirmed the
+   rule. If the owning spec lists the point as an open question, ask on the
+   owner's PR or thread instead of filing.
+2. **A bug issue states the defect, the evidence, and the scope** — nothing
+   more. It never prescribes a new shared mechanism; a "suggested fix" may name
+   only owners and patterns that already exist. A new mechanism is a design
+   proposal for the owner, filed as one.
+3. **Keep the assignee the filing procedure picks.** That is the triage owner.
+   Do not reassign to yourself unless the owner or the user says so.
+4. **The owner decides whether a shared pattern changes, not the PR.** Such a
+   change ships in its own dedicated PR the owner agreed to. A consistency rule
+   ("change it app-wide, never divergently") constrains where a pattern change
+   goes; it never licenses adding a new framework inside a fix.
+5. **Only owner or reviewer decisions and merged specs are settled.** The
+   author's own issue text, PR body, or doc edits made in the same PR are never
+   settled inputs — not to a cycle check, not to a `disagree` reply, not to
+   rejecting a reviewer's suggestion.
+6. **Author gate.** Before every push, re-request, or status report, re-read the
+   PR conversation — reviews, issue comments, inline threads — and the linked
+   issue since your last read. An unanswered code-owner or reviewer comment
+   stops the work until it is answered.
+7. **Check a follow-up's direction before filing it.** Compare it with the
+   latest owner and reviewer feedback in the thread. A follow-up must not
+   entrench what a reviewer asked to remove.
+
+## Output Contract
+
+- A filed issue: defect, evidence, scope, and the assignee left as triaged.
+- A status report on an open PR carries `thread re-read at <UTC time>`, and
+  names any owner or reviewer comment still unanswered.
+- A list of settled inputs names, for each entry, the owner, reviewer, or merged
+  spec it comes from.
+
+## Red Flags — Stop and re-read this rule if you are thinking:
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "The style guide says X and 16 places don't do X, so that is 16 bugs" | A rule gap is a question for the rule's owner until confirmed. If the owner's spec lists it as open, filing it as a bug decides the owner's question for them |
+| "The issue says to do it app-wide, so the fix PR builds the shared mechanism" | The issue is the author's text. A shared mechanism needs the owner's agreement and its own PR |
+| "Our issue and PR body already settled this, so the reviewer's suggestion is a cycle" | Your own text cannot settle your own review. Only an owner's or reviewer's position on record can |
+| "CI is green and two reviewers approved, so the status is done" | Approvals do not answer an owner comment posted after them. Re-read the thread first |
+| "I'll take the issue myself, triage would just slow it down" | Triage is the owner's gate. Bypassing it is how an unconfirmed design ships as a bug fix |
+
+**IRON LAW: THE AUTHOR'S OWN WORDS NEVER SETTLE THE AUTHOR'S OWN SCOPE. ONLY THE OWNER DOES.**
