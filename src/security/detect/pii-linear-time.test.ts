@@ -134,7 +134,10 @@ describe("the IBAN scanner matches the reference regex", () => {
       const detected = detectPii(content)
         .filter((match) => match.policyId === "pii.iban")
         .map((match) => match.value);
-      expect(detected).toEqual(expected);
+      // Flow 412 adds IBANs glued to other text (`GB82WEST12345698765432dolor`), which the regex has no boundary for.
+      // So every candidate of the reference is still reported, in order, and whatever else is reported is valid.
+      expect(detected.filter((value) => expected.includes(value))).toEqual(expected);
+      expect(detected.every((value) => isValidIban(value))).toBe(true);
     }
   });
 

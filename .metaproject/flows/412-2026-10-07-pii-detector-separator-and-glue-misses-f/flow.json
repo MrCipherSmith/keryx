@@ -9,17 +9,42 @@
   "id": "412",
   "slug": "pii-detector-separator-and-glue-misses-f",
   "title": "PII detector: separator and glue misses found in review round 6",
-  "status": "ready",
+  "status": "implemented",
   "createdAt": "2026-10-07T03:34:23.592Z",
-  "updatedAt": "2026-10-07T04:29:16.779Z",
+  "updatedAt": "2026-10-07T08:31:44.590Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ea12f44502b2db119a2848d8479e4b07e064403e228c366dd2d88d12200e88af",
-  "acConfirmed": {},
+  "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93",
+  "acConfirmed": {
+    "AC6": {
+      "at": "2026-10-07T06:31:00.878Z",
+      "note": "operator confirmed in poll 120 (2026-10-07): AC6 reworded with the UUID exception; backed by src/security/detect/pii-flow412-coverage.test.ts and the scaling tests"
+    },
+    "AC1": {
+      "at": "2026-10-07T08:31:08.999Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC2": {
+      "at": "2026-10-07T08:31:09.457Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC3": {
+      "at": "2026-10-07T08:31:09.928Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC4": {
+      "at": "2026-10-07T08:31:10.384Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC5": {
+      "at": "2026-10-07T08:31:10.850Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/921"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -36,7 +61,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -44,14 +69,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "context came from flow 410 review round 6 findings, already collected in the flow description"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -59,14 +86,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in commit 09674039, all six AC"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -74,14 +103,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "74 new tests pii-flow412-*, 46 fail on revert, 422 detector tests pass, CI green"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -89,7 +120,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 921 prepared as draft; formal review round follows"
     }
   ],
   "history": [
@@ -101,6 +134,70 @@
       "at": "2026-10-07T04:29:16.779Z",
       "event": "frozen",
       "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-07T05:38:33.310Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-07T06:31:00.681Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"Every rule stays linear in input length: the existing scaling tests (pii-linear-time, pii-phone-linear-time) pass, and a differential on random phone, email, name, card and SSN inputs shows every span of baseline 6f6d8898 still covered.\" -> \"Every rule stays linear in input length: the existing scaling tests (pii-linear-time, pii-phone-linear-time) pass, and a differential on random phone, email, name, card and SSN inputs shows every span of baseline 6f6d8898 still covered, except a card span that overlaps a UUID-shaped token, which AC5 deliberately stops reporting (4 of 91,973 baseline card spans in the 60,000-input differential, all four overlapping a UUID).\" (Operator poll 120 (2026-10-07): accept the AC5/AC6 loss of 4 card spans that overlap a UUID and word AC6 with that exception.)"
+    },
+    {
+      "at": "2026-10-07T06:31:00.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: operator confirmed in poll 120 (2026-10-07): AC6 reworded with the UUID exception; backed by src/security/detect/pii-flow412-coverage.test.ts and the scaling tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T06:31:25.781Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/921 (base: main)"
+    },
+    {
+      "at": "2026-10-07T08:31:08.999Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:09.457Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:09.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:10.384Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:10.850Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:37.638Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-07T08:31:43.586Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-07T08:31:44.096Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-07T08:31:44.590Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
@@ -122,5 +219,74 @@
     "AC6": {
       "kind": "unclassified"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-07T06:31:00.878Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:08.999Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:09.457Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:09.928Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:10.384Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:10.850Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    }
+  ],
+  "baseBranch": "main"
 }
