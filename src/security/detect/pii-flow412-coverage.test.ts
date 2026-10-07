@@ -45,7 +45,8 @@ describe("surrounding text never uncovers a value (flow 412 AC6)", () => {
     const lost: string[] = [];
     for (let round = 0; round < 3000; round += 1) {
       const parts = Array.from({ length: 1 + Math.floor(random() * 6) }, () => pick(fragments)());
-      const joiner = pick([" | ", " ; ", ", "]);
+      // Line breaks and tabs are joiners too: a number that ends a line is followed by the next line's number.
+      const joiner = pick([" | ", " ; ", ", ", ".\n", "-\n", "\n", "\t"]);
       const text = parts.join(joiner);
       const merged = detectPii(text) as readonly Span[];
       let offset = 0;

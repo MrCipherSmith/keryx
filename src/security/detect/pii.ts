@@ -257,7 +257,8 @@ const PHONE_FIRST_GROUP = /^\+?\d{1,4}$/;
 const PHONE_SEPARATOR = /[+()-]/;
 const PHONE_NANP_SPACED = /^(?:\d{1,3} )?\d{3} \d{3} \d{4}$/;
 const WHITESPACE = /\s/;
-const LINE_BREAK = /[\n\r\u2028\u2029]/;
+const LINE_BREAK = /[\t\n\r\u2028\u2029]/; // a tab ends a cell as a line break ends a line
+const PHONE_BREAK = /[\t\n\r\u2028\u2029]/;
 const PHONE_MAX_DIGITS = 15;
 const PHONE_MIN_DIGITS = 9;
 
@@ -781,6 +782,7 @@ const phoneScanner: Scanner & {
     let digits = 0;
     let limit = end;
     const ends: number[] = [];
+    let breakEnd = -1; // the first line break or tab after at least nine digits
     for (let i = start; i < end; i += 1) {
       const ch = content[i] as string;
       if (DIGIT.test(ch)) {
@@ -791,6 +793,17 @@ const phoneScanner: Scanner & {
         }
       } else if (WHITESPACE.test(ch) && DIGIT.test(content[i - 1] as string) && digits >= PHONE_MIN_DIGITS) {
         ends.push(i);
+        if (breakEnd < 0 && PHONE_BREAK.test(ch)) {
+          breakEnd = i;
+        }
+      }
+    }
+    // A number that ends its line or its cell is not continued by the digits that start the next one: the part before
+    // the break is cut when it is a number by itself, and the rest is read from the break on.
+    if (breakEnd >= 0) {
+      const value = content.slice(start, breakEnd);
+      if (hasPhoneEvidence(value, !WHITESPACE.test(value)) && phoneVerdict(content, start, breakEnd)) {
+        return { end: breakEnd, baseline: false };
       }
     }
     const baseline = this.runBaseline;
@@ -944,6 +957,11 @@ function isIbanGlueChar(code: number): boolean {
   return (code >= 97 && code <= 122) || isIbanChar(code);
 }
 
+// The groups of a written IBAN are separated by up to three of a blank, a tab, a line break, `-`, `.`, `/` or `_`.
+function isIbanSeparator(code: number): boolean {
+  return code === 32 || code === 9 || code === 10 || code === 13 || code === 45 || code === 46 || code === 47;
+}
+
 // A glued IBAN needs a label: a letter that is not a hex digit, or an underscore, next to it. An IBAN glued to hex
 // digits alone is the middle of a digest or an identifier (`...DBE85FC67...`), where the mod-97 check passes by chance.
 function acceptGluedIban(content: string, start: number, end: number): boolean {
@@ -971,10 +989,20 @@ const ibanGluedScanner: Scanner = {
           const code = content.charCodeAt(i);
           if (isIbanGlueChar(code)) {
             count += 1;
-          } else if (!(code === 32 && count >= 4 && isIbanGlueChar(content.charCodeAt(i + 1)))) {
+            i += 1;
+            continue;
+          }
+          if (count < 4 || !isIbanSeparator(code)) {
             break;
           }
-          i += 1;
+          let next = i;
+          while (next - i < 3 && isIbanSeparator(content.charCodeAt(next))) {
+            next += 1;
+          }
+          if (!isIbanGlueChar(content.charCodeAt(next))) {
+            break;
+          }
+          i = next;
         }
         if (count === length) {
           this.lastIndex = i;
@@ -995,26 +1023,24 @@ const ibanGluedScanner: Scanner = {
 //     groups (nothing digit-and-separator follows it), so a long list of numbers or a dotted identifier is not cut
 //     into a card. A candidate glued to letters needs a letter of the glue that is not a hex digit, so a run of digits
 //     inside a hash is not a card.
-//   - An SSN: the groups separated by a bare tab or line break (`078\n05\n1120`). Everything with `-` is the rule's.
+//   - An SSN: the groups separated by blanks, dots, slashes, tabs or line breaks, or nine digits after a label.
+//     Everything with a single `-` is the rule's.
 //   - An IPv4 address: glued to letters (`192.168.1.10abc`) or with a tab or line break next to a dot.
 // Each is a regex whose work per start is bounded by the length of a number, so the scan stays linear.
-const CARD_SEPARATOR = "[ \\t\\r\\n._/-]";
+const CARD_SEPARATOR = "[ \\t\\r\\n._/:,-]";
 const CARD_EXTRA = new RegExp(
-  `(?<!\\d${CARD_SEPARATOR}{0,2})[2-6](?:${CARD_SEPARATOR}{0,2}\\d){12,18}(?!\\d)(?!${CARD_SEPARATOR}{1,2}\\d)`,
+  `(?<!\\d${CARD_SEPARATOR}{0,3})[2-6](?:${CARD_SEPARATOR}{0,3}\\d){12,18}(?!\\d)(?!${CARD_SEPARATOR}{1,3}\\d)`,
   "g",
 );
-const CARD_GROUP_SEPARATOR = /[^\d]+/g;
+const CARD_GROUP_SEPARATOR = /[^\d]+/;
 
 function isCardCandidate(value: string): boolean {
-  const separators = value.match(CARD_GROUP_SEPARATOR) ?? [];
-  const first = separators[0];
-  if (first === undefined) {
+  if (!CARD_GROUP_SEPARATOR.test(value)) {
     return true;
   }
-  if (!separators.every((separator) => separator === first)) {
-    return false;
-  }
-  const lengths = value.split(first).map((group) => group.length);
+  // The groups are the runs of digits, whatever the separators between them are (`4111.1111 1111.1111`,
+  // `4111 - 1111 - 1111 - 1111`, `4111, 1111, 1111, 1111`).
+  const lengths = value.split(CARD_GROUP_SEPARATOR).map((group) => group.length);
   const last = lengths[lengths.length - 1] as number;
   if (lengths.length === 3 && lengths[0] === 4 && lengths[1] === 6 && (last === 5 || last === 4)) {
     return true;
@@ -1061,7 +1087,25 @@ function outsideUuid(content: string, start: number, end: number): boolean {
   return true;
 }
 
-const SSN_BREAK_EXTRA = /(?<![0-9])\d{3}(?:\r\n|[\t\r\n])\d{2}(?:\r\n|[\t\r\n])\d{4}(?![0-9])/g;
+// An SSN written with blanks, dots, slashes, underscores, tabs or line breaks between its groups, up to three of them
+// in a row (`078 05 1120`, `078.05.1120`, `078 - 05 - 1120`, `078\n\n05\n\n1120`, `078/05-1120`). The chain stands
+// alone: no digit, and no digit and separator, before it, and no digit or three digits and a separator after it (a line
+// break ends the chain), so a part of a longer number or of a card is not read as one.
+const SSN_SEPARATOR = "[ \\t\\r\\n._/-]{1,3}";
+const SSN_CHAIN_SEPARATOR = "[ \\t._/-]{1,3}";
+const SSN_SEPARATED = new RegExp(
+  `(?<![0-9])(?<![0-9]${SSN_CHAIN_SEPARATOR})\\d{3}${SSN_SEPARATOR}\\d{2}${SSN_SEPARATOR}\\d{4}(?![0-9])(?!${SSN_CHAIN_SEPARATOR}[0-9]{3})`,
+  "g",
+);
+// Nine digits in a row are an SSN only when the text says so: a label before them (`SSN`, `social security number`).
+// Without a label the run is an order number, an id or a phone number's digits (and the phone rule reports it).
+const SSN_LABELLED =
+  /(?<![0-9])\d{9}(?![0-9])(?<=\b(?:ssn|ss#|social[ _-]?security(?:[ _-]?(?:number|no\.?|num|#))?)[^\d\n]{0,12}\d{9})(?!\.\d)/gi;
+
+function ssnFromDigits(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 9 && isValidSsn(`${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`);
+}
 const IPV4_EXTRA =
   /(?<![0-9.])(?<!\b[vV])\d{1,3}(?:[\t\r\n]{0,2}\.[\t\r\n]{0,2}\d{1,3}){3}(?![0-9])/g;
 const IPV4_VERSION_SUFFIX = /^[A-Za-z]+\d/;
@@ -1126,7 +1170,15 @@ const RULES: Rule[] = [
     severity: "high",
     confidence: 0.9,
     validate: isValidIban,
-    also: [{ regex: ibanGluedScanner, accept: acceptGluedIban }],
+    also: [
+      {
+        regex: ibanGluedScanner,
+        // The groups may be separated by more than a blank (`GB82-WEST-1234-5698-7654-32`): the check is made on the
+        // letters and digits alone.
+        validate: (value) => isValidIban(value.replace(/[^A-Za-z0-9]/g, "")),
+        accept: acceptGluedIban,
+      },
+    ],
   },
   {
     policyId: "pii.credit-card",
@@ -1152,7 +1204,10 @@ const RULES: Rule[] = [
     severity: "high",
     confidence: 0.85,
     validate: isValidSsn,
-    also: [{ regex: SSN_BREAK_EXTRA, validate: (value) => isValidSsn(value.replace(/\r\n|[\t\r\n]/g, "-")) }],
+    also: [
+      { regex: SSN_SEPARATED, validate: ssnFromDigits },
+      { regex: SSN_LABELLED, validate: ssnFromDigits },
+    ],
   },
   {
     policyId: "pii.ip",
@@ -1429,10 +1484,13 @@ function scanRules(content: string): DetectorMatch[][] {
 
 const NORMALIZE_CHUNK = 1 << 21;
 const NORMALIZE_OVERLAP = 512;
-const NORMALIZE_SKIP = 256; // a match starting this close to a chunk's start is the previous chunk's
+const NORMALIZE_SKIP = 256; // a match starting this close to a chunk's start is the previous chunk's, if that chunk saw all of it
+const NORMALIZE_EXTEND = 1 << 20; // a chunk is lengthened over the number that crosses its end, up to this much
 const NON_ASCII = /[\u0080-\uffff]/;
 const DECIMAL_DIGIT = /\p{Nd}/u;
-const digitValues = new Map<number, number>();
+// One byte per BMP code point, filled lazily: 0 unknown, else the digit value plus one (1 for "not a digit" is 11).
+// At most 64 KiB, whatever the text holds; code points beyond the BMP are looked up each time.
+const DIGIT_CLASS = new Uint8Array(0x10000);
 
 // 0-9 for a non-ASCII decimal digit, else -1. Decimal digits come in aligned runs of ten, so the value is the
 // offset from the start of the contiguous run of `Nd` characters, modulo ten.
@@ -1440,9 +1498,11 @@ function decimalDigitValue(codePoint: number): number {
   if (codePoint < 0x660) {
     return -1; // the first non-ASCII `Nd` is U+0660
   }
-  const cached = digitValues.get(codePoint);
-  if (cached !== undefined) {
-    return cached;
+  if (codePoint <= 0xffff) {
+    const cached = DIGIT_CLASS[codePoint] as number;
+    if (cached !== 0) {
+      return cached === 11 ? -1 : cached - 1;
+    }
   }
   let value = -1;
   if (DECIMAL_DIGIT.test(String.fromCodePoint(codePoint))) {
@@ -1452,7 +1512,9 @@ function decimalDigitValue(codePoint: number): number {
     }
     value = (codePoint - runStart) % 10;
   }
-  digitValues.set(codePoint, value);
+  if (codePoint <= 0xffff) {
+    DIGIT_CLASS[codePoint] = value < 0 ? 11 : value + 1;
+  }
   return value;
 }
 
@@ -1555,6 +1617,18 @@ function foldNumberChar(code: number, options: ViewOptions, afterNumber: boolean
   if (code === 0xff20 || code === 0xfe6b) {
     return "@";
   }
+  if (code === 0xff1a || code === 0xfe55) {
+    return ":";
+  }
+  if (code === 0xff0c || code === 0xfe50) {
+    return ",";
+  }
+  if (code === 0xff0f) {
+    return "/";
+  }
+  if (code === 0xff3f) {
+    return "_";
+  }
   if (code === 0xff0b || code === 0x207a || code === 0x208a || code === 0xfe62) {
     return "+";
   }
@@ -1588,18 +1662,150 @@ const BREAK_CHAR = /[\t\r\n]/;
 function isNumberAscii(code: number): boolean {
   return (
     (code >= 48 && code <= 57) || code === 32 || code === 9 || code === 10 || code === 13 || code === 43 ||
-    code === 40 || code === 41 || code === 45 || code === 46
+    code === 40 || code === 41 || code === 44 || code === 45 || code === 46 || code === 47 || code === 58 || code === 95
   );
 }
 
-// A run of tabs and line breaks is deleted when it separates a digit from a `-` or `.` that is itself next to a digit.
+const BREAK_SKIP_LIMIT = 64;
+
+// Where the run of what a number is made of (digits of any script, separators, invisible characters) that is cut by
+// `at` ends: a number that crosses the end of a chunk is read whole by that chunk, however much invisible padding it has.
+// The run is read at most `NORMALIZE_EXTEND` characters on, so a text that is all blanks costs a bounded window.
+function numberRunEnd(content: string, at: number): number {
+  const limit = Math.min(content.length, at + NORMALIZE_EXTEND);
+  let i = at;
+  while (i < limit) {
+    const code = content.charCodeAt(i);
+    if (code < 0x80) {
+      if (!isNumberAscii(code)) {
+        break;
+      }
+      i += 1;
+      continue;
+    }
+    const point = content.codePointAt(i) as number;
+    if (foldNumberChar(point, {}, true) === null) {
+      break;
+    }
+    i += point > 0xffff ? 2 : 1;
+  }
+  return i;
+}
+
+// The width of the character that ends at `end` / starts at `at` when it is one a view deletes everywhere (a format
+// character or default-ignorable code point, the soft hyphen), else 0.
+function invisibleBefore(content: string, end: number): number {
+  if (end <= 0) {
+    return 0;
+  }
+  const low = content.charCodeAt(end - 1);
+  if ((low & 0xfc00) === 0xdc00 && end >= 2) {
+    const code = content.codePointAt(end - 2) as number;
+    return code > 0xffff && classOf(code) === 2 ? 2 : 0;
+  }
+  return low === 0xad || (low >= 0x300 && classOf(low) === 2) ? 1 : 0;
+}
+
+function invisibleAt(content: string, at: number): number {
+  if (at >= content.length) {
+    return 0;
+  }
+  const code = content.codePointAt(at) as number;
+  if (code === 0xad) {
+    return 1;
+  }
+  return code >= 0x300 && classOf(code) === 2 ? (code > 0xffff ? 2 : 1) : 0;
+}
+
+function isBreakAt(content: string, at: number): boolean {
+  const code = content.charCodeAt(at);
+  return code === 9 || code === 10 || code === 13;
+}
+
+// Skips what a view deletes (and, when `breaks`, tabs and line breaks) backwards from `end`, or forwards from `at`,
+// at most `BREAK_SKIP_LIMIT` characters.
+function skipBack(content: string, end: number, breaks: boolean): number {
+  let k = end;
+  for (let steps = 0; k > 0 && steps < BREAK_SKIP_LIMIT; steps += 1) {
+    const width = invisibleBefore(content, k);
+    if (width > 0) {
+      k -= width;
+    } else if (breaks && isBreakAt(content, k - 1)) {
+      k -= 1;
+    } else {
+      break;
+    }
+  }
+  return k;
+}
+
+function skipForward(content: string, at: number, breaks: boolean): number {
+  let k = at;
+  for (let steps = 0; k < content.length && steps < BREAK_SKIP_LIMIT; steps += 1) {
+    const width = invisibleAt(content, k);
+    if (width > 0) {
+      k += width;
+    } else if (breaks && isBreakAt(content, k)) {
+      k += 1;
+    } else {
+      break;
+    }
+  }
+  return k;
+}
+
+function digitEndingAt(content: string, end: number): boolean {
+  if (end <= 0) {
+    return false;
+  }
+  const code = content.charCodeAt(end - 1);
+  if (code >= 48 && code <= 57) {
+    return true;
+  }
+  if (code < 0x660) {
+    return false;
+  }
+  const point = (code & 0xfc00) === 0xdc00 && end >= 2 ? (content.codePointAt(end - 2) as number) : code;
+  return decimalDigitValue(point) >= 0;
+}
+
+function digitStartingAt(content: string, at: number): boolean {
+  if (at >= content.length) {
+    return false;
+  }
+  const code = content.charCodeAt(at);
+  if (code >= 48 && code <= 57) {
+    return true;
+  }
+  return code >= 0x660 && decimalDigitValue(content.codePointAt(at) as number) >= 0;
+}
+
+// A `-` or `.`, or a character a view reads as one. The width is 1 for the characters of the BMP, which all of them are.
+function isDashOrDotCode(code: number): boolean {
+  if (code === 45 || code === 46) {
+    return true;
+  }
+  if (code < 0x80) {
+    return false;
+  }
+  const folded = foldNumberChar(code, {}, true);
+  return folded === "-" || folded === ".";
+}
+
+// A run of tabs and line breaks (and the invisible characters between them) is deleted when it separates a digit from
+// a `-` or `.` that is itself next to a digit, or to another break and then a digit (`415\n-\n555`): that is how a
+// number wraps. The characters around the run are read as the view reads them: digits of any script, dash look-alikes,
+// and invisible characters skipped.
 function isNumberBreak(content: string, from: number, to: number): boolean {
-  const before = content[from - 1];
-  const after = content[to];
-  return (
-    (from > 1 && (before === "-" || before === ".") && DIGIT.test(content[from - 2] as string) && DIGIT.test(after ?? "")) ||
-    (from > 0 && DIGIT.test(before ?? "") && (after === "-" || after === ".") && DIGIT.test(content[to + 1] ?? ""))
-  );
+  const before = skipBack(content, from, false);
+  const after = skipForward(content, to, false);
+  if (digitEndingAt(content, before) && after < content.length && isDashOrDotCode(content.charCodeAt(after))) {
+    return digitStartingAt(content, skipForward(content, after + 1, true));
+  }
+  if (before > 0 && isDashOrDotCode(content.charCodeAt(before - 1)) && digitStartingAt(content, after)) {
+    return digitEndingAt(content, skipBack(content, before - 1, true));
+  }
+  return false;
 }
 
 // `origin[i]` is the original index of the code point that produced unit `i`. A deleted character has no unit, so a
@@ -1611,36 +1817,53 @@ function normalizeWindow(content: string, from: number, to: number, options: Vie
   let flushed = from;
   let changed = false;
   let afterNumber = from > 0 && isNumberAscii(content.charCodeAt(from - 1));
+  let lastUnit = from > 0 ? content.charCodeAt(from - 1) : 0; // the last character the view produced (or left)
   for (let i = from; i < to; ) {
     const code = content.charCodeAt(i);
     if (code < 128) {
       afterNumber = isNumberAscii(code);
       if (options.breaks && (code === 9 || code === 10 || code === 13)) {
         let j = i + 1;
-        while (j < to && BREAK_CHAR.test(content[j] as string)) {
-          j += 1;
+        while (j < to && (isBreakAt(content, j) || invisibleAt(content, j) > 0)) {
+          j += invisibleAt(content, j) || 1;
         }
         if (isNumberBreak(content, i, j)) {
           changed = true;
           parts.push(content.slice(flushed, i));
           flushed = j;
         } else {
-          for (let k = i; k < j; k += 1) {
-            origin[length++] = k;
+          for (let k = i; k < j; ) {
+            const width = invisibleAt(content, k);
+            if (width === 0) {
+              origin[length++] = k;
+              k += 1;
+            } else {
+              changed = true;
+              parts.push(content.slice(flushed, k));
+              flushed = k + width;
+              k += width;
+            }
           }
+          lastUnit = content.charCodeAt(j - 1);
         }
         i = j;
         continue;
       }
       origin[length++] = i;
+      lastUnit = code;
       i += 1;
       continue;
     }
     const codePoint = content.codePointAt(i) as number;
     const width = codePoint > 0xffff ? 2 : 1;
-    const folded = foldNumberChar(codePoint, options, afterNumber);
+    // A soft hyphen is read as the hyphen of a number unless a hyphen is next to it (`078\u00ad05-\u00ad1120`).
+    const folded =
+      options.shyHyphen && codePoint === 0xad && (lastUnit === 45 || content.charCodeAt(i + 1) === 45)
+        ? ""
+        : foldNumberChar(codePoint, options, afterNumber);
     if (folded === null) {
       afterNumber = false;
+      lastUnit = codePoint;
       for (let k = 0; k < width; k += 1) {
         origin[length++] = i;
       }
@@ -1650,6 +1873,7 @@ function normalizeWindow(content: string, from: number, to: number, options: Vie
       flushed = i + width;
       if (folded !== "") {
         afterNumber = folded === "@" ? false : isNumberAscii(folded.charCodeAt(0));
+        lastUnit = folded.charCodeAt(0);
         parts.push(folded);
         origin[length++] = i;
       }
@@ -1669,6 +1893,30 @@ function toOriginal(window: NormalizedWindow, content: string, start: number, en
   const last = window.origin[end - 1] as number;
   const width = (content.codePointAt(last) as number) > 0xffff ? 2 : 1;
   return [window.origin[start] as number, last + width];
+}
+
+// Whether a span of `spans` (in order, not overlapping) overlaps [start, end) without containing it.
+function overlapsPartly(spans: readonly DetectorMatch[], start: number, end: number): boolean {
+  let low = 0;
+  let high = spans.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if ((spans[mid] as DetectorMatch).start < end) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  for (let index = high; index >= 0; index -= 1) {
+    const span = spans[index] as DetectorMatch;
+    if (span.end <= start) {
+      break;
+    }
+    if (!(span.start <= start && span.end >= end)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function containedIn(spans: readonly DetectorMatch[], start: number, end: number): boolean {
@@ -1844,7 +2092,10 @@ const NUMBER_RULES = new Set(
 const FULLWIDTH_LETTER = /[\uff21-\uff3a\uff41-\uff5a]/;
 const IBAN_RULE = RULES.findIndex((rule) => rule.policyId === "pii.iban");
 const SOFT_HYPHEN = /\u00ad/;
-const NUMBER_BREAK = /[-.][\t\r\n]|[\t\r\n][-.]/;
+// A tab or line break next to a dash or a dot, with nothing but invisible characters (or more breaks) between: what a
+// wrapped number looks like. A run of breaks is tried from its start only, so the test is linear.
+const NUMBER_BREAK =
+  /[-.\p{Pd}\u02d7\u06d4\u1427\u2024\u2043\u207b\u208b\u2212\u2796\u30fc\ufe52\ufe63\uff0d\uff0e\uff61\u3002][\p{Cf}\p{Default_Ignorable_Code_Point}]*[\t\r\n]|(?<![\t\r\n\p{Cf}\p{Default_Ignorable_Code_Point}])[\t\r\n][\p{Cf}\p{Default_Ignorable_Code_Point}\t\r\n]*[-.\p{Pd}\u02d7\u06d4\u1427\u2024\u2043\u207b\u208b\u2212\u2796\u30fc\ufe52\ufe63\uff0d\uff0e\uff61\u3002]/u;
 
 // The ways of reading the text besides as written. A view is only built when the text has what it is for.
 function viewsOf(content: string, nonAscii: boolean): ViewOptions[] {
@@ -1883,6 +2134,7 @@ export function detectPii(content: string): DetectorMatch[] {
   }
   const views = viewsOf(content, nonAscii);
   for (const options of views) {
+    let previousTo = 0;
     for (let from = 0; from < content.length; ) {
       let start = from;
       let to = Math.min(content.length, from + NORMALIZE_CHUNK);
@@ -1891,6 +2143,9 @@ export function detectPii(content: string): DetectorMatch[] {
       }
       if (to < content.length && (content.charCodeAt(to - 1) & 0xfc00) === 0xd800) {
         to += 1;
+      }
+      if (to < content.length) {
+        to = numberRunEnd(content, to);
       }
       const window = normalizeWindow(content, start, to, options);
       if (window !== null) {
@@ -1909,11 +2164,14 @@ export function detectPii(content: string): DetectorMatch[] {
             let [a, b] = toOriginal(window, content, match.start, match.end);
             if (options.breaks && index === PHONE_RULE) {
               b = clipAtBreak(content, a, b);
+              if (overlapsPartly(base, a, b)) {
+                continue; // a window across a break that cuts a number the plain scan read is a piece of two numbers
+              }
             }
             if (!numbers && b - a !== match.end - match.start) {
               continue; // an invisible character is a gap inside a number, not a reason to join two words
             }
-            if (start > 0 && a < start + NORMALIZE_SKIP) {
+            if (start > 0 && a < start + NORMALIZE_SKIP && b <= previousTo) {
               continue;
             }
             if (!containedIn(base, a, b) && !containedIn(added, a, b)) {
@@ -1932,6 +2190,7 @@ export function detectPii(content: string): DetectorMatch[] {
       if (to >= content.length) {
         break;
       }
+      previousTo = to;
       from = to - NORMALIZE_OVERLAP;
     }
   }
