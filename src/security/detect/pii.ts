@@ -678,14 +678,6 @@ const RULES: Rule[] = [
   },
 ];
 
-function countDigits(value: string): number {
-  let n = 0;
-  for (const ch of value) {
-    if (ch >= "0" && ch <= "9") n += 1;
-  }
-  return n;
-}
-
 // A whitespace-separated run of numbers is a TABLE, not a phone number. The
 // loose phone pattern treats spaces as grouping separators, so every row of an
 // aligned numeric report (`keryx security eval`'s own output: `12  12  0  0
