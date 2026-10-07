@@ -1,0 +1,92 @@
+[
+  {
+    "id": "logic-F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The truncation-guard test cannot fail: deleting `if (truncated)` passes all 19 sweep tests.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Mutation by the reviewer: deleting `if (truncated)` leaves all 19 sweep tests passing.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#logic-F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fefa7eae (follow-up PR #909, branch fix/pii-ssn-truncation-test): two tests with a real adjacent hash and a 200-char run; mutation fails both"
+    }
+  },
+  {
+    "id": "logic-F-002",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "An abbreviation period ends the label window.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against PR #906 at head 19321fa3.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#logic-F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in bf0ce9dce (follow-up PR #909): no sentence break cut-off, window 64"
+    }
+  },
+  {
+    "id": "logic-F-003",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The labels `S.S.N.`, `Soc. Sec. No.` and `SS#` do not veto suppression.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against PR #906 at head 19321fa3.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#logic-F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in bf0ce9dce (follow-up PR #909): S.S.N., Soc. Sec. No. and SS# now veto"
+    }
+  },
+  {
+    "id": "sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "A crafted or accidental adjacent hex run of 16 or more characters suppresses a genuine SSN, for example `cafebabecafebabe-078-05-1120`.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against PR #906 at head 19321fa3; example input as quoted in `problem`.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#sec-F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in bf0ce9dce (follow-up PR #909): exclusion narrowed to exactly 32/40/64 hex, per operator decision poll 96 (2026-10-05T18:55Z). Residual for a crafted exact-length hash is operator-accepted by that decision; it cannot be removed without dropping the exclusion"
+    }
+  },
+  {
+    "id": "sec-F-002",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label veto is narrow: `SS#`, `NSS`, `СНИЛС` and `Sozialversicherungsnummer` do not veto, nor does a label beyond 32 characters, a label after the value, or a label after a sentence break.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against PR #906 at head 19321fa3.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#sec-F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in bf0ce9dce (follow-up PR #909): label veto widened, per operator decision poll 96 (2026-10-05T18:55Z)"
+    }
+  },
+  {
+    "id": "sec-F-003",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "A run of digits followed by `e` counts as hex evidence.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against PR #906 at head 19321fa3.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#sec-F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "resolved in bf0ce9dce (follow-up PR #909) by the exact-length hex rule"
+    }
+  }
+]

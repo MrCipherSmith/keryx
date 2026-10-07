@@ -1,0 +1,359 @@
+[
+  {
+    "id": "r1-logic-F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The truncation-guard test cannot fail: deleting `if (truncated)` passes all 19 sweep tests.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#logic-F-001 so a post-fix verifier verdict can attach to it. Mutation by the reviewer: deleting `if (truncated)` leaves all 19 sweep tests passing.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r1-logic-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix fefa7eae. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). Mutation in a disposable copy (mut.ts; reviewed worktree untouched): replace the SSN guard's `if (truncated) {` with `if (false) {`. Unmutated sweep file: 44 pass, 0 fail. Mutant: `bun test src/security/detect/pii-identifier-sweep.test.ts` -> 39 pass, 5 fail, so the truncation guard is now pinned by 5 tests (finding claimed 0 fail with all 19 tests green). Positive control: mutating the phone guard's `if (truncated)` instead leaves 44 pass, 0 fail (harness distinguishes the two guards). Behavioural probe group trunc: 200-char run + real md5 + SSN, before and after -> SSN kept (1) in both, short md5-SSN-ok -> suppressed (0); 3/3 as expected.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in fefa7eae (follow-up PR #909, branch fix/pii-ssn-truncation-test): two tests with a real adjacent hash and a 200-char run; mutation fails both"
+    }
+  },
+  {
+    "id": "r1-sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "A crafted or accidental adjacent hex run of 16 or more characters suppresses a genuine SSN, for example `cafebabecafebabe-078-05-1120`.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#sec-F-001 so a post-fix verifier verdict can attach to it. Reported by review-security-code against PR #906 at head 19321fa3; example input as quoted in `problem`.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r1-sec-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix bf0ce9dce. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group r1sec1 at head: `cafebabecafebabe-SSN` (16 hex) -> 1 finding (kept); 16-hex in a sentence, 24-hex, 31-hex, 33-hex prefix -> all 1; `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). Positive control that the probe distinguishes: the same group run on the original reviewed commit 19321fa3 diverges on 5 of 6 (all five non-exact-length inputs suppress the SSN, 0 findings), so the defect did reproduce there. Residual noted, not claimed here: an exact 32-hex crafted prefix still suppresses (control row, 0 findings), which the fix disposition records as operator-accepted (poll 96).",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in bf0ce9dce (follow-up PR #909): exclusion narrowed to exactly 32/40/64 hex, per operator decision poll 96 (2026-10-05T18:55Z). Residual for a crafted exact-length hash is operator-accepted by that decision; it cannot be removed without dropping the exclusion"
+    }
+  },
+  {
+    "id": "r1-sec-F-002",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label veto is narrow: `SS#`, `NSS`, `СНИЛС` and `Sozialversicherungsnummer` do not veto, nor does a label beyond 32 characters, a label after the value, or a label after a sentence break.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-906#sec-F-002 so a post-fix verifier verdict can attach to it. Reported by review-security-code against PR #906 at head 19321fa3.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r1-sec-F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix bf0ce9dce. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group r1sec2 at head, each as `<label> md5-SSN`: SS#, NSS, СНИЛС, Sozialversicherungsnummer -> 1 finding each (veto); label 40 chars before the token -> 1; label after the value -> 1; label after a sentence break before (`SSN. md5-SSN`) -> 1 and after (`md5-SSN. The SSN follows`) -> 1; control `note md5-SSN end` -> 0. 9/9 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). On original commit 19321fa3 the same group diverges on 6 of 9 (defect reproduced there).",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in bf0ce9dce (follow-up PR #909): label veto widened, per operator decision poll 96 (2026-10-05T18:55Z)"
+    }
+  },
+  {
+    "id": "r2-logic-F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Label gaps: `SS #`, `S S N`, `SS number`, `SS no`, `SS-Nr`, `Sozialversicherung`, `Sozialversicherungsnr.`, `SV-Nummer`, `Versicherungsnummer`, `N.S.S.`, `Soc.Sec.#` and fullwidth forms do not veto suppression.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-001 so a post-fix verifier verdict can attach to it. Reported by review-logic against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r2-logic-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 3aa5b61c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group r2l1 at head, each `<label> md5-SSN`: `SS #`, `S S N`, `SS number`, `SS no`, `SS-Nr`, `Sozialversicherung`, `Sozialversicherungsnr.`, `SV-Nummer`, `Versicherungsnummer`, `N.S.S.`, `Soc.Sec.#`, `Soc Sec`, and four fullwidth forms -> every one yields 1 finding (veto); control `class md5-SSN` -> 0. 17/17 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). On bf0ce9dce (the commit the finding was raised against) the same group diverges on 16 of 17, so the gap reproduced there.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): label gaps closed"
+    }
+  },
+  {
+    "id": "r2-logic-F-002",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A label that straddles the 64-character window edge does not veto.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-002 so a post-fix verifier verdict can attach to it. Reported by review-logic against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r2-logic-F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 3aa5b61c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe groups win+strad at head: label starting inside the 64-char window but ending beyond it (`md5-SSN` + 60/62/64 spaces + `Sozialversicherungsnummer`, + `numero de secu`, + `Soc.Sec.#`) -> 1 finding each (veto); label starting 64 before the token -> 1; control: label starting 65 after the token -> 0 (window still bounded). Window sweep lookbehind/lookahead/' s s n' 18/18 as expected, strad 8/8, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). On bf0ce9dce the strad group diverges on 6 of 8 and win on 7 of 18, so the straddle defect reproduced there. (At 3aa5b61c strad still diverges on 3 of 8 -- the after-side 64 vs 63 asymmetry later fixed in 6f6d889, see r4-logic-F-002.)",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): label straddling the 64-char window edge now vetoes"
+    }
+  },
+  {
+    "id": "r2-logic-F-005",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Test gaps: two mutants survived, a scan limit changed from 192 to 100 and `s\\.\\s*s\\.\\s*n` changed to `s\\.s\\.n`.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-005 so a post-fix verifier verdict can attach to it. Mutation by the reviewer: both mutants left the tests passing. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`, the same class as the survived-mutant finding in round A.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r2-logic-F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 3aa5b61c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). Mutants run in disposable copies (mut.ts). Mutant 1, scan limit 192 -> 100: at head `bun test src/security/detect/pii-identifier-sweep.test.ts` -> 41 pass, 3 fail (killed); at 3aa5b61c snapshot (unmutated 31 pass, 0 fail) -> 30 pass, 1 fail (killed). Mutant 2: the literal `s\\.\\s*s\\.\\s*n` no longer exists in pii.ts at 3aa5b61c or head (label regex rewritten around LABEL_SEP), so the literal mutant cannot be applied; its equivalents are killed: at 3aa5b61c LABEL_SEP {0,8}->{0,0} -> 28 pass, 3 fail, dropping the dot from the separator class -> 28 pass, 3 fail; at head LABEL_SEP {0,12} -> {0,0} -> 35 pass, 9 fail, ->{0,1} -> 37 pass, 7 fail, ->{0,11} and {0,13} -> 43 pass, 1 fail each. Positive control: unmutated head 44 pass, 0 fail, and the identity mutant 192 -> 192 stays 44 pass, 0 fail.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): tests added so both surviving mutants (scan limit 192 to 100; s\\\\\\\\.\\\\\\\\s*s\\\\\\\\.\\\\\\\\s*n to s\\\\\\\\.s\\\\\\\\.n) are caught"
+    }
+  },
+  {
+    "id": "r2-sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label veto is cheap to defeat: zero-width and soft-hyphen characters, fullwidth forms, `S-S-N` and `numéro de sécu` all get past it.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#sec-F-001 so a post-fix verifier verdict can attach to it. Reported by review-security-code against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r2-sec-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 3aa5b61c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group inv at head, each `<label> md5-SSN`: zero-width U+200B between letters of ssn, soft hyphen U+00AD, fullwidth ＳＳＮ, `S-S-N`, `numéro de sécu` -> 1 finding each (veto); controls with invisible/control characters but no label (`xyz<LRM> md5-SSN`, `abc<NUL>def md5-SSN`) -> 0, so the veto is not blanket. 13/13 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). On bf0ce9dce the inv group diverges on 11 of 13 (defect reproduced there).",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): zero-width and soft-hyphen characters, fullwidth forms, S-S-N and numéro de sécu now veto"
+    }
+  },
+  {
+    "id": "r3-logic-R3-1",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The label fold iterates UTF-16 code units, so astral characters (a math-bold `ssn`) and wider invisible characters (LRM/RLM, U+202A to U+202E, U+2062, U+180E, U+3164, tag characters) defeat the label.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#logic-R3-1 so a post-fix verifier verdict can attach to it. Reported by review-logic against 3aa5b61c.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r3-logic-R3-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 37d19f1c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group cp at head: math-bold `ssn` built from U+1D42C U+1D42C U+1D427, math-sans-bold variant, and for each of LRM U+200E, RLM U+200F, U+202A..U+202E, U+2062, U+180E, U+3164, tag U+E0020, tag U+E007F both `s<c>s<c>n` and `soc<c>ial` before md5-SSN -> 1 finding each (veto); control with astral non-label letters -> 0. 27/27 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). Defect reproduced earlier: on 3aa5b61c (the commit this finding was reported against) group cp diverges on 26 of 27 (only the control passes); on f6068a19 (post 37d19f1c) it is 0 of 27.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 37d19f1c (PR #909): code-point fold, Default_Ignorable_Code_Point plus Cf plus M stripped, up to 12 separators, small confusable table; verified by tests and mutation (sweep file 39 tests, bun test src/security/detect 239 pass); NOT re-reviewed by a fourth round"
+    }
+  },
+  {
+    "id": "r3-sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label fold iterates UTF-16 code units, so astral characters (a math-bold `ssn`) and wider invisible characters (LRM/RLM, U+202A to U+202E, U+2062, U+180E, U+3164, tag characters) defeat the label. Same defect as logic-R3-1, raised independently.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-001 so a post-fix verifier verdict can attach to it. Reported by review-security-code against 3aa5b61c.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r3-sec-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 37d19f1c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group cp at head: math-bold `ssn` built from U+1D42C U+1D42C U+1D427, math-sans-bold variant, and for each of LRM U+200E, RLM U+200F, U+202A..U+202E, U+2062, U+180E, U+3164, tag U+E0020, tag U+E007F both `s<c>s<c>n` and `soc<c>ial` before md5-SSN -> 1 finding each (veto); control with astral non-label letters -> 0. 27/27 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). Defect reproduced earlier: on 3aa5b61c (the commit this finding was reported against) group cp diverges on 26 of 27 (only the control passes); on f6068a19 (post 37d19f1c) it is 0 of 27.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 37d19f1c (PR #909): code-point fold, Default_Ignorable_Code_Point plus Cf plus M stripped, up to 12 separators, small confusable table; verified by tests and mutation (sweep file 39 tests, bun test src/security/detect 239 pass); NOT re-reviewed by a fourth round"
+    }
+  },
+  {
+    "id": "r3-sec-F-002",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label can be defeated with `S/S/N`, `S:S:N`, long separator runs, and Cyrillic and Greek lookalike letters.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-002 so a post-fix verifier verdict can attach to it. Reported by review-security-code against 3aa5b61c. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`, the same class as sec-F-001 of this round.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r3-sec-F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Fix 37d19f1c. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group sep at head: the named shapes are fixed -- `S/S/N`, `S:S:N`, Cyrillic `ѕѕn`, `sоciаl` (Cyrillic о, а), Greek `σσν`, mixed `ѕsn`, and separator runs of 1, 2, 5 and 12 characters (`s...s...n`, `soc////ial`) all veto (1 finding). But long separator runs are STILL a bypass beyond the 12-character bound (LABEL_SEP `{0,12}`): `s`+13 dots+`s`+13 dots+`n md5-SSN` and the 20-dot form -> 0 findings (SSN suppressed), as does `soc`+13 slashes+`ial`. Probe expectations encoded that bound and matched (136 cases, 0 diverging), which is how the residual is visible rather than a surprise. So the finding's literal claim \"long separator runs defeat the label\" still reproduces above 12 separators; on 3aa5b61c group sep diverged on 9 of 16 including the 12-dot run. Cyrillic `ѕѕн` (н renders as H, not a lookalike of n) is suppressed by design and is listed only as INFO. Note: bound is deliberate (fix disposition: up to 12 separators); confirmed here as a measured residual, not a regression.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: operator, poll 99 (2026-10-05T22:28Z): the 12-separator bound is deliberate; recorded as an accepted residual"
+    }
+  },
+  {
+    "id": "r3-sec-F-003",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Performance: the fold cost grew 10 to 20 times per candidate; the worst case is about 2 s at 160k characters, and it is linear.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-003 so a post-fix verifier verdict can attach to it. Reported by review-security-code against 3aa5b61c. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r3-sec-F-003",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "execution",
+      "evidence": "Fix 37d19f1c (reduced). checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). Measured with perf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calling detectPii on identifier-fringed SSN candidates with non-ASCII neighbours (11 input shapes; best of 3). Relative growth reproduced: unit A (`x-SSN é ` repeated) at 160k chars: bf0ce9dce 13 ms -> 3aa5b61c 154 ms (about 10x, matching the finding's 10-20x) -> head 79 ms; linear at head (80k 32 ms, 160k 79 ms, 320k 156 ms). Heaviest shape (14 chained candidates per token, unit H) at 160k: bf0ce9dce 55 ms, 3aa5b61c 321 ms, head 207 ms (320k 413 ms, linear). The absolute figures in the finding could NOT be reproduced: the worst case I could build on 3aa5b61c was about 350 ms at 160k, not about 2 s, so no input of mine shows the claimed 2 s before the fix, and the claimed 292 ms after cannot be compared like for like. What was measured: head is 1.5x to 2x faster than 3aa5b61c, linear, with a worst case near 0.2 s per 160k chars; still about 4x to 6x above the pre-fold baseline (bf0ce9dce). Verdict unverifiable because the check could not distinguish the reported 2 s case from head.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in PR 912 (b6574aa8, linear email and name rules) and PR 913 (34226226, linear phone rule), both merged to main with green CI; scaling tests: pii-phone-linear-time.test.ts and the PR 912 tests; 160k characters before -> after: 123-45-6789- repeated 5276 ms -> 69 ms, 's.' repeated 7145 ms -> 2 ms, 'user' plus 160k spaces about 14 s -> 1 ms (PR 912); '-1.' repeated 5080 ms -> 5 ms (PR 913)"
+    }
+  },
+  {
+    "id": "r4-logic-F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The 192-character scan limit is applied to each side of the SSN separately, so a token of up to about 380 characters (150 characters either side of a 32/40/64-hex hash) is still suppressed although the rule says a token over 192 characters never suppresses (pii.ts isSsnIdentifierFragment).",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against f6068a19.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r4-logic-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 6f6d8898456b95aa48819daecf7efa6b32ee9696. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group bud at head: token of about 380 chars (116 z + `-md5-SSN-` + 149 z) -> 1 finding (kept); surround total 193 (`md5-SSN-` + 159 z) -> 1; surround total 192 (+158 z) -> 0 (suppressed, boundary); 100 z before md5 -> 0; control md5-SSN -> 0. 5/5 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). Defect reproduced on f6068a19 (the commit reported against): group bud diverges on 2 of 5 (the 380-char token and the 193 case were suppressed, 0 findings). Mutation (disposable copy): removing the total-budget term `tokenEnd - tokenStart - (matchEnd - matchStart) > SSN_TOKEN_SCAN_LIMIT` -> 43 pass, 1 fail.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f6d8898456b95aa48819daecf7efa6b32ee9696 (PR #911, merge of 6ab3b73b): per-side plus total 192 budget with the match length excluded"
+    }
+  },
+  {
+    "id": "r4-logic-F-002",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The label veto window is asymmetric: a label whose start is 64 characters before the token vetoes, a label 64 characters after it does not (lookbehind start offset <=64, lookahead <=63).",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against f6068a19.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r4-logic-F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 6f6d8898456b95aa48819daecf7efa6b32ee9696. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group win at head: lookbehind `ssn`+N spaces before md5-SSN, label start distance 3+N: N=58..63 -> kept (1) while distance <=64, suppressed (0) at 65; lookahead `md5-SSN`+k spaces+`ssn`, k=62..66 -> kept for k<=64, suppressed at 65; ' s s n'+N spaces 56..62 likewise. 18/18 as expected, so start offsets 64 before and 64 after both veto and 65 on either side does not (symmetric inclusive). Defect reproduced on f6068a19: group win diverges on 1 of 18 (label 64 characters after the token did not veto, 0 findings). `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot).",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f6d8898456b95aa48819daecf7efa6b32ee9696 (PR #911, merge of 6ab3b73b): symmetric inclusive 64-character window"
+    }
+  },
+  {
+    "id": "r4-logic-F-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The test 'a truncated token never buys suppression' cannot fail on truncation: its input has no 32/40/64-hex hash adjacent to the SSN, so it yields the SSN with or without the truncated branch.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against f6068a19.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r4-logic-F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 6f6d8898456b95aa48819daecf7efa6b32ee9696. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). Targeted mutation in a disposable copy, named test only: `TFILTER=\"a truncated token never buys suppression\" bun mut.ts <dir> trunc` replacing the SSN guard's `if (truncated) {` with `if (false) {`. On f6068a19 (reported commit): unmutated 1 pass, 0 fail; mutant 1 pass, 0 fail -- the test cannot fail on truncation (defect reproduced). On head: unmutated 1 pass, 0 fail; mutant 0 pass, 1 fail -- the rebuilt test (a 30x `a1b2c3d4-` run plus md5 plus SSN) is now killed by the removal. Positive control: the phone-guard mutant leaves it 1 pass, 0 fail at both commits. Whole file at head with the same mutant: 39 pass, 5 fail.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f6d8898456b95aa48819daecf7efa6b32ee9696 (PR #911, merge of 6ab3b73b): test rebuilt around a real adjacent hash so removing the truncation branch fails it"
+    }
+  },
+  {
+    "id": "r4-logic-F-004",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "No test pins the exact 192/193 boundary of the token scan limit: the suite stays green for every SSN_TOKEN_SCAN_LIMIT from 186 to 233.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against f6068a19.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r4-logic-F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 6f6d8898456b95aa48819daecf7efa6b32ee9696. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). Mutation sweep in disposable copies (mut.ts limit): each of SSN_TOKEN_SCAN_LIMIT = 100 and 186..233 run through `bun test src/security/detect/pii-identifier-sweep.test.ts`. At f6068a19 (reported commit) unmutated 39 pass, 0 fail and 48 of the 49 mutants stay green (186..233 all survive, only 100 is killed) -- defect reproduced. At head unmutated 44 pass, 0 fail and only the identity value 192 survives: 100 -> 41 pass, 3 fail; every other value in 186..233 -> 43 pass, 1 fail (48 of 49 killed, the survivor is the unmutated constant itself). The 192/193 boundary test (\"scan limit boundary: 192 characters beside the SSN still suppress, 193 are redacted\") is present at head, and probe group bud shows the same boundary behaviourally (192 -> 0 findings, 193 -> 1).",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f6d8898456b95aa48819daecf7efa6b32ee9696 (PR #911, merge of 6ab3b73b): boundary tests at 192 and 193 added"
+    }
+  },
+  {
+    "id": "r4-logic-F-005",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The label region slice starts at tokenStart-64, which drops the character before the label, so a label preceded by a letter can match at the window edge (`xs s n` + 59 spaces vetoes, 58 spaces does not).",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against f6068a19. Severity info.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r4-logic-F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 6f6d8898456b95aa48819daecf7efa6b32ee9696. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group lb at head: `xs s n` + N spaces + md5-SSN for N=50,56,57,58,59,60,64 -> 0 findings every time (label preceded by a letter never vetoes, at or off the window edge); control ` s s n` + 58 spaces + md5-SSN -> 1 finding (a properly preceded label still vetoes). 8/8 as expected, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). Defect reproduced on f6068a19: `xs s n` + 59 spaces vetoed there (1 finding where 0 expected; group lb diverges 1 of 8). Test at head: \"a label at the window edge keeps its preceding character for the word-start check\" is inside the 44-pass run.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f6d8898456b95aa48819daecf7efa6b32ee9696 (PR #911, merge of 6ab3b73b): region cut one character earlier"
+    }
+  },
+  {
+    "id": "r4-sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Control characters (so\\x00cial, soc\\x01ial) and the dotless i (soc\\u0131al) defeat the label fold, so these spellings of a label do not veto suppression (pii.ts label fold, LABEL_STRIP and LABEL_CONFUSABLES).",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against f6068a19.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r4-sec-F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fix 6f6d8898456b95aa48819daecf7efa6b32ee9696. checked at 6f6d8898456b95aa48819daecf7efa6b32ee9696 (worktree /home/altsay/keryx-f410 HEAD dab2eb2e; `git diff --stat 6f6d8898456b95aa48819daecf7efa6b32ee9696 HEAD -- src/security/detect` printed nothing, so src/security/detect is byte-identical). probe-pf.ts (scratch /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf) calls detectPii from a snapshot of pii.ts and counts pii.ssn findings; SSN used is a validator-valid value; controls in the same run: unlabelled md5/sha1/sha256+SSN -> 0 findings (suppressed), labelled `ssn: md5-SSN` -> 1, bare SSN -> 1; all 6 controls pass at every commit tried. Probe group inv at head, each `<label> md5-SSN`: `so\\x00cial`, `soc\\x01ial`, `soc\\x7fial`, dotless i `soc\\u0131al` -> 1 finding each (veto); `sozial\\x00versicherung` -> 1; controls with a control character and no label -> 0. Group sep: `soc/ial` and `soc////////////ial` (12) -> 1 (separator-tolerant social). 29/29 as expected across inv+sep, `bun probe-pf.ts /tmp/claude-1000/-home-altsay-keryx/ec4800fc-72ac-47ae-92ef-6d6d4ab0c4fb/scratchpad/pf/head` -> cases=136 diverging=0 (same on the 6f6d8898456b95aa48819daecf7efa6b32ee9696 snapshot). Defect reproduced on f6068a19: group inv diverges on 5 of 13 and group sep on 2 of 16 (the two soc/ial forms). `bun test src/security/detect/pii-identifier-sweep.test.ts` at head -> 44 pass, 0 fail, 804 expect() calls.",
+      "verifier": "review-verifier-postfix"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6f6d8898456b95aa48819daecf7efa6b32ee9696 (PR #911, merge of 6ab3b73b): \\\\p{Cc} added to LABEL_STRIP, dotless i added to the confusables, ASCII fast path reordered, separator-tolerant social / sozialversicherung / numero de secu"
+    }
+  }
+]

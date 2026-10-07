@@ -19,7 +19,10 @@ The guard suppresses an SSN-shaped match only next to an adjacent hex token of e
 
 ## Out of Scope
 
-- The SSN `\b` boundary (SSN glued to a letter, underscore or fullwidth digits) and the quadratic time on very long inputs: pre-existing, moved to flow 409 as items.
-- The unanchored `nss` and `social` over-match (false redaction only): left open for the operator.
+- The SSN `\b` boundary (SSN glued to a letter, underscore or fullwidth digits): pre-existing, moved to flow 409 as items.
+- The unanchored `nss` and `social` over-match (false redaction only): accepted residual by operator decision, poll 99 (2026-10-05T22:28Z).
+- Separators longer than 12 between the letters of a label still defeat the label: accepted residual by operator decision, poll 99; the 12-separator bound is deliberate.
+
+Update, poll 99 (2026-10-05T22:28Z): the quadratic time of `detectPii` on very long inputs is now IN scope of this flow by operator decision (it is fixed here, not moved to flow 409). Acceptance criterion 7 predates this and reads slightly stale; changing it is the operator's call.
 - The phone rule.
 - TUI surfaces: the detector has no operator-visible setting, so the standing TUI rule has nothing to attach to here.

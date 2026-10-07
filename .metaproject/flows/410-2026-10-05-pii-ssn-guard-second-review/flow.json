@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -9,27 +9,60 @@
   "id": "410",
   "slug": "pii-ssn-guard-second-review",
   "title": "PII: second review of the ssn identifier guard (rounds, fixes and verifier)",
-  "status": "initializing",
+  "status": "implemented",
   "createdAt": "2026-10-05T19:27:49.847Z",
-  "updatedAt": "2026-10-05T19:27:49.847Z",
+  "updatedAt": "2026-10-07T04:59:05.164Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-07T04:59:03.673Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). PR 909 merged with a merge commit, CI green; pii-identifier-sweep tests pass on main."
+    },
+    "AC2": {
+      "at": "2026-10-07T04:59:03.887Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). Rewritten to the shipped behaviour (poll 118). pii-identifier-sweep.test.ts: 46 pass, 0 fail at 05ce8851, including 'hex runs of any length beside the SSN, 32 included, are reported', 'md5 (32), sha1 (40) and sha256 (64) neighbours are all reported, on either side', 'a 16-hex neighbour no longer suppresses'."
+    },
+    "AC3": {
+      "at": "2026-10-07T04:59:04.089Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). Rewritten (poll 118). Tests: 'the three hash-adjacent shapes are reported, with and without a label', label forms (accented, astral, invisible, Cyrillic/Greek lookalikes), 63/64/65-character windows: all pass at 05ce8851."
+    },
+    "AC4": {
+      "at": "2026-10-07T04:59:04.301Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). Rewritten (poll 118). Tests 'scan limit boundary: 192 and 193 characters beside the SSN are both reported' and 'a hash and a long token before/after the SSN do not hide it' pass at 05ce8851."
+    },
+    "AC5": {
+      "at": "2026-10-07T04:59:04.514Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). Linear-time scaling tests (PR 912, 913) pass; round-6 verifier: 0 baseline spans lost over 120,000 inputs at 05ce8851."
+    },
+    "AC6": {
+      "at": "2026-10-07T04:59:04.740Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). Rounds 906, 909, r02, r03, round 5 and round 6 (plus its carry-forward) are in the package, every finding has a terminal disposition; the head-commit condition was lifted by the operator's own decision (polls 108-112)."
+    },
+    "AC7": {
+      "at": "2026-10-07T04:59:04.948Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). Confirmed earlier in poll 97; the items are in the description of flow 409."
+    },
+    "AC8": {
+      "at": "2026-10-07T04:59:05.164Z",
+      "note": "operator confirmed in polls 117 and 118 (2026-10-07). logic-R3-2 accepted as residual by the operator (poll 99); flow 261 journal marks its four earlier rounds as reconstructed."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/909"
   },
   "owner": {
     "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "origin": {
     "kind": "human-request",
     "quote": "Тогда сделай строже",
-    "source": "helyx message 186203, 2026-10-05"
+    "source": "helyx 186203"
   },
   "tasks": [
     {
@@ -37,34 +70,374 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 909 merged (5d77115c): fixes and tests for the three review rounds"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 909 merged (5d77115c): fixes and tests for the three review rounds"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 909 merged (5d77115c): fixes and tests for the three review rounds"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-10-05T19:27:49.847Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-05T21:33:59.532Z",
+      "event": "owner-changed",
+      "detail": "MrCipherSmith -> MrCipherSmith (Operator-confirmed owner for keryx flows)"
+    },
+    {
+      "at": "2026-10-05T21:33:59.927Z",
+      "event": "origin-set",
+      "detail": "human-request; quote: \"Тогда сделай строже\"; source: helyx message 186203, 2026-10-05 -> human-request; quote: \"Тогда сделай строже\"; source: helyx 186203 (Operator asked for a stricter second review)"
+    },
+    {
+      "at": "2026-10-05T21:34:00.359Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-05T21:34:00.777Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-05T21:35:08.589Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-05T21:35:09.151Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-05T21:35:09.761Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-05T21:35:12.926Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/909 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-05T22:08:06.128Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-06T05:57:20.122Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"The phone rule is unchanged: the diff of `src/security/detect/pii.ts` against 7b93fc97 touches no phone code, and a differential on phone inputs matches.\" -> \"`detectPii` runs in time linear in input length for every rule, the phone rule included: scaling tests on very long inputs for the email, name and phone shapes fail when their fix is reverted, and a differential on phone, email and name inputs matches the pre-change rules span for span (PR #912 and the phone fix are merged).\" (Operator decision, poll 101 (2026-10-06T05:56Z): change AC5 and fix the quadratic phone rule inside flow 410 instead of leaving it as a residual.)"
+    },
+    {
+      "at": "2026-10-07T04:53:40.887Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: operator confirmed in poll 117 (2026-10-07). PR 909 merged with a merge commit, CI green; pii-identifier-sweep tests pass on main. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:53:41.361Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: operator confirmed in poll 117. Linear-time scaling tests (PR 912, 913) pass; round-6 verifier: 0 baseline spans lost over 120,000 inputs at 05ce8851. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:53:41.830Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: operator confirmed in poll 117. Rounds 906, 909, r02, r03, round 5 and round 6 (PR 916 head, verified at 05ce8851) are in the package, every finding has a terminal disposition; the head-commit condition was lifted by the operator's own decision (polls 108-112). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:53:42.305Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: operator confirmed in polls 97 and 117; the items are in the description of flow 409. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:53:42.829Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: operator confirmed in polls 99 and 117: logic-R3-2 accepted as residual by the operator; flow 261 journal marks its four earlier rounds as reconstructed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:58:51.992Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"`detectPii` redacts a genuine SSN next to a hex run of 16-31 or 33+ characters (for example `cafebabecafebabe-078-05-1120`), and leaves it alone only next to an adjacent hex token of exactly 32, 40 or 64 characters with no label; named tests cover md5, sha1, sha256, before and after the value, and lengths 31 and 33.\" -> \"detectPii redacts a genuine SSN next to a hex token of any length, including an adjacent md5 (32), sha1 (40) and sha256 (64) hash, before and after the value, and next to hex runs of 16, 31 and 33 characters (for example `cafebabecafebabe-[REDACTED:ssn]`); named tests in src/security/detect/pii-identifier-sweep.test.ts cover each.\" (PR 916 and PR 918 removed the SSN identifier guard; the operator chose to rewrite the criterion to the shipped behaviour (poll 118, 2026-10-07))"
+    },
+    {
+      "at": "2026-10-07T04:58:52.190Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"A label (`ssn`, `social`, `SS#`, `NSS`, `СНИЛС`, `Sozialversicherungsnummer`, `S.S.N.`, `Soc. Sec. No.`, `social security number` and their spaced, separated, zero-width, astral, accented, fullwidth and Cyrillic/Greek lookalike forms) starting within 64 characters either side of the value vetoes the suppression, and one starting at 65 does not; each rule has a test that fails when the rule is reverted (mutation results are kept in the review package).\" -> \"A label (`ssn`, `social`, `SS#`, `NSS`, `СНИЛС`, `Sozialversicherungsnummer`, `S.S.N.`, `Soc. Sec. No.`, `social security number` and their spaced, zero-width, accented, fullwidth and lookalike forms) near the value does not change the result: the SSN is redacted with or without a label, at any distance, and a test covers a label next to an adjacent hash.\" (PR 916 and PR 918 removed the SSN identifier guard; the operator chose to rewrite the criterion to the shipped behaviour (poll 118, 2026-10-07))"
+    },
+    {
+      "at": "2026-10-07T04:58:52.394Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"A token longer than 192 characters never suppresses, proven by tests with a real adjacent hash that fail when the guard is removed.\" -> \"A token longer than 192 characters next to an SSN does not suppress it: the SSN is redacted, proven by a test with a real adjacent hash and a long token.\" (PR 916 and PR 918 removed the SSN identifier guard; the operator chose to rewrite the criterion to the shipped behaviour (poll 118, 2026-10-07))"
+    },
+    {
+      "at": "2026-10-07T04:59:03.673Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: operator confirmed in polls 117 and 118 (2026-10-07). PR 909 merged with a merge commit, CI green; pii-identifier-sweep tests pass on main. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:03.887Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: operator confirmed in polls 117 and 118 (2026-10-07). Rewritten to the shipped behaviour (poll 118). pii-identifier-sweep.test.ts: 46 pass, 0 fail at 05ce8851, including 'hex runs of any length beside the SSN, 32 included, are reported', 'md5 (32), sha1 (40) and sha256 (64) neighbours are all reported, on either side', 'a 16-hex neighbour no longer suppresses'. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:04.090Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: operator confirmed in polls 117 and 118 (2026-10-07). Rewritten (poll 118). Tests: 'the three hash-adjacent shapes are reported, with and without a label', label forms (accented, astral, invisible, Cyrillic/Greek lookalikes), 63/64/65-character windows: all pass at 05ce8851. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:04.301Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: operator confirmed in polls 117 and 118 (2026-10-07). Rewritten (poll 118). Tests 'scan limit boundary: 192 and 193 characters beside the SSN are both reported' and 'a hash and a long token before/after the SSN do not hide it' pass at 05ce8851. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:04.514Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: operator confirmed in polls 117 and 118 (2026-10-07). Linear-time scaling tests (PR 912, 913) pass; round-6 verifier: 0 baseline spans lost over 120,000 inputs at 05ce8851. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:04.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: operator confirmed in polls 117 and 118 (2026-10-07). Rounds 906, 909, r02, r03, round 5 and round 6 (plus its carry-forward) are in the package, every finding has a terminal disposition; the head-commit condition was lifted by the operator's own decision (polls 108-112). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:04.948Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: operator confirmed in polls 117 and 118 (2026-10-07). Confirmed earlier in poll 97; the items are in the description of flow 409. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T04:59:05.164Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: operator confirmed in polls 117 and 118 (2026-10-07). logic-R3-2 accepted as residual by the operator (poll 99); flow 261 journal marks its four earlier rounds as reconstructed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    }
+  },
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-07T04:53:40.886Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:c795ea71cb872c8f211c772a29cad333d9b9245d03e20205bcf54f81a50b5da0"
+    },
+    {
+      "at": "2026-10-07T04:53:41.360Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:c795ea71cb872c8f211c772a29cad333d9b9245d03e20205bcf54f81a50b5da0"
+    },
+    {
+      "at": "2026-10-07T04:53:41.829Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:c795ea71cb872c8f211c772a29cad333d9b9245d03e20205bcf54f81a50b5da0"
+    },
+    {
+      "at": "2026-10-07T04:53:42.304Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:c795ea71cb872c8f211c772a29cad333d9b9245d03e20205bcf54f81a50b5da0"
+    },
+    {
+      "at": "2026-10-07T04:53:42.829Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:c795ea71cb872c8f211c772a29cad333d9b9245d03e20205bcf54f81a50b5da0"
+    },
+    {
+      "at": "2026-10-07T04:59:03.673Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:03.887Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:04.089Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:04.301Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:04.514Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:04.740Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:04.948Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-07T04:59:05.164Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
     }
   ]
 }
