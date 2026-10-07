@@ -39,7 +39,7 @@ describe("ci-triage (AC10)", () => {
     const card = await seedCard(env.root, { kind: "ci" });
     const fakes = makeFakes();
     fakes.ci.result = { ok: true, output: `token ${SECRET}\n${"line of log\n".repeat(2000)}` };
-    const result = await decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(result.detail).toBeDefined();
     expect(result.detail).not.toContain(SECRET);
     expect(result.detail!.length).toBeLessThanOrEqual(3000);
@@ -65,19 +65,19 @@ describe("ci-triage (AC10)", () => {
     const fakes = makeFakes();
     fakes.ci.result = { ok: false, reason: "ci-triage timed out" };
     const hub = new FakePressHub();
-    const handler = createIntakePressHandler({ hub, roots: () => [env.root], actionDeps: fakes.deps });
+    const handler = createIntakePressHandler({ hub, roots: () => [env.root], now: () => local(10, 42), actionDeps: fakes.deps });
     const reply = await handler(pressFor(card, "ci-triage"));
     expect(reply?.text).toContain("не вышло");
     expect(hub.sends).toEqual([]);
     expect(await readIntakeCardView(env.root, card.id)).toMatchObject({ state: "failed", reason: "ci-triage timed out" });
     fakes.ci.result = { ok: true, output: "retry worked" };
-    expect((await decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "1", deps: fakes.deps })).ok).toBe(true);
+    expect((await decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "1", now: local(10, 42), deps: fakes.deps })).ok).toBe(true);
   });
 
   test("«Игнорировать» does not run the triage", async () => {
     const card = await seedCard(env.root, { kind: "ci" });
     const fakes = makeFakes();
-    await decideIntakeCard(env.root, card.id, "ignore", { decidedBy: "1", deps: fakes.deps });
+    await decideIntakeCard(env.root, card.id, "ignore", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(fakes.ci.calls).toEqual([]);
   });
 });

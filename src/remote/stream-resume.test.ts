@@ -150,8 +150,13 @@ describe("one stream per session", () => {
     await settle();
     expect(b.frames.some((frame) => frame.event === "inbound")).toBe(false);
     expect(a.ended() || b.ended()).toBe(false);
-    a.close();
-    b.close();
+    // Stop with both sockets open: closing frames must reach both sessions.
+    await serve.stop();
+    await until(() => a.ended() && b.ended(), "both independent streams to end");
+    for (const stream of [a, b]) {
+      const kinds = stream.frames.filter((frame) => frame.event === "status").map((frame) => (JSON.parse(frame.data) as { kind: string }).kind);
+      expect(kinds).toEqual(["ready", "closing"]);
+    }
   });
 });
 
