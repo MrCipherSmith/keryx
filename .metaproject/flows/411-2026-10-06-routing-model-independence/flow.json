@@ -12,7 +12,7 @@
   "title": "Correct task routing: JEV fallback and assignments survive /model",
   "status": "in-progress",
   "createdAt": "2026-10-06T06:04:33.880Z",
-  "updatedAt": "2026-10-07T16:41:06.757Z",
+  "updatedAt": "2026-10-07T18:54:43.758Z",
   "source": {
     "type": "description",
     "ref": null
@@ -20,8 +20,8 @@
   "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9",
   "acConfirmed": {
     "AC9": {
-      "at": "2026-10-07T10:19:25.305Z",
-      "note": "Automated verification, not operator acceptance: exact SHA 290591c7b553cc9a2804a47eee288694cfbc166c. CI run 37603970321 and literal full gate run 37603964584 SUCCESS; bun run check includes lint, typecheck, typecheck:scripts and bun test: 29907 pass,48 skip,0 fail,187932 assertions,1540 files,995.92s,exit0/log_exit0. Bun1.3.14 Node22 Ubuntu. Related fake fetch/provider regression evidence (319 tests/1381 assertions and 6/6 PTY) and replaced pinning contract recorded in journal; current bun run keryx health run --changed --source eslint,typescript PASS. CI run URLs recorded in T3; optional live-provider validation is not claimed. AC11 stays unconfirmed."
+      "at": "2026-10-07T18:51:10.471Z",
+      "note": "Verified exact SHA 212f55f14707bf30498939d47084ebcd6c72d126 PR917: CI + Full check diagnostic completed SUCCESS; literal bun run check29920pass48skip0fail exit0/log_exit0, core20930pass13skip0fail and runtime6001pass38skip0fail. Health changed eslint/typescript PASS97 zero findings. Evidence .metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/{runs.json,core-jobs.json,full-jobs.json,core-summary.txt,full-summary.txt,health.log}. AC11 not confirmed; no merge/release."
     }
   },
   "pr": {
@@ -135,7 +135,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 8,
@@ -184,7 +184,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -328,6 +329,21 @@
       "at": "2026-10-07T16:41:06.757Z",
       "event": "task-attempt",
       "detail": "T4: blocked (attempt 8) — Independent scoped gate-fix review sub:cafe6898 PASS; no semantic security/navigation blocker. Static only; synthetic idle test not native scheduler proof. Whole-PR readiness pending published SHA CI/Full check. Evidence review/gate-fixes/review.md. AC11 OPEN; no merge/release."
+    },
+    {
+      "at": "2026-10-07T18:51:09.838Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-07T18:51:10.471Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Verified exact SHA 212f55f14707bf30498939d47084ebcd6c72d126 PR917: CI + Full check diagnostic completed SUCCESS; literal bun run check29920pass48skip0fail exit0/log_exit0, core20930pass13skip0fail and runtime6001pass38skip0fail. Health changed eslint/typescript PASS97 zero findings. Evidence .metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/{runs.json,core-jobs.json,full-jobs.json,core-summary.txt,full-summary.txt,health.log}. AC11 not confirmed; no merge/release. (signed: Keryx agent (openai-codex/gpt-6.1-sol) [stated])"
+    },
+    {
+      "at": "2026-10-07T18:54:43.758Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
@@ -373,6 +389,17 @@
   "signatures": [
     {
       "at": "2026-10-07T10:19:25.305Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Keryx agent (openai-codex/gpt-6.1-sol)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9"
+    },
+    {
+      "at": "2026-10-07T18:51:10.471Z",
       "kind": "ac-confirm",
       "identity": {
         "value": "Keryx agent (openai-codex/gpt-6.1-sol)",
