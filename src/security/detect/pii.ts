@@ -9,7 +9,9 @@ import type { DetectorMatch, SecuritySeverity } from "../types";
 // A `RegExpExecArray` satisfies it, so rules backed by a plain regex and rules backed by a hand-written
 // linear scanner share one loop.
 type ScanMatch = { readonly index: number; readonly [group: number]: string | undefined };
-type Scanner = { lastIndex: number; exec(content: string): ScanMatch | null };
+// `reset` clears whatever a scanner carries from one scan to the next, so an aborted scan cannot leak into the
+// following one.
+type Scanner = { lastIndex: number; exec(content: string): ScanMatch | null; reset?(): void };
 
 type Rule = {
   policyId: string;
@@ -218,36 +220,58 @@ export function execPhone(content: string, from: number): RegExpExecArray | null
   return null;
 }
 
-// Rejected-run rescan. A run such as `12345678 415-555-0199` is one regex match with too many digits, so the
-// whole of it was dropped and the number inside leaked. The rescan looks for shorter spans INSIDE one rejected
-// match and nowhere else, so the invariant above is untouched: a failed start still skips its whole run, and
-// a match still leaves nothing before its end. The rescan is linear because:
+// Rejected-run rescan. A run such as `12345678 415-555-0199` or `415-555-0199 1.` is one regex match whose
+// digits or shape fail the verdict as a whole, so it was dropped and the number inside leaked. The rescan looks for
+// shorter spans INSIDE one rejected match and nowhere else, so the invariant above is untouched: a failed start
+// still skips its whole run, and a match still leaves nothing before its end. The rescan is linear because:
 //   - matches are disjoint, so each character is rescanned once per match;
 //   - a candidate is a window of whitespace-separated tokens that starts at one token and ends at another. Only
 //     the first token may be a country code or longer than a dialling group; every token after it must be a
-//     2-4 digit dialling group, and the window holds at most 15 digits, so it spans at most 8 tokens;
-//   - so each token is looked at by a bounded number of windows, and the first window that passes at a start
-//     is final (the rescan resumes after it).
-// A run with column alignment (2 or more blanks that are not a line break) is a table, as in `hasPhoneSeparatorShape`,
-// and is left unscanned; a line break between two numbers is a record separator, not alignment, so a window never
-// crosses one (a column of 2-digit numbers, one per line, is not a phone number).
+//     2-4 digit dialling group, and the window holds at most 15 digits, so it spans at most 15 tokens;
+//   - so each token is looked at by a bounded number of windows, and the window chosen at a start is final (the
+//     rescan resumes after it, which is also what reports two numbers written one after the other).
+// A rescan is only allowed to be as bold as the evidence in the window:
+//   - a window must show a phone separator (`+`, `-`, a parenthesis, or a dot inside one token) or be the spaced
+//     NANP shape `415 555 0199`; groups of digits separated by blanks alone (`4111 1111 1111 1111`, a row of
+//     numbers, an identifier) are not a phone number;
+//   - a window of several tokens must start where a run of grouped numbers starts (after a token that is not a
+//     dialling group, a calendar date or a line break) or right after the previous window, never in the middle of a
+//     longer run of groups;
+//   - a window that overlaps a Luhn-valid card is dropped by `detectPii`.
+// Column alignment (2 or more blanks, as in `hasPhoneSeparatorShape`) and a line break between two numbers are not
+// part of a number, so a window never crosses one: a table or a column of 2-digit numbers is not a phone number,
+// and a number beside the next column is still a number.
 const PHONE_DIAL_GROUP = /^\(?\d{2,4}\)?(?:[-.]\d{2,4})*$/;
 const PHONE_FIRST_GROUP = /^\+?\d{1,4}$/;
+const PHONE_SEPARATOR = /[+()-]/;
+const PHONE_NANP_SPACED = /^(?:\d{1,3} )?\d{3} \d{3} \d{4}$/;
 const WHITESPACE = /\s/;
 const LINE_BREAK = /[\n\r\u2028\u2029]/;
 const PHONE_MAX_DIGITS = 15;
 const PHONE_MIN_DIGITS = 9;
 
 function phoneVerdict(content: string, start: number, end: number): boolean {
+  // Count up to one digit past the limit, so a long run that fails on digits is not sliced and read in full.
+  let digits = 0;
+  for (let i = start; i < end && digits <= PHONE_MAX_DIGITS; i += 1) {
+    if (DIGIT.test(content[i] as string)) {
+      digits += 1;
+    }
+  }
+  if (digits < PHONE_MIN_DIGITS || digits > PHONE_MAX_DIGITS) {
+    return false;
+  }
   const value = content.slice(start, end);
-  const digits = countDigits(value);
   return (
-    digits >= PHONE_MIN_DIGITS &&
-    digits <= PHONE_MAX_DIGITS &&
     hasPhoneSeparatorShape(value) &&
     !containsCalendarDate(value) &&
     !isIdentifierFragment(content, start, end)
   );
+}
+
+// Blank-separated digit groups are not evidence of a phone number on their own.
+function hasPhoneEvidence(value: string, singleToken: boolean): boolean {
+  return PHONE_SEPARATOR.test(value) || (singleToken && value.includes(".")) || PHONE_NANP_SPACED.test(value);
 }
 
 type PhoneToken = {
@@ -257,11 +281,12 @@ type PhoneToken = {
   coreEnd: number; // just after the last digit, or 0
   leadDigits: number; // digits before coreStart, which a window starting here does not count
   digits: number;
-  lineBreakBefore: boolean; // a window never crosses a line break: a record separator is not part of a number
+  breakBefore: boolean; // a window never crosses a line break or a column gap: neither is part of a number
+  groupable: boolean; // a country code or dialling group that is not a calendar date: it can sit inside a phone number
 };
 
-// Splits [from, to) into whitespace-separated tokens, or returns null for a run with column alignment.
-function phoneTokens(content: string, from: number, to: number): PhoneToken[] | null {
+// Splits [from, to) into whitespace-separated tokens.
+function phoneTokens(content: string, from: number, to: number): PhoneToken[] {
   const tokens: PhoneToken[] = [];
   let i = from;
   while (i < to) {
@@ -269,13 +294,10 @@ function phoneTokens(content: string, from: number, to: number): PhoneToken[] | 
     while (i < to && WHITESPACE.test(content[i] as string)) {
       i += 1;
     }
-    const lineBreakBefore = tokens.length > 0 && i > gapStart && LINE_BREAK.test(content.slice(gapStart, i));
-    if (tokens.length > 0 && i < to && i - gapStart >= 2 && !lineBreakBefore) {
-      return null;
-    }
     if (i >= to) {
       break;
     }
+    const breakBefore = tokens.length > 0 && (i - gapStart >= 2 || LINE_BREAK.test(content.slice(gapStart, i)));
     const start = i;
     let digits = 0;
     let lastDigit = -1;
@@ -299,7 +321,9 @@ function phoneTokens(content: string, from: number, to: number): PhoneToken[] | 
       }
       i += 1;
     }
-    tokens.push({ start, end: i, coreStart, coreEnd: lastDigit + 1, leadDigits, digits, lineBreakBefore });
+    const text = content.slice(start, i);
+    const groupable = (PHONE_DIAL_GROUP.test(text) || PHONE_FIRST_GROUP.test(text)) && !containsCalendarDate(text);
+    tokens.push({ start, end: i, coreStart, coreEnd: lastDigit + 1, leadDigits, digits, breakBefore, groupable });
   }
   return tokens;
 }
@@ -307,40 +331,58 @@ function phoneTokens(content: string, from: number, to: number): PhoneToken[] | 
 function rescanPhoneRun(content: string, from: number, to: number): ScanMatch[] {
   const tokens = phoneTokens(content, from, to);
   const found: ScanMatch[] = [];
-  if (tokens === null) {
-    return found;
+  // Digits of the grouped tokens that follow a token without a break, so a window is not left with the start of a
+  // second number it could not report: `415 555 0199 415 555 0199` is two numbers, not one number and a tail.
+  const chainAfter = new Array<number>(tokens.length).fill(0);
+  for (let i = tokens.length - 2; i >= 0; i -= 1) {
+    const next = tokens[i + 1] as PhoneToken;
+    chainAfter[i] = next.groupable && !next.breakBefore ? (chainAfter[i + 1] as number) + next.digits : 0;
   }
   let first = 0;
+  let resume = -1; // the token right after the last window
   while (first < tokens.length) {
     const head = tokens[first] as PhoneToken;
     if (head.coreStart < 0 || head.coreEnd <= head.coreStart) {
       first += 1;
       continue;
     }
+    const startsRun = first === 0 || first === resume || head.breakBefore || !(tokens[first - 1] as PhoneToken).groupable;
+    let longest = -1;
+    let clean = -1;
+    const consider = (last: number): void => {
+      const end = (tokens[last] as PhoneToken).coreEnd;
+      if (hasPhoneEvidence(content.slice(head.coreStart, end), last === first) && phoneVerdict(content, head.coreStart, end)) {
+        longest = last;
+        const rest = chainAfter[last] as number;
+        if (rest === 0 || rest >= PHONE_MIN_DIGITS) {
+          clean = last;
+        }
+      }
+    };
     let digits = head.digits - head.leadDigits;
-    let best = digits >= PHONE_MIN_DIGITS && phoneVerdict(content, head.coreStart, head.coreEnd) ? first : -1;
+    if (digits >= PHONE_MIN_DIGITS) {
+      consider(first);
+    }
     // The first group of a longer window is a country code or a dialling group; the others are dialling groups.
     const headGroup = content.slice(head.coreStart, head.end);
-    let extendable = PHONE_FIRST_GROUP.test(headGroup) || PHONE_DIAL_GROUP.test(headGroup);
+    let extendable = startsRun && (PHONE_FIRST_GROUP.test(headGroup) || PHONE_DIAL_GROUP.test(headGroup));
     for (let last = first + 1; last < tokens.length && extendable; last += 1) {
       const tail = tokens[last] as PhoneToken;
       digits += tail.digits;
-      if (digits > PHONE_MAX_DIGITS || tail.digits === 0 || tail.lineBreakBefore) {
+      if (digits > PHONE_MAX_DIGITS || tail.digits === 0 || tail.breakBefore) {
         break;
       }
-      if (
-        digits >= PHONE_MIN_DIGITS &&
-        PHONE_DIAL_GROUP.test(content.slice(tail.start, tail.coreEnd)) &&
-        phoneVerdict(content, head.coreStart, tail.coreEnd)
-      ) {
-        best = last;
+      if (digits >= PHONE_MIN_DIGITS && PHONE_DIAL_GROUP.test(content.slice(tail.start, tail.coreEnd))) {
+        consider(last);
       }
       extendable = PHONE_DIAL_GROUP.test(content.slice(tail.start, tail.end));
     }
+    const best = clean >= 0 ? clean : longest;
     if (best >= 0) {
       const value = content.slice(head.coreStart, (tokens[best] as PhoneToken).coreEnd);
       found.push({ index: head.coreStart, 0: value, 1: value });
       first = best + 1;
+      resume = first;
     } else {
       first += 1;
     }
@@ -348,10 +390,107 @@ function rescanPhoneRun(content: string, from: number, to: number): ScanMatch[] 
   return found;
 }
 
-const phoneScanner: Scanner & { pending: ScanMatch[]; cursor: number } = {
+// The matches `exec` returned from a retry or a rescan rather than from the regex itself; `detectPii` drops those
+// that overlap a card.
+const rescanned = new WeakSet<ScanMatch>();
+
+// A number followed by other digits, or by a list marker (`415-555-0199 1.`, `415-555-0199 2)`), is one regex match
+// whose digits or shape fail the verdict as a whole. Before the plain regex `execPhone` took over, the match ended
+// at the longest end that is not followed by a word character or a dot, and the first end the sentence-final period
+// rule now skips was the one that held the number. So a failed match retries shorter ends, longest first:
+//   - `baselineEnd`, the end the earlier regex would have used (longest end followed by neither `\w` nor `.`), is
+//     tried on the verdict alone, which is what that regex reported, so nothing it reported is lost;
+//   - a shorter end after a blank is tried when the prefix carries phone evidence (`hasPhoneEvidence`), so
+//     `415-555-0199 1` yields `415-555-0199` but `4111 1111 1111 1111` is never cut into a phone number.
+// Only ends inside the first 15 digits can pass the verdict, so the work per match is at most 15 ends over the
+// span up to the 16th digit. The longest end of a run is the same from every start in it, so it is found once per
+// run (`runEnd`), and a match that takes a prefix resumes at the prefix end.
+type PhonePrefix = { end: number; baseline: boolean };
+
+function phoneBaselineEnd(content: string, runEnd: number): number {
+  // The longest end after a digit that is followed by neither a word character nor a dot, or -1.
+  for (let e = runEnd; e > 0; e -= 1) {
+    if (DIGIT.test(content[e - 1] as string) && (e >= content.length || !PHONE_START_BLOCKER.test(content[e] as string))) {
+      return e;
+    }
+  }
+  return -1;
+}
+
+const phoneScanner: Scanner & {
+  pending: ScanMatch[];
+  cursor: number;
+  runEnd: number;
+  runBaseline: number;
+  tailEnd: number;
+  tail(content: string): ScanMatch | null;
+  prefix(content: string, start: number, end: number): PhonePrefix | null;
+} = {
   lastIndex: 0,
   pending: [],
   cursor: 0,
+  runEnd: -1,
+  runBaseline: -1,
+  tailEnd: 0,
+  reset() {
+    this.lastIndex = 0;
+    this.pending = [];
+    this.cursor = 0;
+    this.runEnd = -1;
+    this.runBaseline = -1;
+    this.tailEnd = 0;
+  },
+  // What is left of a run after a prefix was taken. The match that starts at the next valid start still ends at the
+  // end of the run, which is the longest valid end from every start in it, so there is no need to run the regex over
+  // the rest of the run again, which would make a long run of numbers quadratic.
+  tail(content: string): ScanMatch | null {
+    for (let pos = this.lastIndex; pos < this.tailEnd; pos += 1) {
+      if (!DIGIT.test(content[pos] as string) || PHONE_START_BLOCKER.test(content[pos - 1] as string)) {
+        continue;
+      }
+      if (this.tailEnd - pos < 9) {
+        break;
+      }
+      const value = content.slice(pos, this.tailEnd);
+      return { index: pos, 0: value, 1: value };
+    }
+    this.lastIndex = this.tailEnd;
+    this.tailEnd = 0;
+    return null;
+  },
+  prefix(content: string, start: number, end: number): PhonePrefix | null {
+    if (this.runEnd !== end) {
+      this.runEnd = end;
+      this.runBaseline = phoneBaselineEnd(content, end);
+    }
+    let digits = 0;
+    let limit = end;
+    const ends: number[] = [];
+    for (let i = start; i < end; i += 1) {
+      const ch = content[i] as string;
+      if (DIGIT.test(ch)) {
+        digits += 1;
+        if (digits > PHONE_MAX_DIGITS) {
+          limit = i;
+          break;
+        }
+      } else if (WHITESPACE.test(ch) && DIGIT.test(content[i - 1] as string) && digits >= PHONE_MIN_DIGITS) {
+        ends.push(i);
+      }
+    }
+    const baseline = this.runBaseline;
+    if (baseline < end && baseline >= start + 9 && baseline <= limit && phoneVerdict(content, start, baseline)) {
+      return { end: baseline, baseline: true };
+    }
+    for (let k = ends.length - 1; k >= 0; k -= 1) {
+      const e = ends[k] as number;
+      const value = content.slice(start, e);
+      if (e !== baseline && hasPhoneEvidence(value, !WHITESPACE.test(value)) && phoneVerdict(content, start, e)) {
+        return { end: e, baseline: false };
+      }
+    }
+    return null;
+  },
   exec(content) {
     for (;;) {
       if (this.cursor < this.pending.length) {
@@ -359,18 +498,39 @@ const phoneScanner: Scanner & { pending: ScanMatch[]; cursor: number } = {
       }
       this.pending = [];
       this.cursor = 0;
-      const m = execPhone(content, this.lastIndex);
-      if (m === null) {
-        this.lastIndex = 0;
-        return null;
+      let m: ScanMatch | null;
+      if (this.tailEnd > this.lastIndex) {
+        m = this.tail(content);
+        if (m === null) {
+          continue; // the rest of the run is done; the scan goes on after it
+        }
+      } else {
+        m = execPhone(content, this.lastIndex);
+        if (m === null) {
+          this.lastIndex = 0;
+          return null;
+        }
       }
-      const end = m.index + m[0].length;
+      const end = m.index + (m[0] ?? "").length;
       this.lastIndex = end;
+      this.tailEnd = 0;
       if (phoneVerdict(content, m.index, end)) {
         return m;
       }
-      if (countDigits(m[0]) > PHONE_MAX_DIGITS) {
-        this.pending = rescanPhoneRun(content, m.index, end);
+      const prefix = this.prefix(content, m.index, end);
+      if (prefix !== null) {
+        const value = content.slice(m.index, prefix.end);
+        const found: ScanMatch = { index: m.index, 0: value, 1: value };
+        if (!prefix.baseline) {
+          rescanned.add(found);
+        }
+        this.lastIndex = prefix.end;
+        this.tailEnd = end;
+        return found;
+      }
+      this.pending = rescanPhoneRun(content, m.index, end);
+      for (const found of this.pending) {
+        rescanned.add(found);
       }
     }
   },
@@ -502,7 +662,7 @@ const RULES: Rule[] = [
   {
     policyId: "pii.ssn",
     mask: "ssn",
-    // Digit boundaries, not `\b`: `user_078-05-1120` and `x078-05-1120` are still an SSN. The identifier guard decides.
+    // Digit boundaries, not `\b`: `user_078-05-1120` and `x078-05-1120` are still an SSN, and nothing suppresses it.
     regex: /(?<![0-9])\d{3}-\d{2}-\d{4}(?![0-9])/g,
     severity: "high",
     confidence: 0.85,
@@ -517,14 +677,6 @@ const RULES: Rule[] = [
     validate: isValidIp,
   },
 ];
-
-function countDigits(value: string): number {
-  let n = 0;
-  for (const ch of value) {
-    if (ch >= "0" && ch <= "9") n += 1;
-  }
-  return n;
-}
 
 // A whitespace-separated run of numbers is a TABLE, not a phone number. The
 // loose phone pattern treats spaces as grouping separators, so every row of an
@@ -674,164 +826,11 @@ function isIdentifierFragment(content: string, matchStart: number, matchEnd: num
   return [...before.split(/[-_]/), ...after.split(/[-_]/)].some(isHexIdentifierRun);
 }
 
-// ---------------------------------------------------------------------------
-// SSN identifier-fragment guard (flow 261, narrowed by SEC-F-005). A false negative leaks a person's
-// SSN, a false positive only corrupts an identifier, so an SSN-shaped value is redacted unless the
-// digits are part of a well-formed identifier itself: the match sits strictly INSIDE one fully scanned
-// UUID token (`8-4-4-4-12` hex) and no SSN label (`ssn`, `social`, `SS #`, `S-S-N`, `NSS`, `СНИЛС`,
-// `tax id`, `TIN`, ...) is in that token or STARTS within 64 characters before or after it, read after
-// NFKC / invisible-character / accent folding.
-//
-// A neighbouring hash is NOT evidence: `<hex>-078-05-1120`, `078-05-1120-<hex>` and `<hex>_078-05-1120`
-// are reported, because the digits are not part of the hash and anyone can put a hash next to an SSN
-// (the operator reversed the earlier "exact 32/40/64-hex neighbour" rule on 2026-10-06).
-// ---------------------------------------------------------------------------
-
-/** Wide enough that a sha256 (64) on either side never truncates the scan. */
-const SSN_TOKEN_SCAN_LIMIT = 192;
-const SSN_LABEL_WINDOW = 64;
-// Latin/Cyrillic/Greek lookalikes of the label letters (s n o c i a l u e r t y). Intentionally not exhaustive.
-const LABEL_CONFUSABLES: ReadonlyMap<string, string> = new Map(
-  Object.entries({
-    s: "ѕσς",
-    n: "пην",
-    o: "оο",
-    c: "сϲ",
-    i: "іιı",
-    a: "аα",
-    l: "ӏ",
-    u: "υ",
-    e: "еε",
-    r: "г",
-    t: "тτ",
-    y: "уγ",
-  }).flatMap(([latin, lookalikes]) => [...lookalikes].map((ch): [string, string] => [ch, latin])),
-);
-// Default-ignorable, format and control characters (LRM/RLM, bidi, U+2060-2064, U+180E, U+3164, tags, ZWSP, C0/C1...) plus combining marks.
-// Whitespace controls (\t-\r, NEL) stay: they are separators, not noise.
-const LABEL_STRIP = /(?![\t-\r\u0085])\p{Cc}|[\p{Default_Ignorable_Code_Point}\p{Cf}\p{M}]/gu;
-
-const FOLD_CACHE_LIMIT = 2048;
-const FOLD_PIECE_LIMIT = 4; // no label letter folds to more; a long compatibility expansion (U+FDFA) is only cost
-const foldCache = new Map<string, string>();
-
-function foldCodePoint(ch: string): string {
-  const code = ch.charCodeAt(0);
-  if (code < 128) {
-    return code === 127 || (code < 32 && (code < 9 || code > 13)) ? "" : ch;
-  }
-  const cached = foldCache.get(ch);
-  if (cached !== undefined) {
-    return cached;
-  }
-  let out = LABEL_CONFUSABLES.get(ch.toLowerCase()) ?? ""; // checked before NFKC, which turns U+03F2 into a sigma
-  if (out === "") {
-    for (const folded of ch.normalize("NFKC").toLowerCase().normalize("NFD").replace(LABEL_STRIP, "")) {
-      out += LABEL_CONFUSABLES.get(folded) ?? folded;
-    }
-    out = out.slice(0, FOLD_PIECE_LIMIT);
-  }
-  if (foldCache.size >= FOLD_CACHE_LIMIT) {
-    foldCache.clear();
-  }
-  foldCache.set(ch, out);
-  return out;
-}
-
-const LABEL_SEP = "[^\\p{L}\\p{N}]{0,12}";
-// Matched against folded text (NFKC, lowercase, invisibles and accents removed, lookalikes mapped to Latin).
-const SSN_LABEL = new RegExp(
-  [
-    `ssn|soc${LABEL_SEP}ial|nss|${[..."снилс"].map(foldCodePoint).join("")}|sozial${LABEL_SEP}versicherung|versicherungsn(?:ummer|r)|numero${LABEL_SEP}de${LABEL_SEP}secu`,
-    `soc${LABEL_SEP}sec`,
-    `(?<![a-z])(?:s${LABEL_SEP}s${LABEL_SEP}[n#]|n${LABEL_SEP}s${LABEL_SEP}s|sv${LABEL_SEP}n)`,
-    // Other tax and insurance identifiers an SSN-shaped number is written next to. `tin` must stand alone
-    // (not `routine`, `tinder`), and `national insurance` needs both words.
-    `(?<![a-z])(?:i?tin(?![a-z])|tax${LABEL_SEP}id(?:ent|(?![a-z])))|national${LABEL_SEP}insurance`,
-  ].join("|"),
-  "iug",
-);
-const LABEL_TAIL = 64; // the longest label folds to far fewer characters; bounds the work past the window
-const LABEL_LOOKBEHIND = 8; // context before the window so `(?<![a-z])` sees the character just outside it
-const PLAIN_ASCII = /^[\t-\r\u0020-\u007E]*$/;
-
-// Iterates code points so astral characters fold too; offsets maps each folded character to its UTF-16 index in `text`.
-function foldForLabel(
-  text: string,
-  labelStartLimit: number,
-  windowStart: number,
-): { folded: string; offsets: number[]; windowFrom: number } {
-  let folded = "";
-  const offsets: number[] = [];
-  let index = 0;
-  let tailFrom = -1;
-  let windowFrom = -1;
-  for (const ch of text) {
-    if (windowFrom < 0 && index >= windowStart) {
-      windowFrom = folded.length;
-    }
-    if (index >= labelStartLimit) {
-      tailFrom = tailFrom < 0 ? folded.length : tailFrom;
-      if (folded.length - tailFrom >= LABEL_TAIL) {
-        break;
-      }
-    }
-    const piece = foldCodePoint(ch);
-    folded += piece;
-    for (let k = 0; k < piece.length; k += 1) {
-      offsets.push(index);
-    }
-    index += ch.length;
-  }
-  return { folded, offsets, windowFrom: windowFrom < 0 ? folded.length : windowFrom };
-}
-
-// A label vetoes when it STARTS within 64 characters of the token, either side inclusive (or inside it).
-function hasSsnLabelNear(content: string, tokenStart: number, tokenEnd: number): boolean {
-  const base = Math.max(0, tokenStart - SSN_LABEL_WINDOW);
-  const from = Math.max(0, base - LABEL_LOOKBEHIND);
-  const limit = tokenEnd + SSN_LABEL_WINDOW;
-  const region = content.slice(from, Math.min(content.length, tokenEnd + 2 * SSN_LABEL_WINDOW));
-  if (PLAIN_ASCII.test(region)) {
-    SSN_LABEL.lastIndex = base - from;
-    const hit = SSN_LABEL.exec(region);
-    return hit !== null && from + hit.index <= limit;
-  }
-  const { folded, offsets, windowFrom } = foldForLabel(region, limit - from, base - from);
-  SSN_LABEL.lastIndex = windowFrom;
-  const hit = SSN_LABEL.exec(folded);
-  return hit !== null && from + (offsets[hit.index] as number) <= limit;
-}
-
-function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: number): boolean {
-  let tokenStart = matchStart;
-  const floor = Math.max(0, matchStart - SSN_TOKEN_SCAN_LIMIT);
-  while (tokenStart > floor && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) {
-    tokenStart -= 1;
-  }
-  let tokenEnd = matchEnd;
-  const ceiling = Math.min(content.length, matchEnd + SSN_TOKEN_SCAN_LIMIT);
-  while (tokenEnd < ceiling && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) {
-    tokenEnd += 1;
-  }
-  // The scan limit is per side and also a budget for the text around the match, so two long sides cannot both pass.
-  const truncated =
-    (tokenStart === floor && tokenStart > 0 && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) ||
-    (tokenEnd === ceiling && tokenEnd < content.length && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) ||
-    tokenEnd - tokenStart - (matchEnd - matchStart) > SSN_TOKEN_SCAN_LIMIT;
-  if (truncated) {
-    return false; // Evidence incomplete → redact.
-  }
-  if (tokenStart === matchStart && tokenEnd === matchEnd) {
-    return false; // The match IS the token.
-  }
-  // Only a well-formed UUID token holds digits that belong to the identifier itself.
-  if (!UUID_TOKEN.test(content.slice(tokenStart, tokenEnd))) {
-    return false;
-  }
-  // A label overrides everything: the token, or the text just before it, says this is an SSN.
-  return !hasSsnLabelNear(content, tokenStart, tokenEnd);
-}
+// There is deliberately no identifier guard on the SSN rule. A false negative leaks a person's SSN and a
+// false positive only corrupts an identifier, so an SSN-shaped value is always reported, including next to a
+// hash or a label (the operator reversed the earlier "hash neighbour suppresses" rule on 2026-10-06). The one
+// shape the guard could ever have suppressed, a fragment strictly inside a UUID, holds no `ddd-dd-dddd`: a UUID
+// has no two-character group.
 
 function hasPhoneSeparatorShape(value: string): boolean {
   if (/\s{2,}/.test(value)) {
@@ -853,8 +852,12 @@ function hasPhoneSeparatorShape(value: string): boolean {
   });
 }
 
+// The detector matches that came from a phone rescan.
+const rescanTag = new WeakSet<DetectorMatch>();
+
 function scanRule(content: string, rule: Rule): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
+  rule.regex.reset?.();
   rule.regex.lastIndex = 0;
   let m: ScanMatch | null;
   while ((m = rule.regex.exec(content)) !== null) {
@@ -864,16 +867,12 @@ function scanRule(content: string, rule: Rule): DetectorMatch[] {
       continue;
     }
     // Phone candidates are judged (digit count, separator shape, dates, identifiers) inside `phoneScanner`.
-    // Flow 261 / SEC-F-005: an SSN-shaped run is suppressed only strictly inside a UUID token, never when labelled.
-    if (rule.policyId === "pii.ssn" && isSsnIdentifierFragment(content, m.index, m.index + m[0]!.length)) {
-      continue;
-    }
     // E4: gate structured-PII candidates by their checksum/range validator.
     if (rule.validate && !rule.validate(value)) {
       continue;
     }
     const start = group === 0 ? m.index : m.index + (m[0] as string).indexOf(value);
-    matches.push({
+    const match: DetectorMatch = {
       category: "pii",
       policyId: rule.policyId,
       severity: rule.severity,
@@ -883,7 +882,11 @@ function scanRule(content: string, rule: Rule): DetectorMatch[] {
       value,
       mask: rule.mask,
       remediation: "Redact personal data before persisting or publishing.",
-    });
+    };
+    if (rescanned.has(m)) {
+      rescanTag.add(match);
+    }
+    matches.push(match);
     if (m.index === rule.regex.lastIndex) {
       rule.regex.lastIndex += 1;
     }
@@ -903,7 +906,7 @@ function scanRules(content: string): DetectorMatch[][] {
 // one it stands for. The copy has one unit per original code point at most, and a map from every unit back to
 // the original offset, so spans, redaction offsets and returned values always refer to the ORIGINAL text.
 // Only digits, dashes, spaces, dots, `@`, `+` and parentheses are folded: letters are left alone, so the
-// name and address rules, and the SSN label fold, see exactly what they saw before.
+// name and address rules see exactly what they saw before.
 // ---------------------------------------------------------------------------
 
 const NORMALIZE_CHUNK = 1 << 21;
@@ -1027,6 +1030,66 @@ function containedIn(spans: readonly DetectorMatch[], start: number, end: number
   return candidate !== undefined && candidate.start <= start && candidate.end >= end;
 }
 
+// Spans of one rule that overlap become one span, so the plain and the normalised pass never report the same text
+// twice under two shifted spans. A merged span is a rescan span only if every part of it was.
+function coalesce(content: string, spans: readonly DetectorMatch[]): DetectorMatch[] {
+  const merged: DetectorMatch[] = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last === undefined || span.start >= last.end) {
+      merged.push(span);
+      continue;
+    }
+    const end = Math.max(last.end, span.end);
+    const union: DetectorMatch = { ...last, end, value: content.slice(last.start, end) };
+    if (rescanTag.has(last) && rescanTag.has(span)) {
+      rescanTag.add(union);
+    }
+    merged[merged.length - 1] = union;
+  }
+  return merged;
+}
+
+// A card is written with one separator throughout (`4111 1111 1111 1111`, `4111-1111-1111-1111`, or none). A
+// Luhn-valid run that mixes separators (`2026-07-09 415-555-0199`) is a coincidence of checksum, not a card.
+function isUniformCard(card: DetectorMatch): boolean {
+  const separators = new Set(card.value.replace(/\d/g, ""));
+  return separators.size <= 1;
+}
+
+// A rescan window that overlaps a Luhn-valid card is a piece of that card, not a phone number.
+function dropRescansInsideCards(spans: readonly DetectorMatch[], cards: readonly DetectorMatch[]): DetectorMatch[] {
+  if (cards.length === 0 || !spans.some((span) => rescanTag.has(span))) {
+    return spans as DetectorMatch[];
+  }
+  const sorted = cards.filter(isUniformCard).sort((a, b) => a.start - b.start);
+  const reach: number[] = [];
+  let farthest = 0;
+  for (const card of sorted) {
+    farthest = Math.max(farthest, card.end);
+    reach.push(farthest);
+  }
+  return spans.filter((span) => {
+    if (!rescanTag.has(span)) {
+      return true;
+    }
+    let low = 0;
+    let high = sorted.length - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if ((sorted[mid] as DetectorMatch).start < span.end) {
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return high < 0 || (reach[high] as number) <= span.start;
+  });
+}
+
+const PHONE_RULE = RULES.findIndex((rule) => rule.policyId === "pii.phone");
+const CARD_RULE = RULES.findIndex((rule) => rule.policyId === "pii.credit-card");
+
 export function detectPii(content: string): DetectorMatch[] {
   const perRule = scanRules(content);
   if (NON_ASCII.test(content)) {
@@ -1060,11 +1123,15 @@ export function detectPii(content: string): DetectorMatch[] {
               continue;
             }
             if (!containedIn(base, a, b) && !containedIn(added, a, b)) {
-              added.push({ ...match, start: a, end: b, value: content.slice(a, b) });
+              const copy = { ...match, start: a, end: b, value: content.slice(a, b) };
+              if (rescanTag.has(match)) {
+                rescanTag.add(copy);
+              }
+              added.push(copy);
             }
           }
           if (added.length > 0) {
-            perRule[index] = [...base, ...added].sort((x, y) => x.start - y.start || y.end - x.end);
+            perRule[index] = coalesce(content, [...base, ...added].sort((x, y) => x.start - y.start || y.end - x.end));
           }
         });
       }
@@ -1074,5 +1141,6 @@ export function detectPii(content: string): DetectorMatch[] {
       from = to - NORMALIZE_OVERLAP;
     }
   }
+  perRule[PHONE_RULE] = dropRescansInsideCards(perRule[PHONE_RULE] as DetectorMatch[], perRule[CARD_RULE] as DetectorMatch[]);
   return perRule.flat();
 }
