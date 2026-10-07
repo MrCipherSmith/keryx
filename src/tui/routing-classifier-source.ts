@@ -32,6 +32,8 @@ import { hasCredential, type ProviderFactory } from "../harness/provider/single-
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import { redactSensitiveText } from "../security/service";
 import { resolveJevClassifierCredential } from "../harness/decision/jev-classifier";
+import { resolveExternalSetting } from "../lib/external-switch";
+import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../lib/external-providers";
 import { availablePredicateFromProfiles, loadModelProfiles } from "../harness/routing/model-profile";
 
 /**
@@ -111,7 +113,15 @@ export async function runRoutingClassifierForTurn(
 
   const profiles = loadModelProfiles(opts.userConfigDir);
   const env = envWithSavedApiKeys(opts.env ?? process.env);
+  // Mandatory privacy gate, refreshed each turn; caller hooks only restrict further.
+  const external = await resolveExternalSetting({ cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { dir: opts.userConfigDir } : {}) });
+  if (opts.signal?.aborted) return undefined;
+  const externalAllowed = externalAllowedConnectedPredicate(
+    connectedPredicateFrom(opts.detected), external.value === "on",
+    loadExternalProvidersConfig(opts.userConfigDir).config,
+  );
   const fallbackModel = selectClassifierModel(opts.detected, profiles, (providerId, modelId) =>
+    externalAllowed(providerId, modelId) &&
     (opts.classifierAllowed?.(providerId, modelId) ?? true) &&
     (opts.providerFactory !== undefined || hasCredential(providerId, env)),
   );

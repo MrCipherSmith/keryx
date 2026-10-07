@@ -12,13 +12,18 @@
   "title": "Correct task routing: JEV fallback and assignments survive /model",
   "status": "in-progress",
   "createdAt": "2026-10-06T06:04:33.880Z",
-  "updatedAt": "2026-10-07T09:52:11.691Z",
+  "updatedAt": "2026-10-07T11:12:07.376Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC9": {
+      "at": "2026-10-07T10:19:25.305Z",
+      "note": "Automated verification, not operator acceptance: exact SHA 290591c7b553cc9a2804a47eee288694cfbc166c. CI run 37603970321 and literal full gate run 37603964584 SUCCESS; bun run check includes lint, typecheck, typecheck:scripts and bun test: 29907 pass,48 skip,0 fail,187932 assertions,1540 files,995.92s,exit0/log_exit0. Bun1.3.14 Node22 Ubuntu. Related fake fetch/provider regression evidence (319 tests/1381 assertions and 6/6 PTY) and replaced pinning contract recorded in journal; current bun run keryx health run --changed --source eslint,typescript PASS. CI run URLs recorded in T3; optional live-provider validation is not claimed. AC11 stays unconfirmed."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -82,10 +87,10 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 3,
+        "count": 4,
         "log": [
           {
             "at": "2026-10-06T20:01:18.265Z",
@@ -101,12 +106,19 @@
             "at": "2026-10-07T09:52:11.691Z",
             "outcome": "blocked",
             "detail": "PR #917 CI blockers on 3e722231b reviewed: full log has 36 failures (29 intake, 4 remote, 2 cron, 1 prune source audit), plus SDK/sharp advisories. Fixes: explicit intake clocks including claimedAt; prune regex accepts cancellation wrapper; source inventory uses one snapshot and bounded async reads; cron TZ is set at fresh Bun process startup; remote shutdown flushes SSE with bounded 250ms graceful phase before force stop; SDK ^1.32.1 and sharp 0.35.5 lockfile. Focused PASS: intake/source 251 tests,1421 assertions,25 files; intake-report 6 tests; cron/remote 138 pass,1 macOS systemd skip,557 assertions; dependency regressions 237 pass,3 disabled live skips,875 assertions. Typechecks and build PASS; bun audit --json {} exit0. Local evidence .git/flow411-split/ci917/focused-intake-source-final.log,focused-intake-report-final.log,cron-remote-fixed.log,dependency-focused-tests.log,dependency-audit-after.json. Local logs are not portable artifacts. Full Linux bun run check pending new SHA; no local full rerun or gate bypass. T3/AC9 remain open; final independent review and operator AC11 pending; no merge/release/npm publication."
+          },
+          {
+            "at": "2026-10-07T09:58:51.108Z",
+            "outcome": "blocked",
+            "detail": "PR #917 Linux CI status check on exact head 290591c7b553cc9a2804a47eee288694cfbc166c. Intermediate result, NOT full gate PASS. core: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603970321. Job dependency-audit: completed/success. Job standard-baseline: completed/success. Job client matrix (streaming): completed/success. Job macOS real-host legs — OS sandbox + TUI pty launch: completed/success. Job metrics-contract: completed/success. Job vscode-extension: completed/success. Job opentui native (linux-arm64): completed/success. Job client matrix (cancel-resume): completed/success. Job typecheck-and-tests: in_progress/pending. Job opentui native (darwin-x64): completed/success. Job opentui native (darwin-arm64): completed/success. Job opentui native (linux-x64): completed/success. Job client matrix (terminal): in_progress/pending. Job linux sandbox (bubblewrap) live smoke: completed/success. Job client matrix (runtime): completed/success. Job standard-pr: completed/success. full: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603964584. Job full-check: in_progress/pending. Wiki freshness: completed/success. Docs: completed/success. Reports stored locally at .git/flow411-split/ci917/final-ci/{pr,runs,core-jobs,full-jobs}.json; local files are not portable evidence. T3/AC9 remain open while CI and full-check run. Final review, merge/release and operator AC11 remain pending; no acceptance confirmation."
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #917 exact head 290591c7b553cc9a2804a47eee288694cfbc166c verified: CI https://github.com/MrCipherSmith/keryx/actions/runs/37603970321 completed SUCCESS, all 16 jobs passed including dependency audit and client/native/OS matrix. Full diagnostic https://github.com/MrCipherSmith/keryx/actions/runs/37603964584 completed SUCCESS on Ubuntu, Bun 1.3.14, Node 22: literal bun run check (lint, both typechecks, all tests), 29907 pass / 48 skip / 0 fail, 187932 assertions, 29955 tests in 1540 files, 995.92s; check_exit=0 and log_exit=0. Earlier focused fake-provider routing AC1-AC8 regressions and 6/6 hermetic PTY passed; historical pinning expectations replaced. Current changed ESLint/TypeScript health run passed. Logs locally in .git/flow411-split/ci917/final-ci/{core,full}-log.txt and jobs JSON; portable evidence is the linked CI runs and diagnostic artifact. Final independent review, merge/release and operator AC11 remain pending; no flow closure."
     },
     {
       "id": "T4",
@@ -116,7 +128,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-10-06T20:01:18.914Z",
@@ -127,6 +139,16 @@
             "at": "2026-10-06T20:10:35.921Z",
             "outcome": "blocked",
             "detail": "Draft PR: https://github.com/MrCipherSmith/keryx/pull/917. Independent review evidence exists; final review/merge gates remain open. URL recorded in task/journal; implemented transition deferred until merge. AC11 unconfirmed; no release or npm publish."
+          },
+          {
+            "at": "2026-10-07T10:29:24.778Z",
+            "outcome": "blocked",
+            "detail": "Independent final review PR917 head290591c7b: CHANGES REQUIRED, P1 fallback classifier missing production external-policy enforcement (routing-classifier-source.ts:119-123; tui-shell.ts:9515-9528). Two independent read-only reviews; nonrouting no concrete defects. Report review/final-290591c7b/review.md. CI green does not cover policy bypass. AC11 remains open; no merge/release."
+          },
+          {
+            "at": "2026-10-07T11:12:07.376Z",
+            "outcome": "blocked",
+            "detail": "Independent targeted P1 fix-round static review PASS; no blocking finding in mandatory fresh external-policy gate. Focused routing/policy/JEV regressions and typecheck rerun PASS on hash-verified working files. Evidence review/p1-fix-round/review.md and focused.log/typecheck.log. Working fix remains uncommitted; previous CI PASS and AC9 refer only to 290591c7b. T4 final exact-SHA review/CI pending; AC11 OPEN. No merge or release."
           }
         ]
       },
@@ -221,6 +243,31 @@
       "at": "2026-10-07T09:52:11.691Z",
       "event": "task-attempt",
       "detail": "T3: blocked (attempt 3) — PR #917 CI blockers on 3e722231b reviewed: full log has 36 failures (29 intake, 4 remote, 2 cron, 1 prune source audit), plus SDK/sharp advisories. Fixes: explicit intake clocks including claimedAt; prune regex accepts cancellation wrapper; source inventory uses one snapshot and bounded async reads; cron TZ is set at fresh Bun process startup; remote shutdown flushes SSE with bounded 250ms graceful phase before force stop; SDK ^1.32.1 and sharp 0.35.5 lockfile. Focused PASS: intake/source 251 tests,1421 assertions,25 files; intake-report 6 tests; cron/remote 138 pass,1 macOS systemd skip,557 assertions; dependency regressions 237 pass,3 disabled live skips,875 assertions. Typechecks and build PASS; bun audit --json {} exit0. Local evidence .git/flow411-split/ci917/focused-intake-source-final.log,focused-intake-report-final.log,cron-remote-fixed.log,dependency-focused-tests.log,dependency-audit-after.json. Local logs are not portable artifacts. Full Linux bun run check pending new SHA; no local full rerun or gate bypass. T3/AC9 remain open; final independent review and operator AC11 pending; no merge/release/npm publication."
+    },
+    {
+      "at": "2026-10-07T09:58:51.108Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 4) — PR #917 Linux CI status check on exact head 290591c7b553cc9a2804a47eee288694cfbc166c. Intermediate result, NOT full gate PASS. core: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603970321. Job dependency-audit: completed/success. Job standard-baseline: completed/success. Job client matrix (streaming): completed/success. Job macOS real-host legs — OS sandbox + TUI pty launch: completed/success. Job metrics-contract: completed/success. Job vscode-extension: completed/success. Job opentui native (linux-arm64): completed/success. Job client matrix (cancel-resume): completed/success. Job typecheck-and-tests: in_progress/pending. Job opentui native (darwin-x64): completed/success. Job opentui native (darwin-arm64): completed/success. Job opentui native (linux-x64): completed/success. Job client matrix (terminal): in_progress/pending. Job linux sandbox (bubblewrap) live smoke: completed/success. Job client matrix (runtime): completed/success. Job standard-pr: completed/success. full: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603964584. Job full-check: in_progress/pending. Wiki freshness: completed/success. Docs: completed/success. Reports stored locally at .git/flow411-split/ci917/final-ci/{pr,runs,core-jobs,full-jobs}.json; local files are not portable evidence. T3/AC9 remain open while CI and full-check run. Final review, merge/release and operator AC11 remain pending; no acceptance confirmation."
+    },
+    {
+      "at": "2026-10-07T10:19:22.855Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-07T10:19:25.305Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Automated verification, not operator acceptance: exact SHA 290591c7b553cc9a2804a47eee288694cfbc166c. CI run 37603970321 and literal full gate run 37603964584 SUCCESS; bun run check includes lint, typecheck, typecheck:scripts and bun test: 29907 pass,48 skip,0 fail,187932 assertions,1540 files,995.92s,exit0/log_exit0. Bun1.3.14 Node22 Ubuntu. Related fake fetch/provider regression evidence (319 tests/1381 assertions and 6/6 PTY) and replaced pinning contract recorded in journal; current bun run keryx health run --changed --source eslint,typescript PASS. CI run URLs recorded in T3; optional live-provider validation is not claimed. AC11 stays unconfirmed. (signed: Keryx agent (openai-codex/gpt-6.1-sol) [stated])"
+    },
+    {
+      "at": "2026-10-07T10:29:24.778Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 3) — Independent final review PR917 head290591c7b: CHANGES REQUIRED, P1 fallback classifier missing production external-policy enforcement (routing-classifier-source.ts:119-123; tui-shell.ts:9515-9528). Two independent read-only reviews; nonrouting no concrete defects. Report review/final-290591c7b/review.md. CI green does not cover policy bypass. AC11 remains open; no merge/release."
+    },
+    {
+      "at": "2026-10-07T11:12:07.376Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 4) — Independent targeted P1 fix-round static review PASS; no blocking finding in mandatory fresh external-policy gate. Focused routing/policy/JEV regressions and typecheck rerun PASS on hash-verified working files. Evidence review/p1-fix-round/review.md and focused.log/typecheck.log. Working fix remains uncommitted; previous CI PASS and AC9 refer only to 290591c7b. T4 final exact-SHA review/CI pending; AC11 OPEN. No merge or release."
     }
   ],
   "acKinds": {
@@ -262,5 +309,18 @@
     "value": "MrCipherSmith",
     "basis": "stated",
     "source": "`--owner` flag on `flow owner set`"
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-07T10:19:25.305Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Keryx agent (openai-codex/gpt-6.1-sol)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9"
+    }
+  ]
 }
