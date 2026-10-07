@@ -535,9 +535,52 @@ function withJoined(joined: ScanMatch[], rescans: ScanMatch[]): ScanMatch[] {
 // `[\d().-]` (no blanks), and it only takes a number with a separator inside it that touches a letter or an underscore
 // on at least one side; the rest of the run is the phone scanner's. A match consumes its run, so the scan is linear,
 // and the verdict (digits, calendar dates, identifier neighbours) is the phone scanner's own.
+// Two things the verdict cannot see, because they hide in the glue:
+//   - a date written with dots (`report_2026.10.07.123456.pdf`, `metrics_20261007.1234`) is a file name or a metric,
+//     not a number;
+//   - a hex-group identifier (`be44-3100-2465-b583`, `1a228375-472c-016c-13b3`) is cut by the glue into pieces that
+//     look like a phone number. When every letter of the glue is a hex digit and every part of the token around the
+//     number is a hex run, it is one of those, unless the number itself carries a `+` or a parenthesis. A single
+//     non-hex letter or an underscore in the glue (`tel415-555-0199`) is a label, and the number is reported.
 const PHONE_GLUE = /(?<![\d.])\+?\d[\d().-]{7,}\d/g;
 const PHONE_GLUE_LETTER = /[A-Za-z_]/;
 const PHONE_GLUE_EVIDENCE = /[+()-]|\./;
+const PHONE_GLUE_STRONG = /[+(]/;
+const GLUE_LETTERS_BEFORE = /[A-Za-z_]+$/;
+const GLUE_LETTERS_AFTER = /^[A-Za-z_]+/;
+const NON_HEX_GLUE = /[G-Zg-z_]/;
+const HEX_RUN = /^[0-9A-Fa-f]+$/;
+const HEX_SEGMENT_SPLIT = /[-_.]/;
+const GLUE_FLANK = 8;
+const DOTTED_DATE =
+  /(?<!\d)(?:(?:19|20)\d{2}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])|(?:0[1-9]|[12]\d|3[01])\.(?:0[1-9]|1[0-2])\.(?:19|20)\d{2})(?!\d)/;
+const COMPACT_DATE_START = /^(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])[.-]/;
+
+function glueOf(content: string, start: number, end: number): { before: string; after: string } {
+  return {
+    before: GLUE_LETTERS_BEFORE.exec(content.slice(Math.max(0, start - GLUE_FLANK), start))?.[0] ?? "",
+    after: GLUE_LETTERS_AFTER.exec(content.slice(end, end + GLUE_FLANK))?.[0] ?? "",
+  };
+}
+
+function isHexGroupId(content: string, start: number, end: number): boolean {
+  const { text } = enclosingToken(content, start, end);
+  // Identifiers cut their hex into groups of 4, 8, 12... (`be44-3100`, `1a228375-472c`); `dead415-555-0199` is not one.
+  return text
+    .split(HEX_SEGMENT_SPLIT)
+    .every((segment) => segment === "" || (segment.length % 4 === 0 && HEX_RUN.test(segment)));
+}
+
+function acceptPhoneGlue(content: string, start: number, end: number, value: string): boolean {
+  if (DOTTED_DATE.test(value) || COMPACT_DATE_START.test(value)) {
+    return false;
+  }
+  const { before, after } = glueOf(content, start, end);
+  if (NON_HEX_GLUE.test(before) || NON_HEX_GLUE.test(after) || PHONE_GLUE_STRONG.test(value)) {
+    return true;
+  }
+  return !isHexGroupId(content, start, end);
+}
 
 const phoneGlueScanner: Scanner = {
   lastIndex: 0,
@@ -550,7 +593,7 @@ const phoneGlueScanner: Scanner = {
       const glued =
         (start > 0 && PHONE_GLUE_LETTER.test(content[start - 1] as string)) ||
         (end < content.length && PHONE_GLUE_LETTER.test(content[end] as string));
-      if (glued && PHONE_GLUE_EVIDENCE.test(m[0]) && phoneVerdict(content, start, end)) {
+      if (glued && PHONE_GLUE_EVIDENCE.test(m[0]) && phoneVerdict(content, start, end) && acceptPhoneGlue(content, start, end, m[0])) {
         this.lastIndex = end;
         return { index: start, 0: m[0], 1: m[0] };
       }
@@ -784,8 +827,29 @@ const IBAN_LENGTHS: Readonly<Record<string, number>> = {
   LI: 21, LT: 20, LU: 20, LV: 21, MC: 27, MD: 24, ME: 22, MK: 19, MR: 27, MT: 31, MU: 30, NL: 18, NO: 15, PK: 24,
   PL: 28, PS: 29, PT: 25, QA: 29, RO: 24, RS: 22, SA: 24, SC: 31, SE: 24, SI: 19, SK: 24, SM: 27, ST: 25, SV: 28,
   TL: 23, TN: 24, TR: 26, UA: 29, VA: 22, VG: 24, XK: 20,
+  BI: 27, DJ: 27, FK: 18, LY: 25, MN: 20, NI: 28, OM: 23, RU: 33, SD: 18, SO: 23, YE: 30,
 };
-const IBAN_GLUE_START = /[A-Z]{2}\d{2}/g;
+// The country is read in either case (`gb82west...`), and a number glued to letters on one side is still a number.
+const IBAN_GLUE_START = /[A-Za-z]{2}\d{2}/g;
+const IBAN_GLUE_RUN_BEFORE = /[A-Za-z0-9_]*$/;
+const IBAN_GLUE_RUN_AFTER = /^[A-Za-z0-9_]*/;
+
+function isIbanGlueChar(code: number): boolean {
+  return (code >= 97 && code <= 122) || isIbanChar(code);
+}
+
+// A glued IBAN needs a label: a letter that is not a hex digit, or an underscore, next to it. An IBAN glued to hex
+// digits alone is the middle of a digest or an identifier (`...DBE85FC67...`), where the mod-97 check passes by chance.
+function acceptGluedIban(content: string, start: number, end: number): boolean {
+  const gluedBefore = start > 0 && isAsciiWordChar(content.charCodeAt(start - 1));
+  const gluedAfter = end < content.length && isAsciiWordChar(content.charCodeAt(end));
+  if (!gluedBefore && !gluedAfter) {
+    return true;
+  }
+  const before = IBAN_GLUE_RUN_BEFORE.exec(content.slice(Math.max(0, start - GLUE_FLANK), start))?.[0] ?? "";
+  const after = IBAN_GLUE_RUN_AFTER.exec(content.slice(end, end + GLUE_FLANK))?.[0] ?? "";
+  return NON_HEX_GLUE.test(before) || NON_HEX_GLUE.test(after);
+}
 
 const ibanGluedScanner: Scanner = {
   lastIndex: 0,
@@ -793,15 +857,15 @@ const ibanGluedScanner: Scanner = {
     IBAN_GLUE_START.lastIndex = this.lastIndex;
     let m: RegExpExecArray | null;
     while ((m = IBAN_GLUE_START.exec(content)) !== null) {
-      const length = IBAN_LENGTHS[m[0].slice(0, 2)];
+      const length = IBAN_LENGTHS[m[0].slice(0, 2).toUpperCase()];
       if (length !== undefined) {
         let count = 0;
         let i = m.index;
         while (i < content.length && count < length) {
           const code = content.charCodeAt(i);
-          if (isIbanChar(code)) {
+          if (isIbanGlueChar(code)) {
             count += 1;
-          } else if (!(code === 32 && count >= 4 && isIbanChar(content.charCodeAt(i + 1)))) {
+          } else if (!(code === 32 && count >= 4 && isIbanGlueChar(content.charCodeAt(i + 1)))) {
             break;
           }
           i += 1;
@@ -852,29 +916,38 @@ function isCardCandidate(value: string): boolean {
   return lengths.slice(0, -1).every((length) => length === 4) && last >= 1 && last <= 7;
 }
 
-const GLUE_LETTER_BEFORE = /[A-Za-z_]+$/;
-const GLUE_LETTER_AFTER = /^[A-Za-z_]+/;
-const NON_HEX_LETTER = /[G-Zg-z_]/;
-const GLUE_FLANK = 8;
+const HEX_DIGIT = /[0-9A-Fa-f]/;
+const HASH_RUN = 8;
 
-// True when the candidate is not glued to letters, or when some letter of the glue is not a hex digit.
-function hasNonHexGlue(content: string, start: number, end: number): boolean {
-  const before = GLUE_LETTER_BEFORE.exec(content.slice(Math.max(0, start - GLUE_FLANK), start))?.[0] ?? "";
-  const after = GLUE_LETTER_AFTER.exec(content.slice(end, end + GLUE_FLANK))?.[0] ?? "";
-  return (before === "" && after === "") || NON_HEX_LETTER.test(before) || NON_HEX_LETTER.test(after);
+// A card is not a digit run inside a hash (`deadbeef4111111111111111cafe`, a sha256 with sixteen digits in a row).
+// The hex digits that touch the candidate say so: a short glue (`cc4111111111111111`, `dead4111111111111111`,
+// `4111111111111111beef`) is a label and the card is reported; a run of eight or more on its two sides together is the
+// rest of a digest, whatever letters it is made of.
+function outsideHashRun(content: string, start: number, end: number): boolean {
+  let before = 0;
+  while (before < HASH_RUN && start - before > 0 && HEX_DIGIT.test(content[start - before - 1] as string)) {
+    before += 1;
+  }
+  let after = 0;
+  while (before + after < HASH_RUN && end + after < content.length && HEX_DIGIT.test(content[end + after] as string)) {
+    after += 1;
+  }
+  return before + after < HASH_RUN;
 }
 
 const UUID_ANYWHERE = /[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/g;
 const UUID_REACH = 36;
 
-// A UUID is not a card (flow 412): a candidate that shares a character with a UUID-shaped token is a piece of it.
+// A UUID is not a card (flow 412): a candidate that lies inside a UUID-shaped token is a piece of it. A candidate
+// that only overlaps one (`4111111111111111-aaaa-bbbb-cccc-dddddddddddd`, `ab12cd34-ef56-ab78-cd90-4111111111111111`)
+// reaches beyond the token, so the token's last or first group is the card's own digits, and it is reported.
 function outsideUuid(content: string, start: number, end: number): boolean {
   const from = Math.max(0, start - UUID_REACH);
   const window = content.slice(from, Math.min(content.length, end + UUID_REACH));
   UUID_ANYWHERE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = UUID_ANYWHERE.exec(window)) !== null) {
-    if (from + m.index < end && from + m.index + m[0].length > start) {
+    if (from + m.index <= start && from + m.index + m[0].length >= end) {
       return false;
     }
     UUID_ANYWHERE.lastIndex = m.index + 1;
@@ -885,6 +958,22 @@ function outsideUuid(content: string, start: number, end: number): boolean {
 const SSN_BREAK_EXTRA = /(?<![0-9])\d{3}(?:\r\n|[\t\r\n])\d{2}(?:\r\n|[\t\r\n])\d{4}(?![0-9])/g;
 const IPV4_EXTRA =
   /(?<![0-9.])(?<!\b[vV])\d{1,3}(?:[\t\r\n]{0,2}\.[\t\r\n]{0,2}\d{1,3}){3}(?![0-9])/g;
+const IPV4_VERSION_SUFFIX = /^[A-Za-z]+\d/;
+
+// An address glued to letters is read as one unless it is a version number glued to a name or a tag
+// (`python3.11.2.1`, `libssl1.1.1.2`, `go1.21.0.1`, `1.2.3.4rc1`): a version starts with a one-digit major number,
+// which a name glued to the address rarely does, and a tag is letters and a digit after it.
+function acceptGluedIpv4(content: string, start: number, end: number): boolean {
+  const gluedBefore = start > 0 && /[A-Za-z]/.test(content[start - 1] as string);
+  const gluedAfter = end < content.length && /[A-Za-z]/.test(content[end] as string);
+  if (!gluedBefore && !gluedAfter) {
+    return true;
+  }
+  if (content[start + 1] === ".") {
+    return false; // a one-digit first octet
+  }
+  return !(gluedAfter && IPV4_VERSION_SUFFIX.test(content.slice(end, end + GLUE_FLANK)));
+}
 
 const RULES: Rule[] = [
   {
@@ -931,7 +1020,7 @@ const RULES: Rule[] = [
     severity: "high",
     confidence: 0.9,
     validate: isValidIban,
-    also: [{ regex: ibanGluedScanner }],
+    also: [{ regex: ibanGluedScanner, accept: acceptGluedIban }],
   },
   {
     policyId: "pii.credit-card",
@@ -945,7 +1034,7 @@ const RULES: Rule[] = [
       {
         regex: CARD_EXTRA,
         validate: (value) => isCardCandidate(value) && isValidCreditCard(value.replace(/\D/g, "")),
-        accept: hasNonHexGlue,
+        accept: outsideHashRun,
       },
     ],
   },
@@ -966,7 +1055,7 @@ const RULES: Rule[] = [
     severity: "low",
     confidence: 0.6,
     validate: isValidIp,
-    also: [{ regex: IPV4_EXTRA, validate: (value) => isValidIp(value.replace(/[\t\r\n]/g, "")) }],
+    also: [{ regex: IPV4_EXTRA, validate: (value) => isValidIp(value.replace(/[\t\r\n]/g, "")), accept: acceptGluedIpv4 }],
   },
 ];
 
@@ -1270,7 +1359,16 @@ function decimalDigitValue(codePoint: number): number {
 //   - `shyHyphen` reads the soft hyphen as a hyphen instead of deleting it (`078\u00ad05\u00ad1120`);
 //   - `breaks` also deletes a tab or line break that sits right next to a `-` or `.` between digits
 //     (`415-555-\n0199`), which is how a number wraps.
-type ViewOptions = { readonly letters?: boolean; readonly shyHyphen?: boolean; readonly breaks?: boolean };
+// Letters of other alphabets that stand for a Latin letter in an IBAN country code or bank code (`GБ82...`, a Cyrillic
+// `В` for `B`). Read only by the view the IBAN rule alone uses, so no other rule sees a word it did not contain.
+const HOMOGLYPHS: ReadonlyMap<number, string> = new Map([
+  ...Array.from("АВЕКМНОРСТХБГДЗИЛПУФ", (letter, i) => [letter.charCodeAt(0), "ABEKMHOPCTXBGDZILPUF"[i] as string] as const),
+  ...Array.from("авекмнорстхбгдзилпуф", (letter, i) => [letter.charCodeAt(0), "abekmhopctxbgdzilpuf"[i] as string] as const),
+  ...Array.from("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", (letter, i) => [letter.charCodeAt(0), "ABEZHIKMNOPTYX"[i] as string] as const),
+]);
+const HOMOGLYPH_LETTER = /[\u0391-\u03a9\u0410-\u044f]/;
+
+type ViewOptions = { readonly letters?: boolean; readonly homoglyphs?: boolean; readonly shyHyphen?: boolean; readonly breaks?: boolean };
 
 // The `-` look-alikes: every dash punctuation character (`\p{Pd}`: the dashes, small and fullwidth hyphens, the
 // Armenian and Mongolian hyphens, the wave dash, the double oblique hyphen, ...) and the characters that are not
@@ -1362,6 +1460,15 @@ function foldNumberChar(code: number, options: ViewOptions, afterNumber: boolean
   }
   if (options.letters && code >= 0xff21 && code <= 0xff3a) {
     return String.fromCharCode(code - 0xff21 + 65);
+  }
+  if (options.letters && code >= 0xff41 && code <= 0xff5a) {
+    return String.fromCharCode(code - 0xff41 + 97);
+  }
+  if (options.homoglyphs) {
+    const latin = HOMOGLYPHS.get(code);
+    if (latin !== undefined) {
+      return latin;
+    }
   }
   const digit = decimalDigitValue(code);
   return digit < 0 ? null : String(digit);
@@ -1537,7 +1644,8 @@ const CARD_RULE = RULES.findIndex((rule) => rule.policyId === "pii.credit-card")
 const NUMBER_RULES = new Set(
   RULES.flatMap((rule, index) => (["pii.phone", "pii.iban", "pii.credit-card", "pii.ssn", "pii.ip"].includes(rule.policyId) ? [index] : [])),
 );
-const FULLWIDTH_CAPITAL = /[\uff21-\uff3a]/;
+const FULLWIDTH_LETTER = /[\uff21-\uff3a\uff41-\uff5a]/;
+const IBAN_RULE = RULES.findIndex((rule) => rule.policyId === "pii.iban");
 const SOFT_HYPHEN = /\u00ad/;
 const NUMBER_BREAK = /[-.][\t\r\n]|[\t\r\n][-.]/;
 
@@ -1546,8 +1654,11 @@ function viewsOf(content: string, nonAscii: boolean): ViewOptions[] {
   const views: ViewOptions[] = [];
   if (nonAscii) {
     views.push({});
-    if (FULLWIDTH_CAPITAL.test(content)) {
+    if (FULLWIDTH_LETTER.test(content)) {
       views.push({ letters: true });
+    }
+    if (HOMOGLYPH_LETTER.test(content)) {
+      views.push({ homoglyphs: true });
     }
     if (SOFT_HYPHEN.test(content)) {
       views.push({ shyHyphen: true });
@@ -1590,6 +1701,9 @@ export function detectPii(content: string): DetectorMatch[] {
         extra.forEach((found, index) => {
           if (options.breaks && !NUMBER_RULES.has(index)) {
             return; // a line break next to a dot is not a reason to read an address or a name differently
+          }
+          if (options.homoglyphs && index !== IBAN_RULE) {
+            return; // a letter of another alphabet is read as Latin for an IBAN only
           }
           const numbers = NUMBER_RULES.has(index);
           const base = perRule[index] as DetectorMatch[];
