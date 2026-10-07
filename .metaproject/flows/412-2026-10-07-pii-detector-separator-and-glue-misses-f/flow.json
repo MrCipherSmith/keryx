@@ -9,15 +9,20 @@
   "id": "412",
   "slug": "pii-detector-separator-and-glue-misses-f",
   "title": "PII detector: separator and glue misses found in review round 6",
-  "status": "ready",
+  "status": "in-progress",
   "createdAt": "2026-10-07T03:34:23.592Z",
-  "updatedAt": "2026-10-07T04:29:16.779Z",
+  "updatedAt": "2026-10-07T06:31:00.878Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ea12f44502b2db119a2848d8479e4b07e064403e228c366dd2d88d12200e88af",
-  "acConfirmed": {},
+  "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93",
+  "acConfirmed": {
+    "AC6": {
+      "at": "2026-10-07T06:31:00.878Z",
+      "note": "operator confirmed in poll 120 (2026-10-07): AC6 reworded with the UUID exception; backed by src/security/detect/pii-flow412-coverage.test.ts and the scaling tests"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -101,6 +106,20 @@
       "at": "2026-10-07T04:29:16.779Z",
       "event": "frozen",
       "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-07T05:38:33.310Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-07T06:31:00.681Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"Every rule stays linear in input length: the existing scaling tests (pii-linear-time, pii-phone-linear-time) pass, and a differential on random phone, email, name, card and SSN inputs shows every span of baseline 6f6d8898 still covered.\" -> \"Every rule stays linear in input length: the existing scaling tests (pii-linear-time, pii-phone-linear-time) pass, and a differential on random phone, email, name, card and SSN inputs shows every span of baseline 6f6d8898 still covered, except a card span that overlaps a UUID-shaped token, which AC5 deliberately stops reporting (4 of 91,973 baseline card spans in the 60,000-input differential, all four overlapping a UUID).\" (Operator poll 120 (2026-10-07): accept the AC5/AC6 loss of 4 card spans that overlap a UUID and word AC6 with that exception.)"
+    },
+    {
+      "at": "2026-10-07T06:31:00.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: operator confirmed in poll 120 (2026-10-07): AC6 reworded with the UUID exception; backed by src/security/detect/pii-flow412-coverage.test.ts and the scaling tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -122,5 +141,18 @@
     "AC6": {
       "kind": "unclassified"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-07T06:31:00.878Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    }
+  ]
 }
