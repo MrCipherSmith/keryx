@@ -502,7 +502,7 @@ const RULES: Rule[] = [
   {
     policyId: "pii.ssn",
     mask: "ssn",
-    // Digit boundaries, not `\b`: `user_078-05-1120` and `x078-05-1120` are still an SSN. The identifier guard decides.
+    // Digit boundaries, not `\b`: `user_078-05-1120` and `x078-05-1120` are still an SSN, and nothing suppresses it.
     regex: /(?<![0-9])\d{3}-\d{2}-\d{4}(?![0-9])/g,
     severity: "high",
     confidence: 0.85,
@@ -674,164 +674,11 @@ function isIdentifierFragment(content: string, matchStart: number, matchEnd: num
   return [...before.split(/[-_]/), ...after.split(/[-_]/)].some(isHexIdentifierRun);
 }
 
-// ---------------------------------------------------------------------------
-// SSN identifier-fragment guard (flow 261, narrowed by SEC-F-005). A false negative leaks a person's
-// SSN, a false positive only corrupts an identifier, so an SSN-shaped value is redacted unless the
-// digits are part of a well-formed identifier itself: the match sits strictly INSIDE one fully scanned
-// UUID token (`8-4-4-4-12` hex) and no SSN label (`ssn`, `social`, `SS #`, `S-S-N`, `NSS`, `СНИЛС`,
-// `tax id`, `TIN`, ...) is in that token or STARTS within 64 characters before or after it, read after
-// NFKC / invisible-character / accent folding.
-//
-// A neighbouring hash is NOT evidence: `<hex>-078-05-1120`, `078-05-1120-<hex>` and `<hex>_078-05-1120`
-// are reported, because the digits are not part of the hash and anyone can put a hash next to an SSN
-// (the operator reversed the earlier "exact 32/40/64-hex neighbour" rule on 2026-10-06).
-// ---------------------------------------------------------------------------
-
-/** Wide enough that a sha256 (64) on either side never truncates the scan. */
-const SSN_TOKEN_SCAN_LIMIT = 192;
-const SSN_LABEL_WINDOW = 64;
-// Latin/Cyrillic/Greek lookalikes of the label letters (s n o c i a l u e r t y). Intentionally not exhaustive.
-const LABEL_CONFUSABLES: ReadonlyMap<string, string> = new Map(
-  Object.entries({
-    s: "ѕσς",
-    n: "пην",
-    o: "оο",
-    c: "сϲ",
-    i: "іιı",
-    a: "аα",
-    l: "ӏ",
-    u: "υ",
-    e: "еε",
-    r: "г",
-    t: "тτ",
-    y: "уγ",
-  }).flatMap(([latin, lookalikes]) => [...lookalikes].map((ch): [string, string] => [ch, latin])),
-);
-// Default-ignorable, format and control characters (LRM/RLM, bidi, U+2060-2064, U+180E, U+3164, tags, ZWSP, C0/C1...) plus combining marks.
-// Whitespace controls (\t-\r, NEL) stay: they are separators, not noise.
-const LABEL_STRIP = /(?![\t-\r\u0085])\p{Cc}|[\p{Default_Ignorable_Code_Point}\p{Cf}\p{M}]/gu;
-
-const FOLD_CACHE_LIMIT = 2048;
-const FOLD_PIECE_LIMIT = 4; // no label letter folds to more; a long compatibility expansion (U+FDFA) is only cost
-const foldCache = new Map<string, string>();
-
-function foldCodePoint(ch: string): string {
-  const code = ch.charCodeAt(0);
-  if (code < 128) {
-    return code === 127 || (code < 32 && (code < 9 || code > 13)) ? "" : ch;
-  }
-  const cached = foldCache.get(ch);
-  if (cached !== undefined) {
-    return cached;
-  }
-  let out = LABEL_CONFUSABLES.get(ch.toLowerCase()) ?? ""; // checked before NFKC, which turns U+03F2 into a sigma
-  if (out === "") {
-    for (const folded of ch.normalize("NFKC").toLowerCase().normalize("NFD").replace(LABEL_STRIP, "")) {
-      out += LABEL_CONFUSABLES.get(folded) ?? folded;
-    }
-    out = out.slice(0, FOLD_PIECE_LIMIT);
-  }
-  if (foldCache.size >= FOLD_CACHE_LIMIT) {
-    foldCache.clear();
-  }
-  foldCache.set(ch, out);
-  return out;
-}
-
-const LABEL_SEP = "[^\\p{L}\\p{N}]{0,12}";
-// Matched against folded text (NFKC, lowercase, invisibles and accents removed, lookalikes mapped to Latin).
-const SSN_LABEL = new RegExp(
-  [
-    `ssn|soc${LABEL_SEP}ial|nss|${[..."снилс"].map(foldCodePoint).join("")}|sozial${LABEL_SEP}versicherung|versicherungsn(?:ummer|r)|numero${LABEL_SEP}de${LABEL_SEP}secu`,
-    `soc${LABEL_SEP}sec`,
-    `(?<![a-z])(?:s${LABEL_SEP}s${LABEL_SEP}[n#]|n${LABEL_SEP}s${LABEL_SEP}s|sv${LABEL_SEP}n)`,
-    // Other tax and insurance identifiers an SSN-shaped number is written next to. `tin` must stand alone
-    // (not `routine`, `tinder`), and `national insurance` needs both words.
-    `(?<![a-z])(?:i?tin(?![a-z])|tax${LABEL_SEP}id(?:ent|(?![a-z])))|national${LABEL_SEP}insurance`,
-  ].join("|"),
-  "iug",
-);
-const LABEL_TAIL = 64; // the longest label folds to far fewer characters; bounds the work past the window
-const LABEL_LOOKBEHIND = 8; // context before the window so `(?<![a-z])` sees the character just outside it
-const PLAIN_ASCII = /^[\t-\r\u0020-\u007E]*$/;
-
-// Iterates code points so astral characters fold too; offsets maps each folded character to its UTF-16 index in `text`.
-function foldForLabel(
-  text: string,
-  labelStartLimit: number,
-  windowStart: number,
-): { folded: string; offsets: number[]; windowFrom: number } {
-  let folded = "";
-  const offsets: number[] = [];
-  let index = 0;
-  let tailFrom = -1;
-  let windowFrom = -1;
-  for (const ch of text) {
-    if (windowFrom < 0 && index >= windowStart) {
-      windowFrom = folded.length;
-    }
-    if (index >= labelStartLimit) {
-      tailFrom = tailFrom < 0 ? folded.length : tailFrom;
-      if (folded.length - tailFrom >= LABEL_TAIL) {
-        break;
-      }
-    }
-    const piece = foldCodePoint(ch);
-    folded += piece;
-    for (let k = 0; k < piece.length; k += 1) {
-      offsets.push(index);
-    }
-    index += ch.length;
-  }
-  return { folded, offsets, windowFrom: windowFrom < 0 ? folded.length : windowFrom };
-}
-
-// A label vetoes when it STARTS within 64 characters of the token, either side inclusive (or inside it).
-function hasSsnLabelNear(content: string, tokenStart: number, tokenEnd: number): boolean {
-  const base = Math.max(0, tokenStart - SSN_LABEL_WINDOW);
-  const from = Math.max(0, base - LABEL_LOOKBEHIND);
-  const limit = tokenEnd + SSN_LABEL_WINDOW;
-  const region = content.slice(from, Math.min(content.length, tokenEnd + 2 * SSN_LABEL_WINDOW));
-  if (PLAIN_ASCII.test(region)) {
-    SSN_LABEL.lastIndex = base - from;
-    const hit = SSN_LABEL.exec(region);
-    return hit !== null && from + hit.index <= limit;
-  }
-  const { folded, offsets, windowFrom } = foldForLabel(region, limit - from, base - from);
-  SSN_LABEL.lastIndex = windowFrom;
-  const hit = SSN_LABEL.exec(folded);
-  return hit !== null && from + (offsets[hit.index] as number) <= limit;
-}
-
-function isSsnIdentifierFragment(content: string, matchStart: number, matchEnd: number): boolean {
-  let tokenStart = matchStart;
-  const floor = Math.max(0, matchStart - SSN_TOKEN_SCAN_LIMIT);
-  while (tokenStart > floor && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) {
-    tokenStart -= 1;
-  }
-  let tokenEnd = matchEnd;
-  const ceiling = Math.min(content.length, matchEnd + SSN_TOKEN_SCAN_LIMIT);
-  while (tokenEnd < ceiling && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) {
-    tokenEnd += 1;
-  }
-  // The scan limit is per side and also a budget for the text around the match, so two long sides cannot both pass.
-  const truncated =
-    (tokenStart === floor && tokenStart > 0 && IDENTIFIER_CHAR.test(content[tokenStart - 1] as string)) ||
-    (tokenEnd === ceiling && tokenEnd < content.length && IDENTIFIER_CHAR.test(content[tokenEnd] as string)) ||
-    tokenEnd - tokenStart - (matchEnd - matchStart) > SSN_TOKEN_SCAN_LIMIT;
-  if (truncated) {
-    return false; // Evidence incomplete → redact.
-  }
-  if (tokenStart === matchStart && tokenEnd === matchEnd) {
-    return false; // The match IS the token.
-  }
-  // Only a well-formed UUID token holds digits that belong to the identifier itself.
-  if (!UUID_TOKEN.test(content.slice(tokenStart, tokenEnd))) {
-    return false;
-  }
-  // A label overrides everything: the token, or the text just before it, says this is an SSN.
-  return !hasSsnLabelNear(content, tokenStart, tokenEnd);
-}
+// There is deliberately no identifier guard on the SSN rule. A false negative leaks a person's SSN and a
+// false positive only corrupts an identifier, so an SSN-shaped value is always reported, including next to a
+// hash or a label (the operator reversed the earlier "hash neighbour suppresses" rule on 2026-10-06). The one
+// shape the guard could ever have suppressed, a fragment strictly inside a UUID, holds no `ddd-dd-dddd`: a UUID
+// has no two-character group.
 
 function hasPhoneSeparatorShape(value: string): boolean {
   if (/\s{2,}/.test(value)) {
@@ -864,10 +711,6 @@ function scanRule(content: string, rule: Rule): DetectorMatch[] {
       continue;
     }
     // Phone candidates are judged (digit count, separator shape, dates, identifiers) inside `phoneScanner`.
-    // Flow 261 / SEC-F-005: an SSN-shaped run is suppressed only strictly inside a UUID token, never when labelled.
-    if (rule.policyId === "pii.ssn" && isSsnIdentifierFragment(content, m.index, m.index + m[0]!.length)) {
-      continue;
-    }
     // E4: gate structured-PII candidates by their checksum/range validator.
     if (rule.validate && !rule.validate(value)) {
       continue;
@@ -903,7 +746,7 @@ function scanRules(content: string): DetectorMatch[][] {
 // one it stands for. The copy has one unit per original code point at most, and a map from every unit back to
 // the original offset, so spans, redaction offsets and returned values always refer to the ORIGINAL text.
 // Only digits, dashes, spaces, dots, `@`, `+` and parentheses are folded: letters are left alone, so the
-// name and address rules, and the SSN label fold, see exactly what they saw before.
+// name and address rules see exactly what they saw before.
 // ---------------------------------------------------------------------------
 
 const NORMALIZE_CHUNK = 1 << 21;
