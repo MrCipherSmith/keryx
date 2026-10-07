@@ -53,16 +53,18 @@ jobs:
           Path(__import__('os').environ['RUNNER_TEMP'] + '/locator-diagnostic/instrumentation.txt').write_text(observer)
           PYCODE
       - name: Probe exact failed CI locator on original scrubber
+        id: probe
         shell: bash
         run: |
           set -euo pipefail
           bun -e '
             import {scrubGrantedOutput} from "./src/commands/trigger-agent-task.ts";
             const text = "Digest stopped: gh failed for every source. Report: /tmp/locator-diagnostic/dig-20261002T120000-3991d42d.md";
-            const output = scrubGrantedOutput(text);
+            const output = scrubGrantedOutput(text, {});
             console.log(JSON.stringify({unchanged: output === text, phoneMasked: output.includes("[REDACTED:phone]")}));
           ' 2>&1 | tee "$RUNNER_TEMP/locator-diagnostic/exact-probe.log"
       - name: Exact runtime suite
+        if: ${{ !cancelled() && (steps.probe.outcome == 'success' || steps.probe.outcome == 'failure') }}
         shell: bash
         run: |
           set +e
