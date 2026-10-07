@@ -12,7 +12,7 @@
   "title": "Correct task routing: JEV fallback and assignments survive /model",
   "status": "in-progress",
   "createdAt": "2026-10-06T06:04:33.880Z",
-  "updatedAt": "2026-10-07T15:55:51.091Z",
+  "updatedAt": "2026-10-07T16:41:06.757Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,7 +90,7 @@
       "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 4,
+        "count": 6,
         "log": [
           {
             "at": "2026-10-06T20:01:18.265Z",
@@ -111,6 +111,16 @@
             "at": "2026-10-07T09:58:51.108Z",
             "outcome": "blocked",
             "detail": "PR #917 Linux CI status check on exact head 290591c7b553cc9a2804a47eee288694cfbc166c. Intermediate result, NOT full gate PASS. core: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603970321. Job dependency-audit: completed/success. Job standard-baseline: completed/success. Job client matrix (streaming): completed/success. Job macOS real-host legs — OS sandbox + TUI pty launch: completed/success. Job metrics-contract: completed/success. Job vscode-extension: completed/success. Job opentui native (linux-arm64): completed/success. Job client matrix (cancel-resume): completed/success. Job typecheck-and-tests: in_progress/pending. Job opentui native (darwin-x64): completed/success. Job opentui native (darwin-arm64): completed/success. Job opentui native (linux-x64): completed/success. Job client matrix (terminal): in_progress/pending. Job linux sandbox (bubblewrap) live smoke: completed/success. Job client matrix (runtime): completed/success. Job standard-pr: completed/success. full: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603964584. Job full-check: in_progress/pending. Wiki freshness: completed/success. Docs: completed/success. Reports stored locally at .git/flow411-split/ci917/final-ci/{pr,runs,core-jobs,full-jobs}.json; local files are not portable evidence. T3/AC9 remain open while CI and full-check run. Final review, merge/release and operator AC11 remain pending; no acceptance confirmation."
+          },
+          {
+            "at": "2026-10-07T16:21:44.823Z",
+            "outcome": "blocked",
+            "detail": "Final exact SHA c59edc7da: CI FAILURE(core import-policy bypass152>150); literal Full check FAILURE29917pass48skip2fail(import-policy and provider-endpoint-retry blank frame). Evidence review/final-c59edc7da/review.md. Historical AC9 unchanged; no new final-SHA confirmation; AC11 OPEN."
+          },
+          {
+            "at": "2026-10-07T16:41:05.897Z",
+            "outcome": "blocked",
+            "detail": "Gate fixes local PASS91tests9files + ten Esc runs8pass each; facade bypasses routed through security/service, ceiling unchanged; explicit test render-barrier and pending wizard assertions. Blank CI frame root cause unproven. Evidence review/gate-fixes. Final-SHA CI/AC9 pending; historical AC9 unchanged; AC11 OPEN."
           }
         ]
       },
@@ -128,7 +138,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 6,
+        "count": 8,
         "log": [
           {
             "at": "2026-10-06T20:01:18.914Z",
@@ -159,6 +169,16 @@
             "at": "2026-10-07T15:55:51.091Z",
             "outcome": "blocked",
             "detail": "Locator downstream verification: real hub over fake Bot API, session/service x immediate/queued; head and historical merge candidate suites each 34 pass 0 fail; typecheck PASS. Evidence review/locator-downstream and locator-merge-proof (old 25pass1fail -> candidate30pass0fail). Send path does not reapply redaction. Independent downstream reviewer timed out without verdict; T4 stays blocked pending final exact-SHA review and CI. AC11 OPEN, no live transport/npm operator proof; existing AC9 only old290591c7b."
+          },
+          {
+            "at": "2026-10-07T16:21:45.565Z",
+            "outcome": "blocked",
+            "detail": "Independent downstream review sub:c401bd62 PASS: service/session immediate/queued sends do not reapply PII redaction; static only, parent execution evidence34pass0fail each. Not whole-PR approval. Final CI/Full check failures block readiness. Evidence review/final-c59edc7da/review.md. AC11 OPEN."
+          },
+          {
+            "at": "2026-10-07T16:41:06.757Z",
+            "outcome": "blocked",
+            "detail": "Independent scoped gate-fix review sub:cafe6898 PASS; no semantic security/navigation blocker. Static only; synthetic idle test not native scheduler proof. Whole-PR readiness pending published SHA CI/Full check. Evidence review/gate-fixes/review.md. AC11 OPEN; no merge/release."
           }
         ]
       },
@@ -288,6 +308,26 @@
       "at": "2026-10-07T15:55:51.091Z",
       "event": "task-attempt",
       "detail": "T4: blocked (attempt 6) — Locator downstream verification: real hub over fake Bot API, session/service x immediate/queued; head and historical merge candidate suites each 34 pass 0 fail; typecheck PASS. Evidence review/locator-downstream and locator-merge-proof (old 25pass1fail -> candidate30pass0fail). Send path does not reapply redaction. Independent downstream reviewer timed out without verdict; T4 stays blocked pending final exact-SHA review and CI. AC11 OPEN, no live transport/npm operator proof; existing AC9 only old290591c7b."
+    },
+    {
+      "at": "2026-10-07T16:21:44.823Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 5) — Final exact SHA c59edc7da: CI FAILURE(core import-policy bypass152>150); literal Full check FAILURE29917pass48skip2fail(import-policy and provider-endpoint-retry blank frame). Evidence review/final-c59edc7da/review.md. Historical AC9 unchanged; no new final-SHA confirmation; AC11 OPEN."
+    },
+    {
+      "at": "2026-10-07T16:21:45.565Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 7) — Independent downstream review sub:c401bd62 PASS: service/session immediate/queued sends do not reapply PII redaction; static only, parent execution evidence34pass0fail each. Not whole-PR approval. Final CI/Full check failures block readiness. Evidence review/final-c59edc7da/review.md. AC11 OPEN."
+    },
+    {
+      "at": "2026-10-07T16:41:05.898Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 6) — Gate fixes local PASS91tests9files + ten Esc runs8pass each; facade bypasses routed through security/service, ceiling unchanged; explicit test render-barrier and pending wizard assertions. Blank CI frame root cause unproven. Evidence review/gate-fixes. Final-SHA CI/AC9 pending; historical AC9 unchanged; AC11 OPEN."
+    },
+    {
+      "at": "2026-10-07T16:41:06.757Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 8) — Independent scoped gate-fix review sub:cafe6898 PASS; no semantic security/navigation blocker. Static only; synthetic idle test not native scheduler proof. Whole-PR readiness pending published SHA CI/Full check. Evidence review/gate-fixes/review.md. AC11 OPEN; no merge/release."
     }
   ],
   "acKinds": {

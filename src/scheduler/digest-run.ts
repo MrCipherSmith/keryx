@@ -34,8 +34,7 @@ import {
 import { dispatchLockPath } from "../commands/trigger-dispatch";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
-import { detectPii } from "../security/detect/pii";
-import { applyRedaction } from "../security/redact";
+import { detectPii, applyRedaction } from "../security/service";
 import type { AgentTaskAction, TriggerEntry } from "../trigger/config";
 import { DIGEST_DEFAULT_TOPIC } from "../trigger/digest-config";
 import { DIGEST_TOOL_IDS } from "../trigger/granted-tools";

@@ -1,0 +1,33 @@
+bun test v1.3.14 (0d9b296a)
+
+src/tui/provider-endpoint-retry.test.ts:
+(pass) Esc frame polling renders even when flush reports visual idle [2.41ms]
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > nothing answered, or the wrong thing answered: the URL is suspect [0.13ms]
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > BOUNDARY — a refused credential is not the endpoint's fault [0.02ms]
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > BOUNDARY — an honest empty catalogue is not the endpoint's fault
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > BOUNDARY — no failure at all never re-opens the step
+(pass) REGRESSION — an unreachable endpoint re-opens the URL step > the reason is shown, the corrected URL is probed, and the models arrive [88.63ms]
+(pass) REGRESSION — an unreachable endpoint re-opens the URL step > Esc at the re-opened URL step goes back to the provider list, not onward [356.73ms]
+(pass) BOUNDARY — the endpoint step stays shut when the URL is not the problem > an honestly empty catalogue goes straight to the picker's notice [376.80ms]
+
+src/lib/import-policy.live.test.ts:
+(pass) the live scan reads the whole tree, not a subset [1298.30ms]
+(pass) a live scan pointed at an empty directory fails instead of passing [2.97ms]
+(pass) every top-level segment under src/ is classified, and nothing classified is gone [0.93ms]
+(pass) no live file or import target lands in an unclassified zone [0.20ms]
+(pass) every relative specifier in the tree resolves [0.21ms]
+(pass) core owners import client/adapter modules in exactly the allowlisted places [0.30ms]
+(pass) the sac group reaches only the five documented session-state modules [0.24ms]
+(pass) the wiki group is the only core->client debt outside the session-state exception [0.18ms]
+(pass) typeOnlySpecifiers reads every type-only shape and no value import [0.26ms]
+(pass) no production module imports against a forbidden core-to-core direction [422.57ms]
+(pass) facade bypasses that COULD be fixed today are ratcheted, not allowed to grow [1.57ms]
+(pass) exactly the known zones bypass a facade — a new one joining is a real change [0.47ms]
+(pass) some core zones have no service.ts, so the facade rule is unsatisfiable for them [0.79ms]
+(pass) the ten owners src/core.ts publishes really do each have a facade [0.05ms]
+(pass) the bundler reaches no module under src/ that the direct scan failed to name [512.09ms]
+
+ 23 pass
+ 0 fail
+ 45 expect() calls
+Ran 23 tests across 2 files. [4.22s]

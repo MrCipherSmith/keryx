@@ -55,7 +55,10 @@ import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
  * reaches everything behind the facade too, which is what the import policy
  * counts as a bypass. The implementation stays where it is.
  */
-export { redactSensitiveText } from "./redact";
+// Digest report locators inspect PII spans and apply selective fixed-width
+// masks through this facade, without importing security internals.
+export { redactSensitiveText, applyRedaction } from "./redact";
+export { detectPii } from "./detect/pii";
 
 /**
  * Re-exported here for the same reason as `redactSensitiveText` above: S-8
