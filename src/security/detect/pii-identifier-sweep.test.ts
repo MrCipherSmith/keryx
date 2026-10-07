@@ -22,9 +22,9 @@
 //                    boundary, and `isValidIban` checks mod-97.
 //   pii.credit-card  can span a hyphenated digit run, but `isValidCreditCard`
 //                    (Luhn) rejects what is not a card number.
-//   pii.ssn          `\b\d{3}-\d{2}-\d{4}\b` can sit inside a hyphenated token.
-//                    It is the one rule where the same weakness was reachable and
-//                    flow 261 gave it the phone rule's guard; see the block below.
+//   pii.ssn          `(?<![0-9])\d{3}-\d{2}-\d{4}(?![0-9])` can sit inside a hyphenated
+//                    token, and is reported there on purpose: a UUID holds no such
+//                    fragment, and anything else is not evidence; see the block below.
 //   pii.ip           dotted quads / colon groups; `isValidIp` range-checks.
 
 import { describe, expect, test } from "bun:test";
@@ -58,12 +58,11 @@ describe("no PII rule fires on an identifier", () => {
   });
 });
 
-describe("pii.ssn follows the phone rule (flow 261)", () => {
+describe("pii.ssn is reported next to hashes, labels and identifier text (flow 261, SEC-F-005)", () => {
   // `pii.ssn` is bounded by digit boundaries, so an SSN-shaped run can sit inside a longer hyphenated
-  // token. Flow 261 gave it the phone rule's guard: redact unless there is positive evidence that the
-  // digits belong to an identifier. The operator reversed poll 93 on 2026-10-06 (SEC-F-005): a hash
-  // NEXT to an SSN is not such evidence (anyone can put one there), so only a fragment strictly inside
-  // one well-formed UUID token is left alone, and an SSN label within 64 characters still overrides that.
+  // token. The operator reversed poll 93 on 2026-10-06 (SEC-F-005): a hash NEXT to an SSN is not evidence
+  // that it is an identifier (anyone can put one there), and a UUID holds no `ddd-dd-dddd` at all, so the
+  // rule has no suppression: every SSN-shaped value is reported, labelled or not.
   const ssnValues = (input: string) => detectPii(input).filter((m) => m.policyId === "pii.ssn").map((m) => m.value);
   const SSN = "123-45-6789";
   const md5 = "d41d8cd98f00b204e9800998ecf8427e";
@@ -152,12 +151,12 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues("urn:uuid:730344f3-3668-4760-9056-bf7292686b67")).toEqual([]);
   });
 
-  test("a hash that is not adjacent to the SSN does not suppress it", () => {
+  test("a hash that is not adjacent to the SSN is reported alongside it", () => {
     expect(ssnValues(`${md5}-foo-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`${SSN}-foo-${md5}`)).toEqual([SSN]);
   });
 
-  test("a label in or just before the token overrides a hash neighbour", () => {
+  test("a label in or just before the token still leaves the SSN reported", () => {
     for (const input of [
       "john-smith-ssn-123-45-6789-deadbeef",
       "Employee-ID-deadbeef-SSN-123-45-6789",
@@ -189,7 +188,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues(`SSN. ${sha1}-${SSN}`)).toEqual([SSN]);
   });
 
-  test("every label form vetoes an exact-length hash neighbour, before or after", () => {
+  test("an SSN beside an exact-length hash is reported with any label form, before or after", () => {
     const labels = [
       "SS#",
       "ss#:",
@@ -219,7 +218,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("label forms beyond the basic list also veto, incl. separators, accents and invisible characters", () => {
+  test("an SSN is reported next to label forms beyond the basic list, incl. separators, accents and invisible characters", () => {
     const labels = [
       "SS #",
       "SS#",
@@ -258,28 +257,28 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  const vetoesEverywhere = (label: string) => {
+  const reportedEverywhere = (label: string) => {
     expect(ssnValues(`${label} ${md5}-${SSN}`)).toEqual([SSN]);
     expect(ssnValues(`${md5}-${SSN} ${label}`)).toEqual([SSN]);
     expect(ssnValues(`${SSN}-${md5} ${label}`)).toEqual([SSN]);
     expect(ssnValues(`${label}: ${SSN}-${md5}`)).toEqual([SSN]);
   };
 
-  test("astral styled labels (math bold, monospace, sans) veto: the fold runs per code point", () => {
+  test("an SSN is reported beside astral styled labels (math bold, monospace, sans)", () => {
     for (const label of ["𝐒𝐒𝐍", "𝚂𝚂𝙽", "𝗦𝗦𝗡", "𝐬𝐬𝐧", "𝐬𝐨𝐜𝐢𝐚𝐥", "𝚜𝚘𝚌𝚒𝚊𝚕", "𝗦𝗢𝗖𝗜𝗔𝗟", "𝐒𝐨𝐜. 𝐒𝐞𝐜. 𝐍𝐨."]) {
-      vetoesEverywhere(label);
+      reportedEverywhere(label);
     }
   });
 
-  test("invisible and bidi characters inside a label do not defeat it", () => {
+  test("an SSN is reported beside a label with invisible and bidi characters inside it", () => {
     const invisibles = ["‎", "‏", "‪", "‮", "⁠", "⁢", "⁤", "᠎", "ㅤ", "\u{E0001}", "\u{E0041}", "­", "​", "﻿"];
     for (const mark of invisibles) {
-      vetoesEverywhere(`S${mark}S${mark}N`);
-      vetoesEverywhere(`so${mark}cial`);
+      reportedEverywhere(`S${mark}S${mark}N`);
+      reportedEverywhere(`so${mark}cial`);
     }
   });
 
-  test("S/S/N, S:S:N and up to 12 separators between the letters of a short label veto", () => {
+  test("an SSN is reported beside S/S/N, S:S:N and up to 12 separators between the letters of a short label", () => {
     for (const label of [
       "S/S/N",
       "S:S:N",
@@ -292,7 +291,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
       `N${".".repeat(9)}S${".".repeat(9)}S`,
       `SV${"/".repeat(10)}N`,
     ]) {
-      vetoesEverywhere(label);
+      reportedEverywhere(label);
     }
   });
 
@@ -303,9 +302,9 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("Cyrillic and Greek lookalike labels veto", () => {
+  test("an SSN is reported beside Cyrillic and Greek lookalike labels", () => {
     for (const label of ["ЅЅN", "ѕѕn", "ΣΣN", "ΣΣΝ", "σσν", "ѕосіаӏ", "ѕοciαl", "ѕοϲιαl", "Ѕоc. Ѕеc. Nо."]) {
-      vetoesEverywhere(label);
+      reportedEverywhere(label);
     }
   });
 
@@ -345,7 +344,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     }
   });
 
-  test("a label starting inside the 64-character window vetoes even when it ends beyond it", () => {
+  test("an SSN is reported with a label starting inside the 64-character window, even when it ends beyond it", () => {
     const labels = ["social security number", "Sozialversicherungsnummer", "Soc. Sec. No."];
     for (const label of labels) {
       for (const start of [1, 50, 63]) {
@@ -438,7 +437,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
     expect(ssnValues(`é s s n${gap}${md5}-${SSN}`)).toEqual([SSN]);
   });
 
-  test("control characters, lookalikes and separators inside a literal label do not defeat it", () => {
+  test("an SSN is reported beside a label with control characters, lookalikes and separators inside it", () => {
     for (const label of [
       "so\x00cial",
       "soc\x01ial",
@@ -453,7 +452,7 @@ describe("pii.ssn follows the phone rule (flow 261)", () => {
       "numero_de_secu",
       "numero-de-secu",
     ]) {
-      vetoesEverywhere(label);
+      reportedEverywhere(label);
     }
   });
 

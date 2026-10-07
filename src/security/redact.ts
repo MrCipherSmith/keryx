@@ -107,17 +107,22 @@ export function applyRedaction(content: string, matches: DetectorMatch[]): strin
   // keeps a covered inner/partial span from ever re-emitting original content.
   const redactable = matches
     .filter((m) => m.mask !== undefined)
-    .sort((a, b) => a.start - b.start);
+    .sort((a, b) => a.start - b.start || b.end - a.end);
   let out = "";
   let cursor = 0;
   for (const match of redactable) {
-    const start = Math.max(match.start, cursor);
-    if (start >= match.end) {
+    if (match.end <= cursor) {
       continue; // fully covered by a prior mask
     }
-    out += content.slice(cursor, start);
+    if (match.start < cursor) {
+      // A partial overlap (two rules read one run of digits differently) is masked by the marker already
+      // written; the union is hidden without a second marker.
+      cursor = match.end;
+      continue;
+    }
+    out += content.slice(cursor, match.start);
     out += maskFor(match);
-    cursor = Math.max(cursor, match.end);
+    cursor = match.end;
   }
   out += content.slice(cursor);
   return out;
