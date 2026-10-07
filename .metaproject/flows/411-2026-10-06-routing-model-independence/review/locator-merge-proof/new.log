@@ -1,0 +1,40 @@
+bun test v1.3.14 (0d9b296a)
+
+src/scheduler/digest-delivery.test.ts:
+(pass) AC6: where the digest goes > a project with no remote session gets it in the service topic Digest [168.46ms]
+(pass) AC6: where the digest goes > a project with a live remote session gets it in that session's topic, and not in Digest [141.97ms]
+(pass) AC6: where the digest goes > the service topic is the one the schedule names [177.68ms]
+(pass) AC6: where the digest goes > a run with no sink at all (serve is down) queues the message and sends nothing; a later flush delivers it [230.85ms]
+(pass) AC6: where the digest goes > the same run is queued once: enqueueing it again replaces it; the queue lives under .metaproject/data [169.77ms]
+(pass) AC6: a failed delivery is written in the report and retried > a refused send is a line in the report with the reason and the retry time, and the message stays queued [199.23ms]
+(pass) AC6: a failed delivery is written in the report and retried > it is not retried before the backoff has passed, and is retried once it has [225.61ms]
+(pass) AC6: a failed delivery is written in the report and retried > the delay doubles from five minutes and stops growing at an hour [161.44ms]
+(pass) AC6: a failed delivery is written in the report and retried > a sink that throws is a failed attempt, not a crash of the run [213.68ms]
+(pass) AC6: a failed delivery is written in the report and retried > after 12 refused attempts it gives up, says so in the report, and stops trying [352.69ms]
+(pass) AC6: a failed delivery is written in the report and retried > when Telegram did not take it yet but serve's own queue holds it, the digest does not send it a second time [168.40ms]
+(pass) AC6: a failed delivery is written in the report and retried > the serve ticker flushes a message that is waiting, so a retry needs no new run [443.47ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > one gh source failing: the digest still goes out, says what it could not read, and the report has the entry [495.04ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [178.65ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a model that fails does not stop the digest: the plain text goes out and the failure is named as 'model' [1387.70ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a failed delivery of a failure status line is retried like any other message [1428.37ms]
+(pass) AC6: a refusal is a status line in the topic too > the pinned gh binary changed: the run is refused, nothing is read, and the topic is told [1020.21ms]
+(pass) AC6: a refusal is a status line in the topic too > a second concurrent run is refused with a status line, and the first run is not disturbed [320.82ms]
+(pass) AC6: a refusal is a status line in the topic too > an unsafe scratch directory fails the run with a status line [197.46ms]
+(pass) AC6: a refusal is a status line in the topic too > a refusal with no serve connected queues the line instead of losing it, and serve sends it on its next tick [144.27ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > with no session, the digest creates the topic Digest and is written into it; the next digest reuses the topic [283.18ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > with a live session for the project, the digest goes into that session's topic and no Digest topic is made [197.76ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > a session of another project does not take the digest [158.25ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > Telegram down: serve's outbound queue holds the message, the report says so, and it arrives when Telegram is back [221.77ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > Telegram refusing the text for good is a refused delivery that the digest retries by itself [218.63ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > a topic name Telegram would not accept is a refusal in the report, not an exception [369.34ms]
+
+src/scheduler/digest-report-locator.test.ts:
+(pass) generated locator retains the CI phone-shaped run ID [0.23ms]
+(pass) phone and email directories remain redacted [2.23ms]
+(pass) env secrets in and spanning the basename are not restored [0.40ms]
+(pass) arbitrary filenames have no exception [0.09ms]
+
+ 30 pass
+ 0 fail
+ 127 expect() calls
+Ran 30 tests across 2 files. [9.52s]

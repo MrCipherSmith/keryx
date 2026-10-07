@@ -158,6 +158,7 @@ describe("the digest tests cannot reach GitHub, Telegram or a model", () => {
         "digest-delivery.test.ts",
         "digest-diff.test.ts",
         "digest-limits.test.ts",
+        "digest-report-locator.test.ts",
         "digest-run.test.ts",
         "digest-schedule.test.ts",
         "digest-surface.test.ts",

@@ -1,0 +1,2 @@
+old_exit=1
+new_exit=0

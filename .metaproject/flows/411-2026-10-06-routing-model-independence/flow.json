@@ -12,7 +12,7 @@
   "title": "Correct task routing: JEV fallback and assignments survive /model",
   "status": "in-progress",
   "createdAt": "2026-10-06T06:04:33.880Z",
-  "updatedAt": "2026-10-07T11:12:07.376Z",
+  "updatedAt": "2026-10-07T15:55:51.091Z",
   "source": {
     "type": "description",
     "ref": null
@@ -128,7 +128,7 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 4,
+        "count": 6,
         "log": [
           {
             "at": "2026-10-06T20:01:18.914Z",
@@ -149,6 +149,16 @@
             "at": "2026-10-07T11:12:07.376Z",
             "outcome": "blocked",
             "detail": "Independent targeted P1 fix-round static review PASS; no blocking finding in mandatory fresh external-policy gate. Focused routing/policy/JEV regressions and typecheck rerun PASS on hash-verified working files. Evidence review/p1-fix-round/review.md and focused.log/typecheck.log. Working fix remains uncommitted; previous CI PASS and AC9 refer only to 290591c7b. T4 final exact-SHA review/CI pending; AC11 OPEN. No merge or release."
+          },
+          {
+            "at": "2026-10-07T13:46:42.134Z",
+            "outcome": "blocked",
+            "detail": "Locator old-fail/new-pass established on historical merge 9127d78b8: deterministic baseline 25 pass/1 fail, candidate 30 pass/0 fail. Independent targeted static review PASS; source copies hash-identical. Evidence review/locator-merge-proof. Reviewer did not independently rerun logs; downstream RemoteHub re-redaction remains unverified. T4 awaits published exact-SHA CI/final review; AC11 remains OPEN."
+          },
+          {
+            "at": "2026-10-07T15:55:51.091Z",
+            "outcome": "blocked",
+            "detail": "Locator downstream verification: real hub over fake Bot API, session/service x immediate/queued; head and historical merge candidate suites each 34 pass 0 fail; typecheck PASS. Evidence review/locator-downstream and locator-merge-proof (old 25pass1fail -> candidate30pass0fail). Send path does not reapply redaction. Independent downstream reviewer timed out without verdict; T4 stays blocked pending final exact-SHA review and CI. AC11 OPEN, no live transport/npm operator proof; existing AC9 only old290591c7b."
           }
         ]
       },
@@ -268,6 +278,16 @@
       "at": "2026-10-07T11:12:07.376Z",
       "event": "task-attempt",
       "detail": "T4: blocked (attempt 4) — Independent targeted P1 fix-round static review PASS; no blocking finding in mandatory fresh external-policy gate. Focused routing/policy/JEV regressions and typecheck rerun PASS on hash-verified working files. Evidence review/p1-fix-round/review.md and focused.log/typecheck.log. Working fix remains uncommitted; previous CI PASS and AC9 refer only to 290591c7b. T4 final exact-SHA review/CI pending; AC11 OPEN. No merge or release."
+    },
+    {
+      "at": "2026-10-07T13:46:42.134Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 5) — Locator old-fail/new-pass established on historical merge 9127d78b8: deterministic baseline 25 pass/1 fail, candidate 30 pass/0 fail. Independent targeted static review PASS; source copies hash-identical. Evidence review/locator-merge-proof. Reviewer did not independently rerun logs; downstream RemoteHub re-redaction remains unverified. T4 awaits published exact-SHA CI/final review; AC11 remains OPEN."
+    },
+    {
+      "at": "2026-10-07T15:55:51.091Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 6) — Locator downstream verification: real hub over fake Bot API, session/service x immediate/queued; head and historical merge candidate suites each 34 pass 0 fail; typecheck PASS. Evidence review/locator-downstream and locator-merge-proof (old 25pass1fail -> candidate30pass0fail). Send path does not reapply redaction. Independent downstream reviewer timed out without verdict; T4 stays blocked pending final exact-SHA review and CI. AC11 OPEN, no live transport/npm operator proof; existing AC9 only old290591c7b."
     }
   ],
   "acKinds": {

@@ -1,0 +1,50 @@
+bun test v1.3.14 (0d9b296a)
+
+src/scheduler/digest-delivery.test.ts:
+(pass) AC6: where the digest goes > a project with no remote session gets it in the service topic Digest [596.52ms]
+(pass) AC6: where the digest goes > a project with a live remote session gets it in that session's topic, and not in Digest [181.00ms]
+(pass) AC6: where the digest goes > the service topic is the one the schedule names [249.40ms]
+(pass) AC6: where the digest goes > a run with no sink at all (serve is down) queues the message and sends nothing; a later flush delivers it [279.96ms]
+(pass) AC6: where the digest goes > the same run is queued once: enqueueing it again replaces it; the queue lives under .metaproject/data [1303.21ms]
+(pass) AC6: a failed delivery is written in the report and retried > a refused send is a line in the report with the reason and the retry time, and the message stays queued [513.62ms]
+(pass) AC6: a failed delivery is written in the report and retried > it is not retried before the backoff has passed, and is retried once it has [607.07ms]
+(pass) AC6: a failed delivery is written in the report and retried > the delay doubles from five minutes and stops growing at an hour [1568.14ms]
+(pass) AC6: a failed delivery is written in the report and retried > a sink that throws is a failed attempt, not a crash of the run [5779.94ms]
+(pass) AC6: a failed delivery is written in the report and retried > after 12 refused attempts it gives up, says so in the report, and stops trying [5062.02ms]
+(pass) AC6: a failed delivery is written in the report and retried > when Telegram did not take it yet but serve's own queue holds it, the digest does not send it a second time [286.18ms]
+(pass) AC6: a failed delivery is written in the report and retried > the serve ticker flushes a message that is waiting, so a retry needs no new run [509.98ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > one gh source failing: the digest still goes out, says what it could not read, and the report has the entry [297.89ms]
+247 |     const record = await lastRecord();
+248 |     expect(record.outcome).toBe("failed");
+249 |     expect(sink.sent).toHaveLength(1);
+250 |     expect(sink.sent[0]?.text.split("\n")[0]).toBe("Digest morning stopped — no source could be read");
+251 |     expect(sink.sent[0]?.text).toContain("gh_pr_list failed: gh: not logged in");
+252 |     expect(sink.sent[0]?.text).toContain(`Report: ${record.agentTask?.reportPath}`);
+                                     ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "Report: .metaproject/data/trigger/reports/morning/dig-20261002T120000-3991d42d.md"
+Received: "Digest morning stopped — no source could be read\n- pr:MrCipherSmith/keryx: gh_pr_list failed: gh: not logged in\n- issue:MrCipherSmith/keryx: gh_issue_list failed: gh: not logged in\n- review:MrCipherSmith/keryx: gh_pr_review_requested failed: gh: not logged in\n- ci:MrCipherSmith/keryx: gh_run_failed failed: gh: not logged in\n- board: no product index — run `keryx product index` to build it\nReport: .metaproject/data/trigger/reports/morning/dig-20261002T[REDACTED:phone]d42d.md"
+
+      at <anonymous> (/Users/tsaitler.aleksandr/goodea/keryx/.git/flow411-split/ci917/locator-merge-regression/tree/src/scheduler/digest-delivery.test.ts:252:32)
+(fail) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [387.08ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a model that fails does not stop the digest: the plain text goes out and the failure is named as 'model' [1742.91ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a failed delivery of a failure status line is retried like any other message [1905.23ms]
+(pass) AC6: a refusal is a status line in the topic too > the pinned gh binary changed: the run is refused, nothing is read, and the topic is told [893.23ms]
+(pass) AC6: a refusal is a status line in the topic too > a second concurrent run is refused with a status line, and the first run is not disturbed [770.82ms]
+(pass) AC6: a refusal is a status line in the topic too > an unsafe scratch directory fails the run with a status line [3037.80ms]
+(pass) AC6: a refusal is a status line in the topic too > a refusal with no serve connected queues the line instead of losing it, and serve sends it on its next tick [507.87ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > with no session, the digest creates the topic Digest and is written into it; the next digest reuses the topic [1038.52ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > with a live session for the project, the digest goes into that session's topic and no Digest topic is made [392.70ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > a session of another project does not take the digest [377.76ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > Telegram down: serve's outbound queue holds the message, the report says so, and it arrives when Telegram is back [941.87ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > Telegram refusing the text for good is a refused delivery that the digest retries by itself [555.51ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > a topic name Telegram would not accept is a refusal in the report, not an exception [120.82ms]
+
+1 tests failed:
+(fail) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [387.08ms]
+
+ 25 pass
+ 1 fail
+ 117 expect() calls
+Ran 26 tests across 1 file. [30.29s]
