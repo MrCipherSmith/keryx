@@ -405,15 +405,16 @@ function rescanPhoneRun(content: string, from: number, to: number): ScanMatch[] 
 // that overlap a card.
 const rescanned = new WeakSet<ScanMatch>();
 
-// Joined numbers (flow 412). `415-555-0199-123456` and `415.555.0199.415.555.0199` are one regex match with more than
-// 15 digits, so the verdict rejected the whole run and the number inside leaked. A number written with `-` or `.`
-// between its groups may be followed by more groups, so a rejected token of more than 15 digits is cut at those
-// joiners: the longest piece that passes the verdict and leaves either nothing or a piece of at least nine digits
-// (so `415.555.0199.415.555.0199` is two numbers, not one number and a stump) is reported, and the cut resumes after
-// its joiner. A token that holds a calendar date is never cut, because the cut would go through the date
-// (`001-2026-07-09-...`). The work is linear: a piece looks at the next 15 digits, a piece takes at least nine of
-// them, and a start that finds no piece jumps to the first joiner (so a character is looked at a bounded number of
-// times).
+// Joined numbers (flow 412). `415-555-0199-123456`, `4155550199-4155550199` and `415.555.0199.415.555.0199` are one
+// regex match with more than 15 digits, so the verdict rejected the whole run and the number inside leaked. A number
+// written with `-` or `.` between its groups may be followed by more groups, so a rejected run of more than 15 digits
+// is cut at those joiners: a number of ten digits (eleven with a leading 1) is taken whenever a joiner follows it,
+// else the longest piece that passes the verdict and leaves either nothing or a piece of at least nine digits is
+// reported, and the cut resumes after its joiner. A zone is the tokens joined by single blanks (`(415) 555-0199-1234`,
+// `415 555 0199-123456`), and a token that holds a calendar date is never cut, because the cut would go through the
+// date (`001-2026-07-09-...`): it ends the zone. A start that finds no piece moves to the next joiner, so a number
+// after an unreadable group (`5500000000000004-415-555-0199`) is still found. The work is linear: a piece looks at the
+// next 15 digits, and a start that finds no piece jumps to the next joiner.
 function joinedPhones(content: string, from: number, to: number): ScanMatch[] {
   const found: ScanMatch[] = [];
   let i = from;
@@ -421,18 +422,37 @@ function joinedPhones(content: string, from: number, to: number): ScanMatch[] {
     while (i < to && WHITESPACE.test(content[i] as string)) {
       i += 1;
     }
+    const zoneStart = i;
     let zoneEnd = i;
     let total = 0;
-    while (zoneEnd < to && !WHITESPACE.test(content[zoneEnd] as string)) {
-      if (DIGIT.test(content[zoneEnd] as string)) {
-        total += 1;
+    while (i < to) {
+      const tokenStart = i;
+      let digits = 0;
+      while (i < to && !WHITESPACE.test(content[i] as string)) {
+        if (DIGIT.test(content[i] as string)) {
+          digits += 1;
+        }
+        i += 1;
       }
-      zoneEnd += 1;
+      if (containsCalendarDate(content.slice(tokenStart, i))) {
+        break; // the date ends the zone and is not part of it
+      }
+      zoneEnd = i;
+      total += digits;
+      if (content[i] === " " && i + 1 < to && !WHITESPACE.test(content[i + 1] as string)) {
+        i += 1;
+      } else {
+        break;
+      }
     }
-    if (total > PHONE_MAX_DIGITS && !containsCalendarDate(content.slice(i, zoneEnd))) {
-      joinedZone(content, i, zoneEnd, total, found);
+    if (total > PHONE_MAX_DIGITS) {
+      joinedZone(content, zoneStart, zoneEnd, total, found);
     }
-    i = zoneEnd;
+    if (zoneEnd === zoneStart) {
+      while (i < to && !WHITESPACE.test(content[i] as string)) {
+        i += 1; // a token with a date: skipped
+      }
+    }
   }
   return found;
 }
@@ -442,18 +462,58 @@ function isJoinerAt(content: string, k: number, to: number): boolean {
   return (ch === "-" || ch === ".") && k > 0 && DIGIT.test(content[k - 1] as string) && k + 1 < to && DIGIT.test(content[k + 1] as string);
 }
 
-// A piece is a joined number: dialling groups of at most four digits with a joiner between them.
-const PHONE_JOINED_PIECE = /^\+?\d{1,4}(?:[-.]\d{1,4})+$/;
+// A blank between two tokens of a zone ends a number as well (`415-555-0199 4111-1111-1111-1111`), but only where the
+// next token starts a number.
+function isBlankBeforeNumber(content: string, k: number, zoneEnd: number): boolean {
+  return content[k] === " " && k > 0 && DIGIT.test(content[k - 1] as string) && k + 1 < zoneEnd && startsJoinedPiece(content, k + 1, zoneEnd);
+}
+
+// A piece is a joined number: dialling groups of at most four digits, or a local number of seven or a national number
+// of ten or eleven digits, with a joiner or a blank between them.
+const PHONE_JOINED_GROUP = String.raw`\(?(?:\d{1,4}|\d{7}|\d{10,11})\)?`;
+const PHONE_JOINED_PIECE = new RegExp(String.raw`^\+?${PHONE_JOINED_GROUP}(?:[-. ]${PHONE_JOINED_GROUP})*$`);
+const PHONE_JOINED_PLAIN = /^\+?\d{10,11}$/;
 // Groups of four are a card or a table of numbers, not a phone number: `8311-4841-3546-3949` is cut nowhere.
-const PHONE_CARD_SHAPE = /^\d{4}(?:[-.]\d{4})+$/;
+const PHONE_CARD_SHAPE = /^\d{4}(?:[-. ]\d{4})+$/;
+
+function countDigits(content: string, from: number, to: number): number {
+  let n = 0;
+  for (let i = from; i < to; i += 1) {
+    if (DIGIT.test(content[i] as string)) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function startsJoinedPiece(content: string, s: number, zoneEnd: number): boolean {
+  const ch = content[s] as string;
+  if (DIGIT.test(ch)) {
+    return true;
+  }
+  return (ch === "+" || ch === "(") && s + 1 < zoneEnd && DIGIT.test(content[s + 1] as string);
+}
+
+function isJoinedPiece(content: string, s: number, end: number): boolean {
+  const piece = content.slice(s, end);
+  if (!PHONE_JOINED_PIECE.test(piece) || PHONE_CARD_SHAPE.test(piece)) {
+    return false;
+  }
+  return (PHONE_JOINED_PLAIN.test(piece) || hasPhoneEvidence(piece, !piece.includes(" "))) && phoneVerdict(content, s, end);
+}
+
+// Joined pieces of ten or eleven digits: a national number, which wins over a rescan window that starts inside it.
+const nationalPieces = new WeakSet<ScanMatch>();
 
 function joinedZone(content: string, zoneStart: number, zoneEnd: number, total: number, found: ScanMatch[]): void {
   let s = zoneStart;
   let before = 0; // digits of the zone before `s`
   for (;;) {
-    while (s < zoneEnd && !DIGIT.test(content[s] as string) && !(content[s] === "+" && s + 1 < zoneEnd && DIGIT.test(content[s + 1] as string))) {
+    const skipped = s;
+    while (s < zoneEnd && !startsJoinedPiece(content, s, zoneEnd)) {
       s += 1;
     }
+    before += countDigits(content, skipped, s);
     if (s >= zoneEnd) {
       return;
     }
@@ -467,7 +527,7 @@ function joinedZone(content: string, zoneStart: number, zoneEnd: number, total: 
         digits += 1;
         lastDigit = k;
         open = digits <= PHONE_MAX_DIGITS;
-      } else if (digits >= PHONE_MIN_DIGITS && isJoinerAt(content, k, zoneEnd)) {
+      } else if (digits >= PHONE_MIN_DIGITS && (isJoinerAt(content, k, zoneEnd) || isBlankBeforeNumber(content, k, zoneEnd))) {
         cuts.push({ end: k, digits });
       }
     }
@@ -475,10 +535,18 @@ function joinedZone(content: string, zoneStart: number, zoneEnd: number, total: 
       cuts.push({ end: lastDigit + 1, digits });
     }
     let pick = -1;
-    for (let c = cuts.length - 1; c >= 0; c -= 1) {
+    for (let c = 0; c < cuts.length && pick < 0; c += 1) {
       const cut = cuts[c] as { end: number; digits: number };
-      const piece = content.slice(s, cut.end);
-      if (!PHONE_JOINED_PIECE.test(piece) || PHONE_CARD_SHAPE.test(piece) || !phoneVerdict(content, s, cut.end)) {
+      if (
+        (cut.digits === 10 || (cut.digits === 11 && /^\+?1/.test(content.slice(s, s + 2)))) &&
+        isJoinedPiece(content, s, cut.end)
+      ) {
+        pick = c;
+      }
+    }
+    for (let c = cuts.length - 1; c >= 0 && pick < 0; c -= 1) {
+      const cut = cuts[c] as { end: number; digits: number };
+      if (!isJoinedPiece(content, s, cut.end)) {
         continue;
       }
       if (pick < 0) {
@@ -491,43 +559,81 @@ function joinedZone(content: string, zoneStart: number, zoneEnd: number, total: 
       }
     }
     if (pick < 0) {
-      return; // a number is cut where it starts or not at all
+      // Not a number where it starts: look from the next joiner, so a number after a group that is none is found.
+      let k = s;
+      while (k < zoneEnd && !isJoinerAt(content, k, zoneEnd) && !isBlankBeforeNumber(content, k, zoneEnd)) {
+        k += 1;
+      }
+      if (k >= zoneEnd) {
+        return;
+      }
+      before += countDigits(content, s, k + 1);
+      s = k + 1;
+      continue;
     }
     const cut = cuts[pick] as { end: number; digits: number };
     const value = content.slice(s, cut.end);
-    found.push({ index: s, 0: value, 1: value });
-    before += cut.digits;
+    const piece: ScanMatch = { index: s, 0: value, 1: value };
+    if (cut.digits === 10 || cut.digits === 11) {
+      nationalPieces.add(piece);
+    }
+    found.push(piece);
+    before += countDigits(content, s, cut.end + 1);
     s = cut.end + 1;
   }
 }
 
-// Joined pieces and rescan windows of one run, in order; a rescan window that overlaps a joined piece is dropped.
+// Joined pieces and rescan windows of one run, in order. A rescan window inside a joined piece is the piece's own part
+// and is dropped. A joined piece that overlaps a rescan window without containing it is dropped, because the window
+// is a number the run holds and the piece started late in a run of groups that are not one; a national number
+// (ten or eleven digits) is the exception and wins. The rest stand side by
+// side, in order and without overlaps.
 function withJoined(joined: ScanMatch[], rescans: ScanMatch[]): ScanMatch[] {
   if (joined.length === 0) {
     return rescans;
   }
-  const merged: ScanMatch[] = [];
-  let cursor = 0;
-  let pending = 0;
+  const endOf = (span: ScanMatch): number => span.index + (span[0] ?? "").length;
+  // Both lists are in order and without overlaps inside, so the spans that overlap a given one are a short run found
+  // by a moving pointer, and the work stays linear.
+  const keptJoined: ScanMatch[] = [];
+  let first = 0;
+  for (const piece of joined) {
+    while (first < rescans.length && endOf(rescans[first] as ScanMatch) <= piece.index) {
+      first += 1;
+    }
+    let drop = false;
+    if (!nationalPieces.has(piece)) {
+      for (let k = first; k < rescans.length && (rescans[k] as ScanMatch).index < endOf(piece); k += 1) {
+        const rescan = rescans[k] as ScanMatch;
+        if (!(piece.index <= rescan.index && endOf(piece) >= endOf(rescan))) {
+          drop = true;
+          break;
+        }
+      }
+    }
+    if (!drop) {
+      keptJoined.push(piece);
+    }
+  }
+  const keptRescans: ScanMatch[] = [];
+  let at = 0;
   for (const rescan of rescans) {
-    const rescanEnd = rescan.index + (rescan[0] ?? "").length;
-    while (cursor < joined.length && (joined[cursor] as ScanMatch).index + ((joined[cursor] as ScanMatch)[0] ?? "").length <= rescan.index) {
-      cursor += 1;
+    while (at < keptJoined.length && endOf(keptJoined[at] as ScanMatch) <= rescan.index) {
+      at += 1;
     }
-    if (cursor < joined.length && (joined[cursor] as ScanMatch).index < rescanEnd) {
-      continue;
+    let drop = false;
+    for (let k = at; k < keptJoined.length && (keptJoined[k] as ScanMatch).index < endOf(rescan); k += 1) {
+      const piece = keptJoined[k] as ScanMatch;
+      if (nationalPieces.has(piece) || (piece.index <= rescan.index && endOf(piece) >= endOf(rescan))) {
+        drop = true;
+        break;
+      }
     }
-    while (pending < joined.length && (joined[pending] as ScanMatch).index < rescan.index) {
-      merged.push(joined[pending] as ScanMatch);
-      pending += 1;
+    if (!drop) {
+      keptRescans.push(rescan);
     }
-    merged.push(rescan);
   }
-  while (pending < joined.length) {
-    merged.push(joined[pending] as ScanMatch);
-    pending += 1;
-  }
-  return merged;
+  return [...keptJoined, ...keptRescans].sort((x, y) => x.index - y.index);
 }
 
 // A number glued to letters (flow 412): `tel415-555-0199`, `415-555-0199abc`. The phone regex starts only after a
@@ -1607,22 +1713,37 @@ function isUniformCard(card: DetectorMatch): boolean {
   return separators.size <= 1;
 }
 
-// A rescan window that overlaps a Luhn-valid card is a piece of that card, not a phone number.
-function dropRescansInsideCards(spans: readonly DetectorMatch[], cards: readonly DetectorMatch[]): DetectorMatch[] {
-  if (cards.length === 0 || !spans.some((span) => rescanTag.has(span))) {
+// A card is grouped the way cards are: four digits a group, a shorter last group, or 4-6-5 and 4-6-4 (or no groups).
+// A Luhn-valid run of other groups (`555-0199-415-555-0199`) is two phone numbers that the checksum let through.
+function isCardShaped(card: DetectorMatch): boolean {
+  const groups = card.value.split(/[ -]/);
+  if (groups.length === 1) {
+    return true;
+  }
+  const lengths = groups.map((group) => group.length);
+  const last = lengths[lengths.length - 1] as number;
+  if (lengths.slice(0, -1).every((length) => length === 4) && last >= 1 && last <= 4) {
+    return true;
+  }
+  return lengths.length === 3 && lengths[0] === 4 && lengths[1] === 6 && (last === 5 || last === 4);
+}
+
+// A rescan window that overlaps a Luhn-valid card is a piece of that card, not a phone number. What the window holds
+// outside the card is still a number when it is one by itself (`415-555-0199.` before a card, a number after
+// `1111-` at the end of a line), so the card is cut out of the window and the pieces are judged on their own.
+function dropRescansInsideCards(content: string, spans: readonly DetectorMatch[], cards: readonly DetectorMatch[]): DetectorMatch[] {
+  if (cards.length === 0 || spans.length === 0) {
     return spans as DetectorMatch[];
   }
-  const sorted = cards.filter(isUniformCard).sort((a, b) => a.start - b.start);
+  const sorted = cards.filter((card) => isUniformCard(card) && isCardShaped(card)).sort((a, b) => a.start - b.start);
   const reach: number[] = [];
   let farthest = 0;
   for (const card of sorted) {
     farthest = Math.max(farthest, card.end);
     reach.push(farthest);
   }
-  return spans.filter((span) => {
-    if (!rescanTag.has(span)) {
-      return true;
-    }
+  const kept: DetectorMatch[] = [];
+  for (const span of spans) {
     let low = 0;
     let high = sorted.length - 1;
     while (low <= high) {
@@ -1633,11 +1754,87 @@ function dropRescansInsideCards(spans: readonly DetectorMatch[], cards: readonly
         high = mid - 1;
       }
     }
-    return high < 0 || (reach[high] as number) <= span.start;
-  });
+    if (high < 0 || (reach[high] as number) <= span.start) {
+      kept.push(span);
+      continue;
+    }
+    let first = high;
+    while (first > 0 && (reach[first - 1] as number) > span.start) {
+      first -= 1;
+    }
+    if (!rescanTag.has(span)) {
+      // A window found by the plain scan stays unless a card holds all of it (the pieces of a card that lost their tag).
+      let inside = false;
+      for (let index = first; index <= high && !inside; index += 1) {
+        const card = sorted[index] as DetectorMatch;
+        inside = card.start <= span.start && card.end >= span.end;
+      }
+      if (!inside) {
+        kept.push(span);
+      }
+      continue;
+    }
+    let cursor = span.start;
+    for (let index = first; index <= high + 1; index += 1) {
+      const card = sorted[index];
+      const pieceEnd = index > high || card === undefined ? span.end : Math.min(span.end, card.start);
+      if (pieceEnd > cursor) {
+        const piece = outsideCardPiece(content, span, cursor, pieceEnd);
+        if (piece !== null) {
+          kept.push(piece);
+        }
+      }
+      if (card === undefined || index > high) {
+        break;
+      }
+      cursor = Math.max(cursor, card.end);
+    }
+  }
+  return kept;
+}
+
+function outsideCardPiece(content: string, span: DetectorMatch, from: number, to: number): DetectorMatch | null {
+  let start = from;
+  while (start < to && !startsJoinedPiece(content, start, to)) {
+    start += 1;
+  }
+  let end = to;
+  while (end > start && !DIGIT.test(content[end - 1] as string)) {
+    end -= 1;
+  }
+  if (end <= start) {
+    return null;
+  }
+  const value = content.slice(start, end);
+  if (!hasPhoneEvidence(value, !WHITESPACE.test(value)) || !phoneVerdict(content, start, end)) {
+    return null;
+  }
+  return start === span.start && end === span.end ? span : { ...span, start, end, value };
 }
 
 const PHONE_RULE = RULES.findIndex((rule) => rule.policyId === "pii.phone");
+
+// A number that is whole before a line break ends there: `Phone: 415-555-0199.` and a line of text or another number
+// below it are two things, however the break is read (the `breaks` view deletes a break next to a dot or a dash, which
+// would otherwise carry the phone into the next line: `415-555-0199.123 Main Street`). A number that is not whole
+// before the break (`415-555-` / `0199`) is a wrapped number, and the span is kept.
+function clipAtBreak(content: string, start: number, end: number): number {
+  let breakAt = -1;
+  for (let i = start; i < end; i += 1) {
+    if (BREAK_CHAR.test(content[i] as string)) {
+      breakAt = i;
+      break;
+    }
+  }
+  if (breakAt < 0) {
+    return end;
+  }
+  let whole = breakAt;
+  while (whole > start && !DIGIT.test(content[whole - 1] as string)) {
+    whole -= 1;
+  }
+  return whole > start && phoneVerdict(content, start, whole) ? whole : end;
+}
 const CARD_RULE = RULES.findIndex((rule) => rule.policyId === "pii.credit-card");
 
 // The rules about numbers: the `breaks` view reads only these.
@@ -1709,7 +1906,10 @@ export function detectPii(content: string): DetectorMatch[] {
           const base = perRule[index] as DetectorMatch[];
           const added: DetectorMatch[] = [];
           for (const match of found) {
-            const [a, b] = toOriginal(window, content, match.start, match.end);
+            let [a, b] = toOriginal(window, content, match.start, match.end);
+            if (options.breaks && index === PHONE_RULE) {
+              b = clipAtBreak(content, a, b);
+            }
             if (!numbers && b - a !== match.end - match.start) {
               continue; // an invisible character is a gap inside a number, not a reason to join two words
             }
@@ -1735,6 +1935,6 @@ export function detectPii(content: string): DetectorMatch[] {
       from = to - NORMALIZE_OVERLAP;
     }
   }
-  perRule[PHONE_RULE] = dropRescansInsideCards(perRule[PHONE_RULE] as DetectorMatch[], perRule[CARD_RULE] as DetectorMatch[]);
+  perRule[PHONE_RULE] = dropRescansInsideCards(content, perRule[PHONE_RULE] as DetectorMatch[], perRule[CARD_RULE] as DetectorMatch[]);
   return perRule.flat();
 }
