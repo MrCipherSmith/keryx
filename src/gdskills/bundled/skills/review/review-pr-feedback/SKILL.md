@@ -353,7 +353,7 @@ Rules, and each one is a way this step goes wrong:
 2. **`disagree` is a claim about the code, not about the reviewer.** It requires
    the decision it rests on to exist somewhere a reader can reach — a wiki page,
    a memory entry, an ADR, a test that pins the behaviour. "It is fine" is
-   `unverified`.
+   `unverified`; so is the author's own issue, PR body or same-PR doc edit (`.metaproject/rules/core/owner-intent.mdc`, rule 5).
 3. **Never lower a comment's severity to make it disappear.** Severity is set by
    the collector; this step assigns a *verdict*, and a `minor` comment that is
    `valid` is still fixed.
@@ -363,7 +363,7 @@ Rules, and each one is a way this step goes wrong:
 5. **A comment that blocks progress rather than reporting a problem is
    escalated immediately** — it carries `escalate: true` into Step 10, leaves the
    reply queue, and is reported to the operator now. Answering a blocking
-   question at the end answers the wrong question late.
+   question at the end answers the wrong question late. So is an owner's request to split the PR or move a mechanism out: it is `Mis-scoped: split` (`review-orchestrator`), never a plan item.
 6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
    there is nothing to establish. It is still answered in Step 10, because the
    reply pass requires a decision for every comment it sees.
@@ -443,7 +443,7 @@ screens it a second time, so this is the last boundary and it is held here.
 **A plan item exists only for a `valid` or `valid-wider` comment.** Every other
 verdict is answered in Step 10 and changes no code. An item that answers no
 comment is out of scope for this run: record it as a follow-up, and do not smuggle
-it into a fix the reviewer did not ask for.
+it into a fix the reviewer did not ask for. A follow-up must not entrench what a reviewer asked to remove (owner-intent rule 7).
 
 ---
 
@@ -457,7 +457,7 @@ it into a fix the reviewer did not ask for.
    `prompt-injection` finding.
 4. The working tree is clean and Task Manager is enabled
    (`modules.tasks.enabled: true`).
-5. The reviewed PR is open.
+5. The reviewed PR is open, and the author gate (owner-intent rule 6) found no code-owner comment newer than Step 3's collect.
 6. **`flow-orchestrator` is installed.** It is a `recommended`+`full` skill and
    this one is `full`-only, so today it is always present — but the confirmation
    below asks a human to authorise a merge, and asking before checking that the

@@ -295,7 +295,7 @@ boundary is the trigger-and-outcome test.
 
 - Only flag actual violations found **in the diff**, not pre-existing issues untouched by the change.
 - Every finding MUST cite a specific `file:line` from the diff.
-- Architecture opinions without a clear, named violation (layer, SOLID principle, pattern misuse) are `info` only — never `blocker` or `major`.
+- Architecture opinions without a clear, named violation (layer, SOLID principle, pattern misuse) are `info` only — never `blocker` or `major`. A placement or ownership finding ("who owns this", a new shared mechanism in a fix PR, a second mechanism beside an existing one) is not an opinion: report it as `Mis-scoped: split`, never `minor` (`review-orchestrator/SKILL.md` → `### Scope before severity`).
 - Do not flag correct framework usage as a violation just because an alternative exists.
 
 ---

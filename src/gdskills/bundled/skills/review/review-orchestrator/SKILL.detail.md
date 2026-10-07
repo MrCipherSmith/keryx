@@ -368,3 +368,56 @@ inside) the findings they annotate — same separation the finding schema
 itself draws between a reviewer's claim (`severity`, `problem`, …) and what
 became of it (`disposition`), which a reviewer never states and this pass
 does not either.
+
+## Default budget guidance
+
+Linked from SKILL.md § "Token and Context Budget Management".
+
+| Review size | Detection | Context mode | Dispatch style |
+|---|---|---|---|
+| small | <= 5 files and <= 300 changed lines | `light` | full relevant diff to selected reviewers |
+| medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
+| large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
+| high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
+
+## Scope before severity
+
+Linked from SKILL.md § "Severity (canonical)" → `### Scope before severity`, and
+from the Review Context Pack's owner-intent input. The ownership rules it applies
+— who decides scope, what counts as settled — live in
+`.metaproject/rules/core/owner-intent.mdc`.
+
+**The question.** Before any finding is graded: should this change exist in this
+PR? A fix PR that carries a new shared mechanism or an architecture change — a
+new store, framework or audit tool, wiring every caller must adopt — answers no.
+It is reported first as `Mis-scoped: split`, naming what stays in this PR and
+what moves out to its own owner-agreed PR (owner-intent rule 4).
+
+**Why it is not a severity.** The ladder grades how wrong the code is. A
+mechanism that should not be in the PR can be correct at every site, so the
+ladder files it as `minor` or `info` ("architecture opinion"), and a round that
+fixes every `minor` then hardens the mechanism instead of questioning it. That
+is how a fix PR grows round over round while every reviewer's findings are
+"addressed".
+
+**What escalates.** "Who owns this", "this belongs elsewhere", "a second
+mechanism next to the existing one", "this should be its own PR". Reviewers
+that see one report it under this verdict, never as `minor`.
+
+**What happens to it.** It is never auto-fixed: the round stops and asks the
+operator, and a fix loop does not dispatch a task for it. Only the part that
+stays is reviewed further.
+
+**Record.** `location_class: pr-process`, title starting `Mis-scoped: split`,
+machine verdict `REQUEST_CHANGES`; the visible first line is in
+`templates/review-report.md`. The schema's `severity` field holds `info` only
+because it is required — it is not counted, sorted or capped. This is a prose
+contract; no CLI enforces it yet.
+
+**Owner intent in the brief.** The context pack's `requirements.owner_intent`
+carries the owning spec's open questions and the code owner's and reviewers'
+latest comments on the PR and its linked issue. The author's issue, PR body and
+same-PR doc edits are the author's position, not a settled one (owner-intent
+rule 5). Every architecture, core-boundary and design reviewer is asked the
+scope question first. A brief never sets "other reviewers must find nothing" as
+its goal: that goal turns every round into hardening the current approach.

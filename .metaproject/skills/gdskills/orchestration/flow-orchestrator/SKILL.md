@@ -542,7 +542,10 @@ the bound plus an escalation — never an unbounded loop.
 1. Run the relevant `review-orchestrator` checks against the PR and current
    branch state.
 2. If findings or required check failures remain, create or update a flow fix
-   task, dispatch `task-implementer`, push the fix, and run review again.
+   task, dispatch `task-implementer`, push the fix, and run review again. Before
+   each push, run the author gate (`.metaproject/rules/core/owner-intent.mdc`,
+   rule 6). A `Mis-scoped: split` record or an unanswered owner comment is not a
+   fix task: stop and report it to the operator.
 
    **A required check failure is not automatically a fix task.** When `review.jev.ci_triage` is on, run `keryx review ci-triage --run <id> --json` on each failed run first: `top: flaky` (or a `deterministic` override) → rerun once (`gh run rerun --failed <id>`), record it in `journal.md`, and treat a second failure as `real-regression` regardless; `top: real-regression` → investigate and fix as usual; `top: infra` → report it in the completion notes and leave the code alone. The verdict is advisory only — never the sole reason to skip a fix task.
 
@@ -557,15 +560,12 @@ the bound plus an escalation — never an unbounded loop.
    count survives a session restart. Read the budget from that task's
    `attempts.count` in `flow.json`, never from this session's memory.
 
-   Five here by operator decision (message 178020; review findings surface across rounds, and the repetition check below stops a loop that is not converging), three in `task-implementer` and `job-orchestrator`. This skill said six, an outlier with nothing behind it. The evidence for a repair loop converges on three: *"the first three to four repair
-   iterations account for most achievable gains"*
-   ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
-   **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
-   is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the
-   agent finds the fix and then destroys it, throwing away ~15 points by not
-   stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
-   Rounds four through six of a self-fix loop were not buying convergence; they
-   were buying regressions. Review rounds are the exception, as stated above.
+   Five here by operator decision (message 178020; review findings surface across rounds, and the repetition check below stops a loop that is not converging), three in `task-implementer` and `job-orchestrator`. The evidence for a repair loop converges on three: *"the first three to four repair
+   iterations account for most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
+   correctness falls **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
+   is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the agent finds the fix and then
+   destroys it, throwing away ~15 points by not stopping. Aider hardcodes `max_reflections = 3`;
+   OpenHands' critic uses 3. Review rounds are the exception, as stated above.
 
 4. **Before** spending an attempt, and regardless of how much budget is left,
    run the repetition check:

@@ -129,7 +129,7 @@ conditions land under that rubric.
 | A generic helper whose names or types lean on one feature's language | `minor` | Works today; the cost is to the next module that needs it |
 | A blast-radius concern with no named consumer | `info` | Shared law 1 |
 
-"Broad blast radius" is not by itself a `blocker`. Name the consumer that breaks.
+"Broad blast radius" is not by itself a `blocker`. Name the consumer that breaks. A fix PR adding a new shared core mechanism is not graded at all: it is `Mis-scoped: split` (`review-orchestrator/SKILL.md` → `### Scope before severity`).
 
 ---
 

@@ -452,6 +452,7 @@ Required content:
 - Git/PR metadata: repo, branch, base, head, merge-base, PR number/URL when available.
 - Scope summary: changed files grouped by domain, high-risk files, generated/ignored files.
 - Requirements: issue URL, linked task docs, acceptance criteria extracted from `context_doc` when available.
+- **Owner intent**, in `requirements.owner_intent`: the owning spec's open questions and the code owner's and reviewers' latest comments on the PR and linked issue — never the author's own text as settled (`.metaproject/rules/core/owner-intent.mdc`). The brief asks scope before polish and never sets "other reviewers find nothing" as its goal: `SKILL.detail.md` § "Scope before severity".
 - **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`, into the typed `pr.body`. See below.
 - **Cross-repo contracts the diff depends on**, in the typed `cross_repo`: each pinned to the ref you read it at, and each recording whether the producer has merged. See below.
 - Rules: matched repository rules and convention docs by path.
@@ -477,11 +478,7 @@ and not a pleasantry because unfiled housekeeping is raised again every round an
 fixed in none — three consecutive rounds of "still worth rewriting" is the
 recorded outcome of leaving it out of the findings array.
 
-**The Stage 1 gate files it.** Handing the body to every reviewer is what makes
-the body available; it is not what makes the comparison happen. A rule addressed
-to everyone is owned by no one, and that is the state this finding sat in for
-three rounds. The gate already holds the stated intent and the diff side by side,
-so the comparison belongs there — see `## Stage 1 Gate — Spec Compliance`.
+**The Stage 1 gate files it** — see `## Stage 1 Gate — Spec Compliance`.
 
 Same class, same severity: an approach that depends on another repository's change
 being deployed first, with no deploy note saying so. Note the boundary — that
@@ -630,14 +627,7 @@ Budget rules:
 - Record omitted files and truncation in `review_context.token_policy.omissions`.
 - If a reviewer returns `NEEDS_CONTEXT`, provide only the missing targeted context, not the entire repository.
 
-Default budget guidance:
-
-| Review size | Detection | Context mode | Dispatch style |
-|---|---|---|---|
-| small | <= 5 files and <= 300 changed lines | `light` | full relevant diff to selected reviewers |
-| medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
-| large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
-| high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
+Default budget guidance by review size: `SKILL.detail.md` § "Default budget guidance".
 
 ---
 
@@ -661,7 +651,6 @@ whether it is computed:
 Rules:
 - Never write a model id into a dispatch by hand — paste the `model` block `keryx review tier` printed.
 - `inherit: true` is the adaptive answer: dispatch on your runtime's model for the block's `tier` (Step 6). Record `model_assignment: adaptive` and the model you actually chose — not a failure.
-- With `model_strategy: ask`, present the model plan once before dispatch, then proceed with the computed model.
 
 ---
 
@@ -1154,6 +1143,7 @@ This table applies once this skill is running; reaching it is a separate questio
 **Run this FIRST, before dispatching quality reviewers, whenever the change has a
 stated intent — an `issue_url`, a task doc, or a PR body.**
 
+0. Ask the scope question first (`### Scope before severity`). On `Mis-scoped: split`, it is reported first and steps 1-5 run on the part that stays.
 1. Fetch issue or task requirements.
 2. Map changed files and functions to acceptance criteria.
 3. Identify any criteria that are not addressed by the diff.
@@ -1363,6 +1353,15 @@ their own. Ten private rubrics feeding one sort produce a ranking that means ten
 different things at once, and ranking is what an operator uses to decide what to
 read first. A reviewer may state which of *its* conditions land where; it may not
 redefine the levels.
+
+### Scope before severity
+
+**Before grading, ask: should this change exist in this PR?** A fix PR carrying a
+new shared mechanism or an architecture change is not graded on the ladder: it is
+reported first as `Mis-scoped: split`, naming what stays and what moves out. A
+placement or ownership finding escalates to it, never to `minor`, and it is never
+auto-fixed — the round stops and asks the operator. Record and rationale:
+`SKILL.detail.md` § "Scope before severity".
 
 ### `blocker` — merge-blocking, and nothing else
 
@@ -1703,6 +1702,7 @@ If absent, proceed normally — context is optional and non-blocking.
 | "Minor findings from one reviewer cancel out the major from another" | Each finding stands independently; severity is per-finding, not averaged |
 | "The reviewer's own severity table said blocker" | There are no reviewer tables. One rubric, in **Severity (canonical)** above; a reviewer that ships one is the defect this replaced |
 | "It's a security/architecture finding, so it's a blocker" | Severity is the demonstrated outcome, not the domain that found it. `blocker` is exactly the four shapes |
+| "Placement is just a `minor`; fix it in this round" | It is `Mis-scoped: split`: reported first, never auto-fixed. Fixing it in place hardens what the owner may want removed |
 | "It will definitely break something eventually, so blocker" | Name the trigger and the outcome. Named → `major`. Unnamed → `info`. "Eventually" is neither |
 | "A strict re-read of the findings will sharpen them" | That pass existed and was removed: self-correction without new evidence measured 95.5 → 91.5 → 89.0 on GSM8K and 75.8 → 38.1 on CommonSenseQA. Run something instead |
 | "Three reviewers agree, so the finding is verified" | Consensus is not evidence. 80+ agents unanimously endorsed a vulnerability that did not exist; one empirical test killed it |

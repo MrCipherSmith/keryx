@@ -5,6 +5,12 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **`owner-intent` core rule.** A bug issue states a user-visible defect with evidence and never prescribes a new shared mechanism; a rule gap the owner's spec lists as open is asked on the owner's thread, not filed; the triage assignee stays. The owner, not the PR, decides whether a shared pattern changes, in its own PR. Only owner or reviewer decisions and merged specs count as settled, never the author's own issue, PR body or same-PR doc edits. An author gate re-reads the PR thread before every push, re-request or status report, and a follow-up is checked against the latest owner feedback before it is filed.
+
+### Changed
+- **Review: scope before severity.** `review-orchestrator` answers "should this change exist in this PR?" before grading. A fix PR carrying a new shared mechanism is reported first as `Mis-scoped: split` — what stays, what moves out — and is never graded on the ladder or auto-fixed; `review-architecture` and `review-core-boundaries` escalate placement and ownership findings to it, and the `flow-orchestrator` fix loop stops on it. The review context pack carries owner intent, and a brief no longer aims at "other reviewers find nothing". `review-pr-feedback`, `flow-orchestrator` and `push` run the author gate.
+
 ## [0.3.77] — 2026-10-05
 
 ### Fixed

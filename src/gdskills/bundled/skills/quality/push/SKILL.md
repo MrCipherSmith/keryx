@@ -30,7 +30,7 @@ Run in parallel where possible:
 ### Phase 2: Safety Checks
 - If there are uncommitted changes → warn and ask if they want to commit first
 - If on `main` or `master` → warn and ask for confirmation
-- If branch has no upstream → use `git push -u origin <branch>`
+- If the branch has an open PR → run the author gate (`.metaproject/rules/core/owner-intent.mdc`, rule 6) first; an unanswered owner or reviewer comment stops the push
 
 ### Phase 3: Push
 - Normal case: `git push`
