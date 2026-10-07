@@ -1272,30 +1272,73 @@ function decimalDigitValue(codePoint: number): number {
 //     (`415-555-\n0199`), which is how a number wraps.
 type ViewOptions = { readonly letters?: boolean; readonly shyHyphen?: boolean; readonly breaks?: boolean };
 
-// The `-` look-alikes: the dashes, minus signs, small and fullwidth hyphens, the Armenian hyphen, the katakana
-// prolonged sound mark and the hyphen bullet.
+// The `-` look-alikes: every dash punctuation character (`\p{Pd}`: the dashes, small and fullwidth hyphens, the
+// Armenian and Mongolian hyphens, the wave dash, the double oblique hyphen, ...) and the characters that are not
+// punctuation but are drawn as a hyphen or a minus: the minus signs, the modifier minus, the heavy minus, the
+// Canadian syllabics hyphen, the katakana prolonged sound mark, the hyphen bullet and the Arabic full stop.
+const DASH_PUNCTUATION = /\p{Pd}/u;
+const HYPHEN_LOOKALIKES = new Set([
+  0x2d7, 0x6d4, 0x1427, 0x2043, 0x207b, 0x208b, 0x2212, 0x2796, 0x30fc, 0xfe63, 0xff0d,
+]);
+
+// What cannot be seen: format characters (`\p{Cf}`: the soft hyphen, zero-width characters, bidi marks and isolates,
+// the byte-order mark, the tag characters, ...) and default-ignorable code points (variation selectors, Hangul and
+// Khmer fillers, the combining grapheme joiner, the Mongolian free variation selectors, ...) are always deleted. A
+// combining mark (`\p{M}`) can be put between any two characters of a number too, but it is a letter's accent
+// elsewhere, so it is deleted only right after a digit or a number separator (`078\u0301-05-1120`); a mark on a word
+// leaves the word-based rules (email, name, address) reading exactly what they read before.
+// A list of these is always one short.
+const INVISIBLE_PROPERTY = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
+const MARK_PROPERTY = /\p{M}/u;
+
+// One byte per BMP code point, filled lazily: 0 unknown, 1 plain, 2 invisible, 3 hyphen look-alike, 4 combining
+// mark. At most 64 KiB.
+const BMP_CLASS = new Uint8Array(0x10000);
+
+function classOf(code: number): number {
+  if (code <= 0xffff) {
+    const known = BMP_CLASS[code] as number;
+    if (known !== 0) {
+      return known;
+    }
+  }
+  const text = String.fromCodePoint(code);
+  const kind = INVISIBLE_PROPERTY.test(text)
+    ? 2
+    : MARK_PROPERTY.test(text)
+      ? 4
+      : DASH_PUNCTUATION.test(text) || HYPHEN_LOOKALIKES.has(code)
+        ? 3
+        : 1;
+  if (code <= 0xffff) {
+    BMP_CLASS[code] = kind;
+  }
+  return kind;
+}
+
 function isHyphenLookalike(code: number): boolean {
-  return (
-    (code >= 0x2010 && code <= 0x2015) || code === 0x2212 || code === 0x207b || code === 0x208b || code === 0xfe58 ||
-    code === 0xfe63 || code === 0xff0d || code === 0x58a || code === 0x5be || code === 0x1806 || code === 0x2043 ||
-    code === 0x30fc || code === 0x30a0 || code === 0x2e3a || code === 0x2e3b
-  );
+  return classOf(code) === 3;
 }
 
-function isInvisible(code: number): boolean {
-  return (
-    code === 0xad || (code >= 0x200b && code <= 0x200d) || (code >= 0x2060 && code <= 0x2064) || code === 0x180e ||
-    code === 0x34f || code === 0x200e || code === 0x200f
-  );
+function isInvisible(code: number, afterNumber: boolean): boolean {
+  if (code === 0xad) {
+    return true;
+  }
+  if (code < 0x300) {
+    return false;
+  }
+  const kind = classOf(code);
+  return kind === 2 || (kind === 4 && afterNumber);
 }
 
-function foldNumberChar(code: number, options: ViewOptions): string | null {
-  if (isInvisible(code)) {
+// `afterNumber`: the character before is a digit, a number separator or something deleted after one.
+function foldNumberChar(code: number, options: ViewOptions, afterNumber: boolean): string | null {
+  if (isInvisible(code, afterNumber)) {
     return code === 0xad && options.shyHyphen ? "-" : "";
   }
   if (
     code === 0xa0 || code === 0x1680 || (code >= 0x2000 && code <= 0x200a) || code === 0x2028 || code === 0x2029 ||
-    code === 0x202f || code === 0x205f || code === 0x3000 || code === 0xfeff
+    code === 0x202f || code === 0x205f || code === 0x3000
   ) {
     return " ";
   }
@@ -1328,6 +1371,14 @@ type NormalizedWindow = { text: string; origin: Int32Array };
 
 const BREAK_CHAR = /[\t\r\n]/;
 
+// A digit, a blank or one of `+ ( ) - .`: what a number is made of besides its digits.
+function isNumberAscii(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) || code === 32 || code === 9 || code === 10 || code === 13 || code === 43 ||
+    code === 40 || code === 41 || code === 45 || code === 46
+  );
+}
+
 // A run of tabs and line breaks is deleted when it separates a digit from a `-` or `.` that is itself next to a digit.
 function isNumberBreak(content: string, from: number, to: number): boolean {
   const before = content[from - 1];
@@ -1346,9 +1397,11 @@ function normalizeWindow(content: string, from: number, to: number, options: Vie
   let length = 0;
   let flushed = from;
   let changed = false;
+  let afterNumber = from > 0 && isNumberAscii(content.charCodeAt(from - 1));
   for (let i = from; i < to; ) {
     const code = content.charCodeAt(i);
     if (code < 128) {
+      afterNumber = isNumberAscii(code);
       if (options.breaks && (code === 9 || code === 10 || code === 13)) {
         let j = i + 1;
         while (j < to && BREAK_CHAR.test(content[j] as string)) {
@@ -1372,8 +1425,9 @@ function normalizeWindow(content: string, from: number, to: number, options: Vie
     }
     const codePoint = content.codePointAt(i) as number;
     const width = codePoint > 0xffff ? 2 : 1;
-    const folded = foldNumberChar(codePoint, options);
+    const folded = foldNumberChar(codePoint, options, afterNumber);
     if (folded === null) {
+      afterNumber = false;
       for (let k = 0; k < width; k += 1) {
         origin[length++] = i;
       }
@@ -1382,6 +1436,7 @@ function normalizeWindow(content: string, from: number, to: number, options: Vie
       parts.push(content.slice(flushed, i));
       flushed = i + width;
       if (folded !== "") {
+        afterNumber = folded === "@" ? false : isNumberAscii(folded.charCodeAt(0));
         parts.push(folded);
         origin[length++] = i;
       }
