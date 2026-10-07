@@ -11,7 +11,7 @@
   "title": "PII detector: separator and glue misses found in review round 6",
   "status": "implemented",
   "createdAt": "2026-10-07T03:34:23.592Z",
-  "updatedAt": "2026-10-07T06:31:25.781Z",
+  "updatedAt": "2026-10-07T08:31:10.850Z",
   "source": {
     "type": "description",
     "ref": null
@@ -21,6 +21,26 @@
     "AC6": {
       "at": "2026-10-07T06:31:00.878Z",
       "note": "operator confirmed in poll 120 (2026-10-07): AC6 reworded with the UUID exception; backed by src/security/detect/pii-flow412-coverage.test.ts and the scaling tests"
+    },
+    "AC1": {
+      "at": "2026-10-07T08:31:08.999Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC2": {
+      "at": "2026-10-07T08:31:09.457Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC3": {
+      "at": "2026-10-07T08:31:09.928Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC4": {
+      "at": "2026-10-07T08:31:10.384Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
+    },
+    "AC5": {
+      "at": "2026-10-07T08:31:10.850Z",
+      "note": "operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921"
     }
   },
   "pr": {
@@ -125,6 +145,31 @@
       "at": "2026-10-07T06:31:25.781Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/921 (base: main)"
+    },
+    {
+      "at": "2026-10-07T08:31:08.999Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:09.457Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:09.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:10.384Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:10.850Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -157,6 +202,61 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC6",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:08.999Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:09.457Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:09.928Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:10.384Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-07T08:31:10.850Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
       "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
     }
   ],
