@@ -11,7 +11,7 @@
   "title": "PII detector: separator and glue misses found in review round 6",
   "status": "implemented",
   "createdAt": "2026-10-07T03:34:23.592Z",
-  "updatedAt": "2026-10-07T08:31:10.850Z",
+  "updatedAt": "2026-10-07T08:31:44.590Z",
   "source": {
     "type": "description",
     "ref": null
@@ -61,7 +61,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +69,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "context came from flow 410 review round 6 findings, already collected in the flow description"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,14 +86,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in commit 09674039, all six AC"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -99,14 +103,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "74 new tests pii-flow412-*, 46 fail on revert, 422 detector tests pass, CI green"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -114,7 +120,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 921 prepared as draft; formal review round follows"
     }
   ],
   "history": [
@@ -170,6 +178,26 @@
       "at": "2026-10-07T08:31:10.850Z",
       "event": "ac-confirmed",
       "detail": "AC5: operator confirmed in poll 121 (2026-10-07); backed by src/security/detect/pii-flow412-*.test.ts, 422 detector tests pass, CI green on PR 921 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-07T08:31:37.638Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-07T08:31:43.586Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-07T08:31:44.096Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-07T08:31:44.590Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
