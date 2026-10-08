@@ -406,10 +406,16 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
   if (!(await pathExists(componentsDir))) {
     return { pruned: [], orphanedAccepted: [] };
   }
-  const at = new Date().toISOString();
-  const candidates = await collectGraphWikiCandidates(cwd, at, DEFAULT_COLLECT_LIMIT, null);
+  // Every module in the graph, not the capped candidate list: a module ranked
+  // past the collect limit still exists and must keep its page. A module that
+  // shrank below MIN_MODULE_FILES no longer gets a page from collect, so its
+  // old page is stale and goes with the orphans.
+  const counts = await moduleFileCounts(cwd);
+  if (counts === undefined || counts.size === 0) {
+    return { pruned: [], orphanedAccepted: [] };
+  }
   const validSlugs = new Set(
-    candidates.filter((candidate) => candidate.type === "component").map((candidate) => candidate.slug),
+    [...counts].filter(([, files]) => files >= MIN_MODULE_FILES).map(([name]) => slugifyPath(name)),
   );
 
   const pruned: string[] = [];
@@ -456,17 +462,23 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
  * yet," not as "everything is invalid."
  */
 export async function validModuleNames(cwd: string): Promise<Set<string> | undefined> {
+  const counts = await moduleFileCounts(cwd);
+  return counts === undefined ? undefined : new Set(counts.keys());
+}
+
+async function moduleFileCounts(cwd: string): Promise<Map<string, number> | undefined> {
   const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
   if (!(await pathExists(nodesPath))) {
     return undefined;
   }
-  const modules = new Set<string>();
+  const counts = new Map<string, number>();
   for (const node of parseJsonl(await readFile(nodesPath, "utf8"))) {
     if (node.kind === "asset") continue;
     const nodePath = String(node.path ?? node.id ?? "unknown");
-    modules.add(moduleNameFromProjectPath(nodePath));
+    const moduleName = moduleNameFromProjectPath(nodePath);
+    counts.set(moduleName, (counts.get(moduleName) ?? 0) + 1);
   }
-  return modules;
+  return counts;
 }
 
 // AFC-W04 (flow 235, phase 3, T12) — the evidence surface.
