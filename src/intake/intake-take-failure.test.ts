@@ -20,7 +20,7 @@ describe("take that fails (AC7)", () => {
   test("no project has a clone of the repository: failed with the reason, no flow, init never called", async () => {
     const card = await seedCard(env.root, { repo: OTHER_REPO });
     const fakes = makeFakes();
-    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(result.ok).toBe(false);
     expect(result.message).toContain(OTHER_REPO);
     expect(fakes.flows.initCalls).toEqual([]);
@@ -35,7 +35,7 @@ describe("take that fails (AC7)", () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
     fakes.flows.failWith = "flow init failed: gh: not logged in";
-    const first = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    const first = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(first.ok).toBe(false);
     expect(first.message).toContain("Можно нажать ещё раз");
     expect(fakes.flows.flows).toEqual([]);
@@ -52,7 +52,7 @@ describe("take that fails (AC7)", () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
     fakes.flows.dieAfterCreate = true;
-    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(result.ok).toBe(false);
     expect((await readIntakeCardView(env.root, card.id))!.state).toBe("failed");
   });
@@ -61,7 +61,7 @@ describe("take that fails (AC7)", () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
     fakes.flows.failWith = `boom ghp_abcdefghijklmnopqrstuvwxyz0123456789 ${"x".repeat(500)}`;
-    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     const view = (await readIntakeCardView(env.root, card.id))!;
     expect(view.reason!.length).toBeLessThanOrEqual(200);
     expect(view.reason).not.toContain("ghp_");
@@ -73,7 +73,7 @@ describe("take that fails (AC7)", () => {
     const fakes = makeFakes();
     fakes.flows.failWith = "flow init failed: exit 1";
     const hub = new FakePressHub();
-    const handler = createIntakePressHandler({ hub, roots: () => [env.root], actionDeps: fakes.deps });
+    const handler = createIntakePressHandler({ hub, roots: () => [env.root], now: () => local(10, 42), actionDeps: fakes.deps });
     const reply = await handler(pressFor(card, "take"));
     expect(reply?.text).toContain("не вышло");
     expect(hub.edits).toEqual([]);

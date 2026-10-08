@@ -33,7 +33,7 @@ describe("pruneArchive wiring at every host that keeps an archive", () => {
   test("the TUI foreground turn opts into pruning", () => {
     const source = read("tui/tui-shell.ts");
     expect(source).toMatch(
-      /runAgentTurn\(\s*foregroundIo,\s*deps,\s*history,\s*line,\s*\{[\s\S]{0,400}?pruneArchive:\s*true[\s\S]{0,40}?\}\)\s*\.finally/,
+      /runAgentTurn\(\s*foregroundIo,\s*deps,\s*history,\s*line,\s*\{[\s\S]{0,400}?pruneArchive:\s*true[\s\S]{0,40}?\}\)\)?\s*\.finally/,
     );
   });
 

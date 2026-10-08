@@ -137,3 +137,90 @@ test("classifyTurn: no Jev credential skips Jev even when jevEnabled is true", a
   });
   expect(outcome?.trace.map((t) => t.source)).toEqual(["main-model"]);
 });
+
+test("flow 411: null fallback never reverts to session model", async () => {
+  const result = await classifyTurn("add a retry loop to the fetch call", [...CATEGORIES], {
+    fallbackModel: null, sessionProvider: "anthropic", sessionModel: "claude-x",
+    providerFactory: () => { throw new Error("baseline must not be called"); },
+  });
+  expect(result?.result.ok).toBe(false);
+  expect(result?.trace).toEqual([]);
+});
+
+
+test("flow411: one deadline bounds two non-cooperative stages and aborts both", async () => {
+  const signals: AbortSignal[] = [];
+  const started = performance.now();
+  const outcome = await classifyTurn("implement a retry loop", [...CATEGORIES], {
+    jevEnabled: true, env: ENV_WITH_KEY, timeoutMs: 160,
+    fetch: ((_: unknown, init?: RequestInit) => {
+      signals.push(init!.signal!);
+      return new Promise<Response>(() => {});
+    }) as typeof fetch,
+    fallbackModel: { providerId: "anthropic", modelId: "claude-x" },
+    providerFactory: () => ({ ...factoryReplying("coding")("anthropic", "claude-x", { fetch: globalThis.fetch }),
+      async *stream(_request, opts) {
+        signals.push(opts.signal!);
+        await new Promise<void>(() => {});
+      },
+    }),
+  });
+  expect(performance.now() - started).toBeLessThan(260);
+  expect(outcome?.result.ok).toBe(false);
+  expect(outcome?.trace.map(t => t.source)).toEqual(["jev", "main-model"]);
+  expect(signals).toHaveLength(2);
+  expect(signals.every(s => s.aborted)).toBe(true);
+});
+
+test("flow411: cancellation during JEV prevents fallback and ignores late success", async () => {
+  const controller = new AbortController();
+  let finish!: (response: Response) => void;
+  let observed!: AbortSignal;
+  const promise = classifyTurn("implement a retry loop", [...CATEGORIES], {
+    jevEnabled: true, env: ENV_WITH_KEY, timeoutMs: 1000, signal: controller.signal,
+    fetch: ((_: unknown, init?: RequestInit) => {
+      observed = init!.signal!;
+      controller.abort();
+      return new Promise<Response>(resolve => { finish = resolve; });
+    }) as typeof fetch,
+    fallbackModel: { providerId: "anthropic", modelId: "claude-x" },
+    providerFactory: () => { throw new Error("cancelled chain must not call fallback"); },
+  });
+  const outcome = await promise;
+  expect(outcome?.result).toEqual({ ok: false, reason: "classification cancelled" });
+  expect(observed.aborted).toBe(true);
+  expect(outcome?.trace.map(t => t.source)).toEqual(["jev"]);
+  finish(new Response(JSON.stringify({ answers: { category: { type: "choice", choice: "coding" }, confidence: { type: "noul", noul: 0.85 } }, usage: {} })));
+  await new Promise(resolve => setTimeout(resolve, 10));
+  expect(outcome?.result.ok).toBe(false);
+});
+
+test("flow411: pre-cancel and zero budget start no classifier", async () => {
+  const controller = new AbortController(); controller.abort();
+  for (const options of [{ signal: controller.signal }, { timeoutMs: 0 }]) {
+    const outcome = await classifyTurn("implement a retry loop", [...CATEGORIES], {
+      ...options, fallbackModel: { providerId: "anthropic", modelId: "claude-x" },
+      providerFactory: () => { throw new Error("must not start"); },
+    });
+    expect(outcome?.result.ok).toBe(false);
+    expect(outcome?.trace).toEqual([]);
+  }
+});
+
+test("flow411: cancel a hanging fallback stream promptly", async () => {
+  const controller = new AbortController();
+  let observed!: AbortSignal;
+  const outcome = await classifyTurn("implement a retry loop", [...CATEGORIES], {
+    signal: controller.signal, timeoutMs: 1000,
+    fallbackModel: { providerId: "anthropic", modelId: "claude-x" },
+    providerFactory: () => ({ ...factoryReplying("coding")("anthropic", "claude-x", { fetch: globalThis.fetch }),
+      async *stream(_request, opts) {
+        observed = opts.signal!;
+        controller.abort();
+        await new Promise<void>(() => {});
+      },
+    }),
+  });
+  expect(outcome?.result).toEqual({ ok: false, reason: "classification cancelled" });
+  expect(observed.aborted).toBe(true);
+});

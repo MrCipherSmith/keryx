@@ -1,0 +1,12 @@
+{
+  "mergeBase": "34226226890e31a5591e17110f0b44878bcdc153",
+  "base": "9d4cbc364cc1fdd6b2e88a1d64527fa738b40983",
+  "head": "212f55f14707bf30498939d47084ebcd6c72d126",
+  "pii": {
+    "34226226890e31a5591e17110f0b44878bcdc153": "f738ec0cde83d80f3a111dad083032896c61a6b6",
+    "9d4cbc364cc1fdd6b2e88a1d64527fa738b40983": "5aeb9d5952414f8a0878cbb01e8318a45ce08f5c",
+    "212f55f14707bf30498939d47084ebcd6c72d126": "f738ec0cde83d80f3a111dad083032896c61a6b6"
+  },
+  "prDetectorChanges": "",
+  "baseDetectorChanges": "M\tsrc/security/detect/pii-identifier-sweep.test.ts\nM\tsrc/security/detect/pii-linear-time.test.ts\nA\tsrc/security/detect/pii-normalised.test.ts\nM\tsrc/security/detect/pii-phone-linear-time.test.ts\nM\tsrc/security/detect/pii.ts\n"
+}

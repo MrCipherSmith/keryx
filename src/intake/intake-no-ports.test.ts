@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { decideIntakeCard } from "./actions";
 import { OWNER, makeFakes, seedCard } from "./intake-actions.test-helpers";
-import { setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
+import { local, setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
 import { installIntakeDefaultPorts } from "./ports";
 import { readIntakeCardView } from "./store";
 
@@ -28,13 +28,13 @@ describe("a decision with no ports installed (S3)", () => {
   ] as const) {
     test(`${action} resolves with a refusal, the card is not left taking, and a repeat press works once ports exist`, async () => {
       const card = await seedCard(env.root, { kind });
-      const first = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), deps: {} });
+      const first = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), now: local(10, 42), deps: {} });
       expect(first.ok).toBe(false);
       expect(first.message.length).toBeGreaterThan(0);
       expect((await readIntakeCardView(env.root, card.id))?.state).toBe(action === "ci-triage" ? "failed" : "sent");
 
       const fakes = makeFakes();
-      const again = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), deps: fakes.deps });
+      const again = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), now: local(10, 42), deps: fakes.deps });
       expect(again.ok).toBe(true);
       expect((await readIntakeCardView(env.root, card.id))?.state).not.toBe("failed");
     });

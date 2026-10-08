@@ -1,0 +1,5 @@
+{
+  "src/scheduler/digest-run.ts": "e3f37b983ccbaefd17c0159675be926a97eaacae6784ea54e2d9132a4d786f0a",
+  "src/scheduler/digest-delivery.test.ts": "071bbfd6381c36538b2fda5dbfdeadfc31c3b399239ab9e71289bb8951f43148",
+  "src/scheduler/digest-report-locator.test.ts": "e50a1e8975555c951bdabca48aaedbac5b1ce68951b77c7996b228632110df21"
+}

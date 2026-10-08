@@ -82,8 +82,8 @@ describe("concurrent presses (AC11)", () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
     const results = await Promise.all([
-      decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps }),
-      decideIntakeCard(env.root, card.id, "decline", { decidedBy: "2", deps: fakes.deps }),
+      decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps }),
+      decideIntakeCard(env.root, card.id, "decline", { decidedBy: "2", now: local(10, 42), deps: fakes.deps }),
     ]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
     const final = (await readIntakeCardView(env.root, card.id))!;
@@ -94,7 +94,7 @@ describe("concurrent presses (AC11)", () => {
   test("the ledger holds one decision record per accepted press", async () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
-    await Promise.all([1, 2, 3, 4].map((n) => decideIntakeCard(env.root, card.id, "decline", { decidedBy: String(n), deps: fakes.deps })));
+    await Promise.all([1, 2, 3, 4].map((n) => decideIntakeCard(env.root, card.id, "decline", { decidedBy: String(n), now: local(10, 42), deps: fakes.deps })));
     const decided = (await readIntakeLedger(env.root)).filter((r) => r.cardId === card.id && r.state === "decided");
     expect(decided).toHaveLength(1);
   });

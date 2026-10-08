@@ -1,0 +1,39 @@
+{
+  "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "status": "in-progress",
+  "acSha256": "c255889ccaaa9a4bfd799b03dcd8661d3d6dd4b471a55193ae9b80cbd53d051c",
+  "acConfirmed": {
+    "AC9": {
+      "at": "2026-10-07T10:19:25.305Z",
+      "note": "Automated verification, not operator acceptance: exact SHA 290591c7b553cc9a2804a47eee288694cfbc166c. CI run 37603970321 and literal full gate run 37603964584 SUCCESS; bun run check includes lint, typecheck, typecheck:scripts and bun test: 29907 pass,48 skip,0 fail,187932 assertions,1540 files,995.92s,exit0/log_exit0. Bun1.3.14 Node22 Ubuntu. Related fake fetch/provider regression evidence (319 tests/1381 assertions and 6/6 PTY) and replaced pinning contract recorded in journal; current bun run keryx health run --changed --source eslint,typescript PASS. CI run URLs recorded in T3; optional live-provider validation is not claimed. AC11 stays unconfirmed."
+    }
+  },
+  "T5": {
+    "id": "T5",
+    "title": "AC11: operator acceptance on updated released npm artifact in one session; two categories, two /model changes, unavailable JEV fallback, /route off latest baseline",
+    "kind": "verify",
+    "status": "todo",
+    "dependsOn": [
+      "T3",
+      "T4"
+    ],
+    "attempts": {
+      "count": 1,
+      "log": [
+        {
+          "at": "2026-10-06T20:01:20.564Z",
+          "outcome": "blocked",
+          "detail": "AC11 remains UNCONFIRMED. Existing review/pty-evidence demonstrates real kernel TTY with fake JEV/executor, not operator participation or installed released npm artifact. No verified release/version/path evidence or operator transcript/confirmation is present. After separately approved release, record artifact provenance and operator-observed dispatch before/after two /model switches, sufficient fallback for a non-shortcut prompt with JEV unavailable, and latest baseline under /route off. Do not auto-confirm AC11."
+        }
+      ]
+    },
+    "acRefs": [],
+    "evidenceRefs": [],
+    "budget": {}
+  }
+}

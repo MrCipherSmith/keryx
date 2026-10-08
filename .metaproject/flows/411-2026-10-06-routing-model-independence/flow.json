@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true,
+    "confirmation": true
+  },
+  "id": "411",
+  "slug": "routing-model-independence",
+  "title": "Correct task routing: JEV fallback and assignments survive /model",
+  "status": "in-progress",
+  "createdAt": "2026-10-06T06:04:33.880Z",
+  "updatedAt": "2026-10-07T18:54:43.758Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9",
+  "acConfirmed": {
+    "AC9": {
+      "at": "2026-10-07T18:51:10.471Z",
+      "note": "Verified exact SHA 212f55f14707bf30498939d47084ebcd6c72d126 PR917: CI + Full check diagnostic completed SUCCESS; literal bun run check29920pass48skip0fail exit0/log_exit0, core20930pass13skip0fail and runtime6001pass38skip0fail. Health changed eslint/typescript PASS97 zero findings. Evidence .metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/{runs.json,core-jobs.json,full-jobs.json,core-summary.txt,full-summary.txt,health.log}. AC11 not confirmed; no merge/release."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Если я настроил /routing какая модель для чего, это должно работать даже если я в сессии меняю модель через /model.",
+    "source": "interactive operator request in current session"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [
+        ".metaproject/flows/411-2026-10-06-routing-model-independence/context.md",
+        ".metaproject/flows/411-2026-10-06-routing-model-independence/plan.md"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context and frozen plan collected; routing contract, baseline independence and evidence reviewed."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4",
+        "AC5",
+        "AC6",
+        "AC7",
+        "AC8"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/411-2026-10-06-routing-model-independence/journal.md",
+        "git:071702e41"
+      ],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Routing implementation committed and pushed on isolated fix branch at 071702e41; provider-default, independent classifier, shared deadline and cancellation guard implemented. Not operator acceptance."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 6,
+        "log": [
+          {
+            "at": "2026-10-06T20:01:18.265Z",
+            "outcome": "blocked",
+            "detail": "Focused regression evidence: 319 tests / 1381 assertions and typecheck passed; ESLint/TypeScript health passed; 6/6 hermetic kernel PTY scenarios passed. Full ordinary-terminal bun run check exited 1: 491 failed, 76 errors. Diagnostic GitHub CI on fix branch has no verified passing result in this review; do not rerun full check locally. AC9/full release gate remains open."
+          },
+          {
+            "at": "2026-10-06T20:10:36.894Z",
+            "outcome": "blocked",
+            "detail": "Full diagnostic GitHub CI on 071702e41 completed FAILURE. Failed log saved in local .git/flow411-split/ci-failed.log; contains foreground prune-archive-wiring source regex failure, not yet a complete root-cause analysis. Focused evidence remains passing; full gate and AC9 open. Next full check stays on GitHub, not local."
+          },
+          {
+            "at": "2026-10-07T09:52:11.691Z",
+            "outcome": "blocked",
+            "detail": "PR #917 CI blockers on 3e722231b reviewed: full log has 36 failures (29 intake, 4 remote, 2 cron, 1 prune source audit), plus SDK/sharp advisories. Fixes: explicit intake clocks including claimedAt; prune regex accepts cancellation wrapper; source inventory uses one snapshot and bounded async reads; cron TZ is set at fresh Bun process startup; remote shutdown flushes SSE with bounded 250ms graceful phase before force stop; SDK ^1.32.1 and sharp 0.35.5 lockfile. Focused PASS: intake/source 251 tests,1421 assertions,25 files; intake-report 6 tests; cron/remote 138 pass,1 macOS systemd skip,557 assertions; dependency regressions 237 pass,3 disabled live skips,875 assertions. Typechecks and build PASS; bun audit --json {} exit0. Local evidence .git/flow411-split/ci917/focused-intake-source-final.log,focused-intake-report-final.log,cron-remote-fixed.log,dependency-focused-tests.log,dependency-audit-after.json. Local logs are not portable artifacts. Full Linux bun run check pending new SHA; no local full rerun or gate bypass. T3/AC9 remain open; final independent review and operator AC11 pending; no merge/release/npm publication."
+          },
+          {
+            "at": "2026-10-07T09:58:51.108Z",
+            "outcome": "blocked",
+            "detail": "PR #917 Linux CI status check on exact head 290591c7b553cc9a2804a47eee288694cfbc166c. Intermediate result, NOT full gate PASS. core: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603970321. Job dependency-audit: completed/success. Job standard-baseline: completed/success. Job client matrix (streaming): completed/success. Job macOS real-host legs — OS sandbox + TUI pty launch: completed/success. Job metrics-contract: completed/success. Job vscode-extension: completed/success. Job opentui native (linux-arm64): completed/success. Job client matrix (cancel-resume): completed/success. Job typecheck-and-tests: in_progress/pending. Job opentui native (darwin-x64): completed/success. Job opentui native (darwin-arm64): completed/success. Job opentui native (linux-x64): completed/success. Job client matrix (terminal): in_progress/pending. Job linux sandbox (bubblewrap) live smoke: completed/success. Job client matrix (runtime): completed/success. Job standard-pr: completed/success. full: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603964584. Job full-check: in_progress/pending. Wiki freshness: completed/success. Docs: completed/success. Reports stored locally at .git/flow411-split/ci917/final-ci/{pr,runs,core-jobs,full-jobs}.json; local files are not portable evidence. T3/AC9 remain open while CI and full-check run. Final review, merge/release and operator AC11 remain pending; no acceptance confirmation."
+          },
+          {
+            "at": "2026-10-07T16:21:44.823Z",
+            "outcome": "blocked",
+            "detail": "Final exact SHA c59edc7da: CI FAILURE(core import-policy bypass152>150); literal Full check FAILURE29917pass48skip2fail(import-policy and provider-endpoint-retry blank frame). Evidence review/final-c59edc7da/review.md. Historical AC9 unchanged; no new final-SHA confirmation; AC11 OPEN."
+          },
+          {
+            "at": "2026-10-07T16:41:05.897Z",
+            "outcome": "blocked",
+            "detail": "Gate fixes local PASS91tests9files + ten Esc runs8pass each; facade bypasses routed through security/service, ceiling unchanged; explicit test render-barrier and pending wizard assertions. Blank CI frame root cause unproven. Evidence review/gate-fixes. Final-SHA CI/AC9 pending; historical AC9 unchanged; AC11 OPEN."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #917 exact head 290591c7b553cc9a2804a47eee288694cfbc166c verified: CI https://github.com/MrCipherSmith/keryx/actions/runs/37603970321 completed SUCCESS, all 16 jobs passed including dependency audit and client/native/OS matrix. Full diagnostic https://github.com/MrCipherSmith/keryx/actions/runs/37603964584 completed SUCCESS on Ubuntu, Bun 1.3.14, Node 22: literal bun run check (lint, both typechecks, all tests), 29907 pass / 48 skip / 0 fail, 187932 assertions, 29955 tests in 1540 files, 995.92s; check_exit=0 and log_exit=0. Earlier focused fake-provider routing AC1-AC8 regressions and 6/6 hermetic PTY passed; historical pinning expectations replaced. Current changed ESLint/TypeScript health run passed. Logs locally in .git/flow411-split/ci917/final-ci/{core,full}-log.txt and jobs JSON; portable evidence is the linked CI runs and diagnostic artifact. Final independent review, merge/release and operator AC11 remain pending; no flow closure."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 8,
+        "log": [
+          {
+            "at": "2026-10-06T20:01:18.914Z",
+            "outcome": "blocked",
+            "detail": "Independent reviews completed and findings fixed; PRD and smoke evidence updated. Draft PR is not recorded (pr.url is null); review/closure gates not accepted. Earlier journal statements saying no commit/push or CI launched are historical: routing and diagnostic workflow now reside on pushed fix branch 071702e41; research restored via ordinary revert 7ffa36d94."
+          },
+          {
+            "at": "2026-10-06T20:10:35.921Z",
+            "outcome": "blocked",
+            "detail": "Draft PR: https://github.com/MrCipherSmith/keryx/pull/917. Independent review evidence exists; final review/merge gates remain open. URL recorded in task/journal; implemented transition deferred until merge. AC11 unconfirmed; no release or npm publish."
+          },
+          {
+            "at": "2026-10-07T10:29:24.778Z",
+            "outcome": "blocked",
+            "detail": "Independent final review PR917 head290591c7b: CHANGES REQUIRED, P1 fallback classifier missing production external-policy enforcement (routing-classifier-source.ts:119-123; tui-shell.ts:9515-9528). Two independent read-only reviews; nonrouting no concrete defects. Report review/final-290591c7b/review.md. CI green does not cover policy bypass. AC11 remains open; no merge/release."
+          },
+          {
+            "at": "2026-10-07T11:12:07.376Z",
+            "outcome": "blocked",
+            "detail": "Independent targeted P1 fix-round static review PASS; no blocking finding in mandatory fresh external-policy gate. Focused routing/policy/JEV regressions and typecheck rerun PASS on hash-verified working files. Evidence review/p1-fix-round/review.md and focused.log/typecheck.log. Working fix remains uncommitted; previous CI PASS and AC9 refer only to 290591c7b. T4 final exact-SHA review/CI pending; AC11 OPEN. No merge or release."
+          },
+          {
+            "at": "2026-10-07T13:46:42.134Z",
+            "outcome": "blocked",
+            "detail": "Locator old-fail/new-pass established on historical merge 9127d78b8: deterministic baseline 25 pass/1 fail, candidate 30 pass/0 fail. Independent targeted static review PASS; source copies hash-identical. Evidence review/locator-merge-proof. Reviewer did not independently rerun logs; downstream RemoteHub re-redaction remains unverified. T4 awaits published exact-SHA CI/final review; AC11 remains OPEN."
+          },
+          {
+            "at": "2026-10-07T15:55:51.091Z",
+            "outcome": "blocked",
+            "detail": "Locator downstream verification: real hub over fake Bot API, session/service x immediate/queued; head and historical merge candidate suites each 34 pass 0 fail; typecheck PASS. Evidence review/locator-downstream and locator-merge-proof (old 25pass1fail -> candidate30pass0fail). Send path does not reapply redaction. Independent downstream reviewer timed out without verdict; T4 stays blocked pending final exact-SHA review and CI. AC11 OPEN, no live transport/npm operator proof; existing AC9 only old290591c7b."
+          },
+          {
+            "at": "2026-10-07T16:21:45.565Z",
+            "outcome": "blocked",
+            "detail": "Independent downstream review sub:c401bd62 PASS: service/session immediate/queued sends do not reapply PII redaction; static only, parent execution evidence34pass0fail each. Not whole-PR approval. Final CI/Full check failures block readiness. Evidence review/final-c59edc7da/review.md. AC11 OPEN."
+          },
+          {
+            "at": "2026-10-07T16:41:06.757Z",
+            "outcome": "blocked",
+            "detail": "Independent scoped gate-fix review sub:cafe6898 PASS; no semantic security/navigation blocker. Static only; synthetic idle test not native scheduler proof. Whole-PR readiness pending published SHA CI/Full check. Evidence review/gate-fixes/review.md. AC11 OPEN; no merge/release."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "AC11: operator acceptance on updated released npm artifact in one session; two categories, two /model changes, unavailable JEV fallback, /route off latest baseline",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T3",
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-06T20:01:20.564Z",
+            "outcome": "blocked",
+            "detail": "AC11 remains UNCONFIRMED. Existing review/pty-evidence demonstrates real kernel TTY with fake JEV/executor, not operator participation or installed released npm artifact. No verified release/version/path evidence or operator transcript/confirmation is present. After separately approved release, record artifact provenance and operator-observed dispatch before/after two /model switches, sufficient fallback for a non-shortcut prompt with JEV unavailable, and latest baseline under /route off. Do not auto-confirm AC11."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-06T06:04:33.880Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-06T06:09:04.720Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-06T07:25:26.730Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (Operator explicitly requested author MrCipherSmith)"
+    },
+    {
+      "at": "2026-10-06T07:25:26.907Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-06T20:01:16.193Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-06T20:01:16.682Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-06T20:01:18.266Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 1) — Focused regression evidence: 319 tests / 1381 assertions and typecheck passed; ESLint/TypeScript health passed; 6/6 hermetic kernel PTY scenarios passed. Full ordinary-terminal bun run check exited 1: 491 failed, 76 errors. Diagnostic GitHub CI on fix branch has no verified passing result in this review; do not rerun full check locally. AC9/full release gate remains open."
+    },
+    {
+      "at": "2026-10-06T20:01:18.914Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 1) — Independent reviews completed and findings fixed; PRD and smoke evidence updated. Draft PR is not recorded (pr.url is null); review/closure gates not accepted. Earlier journal statements saying no commit/push or CI launched are historical: routing and diagnostic workflow now reside on pushed fix branch 071702e41; research restored via ordinary revert 7ffa36d94."
+    },
+    {
+      "at": "2026-10-06T20:01:19.551Z",
+      "event": "task-added",
+      "detail": "T5: AC11: operator acceptance on updated released npm artifact in one session; two categories, two /model changes, unavailable JEV fallback, /route off latest baseline"
+    },
+    {
+      "at": "2026-10-06T20:01:20.565Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 1) — AC11 remains UNCONFIRMED. Existing review/pty-evidence demonstrates real kernel TTY with fake JEV/executor, not operator participation or installed released npm artifact. No verified release/version/path evidence or operator transcript/confirmation is present. After separately approved release, record artifact provenance and operator-observed dispatch before/after two /model switches, sufficient fallback for a non-shortcut prompt with JEV unavailable, and latest baseline under /route off. Do not auto-confirm AC11."
+    },
+    {
+      "at": "2026-10-06T20:10:35.922Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 2) — Draft PR: https://github.com/MrCipherSmith/keryx/pull/917. Independent review evidence exists; final review/merge gates remain open. URL recorded in task/journal; implemented transition deferred until merge. AC11 unconfirmed; no release or npm publish."
+    },
+    {
+      "at": "2026-10-06T20:10:36.895Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 2) — Full diagnostic GitHub CI on 071702e41 completed FAILURE. Failed log saved in local .git/flow411-split/ci-failed.log; contains foreground prune-archive-wiring source regex failure, not yet a complete root-cause analysis. Focused evidence remains passing; full gate and AC9 open. Next full check stays on GitHub, not local."
+    },
+    {
+      "at": "2026-10-07T09:52:11.691Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 3) — PR #917 CI blockers on 3e722231b reviewed: full log has 36 failures (29 intake, 4 remote, 2 cron, 1 prune source audit), plus SDK/sharp advisories. Fixes: explicit intake clocks including claimedAt; prune regex accepts cancellation wrapper; source inventory uses one snapshot and bounded async reads; cron TZ is set at fresh Bun process startup; remote shutdown flushes SSE with bounded 250ms graceful phase before force stop; SDK ^1.32.1 and sharp 0.35.5 lockfile. Focused PASS: intake/source 251 tests,1421 assertions,25 files; intake-report 6 tests; cron/remote 138 pass,1 macOS systemd skip,557 assertions; dependency regressions 237 pass,3 disabled live skips,875 assertions. Typechecks and build PASS; bun audit --json {} exit0. Local evidence .git/flow411-split/ci917/focused-intake-source-final.log,focused-intake-report-final.log,cron-remote-fixed.log,dependency-focused-tests.log,dependency-audit-after.json. Local logs are not portable artifacts. Full Linux bun run check pending new SHA; no local full rerun or gate bypass. T3/AC9 remain open; final independent review and operator AC11 pending; no merge/release/npm publication."
+    },
+    {
+      "at": "2026-10-07T09:58:51.108Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 4) — PR #917 Linux CI status check on exact head 290591c7b553cc9a2804a47eee288694cfbc166c. Intermediate result, NOT full gate PASS. core: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603970321. Job dependency-audit: completed/success. Job standard-baseline: completed/success. Job client matrix (streaming): completed/success. Job macOS real-host legs — OS sandbox + TUI pty launch: completed/success. Job metrics-contract: completed/success. Job vscode-extension: completed/success. Job opentui native (linux-arm64): completed/success. Job client matrix (cancel-resume): completed/success. Job typecheck-and-tests: in_progress/pending. Job opentui native (darwin-x64): completed/success. Job opentui native (darwin-arm64): completed/success. Job opentui native (linux-x64): completed/success. Job client matrix (terminal): in_progress/pending. Job linux sandbox (bubblewrap) live smoke: completed/success. Job client matrix (runtime): completed/success. Job standard-pr: completed/success. full: in_progress, conclusion=pending; https://github.com/MrCipherSmith/keryx/actions/runs/37603964584. Job full-check: in_progress/pending. Wiki freshness: completed/success. Docs: completed/success. Reports stored locally at .git/flow411-split/ci917/final-ci/{pr,runs,core-jobs,full-jobs}.json; local files are not portable evidence. T3/AC9 remain open while CI and full-check run. Final review, merge/release and operator AC11 remain pending; no acceptance confirmation."
+    },
+    {
+      "at": "2026-10-07T10:19:22.855Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-07T10:19:25.305Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Automated verification, not operator acceptance: exact SHA 290591c7b553cc9a2804a47eee288694cfbc166c. CI run 37603970321 and literal full gate run 37603964584 SUCCESS; bun run check includes lint, typecheck, typecheck:scripts and bun test: 29907 pass,48 skip,0 fail,187932 assertions,1540 files,995.92s,exit0/log_exit0. Bun1.3.14 Node22 Ubuntu. Related fake fetch/provider regression evidence (319 tests/1381 assertions and 6/6 PTY) and replaced pinning contract recorded in journal; current bun run keryx health run --changed --source eslint,typescript PASS. CI run URLs recorded in T3; optional live-provider validation is not claimed. AC11 stays unconfirmed. (signed: Keryx agent (openai-codex/gpt-6.1-sol) [stated])"
+    },
+    {
+      "at": "2026-10-07T10:29:24.778Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 3) — Independent final review PR917 head290591c7b: CHANGES REQUIRED, P1 fallback classifier missing production external-policy enforcement (routing-classifier-source.ts:119-123; tui-shell.ts:9515-9528). Two independent read-only reviews; nonrouting no concrete defects. Report review/final-290591c7b/review.md. CI green does not cover policy bypass. AC11 remains open; no merge/release."
+    },
+    {
+      "at": "2026-10-07T11:12:07.376Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 4) — Independent targeted P1 fix-round static review PASS; no blocking finding in mandatory fresh external-policy gate. Focused routing/policy/JEV regressions and typecheck rerun PASS on hash-verified working files. Evidence review/p1-fix-round/review.md and focused.log/typecheck.log. Working fix remains uncommitted; previous CI PASS and AC9 refer only to 290591c7b. T4 final exact-SHA review/CI pending; AC11 OPEN. No merge or release."
+    },
+    {
+      "at": "2026-10-07T13:46:42.134Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 5) — Locator old-fail/new-pass established on historical merge 9127d78b8: deterministic baseline 25 pass/1 fail, candidate 30 pass/0 fail. Independent targeted static review PASS; source copies hash-identical. Evidence review/locator-merge-proof. Reviewer did not independently rerun logs; downstream RemoteHub re-redaction remains unverified. T4 awaits published exact-SHA CI/final review; AC11 remains OPEN."
+    },
+    {
+      "at": "2026-10-07T15:55:51.091Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 6) — Locator downstream verification: real hub over fake Bot API, session/service x immediate/queued; head and historical merge candidate suites each 34 pass 0 fail; typecheck PASS. Evidence review/locator-downstream and locator-merge-proof (old 25pass1fail -> candidate30pass0fail). Send path does not reapply redaction. Independent downstream reviewer timed out without verdict; T4 stays blocked pending final exact-SHA review and CI. AC11 OPEN, no live transport/npm operator proof; existing AC9 only old290591c7b."
+    },
+    {
+      "at": "2026-10-07T16:21:44.823Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 5) — Final exact SHA c59edc7da: CI FAILURE(core import-policy bypass152>150); literal Full check FAILURE29917pass48skip2fail(import-policy and provider-endpoint-retry blank frame). Evidence review/final-c59edc7da/review.md. Historical AC9 unchanged; no new final-SHA confirmation; AC11 OPEN."
+    },
+    {
+      "at": "2026-10-07T16:21:45.565Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 7) — Independent downstream review sub:c401bd62 PASS: service/session immediate/queued sends do not reapply PII redaction; static only, parent execution evidence34pass0fail each. Not whole-PR approval. Final CI/Full check failures block readiness. Evidence review/final-c59edc7da/review.md. AC11 OPEN."
+    },
+    {
+      "at": "2026-10-07T16:41:05.898Z",
+      "event": "task-attempt",
+      "detail": "T3: blocked (attempt 6) — Gate fixes local PASS91tests9files + ten Esc runs8pass each; facade bypasses routed through security/service, ceiling unchanged; explicit test render-barrier and pending wizard assertions. Blank CI frame root cause unproven. Evidence review/gate-fixes. Final-SHA CI/AC9 pending; historical AC9 unchanged; AC11 OPEN."
+    },
+    {
+      "at": "2026-10-07T16:41:06.757Z",
+      "event": "task-attempt",
+      "detail": "T4: blocked (attempt 8) — Independent scoped gate-fix review sub:cafe6898 PASS; no semantic security/navigation blocker. Static only; synthetic idle test not native scheduler proof. Whole-PR readiness pending published SHA CI/Full check. Evidence review/gate-fixes/review.md. AC11 OPEN; no merge/release."
+    },
+    {
+      "at": "2026-10-07T18:51:09.838Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-07T18:51:10.471Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Verified exact SHA 212f55f14707bf30498939d47084ebcd6c72d126 PR917: CI + Full check diagnostic completed SUCCESS; literal bun run check29920pass48skip0fail exit0/log_exit0, core20930pass13skip0fail and runtime6001pass38skip0fail. Health changed eslint/typescript PASS97 zero findings. Evidence .metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/{runs.json,core-jobs.json,full-jobs.json,core-summary.txt,full-summary.txt,health.log}. AC11 not confirmed; no merge/release. (signed: Keryx agent (openai-codex/gpt-6.1-sol) [stated])"
+    },
+    {
+      "at": "2026-10-07T18:54:43.758Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    }
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-10-07T10:19:25.305Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Keryx agent (openai-codex/gpt-6.1-sol)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9"
+    },
+    {
+      "at": "2026-10-07T18:51:10.471Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "Keryx agent (openai-codex/gpt-6.1-sol)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:e47eee805c4a5ca1359a23e58d30b6baeda12f742dbd42255207a9e3d02744a9"
+    }
+  ]
+}

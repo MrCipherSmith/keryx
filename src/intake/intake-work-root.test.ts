@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { decideIntakeCard, type IntakeActionDeps } from "./actions";
 import { FakePressHub, OWNER, PROJECT, makeFakes, pressFor, seedCard } from "./intake-actions.test-helpers";
-import { setupIntakeEnv, testConfig, type IntakeTestEnv } from "./intake.test-helpers";
+import { local, setupIntakeEnv, testConfig, type IntakeTestEnv } from "./intake.test-helpers";
 import { createIntakePressHandler } from "./press";
 import { readIntakeCardView } from "./store";
 
@@ -28,7 +28,7 @@ describe("the work-repository rule at press time (AC16)", () => {
   test("take on a card made as personal is refused once its project is under the work root", async () => {
     const card = await seedCard(env.root, { account: "personal", takeAllowed: true });
     const { fakes, deps } = inWork(false);
-    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: String(OWNER), deps });
+    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: String(OWNER), now: local(10, 42), deps });
     expect(result.ok).toBe(false);
     expect(result.message).toContain("отключено для рабочих репозиториев");
     expect(fakes.flows.initCalls).toEqual([]);
@@ -38,7 +38,7 @@ describe("the work-repository rule at press time (AC16)", () => {
   test("review-flow is refused the same way, and the card stays open", async () => {
     const card = await seedCard(env.root, { kind: "review", account: "personal" });
     const { fakes, deps } = inWork(false);
-    const result = await decideIntakeCard(env.root, card.id, "review-flow", { decidedBy: String(OWNER), deps });
+    const result = await decideIntakeCard(env.root, card.id, "review-flow", { decidedBy: String(OWNER), now: local(10, 42), deps });
     expect(result.ok).toBe(false);
     expect(result.message).toContain("отключено для рабочих репозиториев");
     expect(fakes.flows.initCalls).toEqual([]);
@@ -49,8 +49,8 @@ describe("the work-repository rule at press time (AC16)", () => {
     const issue = await seedCard(env.root, { account: "personal" });
     const review = await seedCard(env.root, { kind: "review", account: "personal" });
     const { fakes, deps } = inWork(true);
-    expect((await decideIntakeCard(env.root, issue.id, "take", { decidedBy: String(OWNER), deps })).ok).toBe(true);
-    expect((await decideIntakeCard(env.root, review.id, "review-flow", { decidedBy: String(OWNER), deps })).ok).toBe(true);
+    expect((await decideIntakeCard(env.root, issue.id, "take", { decidedBy: String(OWNER), now: local(10, 42), deps })).ok).toBe(true);
+    expect((await decideIntakeCard(env.root, review.id, "review-flow", { decidedBy: String(OWNER), now: local(10, 42), deps })).ok).toBe(true);
     expect(fakes.flows.initCalls.map((c) => c.project)).toEqual([PROJECT, PROJECT]);
   });
 
@@ -58,7 +58,7 @@ describe("the work-repository rule at press time (AC16)", () => {
     const card = await seedCard(env.root, { account: "personal" });
     const fakes = makeFakes();
     const deps: IntakeActionDeps = { ...fakes.deps, env: { GH_WORK_ROOT: "/somewhere/else" }, config: testConfig({ allowTakeInWork: false }) };
-    expect((await decideIntakeCard(env.root, card.id, "take", { decidedBy: String(OWNER), deps })).ok).toBe(true);
+    expect((await decideIntakeCard(env.root, card.id, "take", { decidedBy: String(OWNER), now: local(10, 42), deps })).ok).toBe(true);
     expect(fakes.flows.initCalls).toHaveLength(1);
   });
 
@@ -66,7 +66,7 @@ describe("the work-repository rule at press time (AC16)", () => {
     const card = await seedCard(env.root, { kind: "review", account: "personal" });
     const { fakes, deps } = inWork(false);
     const hub = new FakePressHub();
-    const handler = createIntakePressHandler({ hub, roots: () => [env.root], actionDeps: deps });
+    const handler = createIntakePressHandler({ hub, roots: () => [env.root], now: () => local(10, 42), actionDeps: deps });
     const reply = await handler(pressFor(card, "review-flow"));
     expect(reply?.text).toContain("отключено для рабочих репозиториев");
     expect(fakes.flows.initCalls).toEqual([]);
@@ -88,7 +88,7 @@ describe("the work-repository rule at press time (AC16)", () => {
         env: { GH_WORK_ROOT: WORK_ROOT },
         config: testConfig({ allowTakeInWork: false }),
       };
-      const result = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), deps });
+      const result = await decideIntakeCard(env.root, card.id, action, { decidedBy: String(OWNER), now: local(10, 42), deps });
       expect(result.ok).toBe(false);
       expect(result.message).toContain("не удалось определить проект");
       expect(fakes.flows.initCalls).toEqual([]);
