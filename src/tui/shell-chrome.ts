@@ -49,6 +49,7 @@ import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { TRANSCRIPT_HISTORY_LIMIT, transcriptNodeProtected, forgetTranscriptNode } from "./transcript-history";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -841,14 +842,61 @@ export async function createShellChrome(
   // renderers — goes through this instance method, so pinning is free for all.
   const originalTranscriptAdd = transcript.add.bind(transcript);
   const originalTranscriptRemove = transcript.remove.bind(transcript);
+  let historyNotice: Text | undefined;
+  let historyAnchor: { node: ReturnType<typeof transcript.getChildren>[number]; y: number; scrollTop: number } | undefined;
+  const restoreHistoryAnchor = (): void => {
+    const anchor = historyAnchor;
+    historyAnchor = undefined;
+    if (anchor === undefined || anchor.node.isDestroyed || scroll.stickyScroll || scroll.scrollTop !== anchor.scrollTop) return;
+    scroll.scrollTop += anchor.node.y - anchor.y;
+  };
+  r.on(otui.CliRenderEvents.FRAME, restoreHistoryAnchor);
+  const trimHistory = (): void => {
+    const completed = transcript.getChildren().filter(
+      (node) => node !== liveStatus && node !== historyNotice && !transcriptNodeProtected(node),
+    );
+    const excess = completed.length - TRANSCRIPT_HISTORY_LIMIT;
+    if (excess <= 0) return;
+    if (!scroll.stickyScroll && historyAnchor === undefined) {
+      const evicted = new Set(completed.slice(0, excess));
+      const node = transcript.getChildren().find(
+        (child) => child !== liveStatus && child !== historyNotice && !evicted.has(child)
+          && child.y + child.height > scroll.y && child.y < scroll.y + scroll.height,
+      );
+      if (node !== undefined) historyAnchor = { node, y: node.y, scrollTop: scroll.scrollTop };
+    }
+    for (const node of completed.slice(0, excess)) {
+      forgetTranscriptNode(node);
+      node.destroyRecursively();
+    }
+    for (let i = userPrompts.length - 1; i >= 0; i--) {
+      if (userPrompts[i]?.box.isDestroyed) userPrompts.splice(i, 1);
+    }
+    if (pinnedPrompt?.box.isDestroyed) {
+      pinnedPrompt = undefined;
+      promptPin.visible = false;
+    }
+    if (historyNotice === undefined || historyNotice.isDestroyed) {
+      historyNotice = new otui.TextRenderable(r, {
+        id: "transcript-history-notice",
+        content: "Older output is no longer mounted in this view.",
+        fg: getTheme().muted,
+        flexShrink: 0,
+      });
+      originalTranscriptAdd(historyNotice, 0);
+    }
+  };
   transcript.add = (child: unknown, index?: number): number => {
     if (liveStatus !== undefined && child !== liveStatus) {
       originalTranscriptRemove(liveStatus);
       const added = originalTranscriptAdd(child, index);
       originalTranscriptAdd(liveStatus);
+      trimHistory();
       return added;
     }
-    return originalTranscriptAdd(child, index);
+    const added = originalTranscriptAdd(child, index);
+    trimHistory();
+    return added;
   };
 
   // --- queue dock -----------------------------------------------------------
@@ -1578,6 +1626,7 @@ export async function createShellChrome(
       }
       try {
         r.off(otui.CliRenderEvents.FRAME, syncPromptPin);
+        r.off(otui.CliRenderEvents.FRAME, restoreHistoryAnchor);
       } catch {
         // best-effort teardown
       }

@@ -115,7 +115,7 @@ function resolveAcceptDelay(request: ComposerChoiceRequest): number {
 
 import { getTheme } from "./theme";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
-import { containsNode } from "./modal-host";
+import { containsNode, modalHides, modalFocusFallback } from "./modal-host";
 import { debugEvent } from "./debug-log";
 
 type OpenTui = typeof import("@opentui/core");
@@ -172,6 +172,95 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
     );
 }
 
+/** The slice of a renderable that handing the keyboard back reads. */
+type FocusTarget = {
+  focus(): void;
+  readonly id?: string;
+  readonly isDestroyed?: boolean;
+  readonly visible?: boolean;
+  readonly parent?: unknown;
+};
+
+/** What holds the keyboard right now, read through the slice of it this module uses. */
+function focusedNode(r: Renderer): FocusTarget | null {
+  return r.currentFocusedRenderable as unknown as FocusTarget | null;
+}
+
+/**
+ * Where each open choice hands the keyboard back, keyed by the choice's own focusable nodes. A choice that
+ * opens while another choice holds the keyboard captures one of THOSE nodes; when the outer choice closes
+ * first, that node is gone by the time the inner one closes, and following this map from it reaches whatever
+ * the outer choice would have handed back instead of nothing.
+ */
+const handBackFrom = new WeakMap<object, FocusTarget | null>();
+
+/**
+ * True when `node` can hold the keyboard again: not destroyed, still attached under `root`, and neither it nor
+ * an ancestor hidden. A detached node, or one inside a hidden dropdown, accepts `focus()` and then swallows
+ * every key with nothing on screen to show for it.
+ */
+function canTakeKeyboard(node: FocusTarget, root: unknown): boolean {
+  let current: FocusTarget | null | undefined = node;
+  while (current !== null && current !== undefined) {
+    if (current.isDestroyed === true || current.visible === false) {
+      return false;
+    }
+    if (current === root) {
+      return true;
+    }
+    current = current.parent as FocusTarget | null | undefined;
+  }
+  return false;
+}
+
+/** The first node on the hand-back chain from `start` that can hold the keyboard, or undefined when it runs out. */
+function resolveHandBack(start: FocusTarget | null, root: unknown): FocusTarget | undefined {
+  const seen = new Set<object>();
+  let candidate = start;
+  while (candidate !== null && !seen.has(candidate)) {
+    if (canTakeKeyboard(candidate, root)) {
+      return candidate;
+    }
+    seen.add(candidate);
+    candidate = handBackFrom.get(candidate) ?? modalFocusFallback(candidate);
+  }
+  return undefined;
+}
+
+/**
+ * Give the keyboard back to what held it when the choice opened, unless something newer took it while the
+ * choice was up: a focus outside the choice's own nodes (another dialog, a modal's tab strip, a field a caller
+ * focused) or an open modal that would hide the target. Focus still on the choice, or on nothing at all, is
+ * the choice's to return — the case that used to leave the shell with no focus once the busy-agent routing
+ * choice closed, because that caller has no `input.focus()` after it.
+ */
+function handBackFocus(
+  r: Renderer,
+  previous: FocusTarget | null,
+  mounted: ReadonlyArray<{ getChildren: () => unknown[] }>,
+  title: string,
+): void {
+  if ((r as { isDestroyed?: boolean }).isDestroyed === true) {
+    return;
+  }
+  const current = focusedNode(r);
+  if (current !== null && !mounted.some((node) => containsNode(node, current))) {
+    debugEvent("choice.focus-kept", { title, focused: current.id ?? null });
+    return;
+  }
+  const target = resolveHandBack(previous, r.root);
+  if (target === undefined || modalHides(r, target)) {
+    debugEvent("choice.focus-not-restored", { title, previous: previous?.id ?? null, modal: target !== undefined });
+    return;
+  }
+  try {
+    target.focus();
+    debugEvent("choice.focus-restored", { title, focused: target.id ?? null });
+  } catch {
+    // best-effort: the renderer may be going down under us
+  }
+}
+
 /** Per-dock waiter chain so concurrent callers cannot both pass `visible===false`. */
 const dockChain = new WeakMap<object, Promise<void>>();
 /** How many callers currently hold or wait for this dock (sync, for `enqueue:false`). */
@@ -214,6 +303,12 @@ function lockDock(dock: object): Promise<() => void> {
  *
  * Concurrent calls on the same dock are serialized (queued) unless
  * `enqueue: false`, which cancels immediately while another choice is live.
+ *
+ * However it closes (answer, Esc, click, abort), the menu hands the keyboard
+ * back to whatever held it when the menu opened, provided that is still
+ * mounted, visible and not destroyed, and that nothing newer (another focus,
+ * an open modal) has taken over meanwhile. A caller that focuses something
+ * itself after the await still has the last word.
  */
 export async function showComposerChoice(
   otui: OpenTui,
@@ -276,6 +371,9 @@ function presentComposerChoice(
     return Promise.resolve({ kind: "id", id: request.cancelId });
   }
   return new Promise((resolve) => {
+    // Read before anything below can move it: `onOpen` may blur the composer (the shell approval does), and the
+    // options list takes the keyboard at the end. `cleanup` hands it back (see `handBackFocus`).
+    const previousFocus = focusedNode(r);
     const ownEnabled = request.ownAnswer !== undefined;
     const options = request.options.map((o) => ({
       ...o,
@@ -334,6 +432,7 @@ function presentComposerChoice(
         scrollY: true,
         contentOptions: { flexDirection: "column" },
       });
+      handBackFrom.set(subtitleScroll, previousFocus);
       for (const [i, line] of subtitleLines.entries()) {
         subtitleScroll.content.add(
           new otui.TextRenderable(r, {
@@ -362,6 +461,7 @@ function presentComposerChoice(
       contentOptions: { flexDirection: "column" },
     });
     dock.add(optionsScroll);
+    handBackFrom.set(optionsScroll, previousFocus);
     const optionsBox = optionsScroll.content;
 
     const rows: { id: string; box: Box; label: Text; desc: Text }[] = [];
@@ -429,6 +529,7 @@ function presentComposerChoice(
         content: otui.t`${dimChunk(otui, picked === undefined ? "Your own answer — Enter sends, Esc goes back to the options" : `Reason for "${picked.label}" — Enter sends, Esc goes back to the options`)}`,
       });
       ownInput = new otui.InputRenderable(r, { id: `ch-own-input-${Date.now()}`, value: "", marginTop: 0 });
+      handBackFrom.set(ownInput, previousFocus);
       dock.add(ownNote);
       dock.add(ownInput);
       paintTitle();
@@ -491,7 +592,10 @@ function presentComposerChoice(
         id: rowId,
         width: "100%",
         flexDirection: "column",
-        onMouseDown: () => {
+        onMouseDown: (event) => {
+          // Otherwise the renderer focuses the options scrollbox after this
+          // handler, stealing focus from the own-answer input just opened.
+          event.preventDefault();
           finish(o.id, "click");
         },
       });
@@ -557,6 +661,13 @@ function presentComposerChoice(
         // best-effort
       }
       dock.visible = false;
+      // The keyboard goes back on the next microtask, not here. A click on a row is still being dispatched at this
+      // point, and the renderer then focuses the nearest focusable ancestor of that row (see `scroll.onMouseDown`
+      // in shell-chrome.ts), which is the options box detached just above. A microtask still runs before the
+      // caller's continuation, so a caller that focuses something itself after the await keeps the last word.
+      queueMicrotask(() => {
+        handBackFocus(r, previousFocus, mounted, request.title);
+      });
       // `remove` only detaches. A ScrollBox subscribes to the renderer's
       // `selection` event and lets go of it only in `destroy()`, and every
       // renderable stays in OpenTUI's global registry until destroyed — so each
