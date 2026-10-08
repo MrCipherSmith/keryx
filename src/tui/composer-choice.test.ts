@@ -8,6 +8,7 @@
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { choiceDisplayLabel, initialChoiceSelection, showComposerChoice, showComposerChoiceDetailed, type ChoiceOption } from "./composer-choice";
+import { containsNode, openModal } from "./modal-host";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<
@@ -460,4 +461,376 @@ otuiTest("a menu without ownAnswer has no own row and no Tab key (approvals and 
   h.mockInput.pressEnter();
   expect(await pending).toBe("a");
   h.destroy();
+});
+
+// Keyboard hand-back. The busy-agent routing choice ("Main agent is busy") has no `input.focus()` after it,
+// so a closed choice left the keyboard on its destroyed options box and every later key went nowhere. A
+// closing choice now returns focus to what held it when it opened — unless something newer took it, or the
+// old holder was destroyed, detached or hidden meanwhile.
+const ROUTE_OPTIONS = [
+  { id: "main", label: "Main queue", description: "", recommended: true },
+  { id: "side", label: "Side-1", description: "" },
+];
+const ALLOW_DENY = [
+  { id: "once", label: "Allow once", description: "", recommended: true },
+  { id: "deny", label: "Deny", description: "" },
+];
+
+/** True when the renderer's focused node sits inside `root`. */
+function focusInside(h: Awaited<ReturnType<typeof mountChrome>>, root: { getChildren: () => unknown[] }): boolean {
+  const focused = h.renderer.currentFocusedRenderable;
+  return focused !== null && containsNode(root, focused);
+}
+
+otuiTest("hand-back: the busy-agent routing choice returns a live keyboard to the composer, with no caller refocus", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  expect(h.chrome.textarea.focused).toBe(true);
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Main agent is busy",
+    subtitle: "what is the build doing?",
+    cancelId: "side",
+    enqueue: false,
+    options: ROUTE_OPTIONS,
+  });
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(false); // the menu holds it while open
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("main");
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable).toBe(h.chrome.textarea);
+  // live, not just flagged: typed keys land in the composer
+  await h.mockInput.typeText("next");
+  await h.flush();
+  expect(h.chrome.input.value).toBe("next");
+  h.destroy();
+});
+
+otuiTest("hand-back: Esc returns the keyboard to the composer", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  h.mockInput.pressEscape();
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: an abort returns the keyboard even when onOpen blurred the composer (the shell approval does)", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const ac = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    signal: ac.signal,
+    onOpen: () => h.chrome.blurComposer(),
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(false);
+  ac.abort();
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: a click on a row returns the keyboard after the renderer's own click-to-focus", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "once",
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  const lines = h.captureCharFrame().split("\n");
+  const row = lines.findIndex((line) => line.includes("Deny"));
+  expect(row).toBeGreaterThanOrEqual(0);
+  await h.mockMouse.click((lines[row] ?? "").indexOf("Deny"), row);
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: clicking own answer keeps typing in the answer field", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, ownRequest());
+  await h.flush();
+  const lines = h.captureCharFrame().split("\n");
+  const row = lines.findIndex((line) => line.includes("Свой ответ"));
+  expect(row).toBeGreaterThanOrEqual(0);
+  await h.mockMouse.click((lines[row] ?? "").indexOf("Свой ответ"), row);
+  await h.flush();
+  await h.mockInput.typeText("mouse answer");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "own", text: "mouse answer" });
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  expect(h.chrome.input.value).toBe("");
+  h.destroy();
+});
+
+otuiTest("hand-back: an own answer sent from the text input returns the keyboard to the composer", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const pending = showComposerChoiceDetailed(otui.core, h.renderer, h.chrome.dock, ownRequest());
+  await openOwnInput(h);
+  expect(h.chrome.textarea.focused).toBe(false);
+  await h.mockInput.typeText("third way");
+  h.mockInput.pressEnter();
+  expect(await pending).toEqual({ kind: "own", text: "third way" });
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  expect(h.chrome.input.value).toBe(""); // the answer went to the menu, never to the composer
+  h.destroy();
+});
+
+otuiTest("hand-back: queued choices pass the keyboard along, and the last one returns it to the composer", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Spawn A?", cancelId: "deny", options: ALLOW_DENY });
+  const second = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Spawn B?", cancelId: "deny", options: ALLOW_DENY });
+  await h.flush();
+  h.mockInput.pressEnter();
+  expect(await first).toBe("once");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("Spawn B?");
+  expect(focusInside(h, h.chrome.dock)).toBe(true); // B took it from the composer A handed it back to
+  expect(h.chrome.textarea.focused).toBe(false);
+  h.mockInput.pressEnter();
+  expect(await second).toBe("once");
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: a choice refused because the dock is busy never moves the keyboard", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, { title: "Allow shell command?", cancelId: "deny", options: ALLOW_DENY });
+  await h.flush();
+  const held = h.renderer.currentFocusedRenderable;
+  expect(focusInside(h, h.chrome.dock)).toBe(true);
+  const refused = await showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Main agent is busy",
+    cancelId: "side",
+    enqueue: false,
+    options: ROUTE_OPTIONS,
+  });
+  expect(refused).toBe("side");
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable).toBe(held);
+  h.mockInput.pressEnter();
+  expect(await first).toBe("once");
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: a field focused while the choice is open keeps the keyboard when the choice closes", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const field = new otui.core.InputRenderable(h.renderer, { id: "newer-field", value: "" });
+  h.chrome.main.add(field);
+  const ac = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    signal: ac.signal,
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  field.focus(); // something newer takes the keyboard while the menu is up
+  ac.abort();
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable).toBe(field);
+  expect(h.chrome.textarea.focused).toBe(false);
+  h.destroy();
+});
+
+otuiTest("hand-back: modal close preserves a surviving choice", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  const ac = new AbortController();
+  try {
+    const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+      title: "Busy?", cancelId: "deny", signal: ac.signal, options: ALLOW_DENY,
+    });
+    await h.flush(); const choice = h.renderer.currentFocusedRenderable;
+    const modal = openModal(otui.core, h.chrome, {
+      title: "Inspector", tabs: [{ id: "info", label: "Info" }], renderTab: () => {},
+    });
+    await h.flush(); modal?.close(); await h.flush();
+    expect(h.renderer.currentFocusedRenderable === choice).toBe(true);
+    expect(h.chrome.textarea.focused).toBe(false);
+    ac.abort(); expect(await pending).toBe("deny"); await h.flush();
+    expect(h.chrome.textarea.focused).toBe(true);
+  } finally { ac.abort(); h.destroy(); }
+});
+otuiTest("hand-back: a modal opened over the choice keeps the keyboard; closing it returns the keyboard to the composer", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const ac = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    signal: ac.signal,
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  const modal = openModal(otui.core, h.chrome, { title: "Inspector", tabs: [{ id: "info", label: "Info" }], renderTab: () => {} });
+  await h.flush();
+  const tabStrip = h.renderer.root.findDescendantById("modal-tab-strip") ?? null;
+  expect(h.renderer.currentFocusedRenderable).toBe(tabStrip);
+  ac.abort();
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable).toBe(tabStrip);
+  expect(h.chrome.textarea.focused).toBe(false);
+  modal?.close();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: never into the composer behind an open modal, even when the choice still held the keyboard", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const ac = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    signal: ac.signal,
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  const menuList = h.renderer.currentFocusedRenderable;
+  expect(focusInside(h, h.chrome.dock)).toBe(true);
+  const modal = openModal(otui.core, h.chrome, { title: "Inspector", tabs: [{ id: "info", label: "Info" }], renderTab: () => {} });
+  await h.flush();
+  menuList?.focus(); // the keyboard back on the choice while the modal is still up
+  ac.abort();
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.chrome.textarea.focused).toBe(false);
+  modal?.close();
+  expect(h.chrome.textarea.focused).toBe(true);
+  h.destroy();
+});
+
+otuiTest("hand-back: a choice raised over an open modal returns the keyboard to the modal, not the composer", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const modal = openModal(otui.core, h.chrome, { title: "Inspector", tabs: [{ id: "info", label: "Info" }], renderTab: () => {} });
+  await h.flush();
+  const tabStrip = h.renderer.root.findDescendantById("modal-tab-strip") ?? null;
+  expect(h.renderer.currentFocusedRenderable).toBe(tabStrip);
+  const ac = new AbortController();
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    signal: ac.signal,
+    options: ALLOW_DENY,
+  });
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable).not.toBe(tabStrip);
+  ac.abort();
+  expect(await pending).toBe("deny");
+  await h.flush();
+  expect(h.renderer.currentFocusedRenderable).toBe(tabStrip);
+  expect(h.chrome.textarea.focused).toBe(false);
+  modal?.close();
+  h.destroy();
+});
+
+otuiTest("hand-back: a holder destroyed, detached or hidden while the choice was open never gets the keyboard", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  type Field = InstanceType<OtuiBundle["core"]["InputRenderable"]>;
+  const losses: Array<[string, (field: Field) => void]> = [
+    ["destroyed", (field) => field.destroyRecursively()],
+    ["detached", (field) => h.chrome.main.remove(field)],
+    [
+      "hidden",
+      (field) => {
+        field.visible = false;
+      },
+    ],
+  ];
+  for (const [how, lose] of losses) {
+    const field = new otui.core.InputRenderable(h.renderer, { id: `lost-${how}`, value: "" });
+    h.chrome.main.add(field);
+    field.focus();
+    const ac = new AbortController();
+    const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+      title: `Allow (${how})?`,
+      cancelId: "deny",
+      signal: ac.signal,
+      options: ALLOW_DENY,
+    });
+    await h.flush();
+    lose(field);
+    ac.abort();
+    expect(await pending).toBe("deny");
+    await h.flush();
+    expect(`${how}: ${h.renderer.currentFocusedRenderable === field}`).toBe(`${how}: false`);
+    expect(`${how}: ${field.focused}`).toBe(`${how}: false`);
+  }
+  h.destroy();
+});
+
+otuiTest("hand-back: nested choices on two docks unwind in either order without stranding the keyboard", async () => {
+  const otui = requireOtui();
+  for (const order of ["inner-first", "outer-first"] as const) {
+    const h = await mountChrome(otui);
+    const dock2 = new otui.core.BoxRenderable(h.renderer, { id: "dock-2", flexDirection: "column", visible: false });
+    h.chrome.main.add(dock2);
+    const outerAbort = new AbortController();
+    const innerAbort = new AbortController();
+    const outer = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+      title: "Outer?",
+      cancelId: "deny",
+      signal: outerAbort.signal,
+      options: ALLOW_DENY,
+    });
+    await h.flush();
+    const outerList = h.renderer.currentFocusedRenderable;
+    expect(focusInside(h, h.chrome.dock)).toBe(true);
+    const inner = showComposerChoice(otui.core, h.renderer, dock2, {
+      title: "Inner?",
+      cancelId: "deny",
+      signal: innerAbort.signal,
+      options: ALLOW_DENY,
+    });
+    await h.flush();
+    const innerList = h.renderer.currentFocusedRenderable;
+    expect(focusInside(h, dock2)).toBe(true);
+    if (order === "inner-first") {
+      innerAbort.abort();
+      expect(await inner).toBe("deny");
+      await h.flush();
+      expect(h.renderer.currentFocusedRenderable).toBe(outerList); // back to the outer menu, still open
+      outerAbort.abort();
+      expect(await outer).toBe("deny");
+    } else {
+      outerAbort.abort();
+      expect(await outer).toBe("deny");
+      await h.flush();
+      expect(h.renderer.currentFocusedRenderable).toBe(innerList); // the inner menu took it later and keeps it
+      innerAbort.abort();
+      expect(await inner).toBe("deny"); // its holder (the outer list) is gone: the chain reaches the composer
+    }
+    await h.flush();
+    expect(`${order}: ${h.chrome.textarea.focused}`).toBe(`${order}: true`);
+    h.destroy();
+  }
 });

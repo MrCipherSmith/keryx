@@ -35,7 +35,7 @@ import {
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 import * as themeModule from "./theme";
 import { paintRendererBackground, selectThemeColors, themeColorToHex } from "./shell-chrome";
-import { appendUserEcho, createBlockView, createSegmentView } from "./transcript-blocks";
+import { appendUserEcho, createAssistantMessageStream, createBlockView, createBlockMount, createBlockRegistry, createSegmentView } from "./transcript-blocks";
 import * as shellChromeModule from "./shell-chrome";
 
 async function loadOpenTui(): Promise<{
@@ -182,6 +182,94 @@ async function mountChrome(
   };
 }
 
+otuiTest("flow 413: trimming preserves a retained viewport anchor", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  try {
+    for (let i = 0; i < 256; i++) {
+      h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, {
+        id: `anchor-${i}`, content: `row ${i}`, flexShrink: 0,
+      }));
+    }
+    await h.flush();
+    h.chrome.scroll.stickyScroll = false;
+    h.chrome.scroll.scrollTop = 100;
+    await h.flush();
+    const anchor = h.chrome.transcript.getChildren().find(n => n.id === "anchor-110")!;
+    const y = anchor.y;
+    for (let i = 256; i < 266; i++) {
+      h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, {
+        id: `anchor-${i}`, content: `row ${i}`, flexShrink: 0,
+      }));
+    }
+    await h.flush();
+    await h.flush();
+    expect(anchor.isDestroyed).toBe(false);
+    expect(anchor.y).toBe(y);
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: expanded historical blocks are bounded too", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  try {
+    const registry = createBlockRegistry();
+    const mount = createBlockMount(otui.core, h.renderer, h.chrome.transcript, registry);
+    for (let i = 0; i < 600; i++) {
+      mount.add({ kind: "output", summary: `block ${i}`, fullText: "body", lineCount: 1 }, { startExpanded: true });
+    }
+    expect(h.chrome.transcript.getChildren().length).toBeLessThanOrEqual(257);
+    expect(registry.list().length).toBeLessThanOrEqual(256);
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: reset and empty finalize destroy streamed containers", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  try {
+    const stream = createAssistantMessageStream(otui.core, h.renderer, h.chrome.transcript);
+    for (const finish of [() => stream.reset(), () => stream.finalize("")]) {
+      stream.push("partial");
+      const node = h.chrome.transcript.getChildren().at(-1)!;
+      finish();
+      expect(node.isDestroyed).toBe(true);
+      expect(h.chrome.transcript.getChildren()).not.toContain(node);
+    }
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: trim anchor does not undo intervening user scroll", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  try {
+    for (let i = 0; i < 256; i++) {
+      h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, {
+        id: `scroll-${i}`, content: `row ${i}`, flexShrink: 0,
+      }));
+    }
+    await h.flush(); h.chrome.scroll.stickyScroll = false;
+    h.chrome.scroll.scrollTop = 100; await h.flush();
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { id: "scroll-new", content: "new", flexShrink: 0 }));
+    h.chrome.scroll.scrollTop = 150; await h.flush(); await h.flush();
+    expect(h.chrome.scroll.scrollTop).toBe(150);
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: completed transcript history plateaus and typing stays live", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  try {
+    let first: InstanceType<OtuiBundle["core"]["TextRenderable"]> | undefined;
+    for (let i = 0; i < 4000; i++) {
+      const node = new otui.core.TextRenderable(h.renderer, { id: `bounded-${i}`, content: `history ${i}` });
+      first ??= node;
+      h.chrome.transcript.add(node);
+      if ([100, 500, 1000, 2000, 4000].includes(i + 1)) {
+        expect(h.chrome.transcript.getChildren().length).toBeLessThanOrEqual(257);
+      }
+    }
+    expect(first?.isDestroyed).toBe(true);
+    await h.mockInput.pressKeys(["a", "b"]);
+    await h.flush();
+    expect(h.chrome.input.value).toBe("ab");
+    expect(h.captureCharFrame()).toContain("ab");
+  } finally {
+    h.destroy();
+  }
+});
 otuiTest("AC1: mounting the chrome renders header, transcript, composer and footer, with the composer focused", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });

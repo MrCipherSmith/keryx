@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.79] - 2026-10-08
+
+### Bug Fixes
+
+- Bound mounted completed TUI history to 256 unprotected top-level elements, destroying evicted views while preserving active streaming, focused elements and the on-disk session archive. Evicted history is no longer available by scrolling in the current TUI; a notice marks the trimmed history.
+- Restore composer focus after busy-agent Main/Side choices without stealing focus from newer menus or modals; preserve user scrolling during history eviction and destroy detached streaming containers.
+
+### Verification
+
+- Flow 413: 150 focused tests, TypeScript checks and an independent static review. Streaming PTY checks delivered all 120 input probes and verified Main/Side delivery and subsequent typing.
+- At 4,000 synthetic history messages, mounted UI nodes decreased from 22,093 to 795 and median input latency from 145.4 ms to 25.5 ms. Rare long stalls remain (730.7 ms maximum in the verification run); this is not a guarantee of stall-free input.
+
 ## [0.3.78] - 2026-10-08
 
 Range: `v0.3.77..99385ae9f0c96c9fd875a8324fad97d174b3a6e8` (all changes since the last published release).
