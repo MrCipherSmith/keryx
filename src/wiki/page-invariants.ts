@@ -543,6 +543,7 @@ function withAddedLines(fresh: readonly string[], existingBody: readonly string[
     const text = collapse(line);
     if (text.length === 0) return false;
     if (/^[-*]\s+\[Module [^\]]+\]\([^)]+\.md\)$/.test(text)) return false;
+    if (/^[-*]\s+`[^`]+`\s+\(no wiki page\)$/.test(text)) return false;
     // The generator's own "Graph-derived …" note, as an enricher reworded it
     // (seen five ways on one real wiki); keeping it would print it twice.
     if (/^graph-derived\b/i.test(text)) return false;
