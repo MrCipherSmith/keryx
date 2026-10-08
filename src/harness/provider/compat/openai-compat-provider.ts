@@ -31,8 +31,7 @@
 // link-local/private-LAN hosts stay denied even with it.
 //
 // Determinism / offline: `fetch` is always injected via `deps.fetch` (the
-// global is never touched); there is NO `Date.now`/`Math.random` (a clock is
-// injectable via `deps.clock` but unused on these paths). Nothing is ever
+// global is never touched); the retry-date clock is injectable via `deps.clock`; no `Math.random`. Nothing is ever
 // persisted (storage-off), and a guarded body read fails closed (mirrors the
 // W14 flow-019 fix): an abort mid-read yields `cancelled`, any other read
 // failure `malformed`.
@@ -41,7 +40,7 @@ import { redactSensitiveText } from "../../../security/service";
 import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
 // A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
-import { retryableFor } from "../provider-port";
+import { isTransportFailure, retryableFor, withRetryAfter } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import { ThinkTagParser } from "./think-tag-parser";
 import { FieldThinkTagStripper } from "./think-tag-stripper";
@@ -314,18 +313,13 @@ function inBandErrorStatusFor(stringCode: string | undefined): number {
   return TRANSIENT_IN_BAND_ERROR_STATUS[stringCode] ?? 400;
 }
 
-function classifyHttpError(status: number, headers: Headers, code?: string): NormalizedError {
+function classifyHttpError(status: number, _headers: Headers, code?: string): NormalizedError {
   if (status === 401 || status === 403) {
     // A refused credential or account. The same request cannot succeed on retry.
     return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
   }
   if (status === 429) {
     const error: NormalizedError = { kind: "rate_limit", retryable: retryableFor("rate_limit", true), message: "" };
-    const retryAfter = headers.get("retry-after");
-    const seconds = retryAfter === null ? undefined : Number.parseInt(retryAfter, 10);
-    if (seconds !== undefined && Number.isFinite(seconds)) {
-      error.retryAfterMs = seconds * 1000;
-    }
     return error;
   }
   if (status === 400 && code === "context_length_exceeded") {
@@ -836,7 +830,7 @@ export class OpenAiCompatEngine implements ProviderPort {
       } catch {
         // An unreadable body has no code/reason to give; the status still stands.
       }
-      const error = classifyHttpError(response.status, response.headers, extractErrorCode(parsedBody));
+      const error = withRetryAfter(classifyHttpError(response.status, response.headers, extractErrorCode(parsedBody)), response.headers, this.deps.clock);
       const reason = errorReasonFromParsed(parsedBody);
       // The status stays in the message even when the server gave a reason: a
       // reason alone ("balance exhausted") does not say which provider or which
@@ -873,6 +867,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: "empty response body",
+        detail: { incompleteStream: true },
       });
       return;
     }
@@ -1094,9 +1089,10 @@ export class OpenAiCompatEngine implements ProviderPort {
           return;
         }
         yield errorEvent({
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
+          kind: isTransportFailure(cause) ? "unavailable" : "malformed",
+          retryable: isTransportFailure(cause),
           message: `${this.label} SSE body read failed: ${String(cause)}`,
+          ...(isTransportFailure(cause) ? { detail: { incompleteStream: true } } : {}),
         });
         return;
       }
@@ -1384,6 +1380,7 @@ export class OpenAiCompatEngine implements ProviderPort {
           kind: "malformed",
           retryable: retryableFor("malformed", false),
           message: `${this.label} SSE stream ended mid-record (torn stream)`,
+          detail: { incompleteStream: true },
         };
       } else if (!receivedAnyChunk) {
         // A 200 with literally zero bytes never sets `sawStart` and would
@@ -1393,6 +1390,7 @@ export class OpenAiCompatEngine implements ProviderPort {
           kind: "malformed",
           retryable: retryableFor("malformed", false),
           message: "empty response body",
+          detail: { incompleteStream: true },
         };
       } else if (pendingToolCallId !== undefined) {
         // L-1: the socket closed with a tool call still accumulating — no
@@ -1408,7 +1406,7 @@ export class OpenAiCompatEngine implements ProviderPort {
           kind: "malformed",
           retryable: retryableFor("malformed", false),
           message: `${this.label} SSE stream ended while a tool call was still accumulating`,
-          detail: { pendingToolCallId },
+          detail: { pendingToolCallId, incompleteStream: true },
         };
       } else {
         // A clean stream that reached `[DONE]` or a `finish_reason` completes

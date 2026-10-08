@@ -78,12 +78,13 @@ export interface NormalizedError {
   /** Optional bounded backoff hint (ms) for retryable rows. */
   retryAfterMs?: number;
   /**
-   * Structured, kind-specific extra data. Today only `pendingToolCallId`
+   * Structured, kind-specific extra data. `incompleteStream` marks an empty/truncated
+   * transport response for interactive recovery without changing adapter retry disposition. `pendingToolCallId`
    * (flow 354, L-1): the id of the tool call still accumulating when the
    * stream ended mid tool-call — a `malformed` EOF, never a completed
    * `tool_call_end`. Absent for every other error.
    */
-  detail?: { pendingToolCallId?: string };
+  detail?: { pendingToolCallId?: string; incompleteStream?: boolean };
 }
 
 /**

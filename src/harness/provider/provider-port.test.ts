@@ -410,3 +410,15 @@ describe("no-SDK-leak (structural belt; full audit left to T9 review)", () => {
     }
   });
 });
+
+
+test("Retry-After supports seconds, dates and malformed values", async () => {
+  const { withRetryAfter } = await import("./provider-port");
+  const now = Date.parse("2026-10-08T10:00:00Z");
+  const error = () => ({ kind: "unavailable" as const, retryable: true, message: "offline" });
+  expect(withRetryAfter(error(), new Headers({ "retry-after": "7" }), () => now).retryAfterMs).toBe(7000);
+  expect(withRetryAfter(error(), new Headers({ "retry-after": "Thu, 08 Oct 2026 10:00:12 GMT" }), () => now).retryAfterMs).toBe(12000);
+  expect(withRetryAfter(error(), new Headers({ "retry-after": "soon" }), () => now).retryAfterMs).toBeUndefined();
+  expect(withRetryAfter(error(), new Headers({ "retry-after": "Thu, 08 Oct 2026 09:00:00 GMT" }), () => now).retryAfterMs).toBe(0);
+  expect(withRetryAfter({ kind: "invalid_request", retryable: false, message: "403" }, new Headers({ "retry-after": "7" }), () => now).retryAfterMs).toBeUndefined();
+});

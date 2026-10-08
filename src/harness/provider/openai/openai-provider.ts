@@ -16,13 +16,13 @@
 // API" section for the sourced wire-shape research this module implements.
 //
 // Determinism / offline: `fetch` is always injected via `deps.fetch` (the
-// global is never touched); no `Date.now`/`Math.random`. Every yielded
+// global is never touched); no `Math.random`; the retry-date clock is injectable. Every yielded
 // event/error is scrubbed of the credential before it leaves this module, and
 // nothing is ever persisted (storage-off).
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 // A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
-import { retryableFor } from "../provider-port";
+import { isTransportFailure, retryableFor, withRetryAfter } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
   MessageReasoning,
@@ -311,17 +311,12 @@ function extractErrorFields(data: Record<string, unknown>): ExtractedErrorFields
 }
 
 /** Classify a non-2xx HTTP response into the neutral error taxonomy. */
-function classifyHttpError(status: number, headers: Headers, code: string | undefined): NormalizedError {
+function classifyHttpError(status: number, _headers: Headers, code: string | undefined): NormalizedError {
   if (status === 401) {
     return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
   }
   if (status === 429) {
     const error: NormalizedError = { kind: "rate_limit", retryable: retryableFor("rate_limit", true), message: "" };
-    const retryAfter = headers.get("retry-after");
-    const seconds = retryAfter === null ? undefined : Number.parseInt(retryAfter, 10);
-    if (seconds !== undefined && Number.isFinite(seconds)) {
-      error.retryAfterMs = seconds * 1000;
-    }
     return error;
   }
   if (status === 400) {
@@ -678,7 +673,7 @@ export class OpenAiProvider implements ProviderPort {
         // Non-JSON error body: keep the generic status message below.
       }
       const fields = extractErrorFields(bodyRecord);
-      const error = classifyHttpError(response.status, response.headers, fields.code);
+      const error = withRetryAfter(classifyHttpError(response.status, response.headers, fields.code), response.headers, this.deps.clock);
       let providerMessage = `OpenAI API returned HTTP ${response.status}`;
       if (fields.message !== undefined && fields.message.length > 0) {
         providerMessage = fields.message;
@@ -706,6 +701,7 @@ export class OpenAiProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       });
       return;
     }
@@ -751,9 +747,10 @@ export class OpenAiProvider implements ProviderPort {
           return;
         }
         yield errorEvent({
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
+          kind: isTransportFailure(cause) ? "unavailable" : "malformed",
+          retryable: isTransportFailure(cause),
           message: redact(`OpenAI SSE body read failed: ${String(cause)}`),
+          ...(isTransportFailure(cause) ? { detail: { incompleteStream: true } } : {}),
         });
         return;
       }
@@ -1066,6 +1063,7 @@ export class OpenAiProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("OpenAI SSE stream ended mid-record (torn stream)"),
+        detail: { incompleteStream: true },
       };
     } else if (!receivedAnyChunk) {
       // A 200 with literally zero bytes never sets `sawStart` and would
@@ -1075,12 +1073,14 @@ export class OpenAiProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       };
     } else if (sawStart && !sawCompleted) {
       malformed = {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("OpenAI SSE stream ended before response.completed (truncated stream)"),
+        detail: { incompleteStream: true },
       };
     }
 

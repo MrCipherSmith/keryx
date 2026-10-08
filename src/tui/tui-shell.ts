@@ -342,6 +342,7 @@ import {
 } from "../commands/permission-mode";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
+  settleForegroundOperation,
   createForegroundAgentIoFacade,
   createForegroundForceHandoff,
   createForegroundOperationOwner,
@@ -1076,6 +1077,7 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     },
     onSystem: (text) =>
       append(text.includes("[error]") ? otui.t`${roleChunk(otui, "error", text)}` : otui.t`${dimChunk(otui, text)}`),
+    onAttemptInterrupted: () => messages.reset(),
     resetStream: () => {
       messages.reset();
     },
@@ -1175,6 +1177,14 @@ export function attachBlockIo(
     }
     lastPreviewAt = nowMs;
     chrome.onReasoningPreview?.(reasoningLivePreviewLines(liveText));
+  };
+  const previousAttemptInterrupted = io.onAttemptInterrupted;
+  io.onAttemptInterrupted = () => {
+    previousAttemptInterrupted?.();
+    hasStarted = false;
+    liveText = "";
+    lastPreviewAt = 0;
+    chrome.onReasoningPreview?.(undefined);
   };
   io.onReasoningEnd = (info) => {
     hasStarted = false;
@@ -3905,6 +3915,7 @@ export async function launchTuiAgentShell(opts: {
     },
   });
   const foregroundOperation = createForegroundOperationOwner();
+  const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
   // `release()` is idempotent, so every exit path may call it.
@@ -4877,6 +4888,10 @@ export async function launchTuiAgentShell(opts: {
       () => thinkDisplayMode,
     );
     io.onSystem = (text) => {
+      if (text.includes("[recovering]")) {
+        setBusyPhase(text.trim());
+        setMainAgent("running", "recovering");
+      }
       // Surface budget/stop/errors on the main agent slot.
       if (/\[error\]|\[budget\]|\[stopped\]/i.test(text)) {
         setMainAgent("failed", text.includes("[budget]") ? "budget" : "error");
@@ -6102,6 +6117,18 @@ export async function launchTuiAgentShell(opts: {
     // history interval closes on the session that opened it. A no-op while it is off.
     const stopRemoteForSessionSwitch = (): void => remoteQueue.stopRemoteForSessionSwitch();
 
+    const invalidateForegroundSession = (): void => {
+      foregroundOperation.invalidateSession();
+      io.resetStream();
+      blockIo.resetReasoningLiveState();
+      forceHandoff.clear();
+      suggestionGate.cancel();
+      if (sessionPersistTimer !== undefined) {
+        clearTimeout(sessionPersistTimer);
+        sessionPersistTimer = undefined;
+      }
+    };
+
     const applyOpened = (
       opened: {
         handle: SessionHandle;
@@ -6114,6 +6141,7 @@ export async function launchTuiAgentShell(opts: {
       if (opened.history.length > 0) {
         splash?.removeIfShown();
       }
+      invalidateForegroundSession();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       const entry = sessionEntryOf(opened.resumed);
@@ -6539,6 +6567,7 @@ export async function launchTuiAgentShell(opts: {
     // nothing more is written here, the slate ref is dropped (so tools record
     // no slate touches into the session), and the operator is told once.
     sessionLease.onLost((message) => {
+      foregroundOperation.cancel("session lease lost");
       // Flow 271 R3-1: detach the ref itself, not only this variable. A turn or
       // a `/goal --auto` loop that is already running holds the same object,
       // and every slate write through a detached ref refuses.
@@ -6647,6 +6676,7 @@ export async function launchTuiAgentShell(opts: {
         );
         return false;
       }
+      invalidateForegroundSession();
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
@@ -7634,10 +7664,6 @@ export async function launchTuiAgentShell(opts: {
     // QueuedMainQuestion type imported from ./main-queue (pure helpers).
     let mainQueue: QueuedMainQuestion[] = [];
     let mainQueueSeq = 0;
-    // Force can be selected more than once while cancellation is settling.
-    // Retain every selection in order; only the first schedules the current
-    // operation's settlement handoff (AC3).
-    const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -9567,6 +9593,14 @@ export async function launchTuiAgentShell(opts: {
         const turnCategory: RoutingCategory | undefined = routingOutcome?.category;
         // flow 329: starts collecting THIS turn's tool calls/final text fresh —
         // must run before `runAgentTurn` so no early tool call is missed.
+        if (!foregroundOperation.accepts(operation)) {
+          foregroundOperation.settle(operation);
+          if (!foregroundOperation.isDisposed) stopBusy();
+          return;
+        }
+        deps = { ...deps, onContextCompaction: (result) => {
+          if (foregroundOperation.accepts(operation)) onContextCompaction(result);
+        } };
         guardCollector.reset(line);
         syncArchive();
         rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
@@ -9578,11 +9612,16 @@ export async function launchTuiAgentShell(opts: {
         // signal would say nothing about whether THIS turn was cancelled.
         void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {
         signal: turnSignal,
+        recovery: {},
         ...(origin === "operator" ? {} : { origin }),
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       })).finally(() => {
-        foregroundOperation.settle(operation);
+        const accepted = settleForegroundOperation(foregroundOperation, operation);
+        if (!accepted) {
+          if (!foregroundOperation.isDisposed) stopBusy();
+          return;
+        }
         // Flow 376: the reply of a Telegram-originated turn goes back to the topic
         // (a no-op for any other turn). Cancelled and failed turns say so there.
         void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });

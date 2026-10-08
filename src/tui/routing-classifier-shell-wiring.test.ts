@@ -77,7 +77,7 @@ test("a routed turn's deps are a FRESH object from a fresh makeAgentDeps call â€
 
 test("flow411: captured turn signal cancels classification and gates executor dispatch", () => {
   const start = SOURCE.indexOf("const turnSignal = foregroundOperation.signal;", FN_START);
-  const end = SOURCE.indexOf("foregroundOperation.settle(operation);", start);
+  const end = SOURCE.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);", start);
   expect(start).toBeGreaterThan(FN_START);
   expect(end).toBeGreaterThan(start);
   const body = SOURCE.slice(start, end);
