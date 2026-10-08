@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.80] - 2026-10-08
+
+Range: `v0.3.79..3701acf515bce0f6ab27e9cd4962e4e41d61c35d` plus the release version and notes.
+
+### Bug Fixes
+
+- Recover the same interactive shell turn automatically after transient provider failures and broken streams, in readline and TUI (flow 414, PR #926).
+- Preserve completed tool results, approvals and budgets across bounded retries; display cancellable backoff instead of requiring a new user message.
+- Retry interrupted transport reads across provider adapters; keep permanent authentication and access failures, including generic HTTP 403, non-retryable.
+
+### Tests
+
+- Add recovery, stream-interruption, cancellation and session-lifecycle regressions; align source audits with recovery exception boundaries.
+
+
 ## [0.3.79] - 2026-10-08
 
 ### Routing and Test Reliability
