@@ -291,6 +291,54 @@ function prependChangelogEntry(markdown: string, entry: string): string {
 }
 
 /**
+ * Put the changelog newest-first and lift Version to the newest entry. Pages
+ * written by older keryx releases carry their changelog oldest-first (the
+ * generated `0.1.0` on top, enrichment entries below) with `Version: 0.1.0`;
+ * inserting one more entry above that leaves the log out of order and Version
+ * behind it. Entries are moved whole and never reworded, and a log with an
+ * entry that names no version is left in the order the page has. Expects LF.
+ */
+function repairVersionAndOrder(markdown: string): string {
+  let next = markdown;
+  const all = next.split("\n");
+  const range = changelogRange(all);
+  if (range !== null) {
+    const mask = fencedLines(all);
+    const starts: number[] = [];
+    for (let index = range.heading + 1; index < range.end; index += 1) {
+      if (!mask[index] && ENTRY_START.test(all[index]!)) starts.push(index);
+    }
+    const chunks = starts.map((start, position) => {
+      const end = position + 1 < starts.length ? starts[position + 1]! : range.end;
+      const body = all.slice(start, end);
+      while (body.length > 1 && body[body.length - 1]!.trim() === "") body.pop();
+      return { body, version: ENTRY_VERSION.exec(body[0]!)?.[1] ?? null };
+    });
+    const ordered = chunks.every((chunk) => chunk.version !== null)
+      ? [...chunks].sort((left, right) => compareVersions(right.version, left.version))
+      : chunks;
+    if (ordered.some((chunk, index) => chunk !== chunks[index])) {
+      const spaced = starts.length > 1 && all[starts[1]! - 1]!.trim() === "";
+      const rebuilt: string[] = [];
+      ordered.forEach((chunk, index) => {
+        if (index > 0 && spaced) rebuilt.push("");
+        rebuilt.push(...chunk.body);
+      });
+      let tail = range.end;
+      while (tail > starts[0]! && all[tail - 1]!.trim() === "") tail -= 1;
+      all.splice(starts[0]!, tail - starts[0]!, ...rebuilt);
+      next = all.join("\n");
+    }
+  }
+  const version = pageVersion(next);
+  const newest = newestChangelogVersion(parseChangelog(next));
+  if (version !== null && newest !== null && compareVersions(version, newest) < 0) {
+    next = setPageVersion(next, newest);
+  }
+  return next;
+}
+
+/**
  * Replace `target`'s changelog with `source`'s, byte for byte: whatever the
  * target says in its own changelog (a model's rewrite, nothing at all) is
  * discarded. When `source` has none, the target's is removed too. Expects LF.
@@ -571,7 +619,11 @@ export function mergeGeneratedSections(existing: string, generated: string, entr
       next = all.join("\n");
     }
   }
-  if (next === source) return existing;
-  const version = nextPageVersion(source);
-  return inEolOf(existing, prependChangelogEntry(setPageVersion(next, version), `- ${version} - ${entryNote}`));
+  // Repair first, then bump: the new entry lands above a newest-first log, and
+  // a page nothing else changed on is still brought back in order (no new entry:
+  // nothing was regenerated, only a defect fixed).
+  const repaired = repairVersionAndOrder(next);
+  if (next === source) return repaired === source ? existing : inEolOf(existing, repaired);
+  const version = nextPageVersion(repaired);
+  return inEolOf(existing, prependChangelogEntry(setPageVersion(repaired, version), `- ${version} - ${entryNote}`));
 }
