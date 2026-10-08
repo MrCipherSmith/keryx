@@ -30,6 +30,7 @@ import path from "node:path";
 import { withCwd } from "../lib/test-cwd";
 import { flowCommand, flowServiceDeps } from "../commands/flow";
 import { reviewCommand } from "../commands/review";
+import { readyResearchFixture } from "../review/research.test-helpers";
 import { durableExternalCommentsGate, runReviewGate } from "./review-gate";
 import type { ReviewGateCondition } from "./review-gate";
 import { readFlow } from "./store";
@@ -200,6 +201,7 @@ async function flowDir(root: string): Promise<string> {
 }
 
 async function ingestRound(root: string, reviewId: string, extra: string[] = []): Promise<void> {
+  await writeFile(path.join(root, "research.json"), JSON.stringify(readyResearchFixture()), "utf8");
   await writeFile(path.join(root, "round.md"), "# Round\n\nNothing outstanding.\n", "utf8");
   await reviewCommand([
     "ingest",
@@ -211,6 +213,8 @@ async function ingestRound(root: string, reviewId: string, extra: string[] = [])
     "001",
     "--review-id",
     reviewId,
+    "--research",
+    "research.json",
     ...extra,
   ]);
 }
@@ -599,4 +603,24 @@ test("MAJOR 3 — the external-comment seam is wired at the composition root", (
   // collector at all and fell through to a coverage name any `--reviewers` value
   // produced.
   expect(flowServiceDeps().externalCommentsGate).toBe(durableExternalCommentsGate);
+});
+
+
+workspaceTest("flow complete revalidates dispatch on a closed review round", async (root) => {
+  const head = await freshRepo(root);
+  await initFlow(root);
+  await ingestRound(root, "round-1");
+  await reviewCommand(["complete", "round-1"]);
+  expect(process.exitCode).toBe(0);
+  const manifest = await readManifest(root, "round-1");
+  expect(manifest.status).toBe("closed");
+  const researchPath = path.join(path.dirname(await manifestPath(root, "round-1")), "research.json");
+  const ledger = JSON.parse(await readFile(researchPath, "utf8"));
+  ledger.dispatch.runs = [];
+  await writeFile(researchPath, JSON.stringify(ledger), "utf8");
+  logs = [];
+  await flowCommand(["complete", "001", "--merged", head]);
+  expect(process.exitCode).toBe(1);
+  expect(reviewLine()).toContain("selected reviewer was not dispatched");
+  expect(reviewLine()).not.toContain("all 5 conditions hold");
 });

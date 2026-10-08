@@ -9,6 +9,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { readyResearchFixture } from "./research.test-helpers";
 import type { ManagedReviewManifest } from "./types";
 
 const ORIGINAL_CWD = process.cwd();
@@ -138,6 +139,7 @@ test("point 2 — a round that reported nothing records NO cost, rather than zer
 
 test("point 3 — `review complete` prints the cost per retained finding", async () => {
   await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture(["review-logic"], ["F-001"])));
   process.chdir(ROOT);
   await reviewCommand([
     "ingest",
@@ -147,6 +149,8 @@ test("point 3 — `review complete` prints the cost per retained finding", async
     "report.md",
     "--review-id",
     "2026-09-15-priced",
+    "--research",
+    "research.json",
     "--tokens-in",
     "440000",
     "--tokens-out",
@@ -162,11 +166,33 @@ test("point 3 — `review complete` prints the cost per retained finding", async
 
 test("point 3 — an unpriced round says `not recorded`, and says that is not zero", async () => {
   await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture(["review-logic"], ["F-001"])));
   process.chdir(ROOT);
-  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "2026-09-15-unpriced"]);
+  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "2026-09-15-unpriced", "--research", "research.json"]);
   logs = [];
   await reviewCommand(["complete", "2026-09-15-unpriced"]);
   const out = logs.join("\n");
   expect(out).toContain("cost: not recorded");
   expect(out).toContain("NOT zero");
+});
+
+
+test("review complete refuses an ingested round without research and dispatch evidence", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT, "utf8");
+  process.chdir(ROOT);
+  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "missing-ledger"]);
+  logs = [];
+  const errors: string[] = [];
+  const realError = console.error;
+  try {
+    console.error = (...args: unknown[]) => { errors.push(args.map(String).join(" ")); };
+    await reviewCommand(["complete", "missing-ledger"]);
+  } finally {
+    console.error = realError;
+  }
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("research scope census is incomplete");
+  expect(errors.join("\n")).toContain("reviewer dispatch evidence is missing");
+  const manifest = JSON.parse(await readFile(path.join(ROOT, ".metaproject", "reviews", "missing-ledger", "manifest.json"), "utf8")) as ManagedReviewManifest;
+  expect(manifest.status).not.toBe("closed");
 });
