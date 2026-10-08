@@ -106,7 +106,7 @@ import {
   renderGdwikiSkillReadme,
   renderWikiPageTemplate,
 } from "../wiki/templates";
-import { renderSacManifest, renderSacSkillReadme } from "../sac/templates";
+import { renderSacCoreReadme, renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 import { pathExists } from "../lib/fs";
 import { resolveGitHooksRoot } from "../lib/git-hooks";
 import {
@@ -675,6 +675,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
 
   if (enableSac) {
     await writeTextIfMissing(path.join(metaprojectRoot, "modules", "sac.md"), renderSacManifest());
+    await writeTextIfMissing(path.join(metaprojectRoot, "core", "sac", "README.md"), renderSacCoreReadme());
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "sac", "SKILL.md"), renderSacSkillReadme());
   }
 
@@ -1694,6 +1695,8 @@ async function createServiceDirs(
       path.join(metaprojectRoot, "core", "security"),
     ] : []),
     ...(modules.enableSac ? [
+      path.join(metaprojectRoot, "core", "sac"),
+      path.join(metaprojectRoot, "data", "sac"),
       path.join(metaprojectRoot, "skills", "sac"),
     ] : []),
   ];

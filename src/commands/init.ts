@@ -143,7 +143,7 @@ import {
   renderMcpCoreReadme,
   renderMcpManifest,
 } from "../mcp/client-config";
-import { renderSacManifest, renderSacSkillReadme } from "../sac/templates";
+import { renderSacCoreReadme, renderSacManifest, renderSacSkillReadme } from "../sac/templates";
 
 // Runtime a user can opt into wiring during interactive init; `skip` writes no
 // client config (the manifest still enables the module). Mirrors
@@ -1127,6 +1127,11 @@ export async function initCommand(args: string[]): Promise<void> {
       path.join(metaprojectRoot, "modules", "sac.md"),
       renderSacManifest(),
     );
+    await writeTextIfMissing(
+      projectRoot,
+      path.join(metaprojectRoot, "core", "sac", "README.md"),
+      renderSacCoreReadme(),
+    );
     await writeTextIfChanged(
       projectRoot,
       path.join(metaprojectRoot, "skills", "sac", "SKILL.md"),
@@ -1546,12 +1551,16 @@ async function createMcpStructure(root: string): Promise<void> {
 }
 
 // SAC's actual data (.metaproject/workspaces/, .metaproject/context-operations/)
-// is created lazily by WorkspaceService/FwkReadService at runtime — only the
-// skills dir is scaffolded here, matching createTasksStructure's pattern of
-// not pre-creating what is otherwise lazily created.
+// is created lazily by WorkspaceService/FwkReadService at runtime. The core and
+// data dirs are scaffolded because modules.sac declares them and
+// `standard validate` checks every declared path.
 async function createSacStructure(root: string): Promise<void> {
   const projectRoot = projectRootOf(root);
-  const dirs = [path.join(root, "skills", "sac")];
+  const dirs = [
+    path.join(root, "core", "sac"),
+    path.join(root, "data", "sac"),
+    path.join(root, "skills", "sac"),
+  ];
   await mkdirAllContained(projectRoot, dirs);
 }
 
