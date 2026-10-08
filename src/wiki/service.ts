@@ -406,11 +406,13 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
   if (!(await pathExists(componentsDir))) {
     return { pruned: [], orphanedAccepted: [] };
   }
-  const at = new Date().toISOString();
-  const candidates = await collectGraphWikiCandidates(cwd, at, DEFAULT_COLLECT_LIMIT, null);
-  const validSlugs = new Set(
-    candidates.filter((candidate) => candidate.type === "component").map((candidate) => candidate.slug),
-  );
+  // Every module in the graph, not the capped candidate list: a module ranked
+  // past the collect limit still exists and must keep its page.
+  const modules = await validModuleNames(cwd);
+  if (modules === undefined) {
+    return { pruned: [], orphanedAccepted: [] };
+  }
+  const validSlugs = new Set([...modules].map(slugifyPath));
 
   const pruned: string[] = [];
   const orphanedAccepted: string[] = [];
