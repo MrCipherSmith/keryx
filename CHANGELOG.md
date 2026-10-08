@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.82] - 2026-10-08
+
+Range: `v0.3.81..3743ee29` plus the release version and notes.
+
+### Bug Fixes
+
+- `keryx init` and `keryx update` create the core and data directories that `modules.sac` declares, so a fresh install no longer lists directories that do not exist (PR #931).
+- A wiki page's Version and changelog stay monotonic across `wiki restore --run` followed by `collect`, and a duplicated Reference heading is no longer produced.
+- Module wiki pages link only to modules that have a page: neighbours past the page limit are named as code paths, and relative links in README excerpts resolve against the README directory instead of the wiki folder.
+
+### Tests
+
+- Add regressions for the sac directories, page version/changelog order after restore and collect, and module and README links.
+
 ## [0.3.81] - 2026-10-08
 
 Range: `v0.3.80..c87d3e58` plus the release version and notes.
