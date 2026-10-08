@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.81] - 2026-10-08
+
+Range: `v0.3.80..c87d3e58` plus the release version and notes.
+
+### Bug Fixes
+
+- `keryx sync --apply` no longer prunes wiki pages of modules that still exist: orphan pruning now checks every module in the graph instead of the top 500 by file count, and prunes nothing when the graph is unavailable (PR #930).
+
+### Tests
+
+- Add regressions for a graph with more modules than the collect limit and for pruning without a graph.
+
 ## [0.3.80] - 2026-10-08
 
 Range: `v0.3.79..3701acf515bce0f6ab27e9cd4962e4e41d61c35d` plus the release version and notes.
