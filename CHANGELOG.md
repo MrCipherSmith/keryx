@@ -1,5 +1,100 @@
 # Changelog
 
+## [0.3.78] - 2026-10-08
+
+Range: `v0.3.77..99385ae9f0c96c9fd875a8324fad97d174b3a6e8` (all changes since the last published release).
+
+### Summary
+
+- Routing assignments remain effective across `/model` changes; classifier selection enforces external policy and supports JEV/fallback with shared cancellation and deadline handling.
+- PII detection fixes separator, glue, Unicode, IBAN, phone and SSN misses, reduces false positives, and makes long-input scanning linear.
+- Generated digest report locators remain usable without relaxing redaction of surrounding status text.
+- Dependency security updates, deterministic regression fixtures, full-check diagnostics and bounded APT waits improve release reliability.
+
+### Bug Fixes
+
+- fix(ci): bound APT transport and installation waits (`ea7a480f4f1d`).
+- fix: route digest security imports through facade and render Esc test frames (`3481ea659899`).
+- fix(scheduler): preserve generated digest report locators (`c59edc7da9d3`).
+- fix(routing): enforce external policy before classifier selection (`e7e8586f74fe`).
+- fix(ci): stabilize routing flow regression gates (`290591c7b553`).
+- fix(security): close PII detector separator and glue misses (flow 412) (`09674039104d`).
+- fix(pii): satisfy noUncheckedIndexedAccess in the phone scanner (`a751b1de8ad8`).
+- fix(pii): remove unused countDigits left by the guard removal (`826bc71a3a64`).
+- fix(pii): report a phone before a list marker, stop the rescan inventing phones (`0996c33f3509`).
+- fix(routing): preserve assignments across model changes (flow 411) (`054fcd63d0b9`).
+- fix(pii): report an SSN joined to a hash, keep only UUID-internal suppression (`dd1258bba269`).
+- fix(pii): close the residual detector findings (iban, phone, ssn, unicode) (`78a69c94d365`).
+- fix(pii): close six round-4 findings in the ssn identifier guard (`6ab3b73b6b5a`).
+- fix(pii): avoid a control character in the ascii-only regex (`f6068a19dd36`).
+- fix(pii): fold the label window per code point and widen the invisible set (`37d19f1caafb`).
+- fix(pii): normalise the label window and close the remaining label gaps (`3aa5b61cde2e`).
+- fix(pii): suppress ssn only next to 32/40/64-char hashes, widen the label veto (`bf0ce9dce65a`).
+- fix(security): veto pii.ssn suppression on a trailing label, drop dead branches (`1280d3b29d19`).
+- fix(security): drop unused ALNUM_CHAR constant in pii.ssn guard (`9cb8ddc365bd`).
+- fix(security): tighten pii.ssn identifier-fragment guard (`7078e6c9d991`).
+- fix(security): give pii.ssn the phone rule's identifier-fragment guard (flow 261) (`07b86da14c2c`).
+
+### Documentation
+
+- docs(flow411): publish final 212f55f gates and review evidence (`00ab6425f3bb`).
+- docs(flow411): record draft PR and full CI blockers (`3e722231bc65`).
+- docs(flow): record poll 99 scope decisions for flows 409 and 410 (`3af9948daa9a`).
+
+### Tests
+
+- test(core): pin added security facade exports (`212f55f14707`).
+- test(pii): cover list-marker phones, rescan false positives and span coalescing (`ad89dcb671c3`).
+- test(intake): pin the clock in setupIntakeEnv so cards do not expire with the date (`0fd5e4e52183`).
+- test(pii): cover the residual findings and make the linear-time gate robust (`d6305b706ed7`).
+- test(pii): make the ssn truncation guard test able to fail (`fefa7eae76ed`).
+- test(security): pin SSN label window bounds (flow 261) (`19321fa3b6e0`).
+
+### Maintenance
+
+- chore(flow): close tasks of flow 412 (`632126cb1cfa`).
+- chore(flow): confirm AC1-AC5 of flow 412 (`568824dc89d9`).
+- chore(flow): record PR 921 on flow 412 (`9fa6807f5e7b`).
+- chore(flow): reword AC6 of flow 412 for the UUID exception, confirm it (`cc7a24441e01`).
+- chore(flow): rewrite AC2-AC4 of flow 410 and confirm all eight (`82bcc4dc9be5`).
+- chore(flow): carry round 6 deferred findings forward with decided-by (`a84cd891e386`).
+- chore(flow): open flow 412, PII detector separator and glue misses (`bba463a498be`).
+- chore(flow): record review round 6 for flow 410 (`2b51a6c4ce4f`).
+- chore(deps): bump @modelcontextprotocol/sdk and sharp to clear audit advisories (`8d60227e0a2d`).
+- chore(flow-410): round 5 review of the PII detection code at 5d7fe70b, verifier verdict for sec-F-003 (`69a2b1a4f9da`).
+- chore(flow): record r3-sec-F-003 as fixed by the linear-time detectPii PRs (`5d7fe70bf558`).
+- chore(deps): bump proxy-addr to 2.0.8 for GHSA-jqcg-44mw-7w3h (`cf2ff22cbb75`).
+- chore(flow): rewrite AC5 of flow 410 to cover a linear phone rule (operator, poll 101) (`dd4c5f6f72b1`).
+- chore(flow): record poll 99 accepted residuals for flow 410 findings (`c9de1f8a8dee`).
+- chore(flow): record round 4 and the post-fix verifier pass for flow 410 (`72fc801ec703`).
+- chore(flow): record the three real review rounds for flow 410 (`3ca24287aead`).
+- chore(flow): fix the verifier label in the flow 261 journal note (`de4600416f30`).
+- chore(flow): mark flow 261 review rounds as reconstructed, point to flow 410 (`93fc0d383b60`).
+- chore(flow): open flow 410 (second review of the ssn guard), add reviewer findings to flow 409 (`e80b6e597751`).
+- chore(flow): close flow 261 (pii.ssn identifier-fragment guard) (`77e369d7a394`).
+- chore(flow): open flows 408 and 409, keep blocked test flow 407 (`1441b9e0c177`).
+- chore(flow): record flow 261 tasks done (`9bb2e504b85b`).
+
+### Refactoring
+
+- refactor(pii): drop the unreachable SSN identifier guard and its label machinery (`dcfba9f98b39`).
+
+### CI and Release
+
+- ci: run full gate diagnostic on isolated routing fix branch (`071702e416a7`).
+- ci: add no-publish full gate diagnostic and cwd regression tests (`35bdaa37690f`).
+
+### Performance
+
+- perf(pii): make the phone rule linear on very long inputs (`595fd9a508cb`).
+- perf(pii): make detectPii linear on very long inputs (`4e78bd9bb727`).
+
+Coverage: 79 commits reviewed; 57 individual changes listed; 22 merge commits deliberately omitted to avoid double-counting.
+
+### Release preparation
+
+- Bump package version to 0.3.78 and bound APT waits in the release workflow; existing publication gates remain mandatory.
+
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 

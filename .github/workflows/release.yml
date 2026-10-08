@@ -97,9 +97,11 @@ jobs:
       # Non-fatal `update` for the reason given in `ci.yml`: a third-party
       # repository this project never uses must not be able to fail a release.
       - name: Install ripgrep
+        timeout-minutes: 12
         run: |
-          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
-          sudo apt-get install -y ripgrep
+          set -euo pipefail
+          sudo timeout --kill-after=30s 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60 update || echo "apt-get update reported errors or timed out; the install below is the gate"
+          sudo timeout --kill-after=30s 300s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60 install -y ripgrep
 
       - name: Confirm ripgrep is present
         run: rg --version
