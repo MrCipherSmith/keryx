@@ -157,6 +157,7 @@ describe("the digest tests cannot reach GitHub, Telegram or a model", () => {
         "digest-content.test.ts",
         "digest-delivery.test.ts",
         "digest-diff.test.ts",
+        "digest-env.test.ts",
         "digest-limits.test.ts",
         "digest-report-locator.test.ts",
         "digest-run.test.ts",
@@ -181,11 +182,11 @@ describe("the digest tests cannot reach GitHub, Telegram or a model", () => {
   test("the one process a test helper starts is `git init` in a temp directory", () => {
     const importers = digestTests.filter((entry) => importedSpecifiers(stripComments(entry.text)).some((s) => s.replace(/^node:/, "") === "child_process"));
     expect(importers.map((entry) => path.basename(entry.name))).toEqual(["digest.test-helpers.ts"]);
-    const calls = callArguments(importers[0]?.text ?? "", "execFileSync");
+    const calls = callArguments(importers[0]?.text ?? "", "execFile");
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatch(/^\s*"git",\s*\["init", "-q", "-b", "main"\],\s*\{ cwd: root \}\s*$/);
+    expect(calls[0]).toMatch(/^\s*"git",\s*\["init", "-q", "-b", "main"\],\s*\{\s*cwd: root, env: \{ \.\.\.process\.env \}, timeout: 3_000, killSignal: "SIGKILL",\s*\},\s*\(error\) => error \? reject\(error\) : resolve\(\)\s*$/);
     // and nothing else of the process module is used
-    expect(callArguments(importers[0]?.text ?? "", "(?:exec|execSync|spawn|spawnSync|fork|execFile)")).toEqual([]);
+    expect(callArguments(importers[0]?.text ?? "", "(?:exec|execSync|spawn|spawnSync|fork|execFileSync)")).toEqual([]);
   });
 
   test("no test imports a real client: delivery runs on the in-process fake Bot API or on FakeSink", () => {
