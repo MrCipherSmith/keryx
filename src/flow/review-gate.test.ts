@@ -1575,3 +1575,26 @@ test("only `no-tracker` may differ between the two callers of the remedy helper"
   expect(forHead).toContain("--merged");
   expect(forComments).toContain("externalCommentsGate");
 });
+
+// A clean findings list must not mask outstanding research or lost raw observations.
+test("research ledger blocks a clean round and rechecks tampering after closure", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { dir } = await driveToGates(service);
+  const packageDir = await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+  const manifestPath = path.join(packageDir, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.artifacts = { ...manifest.artifacts, research: "research.json" };
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const researchPath = path.join(packageDir, "research.json");
+  const ready = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] };
+  await writeFile(researchPath, JSON.stringify(ready));
+  const clean = await readReviewRounds(ROOT, dir);
+  expect(clean.some(round => round.problems.some(p => p.includes("research")))).toBe(false);
+  await writeFile(researchPath, JSON.stringify({ ...ready, rawReconciled: false }));
+  const dirty = await readReviewRounds(ROOT, dir);
+  expect(dirty.some(round => !round.ingested && round.problems.some(p => p.includes("raw observations")))).toBe(true);
+  await rm(researchPath);
+  const missing = await readReviewRounds(ROOT, dir);
+  expect(missing.some(round => !round.ingested && round.problems.some(p => p.includes("unreadable")))).toBe(true);
+});

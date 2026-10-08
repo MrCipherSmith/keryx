@@ -1185,6 +1185,10 @@ whoever reads the merge commit a year later reads the body. When `review.jev.con
 
 ## Dispatching Reviewers
 
+**Dispatch integrity is a completion prerequisite.** Use one distinct execution per selected reviewer role; do not combine multiple roles in one child or count sections of one response as independent runs. When budgets are tight, use sequential waves, not role batching. Resolve every project-rule anchor before dispatch; missing rules require context recovery or a blocked result, never silently skipped checks. A read-only pass cannot discharge executable obligations: dispatch a capable execution pass and retain its evidence. Partial scope and NEEDS_CONTEXT remain incomplete until rerun over the outstanding scope.
+
+New managed packages declare `reviewerDispatch: "research.json"`. Alongside the research ledger, provide `dispatch: { version: 1, selected: [...], unresolvedRules: [], runs: [...] }`. Preserve the actual computed reviewer inventory. Each run has `reviewer`, unique `executionId`, `status: "complete"`, `scopeComplete: true`, `rawEvidence`, nonempty `ruleEvidence`, and boolean `executionRequired`. Required execution needs nonempty `executionEvidence` (command/output references); a source-only scope requires `executionReason`. Do not fabricate IDs or mark truncated responses complete. Runtime validates these declarations at closure and the flow gate, not their truth: independently audit evidence and inventory before freezing. Legacy artifact absence is compatibility, not proof of a correct launch.
+
 Dispatch selected reviewers in parallel when independent — this engine dispatches them itself; a host without a dispatch tool returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) and never reviews alone. Use waves when token budget is tight or when one reviewer needs another result:
 
 1. Wave A - core correctness/risk reviewers: logic, architecture, security/highload when selected.
@@ -1710,3 +1714,12 @@ If absent, proceed normally — context is optional and non-blocking.
 | "No flags means no reviewers" | No flags → run auto-detection; never produce an empty review |
 | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
 | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |
+
+
+### Runtime research-completion ledger
+
+New managed packages carry `research.json`, initially pending. Before closing a round, enumerate unresolved observations from raw reviewers and the changed-file/consumer census, assign stable obligation IDs, and investigate them. Run the probe or inspect the relevant source and assertions: merely proposing a check does not resolve it. An unexecuted probe is not a verified claim.
+
+Supply the ledger using `keryx review ingest --research <ledger.json>` alongside the report and findings. Format: `version: 1`, `scopeReviewed: true`, `rawReconciled: true`, `obligations: [...]`. Each obligation requires `id`, `source`, `question`, `status`, `evidence`, `reason`. Status `finding` additionally requires `finding` pointing to exactly one canonical finding ID or global ID. Other terminal statuses are `refuted` and `out-of-scope`, both requiring evidence and reason. Preserve distinct scenarios when deduplicating. Assert census/reconciliation flags only after performing those checks; an empty obligations array is valid only if the actual census found no open observations.
+
+Open, deferred and unverifiable obligations block completion. If context, runtime or budget prevents resolution, retain the obligation and report incomplete; do not relabel it refuted or out-of-scope. Completion and the flow gate re-read the ledger even when the manifest says closed. Legacy packages without this artifact remain compatible, not proven complete. This gate validates the declared ledger, not the truth or exhaustiveness of its census; independent source/raw audits remain necessary.
