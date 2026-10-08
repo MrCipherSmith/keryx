@@ -410,6 +410,22 @@ applies: when the session-entry and command paths of `launchTuiAgentShell` can b
 mounted, replace the counts with a test that enters a session and observes the topic.
 It pins no line number.
 
+### Added by flow 414 (interactive recovery)
+
+`tui/tui-shell.test.ts` adds one source reader for session replacement safety.
+It requires `/new` and `/resume` to invalidate foreground callbacks before
+replacing `liveSession`, clear Force handoff and pending persistence, and reject
+stale settlement before remote-queue or checkpoint effects. Behavioural recovery
+tests cover the owner and IO helpers; this audit protects their wiring inside
+the shell closure. When that closure becomes mountable, replace it with a
+session-switch test that observes those effects.
+
+The readline pruning audits in `commands/prune-archive-wiring.test.ts` now
+select the exact `runAgentTurn` calls with the TypeScript parser and check their
+archive-enabled options branch. They still require `slateSession` and literal
+`pruneArchive: true` together, without fixed character windows that unrelated
+recovery options can outgrow. The three source-reader sites are unchanged.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -455,6 +471,6 @@ tui/task-cost-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
-tui/tui-shell.test.ts | tui/tui-shell.ts | 12
+tui/tui-shell.test.ts | tui/tui-shell.ts | 13
 tui/turn-guard-shell-wiring.test.ts | tui/tui-shell.ts | 1
 ```
