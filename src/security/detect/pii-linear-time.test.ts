@@ -78,6 +78,36 @@ describe("detectPii matches the reference rules", () => {
     }
   });
 
+  test("an email after an astral-ended address keeps the reference boundary", () => {
+    for (const tail of ["𝐚", "é", "😀"]) {
+      for (const separator of ["+", "-", ".", "%", "_"]) {
+        const content = `a@b.cc${tail}${separator}日本@例え.jp`;
+        const detected = detectedSpans(content, "pii.email");
+        const unicode = referenceSpans(content, REFERENCE_UNICODE_EMAIL, 0);
+        const ascii = referenceSpans(content, REFERENCE_EMAIL, 0);
+        const key = (span: Span) => `${span.start}:${span.value}`;
+        const detectedKeys = new Set(detected.map(key));
+        for (const span of unicode) expect(detectedKeys.has(key(span))).toBe(true);
+        for (const span of ascii) {
+          expect(detected.some((d) => d.start <= span.start && d.start + d.value.length >= span.start + span.value.length)).toBe(true);
+        }
+        const allowed = new Set([...unicode, ...ascii].map(key));
+        for (const span of detected) expect(allowed.has(key(span))).toBe(true);
+      }
+    }
+  });
+
+  test("the next email is not skipped after an astral TLD and plus", () => {
+    const content = "a@b.cc𝐚+日本@例え.jp";
+    // Bun runtimes differ on the astral lookbehind: the valid second span
+    // can include the plus. Require the exact reference span, not an offset
+    // pinned to one regex engine, and require the second address to exist.
+    const second = referenceSpans(content, REFERENCE_UNICODE_EMAIL, 0)
+      .find((span) => span.value.endsWith("日本@例え.jp"));
+    expect(second).toBeDefined();
+    expect(detectedSpans(content, "pii.email")).toContainEqual(second!);
+  });
+
   test("email edge cases keep their reference spans", () => {
     const cases = [
       "",

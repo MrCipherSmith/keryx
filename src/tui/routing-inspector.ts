@@ -198,7 +198,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     cwd: options.cwd,
     ...(options.userConfigDir !== undefined ? { userConfigDir: options.userConfigDir } : {}),
   };
-  const loadProviders = options.providers ?? defaultProviders;
+  const loadProviders = options.providers ?? loadRoutingProviders;
   const loadProfiles = options.loadProfiles ?? ((dir) => loadModelProfiles(dir));
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const panelRows =
@@ -460,7 +460,7 @@ export function describePickerRowProfile(opt: FlatModelOption, profiles: Readonl
  * handed straight to the picker — curated model ids, and every OpenAI-compat
  * provider offered whether or not it had a credential.
  */
-async function defaultProviders(): Promise<readonly FlatPickerProvider[]> {
+export async function loadRoutingProviders(): Promise<readonly FlatPickerProvider[]> {
   const { loadOrRefreshProviderCatalog, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
   const { envWithSavedApiKeys } = await import("../lib/shell-config");
   const catalog = await loadOrRefreshProviderCatalog({ fetch, env: envWithSavedApiKeys() });
