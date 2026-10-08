@@ -81,6 +81,36 @@ test("prune keeps pages of modules ranked past the collect limit and still remov
   }
 });
 
+test("prune removes the stale page of a module that shrank below the page minimum", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-prune-shrunk-"));
+  const graphDir = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+  const components = path.join(root, ".metaproject", "wiki", "components");
+  const nodesPath = path.join(graphDir, "nodes.jsonl");
+  const fileNode = (file: string) => ({ id: file, kind: "file", path: file });
+  try {
+    await mkdir(graphDir, { recursive: true });
+    await writeFile(nodesPath, jsonl([
+      fileNode("src/keep/a.ts"), fileNode("src/keep/b.ts"),
+      fileNode("src/shrunk/a.ts"), fileNode("src/shrunk/b.ts"),
+    ]), "utf8");
+    await writeFile(path.join(graphDir, "edges.jsonl"), "", "utf8");
+
+    await wikiCollect({ cwd: root });
+    expect(await pathExists(path.join(components, "src-shrunk.md"))).toBe(true);
+
+    // The module still exists with one file, which collect no longer pages.
+    await writeFile(nodesPath, jsonl([
+      fileNode("src/keep/a.ts"), fileNode("src/keep/b.ts"), fileNode("src/shrunk/a.ts"),
+    ]), "utf8");
+    const prune = await wikiPruneOrphans(root);
+
+    expect(prune.pruned).toEqual([".metaproject/wiki/components/src-shrunk.md"]);
+    expect(await pathExists(path.join(components, "src-keep.md"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("prune removes nothing when the graph is unavailable or empty", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-prune-nograph-"));
   const components = path.join(root, ".metaproject", "wiki", "components");
