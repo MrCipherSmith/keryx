@@ -3,8 +3,8 @@
 # Role Blurring in Product Development under Agentic Automation: the Residual Judgment Concept
 
 Status: preprint, part 1.
-Article: link to be added when the article is published.
-Link for the article: https://github.com/MrCipherSmith/keryx/tree/main/docs/research/role-blurring-part1
+Preprint (citable, EN + RU): https://doi.org/10.5281/zenodo.23242704
+LinkedIn version: https://www.linkedin.com/pulse/role-blurring-product-development-under-agentic-concept-zeitler-0tgoe/
 
 This directory holds the materials behind part 1: the counts over the committed flow records, the protocol that fixes how part 2 will be tested, the log of decisions that changed the direction of the article, and a text-free export of the pilot recommendation records.
 
