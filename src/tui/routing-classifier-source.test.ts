@@ -1,7 +1,7 @@
 // Flow 338, AC6/AC8. Hermetic: fake `fetch` for Jev, a temp dir for the
 // routing config layers, no real network.
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runRoutingClassifierForTurn, renderRoutingFallbackLine, renderRoutingTagLine, renderRoutingSidebarValue, renderRoutingUsageLine } from "./routing-classifier-source";
@@ -12,7 +12,7 @@ function tmpDir(): string {
   return mkdtempSync(path.join(tmpdir(), "keryx-routing-classifier-source-"));
 }
 
-const ENV_WITH_KEY = { OPENROUTER_API_KEY: "sk-or-test" } as const;
+const ENV_WITH_KEY = { ANTHROPIC_API_KEY: "test-only", OPENROUTER_API_KEY: "sk-or-test" } as const;
 
 function fakeFetch(body: unknown, status = 200): typeof fetch {
   return (async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
@@ -43,7 +43,7 @@ test("runRoutingClassifierForTurn: a deterministic 'review' shortcut resolves th
     detected: [{ name: "anthropic", models: ["claude-x", "claude-strong"] }],
     sessionProvider: "anthropic",
     sessionModel: "claude-x",
-    env: {},
+    env: { ANTHROPIC_API_KEY: "test-only" },
     userConfigDir: cwd,
   });
   expect(result?.category).toBe("review");
@@ -67,7 +67,7 @@ test("runRoutingClassifierForTurn: no project/user config AND no derivable profi
     detected: [{ name: "anthropic", models: ["claude-x", "claude-y"] }],
     sessionProvider: "anthropic",
     sessionModel: "claude-x",
-    env: {},
+    env: { ANTHROPIC_API_KEY: "test-only" },
     userConfigDir: cwd,
   });
   expect(result?.category).toBe("review");
@@ -90,7 +90,7 @@ test("runRoutingClassifierForTurn: an unconfigured operator (no project/user rou
     detected: [{ name: "anthropic", models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"] }],
     sessionProvider: "anthropic",
     sessionModel: "claude-opus-4-8",
-    env: {},
+    env: { ANTHROPIC_API_KEY: "test-only" },
     userConfigDir: cwd,
   });
   // "hi" is the deterministic chit-chat shortcut ("quick") — no Jev/network call.
@@ -141,7 +141,7 @@ test("flow 406: the Russian smoke greeting routes to configured quick without a 
     detected: [{ name: "anthropic", models: ["claude-session", "claude-quick"] }],
     sessionProvider: "anthropic",
     sessionModel: "claude-session",
-    env: {},
+    env: { ANTHROPIC_API_KEY: "test-only" },
     userConfigDir: cwd,
     fetch: (async () => { throw new Error("unexpected classifier request"); }) as unknown as typeof fetch,
   });
@@ -169,7 +169,7 @@ test("flow 411: baseline changes neither classifier nor configured executor", as
   const calls: string[] = [];
   for (const sessionModel of ["claude-haiku-4-5", "claude-opus-4-8"]) {
     const result = await runRoutingClassifierForTurn("add a retry loop to the fetch call", {
-      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: {},
+      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { ANTHROPIC_API_KEY: "test-only" },
       detected: [{ name: "anthropic", models: ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8"] }],
       sessionProvider: "anthropic", sessionModel, providerFactory: recordingClassifier(calls),
     });
@@ -197,7 +197,7 @@ test("flow 411: absent or denied sufficient models never revert to baseline", as
   const calls: string[] = [];
   for (const models of [["claude-haiku-4-5"], ["claude-sonnet-5"]]) {
     const result = await runRoutingClassifierForTurn("add a retry loop to the fetch call", {
-      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: {},
+      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { ANTHROPIC_API_KEY: "test-only" },
       detected: [{ name: "anthropic", models }], sessionProvider: "anthropic", sessionModel: models[0]!,
       providerFactory: recordingClassifier(calls), classifierAllowed: () => false,
     });
@@ -220,7 +220,7 @@ test("flow 411: provider-default dispatch remains independent of baseline", asyn
   const calls: string[] = [];
   for (const sessionModel of ["baseline-a", "baseline-b"]) {
     const result = await runRoutingClassifierForTurn("please review this PR", {
-      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: {},
+      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { ANTHROPIC_API_KEY: "test-only" },
       detected: [{ name: "ollama", models: ["not-the-default", modelId] }],
       sessionProvider: "anthropic", sessionModel,
     });
@@ -231,7 +231,7 @@ test("flow 411: provider-default dispatch remains independent of baseline", asyn
     // Execute a normalized request on the returned target using a fake port;
     // this does not claim to exercise the live TTY shell.
     await runModelTurn({ provider: result!.routed!.providerId, model: result!.routed!.modelId,
-      system: "Review", user: "PR", env: {}, providerFactory: (provider, model, options) => {
+      system: "Review", user: "PR", env: { ANTHROPIC_API_KEY: "test-only" }, providerFactory: (provider, model, options) => {
         const port = recordingClassifier(calls)(provider, model, options);
         return { ...port, async *stream(request, streamOptions) {
           expect(request.providerId).toBe("ollama");
@@ -257,7 +257,7 @@ for (const scenario of ["unknown", "disconnected", "missing-model", "unavailable
       await refreshModelProfiles("ollama", [], {}, { dir: cwd });
     }
     const result = await runRoutingClassifierForTurn("please review this PR", {
-      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: {},
+      enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { ANTHROPIC_API_KEY: "test-only" },
       detected: scenario === "disconnected" ? [] : [{ name: providerId, models: scenario === "missing-model" ? ["other-model"] : [modelId] }],
       sessionProvider: "anthropic", sessionModel: "baseline",
       executorAllowed: () => scenario !== "denied",
@@ -296,7 +296,7 @@ test("flow 411: project default wins over user; no catalogue cannot refute its m
   expect(approveProjectRouting(cwd, table, cwd).ok).toBe(true);
   await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { review: { kind: "model", providerId: "ollama", modelId: "user-review" } });
   const result = await runRoutingClassifierForTurn("please review this PR", {
-    enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: {}, detected: [{ name: "ollama" }],
+    enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { ANTHROPIC_API_KEY: "test-only" }, detected: [{ name: "ollama" }],
     sessionProvider: "anthropic", sessionModel: "baseline",
   });
   expect(result?.routed).toEqual({ providerId: "ollama", modelId: resolveProviderDefaultModelId("ollama")! });
@@ -341,7 +341,7 @@ test("flow411 review: concrete executor policy denial preserves layer fallback",
   expect(approveProjectRouting(cwd, table, cwd).ok).toBe(true);
   await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { review: { kind: "model", providerId: "ollama", modelId: "allowed" } });
   const result = await runRoutingClassifierForTurn("please review this PR", {
-    enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: {},
+    enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { ANTHROPIC_API_KEY: "test-only" },
     detected: [{ name: "ollama", models: ["denied", "allowed"] }],
     sessionProvider: "ollama", sessionModel: "baseline", executorAllowed: (_, model) => model !== "denied",
   });
@@ -361,6 +361,8 @@ test("flow411 review: caller can deny JEV separately while permitting sufficient
   expect(calls).toEqual(["anthropic/claude-sonnet-5"]);
   expect(result?.classification.result).toMatchObject({ ok: true, source: "main-model" });
   expect(result?.fallbackReason).toContain("jev: caller policy denied");
+  expect(renderRoutingFallbackLine(result)).toContain("classifier: fallback");
+  if (result) expect(renderRoutingTagLine({ ...result, routed: { providerId: "anthropic", modelId: "claude-sonnet-5" } })).toContain("(fallback ");
 });
 
 test("flow411 review: failure retains sanitized source/reason and actual baseline without success tag", async () => {
@@ -374,6 +376,7 @@ test("flow411 review: failure retains sanitized source/reason and actual baselin
   expect(result?.category).toBeUndefined();
   expect(result && renderRoutingTagLine(result)).toBeUndefined();
   expect(result?.classification.result.ok).toBe(false);
+  expect(renderRoutingFallbackLine(result)).toContain("classifier: none");
   expect(renderRoutingFallbackLine(result)).toContain("jev:");
   expect(renderRoutingFallbackLine(result)).toContain("ollama/latest-baseline");
   expect(renderRoutingFallbackLine(result)).not.toContain(ENV_WITH_KEY.OPENROUTER_API_KEY);
@@ -401,5 +404,114 @@ for (const fallback of [false, true]) {
     expect(rendered).toContain("jev:");
     expect(rendered).not.toContain(secret);
     expect(calls).toEqual(fallback ? ["anthropic/claude-sonnet-5"] : []);
+  });
+}
+
+
+test("live picker catalog overrides stale startup ids; successful JEV and executor denial", async () => {
+  const cwd = tmpDir();
+  await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, {
+    docs: { kind: "model", providerId: "openai-codex", modelId: "gpt-6.1-sol" },
+  });
+  const opts = {
+    enabled: true, jevEnabled: true, cwd, userConfigDir: cwd,
+    detected: [{ name: "openai-codex", models: ["startup-only"] }],
+    sessionProvider: "openai-codex", sessionModel: "gpt-6.1-sol", env: ENV_WITH_KEY,
+    providerFactory: recordingClassifier([]),
+    fetch: fakeFetch({ answers: { category: { type: "choice", choice: "docs" }, confidence: { type: "noul", noul: 0.9 } }, usage: {} }),
+    providers: async () => [{ name: "openai-codex", models: ["gpt-6.1-sol"] }],
+  };
+  const result = await runRoutingClassifierForTurn("Compare event logs and snapshots", opts);
+  expect(result?.classification.result).toMatchObject({ ok: true, source: "jev", category: "docs" });
+  expect(result?.routed).toEqual({ providerId: "openai-codex", modelId: "gpt-6.1-sol" });
+  expect(result && renderRoutingTagLine(result)).toContain("(JEV 90%)");
+  const denied = await runRoutingClassifierForTurn("Compare event logs and snapshots", { ...opts, executorAllowed: () => false });
+  expect(denied?.routed).toBeUndefined();
+  expect(denied?.fallbackReason).toContain("executor policy denied");
+  expect(renderRoutingFallbackLine(denied)).toContain("classifier: JEV");
+  const missing = await runRoutingClassifierForTurn("Compare event logs and snapshots", { ...opts, providers: async () => [] });
+  expect(missing?.routed).toBeUndefined();
+  expect(missing?.fallbackReason).toContain("model not connected");
+});
+
+for (const mode of ["abort", "timeout"] as const) {
+  test(`live catalog preparation settles on ${mode} without classification or dispatch`, async () => {
+    const cwd = tmpDir();
+    const controller = new AbortController();
+    let finish!: (providers: readonly import("../harness/routing/table").FlatPickerProvider[]) => void;
+    let started!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    let calls = 0;
+    const promise = runRoutingClassifierForTurn("Compare event logs and snapshots", {
+      enabled: true, jevEnabled: true, cwd, userConfigDir: cwd, env: ENV_WITH_KEY,
+      detected: [], sessionProvider: "ollama", sessionModel: "baseline",
+      signal: controller.signal, timeoutMs: mode === "timeout" ? 30 : 1000,
+      providers: () => { started(); return new Promise(resolve => { finish = resolve; }); },
+      fetch: (async () => { calls++; throw new Error("must not classify"); }) as unknown as typeof fetch,
+    });
+    await ready;
+    if (mode === "abort") controller.abort();
+    const sentinel = Symbol("still pending");
+    let timer!: ReturnType<typeof setTimeout>;
+    const result = await Promise.race([promise, new Promise(resolve => { timer = setTimeout(() => resolve(sentinel), 200); })]);
+    clearTimeout(timer);
+    expect(result).toBeUndefined();
+    finish([{ name: "ollama", models: ["late"] }]);
+    expect(await promise).toBeUndefined();
+    expect(calls).toBe(0);
+  });
+}
+
+import { writeUserExternalSetting } from "../lib/external-switch";
+
+test("external policy denial of concrete executor falls through project to authorized user", async () => {
+  const cwd = tmpDir();
+  writeUserExternalSetting("off", cwd);
+  const table = { review: { kind: "model" as const, providerId: "openrouter", modelId: "deepseek/blocked" } };
+  await saveRoutingConfig("project", { cwd, userConfigDir: cwd }, table);
+  expect(approveProjectRouting(cwd, table, cwd).ok).toBe(true);
+  await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { review: { kind: "model", providerId: "ollama", modelId: "allowed" } });
+  const result = await runRoutingClassifierForTurn("please review this PR", {
+    enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: ENV_WITH_KEY,
+    detected: [{ name: "openrouter", models: ["deepseek/blocked"] }, { name: "ollama", models: ["allowed"] }],
+    sessionProvider: "ollama", sessionModel: "baseline", executorAllowed: () => true,
+  });
+  expect(result?.routed?.modelId).toBe("allowed");
+  expect(result?.fallbackReason).toContain("external policy denied");
+});
+
+test("missing concrete executor credentials falls through project to authorized user", async () => {
+  const cwd = tmpDir();
+  const table = { review: { kind: "model" as const, providerId: "deepseek", modelId: "missing-key" } };
+  await saveRoutingConfig("project", { cwd, userConfigDir: cwd }, table);
+  expect(approveProjectRouting(cwd, table, cwd).ok).toBe(true);
+  await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { review: { kind: "model", providerId: "ollama", modelId: "allowed" } });
+  const result = await runRoutingClassifierForTurn("please review this PR", {
+    enabled: true, jevEnabled: false, cwd, userConfigDir: cwd, env: { DEEPSEEK_API_KEY: "" },
+    detected: [{ name: "deepseek", models: ["missing-key"] }, { name: "ollama", models: ["allowed"] }],
+    sessionProvider: "ollama", sessionModel: "baseline",
+  });
+  expect(result?.routed?.modelId).toBe("allowed");
+  expect(result?.fallbackReason).toContain("credentials unavailable");
+});
+
+for (const scope of ["user", "project"] as const) {
+  test(`turn-scoped ${scope} external denial prevents credentialed JEV network calls`, async () => {
+    const cwd = tmpDir();
+    if (scope === "user") writeUserExternalSetting("off", cwd);
+    else {
+      mkdirSync(path.join(cwd, ".metaproject"), { recursive: true });
+      writeFileSync(path.join(cwd, ".metaproject", "tasks.config.json"), JSON.stringify({ external: "off" }));
+      writeUserExternalSetting("on", cwd);
+    }
+    let calls = 0;
+    const result = await runRoutingClassifierForTurn("Compare event logs and snapshots", {
+      enabled: true, jevEnabled: true, cwd, userConfigDir: cwd, env: ENV_WITH_KEY,
+      detected: [], sessionProvider: "ollama", sessionModel: "baseline",
+      fetch: (async () => { calls++; throw new Error("must not send to JEV"); }) as unknown as typeof fetch,
+    });
+    expect(calls).toBe(0);
+    expect(result?.classification.trace.some(stage => stage.source === "jev")).toBe(false);
+    expect(result?.fallbackReason).toContain("jev: external policy denied");
   });
 }

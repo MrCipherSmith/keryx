@@ -138,7 +138,7 @@ import {
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
-import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
+import { openRouting, loadRoutingProviders, ROUTING_COMMAND } from "./routing-inspector";
 import { loadModelProfiles, profileKey, type ModelProfile, type ProfileRefreshSummary } from "../harness/routing/model-profile";
 import { appendTaskCostRecord } from "../harness/routing/task-cost";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
@@ -9523,6 +9523,7 @@ export async function launchTuiAgentShell(opts: {
               jevEnabled: routingEnabled,
               cwd: opts.session?.cwd ?? process.cwd(),
               detected: opts.detected ?? [],
+              providers: loadRoutingProviders,
               sessionProvider: currentSel.provider,
               sessionModel: currentSel.model,
             });

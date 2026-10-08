@@ -97,3 +97,10 @@ test("flow411: cancellation after routed preparation suppresses success and fall
   expect(body).toContain('if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model');
   expect(body).toContain("} else if (!turnSignal.aborted) {");
 });
+
+
+test("routing dispatch and picker share their catalog loader", () => {
+  const start = SOURCE.indexOf('if (routingEnabled && origin === "operator" && line.trim().length > 0) {', FN_START);
+  expect(SOURCE.slice(start, SOURCE.indexOf("// Flow 341", start))).toContain("providers: loadRoutingProviders,");
+  expect(readFileSync(join(import.meta.dir, "routing-inspector.ts"), "utf8")).toContain("options.providers ?? loadRoutingProviders");
+});

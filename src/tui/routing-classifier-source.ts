@@ -56,6 +56,8 @@ export interface RoutingClassifierTurnOptions {
   readonly jevAllowed?: boolean;
   readonly cwd: string;
   readonly detected: readonly FlatPickerProvider[];
+  /** Same live catalog as the picker; detection is for headless callers only. */
+  readonly providers?: () => Promise<readonly FlatPickerProvider[]>;
   readonly sessionProvider: string;
   readonly sessionModel: string;
   readonly env?: Record<string, string | undefined>;
@@ -104,6 +106,23 @@ export interface RoutingClassifierTurnResult {
  * is a slash command / empty-vocabulary case (`classifyTurn` itself
  * returns `undefined`), or every stage refused.
  */
+/** Bound live catalog preparation even when the loader ignores cancellation. */
+async function loadTurnProviders(
+  load: () => Promise<readonly FlatPickerProvider[]>, signal: AbortSignal | undefined, timeoutMs: number,
+): Promise<readonly FlatPickerProvider[] | undefined> {
+  if (signal?.aborted || timeoutMs <= 0) return undefined;
+  let stop!: () => void;
+  const stopped = new Promise<undefined>((resolve) => { stop = () => resolve(undefined); });
+  signal?.addEventListener("abort", stop, { once: true });
+  const timer = setTimeout(stop, timeoutMs);
+  try {
+    return await Promise.race([Promise.resolve().then(load), stopped]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", stop);
+  }
+}
+
 export async function runRoutingClassifierForTurn(
   line: string,
   opts: RoutingClassifierTurnOptions,
@@ -111,33 +130,38 @@ export async function runRoutingClassifierForTurn(
   if (opts.signal?.aborted) return undefined;
   if (!opts.enabled) return undefined;
 
+  const deadline = performance.now() + Math.max(0, opts.timeoutMs ?? CLASSIFY_TURN_TIMEOUT_MS);
   const profiles = loadModelProfiles(opts.userConfigDir);
+  const providers = opts.providers === undefined ? opts.detected : await loadTurnProviders(opts.providers, opts.signal, Math.max(0, deadline - performance.now()));
+  if (providers === undefined) return undefined;
+  if (opts.signal?.aborted) return undefined;
   const env = envWithSavedApiKeys(opts.env ?? process.env);
   // Mandatory privacy gate, refreshed each turn; caller hooks only restrict further.
   const external = await resolveExternalSetting({ cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { dir: opts.userConfigDir } : {}) });
   if (opts.signal?.aborted) return undefined;
   const externalAllowed = externalAllowedConnectedPredicate(
-    connectedPredicateFrom(opts.detected), external.value === "on",
+    connectedPredicateFrom(providers), external.value === "on",
     loadExternalProvidersConfig(opts.userConfigDir).config,
   );
-  const fallbackModel = selectClassifierModel(opts.detected, profiles, (providerId, modelId) =>
+  const fallbackModel = selectClassifierModel(providers, profiles, (providerId, modelId) =>
     externalAllowed(providerId, modelId) &&
     (opts.classifierAllowed?.(providerId, modelId) ?? true) &&
     (opts.providerFactory !== undefined || hasCredential(providerId, env)),
   );
   const classification = await classifyTurn(line, TURN_CLASSIFIER_CATEGORIES, {
-    jevEnabled: opts.jevEnabled && opts.jevAllowed !== false,
+    jevEnabled: opts.jevEnabled && opts.jevAllowed !== false && external.value === "on",
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     fallbackModel: fallbackModel ?? null,
     ...(opts.providerFactory !== undefined ? { providerFactory: opts.providerFactory } : {}),
     ...(opts.env !== undefined ? { env: opts.env } : {}),
     ...(opts.fetch !== undefined ? { fetch: opts.fetch } : {}),
-    timeoutMs: opts.timeoutMs ?? CLASSIFY_TURN_TIMEOUT_MS,
+    timeoutMs: Math.max(0, deadline - performance.now()),
   });
   if (opts.signal?.aborted) return undefined;
   if (classification === undefined) return undefined;
   const baseline = { providerId: opts.sessionProvider, modelId: opts.sessionModel };
   const skippedJev = opts.jevEnabled && opts.jevAllowed === false ? "jev: caller policy denied"
+    : opts.jevEnabled && external.value !== "on" ? "jev: external policy denied"
     : opts.jevEnabled && resolveJevClassifierCredential(opts.env).key === undefined ? "jev: credentials unavailable" : undefined;
   if (!classification.result.ok) {
     const failures = classification.trace.flatMap(stage => stage.result.ok ? [] : [`${stage.source}: ${stage.result.reason}`]);
@@ -151,7 +175,7 @@ export async function runRoutingClassifierForTurn(
   const location: RoutingConfigLocation = { cwd: opts.cwd, ...(opts.userConfigDir !== undefined ? { userConfigDir: opts.userConfigDir } : {}) };
   const [project, user] = await Promise.all([loadRoutingConfig("project", location), loadRoutingConfig("user", location)]);
   if (opts.signal?.aborted) return undefined;
-  const connected = connectedPredicateFrom(opts.detected);
+  const connected = connectedPredicateFrom(providers);
   const available = availablePredicateFromProfiles(profiles);
   let fallbackReason: string | undefined;
   // Check the concrete default BEFORE accepting a layer, preserving the
@@ -159,8 +183,10 @@ export async function runRoutingClassifierForTurn(
   const connectedForTurn = (providerId: string, modelId?: string): boolean => {
     if (modelId !== undefined) {
       const reason = !connected(providerId, modelId) ? "model not connected"
+        : !externalAllowed(providerId, modelId) ? "external policy denied"
         : !available(providerId, modelId) ? "model unavailable"
         : !(opts.executorAllowed?.(providerId, modelId) ?? true) ? "executor policy denied"
+        : opts.providerFactory === undefined && !hasCredential(providerId, env) ? "credentials unavailable"
         : undefined;
       if (reason !== undefined) {
         fallbackReason ??= `${providerId}/${modelId}: ${reason}`;
@@ -172,6 +198,7 @@ export async function runRoutingClassifierForTurn(
     const reason = !connected(providerId) ? "provider not connected"
       : defaultId === undefined ? "no documented provider default"
       : !connected(providerId, defaultId) ? "default model not connected"
+      : !externalAllowed(providerId, defaultId) ? "external policy denied"
       : !available(providerId, defaultId) ? "default model unavailable"
       : !(opts.executorAllowed?.(providerId, defaultId) ?? true) ? "executor policy denied"
       : opts.providerFactory === undefined && !hasCredential(providerId, env) ? "credentials unavailable"
@@ -183,9 +210,9 @@ export async function runRoutingClassifierForTurn(
     return true;
   };
   // Flow 327's `derived` layer, built from the SAME provider list already on
-  // hand (`opts.detected`, no extra probe) against the session's own
+  // hand (`providers`, shared with the picker) against the session's own
   // provider/model — the same shape `keryx routing list` and `/routing` use.
-  const sessionProvider = opts.detected.find((p) => p.name === opts.sessionProvider);
+  const sessionProvider = providers.find((p) => p.name === opts.sessionProvider);
   const models = sessionProvider?.models ?? [opts.sessionModel];
   const derived: RoutingTable = deriveDefaultTable(opts.sessionProvider, models, profiles, opts.sessionModel);
   const resolved = resolveCategoryDetailed(category, { project: project.table, user: user.table, derived }, connectedForTurn, available);
@@ -205,11 +232,18 @@ export async function runRoutingClassifierForTurn(
   return modelId === undefined ? result : { ...result, routed: { providerId: resolved.assignment.providerId, modelId } };
 }
 
+/** Report the deciding stage, not the executor's fallback status. */
+function classificationSource(result: RoutingClassifierTurnResult): string {
+  if (!result.classification.result.ok) return "none";
+  const source = result.classification.result.source;
+  return source === "jev" ? "JEV" : source === "main-model" ? "fallback" : source;
+}
+
 /** An enabled route must never silently look successful while falling back. */
 export function renderRoutingFallbackLine(result: RoutingClassifierTurnResult | undefined): string {
   if (result === undefined) return "[route fallback: no classifier category; using session model]";
   const target = result.baseline === undefined ? "session model" : `${result.baseline.providerId}/${result.baseline.modelId}`;
-  return redactSensitiveText(`[route fallback: ${result.category ?? "no classifier category"} -> ${describeAssignment(result.assignment)}${result.fallbackReason !== undefined ? `; ${result.fallbackReason}` : ""}; using ${target}]`);
+  return redactSensitiveText(`[route fallback: ${result.category ?? "no classifier category"} -> ${describeAssignment(result.assignment)}; classifier: ${classificationSource(result)}${result.fallbackReason !== undefined ? `; ${result.fallbackReason}` : ""}; using ${target}]`);
 }
 
 function pct(n: number): string {
@@ -219,7 +253,7 @@ function pct(n: number): string {
 /** AC8: the per-turn tag line, e.g. `[quick -> claude-haiku-4.5]` — shown only when a turn actually routed to something other than the session's own model. */
 export function renderRoutingTagLine(result: RoutingClassifierTurnResult): string | undefined {
   if (result.routed === undefined) return undefined;
-  const source = result.classification.result.ok ? result.classification.result.source : "none";
+  const source = classificationSource(result);
   const confidence = result.classification.result.ok ? ` ${pct(result.classification.result.confidence)}` : "";
   return `[${result.category} -> ${result.routed.providerId}/${result.routed.modelId}] (${source}${confidence}${result.fallbackReason !== undefined ? `; fallback: ${result.fallbackReason}` : ""})`;
 }
