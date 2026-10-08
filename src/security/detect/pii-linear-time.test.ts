@@ -99,7 +99,13 @@ describe("detectPii matches the reference rules", () => {
 
   test("the next email is not skipped after an astral TLD and plus", () => {
     const content = "a@b.cc𝐚+日本@例え.jp";
-    expect(detectedSpans(content, "pii.email")).toContainEqual({ start: 9, value: "日本@例え.jp" });
+    // Bun runtimes differ on the astral lookbehind: the valid second span
+    // can include the plus. Require the exact reference span, not an offset
+    // pinned to one regex engine, and require the second address to exist.
+    const second = referenceSpans(content, REFERENCE_UNICODE_EMAIL, 0)
+      .find((span) => span.value.endsWith("日本@例え.jp"));
+    expect(second).toBeDefined();
+    expect(detectedSpans(content, "pii.email")).toContainEqual(second!);
   });
 
   test("email edge cases keep their reference spans", () => {
