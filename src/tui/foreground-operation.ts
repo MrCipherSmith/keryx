@@ -12,11 +12,15 @@ interface ActiveForegroundOperation {
   controller: AbortController;
   settled: Promise<void>;
   resolveSettled: () => void;
+  invalidated: boolean;
 }
 
 export class ForegroundOperationOwner {
   private active: ActiveForegroundOperation | undefined;
   private disposed = false;
+  private sessionGeneration = 0;
+
+  get generation(): number { return this.sessionGeneration; }
 
   get signal(): AbortSignal {
     if (this.active === undefined) {
@@ -34,7 +38,7 @@ export class ForegroundOperationOwner {
   }
 
   accepts(token: ForegroundOperationToken): boolean {
-    return !this.disposed && this.active?.token === token;
+    return !this.disposed && this.active?.token === token && !this.active.invalidated;
   }
 
   begin(): ForegroundOperationToken {
@@ -49,7 +53,7 @@ export class ForegroundOperationOwner {
     const settled = new Promise<void>((resolve) => {
       resolveSettled = resolve;
     });
-    this.active = { token, controller: new AbortController(), settled, resolveSettled };
+    this.active = { token, controller: new AbortController(), settled, resolveSettled, invalidated: false };
     return token;
   }
 
@@ -58,6 +62,13 @@ export class ForegroundOperationOwner {
     if (controller !== undefined && !controller.signal.aborted) {
       controller.abort(reason);
     }
+  }
+
+  /** Revoke session-bound callbacks immediately, retain busy ownership until settlement. */
+  invalidateSession(): void {
+    this.sessionGeneration += 1;
+    if (this.active !== undefined) this.active.invalidated = true;
+    this.cancel("session switched");
   }
 
   settled(): Promise<void> {
@@ -97,6 +108,11 @@ export class ForegroundForceHandoff<T> {
     if (this.awaitingSettlement) return false;
     this.awaitingSettlement = true;
     return true;
+  }
+
+  clear(): void {
+    this.pending.length = 0;
+    this.awaitingSettlement = false;
   }
 
   get isAwaitingSettlement(): boolean {
@@ -146,8 +162,9 @@ export async function runAfterForegroundSettlement(
   owner: ForegroundOperationOwner,
   action: () => void,
 ): Promise<void> {
+  const generation = owner.generation;
   await owner.settled();
-  if (!owner.isDisposed) {
+  if (!owner.isDisposed && owner.generation === generation) {
     action();
   }
 }
@@ -236,6 +253,7 @@ export function createForegroundAgentIoFacade(
     // same guarded way as `onReasoning` above — a stale/disposed turn must
     // not paint a "thinking…" indicator or a finished reasoning block onto
     // whatever operation now owns the screen.
+    onAttemptInterrupted: () => { if (accepts()) io.onAttemptInterrupted?.(); },
     onReasoningDelta: (delta) => {
       if (accepts()) io.onReasoningDelta?.(delta);
     },
@@ -281,4 +299,11 @@ export function createForegroundAgentIoFacade(
         }),
     readOnly: () => !accepts() || (io.readOnly?.() ?? false),
   };
+}
+
+/** Session effects are valid only before settlement and only in the originating session. */
+export function settleForegroundOperation(owner: ForegroundOperationOwner, token: ForegroundOperationToken): boolean {
+  const accepted = owner.accepts(token);
+  owner.settle(token);
+  return accepted;
 }

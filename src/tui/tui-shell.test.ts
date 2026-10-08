@@ -3810,7 +3810,7 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     // site. Assert both halves: the capture is `foregroundOperation.signal`,
     // and the call site passes that same binding.
     const start = source.indexOf("const turnSignal = foregroundOperation.signal;");
-    const end = source.indexOf("foregroundOperation.settle(operation);", start);
+    const end = source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const turn = source.slice(start, end);
@@ -4360,4 +4360,55 @@ otuiTest("/theme switch remaps tone-painted feed text to the new palette's slots
   } finally {
     applyThemeId(previous);
   }
+});
+
+
+otuiTest("interactive recovery renders interrupted output and a fresh answer through real OpenTUI IO", async () => {
+  const otui = requireOtui();
+  const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+  try {
+    const transcript = new otui.core.BoxRenderable(renderer, { id: "recovery-transcript", flexGrow: 1, flexDirection: "column" });
+    renderer.root.add(transcript);
+    const io = createTuiAgentIo(otui.core, renderer, transcript);
+    const retained: { kind: string; fullText: string }[] = [];
+    attachBlockIo(io, (block) => { retained.push(block); return `block${retained.length}`; }, {});
+    const provider = scriptedProvider([
+      [{ kind: "reasoning_delta", text: "discarded reasoning" }, { kind: "text_delta", text: "Partial output." },
+        { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+      [{ kind: "reasoning_delta", text: "complete reasoning" }, { kind: "text_delta", text: "Recovered TUI answer." }, { kind: "model_end" }],
+    ]);
+    const history: NormalizedMessage[] = [];
+    const deps: AgentDeps = { provider, providerId: "scripted", modelId: "m", tools: [], systemInstruction: "sys", idSeq: fixedIdSeq(), maxRounds: 1 };
+    await runAgentTurn(io, deps, history, "hello", { recovery: { random: () => 0, wait: async () => {
+      await flush();
+      expect(captureCharFrame()).toContain("[recovering]");
+      expect(retained).toHaveLength(0);
+    } } });
+    await flush();
+    const frame = captureCharFrame();
+    expect(frame).toContain("[interrupted output]");
+    expect(frame).toContain("Recovered TUI answer.");
+    expect(retained.filter((block) => block.kind === "thought").map((block) => block.fullText)).toEqual(["complete reasoning"]);
+    expect(history.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(history.at(-1)?.content).toBe("Recovered TUI answer.");
+  } finally { renderer.destroy(); }
+});
+
+
+test("session replacement paths revoke foreground callbacks before replacing the global session", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  for (const anchor of ["const applyOpened =", "const startNewSession ="]) {
+    const start = source.indexOf(anchor);
+    const replace = source.indexOf("liveSession = opened.handle;", start);
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, replace);
+    expect(body).toContain("invalidateForegroundSession();");
+  }
+  const invalidation = source.slice(source.indexOf("const invalidateForegroundSession ="), source.indexOf("const applyOpened ="));
+  expect(invalidation).toContain("foregroundOperation.invalidateSession();");
+  expect(invalidation).toContain("forceHandoff.clear();");
+  expect(invalidation).toContain("clearTimeout(sessionPersistTimer)");
+  const finalizer = source.slice(source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);"));
+  expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("remoteQueue.turnSettled"));
+  expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("flushSessionCheckpoint()"));
 });

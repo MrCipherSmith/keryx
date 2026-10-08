@@ -1,3 +1,4 @@
+import { isTransportFailure } from "../harness/provider/provider-port";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -260,7 +261,8 @@ export interface AgentIO {
   /**
    * A durable-history checkpoint is needed. Emitted after every history
    * mutation, including streamed assistant deltas, so interrupted turns are
-   * recoverable instead of being lost at the end of a model turn.
+   * recoverable instead of being lost at the end of a model turn. Interactive
+   * recovery defers provisional assistant deltas until a valid model_end.
    */
   onHistoryChange?: (kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void;
   /**
@@ -300,6 +302,8 @@ export interface AgentIO {
    * before the span closed, else omitted.
    */
   onReasoningEnd?: (info: { text: string; redacted: boolean; durationMs?: number; tokens?: number }) => void;
+  /** An unsuccessful provisional stream was discarded; reset live output/preview. */
+  onAttemptInterrupted?: () => void;
   /** Provider-reported token usage for this run (forwarded from `usage_update`). */
   onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
@@ -755,7 +759,56 @@ export interface AgentDeps {
   hooks?: ShellHookContext;
 }
 
+/** Same-round recovery seams; production uses an abortable timer and Math.random. */
+export interface InteractiveRecovery {
+  wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  random?: () => number;
+  /** A host with a spend/time ceiling can refuse the next paid request. */
+  canRequest?: () => boolean;
+}
+
+export const RECOVERY_MAX_DELAY_MS = 60_000;
+export const RECOVERY_MAX_RETRY_AFTER_MS = 300_000;
+
+export function recoveryDelayMs(attempt: number, retryAfterMs: number | undefined, random: () => number): number {
+  const ceiling = Math.min(RECOVERY_MAX_DELAY_MS, 1_000 * 2 ** Math.min(attempt - 1, 6));
+  const sample = random();
+  const jitter = Number.isFinite(sample) ? Math.max(0, Math.min(1, sample)) : 0.5;
+  const delay = Math.round(ceiling * (0.5 + jitter * 0.5));
+  const hint = retryAfterMs !== undefined && Number.isFinite(retryAfterMs)
+    ? Math.max(0, Math.min(RECOVERY_MAX_RETRY_AFTER_MS, retryAfterMs)) : 0;
+  return Math.max(delay, hint);
+}
+
+export function waitForRecovery(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(new Error("recovery cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
+function retryStructuredError(error: NormalizedError | undefined): boolean {
+  if (error === undefined) return false;
+  // Never let a generic auth/access/request error become an endless recovery.
+  if (["authentication", "invalid_request", "context_overflow", "cancelled"].includes(error.kind)) return false;
+  if (/\b403\b/.test(error.message) && !["unavailable", "overloaded", "rate_limit"].includes(error.kind)) return false;
+  return error.retryable || (error.kind === "malformed"
+    && (error.detail?.incompleteStream === true || error.detail?.pendingToolCallId !== undefined));
+}
+
+
 export interface RunAgentTurnOptions {
+  /** Interactive hosts only. Absent for print, unattended and child runs. */
+  recovery?: InteractiveRecovery;
   /** Abort signal for a running turn (UI hard-stop support). */
   signal?: AbortSignal;
   /**
@@ -2876,6 +2929,7 @@ async function runAgentTurnCore(
   }
   const signal = options.signal;
   const isAborted = (): boolean => signal?.aborted === true;
+  const recovery = deps.unattended === true || deps.subagentBudget !== undefined ? undefined : options.recovery;
 
   if (isAborted()) {
     io.onSystem?.("\n[stopped] Model turn interrupted by user.\n");
@@ -3295,7 +3349,7 @@ async function runAgentTurnCore(
     const request: NormalizedRequest =
       signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
-    let assistantText = "";
+    let assistantText: string;
     let assistantMessage: NormalizedMessage | undefined;
     let reasoningText = "";
     let reasoningFlushed = false;
@@ -3317,7 +3371,9 @@ async function runAgentTurnCore(
     // e.g. a reasoning+tool-call round) has it available at that point.
     let reasoningTokens: number | undefined;
     let reasoningEndFlushed = false;
+    let attemptComplete = false;
     const flushReasoning = (): void => {
+      if (recovery !== undefined && !attemptComplete) return;
       if (reasoningText.length > 0 && !reasoningFlushed) {
         io.onReasoning?.(reasoningText);
         reasoningFlushed = true;
@@ -3339,103 +3395,213 @@ async function runAgentTurnCore(
     };
     const nameById = new Map<string, string>();
     const calls: PendingCall[] = [];
-    let errored = false;
+    let errored: boolean;
     // Flow 387 T6: the round's normalized provider error, held back (not yet
     // printed) when it is a context overflow that may still be recovered.
     let pendingOverflowError: NormalizedError | undefined;
 
-    try {
-      const streamOptions = {
-        attemptId: deps.idSeq(),
-        ...(signal === undefined ? {} : { signal }),
-        ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
-      };
-      for await (const event of deps.provider.stream(request, streamOptions)) {
+    let recoveryAttempt = 0;
+    for (;;) {
+      if (isAborted()) {
+        io.onAttemptInterrupted?.();
+        system("\n[stopped] Model turn interrupted by user.\n");
+        return recovery === undefined ? {} : { finishReason: "interrupted" };
+      }
+      if (recovery?.canRequest?.() === false) {
+        system("\n[budget] Recovery stopped: request budget exhausted.\n");
+        return { finishReason: "budget" };
+      }
+      let terminalSeen = false;
+      let retryable = false;
+      let attemptUsageKnown = false;
+      let attemptError: NormalizedError | undefined;
+      let transportCause: unknown;
+      assistantText = "";
+      assistantMessage = undefined;
+      reasoningText = "";
+      reasoningFlushed = false;
+      reasoningRedacted = false;
+      reasoningReplay.length = 0;
+      reasoningStartedAt = undefined;
+      reasoningEndedAt = undefined;
+      reasoningTokens = undefined;
+      reasoningEndFlushed = false;
+      nameById.clear();
+      calls.length = 0;
+      errored = false;
+      try {
+        const streamOptions = {
+          attemptId: deps.idSeq(),
+          ...(signal === undefined ? {} : { signal }),
+          ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+        };
+        for await (const event of deps.provider.stream(request, streamOptions)) {
+          if (isAborted()) {
+            // flow 268 T26: fire `onReasoningEnd` for a round that started
+            // reasoning before the abort landed — otherwise a live TUI preview
+            // (`attachBlockIo`) never sees its end-of-round reset and the next
+            // turn's `reasoning_delta`s land appended to this round's stale
+            // text. Never attaches `roundReasoning` to `history` here (the
+            // early `return {}` still skips that, same as before this fix) —
+            // only the display/durable-summary forwarding callbacks fire.
+            flushReasoning();
+            if (recovery !== undefined) {
+              io.onAttemptInterrupted?.();
+              if (assistantText.length > 0 || reasoningText.length > 0 || reasoningReplay.length > 0 || nameById.size > 0) {
+                system("\n[interrupted output] Incomplete model output discarded.\n");
+              }
+            }
+            system("\n[stopped] Model turn interrupted by user.\n");
+            return recovery === undefined ? {} : { finishReason: "interrupted" };
+          }
+          if (
+            reasoningStartedAt !== undefined &&
+            reasoningEndedAt === undefined &&
+            event.kind !== "reasoning_delta" &&
+            event.kind !== "reasoning_replay"
+          ) {
+            reasoningEndedAt = now(); // first non-reasoning event closes the span
+          }
+          if (event.kind === "reasoning_delta") {
+            if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+            reasoningText += event.text ?? "";
+            if (event.redacted === true) reasoningRedacted = true;
+            io.onReasoningDelta?.(reasoningDeltaPayload(event));
+          } else if (event.kind === "reasoning_replay") {
+            if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+            if (event.replay !== undefined) reasoningReplay.push(event.replay);
+          } else if (event.kind === "text_delta") {
+            flushReasoning(); // reasoning precedes the answer → surface it first
+            const text = event.text ?? "";
+            io.write(text);
+            assistantText += text;
+            if (assistantMessage === undefined) {
+              assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };
+              if (recovery === undefined) history.push(assistantMessage);
+            } else {
+              assistantMessage.content += text;
+            }
+            if (recovery === undefined) io.onHistoryChange?.("assistant_delta");
+          } else if (event.kind === "tool_call_start") {
+            if (event.toolCallId !== undefined && event.toolName !== undefined) {
+              nameById.set(event.toolCallId, event.toolName);
+            }
+          } else if (event.kind === "tool_call_end") {
+            if (event.toolCallId !== undefined) {
+              calls.push({
+                id: event.toolCallId,
+                name: nameById.get(event.toolCallId) ?? event.toolName ?? "",
+                input: event.input ?? "",
+              });
+            }
+          } else if (event.kind === "usage_update") {
+            if (event.usage !== undefined) {
+              attemptUsageKnown = true;
+              io.onUsage?.(event.usage);
+              reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
+              // Flow 387 T7: remember the provider's own input-token count for this request.
+              const newAnchor = toUsageAnchor(requestSnapshot, event.usage.inputTokens);
+              if (newAnchor !== undefined) {
+                usageAnchors.set(history, { anchor: newAnchor, providerId: deps.providerId, modelId: deps.modelId });
+              }
+            }
+          } else if (event.kind === "provider_error") {
+            attemptError = event.error;
+            retryable = retryStructuredError(event.error);
+            if (!overflowRetried && isContextOverflowError(event.error)) {
+              pendingOverflowError = event.error;
+            } else if (recovery === undefined) {
+              system(formatProviderErrorMessage(event.error));
+            }
+            errored = true;
+            break;
+          } else if (event.kind === "model_end") {
+            terminalSeen = true;
+            break;
+          }
+        }
+      } catch (cause) {
         if (isAborted()) {
-          // flow 268 T26: fire `onReasoningEnd` for a round that started
-          // reasoning before the abort landed — otherwise a live TUI preview
-          // (`attachBlockIo`) never sees its end-of-round reset and the next
-          // turn's `reasoning_delta`s land appended to this round's stale
-          // text. Never attaches `roundReasoning` to `history` here (the
-          // early `return {}` still skips that, same as before this fix) —
-          // only the display/durable-summary forwarding callbacks fire.
+          // Same flush-before-abort-return fix as the in-loop check above —
+          // an abort caught here (e.g. mid-read) must still close the round's
+          // reasoning span exactly once.
           flushReasoning();
-          system("\n[stopped] Model turn interrupted by user.\n");
-          return {};
-        }
-        if (
-          reasoningStartedAt !== undefined &&
-          reasoningEndedAt === undefined &&
-          event.kind !== "reasoning_delta" &&
-          event.kind !== "reasoning_replay"
-        ) {
-          reasoningEndedAt = now(); // first non-reasoning event closes the span
-        }
-        if (event.kind === "reasoning_delta") {
-          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
-          reasoningText += event.text ?? "";
-          if (event.redacted === true) reasoningRedacted = true;
-          io.onReasoningDelta?.(reasoningDeltaPayload(event));
-        } else if (event.kind === "reasoning_replay") {
-          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
-          if (event.replay !== undefined) reasoningReplay.push(event.replay);
-        } else if (event.kind === "text_delta") {
-          flushReasoning(); // reasoning precedes the answer → surface it first
-          const text = event.text ?? "";
-          io.write(text);
-          assistantText += text;
-          if (assistantMessage === undefined) {
-            assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };
-            history.push(assistantMessage);
-          } else {
-            assistantMessage.content += text;
-          }
-          io.onHistoryChange?.("assistant_delta");
-        } else if (event.kind === "tool_call_start") {
-          if (event.toolCallId !== undefined && event.toolName !== undefined) {
-            nameById.set(event.toolCallId, event.toolName);
-          }
-        } else if (event.kind === "tool_call_end") {
-          if (event.toolCallId !== undefined) {
-            calls.push({
-              id: event.toolCallId,
-              name: nameById.get(event.toolCallId) ?? event.toolName ?? "",
-              input: event.input ?? "",
-            });
-          }
-        } else if (event.kind === "usage_update") {
-          if (event.usage !== undefined) {
-            io.onUsage?.(event.usage);
-            reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
-            // Flow 387 T7: remember the provider's own input-token count for this request.
-            const newAnchor = toUsageAnchor(requestSnapshot, event.usage.inputTokens);
-            if (newAnchor !== undefined) {
-              usageAnchors.set(history, { anchor: newAnchor, providerId: deps.providerId, modelId: deps.modelId });
+          if (recovery !== undefined) {
+            io.onAttemptInterrupted?.();
+            if (assistantText.length > 0 || reasoningText.length > 0 || reasoningReplay.length > 0 || nameById.size > 0) {
+              system("\n[interrupted output] Incomplete model output discarded.\n");
             }
           }
-        } else if (event.kind === "provider_error") {
-          if (!overflowRetried && isContextOverflowError(event.error)) {
-            pendingOverflowError = event.error;
-          } else {
-            system(formatProviderErrorMessage(event.error));
-          }
+          system("\n[stopped] Model turn interrupted by user.\n");
+          return recovery === undefined ? {} : { finishReason: "interrupted" };
+        }
+        transportCause = cause;
+        retryable = isTransportFailure(cause);
+        if (recovery === undefined) system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
+        errored = true;
+      }
+
+      if (recovery !== undefined) {
+        if (!errored && !terminalSeen) {
           errored = true;
-          break;
-        } else if (event.kind === "model_end") {
-          break;
+          retryable = true;
+          attemptError = { kind: "unavailable", retryable: true, message: "Stream ended without model_end" };
+        }
+        if (errored || isAborted()) {
+          io.onAttemptInterrupted?.();
+          if (assistantText.length > 0 || reasoningText.length > 0 || reasoningReplay.length > 0 || nameById.size > 0 || calls.length > 0) {
+            system("\n[interrupted output] Incomplete model output discarded; retry starts from the last completed round.\n");
+          }
+          // Nothing provisional ever entered history or its durable checkpoints.
+          assistantMessage = undefined;
+          assistantText = "";
+          reasoningText = "";
+          reasoningReplay.length = 0;
+          reasoningRedacted = false;
+          calls.length = 0;
+          if (isAborted()) {
+            system("\n[stopped] Model turn interrupted by user.\n");
+            return { finishReason: "interrupted" };
+          }
+          if (!attemptUsageKnown) system("\n[recovery usage] Failed-attempt usage unknown; provider may have billed it.\n");
+          if (retryable) {
+            if (recovery.canRequest?.() === false) {
+              system("\n[budget] Recovery stopped: request budget exhausted.\n");
+              return { finishReason: "budget" };
+            }
+            recoveryAttempt += 1;
+            const delay = recoveryDelayMs(recoveryAttempt, attemptError?.retryAfterMs, recovery.random ?? Math.random);
+            system(`\n[recovering] Attempt ${recoveryAttempt} interrupted. Next probe in ${(delay / 1_000).toFixed(1)}s; cancel to stop.\n`);
+            try {
+              await (recovery.wait ?? waitForRecovery)(delay, signal);
+            } catch {
+              if (!isAborted()) {
+                system("\n[error] Recovery wait failed; turn stopped.\n");
+                return { finishReason: "interrupted" };
+              }
+            }
+            continue;
+          }
+          if (pendingOverflowError === undefined) {
+            if (attemptError?.kind === "cancelled") {
+              system("\n[stopped] Provider attempt cancelled.\n");
+              return { finishReason: "interrupted" };
+            }
+            const message = attemptError === undefined
+              ? `\n[error] ${redactSensitiveText(transportCause instanceof Error ? transportCause.message : String(transportCause))}\n`
+              : formatProviderErrorMessage(attemptError);
+            system(message);
+            if (["authentication", "invalid_request"].includes(attemptError?.kind ?? "") || /\b403\b/.test(attemptError?.message ?? "")) {
+              system("Check /connect and your provider account, model entitlement and access policy; reconnect after correcting access. This error is not retried automatically.\n");
+            }
+            return { finishReason: "interrupted" };
+          }
+        } else if (assistantMessage !== undefined) {
+          history.push(assistantMessage);
         }
       }
-    } catch (cause) {
-      if (isAborted()) {
-        // Same flush-before-abort-return fix as the in-loop check above —
-        // an abort caught here (e.g. mid-read) must still close the round's
-        // reasoning span exactly once.
-        flushReasoning();
-        system("\n[stopped] Model turn interrupted by user.\n");
-        return {};
-      }
-      system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
-      errored = true;
+      attemptComplete = !errored;
+      break;
     }
 
     flushReasoning(); // reasoning-only round (e.g. before a tool call) still surfaces it

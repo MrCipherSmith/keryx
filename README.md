@@ -275,6 +275,13 @@ keryx shell --chat                            # chat without tools
 keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
 
+Interactive agent turns automatically recover from temporary provider/network
+outages in both the TUI and readline shell. The shell shows the next retry and
+keeps the same prompt active; use the normal stop control (Ctrl-C in readline)
+to cancel. Permanent access errors such as generic HTTP 403 require correcting
+provider access. See [shell recovery](docs/docs/shell-recovery.md) for timing,
+partial-output handling and limits.
+
 ### Finding a command
 
 `keryx help` prints every command grouped by task — Start here; Connect a
