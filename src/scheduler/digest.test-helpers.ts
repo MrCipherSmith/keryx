@@ -9,7 +9,7 @@
 //   - a fake delivery sink, and a scripted summariser;
 //   - a clock the test moves by hand.
 
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -57,40 +57,58 @@ export async function setupDigestEnv(options: { board?: boolean } = {}): Promise
   const keyHome = await mkdtemp(path.join(tmpdir(), "keryx-digest-home-"));
   process.env["HOME"] = keyHome;
   process.env["XDG_DATA_HOME"] = path.join(keyHome, ".local", "share");
-  const root = await copyBoardProject({ board: options.board !== false });
-  const aside = await mkdtemp(path.join(tmpdir(), "keryx-digest-aside-"));
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root });
-  const ghBin = path.join(aside, "gh");
-  await writeFile(ghBin, "#!/bin/sh\necho '[]'\n", "utf8");
-  await chmod(ghBin, 0o755);
-  const logged: string[] = [];
+  let root: string | undefined;
+  let aside: string | undefined;
   const realLog = console.log;
   const realError = console.error;
-  console.log = (...parts: unknown[]) => {
-    logged.push(parts.map(String).join(" "));
+  const savedExitCode = process.exitCode;
+  const restore = () => {
+    console.log = realLog;
+    console.error = realError;
+    process.exitCode = savedExitCode;
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   };
-  console.error = (...parts: unknown[]) => {
-    logged.push(parts.map(String).join(" "));
+  const cleanup = async () => {
+    await Promise.all([root, aside, keyHome].filter((dir): dir is string => dir !== undefined)
+      .map((dir) => rm(dir, { recursive: true, force: true })));
   };
-  process.exitCode = 0;
-  return {
-    root,
-    aside,
-    ghBin,
-    logged,
-    teardown: async () => {
-      console.log = realLog;
-      console.error = realError;
-      process.exitCode = 0;
-      for (const [name, value] of Object.entries(saved)) {
-        if (value === undefined) delete process.env[name];
-        else process.env[name] = value;
-      }
-      await rm(root, { recursive: true, force: true });
-      await rm(aside, { recursive: true, force: true });
-      await rm(keyHome, { recursive: true, force: true });
-    },
-  };
+  try {
+    root = await copyBoardProject({ board: options.board !== false });
+    aside = await mkdtemp(path.join(tmpdir(), "keryx-digest-aside-"));
+    // Do not block Bun's test runner in a synchronous child-process wait. Bound
+    // the command itself, so a stalled Git fails before the default hook timeout.
+    await new Promise<void>((resolve, reject) => {
+      execFile("git", ["init", "-q", "-b", "main"], {
+        cwd: root, env: { ...process.env }, timeout: 3_000, killSignal: "SIGKILL",
+      }, (error) => error ? reject(error) : resolve());
+    });
+    const ghBin = path.join(aside, "gh");
+    await writeFile(ghBin, "#!/bin/sh\necho '[]'\n", "utf8");
+    await chmod(ghBin, 0o755);
+    const logged: string[] = [];
+    console.log = (...parts: unknown[]) => {
+      logged.push(parts.map(String).join(" "));
+    };
+    console.error = (...parts: unknown[]) => {
+      logged.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+    return {
+      root, aside, ghBin, logged,
+      teardown: async () => {
+        restore();
+        await cleanup();
+      },
+    };
+  } catch (error) {
+    // Setup can reject before a caller gets a teardown handle.
+    restore();
+    await cleanup();
+    throw error;
+  }
 }
 
 export interface DigestScheduleOptions {
