@@ -81,7 +81,7 @@ test("prune keeps pages of modules ranked past the collect limit and still remov
   }
 });
 
-test("prune removes nothing when the graph is unavailable", async () => {
+test("prune removes nothing when the graph is unavailable or empty", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-prune-nograph-"));
   const components = path.join(root, ".metaproject", "wiki", "components");
   try {
@@ -92,6 +92,16 @@ test("prune removes nothing when the graph is unavailable", async () => {
     const prune = await wikiPruneOrphans(root);
 
     expect(prune.pruned).toEqual([]);
+    expect(await pathExists(page)).toBe(true);
+
+    // A truncated or mid-write graph reads as zero modules, not as "all modules removed".
+    const graphDir = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+    await mkdir(graphDir, { recursive: true });
+    await writeFile(path.join(graphDir, "nodes.jsonl"), "", "utf8");
+
+    const pruneEmpty = await wikiPruneOrphans(root);
+
+    expect(pruneEmpty.pruned).toEqual([]);
     expect(await pathExists(page)).toBe(true);
   } finally {
     await rm(root, { recursive: true, force: true });

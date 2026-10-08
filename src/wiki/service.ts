@@ -409,7 +409,7 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
   // Every module in the graph, not the capped candidate list: a module ranked
   // past the collect limit still exists and must keep its page.
   const modules = await validModuleNames(cwd);
-  if (modules === undefined) {
+  if (modules === undefined || modules.size === 0) {
     return { pruned: [], orphanedAccepted: [] };
   }
   const validSlugs = new Set([...modules].map(slugifyPath));
