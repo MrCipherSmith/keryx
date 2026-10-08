@@ -2,6 +2,12 @@
 
 ## [0.3.79] - 2026-10-08
 
+### Routing and Test Reliability
+
+- Include the routing catalog and classifier source fixes from PR923, with Unicode scalar boundary handling for email PII detection and runtime-compatible regression expectations.
+- Bound asynchronous digest fixture repository setup and restore the test environment on setup failure (PR924), reducing intermittent beforeEach timeouts.
+- Combined release includes PR922, PR923 and PR924. Shell provider auto-recovery from flow 414 is not included.
+
 ### Bug Fixes
 
 - Bound mounted completed TUI history to 256 unprotected top-level elements, destroying evicted views while preserving active streaming, focused elements and the on-disk session archive. Evicted history is no longer available by scrolling in the current TUI; a notice marks the trimmed history.
