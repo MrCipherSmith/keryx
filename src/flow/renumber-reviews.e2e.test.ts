@@ -172,6 +172,9 @@ test("renumber re-points an ingested round at the new id, and the gate and `kery
   expect(manifest.artifacts.research).toBe("research.json");
   expect(manifest.artifacts.reviewerDispatch).toBe("research.json");
   for (const [name, artifact] of Object.entries(manifest.artifacts)) {
+    if (artifact === undefined) {
+      throw new Error(`manifest artifact ${name} is undefined`);
+    }
     if (name === "research" || name === "reviewerDispatch") {
       expect(artifact).toBe("research.json");
       expect(await Bun.file(path.join(pkg, artifact)).exists()).toBe(true);
@@ -267,6 +270,9 @@ test("repair-reviews re-points rounds left behind by renumbers that predate the 
   expect(manifest.artifacts.research).toBe("research.json");
   expect(manifest.artifacts.reviewerDispatch).toBe("research.json");
   for (const [name, artifact] of Object.entries(manifest.artifacts)) {
+    if (artifact === undefined) {
+      throw new Error(`manifest artifact ${name} is undefined`);
+    }
     if (name === "research" || name === "reviewerDispatch") {
       expect(artifact).toBe("research.json");
       expect(await Bun.file(path.join(pkg, artifact)).exists()).toBe(true);

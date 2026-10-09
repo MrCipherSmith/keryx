@@ -90,8 +90,15 @@ const NUDGE_MS = Number(POLL_ENV.KERYX_BUS_POLL_MS);
  * `shell-bus.process.test.ts`'s own `SHORT_BUS_STALE_ENV`
  * (`KERYX_TEST_BUS_TIMING=1`, `src/bus/presence.ts`).
  */
-const STALE_MS = 300;
-const SHORT_BUS_STALE_ENV = { KERYX_TEST_BUS_TIMING: "1", KERYX_BUS_PRESENCE_STALE_MS: String(STALE_MS) };
+const STALE_MS = 1500;
+// Keep living shells refreshing inside the shortened stale window: the
+// default 5000 ms heartbeat with a 300 ms stale window can omit beta from
+// the pause-request recipients before alpha is killed.
+const SHORT_BUS_STALE_ENV = {
+  KERYX_TEST_BUS_TIMING: "1",
+  KERYX_BUS_HEARTBEAT_MS: "100",
+  KERYX_BUS_PRESENCE_STALE_MS: String(STALE_MS),
+};
 
 /** Isolated from the host's git config (hooks, signing, identity rules). */
 const GIT_ENV = {

@@ -69,11 +69,9 @@ describe("AC1: start questions, once, after the context pack and the scope", () 
   });
 
   test("the report records how the questions were answered", () => {
-    expect(SKILL).toContain(
-      "start questions: reviewers <…>, counterpart <verified at <sha> | skipped: reason>, models <accepted | all deep | custom | defaults (unattended)>",
-    );
+    expect(SKILL).toContain("<!-- slot:how-run -->");
     expect(read(ENGINE, "templates", "review-report.md")).toContain(
-      "- **Selection:** <explicit flags | start questions: reviewers <`--all` | narrowed to …>, counterpart <verified at <sha> | skipped: reason>",
+      "- **Selection:** <explicit flags | start questions: reviewers <`--all` | narrowed to …>, counterpart <verified at <sha> | skipped: reason>, models <accepted | all deep | custom> | defaults (unattended)>",
     );
   });
 
