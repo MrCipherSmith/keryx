@@ -495,3 +495,11 @@ These apply to every round without a question:
 8. **"Do not re-raise" needs a record.** A dispatch may exclude an item only by
    citing the PR comment, issue or decision that settled it — never a whole
    surface ("X has no test; covered elsewhere").
+
+### Runtime research-completion ledger
+
+New managed packages carry `research.json`, initially pending. Before closing a round, enumerate unresolved observations from raw reviewers and the changed-file/consumer census, assign stable obligation IDs, and investigate them. Run the probe or inspect the relevant source and assertions: merely proposing a check does not resolve it. An unexecuted probe is not a verified claim.
+
+Supply the ledger using `keryx review ingest --research <ledger.json>` alongside the report and findings. Format: `version: 1`, `scopeReviewed: true`, `rawReconciled: true`, `obligations: [...]`. Each obligation requires `id`, `source`, `question`, `status`, `evidence`, `reason`. Status `finding` additionally requires `finding` pointing to exactly one canonical finding ID or global ID. Other terminal statuses are `refuted` and `out-of-scope`, both requiring evidence and reason. Preserve distinct scenarios when deduplicating. Assert census/reconciliation flags only after performing those checks; an empty obligations array is valid only if the actual census found no open observations.
+
+Open, deferred and unverifiable obligations block completion. If context, runtime or budget prevents resolution, retain the obligation and report incomplete; do not relabel it refuted or out-of-scope. Completion and the flow gate re-read the ledger even when the manifest says closed. Legacy packages without this artifact remain compatible, not proven complete. This gate validates the declared ledger, not the truth or exhaustiveness of its census; independent source/raw audits remain necessary.

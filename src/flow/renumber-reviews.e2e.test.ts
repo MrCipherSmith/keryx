@@ -161,9 +161,16 @@ test("renumber re-points an ingested round at the new id, and the gate and `kery
   // The records name the new id, and every path they hold resolves.
   const manifest = await readManifest(toDir);
   expect(manifest.flow).toEqual({ id: "007", path: `.metaproject/flows/${toDir}` });
-  for (const artifact of Object.values(manifest.artifacts)) {
-    expect(artifact.startsWith(`.metaproject/flows/${toDir}/reviews/round-1/`)).toBe(true);
-    expect(await Bun.file(path.join(ROOT, artifact)).exists()).toBe(true);
+  expect(manifest.artifacts.research).toBe("research.json");
+  expect(manifest.artifacts.reviewerDispatch).toBe("research.json");
+  for (const [name, artifact] of Object.entries(manifest.artifacts)) {
+    if (name === "research" || name === "reviewerDispatch") {
+      expect(artifact).toBe("research.json");
+      expect(await Bun.file(path.join(pkg, artifact)).exists()).toBe(true);
+    } else {
+      expect(artifact.startsWith(`.metaproject/flows/${toDir}/reviews/round-1/`)).toBe(true);
+      expect(await Bun.file(path.join(ROOT, artifact)).exists()).toBe(true);
+    }
   }
   const scope = await readFile(path.join(pkg, "scope.md"), "utf8");
   expect(scope).toMatch(/^flow: 007 \(explicit-flow-id\)$/m);
@@ -248,10 +255,17 @@ test("repair-reviews re-points rounds left behind by renumbers that predate the 
 
   const manifest = await readManifest(finalDir);
   expect(manifest.flow).toEqual({ id: "009", path: `.metaproject/flows/${finalDir}` });
-  for (const artifact of Object.values(manifest.artifacts)) {
-    expect(await Bun.file(path.join(ROOT, artifact)).exists()).toBe(true);
-  }
   const pkg = path.join(ROOT, FLOWS, finalDir, "reviews", "round-1");
+  expect(manifest.artifacts.research).toBe("research.json");
+  expect(manifest.artifacts.reviewerDispatch).toBe("research.json");
+  for (const [name, artifact] of Object.entries(manifest.artifacts)) {
+    if (name === "research" || name === "reviewerDispatch") {
+      expect(artifact).toBe("research.json");
+      expect(await Bun.file(path.join(pkg, artifact)).exists()).toBe(true);
+    } else {
+      expect(await Bun.file(path.join(ROOT, artifact)).exists()).toBe(true);
+    }
+  }
   expect(await readFile(path.join(pkg, "scope.md"), "utf8")).toMatch(/^flow: 009 \(explicit-flow-id\)$/m);
   const [finding] = JSON.parse(await readFile(path.join(pkg, "findings.json"), "utf8")) as StructuredReviewFinding[];
   expect(finding?.file).toBe(`.metaproject/flows/${finalDir}/plan.md`);

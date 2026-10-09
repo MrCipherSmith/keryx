@@ -18,15 +18,11 @@ metadata:
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
-
 # Review Orchestrator
-
 Entry point for the entire review domain. This skill is a thin router: it detects scope,
 dispatches specialized reviewers in parallel, then consolidates their findings into one
 unified report sorted by severity. It does not perform any review logic itself.
-
 ---
-
 ## Workflow
 
 ```
@@ -1184,6 +1180,10 @@ whoever reads the merge commit a year later reads the body. When `review.jev.con
 ---
 
 ## Dispatching Reviewers
+
+**Dispatch integrity is a completion prerequisite.** Use one distinct execution per selected reviewer role; do not combine multiple roles in one child or count sections of one response as independent runs. When budgets are tight, use sequential waves, not role batching. Resolve every project-rule anchor before dispatch; missing rules require context recovery or a blocked result, never silently skipped checks. A read-only pass cannot discharge executable obligations: dispatch a capable execution pass and retain its evidence. Partial scope and NEEDS_CONTEXT remain incomplete until rerun over the outstanding scope.
+
+New managed packages declare `reviewerDispatch: "research.json"`. Alongside the research ledger, provide `dispatch: { version: 1, selected: [...], unresolvedRules: [], runs: [...] }`. Preserve the actual computed reviewer inventory. Each run has `reviewer`, unique `executionId`, `status: "complete"`, `scopeComplete: true`, `rawEvidence`, nonempty `ruleEvidence`, and boolean `executionRequired`. Required execution needs nonempty `executionEvidence` (command/output references); a source-only scope requires `executionReason`. Do not fabricate IDs or mark truncated responses complete. Runtime validates these declarations at closure and the flow gate, not their truth: independently audit evidence and inventory before freezing. Legacy artifact absence is compatibility, not proof of a correct launch. Research closure is mandatory: see [Runtime research-completion ledger](SKILL.detail.md#runtime-research-completion-ledger).
 
 Dispatch selected reviewers in parallel when independent — this engine dispatches them itself; a host without a dispatch tool returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) and never reviews alone. Use waves when token budget is tight or when one reviewer needs another result:
 

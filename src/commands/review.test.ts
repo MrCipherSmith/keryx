@@ -16,6 +16,7 @@ import path from "node:path";
 import { pinsModel, reviewCommand, runReviewers, setTierRankHostForTests } from "./review";
 import type { DispatchModelDecision, TierRankAgent, TierRankCache } from "../gdskills/model-tier";
 import type { StructuredReviewFinding } from "../review/types";
+import { readyResearchFixture } from "../review/research.test-helpers";
 import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
 
@@ -102,6 +103,7 @@ function reportWith(findings: readonly unknown[]): string {
 }
 
 async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], [FINDING.id])), "utf8");
   await writeFile(path.join(ROOT, "report.md"), reportWith([FINDING]), "utf8");
   await reviewCommand([
     "ingest",
@@ -111,6 +113,8 @@ async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
     "report.md",
     "--review-id",
     reviewId,
+    "--research",
+    "research.json",
     ...extra,
   ]);
   return path.join(ROOT, ".metaproject", "reviews", reviewId);
@@ -207,6 +211,7 @@ test("several findings can be dispositioned in one close", async () => {
     reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
     "utf8",
   );
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], ["F-001", "F-002"])), "utf8");
   await reviewCommand([
     "ingest",
     "--report",
@@ -215,6 +220,8 @@ test("several findings can be dispositioned in one close", async () => {
     "report.md",
     "--review-id",
     "2026-08-29-cli-two-dispositions",
+    "--research",
+    "research.json",
   ]);
   const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-08-29-cli-two-dispositions");
 
@@ -254,6 +261,25 @@ test("`--disposition` without `--finding` is refused rather than applied to ever
   expect(errors.join("\n")).toContain("--finding");
 });
 
+test("CLI completion refuses a newly ingested package without research and dispatch evidence", async () => {
+  await writeFile(path.join(ROOT, "report.md"), reportWith([FINDING]), "utf8");
+  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "cli-pending-research"]);
+  expect(process.exitCode).toBe(0);
+  const pkg = path.join(ROOT, ".metaproject", "reviews", "cli-pending-research");
+  await reviewCommand(["complete", pkg]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("research scope census");
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+  const { dispatch: _dispatch, ...researchOnly } = readyResearchFixture([FINDING.reviewer], [FINDING.id]);
+  await writeFile(path.join(pkg, "research.json"), JSON.stringify(researchOnly), "utf8");
+  errors = [];
+  process.exitCode = 0;
+  await reviewCommand(["complete", pkg]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("reviewer dispatch evidence is missing");
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+});
+
 test("closing with no disposition flags still works, and writes nothing", async () => {
   const pkg = await ingest("2026-08-29-cli-plain-complete");
   const before = await readFile(path.join(pkg, "findings.json"), "utf8");
@@ -278,6 +304,7 @@ test("a bare `complete` on a fully dispositioned package does not claim nobody r
     reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
     "utf8",
   );
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], ["F-001", "F-002"])), "utf8");
   await reviewCommand([
     "ingest",
     "--report",
@@ -286,6 +313,8 @@ test("a bare `complete` on a fully dispositioned package does not claim nobody r
     "report.md",
     "--review-id",
     "2026-09-12-cli-all-dispositioned",
+    "--research",
+    "research.json",
   ]);
   const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-09-12-cli-all-dispositioned");
 
@@ -336,6 +365,7 @@ test("a partly dispositioned package is reported as partly dispositioned", async
     reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
     "utf8",
   );
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], ["F-001", "F-002"])), "utf8");
   await reviewCommand([
     "ingest",
     "--report",
@@ -344,6 +374,8 @@ test("a partly dispositioned package is reported as partly dispositioned", async
     "report.md",
     "--review-id",
     "2026-09-12-cli-partly-dispositioned",
+    "--research",
+    "research.json",
   ]);
   const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-09-12-cli-partly-dispositioned");
 
