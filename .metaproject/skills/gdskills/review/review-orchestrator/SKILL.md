@@ -1564,15 +1564,18 @@ in `templates/review-report.md`: `Changes requested` or `No blockers, merge-read
 Render the human report from that file. Do not invent a second skeleton here.
 
 ```markdown
-**Changes requested — 1 Blocker, 2 Major, 4 Minor, 1 question.** Reviewed `<head>` against `<base>` (round N). <what holds, and where the risk is.>
+<!-- slot:pre-verdict -->
+**Changes requested — 1 Blocker, 2 Major, 4 Minor, 1 question.** <what holds, and where the risk is.>
+Reviewed `<head>` against `<base>` · round N · <files> files, +<add>/−<del> · CI <state>.
+<!-- slot:after-verdict -->
 
 ### Blocker
-**F-001. <one-sentence claim>.** `path/to/file.ts:line`, in the diff.
+**F-001. <one-sentence claim>.** [`path/to/file.ts:line`](<blob link at head>), in the diff.
 <proof: traced path, probe, or failing scenario>
 Fix: <concrete>
 
 ### Major
-**F-002. <one-sentence claim>.** `path/to/file.ts:line`, pre-existing — render under Pre-existing instead when location_class says so.
+**F-002. <one-sentence claim>.** [`path/to/file.ts:line`](<blob link at head>), in the diff.
 
 ### Minor
 - **F-010. <claim>.** `path:line`, in the diff — <proof and fix, one to three sentences>.
@@ -1580,21 +1583,7 @@ Fix: <concrete>
 ### Questions
 1. <an info finding that needs an author answer; other info is not published>
 
-### Pre-existing (not blocking)
-- **F-020. <claim>.** `path:line` — <why it is out of this diff>
-
-### Verified clean
-- <what was checked> — <how>
-
-### How this review was run
-- **Workflow:** `review-orchestrator`
-- **Scope:** `<base>..<head>`, round N, PR #N
-- **Models:** <actual models and reviewers, or not recorded>
-- **Tools:** <tools actually invoked, or not recorded>
-- **Skills:** <skills actually used, or not recorded>
-- **Subagents:** <dispatched reviewers and models, or none when confirmed; otherwise not recorded>
-- **Not run:** <reviewer — reason>
-- **Verification:** <mode>; confirmed N, refuted N, unverifiable N, unverified N
+<details> Pre-existing (not blocking) · Verified clean <!-- slot:verified-clean --> · How this review was run — **Workflow:**, **Scope:**, **Models:**, **Tools:**, **Skills:**, **Subagents:**, **Not run:**, **Verification:** <!-- slot:how-run --> </details>
 ```
 
 Pick the domain file the same way reviewers are picked: frontend scope, or a
@@ -1650,8 +1639,8 @@ the report exists, unless `publish_pr_review_report` is already set:
 ```text
 Publish this review report to the PR?
 
-  A) PR comment only
-  B) PR comment + follow-up file (recommended when a fix round will follow)
+  A) PR review only
+  B) PR review + follow-up file (recommended when a fix round will follow)
   C) Do not publish
 
 > pick a letter (default: C)
@@ -1659,15 +1648,15 @@ Publish this review report to the PR?
 
 Automation values, names unchanged:
 
-- `comment` or legacy `true` -> the PR comment only.
-- `comment-and-ai-artifact` -> the PR comment plus the follow-up file.
+- `comment` or legacy `true` -> the PR review only.
+- `comment-and-ai-artifact` -> the PR review plus the follow-up file.
 - `none` or legacy `false` -> do not publish.
 
 Default is do not publish. No resolvable PR number means skip and say so.
 
-The comment is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Name the workflow and reviewers that actually ran, with models, tools, skills and subagents. Never identify the operator from `gh auth status`, git config or a credential; do not sign the comment as a person, reviewer or model.
+The review body is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Name the workflow and reviewers that actually ran, with models, tools, skills and subagents. Never identify the operator from `gh auth status`, git config or a credential; do not sign the review as a person, reviewer or model. A project overlay adds content only through the template's overlay slots.
 
-The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. Write the body to a temp file and post with `gh pr comment <n> --body-file <file>`.
+The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. Write the body to a temp file and post it as one formal review whose state follows *Where it is posted* in the template: `gh pr review <n> --request-changes|--approve|--comment --body-file <file>`. On a merged or closed PR, post it as `gh pr comment <n> --body-file <file>` instead.
 
 **No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
 Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.

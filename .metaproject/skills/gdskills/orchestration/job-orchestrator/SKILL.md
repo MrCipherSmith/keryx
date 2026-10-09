@@ -1203,25 +1203,25 @@ Ask unless automation settings explicitly set `publish_pr_review_report`:
 ```text
 Publish the review report to the PR?
 
-  A) Concise PR comment only
-  B) Concise PR comment + detailed AI markdown artifact (recommended for follow-up fixes)
+  A) Concise PR review only
+  B) Concise PR review + detailed AI markdown artifact (recommended for follow-up fixes)
   C) Do not publish
 
 > pick a letter (default: C)
 ```
 
 **Rules:**
-- The PR comment and AI artifact must be written in English only, regardless of the chat language or reviewer output language.
+- The PR review and AI artifact must be written in English only, regardless of the chat language or reviewer output language.
 - Default is C. Never publish to a PR without explicit user confirmation or `publish_pr_review_report: comment`, `publish_pr_review_report: comment-and-ai-artifact`.
-- If the user chooses A, delegate concise comment formatting to `review-orchestrator`'s PR Review Report Publication contract.
+- If the user chooses A, delegate concise review formatting to `review-orchestrator`'s PR Review Report Publication contract.
 - If the user chooses B, also generate `.metaproject/jobs/<job-name>/review-ai-report.md` using `review-orchestrator`'s Detailed AI Markdown Artifact contract, and include in the comment's `Meta` section both an `AI artifact` path and an `AI artifact description` row explaining that the file carries detailed findings, fix guidance, patch guidance, regression coverage, validation plan, and follow-up agent context.
 - **If no PR exists yet**, do not ask now and do not stash a pending decision — nothing persists one. Ask this question again after the PR step (2.10) creates the PR, when the answer can actually be acted on.
 - The decision is acted on immediately or not at all. There is no `publication_plan` field in `state.json`; what was published is stated in the 2.9 report.
 
 **Automation values:**
 - `publish_pr_review_report: ask` -> ask the question above.
-- `publish_pr_review_report: comment` -> publish the concise PR comment only.
-- `publish_pr_review_report: comment-and-ai-artifact` -> publish the concise PR comment and create the detailed AI markdown artifact.
+- `publish_pr_review_report: comment` -> publish the concise PR review only.
+- `publish_pr_review_report: comment-and-ai-artifact` -> publish the concise PR review and create the detailed AI markdown artifact.
 - `publish_pr_review_report: none` -> do not publish.
 
 #### 2.6.3 Post-Review Checkpoint
