@@ -182,3 +182,20 @@ export function classifyBusyDispatch(params: {
   if (commandName !== undefined || line.startsWith("/")) return "deferred";
   return "not-a-command";
 }
+
+/**
+ * Commands that swap the session out from under the main turn and the questions queued behind it, so
+ * a deferred line of this kind is refused rather than queued: run later, it would rewrite the history
+ * those queued questions were typed against.
+ */
+export const BUSY_REFUSED_COMMANDS: ReadonlySet<string> = new Set(["/new", "/clear", "/resume"]);
+
+/** What `runLine` does with a line classified `"deferred"`: queue it for the turn's end, or refuse it. */
+export function deferredBusyAction(line: string, commandName: string | undefined): "queue" | "refuse" {
+  const name = (commandName ?? line.trim().split(/\s+/)[0] ?? "").toLowerCase();
+  return BUSY_REFUSED_COMMANDS.has(name) ? "refuse" : "queue";
+}
+
+export function queuedCommandNotice(position: number): string {
+  return `◇ main is busy — queued as q${position} (runs when the turn ends).`;
+}

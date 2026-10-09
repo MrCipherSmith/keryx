@@ -37,6 +37,7 @@ import * as themeModule from "./theme";
 import { paintRendererBackground, selectThemeColors, themeColorToHex } from "./shell-chrome";
 import { appendUserEcho, createAssistantMessageStream, createBlockView, createBlockMount, createBlockRegistry, createSegmentView } from "./transcript-blocks";
 import * as shellChromeModule from "./shell-chrome";
+import { createShellRenderer } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -1478,4 +1479,56 @@ test("the shell renderer paints the theme background at creation, not only on a 
   // and clears every frame with it, so a fresh start shows the terminal's own
   // background behind the transcript until a `/theme` switch repaints it.
   expect(body).toContain("paintRendererBackground(renderer, getTheme());");
+});
+
+// AC6 (flow 418): Ctrl+C is the caller's to interpret, not an unconditional exit.
+function fakeRendererOtui() {
+  const handlers = new Set<(key: unknown) => void>();
+  const seen: { config?: Record<string, unknown> } = {};
+  const renderer = {
+    isDestroyed: false,
+    setBackgroundColor() {},
+    _internalKeyInput: {
+      onInternal: (_e: string, h: (key: unknown) => void) => void handlers.add(h),
+      offInternal: (_e: string, h: (key: unknown) => void) => void handlers.delete(h),
+    },
+  };
+  const otui = {
+    createCliRenderer: async (config: Record<string, unknown>) => {
+      seen.config = config;
+      return renderer;
+    },
+  } as unknown as Parameters<typeof createShellRenderer>[0];
+  const press = (key: { name: string; ctrl: boolean }) => {
+    const calls = { prevented: 0, stopped: 0 };
+    for (const h of [...handlers]) h({ ...key, meta: false, sequence: "", preventDefault: () => calls.prevented++, stopPropagation: () => calls.stopped++ });
+    return calls;
+  };
+  return { otui, seen, press, handlers };
+}
+
+test("createShellRenderer without onCtrlC keeps OpenTUI's exit-on-Ctrl+C", async () => {
+  const f = fakeRendererOtui();
+  await createShellRenderer(f.otui);
+  expect(f.seen.config?.exitOnCtrlC).toBe(true);
+  (f.seen.config?.onDestroy as () => void)();
+});
+
+test("createShellRenderer with onCtrlC turns exit-on-Ctrl+C off and routes only Ctrl+C to the caller", async () => {
+  const f = fakeRendererOtui();
+  let presses = 0;
+  await createShellRenderer(f.otui, { onCtrlC: () => void presses++ });
+  expect(f.seen.config?.exitOnCtrlC).toBe(false);
+
+  const calls = f.press({ name: "c", ctrl: true });
+  expect(presses).toBe(1);
+  expect(calls).toEqual({ prevented: 1, stopped: 1 });
+
+  f.press({ name: "c", ctrl: false });
+  f.press({ name: "d", ctrl: true });
+  expect(presses).toBe(1);
+
+  (f.seen.config?.onDestroy as () => void)();
+  f.press({ name: "c", ctrl: true });
+  expect(presses).toBe(1);
 });
