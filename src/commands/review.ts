@@ -39,6 +39,7 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { runJevRisk } from "./review-jev-risk";
+import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
 import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
@@ -567,6 +568,18 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "floor") {
       await runFloor(args.slice(1));
+      return;
+    }
+    if (command === "slice") {
+      await runSlice(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "dispatch-check") {
+      await runDispatchCheck(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "retry-plan") {
+      await runRetryPlan(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "blast-radius") {
@@ -3421,6 +3434,8 @@ async function readDiffSource(source: string): Promise<string> {
   return await Bun.file(source).text();
 }
 
+const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, rejectUnknownFlags };
+
 /**
  * The diff the scope is built from.
  *
@@ -3879,6 +3894,9 @@ ${reviewHelpSection("learn")}
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["scope", printScopeHelp],
+  ["slice", printSliceHelp],
+  ["dispatch-check", printDispatchCheckHelp],
+  ["retry-plan", printRetryPlanHelp],
   ["tier", printTierHelp],
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],
@@ -3912,6 +3930,18 @@ Usage:
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
+                     [--max-bytes <n>] [--out <dir>] [--json]
+                     Cuts scope A into reviewer-sized slice files plus a manifest;
+                     ledgers (csv, lockfiles, snapshots) are omitted with a reason.
+  keryx review dispatch-check --payload <file|-> [--manifest <file>]
+                              [--max-bytes <n>] [--json]
+                              Refuses a reviewer payload with no slice, an oversize
+                              slice, or a shape the reviewer-input schema rejects.
+  keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
+                          [--slices a,b] [--state <file>] [--dry-run] [--json]
+                          One smaller-slice retry for INCOMPLETE/BLOCKED, then
+                          "Not run" — never a clean pass.
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
                      --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,

@@ -3978,7 +3978,7 @@ test("D1 regression: a batch with exactly ONE spawn_subagent call never takes th
 });
 
 test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave never overwrites an EARLIER wave's real successes — only the genuinely-failed call gets the synthesized error", async () => {
-  expect(DEFAULT_MAX_SUBAGENT_CONCURRENCY).toBe(3); // sanity: 4 calls must split into a 3-call wave then a 1-call wave
+  // The cap is pinned to 3 below: 4 calls must split into a 3-call wave then a 1-call wave.
 
   const invoked: string[] = [];
   const spawnTool = delegateSpawnTool(async (input) => {
@@ -4008,7 +4008,7 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
     onToolResult: (_name, r) => toolResultOutputs.push(r.output),
     // c1/c2/c3 (taskIds "c1".."c3", sorted first by `planWaves`' byTaskId
     // order) land in wave 0 and approve normally; c4 lands alone in wave 1
-    // (default `maxSubagentConcurrency` = 3, so 4 candidates split 3-then-1)
+    // (`maxSubagentConcurrency` is pinned to 3, so 4 candidates split 3-then-1)
     // and its approval callback THROWS — the finding's documented
     // reproduction path (a throwing `requestApproval`, not a literal
     // ledger/tool bug) for an exception inside a LATER wave.
@@ -4026,6 +4026,7 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
     tools: [spawnTool],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    maxSubagentConcurrency: 3,
   };
   const history: NormalizedMessage[] = [];
 

@@ -127,10 +127,16 @@ export async function ctxCommand(args: string[]): Promise<void> {
 
   if (command === "run") {
     const separatorIndex = args.indexOf("--");
-    const runArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : args.slice(1);
+    const head = separatorIndex >= 0 ? args.slice(1, separatorIndex) : args.slice(1, 2);
+    const raw = head.includes("--raw");
+    const runArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : args.slice(raw ? 2 : 1);
     if (runArgs.length === 0) {
-      console.error("Usage: keryx ctx run -- <command...>");
+      console.error("Usage: keryx ctx run [--raw] -- <command...>");
       process.exitCode = 1;
+      return;
+    }
+    if (raw) {
+      process.exitCode = await runPassthrough(runArgs);
       return;
     }
     await runAndSummarize("run", runArgs, config);
@@ -418,6 +424,23 @@ function reportUnreadable(requested: string, cause: unknown): void {
     return;
   }
   console.error(`keryx ctx read: \`${requested}\` could not be read.`);
+}
+
+// `--raw`: stdio is inherited, so a machine artifact (`> scope.json`) is the
+// command's bytes and not a summary of them. No redaction and no gdctx artifact.
+async function runPassthrough(command: string[]): Promise<number> {
+  try {
+    const proc = Bun.spawn(command, {
+      cwd: process.cwd(),
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    return await proc.exited;
+  } catch (cause) {
+    console.error(`keryx ctx run --raw: could not start \`${command[0]}\`: ${cause instanceof Error ? cause.message : String(cause)}`);
+    return 127;
+  }
 }
 
 async function runAndSummarize(
@@ -1821,7 +1844,7 @@ Usage:
   keryx ctx diff [--staged|--stat|<revision>]   # no args: staged + unstaged (git diff HEAD) + untracked list
   keryx ctx rg "<pattern>" [path] [--json] [--all]
   keryx ctx read <file> [--mode outline|compact|full] [--base <ref>]
-  keryx ctx run -- <command...>
+  keryx ctx run [--raw] -- <command...>
   keryx ctx show <artifact|latest> [--raw] [--lines <start>-<end>]
   keryx ctx install-hook [--runtime <id|all>]   # opt-in routing guard
   keryx ctx uninstall-hook [--runtime <id|all>]
@@ -1832,6 +1855,10 @@ Notes:
   no base snapshot to diff against, so every read returns the full view and
   says so. Delta-from-base is unbuilt, not broken — see NO_DELTA_REASON in
   src/commands/ctx.ts for what building it would require.
+  --raw (before the "--") streams the command's stdout and stderr unmodified and
+  returns its exit code: no summary, no redaction, no artifact. Use it whenever
+  the output is a machine artifact, e.g. keryx ctx run --raw -- keryx review
+  scope --json > scope.json (a summary in place of the JSON breaks the reader).
   --lines recovers one range named by a summary's "## Omitted" manifest,
   addressed by the "raw:" line that same summary printed.
   Every "ctx rg" summary carries a "Scope:" line (what was not searched — dot

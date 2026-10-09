@@ -20,6 +20,7 @@ import { isTransportFailure } from "../harness/provider/provider-port";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
+import { isTrustRoutineCommand } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
@@ -101,6 +102,7 @@ import {
   renderExecutionPlanSnapshot,
   type ExecutionPlan,
 } from "../session/execution-plan";
+import { findStoredAnswer, rememberAnswer } from "../session/ask-answer-notes";
 import { courseFromSlate } from "../session/slate-course";
 import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
@@ -513,10 +515,11 @@ export interface AgentDeps {
    * `in_progress` items left simply ends on the model's text reply, and the
    * operator gets a one-line `[plan]` system() note naming the actionable
    * items instead. Set `true` only for a caller that has decided it wants the
-   * shell to push a single synthetic `role: "user"` "still has actionable
-   * items" message and force one more round when the model stops early with
-   * work still open (still capped at ONE follow-through per turn — see
-   * `planFollowThroughUsed` in the round loop). `/goal`'s own `--auto`
+   * shell to push a synthetic `role: "user"` "still has actionable items"
+   * message and force another round when the model stops early with work still
+   * open (capped at MAX_PLAN_FOLLOW_THROUGHS per turn; a blocked item or a
+   * nudge that moved nothing stops it). Flow 418: left unset it defaults ON in
+   * `trust` mode; an explicit `false` keeps it off. `/goal`'s own `--auto`
    * continuation loop (`goal-command.ts`) is independent of this flag and is
    * unaffected either way.
    */
@@ -998,6 +1001,12 @@ export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";
 /** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
 export const MAX_AGENT_MAX_ROUNDS = 200;
 
+/** Round budget of a `trust`-mode turn: a long review orchestration must reach its end unattended. */
+export const TRUST_MODE_MAX_ROUNDS = 200;
+
+/** Turn-level cap on automatic plan follow-through continuations (a stalled one ends the turn earlier). */
+export const MAX_PLAN_FOLLOW_THROUGHS = 8;
+
 /**
  * Conservative default cap on how many sibling `spawn_subagent` calls in ONE
  * turn's tool-call batch run CONCURRENTLY (flow 171, Phase D / D1c). The
@@ -1012,7 +1021,7 @@ export const MAX_AGENT_MAX_ROUNDS = 200;
  * things" fan-out, while staying safe as the default for an unknown
  * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
  */
-export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3;
+export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
 
 /**
  * Resolve model-round-trip budget for an interactive agent turn.
@@ -1023,14 +1032,16 @@ export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3;
  */
 export function resolveAgentMaxRounds(
   env: Record<string, string | undefined> = process.env,
+  mode?: PermissionMode,
 ): number {
+  const fallback = mode === "trust" ? TRUST_MODE_MAX_ROUNDS : DEFAULT_MAX_ROUNDS;
   const raw = env[ENV_AGENT_MAX_ROUNDS];
   if (raw === undefined || raw.trim().length === 0) {
-    return DEFAULT_MAX_ROUNDS;
+    return fallback;
   }
   const n = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(n) || n < 1) {
-    return DEFAULT_MAX_ROUNDS;
+    return fallback;
   }
   return Math.min(n, MAX_AGENT_MAX_ROUNDS);
 }
@@ -2432,6 +2443,51 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
   return options.slateSession !== undefined ? slateSessionDir(options.slateSession) : undefined;
 }
 
+function askUserQuestion(call: PendingCall): string | undefined {
+  const question = parseToolInput(call.input).question;
+  return call.name === "ask_user" && typeof question === "string" ? question : undefined;
+}
+
+/** An irreversible decision is asked every time; the stored answer is for ordinary questions only. */
+function isIrreversibleAsk(call: PendingCall): boolean {
+  const input = parseToolInput(call.input);
+  return input.irreversible === true || (typeof input.action === "string" && input.action.trim().length > 0);
+}
+
+/** The operator's earlier answer to this same question, when the session slate is open and still ours. */
+async function storedAskUserAnswer(call: PendingCall, options: RunAgentTurnOptions): Promise<string | undefined> {
+  const question = askUserQuestion(call);
+  const dir = liveSessionDir(options);
+  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call)) {
+    return undefined;
+  }
+  try {
+    const answer = await findStoredAnswer(dir, question);
+    return answer === undefined ? undefined : `Already answered by the operator earlier in this session (no new prompt shown): ${answer}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keep a real operator answer as a Note keyed by the question; bookkeeping never changes the tool result. */
+async function rememberAskUserAnswer(
+  call: PendingCall,
+  result: InteractiveToolResult,
+  options: RunAgentTurnOptions,
+  ts: string,
+): Promise<void> {
+  const question = askUserQuestion(call);
+  const dir = liveSessionDir(options);
+  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call) || result.isError === true) {
+    return;
+  }
+  try {
+    await rememberAnswer(dir, question, result.output, ts);
+  } catch {
+    // a full shelf or a closed slate just means the question may be asked again
+  }
+}
+
 /**
  * Flow 387 review r1 F-001: the dir pruning may rewrite history against — only when the
  * host proved it keeps the originals (`pruneArchive`) and holds a live, non-detached dir.
@@ -2791,7 +2847,7 @@ async function runAgentTurnCore(
   // output) enters `history`, so echoed content can never carry the marker.
   const controlNonce = deps.controlNonce ?? generateControlNonce();
   const scrub = (text: string): string => scrubControlNonce(text, controlNonce);
-  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
+  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds(process.env, io.permissionMode?.());
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   // Flow 347 T7: a subagent's advisory call target (warning threshold only).
   const subagentBudget = deps.subagentBudget;
@@ -3126,7 +3182,7 @@ async function runAgentTurnCore(
       await emitTerminalState(io, deps, options, "budget_exhausted");
       return "stop";
     }
-    const resolution = await offerRoundLimitReset(deps, roundState, system);
+    const resolution = await offerRoundLimitReset(deps, roundState, system, io.permissionMode?.());
     if (resolution === "reset") {
       return "reset";
     }
@@ -3210,7 +3266,8 @@ async function runAgentTurnCore(
   // Loop: request → stream → (execute tool calls, re-request) until a text-only
   // finish or an independent model-round/tool-call guard trips.
   let toollessReprompts = 0;
-  let planFollowThroughUsed = false;
+  let planFollowThroughCount = 0;
+  let lastFollowThroughSignature: string | undefined;
   // The previous toolless reply, normalized. A model that answers the reprompt
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
@@ -3867,40 +3924,48 @@ async function runAgentTurnCore(
       }
 
       // Flow 347 T5 (AC1): the plan is a display-only projection of intent,
-      // never a completion signal — so by default (`deps.planFollowThrough`
-      // unset/false) a turn with actionable items still ends here, on the
-      // model's own text reply, with nothing injected into `history`. Only an
-      // explicit opt-in reintroduces the single synthetic follow-through round
-      // below (still capped at one per turn via `planFollowThroughUsed`).
+      // never a completion signal — so with follow-through off (the default
+      // outside `trust`) a turn with actionable items still ends here, on the
+      // model's own text reply, with nothing injected into `history`.
+      // Flow 418: in `trust` it defaults on, bounded by MAX_PLAN_FOLLOW_THROUGHS
+      // per turn; it also stops on a blocked item or a nudge that moved nothing.
+      const followThroughOn =
+        deps.planFollowThrough ?? (subagentBudget === undefined && io.permissionMode?.() === "trust");
+      const planHasBlocker = currentPlan?.items.some((item) => item.status === "blocked") ?? false;
       if (
-        deps.planFollowThrough === true &&
-        !planFollowThroughUsed &&
+        followThroughOn &&
+        !planHasBlocker &&
+        planFollowThroughCount < MAX_PLAN_FOLLOW_THROUGHS &&
         hasActionableExecutionPlanItems(currentPlan)
       ) {
-        planFollowThroughUsed = true;
-        history.push({
-          role: "user",
-          content: wrapHarnessNudge(
-            "The current execution plan still has actionable items remaining. Continue the work now. " +
-              "Do not give another final reply until the plan is complete or genuinely blocked.",
-            controlNonce,
-          ),
-          // Flow 347 T6 (AC9): "harness", not "project" — this is the keryx
-          // shell's own synthesized control nudge, not operator input.
-          provenance: "harness",
-          ts: now(),
-        });
-        io.onHistoryChange?.("tool");
-        continue;
+        const progressSignature = `${currentPlan?.items.map((item) => `${item.id}:${item.status}`).join(",")}|${invocationBudget.invoked}`;
+        if (progressSignature !== lastFollowThroughSignature) {
+          lastFollowThroughSignature = progressSignature;
+          planFollowThroughCount += 1;
+          history.push({
+            role: "user",
+            content: wrapHarnessNudge(
+              "The current execution plan still has actionable items remaining. Continue the work now. " +
+                "Do not give another final reply until the plan is complete or genuinely blocked.",
+              controlNonce,
+            ),
+            // Flow 347 T6 (AC9): "harness", not "project" — this is the keryx
+            // shell's own synthesized control nudge, not operator input.
+            provenance: "harness",
+            ts: now(),
+          });
+          io.onHistoryChange?.("tool");
+          continue;
+        }
       }
 
       if (hasActionableExecutionPlanItems(currentPlan)) {
         const actionable = currentPlan?.items.filter(
           (item) => item.status === "pending" || item.status === "in_progress",
         ) ?? [];
-        if (planFollowThroughUsed) {
-          // After the (opt-in) follow-through round already ran once: the
-          // itemised list, so the operator sees exactly what is still open.
+        if (planFollowThroughCount > 0) {
+          // After follow-through already ran: the itemised list, so the
+          // operator sees exactly what is still open.
           const shown = actionable.slice(0, 7).map((item) => {
             const title = item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title;
             return `- ${item.id} [${item.status}]: ${title}`;
@@ -3908,14 +3973,16 @@ async function runAgentTurnCore(
           if (actionable.length > shown.length) {
             shown.push(`- … ${actionable.length - shown.length} more actionable item(s)`);
           }
-          system(`\n[plan] Actionable items remain after the single follow-through:\n${shown.join("\n")}\n`);
+          const after = planFollowThroughCount === 1 ? "the single follow-through" : `${planFollowThroughCount} follow-throughs`;
+          system(`\n[plan] Actionable items remain after ${after}:\n${shown.join("\n")}\n`);
         } else {
           // Flow 347 AC1, review F-016: the default-off path is ONE line
           // naming the open item ids — the plan is display-only here, so
           // this is a notice, not a report.
           const ids = actionable.slice(0, 7).map((item) => item.id);
           if (actionable.length > ids.length) ids.push(`… ${actionable.length - ids.length} more`);
-          system(`\n[plan] Turn ending with open plan items (follow-through is off): ${ids.join(", ")}\n`);
+          const state = followThroughOn ? "a blocked item stops follow-through" : "follow-through is off";
+          system(`\n[plan] Turn ending with open plan items (${state}): ${ids.join(", ")}\n`);
         }
       }
 
@@ -4169,8 +4236,11 @@ async function runAgentTurnCore(
       // executes exactly as before.
       const precomputedResult = concurrentSpawnResults?.get(call.id);
       let result: InteractiveToolResult;
+      const storedAnswer = precomputedResult === undefined ? await storedAskUserAnswer(call, options) : undefined;
       if (precomputedResult !== undefined) {
         result = precomputedResult;
+      } else if (storedAnswer !== undefined) {
+        result = { output: storedAnswer, isError: false };
       } else {
         try {
           result = await executeCall(
@@ -4212,6 +4282,9 @@ async function runAgentTurnCore(
           // result — see `RunAgentTurnResult.caughtToolErrors`'s own doc.
           caughtToolErrors.push({ toolName: call.name, message });
         }
+      }
+      if (precomputedResult === undefined && storedAnswer === undefined) {
+        await rememberAskUserAnswer(call, result, options, now());
       }
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
@@ -4474,6 +4547,7 @@ export async function offerRoundLimitReset(
   deps: AgentDeps,
   roundState: { round: number; maxRounds: number },
   system: (text: string) => void,
+  mode?: PermissionMode,
 ): Promise<"reset" | "cancel"> {
   if (deps.askUser === undefined) {
     return "cancel";
@@ -4508,7 +4582,7 @@ export async function offerRoundLimitReset(
   if (choice !== "reset") {
     return "cancel";
   }
-  roundState.maxRounds += resolveAgentMaxRounds();
+  roundState.maxRounds += resolveAgentMaxRounds(process.env, mode);
   system(`\n[budget] Round limit increased — ${roundState.maxRounds} rounds. Continuing…\n`);
   return "reset";
 }
@@ -5392,6 +5466,10 @@ async function executeCall(
       publishLease,
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
+    // The untrusted-content latch must not stall a long trust-mode review on routine local commands.
+    const untrustedGate =
+      untrustedOrigin &&
+      !(mode === "trust" && gated.decision === "auto" && !gated.hookAsked && isTrustRoutineCommand(command));
     // The model supplies this name, but cannot grant it: only a validated
     // operator response from the host below can put it in the session set.
     const mcpFqn = call.name === "use_tool" && typeof input.tool_name === "string" ? input.tool_name : undefined;
@@ -5422,7 +5500,7 @@ async function executeCall(
     }
     // A trust grant is not a way around the untrusted-content floor: with
     // external content in this turn the call asks even for a trusted tool.
-    if ((gated.decision === "auto" && !untrustedOrigin) || (trustedMcp && !untrustedOrigin && !gated.hookAsked && !isReadOnly)) {
+    if ((gated.decision === "auto" && !untrustedGate) || (trustedMcp && !untrustedGate && !gated.hookAsked && !isReadOnly)) {
       onAutoApproved?.(call.name, call.input, { destructive, credentials, ...(trustedMcp ? { mcpTrusted: true } : {}) });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -5438,18 +5516,18 @@ async function executeCall(
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
-              ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              ...(untrustedGate ? { untrustedOrigin: true } : {}),
               ...(mcpTrustPossible
                 ? mcpDestructive
                   ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" as const }
-                  : untrustedOrigin
+                  : untrustedGate
                     ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "untrusted-origin" as const }
                     : { mcpTrustAvailable: true }
                 : {}),
               ...(mcpGranted ? { mcpTrusted: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedOrigin ? untrustedDenial : "command not approved by the user; not executed", isError: true };
+        return { output: untrustedGate ? untrustedDenial : "command not approved by the user; not executed", isError: true };
       }
       if (
         mcpFqn !== undefined &&
@@ -5457,7 +5535,7 @@ async function executeCall(
         typeof response === "object" &&
         response.trustMcpTool === true &&
         mcpTrustEligible &&
-        !untrustedOrigin
+        !untrustedGate
       ) {
         trustedMcpTools?.set(mcpFqn, currentMcpFingerprint);
       }

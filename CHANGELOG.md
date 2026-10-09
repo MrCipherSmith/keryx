@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.87] - 2026-10-09
+
+### Shell
+
+- In `trust` mode a turn may use 200 tool rounds (40 in `ask` and `auto`); the limit follows the mode at the start of the turn and `KERYX_AGENT_MAX_ROUNDS` still overrides it. Subagents get 40 rounds by default and up to 200, and a wave runs up to 10 of them at once instead of 3 (flow 418).
+- In `trust`, routine commands (`keryx review`, `keryx ctx rg|read|diff|run --`, read-only `flow`/`gdgraph`/`git`, `bun test`, chained with `cd`) no longer ask for approval after the turn read untrusted content; destructive, credential, SAC and publish commands still ask.
+- A turn with open plan items continues on its own in `trust` (at most 8 times in a row), and answers to questions the agent asks are kept in the session slate instead of being asked again.
+- A slash command typed while a turn runs is queued (`queued as qN`) and runs when the turn ends, instead of being dropped; `/new`, `/clear` and `/resume` are refused while busy.
+- Ctrl+C cancels the running turn; at an idle prompt a second Ctrl+C within 2 seconds exits, and `/exit` always does.
+
+### Review Process
+
+- `keryx review slice` cuts a large diff by domain into slices of at most 150 KB with a manifest, and leaves data ledgers, lockfiles, snapshots and generated files out, listing them as omissions. `keryx review dispatch-check` refuses a reviewer payload without a slice assignment before it is sent, and `keryx review retry-plan` retries an INCOMPLETE or BLOCKED reviewer once on a smaller slice, then reports it as not run. `review-orchestrator` has a shell-host section that uses them.
+- `keryx ctx run --raw -- <cmd>` passes the command output through unchanged, for machine artifacts; the read tool's error for a path outside the working directory names the cause and the alternative.
+
 ## [0.3.86] - 2026-10-09
 
 ### Review Process

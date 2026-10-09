@@ -68,7 +68,7 @@ test("spawn_subagent runs a child turn and returns a summary", async () => {
   expect(result.output).toMatch(/MAE reservation/);
 });
 
-test("default per-child round budget is 10 when max_rounds is omitted", async () => {
+test("default per-child round budget is 40 when max_rounds is omitted", async () => {
   const tool = createSpawnSubagentTool({
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
@@ -81,10 +81,10 @@ test("default per-child round budget is 10 when max_rounds is omitted", async ()
     clock: () => "2020-01-01T00:00:00.000Z",
   });
   const result = await tool.invoke({ task: "investigate", mode: "read_only" });
-  expect(result.output).toMatch(/rounds≤10\b/);
+  expect(result.output).toMatch(/rounds≤40\b/);
 });
 
-test("per-child round cap is 24 even when the model asks for more", async () => {
+test("per-child round cap is 200 even when the model asks for more", async () => {
   const tool = createSpawnSubagentTool({
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
@@ -97,7 +97,7 @@ test("per-child round cap is 24 even when the model asks for more", async () => 
     clock: () => "2020-01-01T00:00:00.000Z",
   });
   const result = await tool.invoke({ task: "investigate", mode: "read_only", max_rounds: 999 });
-  expect(result.output).toMatch(/rounds≤24\b/);
+  expect(result.output).toMatch(/rounds≤200\b/);
 });
 
 /**
@@ -379,7 +379,7 @@ test("onLedgerReady hands back a working resetBudget the tool keeps functioning 
   resetBudget?.();
   const result = await tool.invoke({ task: "investigate after reset", mode: "read_only" });
   expect(result.isError).toBe(false);
-  expect(result.output).toMatch(/rounds≤10\b/);
+  expect(result.output).toMatch(/rounds≤40\b/);
 });
 
 test("spawn_subagent inherits network LLM parent (deepseek) under tools-readonly policy", async () => {

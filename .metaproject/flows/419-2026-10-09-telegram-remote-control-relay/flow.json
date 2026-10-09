@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "419",
+  "slug": "telegram-remote-control-relay",
+  "title": "Keryx Telegram: remote-control relays approvals, questions and progress",
+  "status": "ready",
+  "createdAt": "2026-10-09T19:42:55.347Z",
+  "updatedAt": "2026-10-09T19:45:41.801Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "То, что потом через Keryx Surf приходит в Telegram, это тоже записываю, но это как отдельная проблема, которую мы будем потом фиксить и вообще дорабатывать Keryx Telegram.",
+    "source": "helyx 195182, 2026-10-09 (voice) + 195221 Заводи"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-09T19:42:55.347Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-09T19:45:41.801Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    }
+  }
+}

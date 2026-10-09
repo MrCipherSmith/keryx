@@ -19,6 +19,10 @@ export function dispatchErrors(value: unknown): string[] {
     roles.add(role);
     if (!text(run.executionId) || executions.has(run.executionId)) errors.push(`${role}: missing or shared execution identity`);
     if (text(run.executionId)) executions.add(run.executionId);
+    if (run.status === "not-run") {
+      errors.push(`${role}: not run${text(run.notRunReason) ? ` (${run.notRunReason})` : ""}; a reviewer that did not run is never a clean pass`);
+      continue;
+    }
     if (run.status !== "complete" || run.scopeComplete !== true) errors.push(`${role}: reviewer scope is incomplete`);
     if (!text(run.rawEvidence)) errors.push(`${role}: raw result evidence is required`);
     if (!strings(run.ruleEvidence) || !run.ruleEvidence.length) errors.push(`${role}: resolved rule evidence is required`);

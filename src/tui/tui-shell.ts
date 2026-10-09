@@ -117,7 +117,8 @@ import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } f
 import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
-import { classifyBusyDispatch } from "./busy-dispatch";
+import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
+import { classifyBusyDispatch, deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import {
   createSplashLifecycle,
@@ -3799,7 +3800,7 @@ export async function launchTuiAgentShell(opts: {
   // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
   // it is never rebound to a placeholder no-op (flow 112, AC2).
   let mountedChrome: ShellChrome | undefined;
-  // Flow 173 F-002: `onDestroy` (Ctrl+C — `exitOnCtrlC: true` below) is a
+  // Flow 173 F-002: `onDestroy` (a second Ctrl+C at an idle prompt, see `ctrlCPress`) is a
   // real, common exit path and must ALSO sweep background jobs (process-
   // group SIGTERM→SIGKILL) and purge the sidebar/store list, same as
   // `/exit`. It can fire before `deps`/`jobs` are ever assigned (Ctrl+C
@@ -3920,10 +3921,13 @@ export async function launchTuiAgentShell(opts: {
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
   // `release()` is idempotent, so every exit path may call it.
   const sessionLease = createTuiLeaseHolder();
+  // Set once the chrome and io exist; until then (boot animation, pickers) Ctrl+C quits at once.
+  let ctrlCPress: (() => void) | undefined;
   try {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await createShellRenderer(otui, {
+    onCtrlC: () => (ctrlCPress ?? (() => renderer?.destroy()))(),
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
@@ -4061,7 +4065,7 @@ export async function launchTuiAgentShell(opts: {
     // `/think`'s handler below both updates this and persists it.
     let thinkDisplayMode: ThinkDisplayMode = resolveThinkDisplayMode(loadShellConfig().thinkDisplay);
 
-    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
+    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C cancels a turn (twice to exit) · /exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
 
     // Flow 303 (AC14 follow-up, PR #669 review HIGH 2): `startupIndicator`
@@ -4729,6 +4733,19 @@ export async function launchTuiAgentShell(opts: {
     setMainAgent("queued", "ready");
 
     const io = createTuiAgentIo(otui, r, transcript);
+    const ctrlCPolicy = createCtrlCPolicy({ now: Date.now });
+    ctrlCPress = () => {
+      // A turn already told to stop but not yet unwound counts as idle, so a wedged one cannot trap the user.
+      const action = ctrlCPolicy.press(foregroundOperation.isActive && !foregroundOperation.signal.aborted);
+      if (action === "cancel-turn") {
+        foregroundOperation.cancel("interrupted by Ctrl+C");
+        io.onSystem?.("◇ main turn interrupted (Ctrl+C).\n");
+      } else if (action === "arm-exit") {
+        chrome.showToast(CTRL_C_EXIT_HINT);
+      } else {
+        r.destroy();
+      }
+    };
     // review r1 F10: now that `io` exists, the drop notifier can actually print.
     busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));
     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
@@ -8350,12 +8367,20 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "deferred": {
-            // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
+            // Any other slash line waits for the turn's end and runs from the main queue; only the
+            // session-replacing ones (BUSY_REFUSED_COMMANDS) are refused.
+            if (deferredBusyAction(line, command?.name) === "queue") {
+              const id = `mq${mainQueueSeq++}`;
+              mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
+              paintMainQueue();
+              io.onSystem?.(`${queuedCommandNotice(mainQueue.length)}\n`);
+              return;
+            }
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `c${uid++}`,
-                content: otui.t`${roleChunk(otui, "attention", 
-                  `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
+                content: otui.t`${roleChunk(otui, "attention",
+                  `◇ main is busy — that command would replace the session under the running turn. Wait for the turn to end, or /interrupt.`,
                 )}`,
                 marginTop: 1,
               }),

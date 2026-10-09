@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { classifyBusyDispatch } from "./busy-dispatch";
+import { BUSY_REFUSED_COMMANDS, classifyBusyDispatch, deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
 
 const base = {
   isSessionInfo: false,
@@ -227,4 +227,54 @@ test("flow 300: /governance and /triggers are read-only while busy — never def
   expect(classifyBusyDispatch({ line: "/governance", commandName: "/governance", ...base })).toBe("governance");
   expect(classifyBusyDispatch({ line: "/triggers", commandName: "/triggers", ...base })).toBe("triggers");
   expect(classifyBusyDispatch({ line: "/triggers nightly", commandName: "/triggers", ...base })).toBe("triggers");
+});
+
+// AC5 (flow 418): a slash line sent while main is busy is queued, not dropped.
+for (const name of ["/route", "/external", "/model", "/goal", "/connect", "/compact", "/sessions"]) {
+  test(`busy slash ${name} is deferred by the classifier and QUEUED for the turn's end`, () => {
+    const line = `${name} some args`;
+    expect(classifyBusyDispatch({ line, commandName: undefined, ...base })).toBe("deferred");
+    expect(deferredBusyAction(line, undefined)).toBe("queue");
+    expect(deferredBusyAction(line, name)).toBe("queue");
+  });
+}
+
+for (const name of ["/mode", "/remote-control", "/status"]) {
+  test(`busy slash ${name} is never refused: it runs at once or queues`, () => {
+    expect(deferredBusyAction(name, name)).toBe("queue");
+  });
+}
+
+for (const name of ["/new", "/clear", "/resume"]) {
+  test(`busy slash ${name} is REFUSED, not queued: it would replace the session under the queued questions`, () => {
+    expect(BUSY_REFUSED_COMMANDS.has(name)).toBe(true);
+    expect(deferredBusyAction(`${name} x`, undefined)).toBe("refuse");
+    expect(deferredBusyAction(name, name.toUpperCase())).toBe("refuse");
+  });
+}
+
+test("the queued-command notice names its qN position and when it runs", () => {
+  expect(queuedCommandNotice(3)).toContain("queued as q3");
+  expect(queuedCommandNotice(1)).toContain("runs when the turn ends");
+});
+
+test("tui-shell.ts's busy 'deferred' case pushes the slash line onto mainQueue, repaints and tells the user", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const caseIdx = source.indexOf('case "deferred": {');
+  const endIdx = source.indexOf('case "not-a-command":', caseIdx);
+  expect(caseIdx).toBeGreaterThan(-1);
+  expect(endIdx).toBeGreaterThan(caseIdx);
+  const body = source.slice(caseIdx, endIdx);
+  expect(body).toContain('deferredBusyAction(line, command?.name) === "queue"');
+  expect(body).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine");
+  expect(body).toContain("paintMainQueue();");
+  expect(body).toContain("queuedCommandNotice(mainQueue.length)");
+  expect(body).not.toContain("command deferred");
+});
+
+test("a queued slash line is drained through runLine as a command once the turn settles", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  expect(source).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
+  const wiring = readFileSync(join(import.meta.dir, "remote-queue-wiring.ts"), "utf8");
+  expect(wiring).toContain("deps.runLine(item.question");
 });

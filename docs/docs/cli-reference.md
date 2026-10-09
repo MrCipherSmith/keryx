@@ -1060,7 +1060,7 @@ session state and still see recent context about the busy main turn.
   one is set — absent, no `temperature` is sent at all, unchanged from
   before this setting existed.
 - **Subagent budgets.** A `spawn_subagent` child stops on its round budget
-  (`max_rounds`, default 10, capped at 24), its wall-clock deadline
+  (`max_rounds`, default 40, capped at 200), its wall-clock deadline
   (`KERYX_SUBAGENT_TIMEOUT_MS` can tighten it; `0` disables it) and the
   no-progress detector. The `max_tool_calls` value the parent model passes
   is advisory: it never stops the child. A hard tool-call cap applies only
@@ -3313,7 +3313,7 @@ keryx ctx status
 keryx ctx diff [git-diff-args...]
 keryx ctx rg "<pattern>" [path]
 keryx ctx read <file> [--mode outline|compact|full]
-keryx ctx run -- <command...>
+keryx ctx run [--raw] -- <command...>
 keryx ctx show [latest|<name>] [--raw]
 keryx ctx install-hook [--runtime <id|all>]
 keryx ctx uninstall-hook [--runtime <id|all>]
@@ -3325,7 +3325,7 @@ keryx ctx uninstall-hook [--runtime <id|all>]
 | `diff` | git-diff args (e.g. `--staged`, `--stat`) | Run `git diff <args>` and summarize (files, risk hints, hunks, errors). |
 | `rg` | `"<pattern>" [path]` | Run ripgrep and summarize top files + example matches. Requires ≥1 arg. |
 | `read` | `<file>`, `--mode outline\|compact\|full` | Read and summarize a file. Default mode `compact`. |
-| `run` | `-- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. |
+| `run` | `[--raw] -- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. `--raw` (before the `--`) streams stdout/stderr unmodified and returns the command's exit code, with no summary, redaction or artifact: use it for machine artifacts (`keryx ctx run --raw -- keryx review scope --json > scope.json`). |
 | `show` | `[latest\|<name>]`, `--raw` | Print a saved artifact summary (`.md`), or the raw `.log` with `--raw`. |
 | `install-hook` | `--runtime <id\|all>` | Install an opt-in routing guard that blocks broad raw search/read/diff commands and points the agent to the bounded `ctx` equivalent. |
 | `uninstall-hook` | `--runtime <id\|all>` | Remove only the managed routing-guard integration for the selected runtime(s). |
@@ -4681,6 +4681,10 @@ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
                           [--json|--brief] [--out <file>]
+keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--out <dir>] [--json]
+keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--json]
+keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>] [--slices a,b]
+                        [--state <file>] [--dry-run] [--json]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -5151,6 +5155,44 @@ it almost never costs a direct dependent.
 **Bounded on purpose.** Reviewing the whole repository every round is
 unaffordable *and* harmful — review quality decays as context grows, and an
 unbounded second scope makes later rounds worse than earlier ones.
+
+### `review slice`, `review dispatch-check`, `review retry-plan`
+
+A reviewer on a shell host cannot open a path, and one handed the whole diff
+spends its rounds reading. These three commands keep each reviewer's input small
+enough to finish; none of them calls a model.
+
+`review slice` cuts the diff (a git diff, or `review scope --scoped-diff` output)
+into `slice-NN.diff` files of at most `--max-bytes` (default **150000**) and a
+`manifest.json` whose `path` values are relative to the manifest. Files of one
+directory or module stay together while they fit; a domain over the limit is cut
+by file, a file over it by hunk, a hunk over it by line. Data ledgers (csv, tsv,
+jsonl, parquet), lockfiles, snapshots, generated files and oversize json are
+never sliced: they are listed under `omissions` with their reason and byte count.
+`--out` defaults to `.metaproject/data/review/slices`.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` / `--diff <file\|->` | Where the diff comes from. Default: `git diff`. |
+| `--context <n>` | Context lines kept around a change. |
+| `--max-bytes <n>` | Slice ceiling, at least 200. |
+| `--out <dir>` | Where the slices and the manifest are written. |
+| `--json` | Print the manifest plus `dir` and `manifestPath`. |
+
+`review dispatch-check` validates reviewer payloads (one object, an array, or
+`{"dispatches": [...]}`) against `reviewer-input.schema.json`. A `diff`-scope
+payload must name its `slices` or carry a `diff` that fits, and what it is
+assigned must total at most the ceiling. Codes: `REVIEWER_INPUT_INVALID`,
+`REVIEWER_INPUT_NO_SLICE`, `REVIEWER_INPUT_SLICE_UNKNOWN`,
+`REVIEWER_INPUT_TOO_LARGE`. Exit 0 ok, 1 refused, 2 payload or manifest
+unreadable.
+
+`review retry-plan` decides what follows a reviewer result. `INCOMPLETE` and
+`BLOCKED` get one retry on slices half the size (`r1-<reviewer>-NN.diff`, appended
+to the manifest); a second failure is `not-run` and prints
+`- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted as a clean pass`.
+Attempts are kept in `retry-state.json` beside the manifest. `--dry-run` plans
+without writing; the exit code is 0 for every decision.
 
 **The set is under regression check, not under review**, and that is refused in
 code rather than discouraged in prose. Three rules, and every one of them is a

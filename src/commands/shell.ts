@@ -176,7 +176,6 @@ import {
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveAgentMaxOutputTokens,
-  resolveAgentMaxRounds,
   resolveMaxAutoWake,
   resolveReasoningEffort,
   runAgentTurn,
@@ -4013,8 +4012,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         mcpRuntime: () => mcpRuntime,
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
-        maxRounds: resolveAgentMaxRounds(),
-        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+          // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
         // per-provider override (`resolvedModelParams.maxOutputTokens`,
         // resolved above via `resolveProviderModelParamsByName` — an
         // operator-saved `ShellConfig.modelParams[provider]` override, else
@@ -4493,8 +4491,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           // review fixed. `runAgentRepl` splices `bus_list`/`bus_send` in
           // directly (`buildBusTools`) right after its own join succeeds.
         }),
-        maxRounds: resolveAgentMaxRounds(),
-        // Same precedence as the TUI's `makeAgentDeps` above — routed through
+          // Same precedence as the TUI's `makeAgentDeps` above — routed through
         // `initialModelParams.maxOutputTokens` (resolved once above) rather
         // than a second, independent `providerByName(...).maxOutputTokens`
         // lookup, so there is exactly one computation of the provider's

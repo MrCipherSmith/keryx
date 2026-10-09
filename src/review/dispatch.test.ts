@@ -26,6 +26,13 @@ test("unresolved anchors and partial or NEEDS_CONTEXT results block completion",
   for (const change of [{ unresolvedRules: ["testing.md"] }, { runs: [{ ...valid().runs[0], status: "NEEDS_CONTEXT" }] }, { runs: [{ ...valid().runs[0], scopeComplete: false }] }])
     expect(dispatchErrors({ ...valid(), ...change }).length).toBeGreaterThan(0);
 });
+test("a reviewer marked not-run is reported as not run, never as a clean pass", () => {
+  const d = valid();
+  const run = { ...d.runs[0], status: "not-run", scopeComplete: false, notRunReason: "INCOMPLETE after a smaller-slice retry" };
+  const errors = dispatchErrors({ ...d, runs: [run] });
+  expect(errors.join(" ")).toContain("not run (INCOMPLETE after a smaller-slice retry)");
+  expect(errors.join(" ")).not.toContain("scope is incomplete");
+});
 test("read-only pass cannot satisfy a required executable investigation", () => {
   const d = valid();
   const run = { ...d.runs[0], executionRequired: true, executionEvidence: [] as string[] };

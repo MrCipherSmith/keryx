@@ -310,7 +310,12 @@ export function builtinReadOnlyTools(
       const target =
         confineToRoot(root, requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
       if (target === null) {
-        return { output: `path escapes the project root: ${requested}`, isError: true };
+        return {
+          output:
+            `path escapes the project root: ${requested}. read_file only reads inside the working directory (${root}); ` +
+            `for a file outside it use shell_exec \`cat <path>\`, or run keryx from a directory that contains it.`,
+          isError: true,
+        };
       }
       try {
         const file = Bun.file(target);
