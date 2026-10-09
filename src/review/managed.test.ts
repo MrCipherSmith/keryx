@@ -1,3 +1,4 @@
+import { READY_DISPATCH } from "./dispatch.test-helpers";
 import { afterEach, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
@@ -9,7 +10,7 @@ import { createFlowService } from "../flow/service";
 import type { FlowServiceDeps, TrackerAdapter } from "../flow/types";
 import {
   completeManagedReview,
-  createManagedReviewPackage,
+  createManagedReviewPackage as createPendingManagedReviewPackage,
   findingDispositionState,
   findRelatedFlow,
   validateManagedReviewManifest,
@@ -1662,3 +1663,12 @@ test("AC3: rule 3 still holds a major to naming the change, and says so out loud
   expect(scope).toContain("no-link-to-change");
   expect(scope).toContain("scope_b_findings: 1");
 });
+
+// These synthetic fixtures exercise disposition/ingest, not outstanding research.
+// The pending default is exercised without this helper in research.test.ts.
+function createManagedReviewPackage(input: ManagedReviewIngestInput) {
+  return createPendingManagedReviewPackage({
+    research: { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH },
+    ...input,
+  });
+}

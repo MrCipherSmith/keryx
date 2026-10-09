@@ -104,6 +104,14 @@
         },
         "decisions": {
           "type": "string"
+        },
+        "research": {
+          "type": "string",
+          "const": "research.json"
+        },
+        "reviewerDispatch": {
+          "type": "string",
+          "const": "research.json"
         }
       }
     },

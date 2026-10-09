@@ -11,8 +11,28 @@ import { createFlowService } from "../flow/service";
 import type { FlowServiceDeps, TrackerAdapter } from "../flow/types";
 import { buildIntentIndex } from "./corpus";
 import { indexPath, writeIntentIndex } from "./store";
+import { withCwd } from "../lib/test-cwd";
 
-let ROOT = "";
+const pendingTests = new Set<Promise<void>>();
+
+function workspaceTest(name: string, fn: (root: string) => Promise<void>): void {
+  test(name, () => {
+    const run = (async () => {
+      // Each callback owns an immutable absolute root, even after a Bun timeout.
+      const root = await mkdtemp(path.join(tmpdir(), "keryx-product-never-gates-"));
+      try {
+        await mkdir(path.join(root, ".metaproject"), { recursive: true });
+        await fn(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    })();
+    pendingTests.add(run);
+    // Handle late rejections without hiding ordinary failures from the runner.
+    void run.then(() => pendingTests.delete(run), () => pendingTests.delete(run));
+    return run;
+  });
+}
 
 function tracker(): TrackerAdapter {
   return {
@@ -33,31 +53,26 @@ function deps(): FlowServiceDeps {
   };
 }
 
-async function freshRoot(): Promise<void> {
-  ROOT = await mkdtemp(path.join(tmpdir(), "keryx-product-never-gates-"));
-  await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
-}
-
-async function driveOneFlow(title: string): Promise<{ transitions: string[]; gates: string[] }> {
+async function driveOneFlow(root: string, title: string): Promise<{ transitions: string[]; gates: string[] }> {
   const service = createFlowService(deps());
   const transitions: string[] = [];
-  const { flow, dir } = await service.init({ cwd: ROOT, title });
+  const { flow, dir } = await service.init({ cwd: root, title });
   transitions.push("init");
   await Bun.write(
-    path.join(ROOT, ".metaproject", "flows", path.basename(dir), "acceptance-criteria.md"),
+    path.join(root, ".metaproject", "flows", path.basename(dir), "acceptance-criteria.md"),
     ["# Acceptance Criteria", "", "## Criteria", "", "- AC1: It works", "- AC2: It is read [verify: judged]", ""].join("\n"),
   );
   const id = flow.id;
-  await service.freeze({ cwd: ROOT, id });
+  await service.freeze({ cwd: root, id });
   transitions.push("freeze");
-  await service.start({ cwd: ROOT, id });
+  await service.start({ cwd: root, id });
   transitions.push("start");
-  await service.implemented({ cwd: ROOT, id, prUrl: "https://github.com/acme/app/pull/9" });
+  await service.implemented({ cwd: root, id, prUrl: "https://github.com/acme/app/pull/9" });
   transitions.push("implemented");
-  await service.acConfirm({ cwd: ROOT, id, criterion: "AC1", note: "read it" });
-  await service.acConfirm({ cwd: ROOT, id, criterion: "AC2", note: "read it" });
+  await service.acConfirm({ cwd: root, id, criterion: "AC1", note: "read it" });
+  await service.acConfirm({ cwd: root, id, criterion: "AC2", note: "read it" });
   transitions.push("confirm");
-  const result = await service.complete({ cwd: ROOT, id });
+  const result = await service.complete({ cwd: root, id });
   transitions.push("complete");
   // The scaffold tasks, owner and review are not set up here, so those gates fail
   // for reasons of their own; what matters is that none of them is about the product.
@@ -71,56 +86,52 @@ async function driveOneFlow(title: string): Promise<{ transitions: string[]; gat
 const EVERY_TRANSITION = ["init", "freeze", "start", "implemented", "confirm", "complete"];
 
 afterEach(async () => {
-  if (ROOT) await rm(ROOT, { recursive: true, force: true });
-  ROOT = "";
-});
+  // Bun times out a test without cancelling its callback. Drain all fixture work,
+  // including assertions and cleanup, before the runner advances to another test.
+  await Promise.allSettled([...pendingTests]);
+}, 60_000);
 
 describe("a product index never gates a flow transition", () => {
-  test("with no product index at all, every transition succeeds", async () => {
-    await freshRoot();
-    const outcome = await driveOneFlow("No index");
+  workspaceTest("with no product index at all, every transition succeeds", async (root) => {
+    const outcome = await driveOneFlow(root, "No index");
     expect(outcome.transitions).toEqual(EVERY_TRANSITION);
   });
 
-  test("with an empty product index, every transition succeeds", async () => {
-    await freshRoot();
-    await writeIntentIndex(ROOT, await buildIntentIndex(ROOT));
-    expect(JSON.parse(await readFile(indexPath(ROOT), "utf8")).intents).toEqual([]);
-    const outcome = await driveOneFlow("Empty index");
+  workspaceTest("with an empty product index, every transition succeeds", async (root) => {
+    await writeIntentIndex(root, await buildIntentIndex(root));
+    expect(JSON.parse(await readFile(indexPath(root), "utf8")).intents).toEqual([]);
+    const outcome = await driveOneFlow(root, "Empty index");
     expect(outcome.transitions).toEqual(EVERY_TRANSITION);
   });
 
-  test("with an unreadable product index, every transition succeeds", async () => {
-    await freshRoot();
-    await Bun.write(indexPath(ROOT), "{ not json");
-    const outcome = await driveOneFlow("Broken index");
+  workspaceTest("with an unreadable product index, every transition succeeds", async (root) => {
+    await Bun.write(indexPath(root), "{ not json");
+    const outcome = await driveOneFlow(root, "Broken index");
     expect(outcome.transitions).toEqual(EVERY_TRANSITION);
   });
 
-  test("the gates a flow passes are the same with and without an index", async () => {
-    await freshRoot();
-    const without = await driveOneFlow("Twin without");
-    await writeIntentIndex(ROOT, await buildIntentIndex(ROOT));
-    const withIndex = await driveOneFlow("Twin with");
+  workspaceTest("the gates a flow passes are the same with and without an index", async (root) => {
+    const without = await driveOneFlow(root, "Twin without");
+    await writeIntentIndex(root, await buildIntentIndex(root));
+    const withIndex = await driveOneFlow(root, "Twin with");
     expect(withIndex.gates).toEqual(without.gates);
   });
 
-  test("running the module's own commands leaves a later flow untouched", async () => {
-    await freshRoot();
+  workspaceTest("running the module's own commands leaves a later flow untouched", async (root) => {
     const { productCommand } = await import("../commands/product");
-    const realLog = console.log;
-    const cwd = process.cwd();
-    console.log = () => {};
-    try {
-      process.chdir(ROOT);
-      await productCommand(["index"]);
-      await productCommand(["open"]);
-    } finally {
-      process.chdir(cwd);
-      console.log = realLog;
-      process.exitCode = 0;
-    }
-    expect((await driveOneFlow("After product")).transitions).toEqual(EVERY_TRANSITION);
+    await withCwd(root, async () => {
+      const realLog = console.log;
+      const exitCode = process.exitCode;
+      console.log = () => {};
+      try {
+        await productCommand(["index"]);
+        await productCommand(["open"]);
+      } finally {
+        console.log = realLog;
+        process.exitCode = exitCode;
+      }
+    });
+    expect((await driveOneFlow(root, "After product")).transitions).toEqual(EVERY_TRANSITION);
   });
 });
 

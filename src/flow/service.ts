@@ -745,7 +745,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         originNote = "--quote/--source were given without --origin; origin stays unknown.";
       }
 
-      const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
+      // Context only uses the tracker for an explicit issue; title-only init stays offline.
+      const trackerReady = input.issue && deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
       const issueRef =
         input.issue && deps.tracker ? deps.tracker.parseRef(input.issue) : null;

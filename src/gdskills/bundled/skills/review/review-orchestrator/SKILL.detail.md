@@ -368,3 +368,138 @@ inside) the findings they annotate — same separation the finding schema
 itself draws between a reviewer's claim (`severity`, `problem`, …) and what
 became of it (`disposition`), which a reviewer never states and this pass
 does not either.
+
+## Start questions (Step 5) — once per round, after the context pack
+
+The round asks its operator three questions, once, in one interaction, after
+Step 1 (context pack) and Step 3 (scope) — never before them: the counterpart
+question cannot be answered well until the context pack has looked for the
+other side. On Claude Code that is one `AskUserQuestion` call carrying the
+three questions; on any other host, the lettered prompt below. An unattended
+round (job pipeline, trigger, schedule) asks nothing, applies the defaults and
+records them under `### How this review was run`.
+
+1. **Reviewers** — default `--all`: every reviewer the engine detects plus every
+   project and convention reviewer its gates admit. Narrowing is an explicit
+   choice (tests only, one domain, a custom list). Flags the caller passed
+   answer this question and skip it. Convention reviewers are part of this
+   question; the job setting `convention_reviewers` still answers it in a
+   `job-orchestrator` pipeline.
+2. **Counterpart** — the other side of every contract the diff consumes or
+   mirrors: the backend for a frontend change, the frontend and other consumers
+   for a backend change. Before asking, the context pack looks for it:
+   endpoints, DTOs and rules the diff calls or mirrors, a paired PR
+   (`gh pr list --repo <counterpart> --search <branch-or-feature>`), the
+   producer at a freshly fetched SHA. The question shows what was found —
+   "no link found" included — and one checkbox, **verify the counterpart**, ON
+   by default even when nothing was found. Verification is not limited to a
+   paired PR: the other side's contracts and logic are re-read at a pinned SHA
+   every round. When the round cannot locate that code itself (repository,
+   handler, validator), it asks the operator where it is; it never records
+   `state: unavailable` on its own. Skipping verification takes a reason, and
+   the reason goes in the report.
+3. **Models** — the complexity the round already holds signals for (changed
+   files and lines, the risk class from Depth floor below, domains, scope B),
+   the per-role tier `keryx review tier` prints for each planned dispatch, and
+   the model each tier resolves to on this host. Choices: accept the plan (the
+   default), all `deep`, or custom. The plan is shown once per round, never per
+   dispatch (`rules/core/model-selection.mdc`). Skills, rules and this file name
+   tiers only; model ids appear in the rendered question and the report.
+
+```text
+Context: <PR or branch>, <N> files / <N> lines, <domains>; risk: <class>
+
+1) Reviewers     A) --all (default)  B) tests only  C) <domain> only  D) choose
+2) Counterpart   found: <endpoints, rules, paired PR — or "no link found">
+                 A) verify <backend|frontend> (default)  B) skip — give a reason
+3) Models        complexity: <low|medium|high>; <role>: <tier> → <model>, …
+                 A) accept (default)  B) all deep  C) custom
+
+> answers (default: 1A 2A 3A)
+```
+
+## Depth floor — a gating round does not degrade
+
+A round is **gating** when its verdict lets a change move: the review step of a
+flow (`flow-orchestrator` Phase 3), a pre-merge or pre-ship review, a
+re-request after fixes. A gating round runs the composition the start questions
+selected.
+
+- **No dispatch tool, no review.** A host that cannot dispatch subagents — this
+  engine running inside a subagent is the usual case — returns
+  `STATUS: BLOCKED` with reason `nested_dispatch_unavailable` and no verdict.
+  It does not review the diff alone and call that a round. Measured (flow 405):
+  a single-agent round on a 150-line frontend PR wrote "did not dispatch any
+  sub-reviewers", approved it with two cosmetic minors, and the next human round
+  filed six real findings, every one reachable from the diff and the backend at
+  a pinned SHA.
+- **Size never lowers depth below the risk class.** The budget table sizes the
+  context, not the depth.
+- **High-risk includes a client-side mirror of a server rule** — validation,
+  limits, permissions, uniqueness, reserved names — beside the triggers the main
+  file lists.
+
+## Counterpart verification — the contract is enumerated, not summarised
+
+For an **input rule** the diff mirrors or depends on (what the server accepts
+for a name, a value, a role), the `cross_repo` entry records the producer's
+complete check set in `checks` and how that set was found in
+`enumeration_method` (`review-context.schema.json`):
+
+- every check the producer runs on that input: validators, restriction
+  utilities, uniqueness queries, reserved-name registries, and the storage bound
+  (column width, index, a downstream identifier);
+- for each check: its `source` (`file:line` at the pinned SHA), whether it is
+  case-sensitive, and the `paths` it runs on (create, update, rename, copy,
+  import, move, …).
+
+Put these rules in every reviewer dispatch:
+
+- **The facts are a starting point, not a boundary.** A reviewer may read the
+  producer itself and file what the entry missed.
+- **"The producer has no limit" is a question, not a fact.** Find what bounds
+  the value — that is where an over-long or unexpected value fails, usually as a
+  server error.
+- **Build the surfaces × checks matrix**: every surface that sends the input
+  against every check, each cell `same`, `missing`, `stricter` or `looser`.
+  `missing` is a refusal the user meets late; `stricter` blocks legal input; a
+  check the producer lacks but storage enforces is a producer defect — filed as
+  pre-existing, or fixed by a paired change.
+- **Every refusal the producer can return is shown where the user can act on
+  it** — next to the field, not as a generic toast.
+
+## Round obligations — always on, never asked
+
+These apply to every round without a question:
+
+1. **Enumerate before concluding.** Every caller and surface of a changed value
+   is found with `keryx ctx rg` or gdgraph, and the query is recorded — never
+   taken from the diff's own list.
+2. **Quantified claims are checked.** "Every", "all", "only" and "never" in the
+   PR body or the commits are compared with that enumeration; an over-claim is a
+   `minor` finding, the same class as the description-versus-diff rule.
+3. **A verified-clean line names its sites.** Each line of the `Verified clean`
+   lane names the files, sites or commands it rests on; "the frontend does the
+   same" without them is not verified.
+4. **A pre-existing defect gets a disposition.** Every pre-existing defect the
+   round finds in the contract the change touches is recorded with one: fixed in
+   the change (small, same contract), named out of scope in the PR body, or a
+   recommended issue. Found and dropped is the failure this rule exists for.
+5. **Red on the parent, per test.** Every added test fails with the parent
+   commit's production files restored; the run is the evidence.
+6. **A threaded value is pinned per site.** A parameter, key or prop passed at
+   several render sites is asserted at each site, or centralised so there is
+   one.
+7. **One rule, one implementation.** The same check implemented twice is a
+   finding, even while both copies agree.
+8. **"Do not re-raise" needs a record.** A dispatch may exclude an item only by
+   citing the PR comment, issue or decision that settled it — never a whole
+   surface ("X has no test; covered elsewhere").
+
+### Runtime research-completion ledger
+
+New managed packages carry `research.json`, initially pending. Before closing a round, enumerate unresolved observations from raw reviewers and the changed-file/consumer census, assign stable obligation IDs, and investigate them. Run the probe or inspect the relevant source and assertions: merely proposing a check does not resolve it. An unexecuted probe is not a verified claim.
+
+Supply the ledger using `keryx review ingest --research <ledger.json>` alongside the report and findings. Format: `version: 1`, `scopeReviewed: true`, `rawReconciled: true`, `obligations: [...]`. Each obligation requires `id`, `source`, `question`, `status`, `evidence`, `reason`. Status `finding` additionally requires `finding` pointing to exactly one canonical finding ID or global ID. Other terminal statuses are `refuted` and `out-of-scope`, both requiring evidence and reason. Preserve distinct scenarios when deduplicating. Assert census/reconciliation flags only after performing those checks; an empty obligations array is valid only if the actual census found no open observations.
+
+Open, deferred and unverifiable obligations block completion. If context, runtime or budget prevents resolution, retain the obligation and report incomplete; do not relabel it refuted or out-of-scope. Completion and the flow gate re-read the ledger even when the manifest says closed. Legacy packages without this artifact remain compatible, not proven complete. This gate validates the declared ledger, not the truth or exhaustiveness of its census; independent source/raw audits remain necessary.

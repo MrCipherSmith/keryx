@@ -433,14 +433,14 @@ Before accepting implementation:
 1. Run focused tests for touched scope.
 2. Run `code-verifier`.
 3. Run `keryx health run` when Code Health is enabled.
-4. Check the bounds, then run `review-orchestrator` with relevant domains.
-
+4. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
+   never handed whole to one subagent: one without a dispatch tool returns `STATUS: BLOCKED`.
    ```bash
    keryx review budget --spent <usd-so-far> --outstanding <subagents you already have in flight>
    ```
-
    A non-zero exit means the spend ceiling (3 USD by default) has been reached:
-   **stop and ask the user** rather than dispatching another fan-out.
+   **stop and ask the user** rather than dispatching another fan-out — never shrink the fan-out to fit.
+   Dispatch prompts point at sources (files, SHAs, the PR) and never paraphrase a contract.
 
    `--outstanding` is the part that matters here. `review-orchestrator`
    dispatches reviewers in parallel and runs *nested* under this skill, and
