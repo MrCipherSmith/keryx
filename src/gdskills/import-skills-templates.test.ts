@@ -345,12 +345,31 @@ describe("the security gate and symlink containment cover templates", () => {
     expect(await read(`${TEMPLATES}/slots`)).toBe("i am a file\n");
   });
 
-  test("a directory at the destination refuses the run before anything is written, not an EISDIR crash", async () => {
+  test("a directory at a template destination is a skipped row, not a crash and not a refusal of the run", async () => {
     const pkg = await writePackage();
     await writeTemplate(pkg, "report-overlay.md", "overlay\n");
+    await writeTemplate(pkg, "other.md", "other\n");
     await mkdir(path.join(cwd, TEMPLATES, "report-overlay.md"), { recursive: true });
-    await expect(importPackage(pkg)).rejects.toThrow(/Nothing was written/);
-    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
+    for (const dryRun of [true, false]) {
+      const result = await importPackage(pkg, { dryRun });
+      expect(result.templates.find((row) => row.file === "report-overlay.md")).toMatchObject({ status: "skipped" });
+      expect(result.templates.find((row) => row.file === "report-overlay.md")?.reason).toContain("is not a regular file");
+    }
+    expect(await read(`${TEMPLATES}/other.md`)).toBe("other\n");
+  });
+
+  test("a parent that is a symlink to a file inside the project is a file in the way, as a plain file is", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "slots/b.md", "b\n");
+    await mkdir(path.join(cwd, TEMPLATES), { recursive: true });
+    await writeFile(path.join(cwd, "afile.txt"), "keep\n", "utf8");
+    await symlink(path.join(cwd, "afile.txt"), path.join(cwd, TEMPLATES, "slots"));
+    for (const dryRun of [true, false]) {
+      const result = await importPackage(pkg, { dryRun });
+      expect(result.templates[0]).toMatchObject({ file: "slots/b.md", status: "skipped" });
+      expect(result.templates[0]?.reason).toContain(`${TEMPLATES}/slots is a file, not a directory`);
+    }
+    expect(await read("afile.txt")).toBe("keep\n");
   });
 
   test("a templates/ directory that is a symlink at the source is not a templates directory", async () => {
@@ -440,6 +459,104 @@ describe("skills update and skills remove", () => {
     expect(await exists(`${TEMPLATES}/report-overlay.md`)).toBe(false);
     expect(await exists(`${TEMPLATES}/slots/b.md`)).toBe(false);
     expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
+  });
+});
+
+describe("a refused template refuses its own package and no other", () => {
+  const OTHER = ".metaproject/project-skills/review/review-other";
+
+  test("in a tree import the other package lands, and a rule cited only by the refused one is not written", async () => {
+    const skills = path.join(source, "skills");
+    const bad = await writePackage("review-house", skills);
+    const good = await writePackage("review-other", skills);
+    await writeFile(path.join(bad, "SKILL.md"), `${await readFile(path.join(bad, "SKILL.md"), "utf8")}\nStandard: \`house/bad-only.mdc\`.\n`, "utf8");
+    await writeFile(path.join(good, "SKILL.md"), `${await readFile(path.join(good, "SKILL.md"), "utf8")}\nStandard: \`house/shared.mdc\`.\n`, "utf8");
+    await mkdir(path.join(source, "rules", "house"), { recursive: true });
+    await writeFile(path.join(source, "rules", "house", "bad-only.mdc"), "# bad only\n", "utf8");
+    await writeFile(path.join(source, "rules", "house", "shared.mdc"), "# shared\n", "utf8");
+    await writeTemplate(bad, "overlay.md", INJECTION);
+    await writeTemplate(good, "overlay.md", "fine\n");
+
+    for (const dryRun of [true, false]) {
+      const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"], dryRun });
+      const byName = Object.fromEntries(result.imported.map((row) => [row.name, row]));
+      expect(byName["review-house"]?.status).toBe(dryRun ? "would-refuse" : "refused");
+      expect(byName["review-house"]?.path).toBe(PACKAGE);
+      expect(byName["review-house"]?.origin).toContain("review-house");
+      expect(byName["review-other"]?.status).toBe(dryRun ? "would-import" : "imported");
+      const rules = Object.fromEntries(result.rules.map((row) => [row.ref, row]));
+      expect(rules["house/bad-only.mdc"]?.reason).toContain("cited only by a refused package");
+      expect(rules["house/shared.mdc"]?.status).toBe(dryRun ? "would-import" : "imported");
+    }
+    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
+    expect(await exists(`${TEMPLATES}/overlay.md`)).toBe(false);
+    expect(await exists(".metaproject/rules/house/bad-only.mdc")).toBe(false);
+    expect(await read(`${OTHER}/templates/overlay.md`)).toBe("fine\n");
+    expect(await exists(`${OTHER}/SKILL.md`)).toBe(true);
+  });
+
+  test("a package the project already has keeps its row and its rules when a template is refused", async () => {
+    const skills = path.join(source, "skills");
+    const pkg = await writePackage("review-house", skills);
+    await writeFile(path.join(pkg, "SKILL.md"), `${await readFile(path.join(pkg, "SKILL.md"), "utf8")}\nStandard: \`house/own.mdc\`.\n`, "utf8");
+    await mkdir(path.join(source, "rules", "house"), { recursive: true });
+    await writeFile(path.join(source, "rules", "house", "own.mdc"), "# own\n", "utf8");
+    await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"] });
+    await rm(path.join(cwd, ".metaproject/rules/house/own.mdc"), { force: true });
+    await writeTemplate(pkg, "overlay.md", INJECTION);
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"] });
+    expect(result.imported[0]?.status).toBe("skipped");
+    expect(result.templates[0]?.status).toBe("refused");
+    expect(result.rules[0]?.status).toBe("imported");
+  });
+
+  test("update --all: the other package still updates, and a dry run says would-refuse without touching anything", async () => {
+    const bad = await writePackage("review-house");
+    const good = await writePackage("review-other");
+    await writeTemplate(bad, "overlay.md", "b1\n");
+    await writeTemplate(good, "overlay.md", "g1\n");
+    await importPackage(bad);
+    await importPackage(good);
+    await writeFile(path.join(bad, "SKILL.md"), `${await readFile(path.join(bad, "SKILL.md"), "utf8")}\nchanged\n`, "utf8");
+    await writeFile(path.join(good, "SKILL.md"), `${await readFile(path.join(good, "SKILL.md"), "utf8")}\nchanged\n`, "utf8");
+    await writeTemplate(bad, "overlay.md", INJECTION);
+    await writeTemplate(good, "overlay.md", "g2\n");
+
+    const dry = await updateProjectSkills({ projectRoot: cwd, all: true, dryRun: true });
+    const dryRows = Object.fromEntries(dry.imported.map((row) => [row.name, row]));
+    expect(dryRows["review-house"]?.status).toBe("would-refuse");
+    expect(dryRows["review-other"]?.status).toBe("would-overwrite");
+    expect(await read(`${OTHER}/templates/overlay.md`)).toBe("g1\n");
+
+    const real = await updateProjectSkills({ projectRoot: cwd, all: true });
+    const rows = Object.fromEntries(real.imported.map((row) => [row.name, row]));
+    expect(rows["review-house"]?.status).toBe("refused");
+    expect(rows["review-other"]?.status).toBe("updated");
+    expect(await read(`${OTHER}/templates/overlay.md`)).toBe("g2\n");
+    expect(await read(`${TEMPLATES}/overlay.md`)).toBe("b1\n");
+  });
+
+  test("update: a directory at a template destination is skipped, an outside symlink refuses before any write", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "a.md", "a1\n");
+    await writeTemplate(pkg, "b.md", "b1\n");
+    await importPackage(pkg);
+    await writeFile(path.join(pkg, "SKILL.md"), `${await readFile(path.join(pkg, "SKILL.md"), "utf8")}\nchanged\n`, "utf8");
+    await writeTemplate(pkg, "a.md", "a2\n");
+    await writeTemplate(pkg, "b.md", "b2\n");
+    await rm(path.join(cwd, TEMPLATES, "a.md"));
+    await mkdir(path.join(cwd, TEMPLATES, "a.md"));
+    const result = await updateProjectSkills({ projectRoot: cwd, all: true });
+    expect(result.templates.find((row) => row.file === "a.md")?.status).toBe("skipped");
+    expect(await read(`${TEMPLATES}/b.md`)).toBe("b2\n");
+
+    await writeFile(path.join(outside, "target.md"), "outside\n", "utf8");
+    await rm(path.join(cwd, TEMPLATES, "a.md"), { recursive: true });
+    await symlink(path.join(outside, "target.md"), path.join(cwd, TEMPLATES, "a.md"));
+    await writeTemplate(pkg, "b.md", "b3\n");
+    await expect(updateProjectSkills({ projectRoot: cwd, all: true })).rejects.toThrow(/Nothing was written/);
+    expect(await read(`${TEMPLATES}/b.md`)).toBe("b2\n");
+    expect(await readFile(path.join(outside, "target.md"), "utf8")).toBe("outside\n");
   });
 });
 

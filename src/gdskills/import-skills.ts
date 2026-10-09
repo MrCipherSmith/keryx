@@ -295,7 +295,9 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
     const own = await planTemplates(options, { module: source.module, name: source.name, sourcePath: source.sourcePath }, options.force === true);
     if (packageRefusedByTemplates(own)) {
       refusedByTemplates.add(source.name);
-      refusedPackages.add(source.name);
+      // Only a package being written is refused; one the project already has
+      // keeps its row, and the rules it cites are written as before.
+      if (plans.some((plan) => "write" in plan && plan.write.name === source.name)) refusedPackages.add(source.name);
       templatePlans.push(...withheldTemplates(own));
     } else {
       templatePlans.push(...own);
@@ -309,7 +311,7 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
         : [],
     ),
     ...ruleDecisions.flatMap((decision) => ("placement" in decision ? [decision.placement.target] : [])),
-    ...templatePlans.map(templateTarget),
+    ...templateTargets(templatePlans),
   ]);
 
   const imported: ImportedProjectSkill[] = [];
@@ -435,7 +437,7 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
         ? projectSkillWritePaths(projectSkillSlug(plan.entry.module), projectSkillSlug(plan.entry.name), "single")
         : [],
     ),
-    ...templatePlans.map(templateTarget),
+    ...templateTargets(templatePlans),
   ]);
   // Read before the first write, as in the import, so a dry run and a real run
   // compare the refreshed packages with the same set of reviewers.
@@ -1932,7 +1934,7 @@ async function listTemplateFiles(sourcePath: string): Promise<string[]> {
 
 type TemplateOptions = { projectRoot: string; dryRun?: boolean; allowFlagged?: boolean };
 
-/** The first existing parent of `target` (project-relative, posix) that is a file; a symlink is the containment check's business. */
+/** The first existing parent of `target` (project-relative, posix) that resolves to something other than a directory; a link that leaves the project or dangles is the containment check's business. */
 async function fileInTheWay(projectRoot: string, target: string): Promise<string | undefined> {
   let current = projectRoot;
   let relative = "";
@@ -1940,8 +1942,7 @@ async function fileInTheWay(projectRoot: string, target: string): Promise<string
     current = path.join(current, part);
     relative = relative === "" ? part : `${relative}/${part}`;
     try {
-      const info = await lstat(current);
-      if (!info.isDirectory() && !info.isSymbolicLink()) return relative;
+      if (!(await stat(current)).isDirectory()) return relative;
     } catch {
       return undefined;
     }
@@ -1949,8 +1950,9 @@ async function fileInTheWay(projectRoot: string, target: string): Promise<string
   return undefined;
 }
 
-/** Where a template plan writes or would write: every one goes through the containment check, a row that writes nothing included. */
-const templateTarget = (plan: TemplatePlan): string => ("write" in plan ? plan.write.target : plan.row.path);
+/** The destinations of the template plans that go through the containment check: a row that is `skipped` writes nothing and names a path that is not there to write, so it is reported instead of refusing the run. */
+const templateTargets = (plans: readonly TemplatePlan[]): string[] =>
+  plans.flatMap((plan) => ("write" in plan ? [plan.write.target] : plan.row.status === "skipped" ? [] : [plan.row.path]));
 
 /** A refused template refuses its whole package: nothing of it is written, so it never lands without the overlay it was imported for. */
 function packageRefusedByTemplates(plans: readonly TemplatePlan[]): boolean {
