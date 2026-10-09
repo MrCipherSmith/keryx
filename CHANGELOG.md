@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.86] - 2026-10-09
 
 ### Review Process
 
