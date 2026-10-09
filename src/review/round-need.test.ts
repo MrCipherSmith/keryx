@@ -16,6 +16,29 @@ describe("classifyRoundNeed", () => {
   });
 
   test.each([
+    ["src/build/index.ts"],
+    ["scripts/build/release.ts"],
+    ["requirements.txt"],
+    ["constraints.txt"],
+    ["CMakeLists.txt"],
+    [".claude/agents/reviewer.md"],
+    [".claude/commands/ship.md"],
+    [".metaproject/skills/x/references/a.md"],
+    ["GEMINI.md"],
+    [".github/copilot-instructions.md"],
+    ["skills/foo/skill.md"],
+  ])("%s fails open: it needs a round", (file) => {
+    expect(classifyRoundNeed({ files: [file] }).needed).toBe(true);
+  });
+
+  test.each([["dist/app.js"], ["coverage/lcov.info"], ["src/__generated__/types.ts"]])(
+    "%s is machine-written and needs no round",
+    (file) => {
+      expect(classifyRoundNeed({ files: [file] }).needed).toBe(false);
+    },
+  );
+
+  test.each([
     [".github/workflows/ci.yml"],
     ["db/migrations/0042_add_column.sql"],
     ["src/auth/session.ts"],

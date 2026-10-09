@@ -473,7 +473,7 @@ export function planReviewerWaves(
     }
   }
   return {
-    cap,
+    cap: ceiling,
     outstanding,
     effective,
     waves,

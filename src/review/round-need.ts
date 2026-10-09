@@ -30,10 +30,11 @@ const LOCKFILES = new Set([
   "go.sum",
 ]);
 
-// These Markdown files steer agents, so a change to them changes behaviour.
-const RULE_BEARING = /(^|\/)(SKILL(\.detail)?\.md|CLAUDE\.md|AGENTS\.md|[^/]+\.mdc)$/;
-const PROSE = /\.(md|mdx|txt|rst|adoc)$/;
-const GENERATED = /(^|\/)(dist|build|coverage|__generated__)\//;
+// Markdown that steers agents: a change to it changes behaviour, so it is code.
+const RULE_BEARING =
+  /(^|\/)(SKILL(\.detail)?\.md|CLAUDE\.md|AGENTS\.md|GEMINI\.md|copilot-instructions\.md|[^/]+\.mdc)$|(^|\/)\.(claude|cursor|github|metaproject)\/(agents|commands|skills|rules)\//i;
+const PROSE = /\.(md|mdx|rst|adoc)$/i;
+const GENERATED = /^(dist|coverage)\/|(^|\/)__generated__\//;
 
 function isProse(file: string): boolean {
   if (RULE_BEARING.test(file)) return false;

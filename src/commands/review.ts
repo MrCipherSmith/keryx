@@ -1003,6 +1003,7 @@ async function runBudget(args: string[]): Promise<void> {
       ?.split(",")
       .map((item) => item.trim())
       .filter(Boolean) ?? [];
+  if (args.some((arg) => arg.startsWith("--full="))) throw new Error("`--full` takes no value.");
   const plan = planReviewerWaves(reviewers, {
     cap: parseNonNegativeInteger(optionValue(args, "--parallel"), "--parallel"),
     outstanding: parseNonNegativeInteger(optionValue(args, "--outstanding"), "--outstanding"),
