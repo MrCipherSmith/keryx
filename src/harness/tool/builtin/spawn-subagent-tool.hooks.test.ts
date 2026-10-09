@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import {
   createSpawnSubagentTool,
   DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+  SUBAGENT_CHILD_RESERVATION_MS,
   type StructuredSubagentResult,
 } from "./spawn-subagent-tool";
 import type { HookFireResult, HookRegistration, HookRuntime } from "../../hooks";
@@ -383,17 +384,17 @@ test("native: makeProvider throwing AFTER SubagentStart fires SubagentStop and r
 
   // The reservation was released, not leaked. Each reservation requests
   // `5 * 60_000`ms (the tool's own fixed per-spawn runtime request) against a
-  // `DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS` (30 minutes) pool — exactly 6
-  // admissions' worth. `maxChildren` (16) is a LIFETIME cap the ledger never
+  // `DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS` (80 minutes) pool — exactly 16
+  // admissions' worth. `maxChildren` (32) is a LIFETIME cap the ledger never
   // gives back, so it cannot tell release apart from a leak; the BUDGET can,
-  // because it is returned on release and NOT on a leak. Six further calls
+  // because it is returned on release and NOT on a leak. Sixteen further calls
   // (each hitting the same throwing `makeProvider`) must EACH still reach
   // `fireSubagentStart` — if the first call's reservation had leaked, the
   // budget would already be half-spent, and this loop alone would exhaust it
-  // (6 more reservations against 1_500_000ms remaining) before the last one,
+  // (16 more reservations against 4_500_000ms remaining) before the last one,
   // which would then be denied by MAE admission BEFORE `SubagentStart` ever
   // fires, never reaching `makeProvider` at all.
-  const perChildReservationMs = 5 * 60_000;
+  const perChildReservationMs = SUBAGENT_CHILD_RESERVATION_MS;
   const rounds = DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / perChildReservationMs;
   for (let i = 0; i < rounds; i++) {
     await expect(
@@ -454,9 +455,9 @@ test("native: a rejecting fire() on SubagentStart is treated as deny and release
   // The reservation was released despite the rejection (same budget-based
   // proof as the sibling test above — see its comment for why the BUDGET,
   // not the lifetime `maxChildren` count, is what actually distinguishes a
-  // release from a leak here). Six further calls must EACH still reach the
+  // release from a leak here). Sixteen further calls must EACH still reach the
   // point of invoking `fire()` for SubagentStart.
-  const perChildReservationMs = 5 * 60_000;
+  const perChildReservationMs = SUBAGENT_CHILD_RESERVATION_MS;
   const rounds = DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / perChildReservationMs;
   for (let i = 0; i < rounds; i++) {
     const again = await tool.invoke({ task: "again", mode: "read_only", label: `auth-check-${i}` });

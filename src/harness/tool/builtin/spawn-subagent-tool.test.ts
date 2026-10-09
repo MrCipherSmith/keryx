@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -9,10 +9,13 @@ import {
   resolveSubagentMaxToolCalls,
   subagentFleetDetail,
   subagentStatusForFinishReason,
+  renderContextFiles,
+  SUBAGENT_CHILD_RESERVATION_MS,
+  DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+  SUBAGENT_TURN_MAX_CHILDREN,
   type SpawnSubagentFleetEvent,
 } from "./spawn-subagent-tool";
 import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
-import { DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
 import { loadRoutingConfigRaw } from "../../routing/config";
 import { approveProjectRouting } from "../../routing/trust";
@@ -755,12 +758,12 @@ test("status: Denied keeps the existing isError:true behavior and gains the matc
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
   });
-  // Exhaust the shared per-turn child-COUNT cap (`DEFAULT_MAX_CHILDREN`) so
+  // Exhaust the shared per-turn child-COUNT cap (`SUBAGENT_TURN_MAX_CHILDREN`) so
   // MAE's admission check denies the NEXT spawn outright — the child never
   // starts. (The round-cap redesign removed the ledger's tool-call
   // dimension — see `spawn-subagent-tool.ts`'s `ledgerLimits` — so
   // child-count, not a shrunk tool-call pool, is now the lever here.)
-  for (let i = 0; i < DEFAULT_MAX_CHILDREN; i += 1) {
+  for (let i = 0; i < SUBAGENT_TURN_MAX_CHILDREN; i += 1) {
     const warm = await tool.invoke({ task: `warm ${i}`, mode: "read_only" });
     expect(warm.status).toBe("Completed");
   }
@@ -862,7 +865,7 @@ test("AC8: a caller reading only {output, isError} sees pre-Phase-D behavior on 
   }
 
   // Denied (pre-existing MAE admission path) — exhaust the shared per-turn
-  // child-count cap (`DEFAULT_MAX_CHILDREN`), same lever as the AC7 Denied
+  // child-count cap (`SUBAGENT_TURN_MAX_CHILDREN`), same lever as the AC7 Denied
   // test above (the ledger's tool-call dimension was removed with the
   // round-cap redesign).
   {
@@ -877,7 +880,7 @@ test("AC8: a caller reading only {output, isError} sees pre-Phase-D behavior on 
       })(),
       clock: () => "2020-01-01T00:00:00.000Z",
     });
-    for (let i = 0; i < DEFAULT_MAX_CHILDREN; i += 1) {
+    for (let i = 0; i < SUBAGENT_TURN_MAX_CHILDREN; i += 1) {
       await tool.invoke({ task: `warm ${i}`, mode: "read_only" });
     }
     const legacy = legacyView(await tool.invoke({ task: "denied before it ever starts", mode: "read_only" }));
@@ -1194,3 +1197,90 @@ for (const stage of ["discovery", "provider"] as const) {
     expect(lastUpsert(events)?.status).toBe("failed");
   });
 }
+
+test("flow 420: twelve read-only reviewers are all admitted in one turn, none refused for budget", async () => {
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => textProvider("done"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+  });
+  const results = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => tool.invoke({ task: `review ${i}`, mode: "read_only" })),
+  );
+  expect(results.map((r) => r.status)).toEqual(Array.from({ length: 12 }, () => "Completed"));
+  // Stubs finish instantly, so concurrency is asserted on the constants too.
+  expect(DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS / SUBAGENT_CHILD_RESERVATION_MS).toBeGreaterThanOrEqual(12);
+  expect(SUBAGENT_TURN_MAX_CHILDREN).toBeGreaterThanOrEqual(12);
+});
+
+test("flow 420: context_files are copied into the child's task and cannot leave the project root", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctxfiles-"));
+  try {
+    await writeFile(path.join(root, "slice-01.diff"), "diff --git a/x b/x\n+hello\n");
+    const ok = await renderContextFiles(root, ["slice-01.diff"]);
+    expect(ok).toMatchObject({ ok: true });
+    if (ok.ok) {
+      expect(ok.text).toContain("BEGIN FILE slice-01.diff");
+      expect(ok.text).toContain("+hello");
+    }
+    expect((await renderContextFiles(root, ["../outside.diff"])).ok).toBe(false);
+    expect((await renderContextFiles(root, ["missing.diff"])).ok).toBe(false);
+    expect((await renderContextFiles(root, undefined))).toEqual({ ok: true, text: "" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 420: context_files refuse symlink escapes, credential paths, non-files, bad input and oversize sets", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctxfiles-deny-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-ctxfiles-out-"));
+  try {
+    await writeFile(path.join(outside, "secret.txt"), "top secret");
+    await symlink(path.join(outside, "secret.txt"), path.join(root, "link.txt"));
+    expect((await renderContextFiles(root, ["link.txt"])).ok).toBe(false);
+
+    await writeFile(path.join(root, ".env.local"), "TOKEN=1");
+    await writeFile(path.join(root, "server.pem"), "key");
+    await writeFile(path.join(root, "id_ed25519"), "key");
+    await mkdir(path.join(root, ".git"));
+    await writeFile(path.join(root, ".git", "config"), "x");
+    for (const denied of [".env.local", "server.pem", "id_ed25519", ".git/config"]) {
+      const r = await renderContextFiles(root, [denied]);
+      expect(r.ok).toBe(false);
+    }
+
+    await mkdir(path.join(root, "dir"));
+    expect((await renderContextFiles(root, ["dir"])).ok).toBe(false);
+
+    expect((await renderContextFiles(root, "a.diff" as unknown as string[])).ok).toBe(false);
+    expect((await renderContextFiles(root, [""])).ok).toBe(false);
+
+    await writeFile(path.join(root, "a.diff"), "x");
+    const tooMany = Array.from({ length: 41 }, () => "a.diff");
+    expect((await renderContextFiles(root, tooMany)).ok).toBe(false);
+
+    await writeFile(path.join(root, "big.diff"), "y".repeat(300_000));
+    const big = await renderContextFiles(root, ["big.diff", "big.diff"]);
+    expect(big.ok).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("flow 420: context_files are refused for external children and stay out of the fleet task", async () => {
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => textProvider("done"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+  });
+  const result = await tool.invoke({
+    task: "review",
+    runtime: { kind: "external", agent: "claude" },
+    context_files: ["package.json"],
+  });
+  expect(result.isError).toBe(true);
+  expect(String(result.output)).toContain("context_files is not supported for external");
+});
