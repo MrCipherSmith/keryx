@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.83] - 2026-10-09
+
+Range: `v0.3.82..d31ee742` plus the release version and notes.
+
+### Documentation
+
+- The review-orchestrator report is posted as the body of one formal PR review (Request changes, Approve or Comment by the verdict) instead of a comment; a merged or closed PR still gets a plain comment. On the reviewer's own PR, where GitHub rejects Request changes and Approve, the review falls back to Comment (PR #933).
+- The report template gains overlay slots (`pre-verdict`, `after-verdict`, `verified-clean`, `how-run`) so a project overlay can extend the report without reordering base sections; finding links point at the reviewed head SHA and finding ids stay stable across rounds.
+- job-orchestrator wording follows: the published report is a PR review.
+
 ## [0.3.82] - 2026-10-08
 
 Range: `v0.3.81..3743ee29` plus the release version and notes.
