@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.89] - 2026-10-09
+
+### Review Process
+
+- On a shell host `review-orchestrator` publishes its checklist as the first action, so the shell keeps the turn going instead of ending it on a text reply; it also writes `keryx review scope` output to a file instead of printing hundreds of KB, takes the base from `origin/HEAD`, and treats a missing `.metaproject/data/review/` as a command to run (flow 420).
+
 ## [0.3.88] - 2026-10-09
 
 ### Shell
