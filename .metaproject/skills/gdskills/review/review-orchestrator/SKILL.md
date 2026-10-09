@@ -40,7 +40,7 @@ Review Orchestrator Progress:
 - [ ] Step 3: Build the bounded scope with `keryx review scope` — never by hand
 - [ ] Step 3b: On a deep round, compute scope B with `keryx review blast-radius` — never by browsing — and KEEP the `--json` file; `review ingest --blast-radius <file>` is refused without it
 - [ ] Step 4: Parse flags / auto-detect domain from scope
-- [ ] Step 5: Start questions, once, after Steps 1 and 3 — reviewers (default `--all`), counterpart verification (default on), model plan; unattended takes the defaults (SKILL.detail.md § "Start questions"; legacy/profile reviewers stay flag-only)
+- [ ] Step 5: Start questions, once, after Steps 1 and 3 — reviewers (default `--all`), counterpart verification (default on), model plan; unattended — and an `auto` or `trust` shell session, which has no operator at the keyboard — takes the defaults (SKILL.detail.md § "Start questions"; legacy/profile reviewers stay flag-only)
 - [ ] Step 5c: When `review.jev.select` is on, run `keryx review jev-select` over the finalized candidate set and drop its `skip` decisions from Wave A/B — see "Reviewer selection with Jev"
 - [ ] Step 6: Plan sub-agent dispatch and token budgets; compute each dispatch's model with `keryx review tier` (6a: publish this plan)
 - [ ] Step 7: Stage 1 gate - spec compliance check (if issue/task provided)
@@ -82,9 +82,9 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` once, 
 A reviewer on this host cannot open a path: its file tool reads inside its working directory only, and a pointer it cannot follow becomes a round spent on a refusal. So the pointer rule above does not apply; the TEXT travels in the prompt, in slices small enough to finish.
 
 1. **Slice first.** `keryx review slice --ref <base> --out <dir>` after `keryx review scope`. It writes `slice-NN.diff` files of at most 150000 bytes each and a `manifest.json`; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
-2. **Slice text in the prompt.** Each reviewer's prompt holds the content of the slices assigned to it (the file bodies, not their paths), plus the `slices` ids in its reviewer-input.
+2. **Slices travel by `context_files`.** Write the slices under the project (the default `--out`, `.metaproject/data/review/slices`, already is) and pass each reviewer its slice paths in `spawn_subagent`'s `context_files`: the host copies the text into that reviewer's task, so you never paste or retype a slice. Put the `slices` ids in its reviewer-input. A dispatch that names a git range but no slice and no `context_files` leaves the reviewer with nothing to read — that is `BLOCKED`, not a review.
 3. **Check before dispatch.** `keryx review dispatch-check --payload <file> --manifest <dir>/manifest.json` for the wave; exit 1 means a payload names no slice, is over the ceiling, or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
-4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time.
+4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time. Give each reviewer `max_rounds` of at least 40 (the default); a reviewer that spends its rounds reading the skill and the schema returns nothing.
 5. **Incomplete means retry once, then Not run.** On `INCOMPLETE` or `BLOCKED`, `keryx review retry-plan --manifest <dir>/manifest.json --result <result.json>` decides: it cuts the assigned slices in half and names the one retry, and after that prints the `- **Not run:** …` line to paste into the report. An unfinished reviewer is never counted as a clean pass.
 6. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
 

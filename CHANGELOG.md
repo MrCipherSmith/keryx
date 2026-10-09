@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.88] - 2026-10-09
+
+### Shell
+
+- A turn can start up to 16 subagents at once and 32 in total (it was 6 at once: the 30-minute runtime pool divided by the 5-minute reservation, so reviewers 7 to 12 were refused with `budget inheritance denied`). The runtime pool is now 80 minutes, so a turn's worst-case spend is larger than before.
+- `spawn_subagent` takes `context_files`: project-relative files (review slices) the host copies into the child's task. A read-only child can no longer be left without the text it must review, and the dispatcher no longer retypes a 150 KB slice for every reviewer. Native children only; `.env*`, key files and `.git` are refused; the file text goes to the child's prompt, not to fleet events, hooks or the artifact hash.
+
+### Review Process
+
+- `review-orchestrator` passes slices through `context_files`, treats an `auto` or `trust` shell session as unattended for the start questions, and tells a reviewer to keep at least 40 rounds (flow 420).
+
 ## [0.3.87] - 2026-10-09
 
 ### Shell
