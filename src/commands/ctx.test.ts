@@ -589,6 +589,55 @@ test("ctx run from a subdirectory writes artifacts to the project root, not besi
   }
 }, 60_000);
 
+test("ctx run --raw streams stdout/stderr unmodified, keeps the exit code and writes no artifact", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctx-raw-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    const payload = JSON.stringify({ ok: true, rows: Array.from({ length: 400 }, (_, i) => i) });
+    const proc = Bun.spawn(
+      ["bun", CLI, "ctx", "run", "--raw", "--", "sh", "-c", `printf '%s' '${payload}'; echo oops >&2; exit 3`],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+
+    expect(exitCode).toBe(3);
+    expect(stdout).toBe(payload);
+    expect(JSON.parse(stdout).ok).toBe(true);
+    expect(stderr).toContain("oops");
+    expect(existsSync(path.join(root, ".metaproject", "data", "gdctx"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("ctx run --raw works without a separator and without a command it prints usage", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ctx-raw2-"));
+  try {
+    const ok = Bun.spawn(["bun", CLI, "ctx", "run", "--raw", "echo", "hi"], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [out, okCode] = await Promise.all([new Response(ok.stdout).text(), ok.exited]);
+    expect(okCode).toBe(0);
+    expect(out).toBe("hi\n");
+
+    const bare = Bun.spawn(["bun", CLI, "ctx", "run", "--raw", "--"], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [err, bareCode] = await Promise.all([new Response(bare.stderr).text(), bare.exited]);
+    expect(bareCode).toBe(1);
+    expect(err).toContain("Usage: keryx ctx run [--raw]");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("ctx help documents --raw for machine artifacts", async () => {
+  const proc = Bun.spawn(["bun", CLI, "ctx"], { stdout: "pipe", stderr: "pipe" });
+  const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  expect(stdout).toContain("keryx ctx run [--raw] -- <command...>");
+  expect(stdout).toContain("machine artifact");
+});
+
 // Regression: `keryx ctx diff` must describe the working tree it is invoked
 // from — including a linked `git worktree`, the isolation model used for
 // concurrent flows — and must not miss staged or untracked work. Bare

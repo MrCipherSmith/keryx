@@ -657,3 +657,19 @@ State what made the original claim wrong, in one sentence, and if the same
 reasoning error has now happened twice in one review, say that too. A reviewer
 that names its own recurring error is calibrating; one that quietly drops a
 finding is hiding a result.
+
+## Job Context Awareness
+
+When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
+
+```
+JOB_NAME:     <job-name>
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
+```
+
+If provided and the file exists, read the context document **before** running scope detection.
+Use it to understand:
+- Intentionally chosen libraries and patterns (do not flag as issues)
+- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
+
+If absent, proceed normally — context is optional and non-blocking.

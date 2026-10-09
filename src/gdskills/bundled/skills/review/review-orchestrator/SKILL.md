@@ -13,7 +13,7 @@ triggers:
   - "review --legacy-profiles"
 metadata:
   author: "MrCipherSmith"
-  version: "1.10.0"
+  version: "1.11.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
@@ -76,6 +76,17 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` once, 
 - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract.
 - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`.
 - The model comes from `keryx review tier` (Step 6).
+
+## Shell host (keryx shell, or any host with no file-reading subagent) — mandatory
+
+A reviewer on this host cannot open a path: its file tool reads inside its working directory only, and a pointer it cannot follow becomes a round spent on a refusal. So the pointer rule above does not apply; the TEXT travels in the prompt, in slices small enough to finish.
+
+1. **Slice first.** `keryx review slice --ref <base> --out <dir>` after `keryx review scope`. It writes `slice-NN.diff` files of at most 150000 bytes each and a `manifest.json`; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
+2. **Slice text in the prompt.** Each reviewer's prompt holds the content of the slices assigned to it (the file bodies, not their paths), plus the `slices` ids in its reviewer-input.
+3. **Check before dispatch.** `keryx review dispatch-check --payload <file> --manifest <dir>/manifest.json` for the wave; exit 1 means a payload names no slice, is over the ceiling, or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
+4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time.
+5. **Incomplete means retry once, then Not run.** On `INCOMPLETE` or `BLOCKED`, `keryx review retry-plan --manifest <dir>/manifest.json --result <result.json>` decides: it cuts the assigned slices in half and names the one retry, and after that prints the `- **Not run:** …` line to paste into the report. An unfinished reviewer is never counted as a clean pass.
+6. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
 
 ## Control
 
@@ -1568,19 +1579,7 @@ and name unchecked commits. Do not duplicate findings; cite extended ones.
 
 ## Job Context Awareness
 
-When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
-
-```
-JOB_NAME:     <job-name>
-CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
-```
-
-If provided and the file exists, read the context document **before** running scope detection.
-Use it to understand:
-- Intentionally chosen libraries and patterns (do not flag as issues)
-- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
-
-If absent, proceed normally — context is optional and non-blocking.
+When a prompt carries `JOB_NAME` and `CONTEXT_PATH`, read that context document before scope detection (`SKILL.detail.md` § "Job Context Awareness"). It is optional and non-blocking.
 
 ---
 

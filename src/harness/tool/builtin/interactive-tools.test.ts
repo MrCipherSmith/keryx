@@ -78,3 +78,9 @@ test("read_file rejects an absolute-path escape", async () => {
   expect(result.isError).toBe(true);
   expect(result.output).toMatch(/escapes the project root/);
 });
+
+test("read_file outside-cwd refusal names the cause and the alternative", async () => {
+  const result = await tool("read_file").invoke({ path: "/etc/hosts" });
+  expect(result.output).toContain("working directory");
+  expect(result.output).toContain("outside it use shell_exec `cat <path>`");
+});

@@ -1524,3 +1524,102 @@ test("`review reviewers --json` exits 1 and reports `bundledSource: \"not-found\
   expect(parsed.bundledSource).toBe("not-found");
   expect(parsed.bundled).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------
+// Slice, dispatch-check, retry-plan (flow 418, AC7/AC8/AC9)
+// ---------------------------------------------------------------------------
+
+function sliceGitFile(filePath: string, count: number): string {
+  const lines = Array.from({ length: count }, (_, n) => `+export const v${n} = ${n};`);
+  return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n@@ -1,0 +1,${count} @@\n${lines.join("\n")}\n`;
+}
+
+test("`review slice --help` prints usage and writes nothing", async () => {
+  await reviewCommand(["slice", "--help"]);
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(out).toContain("keryx review slice");
+  expect(out).toContain("--max-bytes");
+});
+
+test("`review slice` writes bounded slices and a manifest, and omits a csv ledger by name", async () => {
+  const csv = Array.from({ length: 6000 }, () => "+2026-10-01,acct-000123,debit,19.99,EUR,settled").join("\n");
+  const diff =
+    sliceGitFile("src/alpha/a.ts", 400) +
+    sliceGitFile("src/beta/b.ts", 400) +
+    `diff --git a/data/ledger.csv b/data/ledger.csv\n--- a/data/ledger.csv\n+++ b/data/ledger.csv\n@@ -1,0 +1,6000 @@\n${csv}\n`;
+  await writeFile(path.join(ROOT, "change.diff"), diff, "utf8");
+
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "9000", "--out", "out", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const printed = JSON.parse(logs.join("\n"));
+  expect(printed.omissions.map((o: { path: string }) => o.path)).toEqual(["data/ledger.csv"]);
+  expect(printed.omissions[0].reason).toBe("data-ledger");
+  expect(printed.slices.length).toBeGreaterThan(2);
+
+  const manifest = JSON.parse(await readFile(path.join(ROOT, "out", "manifest.json"), "utf8"));
+  for (const slice of manifest.slices) {
+    const text = await readFile(path.join(ROOT, "out", slice.path), "utf8");
+    expect(Buffer.byteLength(text)).toBe(slice.bytes);
+    expect(slice.bytes).toBeLessThanOrEqual(9000);
+  }
+});
+
+test("`review slice` refuses an unknown flag and a ceiling below the minimum", async () => {
+  await reviewCommand(["slice", "--nope"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--nope");
+
+  errors = [];
+  process.exitCode = 0;
+  await writeFile(path.join(ROOT, "empty.diff"), "", "utf8");
+  await reviewCommand(["slice", "--diff", "empty.diff", "--max-bytes", "5"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--max-bytes");
+});
+
+test("`review dispatch-check` refuses a diff payload with no slice and exits 1", async () => {
+  const payload = {
+    review_context: {
+      request: { raw: "review" },
+      scope: { mode: "diff", files: ["src/a.ts"] },
+      routing: { selected_reviewers: ["review-logic"] },
+      token_policy: { context_mode: "light", omissions: [] },
+    },
+    reviewer: "review-logic",
+    scope_mode: "diff",
+    model: { tier: "standard", tier_reasons: ["base"], tier_resolution: "session-fallback", model_discovery: {}, inherit: true },
+    budget: { max_findings: 10 },
+  };
+  await writeFile(path.join(ROOT, "payload.json"), JSON.stringify(payload), "utf8");
+  await reviewCommand(["dispatch-check", "--payload", "payload.json", "--json"]);
+  expect(process.exitCode).toBe(1);
+  expect(JSON.parse(logs.join("\n")).errors[0].code).toBe("REVIEWER_INPUT_NO_SLICE");
+
+  logs = [];
+  process.exitCode = 0;
+  await reviewCommand(["dispatch-check", "--payload", "missing.json"]);
+  expect(process.exitCode).toBe(2);
+});
+
+test("`review retry-plan` retries once on smaller slices, then reports Not run", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 4 }, (_, i) => sliceGitFile(`src/m/f${i}.ts`, 80)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "30000", "--out", "out"]);
+  await writeFile(path.join(ROOT, "result.json"), JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE" }), "utf8");
+  logs = [];
+
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "result.json", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const first = JSON.parse(logs.join("\n"));
+  expect(first.decision).toBe("retry");
+  expect(first.dispatch.length).toBeGreaterThan(1);
+  const retried = JSON.parse(await readFile(path.join(ROOT, "out", "manifest.json"), "utf8"));
+  expect(retried.slices.some((s: { id: string }) => s.id.startsWith("r1-review-logic-"))).toBe(true);
+
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "result.json", "--json"]);
+  const second = JSON.parse(logs.join("\n"));
+  expect(second.decision).toBe("not-run");
+  expect(second.reportLine).toContain("- **Not run:** review-logic");
+  expect(second.dispatch).toEqual([]);
+});
