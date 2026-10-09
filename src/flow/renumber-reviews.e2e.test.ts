@@ -18,6 +18,7 @@ import path from "node:path";
 import { flowCommand, flowServiceDeps } from "../commands/flow";
 import { reviewCommand } from "../commands/review";
 import { readFlowReviewRounds } from "../review/loop";
+import { readyResearchFixture } from "../review/research.test-helpers";
 import { reviewNotesDir } from "../review/review-notes";
 import type { ManagedReviewManifest, StructuredReviewFinding } from "../review/types";
 import { readReviewRounds, runReviewGate } from "./review-gate";
@@ -101,6 +102,11 @@ async function ingestRound(fromDir: string, flowId = "001", reviewId = "round-1"
     ["# Round 1", "", "```json keryx:findings", JSON.stringify(results, null, 2), "```", ""].join("\n"),
     "utf8",
   );
+  await writeFile(
+    path.join(ROOT, "research.json"),
+    JSON.stringify(readyResearchFixture(["review-logic"], ["F-001"])),
+    "utf8",
+  );
   await reviewCommand([
     "ingest",
     "--report",
@@ -113,6 +119,8 @@ async function ingestRound(fromDir: string, flowId = "001", reviewId = "round-1"
     reviewId,
     "--reviewers",
     "review-logic",
+    "--research",
+    "research.json",
   ]);
 }
 

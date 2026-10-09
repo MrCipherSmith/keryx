@@ -78,9 +78,12 @@ describe("keryx serve starts the research sync job", () => {
       const seen = await readUntil(proc.stdout, /research sync could not run: run from the repository root/);
       expect(seen).toContain("listening on http://");
 
-      // The notice is printed after the day is recorded, but poll briefly rather than assume the order.
-      for (let i = 0; i < 20 && (await readResearchSyncFired(project)) === null; i += 1) await Bun.sleep(250);
-      const fired = await readResearchSyncFired(project);
+      // The notice precedes the terminal write; a claim alone has no `ok` yet.
+      let fired = await readResearchSyncFired(project);
+      for (let i = 0; i < 20 && fired?.ok === undefined; i += 1) {
+        await Bun.sleep(250);
+        fired = await readResearchSyncFired(project);
+      }
       expect(fired).toMatchObject({ ok: false });
       expect(fired?.day).toBe(new Date().toISOString().slice(0, 10));
       expect(existsSync(researchSyncFiredPath(project))).toBe(true);
