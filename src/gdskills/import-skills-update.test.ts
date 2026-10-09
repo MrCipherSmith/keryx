@@ -92,7 +92,7 @@ describe("skills update text output", () => {
     const dir = await writePackage("review-house");
     await importProjectSkills({ projectRoot: cwd, from: dir });
     const result = await updateProjectSkills({ projectRoot: cwd, all: true, dryRun: true });
-    expect(Object.keys(result).sort()).toEqual(["dryRun", "force", "from", "imported", "only", "rules"]);
+    expect(Object.keys(result).sort()).toEqual(["dryRun", "force", "from", "imported", "only", "rules", "templates"]);
     expect(result.imported[0]?.status).toBe("would-overwrite");
   });
 
