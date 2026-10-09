@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.84] - 2026-10-09
+
+Range: `v0.3.83..87dd2c8d` plus the release version and notes.
+
+### Features
+
+- `keryx skills import` and `keryx skills update` copy a package's `templates/` files next to its `SKILL.md`, under the same security gate and symlink containment as the rest of the import; `keryx skills remove` deletes them with the package. A package that ships a report overlay now carries it into the project, so a skill no longer reads the overlay from the source repository. The JSON result gains a `templates` field (PR #935, flow 416).
+
 ## [0.3.83] - 2026-10-09
 
 Range: `v0.3.82..d31ee742` plus the release version and notes.
