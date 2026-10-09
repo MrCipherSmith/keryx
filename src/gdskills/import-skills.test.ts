@@ -579,7 +579,7 @@ describe("package names that are not already slugs", () => {
         ["review-house-api", "skipped", ".metaproject/project-skills/review/review-house-api"],
         ["review-logic", "skipped", ".metaproject/project-skills/review/review-logic"],
       ]);
-      expect(result.imported[0]?.reason).toBe("already exists; pass --force to overwrite");
+      expect(result.imported[0]?.reason).toBe("already exists; pass --force to overwrite, or run `keryx skills update` to refresh it from its origin");
       expect(result.imported[1]?.reason).toMatch(/bundled keryx skill/);
     }
     expect(await readFile(installed("review-house-api"), "utf8")).toBe(before);
