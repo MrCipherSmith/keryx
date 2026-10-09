@@ -134,11 +134,11 @@ test("AC2: isTrustRoutineCommand allows review/context chains and refuses everyt
   for (const command of [
     "cd ../dir && keryx ctx run -- keryx review scope --help",
     "keryx review scope --base main",
-    "keryx review verify --run",
+    "keryx review status",
     "keryx ctx run -- bun test src/foo.test.ts",
     "keryx ctx rg foo src",
     "keryx flow status",
-    "cd /tmp/x && keryx review finalize --out r.md",
+    "cd /tmp/x && keryx review complete --round 1",
     "git status",
   ]) {
     expect(isTrustRoutineCommand(command)).toBe(true);
@@ -150,6 +150,10 @@ test("AC2: isTrustRoutineCommand allows review/context chains and refuses everyt
     "keryx workspace confirm-review --workspace ws-1",
     "git push origin main",
     "keryx review reply 12 --body hi",
+    "keryx review comments 12",
+    "keryx review ci-triage 12",
+    "keryx review jev-rules",
+    "keryx review",
     "keryx ctx run -- curl https://example.com",
     "keryx review scope; rm -rf build",
     "keryx review scope | tee out.txt",
@@ -185,7 +189,7 @@ async function runAfterUntrusted(
 test("AC2: routine review commands raise zero approval prompts in trust, even after an untrusted tool result", async () => {
   const commands = [
     "cd ../dir && keryx ctx run -- keryx review scope --help",
-    "keryx review verify --run",
+    "keryx review status",
     "keryx ctx run -- bun test src/foo.test.ts",
   ];
   const { approvals, ran } = await runAfterUntrusted("trust", commands);

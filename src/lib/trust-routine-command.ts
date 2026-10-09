@@ -21,7 +21,22 @@ const GIT_READ_SUBCOMMANDS: ReadonlySet<string> = new Set([
   "merge-base",
   "blame",
 ]);
-const REVIEW_OUTBOUND_SUBCOMMANDS: ReadonlySet<string> = new Set(["reply"]);
+const REVIEW_LOCAL_SUBCOMMANDS: ReadonlySet<string> = new Set([
+  "attach",
+  "start",
+  "scope",
+  "slice",
+  "dispatch-check",
+  "retry-plan",
+  "floor",
+  "blast-radius",
+  "budget",
+  "tier",
+  "status",
+  "reviewers",
+  "ingest",
+  "complete",
+]);
 const EXEC_FLAGS: readonly string[] = ["--pre", "--hostname-bin", "--output", "--ext-diff", "--exec", "--upload-pack", "--post", "--publish", "--push"];
 
 function hasExecFlag(words: readonly string[]): boolean {
@@ -33,7 +48,7 @@ function isRoutineKeryx(words: readonly string[]): boolean {
   const verb = words[2];
   if (sub === undefined) return false;
   if (sub === "review") {
-    return verb === undefined || (!REVIEW_OUTBOUND_SUBCOMMANDS.has(verb) && !hasExecFlag(words));
+    return verb !== undefined && REVIEW_LOCAL_SUBCOMMANDS.has(verb) && !hasExecFlag(words);
   }
   if (sub === "flow") return verb !== undefined && FLOW_READ_SUBCOMMANDS.has(verb);
   if (sub === "gdgraph") return verb !== undefined && GRAPH_READ_SUBCOMMANDS.has(verb);

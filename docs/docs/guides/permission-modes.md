@@ -108,6 +108,40 @@ ever be changed by you, directly, in the running session. Nothing a tool or
 the model outputs can set it — that is a deliberate boundary, not an
 oversight.
 
+## Long runs in the shell
+
+A review of a large pull request is hundreds of tool calls. The shell is built to
+carry one to the end without you typing anything after the task.
+
+- **Round limit.** A turn may use 40 tool rounds in `ask` and `auto`, and **200 in
+  `trust`**. The limit follows the mode in force when the turn starts, so `/mode
+  trust` takes effect on the next turn. `KERYX_AGENT_MAX_ROUNDS` still overrides
+  both. When the limit is hit, the "reset" choice adds the limit of the current mode.
+- **No prompt for routine commands.** In `trust`, a short `&&` chain of `cd`,
+  `keryx review`, `keryx ctx rg|read|diff|run --`, read-only `keryx flow`, `gdgraph`
+  and `git` subcommands, and `bun test` runs without asking, even after the turn has
+  read untrusted content (web or MCP results). Destructive commands, credential
+  access, SAC and publish gates, and every other command still ask.
+- **Open plans do not end the turn.** In `trust`, a turn that would end with open
+  plan items continues on its own, at most 8 times in a row, and stops earlier when
+  the model makes no progress.
+- **Answers are kept.** What you answer to a question the agent asks (counterpart,
+  model plan, budget, scope) is stored in the session slate, so it is not asked again
+  after compaction or in a later turn. Questions marked irreversible are always asked.
+- **Waves of 10.** Up to 10 subagents run at once, each with a round budget of 40
+  (at most 200 per subagent).
+- **Slash commands are queued, not dropped.** A command typed while a turn runs is
+  shown as `queued as qN` and runs when the turn ends; `/queue` lists, edits and
+  removes. `/new`, `/clear` and `/resume` are refused while busy, because running
+  them later would swap the session under the questions queued behind them.
+- **Ctrl+C cancels the turn.** During a turn, one Ctrl+C cancels it and returns to the
+  prompt. At an idle prompt, the first Ctrl+C shows a hint and a second one within 2
+  seconds exits; `/exit` always exits. Exiting a shell started with
+  `/remote-control` ends its Telegram topic.
+
+For the review side (`keryx review slice`, `dispatch-check`, `retry-plan`,
+`keryx ctx run --raw`) see the [CLI reference](../cli-reference.md).
+
 ## Read-only mode: `/plan`
 
 `readOnly` is a separate, **orthogonal** toggle — not a fourth mode. Where
