@@ -18,7 +18,7 @@ counts as a review and not as a comment stream:
 
 | Machine `verdict` | Review state |
 |---|---|
-| `REQUEST_CHANGES` | Request changes |
+| `REQUEST_CHANGES` | Request changes, if the reviewer may; on the reviewer's own PR GitHub rejects it, so Comment |
 | `APPROVE` / `APPROVE_WITH_SUGGESTIONS` | Approve, if the reviewer may approve; else Comment |
 | PR already merged or closed | a plain PR comment — a review state no longer gates anything |
 
