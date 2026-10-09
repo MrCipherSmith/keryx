@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -1283,4 +1283,37 @@ test("flow 420: context_files are refused for external children and stay out of 
   });
   expect(result.isError).toBe(true);
   expect(String(result.output)).toContain("context_files is not supported for external");
+});
+
+test("flow 420: save_result_to writes the child's full text inside the project and refuses unsafe paths", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveres-"));
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-saveres-out-"));
+  try {
+    const tool = createSpawnSubagentTool({
+      cwd: root,
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => textProvider("REVIEW_RESULT body"),
+      getDetectedProviders: () => [{ name: "ollama" }],
+    });
+    const ok = await tool.invoke({ task: "review", save_result_to: ".metaproject/data/review/raw/logic.txt" });
+    expect(ok.status).toBe("Completed");
+    expect(String(ok.output)).toContain("[full result saved to .metaproject/data/review/raw/logic.txt]");
+    expect(await readFile(path.join(root, ".metaproject/data/review/raw/logic.txt"), "utf8")).toContain("REVIEW_RESULT body");
+
+    await symlink(outside, path.join(root, "linkdir"));
+    for (const bad of ["../escape.txt", "linkdir/x.txt", ".env.local", ".git/hooks/x", ""]) {
+      const r = await tool.invoke({ task: "review", save_result_to: bad });
+      expect(r.isError).toBe(true);
+    }
+    await mkdir(path.join(root, "adir"));
+    expect((await tool.invoke({ task: "review", save_result_to: "adir" })).isError).toBe(true);
+    expect((await tool.invoke({ task: "review", save_result_to: 5 as unknown as string })).isError).toBe(true);
+
+    const ext = await tool.invoke({ task: "review", runtime: { kind: "external", agent: "claude" }, save_result_to: "r.txt" });
+    expect(ext.isError).toBe(true);
+    expect(String(ext.output)).toContain("save_result_to is not supported for external");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
 });
