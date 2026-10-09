@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.85] - 2026-10-09
+
+Range: `v0.3.84..3c4d68f6` plus the release version and notes.
+
+### Review Process
+
+- Managed review completion and flow gates validate research and dispatch evidence, including scope census, unresolved research obligations and raw-to-canonical reconciliation. A closed round is revalidated rather than trusted solely by its closed status (PR #915, flow 405).
+- Review CLI, schemas and orchestrator instructions carry the research/dispatch contract; successful test fixtures provide explicitly synthetic evidence, while missing-ledger and post-close tampering remain negative cases.
+
+### Tests and Reliability
+
+- Add contract regressions and stabilize asynchronous fixture cleanup, injected clocks, review artifact paths, skill projections and bus heartbeat fixtures without weakening production review gates.
+- The final PR HEAD passed GitHub CI: AC8 full suite at 5000 ms with preload, 30,263 passed, 47 skipped, zero failed; core gate, 21,062 passed, 13 skipped, zero failed.
+
+### Known Limitation
+
+- **AC9 remains open.** These changes improve enforcement and evidence accounting; they do not establish improved first-round defect detection. Blind-review evaluations still missed substantial reference findings, and a live evaluation after updating is pending. This release does not claim review-completeness acceptance.
+
 ## [0.3.84] - 2026-10-09
 
 Range: `v0.3.83..87dd2c8d` plus the release version and notes.
