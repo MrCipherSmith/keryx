@@ -79,9 +79,9 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` once, 
 
 ## Control
 
-- **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code, and each re-review counts toward the ceiling.
-- **Waves.** Split by diff domain: logic and security first, then frontend and backend, then style and tests; A/B/C below keep their dependency order. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
-- **Rate limits.** On `STATUS: RATE_LIMITED`, halve the wave, requeue the rest and honour `retry-after`. After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+- **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+- **Waves.** Split by diff domain (`core` = logic, security, architecture; `domain` = frontend, backend, conventions; `support` = style, tests), in that order; A/B/C below keep their dependency order. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
+- **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`. After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
 - **Done when** every dispatched reviewer's result is recorded with `keryx review ingest`, the stage counts and **Not run** are in the report, and `keryx review complete` has run.
 
 ---

@@ -426,7 +426,7 @@ re-request after fixes. A gating round runs the composition the start questions
 selected.
 
 - **No dispatch tool, no review.** A host that cannot dispatch subagents — this
-  engine running inside a subagent is the usual case — returns
+  engine running inside a subagent, say — returns
   `STATUS: BLOCKED` with reason `nested_dispatch_unavailable` and no verdict.
   It does not review the diff alone and call that a round. Measured (flow 405):
   a single-agent round on a 150-line frontend PR wrote "did not dispatch any

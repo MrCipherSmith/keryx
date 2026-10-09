@@ -5,7 +5,7 @@
 ### Review Process
 
 - `review-orchestrator`, `flow-orchestrator` and `job-orchestrator` open with a preflight: the agent that loads the skill is the orchestrator and runs inline in the main session; without the `Agent` tool or with the nesting depth spent, the output is the single line `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`. The `SUBAGENT-STOP` block is gone (flow 417).
-- A diff that only touches docs, comments or formatting ends in `no round: <reason>` and launches no reviewer; `--all` forces a round. The default profile is read-only; `--fix` hands findings to `flow-orchestrator` or `task-implementer` and each re-review counts toward `REVIEW_ROUND_CAP`.
+- A diff that only touches docs, lockfiles or generated files ends in `round not needed: <reason>` and launches no reviewer; `--all` forces a round. The default profile is read-only; `--fix` hands findings to `flow-orchestrator` or `task-implementer` and each re-review counts toward `REVIEW_ROUND_CAP`.
 - Reviewer waves are split by diff domain, at most 10 reviewers per wave for `--all`; `DEFAULT_MAX_PARALLEL_REVIEWERS` (4) is replaced by that rule. `STATUS: RATE_LIMITED` halves the wave at most twice, then `BLOCKED rate_limited`. `keryx review budget` gains `--full`.
 - The exported agent vocabulary can express the spawn tool, and an orchestrating agent keeps it. The managed block, `catalog.md` and `routing.md` say the orchestrators run in the main session.
 - Skill hygiene: dead schema reference, double step numbering and a raw `find` fixed; the `review-orchestrator` ceiling drops from 1712 to 1615 lines.

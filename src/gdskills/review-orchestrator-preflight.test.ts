@@ -131,9 +131,9 @@ describe("AC6 / AC9 (skill text): waves split by domain, bounded, and adaptive t
   const control = section(SKILL, "## Control");
 
   test("waves are split by diff domain and capped at the full-round ceiling", () => {
-    expect(control).toContain("logic and security");
-    expect(control).toContain("frontend and backend");
-    expect(control).toContain("style and tests");
+    expect(control).toContain("`core` = logic, security, architecture");
+    expect(control).toContain("`domain` = frontend, backend, conventions");
+    expect(control).toContain("`support` = style, tests");
     expect(control).toContain(`at most ${MAX_REVIEWERS_PER_WAVE_FULL} reviewers per wave`);
     expect(control).toContain("`MAX_REVIEWERS_PER_WAVE_FULL`");
   });

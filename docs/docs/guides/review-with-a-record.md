@@ -91,8 +91,8 @@ Before step 0 it checks three things:
    (Claude Code nests at most 3 deep). If not, the whole output is
    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`,
    and nothing else runs. It never reviews alone.
-2. **A round is needed.** A diff that only touches docs, comments or formatting
-   gets `no round: <reason>` and launches no reviewer. `--all` forces a round.
+2. **A round is needed.** A diff that only touches docs, lockfiles or generated files
+   gets `round not needed: <reason>` and launches no reviewer. `--all` forces a round.
 3. **A round is left.** The ceiling is `REVIEW_ROUND_CAP` rounds on one
    `merge-base..HEAD` (5 today); after the last one it stops and reports to you.
 
@@ -101,8 +101,9 @@ profile: the orchestrator still changes no code itself, it hands the findings to
 `flow-orchestrator` or `task-implementer`, takes the new head and runs the next
 round, and each re-review counts toward the ceiling.
 
-Reviewers are dispatched in waves split by diff domain: logic and security first,
-then frontend and backend, then style and tests; the verifier runs last and only
+Reviewers are dispatched in waves split by diff domain: `core` (logic, security,
+architecture) first, then `domain` (frontend, backend, conventions), then `support`
+(style, tests); the verifier runs last and only
 removes findings. For `--all` and a full review a wave holds at most 10 reviewers
 (`keryx review budget --full` prints the plan). A reviewer that answers
 `STATUS: RATE_LIMITED` is requeued with the wave halved and `retry-after`

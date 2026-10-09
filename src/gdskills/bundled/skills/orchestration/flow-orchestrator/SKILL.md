@@ -436,19 +436,17 @@ Before accepting implementation:
 4. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
    never handed whole to one subagent: one without a dispatch tool returns `STATUS: BLOCKED`.
    ```bash
-   keryx review budget --spent <usd-so-far> --outstanding <subagents you already have in flight>
+   keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
    ```
    A non-zero exit means the spend ceiling (3 USD by default) has been reached:
    **stop and ask the user** rather than dispatching another fan-out — never shrink the fan-out to fit.
    Dispatch prompts point at sources (files, SHAs, the PR) and never paraphrase a contract.
 
-   `--outstanding` is the part that matters here. `review-orchestrator`
-   dispatches reviewers in parallel and runs *nested* under this skill, and
-   keryx cannot observe subagents in another process. Passing the count you
-   already have in flight is the only thing that makes the concurrency cap mean
-   anything across the nesting; omit it and the cap bounds the reviewer fan-out
-   alone, which the review record then states plainly rather than implying
-   otherwise.
+   `--outstanding` is the part that matters here. `review-orchestrator` runs inline
+   in this session and dispatches reviewers in parallel; keryx cannot observe other
+   subagents. Passing the count still running is the only thing that makes the
+   concurrency cap mean anything; omit it and the cap bounds the reviewer fan-out
+   alone, which the review record then states plainly. Add `--full` for `--all`.
 
 5. If findings require code changes, dispatch fix work through `task-implementer`
    and record the fix task in the flow.
@@ -586,7 +584,9 @@ the bound plus an escalation — never an unbounded loop.
    findings, affected graph, relevant wiki, and health/testing artifacts;
    identify the likely cycle cause; choose a materially different fix strategy
    or split the work into narrower tasks; record the decision in `journal.md`;
-   then continue with the enriched context.
+   then continue with the enriched context. The review round count is not reset:
+   past `REVIEW_ROUND_CAP` rounds on one merge-base..HEAD, report to the operator
+   instead of running another round.
 6. Never merge while findings or required checks remain unresolved. If the
    re-planned approach still cannot produce a mergeable PR, leave the flow
    `in-progress` and report the blocker instead of forcing completion.
