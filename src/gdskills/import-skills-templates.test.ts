@@ -220,7 +220,7 @@ describe("a template that differs from the project's copy", () => {
 });
 
 describe("the security gate and symlink containment cover templates", () => {
-  test("a prompt-injection template is refused, the rest of the package still lands", async () => {
+  test("a prompt-injection template refuses its whole package: nothing of it is written", async () => {
     const pkg = await writePackage();
     await writeTemplate(pkg, "bad.md", `# overlay\n\n${INJECTION}\n`);
     await writeTemplate(pkg, "good.md", "fine\n");
@@ -228,12 +228,61 @@ describe("the security gate and symlink containment cover templates", () => {
     const byFile = Object.fromEntries(result.templates.map((row) => [row.file, row]));
     expect(byFile["bad.md"]).toMatchObject({ status: "refused" });
     expect(byFile["bad.md"]?.security?.refused).toBe(true);
-    expect(byFile["good.md"]?.status).toBe("imported");
+    expect(byFile["good.md"]).toMatchObject({ status: "skipped" });
+    expect(byFile["good.md"]?.reason).toContain("another template of this package was refused");
+    expect(result.imported[0]).toMatchObject({ name: "review-house", status: "refused" });
+    expect(result.imported[0]?.reason).toContain("a template of this package was refused");
     expect(await exists(`${TEMPLATES}/bad.md`)).toBe(false);
-    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(true);
+    expect(await exists(`${TEMPLATES}/good.md`)).toBe(false);
+    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
     expect(renderImportProjectSkillsMarkdown(result)).toContain("--allow-flagged");
     exitNonZeroOnRefusal(result);
     expect(process.exitCode).toBe(1);
+  });
+
+  test("a dry run says the package would be refused and exits clean", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "bad.md", INJECTION);
+    const dry = await importPackage(pkg, { dryRun: true });
+    expect(dry.imported[0]?.status).toBe("would-refuse");
+    expect(dry.templates[0]?.status).toBe("would-refuse");
+    expect(await exists(PACKAGE)).toBe(false);
+  });
+
+  test("--allow-flagged lets the package land with its template", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "bad.md", INJECTION);
+    const result = await importPackage(pkg, { allowFlagged: true });
+    expect(result.imported[0]?.status).toBe("imported");
+    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(true);
+  });
+
+  test("a differing flagged template is refused, not offered a --force that then fails", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "report-overlay.md", "clean\n");
+    await importPackage(pkg);
+    await writeTemplate(pkg, "report-overlay.md", INJECTION);
+    const result = await importPackage(pkg);
+    expect(result.templates[0]?.status).toBe("refused");
+    expect(await read(`${TEMPLATES}/report-overlay.md`)).toBe("clean\n");
+  });
+
+  test("a flagged template written with --allow-flagged is unchanged on the next run without it", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "bad.md", INJECTION);
+    await importPackage(pkg, { allowFlagged: true });
+    const again = await importPackage(pkg);
+    expect(again.templates[0]?.status).toBe("unchanged");
+  });
+
+  test("a package whose SKILL.md is refused leaves no templates/ behind", async () => {
+    const pkg = await writePackage();
+    await writeFile(path.join(pkg, "SKILL.md"), `---\nname: review-house\ndescription: "x"\nmetadata:\n  category: review\n  paths: "src/**"\n---\n\n${INJECTION}\n`, "utf8");
+    await writeTemplate(pkg, "report-overlay.md", "overlay\n");
+    const result = await importPackage(pkg);
+    expect(result.imported[0]?.status).toBe("refused");
+    expect(result.templates).toEqual([]);
+    expect(await exists(TEMPLATES)).toBe(false);
   });
 
   test("a dry run says would-refuse and exits clean", async () => {
@@ -264,6 +313,53 @@ describe("the security gate and symlink containment cover templates", () => {
     }
     expect(await readdir(outside)).toEqual([]);
     expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
+  });
+
+  test("a template that is a symlink to an existing file outside the project refuses the run, whatever its bytes", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "report-overlay.md", "overlay\n");
+    const target = path.join(outside, "existing.md");
+    for (const bytes of ["overlay\n", "something else\n"]) {
+      await writeFile(target, bytes, "utf8");
+      await mkdir(path.join(cwd, TEMPLATES), { recursive: true });
+      await rm(path.join(cwd, TEMPLATES, "report-overlay.md"), { force: true });
+      await symlink(target, path.join(cwd, TEMPLATES, "report-overlay.md"));
+      for (const force of [false, true]) {
+        await expect(importPackage(pkg, { force })).rejects.toThrow(/Nothing was written/);
+      }
+      expect(await readFile(target, "utf8")).toBe(bytes);
+    }
+    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
+  });
+
+  test("a regular file where a template directory belongs skips the template in a dry run and a real run alike", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "slots/b.md", "b\n");
+    await mkdir(path.join(cwd, TEMPLATES), { recursive: true });
+    await writeFile(path.join(cwd, TEMPLATES, "slots"), "i am a file\n", "utf8");
+    for (const dryRun of [true, false]) {
+      const result = await importPackage(pkg, { dryRun });
+      expect(result.templates[0]).toMatchObject({ file: "slots/b.md", status: "skipped" });
+      expect(result.templates[0]?.reason).toContain("is a file, not a directory");
+    }
+    expect(await read(`${TEMPLATES}/slots`)).toBe("i am a file\n");
+  });
+
+  test("a directory at the destination refuses the run before anything is written, not an EISDIR crash", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "report-overlay.md", "overlay\n");
+    await mkdir(path.join(cwd, TEMPLATES, "report-overlay.md"), { recursive: true });
+    await expect(importPackage(pkg)).rejects.toThrow(/Nothing was written/);
+    expect(await exists(`${PACKAGE}/SKILL.md`)).toBe(false);
+  });
+
+  test("a templates/ directory that is a symlink at the source is not a templates directory", async () => {
+    const pkg = await writePackage();
+    await writeFile(path.join(outside, "overlay.md"), "outside\n", "utf8");
+    await symlink(outside, path.join(pkg, "templates"));
+    const result = await importPackage(pkg);
+    expect(result.templates).toEqual([]);
+    expect(await exists(TEMPLATES)).toBe(false);
   });
 
   test("a template file that is a symlink out of the project is refused with nothing written", async () => {
@@ -316,6 +412,22 @@ describe("skills update and skills remove", () => {
     await symlink(outside, path.join(cwd, TEMPLATES));
     await expect(updateProjectSkills({ projectRoot: cwd, all: true })).rejects.toThrow(/Nothing was written/);
     expect(await readdir(outside)).toEqual([]);
+  });
+
+  test("update with a flagged template leaves the installed SKILL.md and the other templates as they were", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "report-overlay.md", "v1\n");
+    await writeTemplate(pkg, "other.md", "o1\n");
+    await importPackage(pkg);
+    const installed = await read(`${PACKAGE}/SKILL.md`);
+    await writeFile(path.join(pkg, "SKILL.md"), `${installed}\nA new line from the source.\n`, "utf8");
+    await writeTemplate(pkg, "report-overlay.md", INJECTION);
+    await writeTemplate(pkg, "other.md", "o2\n");
+    const result = await updateProjectSkills({ projectRoot: cwd, all: true });
+    expect(result.templates.find((row) => row.file === "report-overlay.md")?.status).toBe("refused");
+    expect(await read(`${PACKAGE}/SKILL.md`)).toBe(installed);
+    expect(await read(`${TEMPLATES}/other.md`)).toBe("o1\n");
+    expect(await read(`${TEMPLATES}/report-overlay.md`)).toBe("v1\n");
   });
 
   test("remove deletes the templates with the package", async () => {
