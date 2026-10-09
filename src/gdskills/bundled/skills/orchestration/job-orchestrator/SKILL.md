@@ -22,13 +22,11 @@ metadata:
 license: "MIT"
 ---
 
-<SUBAGENT-STOP>
-If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
-This skill is for orchestrators and interactive session-level routing only.
-Proceed directly with your assigned task.
-</SUBAGENT-STOP>
-
 # Job Orchestrator
+
+## Preflight
+
+Run in the main session: this skill dispatches sub-agents. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose
 
@@ -1059,16 +1057,14 @@ carried in the dispatch prompt and reported in 2.9.
 **Step 1 — check the budget before dispatching, while stopping is still possible.**
 
 ```bash
-keryx review budget --spent <usd-so-far> --outstanding <subagents this orchestrator has in flight>
+keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
 ```
 
-`--outstanding` is not optional here. `src/review/caps.ts` names `job-orchestrator`
-as the outermost of the three nesting levels — `job-orchestrator` →
-`flow-orchestrator` → `review-orchestrator` — that its cap of 4 in-flight reviewers
-was chosen to survive. keryx is a CLI invoked once per command; it cannot observe
-subagents running inside another orchestrator's process. **The cap binds the nested
-total only when the parent declares its own in-flight count.** Omit `--outstanding`
-and the cap bounds the reviewer fan-out alone, which the record then states plainly.
+`--outstanding` is the number of subagents this session still has running while the
+round starts (0 when none). All three orchestrators run inline in the main session, so the
+reviewers are the only fan-out; keryx cannot observe other subagents, so **the wave size
+(at most 10 for `--all` or a full review; add `--full`) binds the total only when you
+declare that count.** Omit it and the record states that the cap bounds the reviewers alone.
 
 A non-zero exit means the spend ceiling (3 USD by default) is reached: stop and ask
 the user rather than dispatching another fan-out.
@@ -1122,29 +1118,25 @@ replaced. The command names no model — it ranks what the provider reports at r
 and, when it cannot rank anything, prints `inherit: true`, which means the dispatch
 runs on the session model. That is a correct answer, not a failure.
 
-**Step 6 — dispatch `review-orchestrator`.**
+**Step 6 — run `review-orchestrator` inline, in this main session.** Load
+`skills/gdskills/review/review-orchestrator/SKILL.md` yourself; do **not** wrap it in a
+`Task` — a subagent cannot spawn the reviewers and the skill answers
+`STATUS: BLOCKED nested_dispatch_unavailable`. Give it these inputs:
 
 ```
-Task({
-  description: "Review round <n>: <job-name>",
-  subagent_type: "general-purpose",
-  prompt: |
-    Load skill: skills/gdskills/review/review-orchestrator/SKILL.md
-
-    flags:            <selected flags, e.g. --backend --security --testing-practices>
-    commit_range:     <BASE_SHA>..HEAD
-    issue_url:        <issue URL, when the job has one — enables the Stage 1 spec gate>
-    context_doc:      <JOBS_ROOT>/<job-name>/ai/context.md
-    verification_mode: annotate
-    managed_review:   { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
-    is_fix_round:     <true on any round after the first>
-    pr_comments:      { enabled: <true when a PR exists> }
-
-    Emit the unified report AND the fenced ```json keryx:findings``` block.
-    Dispatch review-verifier (Wave C) over the consolidated findings and return
-    its verification claims as a file path.
-})
+flags:             <selected flags, e.g. --backend --security --testing-practices>
+commit_range:      <BASE_SHA>..HEAD
+issue_url:         <issue URL, when the job has one — enables the Stage 1 spec gate>
+context_doc:       <JOBS_ROOT>/<job-name>/ai/context.md
+verification_mode: annotate
+managed_review:    { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
+is_fix_round:      <true on any round after the first>
+pr_comments:       { enabled: <true when a PR exists> }
 ```
+
+It emits the unified report AND the fenced ```json keryx:findings``` block, and runs
+`review-verifier` (Wave C) over the consolidated findings, returning its verification
+claims as a file path.
 
 **Step 7 — verification is part of the round, not an extra.** `review-orchestrator`
 dispatches `review-verifier` in Wave C over the consolidated findings. The verifier
@@ -1310,7 +1302,7 @@ FOR iteration in [1, 2, 3]:
        keryx review comments collect --repo <r> --pr <n> --sha <new-head> --round <N+1> --out <file>
        keryx review scope        --ref "$BASE_SHA" --json > scope.json
        keryx review blast-radius --ref "$BASE_SHA" --previous blast-radius.json --json > blast-radius.json
-       <dispatch review-orchestrator with is_fix_round: true>
+       <run review-orchestrator inline, in this session, with is_fix_round: true>
        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
                             --scope scope.json --blast-radius blast-radius.json \
                             --verifications <file> --refuted <file> --outstanding <n>
@@ -1985,7 +1977,7 @@ What actually bounds this orchestrator:
 | review → fix rounds | 3 | 2.7, and `max_review_iterations` (`maximum: 3`) in the input contract |
 | repetition, whatever the count says | first repeat | the STUCK CHECK in 2.7, and `keryx review loop` against the durable record |
 | retries per step | recorded, not guessed | `metrics.steps[].retries`, incremented by `keryx job step --status in-progress` and read back with `keryx job status --json` |
-| reviewer fan-out | 4 in flight | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
+| reviewer fan-out | ≤10 per wave | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
 | spend | 3 USD by default | `keryx review budget --spent <usd>` — a non-zero exit means stop and ask |
 
 Each of these is a number some command reads or writes. A guard no command can

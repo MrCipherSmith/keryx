@@ -522,7 +522,7 @@ test("AC10: unreported spend reads `not recorded`, not `under`", async () => {
 });
 
 test("AC7/AC10: `review budget` plans waves and says whether the cap holds across nesting", async () => {
-  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f"]);
+  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f", "--parallel", "4"]);
   const output = logs.join("\n");
 
   expect(output).toContain("concurrency_cap: 4");
@@ -532,7 +532,7 @@ test("AC7/AC10: `review budget` plans waves and says whether the cap holds acros
 });
 
 test("AC7: a declared outstanding count is the only thing that reaches the nesting", async () => {
-  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--outstanding", "2"]);
+  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--parallel", "4", "--outstanding", "2"]);
   const output = logs.join("\n");
 
   expect(output).toContain("effective_wave_size: 2");

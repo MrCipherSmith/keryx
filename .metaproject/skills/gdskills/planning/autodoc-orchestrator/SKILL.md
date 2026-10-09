@@ -20,8 +20,7 @@ metadata:
   version: 1.0.0
 ---
 
-<!-- SUBAGENT-STOP: If you are a subagent dispatched by another orchestrator, HALT.
-     Return STATUS: BLOCKED — autodoc-orchestrator must run as top-level agent only. -->
+**Preflight:** run in the main session. Without the `Agent` tool or depth budget, output only `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`, with no tool calls.
 
 # autodoc-orchestrator
 

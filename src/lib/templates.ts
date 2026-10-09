@@ -1,4 +1,5 @@
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
+import { ORCHESTRATORS_INLINE_NOTE } from "./orchestrators-inline";
 import { renderMetaprojectGitignoreBlock as renderGeneratedGitignoreBlock } from "./metaproject-gitignore";
 import { CONTRACTS } from "../gdskills/contracts";
 
@@ -240,6 +241,7 @@ export function renderIndexMarkdown({
           "For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.",
           "For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.",
           "For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.",
+          ORCHESTRATORS_INLINE_NOTE,
           "When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.",
         ]
       : []),

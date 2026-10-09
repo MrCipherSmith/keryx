@@ -21,14 +21,16 @@ license: "MIT"
 
 # Flow Orchestrator
 
+## Preflight
+
+Run in the main session: this skill dispatches workers. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+
 ## Purpose
 
 Flow Orchestrator is the Task Manager-aware implementation orchestrator. Plan bridge: publish the tasks with `plan_set` under the ids `T1`…`Tn`, mirror each `keryx flow task done` with `plan_update`, and publish Phase 4's completion choice as `proposed` — see the `session-plan-bridge` rule.
 It wraps the existing gdskills pipeline with `keryx flow` state.
 
 Use this skill instead of `job-orchestrator` when the user wants a managed story/issue lifecycle with frozen acceptance criteria, task state, an explicit completion choice, Code Health, and a durable flow package in `.metaproject/flows/`.
-
-Do not modify `job-orchestrator` or `task-implementer` behavior. They remain usable without Task Manager. This skill coordinates them through flow state.
 
 ## Hard Preconditions
 
@@ -122,9 +124,8 @@ it already tried. The flow package does.
       keryx flow next <id> --json
       ```
 
-      This is the first task whose `status` is not `done` and whose declared
-      `dependsOn` are all `done` — the ordering computed from the package
-      instead of re-derived by you from prose.
+      This is the first task not `done` whose declared `dependsOn` are all
+      `done` — computed from the package, not re-derived from prose.
 
    4. **Read the `resume` field before dispatching anything.** It has three
       answers and they are not interchangeable:
@@ -141,10 +142,9 @@ it already tried. The flow package does.
         or close the task (`keryx flow task done <id> <Tn>`). Re-dispatching
         over an unresolved attempt is how the same work gets done twice.
 
-      `keryx flow next` also lists every OTHER not-done task carrying an
-      unresolved attempt, under `unresolved`. Those are parallel dispatches that
-      never reported back; resolve them the same way before assuming the flow is
-      idle.
+      `keryx flow next` also lists every OTHER not-done task with an unresolved
+      attempt, under `unresolved`: parallel dispatches that never reported back.
+      Resolve them the same way before assuming the flow is idle.
 
    5. Before dispatching a worker for that task, record the attempt:
 
@@ -436,19 +436,17 @@ Before accepting implementation:
 4. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
    never handed whole to one subagent: one without a dispatch tool returns `STATUS: BLOCKED`.
    ```bash
-   keryx review budget --spent <usd-so-far> --outstanding <subagents you already have in flight>
+   keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
    ```
    A non-zero exit means the spend ceiling (3 USD by default) has been reached:
    **stop and ask the user** rather than dispatching another fan-out — never shrink the fan-out to fit.
    Dispatch prompts point at sources (files, SHAs, the PR) and never paraphrase a contract.
 
-   `--outstanding` is the part that matters here. `review-orchestrator`
-   dispatches reviewers in parallel and runs *nested* under this skill, and
-   keryx cannot observe subagents in another process. Passing the count you
-   already have in flight is the only thing that makes the concurrency cap mean
-   anything across the nesting; omit it and the cap bounds the reviewer fan-out
-   alone, which the review record then states plainly rather than implying
-   otherwise.
+   `--outstanding` is the part that matters here. `review-orchestrator` runs inline
+   in this session and dispatches reviewers in parallel; keryx cannot observe other
+   subagents. Passing the count still running is the only thing that makes the
+   concurrency cap mean anything; omit it and the cap bounds the reviewer fan-out
+   alone, which the review record then states plainly. Add `--full` for `--all`.
 
 5. If findings require code changes, dispatch fix work through `task-implementer`
    and record the fix task in the flow.
@@ -586,7 +584,9 @@ the bound plus an escalation — never an unbounded loop.
    findings, affected graph, relevant wiki, and health/testing artifacts;
    identify the likely cycle cause; choose a materially different fix strategy
    or split the work into narrower tasks; record the decision in `journal.md`;
-   then continue with the enriched context.
+   then continue with the enriched context. The review round count is not reset:
+   past `REVIEW_ROUND_CAP` rounds on one merge-base..HEAD, report to the operator
+   instead of running another round.
 6. Never merge while findings or required checks remain unresolved. If the
    re-planned approach still cannot produce a mergeable PR, leave the flow
    `in-progress` and report the blocker instead of forcing completion.

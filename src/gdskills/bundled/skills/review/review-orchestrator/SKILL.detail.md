@@ -426,7 +426,7 @@ re-request after fixes. A gating round runs the composition the start questions
 selected.
 
 - **No dispatch tool, no review.** A host that cannot dispatch subagents — this
-  engine running inside a subagent is the usual case — returns
+  engine running inside a subagent, say — returns
   `STATUS: BLOCKED` with reason `nested_dispatch_unavailable` and no verdict.
   It does not review the diff alone and call that a round. Measured (flow 405):
   a single-agent round on a 150-line frontend PR wrote "did not dispatch any
@@ -503,3 +503,157 @@ New managed packages carry `research.json`, initially pending. Before closing a 
 Supply the ledger using `keryx review ingest --research <ledger.json>` alongside the report and findings. Format: `version: 1`, `scopeReviewed: true`, `rawReconciled: true`, `obligations: [...]`. Each obligation requires `id`, `source`, `question`, `status`, `evidence`, `reason`. Status `finding` additionally requires `finding` pointing to exactly one canonical finding ID or global ID. Other terminal statuses are `refuted` and `out-of-scope`, both requiring evidence and reason. Preserve distinct scenarios when deduplicating. Assert census/reconciliation flags only after performing those checks; an empty obligations array is valid only if the actual census found no open observations.
 
 Open, deferred and unverifiable obligations block completion. If context, runtime or budget prevents resolution, retain the obligation and report incomplete; do not relabel it refuted or out-of-scope. Completion and the flow gate re-read the ledger even when the manifest says closed. Legacy packages without this artifact remain compatible, not proven complete. This gate validates the declared ledger, not the truth or exhaustiveness of its census; independent source/raw audits remain necessary.
+
+## Why Wave C verifies instead of re-scoring
+
+Wave C used to run `review-strict`: a meta-pass that re-read the consolidated
+findings and **adjusted their severity with no new evidence**, under an elevation
+table biased 3:1 toward escalation. It was **removed, not improved**, and the
+reason is measured rather than stylistic:
+
+- **GPT-4 on GSM8K across self-correction rounds: 95.5 → 91.5 → 89.0.**
+  **GPT-3.5 on CommonSenseQA: 75.8 → 38.1.** Among the answers that changed,
+  correct → incorrect exceeded incorrect → correct (Huang et al., *Large Language
+  Models Cannot Self-Correct Reasoning Yet*, ICLR 2024, arXiv:2310.01798).
+- **Self-Refine (arXiv:2303.17651): +49.2 on dialogue response generation, +0.2
+  on maths.** Self-refinement gains are on subjective tasks and vanish on
+  verifiable reasoning. Judging whether a null-guard is missing is verifiable
+  reasoning.
+
+Re-scoring a finding by re-reading it is therefore not a rigour pass; it is a
+coin flip weighted toward more findings. **Do not restore it because it looks
+obviously useful — it looked obviously useful the first time.**
+
+`review-verifier` occupies the slot and differs in exactly one way that matters:
+**it runs something.** Verification that executes rejects 85–96% of false reports
+against 4–15% unaided while finding 30–44% more true bugs (AnyPoC,
+arXiv:2604.11950); Meta's TestGen-LLM funnel discards 75% of its own output
+(75% build → 57% build and pass → 25% improve coverage) and the surviving quarter
+reaches 73% human acceptance (arXiv:2402.09171).
+
+## Scope B — bounds, rejections and recompute
+
+It walks `gdgraph affected` outward from every changed file, ranks by edge
+distance, keeps distance ≤ 2, cuts at 40 files closest-first, and adds a changed
+file's naming-related tests when the graph did not already reach them. Requires a
+built graph — run `keryx gdgraph build` if it refuses.
+
+**Do not pick the files yourself, and do not widen it.** "Review the
+functionality so nothing breaks" naively means "review the whole repository every
+round", which is unaffordable *and* actively harmful: review quality decays as
+context grows — measured F1 0.65 at round 2 falling to 0.29 at round 10. An
+unbounded scope B makes later rounds worse than earlier ones.
+
+The bounds are measured on this repository, not guessed: at depth 2 the set is a
+median of 19 files (p90 65); depth 3 buys eight more in the median and doubles
+the p90. The 40-file cap fires on 25% of commits and removes only hop-2 entries
+on all but 2 of 80, so it almost never costs a direct dependent — and when it
+does, it says so.
+
+**Record the whole thing.** `--out "<review-package>/blast-radius.md"` writes the
+set, the depth, and **every file the cap removed**. A truncation nobody can see
+reads afterwards as "we checked everything", which is the claim this pipeline
+exists to stop making. An empty radius is reported as `unresolved`, not as clean:
+the graph indexes code, so a change to a skill, a rule or a schema has no blast
+radius at all and that is a different fact from "nothing depends on it".
+
+### The scope-B question, and what is rejected
+
+> Does this change break an existing behaviour **at these sites**?
+
+Nothing else. The blast-radius set is **under regression check, not under
+review**. A finding about style, naming or architecture in code the change did
+not touch is refused **by the orchestrator in code** — not discouraged here —
+under three rules, every one of them a fact about the claim rather than about who
+made it:
+
+| Rule | Refused because |
+|---|---|
+| `outside-set` | the file is neither in the computed set nor in the changed set; the reviewer went browsing |
+| `non-regression-severity` | below `major`. Under the canonical rubric `minor` states the code behaves correctly and `info` names neither trigger nor outcome; neither can be a claim that something broke |
+| `no-link-to-change` | nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this site |
+
+Rejections are **recorded, not deleted** — raise the observation under scope A or
+as a separate review. Pass `--brief` output verbatim into the scope-B dispatch:
+the code rejection is the enforcement, but a reviewer told afterwards has already
+spent the round producing findings that will all be refused.
+
+`class_scope` on a scope-B finding names the **caller that breaks**, not the
+changed line, because that is the site a human has to look at.
+
+### When it is recomputed
+
+| Round | Scope A | Scope B |
+|---|---|---|
+| 1 (first after the draft PR) | yes | yes |
+| 2..N | yes | recomputed only if the changed-file set moved |
+| final | yes | **yes, always** |
+
+Do not decide this by memory:
+
+```bash
+keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+```
+
+It prints the decision and the reason, and reuses the previous record when
+nothing moved. The final round recomputes whatever the file set did — otherwise a
+fix introduced in round 3 gets no regression check at all, and the round that
+certifies the flow is the one that checked the least.
+
+## Fix rounds — dispositions, regressions, withdrawal
+
+### Every prior finding leaves the round with a disposition
+
+A fix round that reports only new findings is unreadable: the author cannot tell
+which of their fixes landed. Close the loop explicitly — one line per prior
+finding, in the report, before the new findings:
+
+| Disposition | Meaning |
+|---|---|
+| `closed` | Checked against the code, not against the commit message, and the defect is gone |
+| `open` | The fix does not reach the defect; say what is still true |
+| `partial` | One site of the class was fixed and the enumeration named others |
+| `regressed` | The fix removed this defect and introduced another — file the new one separately |
+| `withdrawn` | The finding was wrong. See below |
+
+**Check the code, not the commit message.** A commit titled *"report an abandoned
+sync as abandoned"* is a claim; the disposition is whether the branch it renamed
+is reachable and pinned. On a recorded round, two such commits asserted behaviour
+on lines no test could reach.
+
+### A fix is a change, and changes get reviewed
+
+The most expensive class in a multi-round review is **the defect the fix
+introduced**. It is systematically under-found, for a structural reason: the fix
+arrives framed as the answer to a finding, so it is read as an answer rather than
+as new code. It is new code.
+
+So scope A of a fix round includes the fix, reviewed on its own merits, and the
+report carries its own section:
+
+```markdown
+## Regressions the fixes introduced
+<[F-NNN] — the finding it was answering, and the new defect it created>
+```
+
+Recorded shapes, all from fixes that correctly closed the finding they answered:
+an early return added to stop a fall-through, which then skipped the work the
+caller needed; a persistence call added to save expanded state, which then
+persisted the broken state on the error path too. Both were closed correctly and
+both shipped a new bug in the same commit.
+
+### Withdrawing your own earlier finding
+
+A finding from a previous round that this round disproves is **withdrawn**,
+explicitly, at the top of the report, with the evidence — before any new finding.
+
+This is not a courtesy. An uncorrected wrong finding costs the author a fix they
+did not need, and it stays in `prior_findings` steering later rounds. Withdrawal
+is also the one self-correction this pipeline permits, and it is permitted because
+it is asymmetric: it *deletes* a claim, so it cannot inflate the finding count,
+which is the failure mode that removed the re-scoring pass from Wave C.
+
+State what made the original claim wrong, in one sentence, and if the same
+reasoning error has now happened twice in one review, say that too. A reviewer
+that names its own recurring error is calibrating; one that quietly drops a
+finding is hiding a result.

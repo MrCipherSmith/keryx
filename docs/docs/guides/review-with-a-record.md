@@ -37,7 +37,7 @@ Usage:
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
-                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                                 [--self <login>] [--round <n>]
                                 [--out <findings.json>] [--json] [--fixtures <dir>]
@@ -80,6 +80,39 @@ The cost of the choice, stated: running `review ingest` twice with no
 `--review-id` records two rounds, and if the reports match it escalates. That is
 what the record says happened, and it is the safe direction — reusing the
 directory would delete exactly the signal a genuinely stuck round produces.
+
+## Who runs the round
+
+The agent that loads the `review-orchestrator` skill is the orchestrator: it runs
+the round inline, in the main session, and does not hand the round to one subagent.
+Before step 0 it checks three things:
+
+1. **It can spawn.** The `Agent` tool is present and the nesting depth is not spent
+   (Claude Code nests at most 3 deep). If not, the whole output is
+   `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`,
+   and nothing else runs. It never reviews alone.
+2. **A round is needed.** A diff that only touches docs, lockfiles or generated files
+   gets `round not needed: <reason>` and launches no reviewer. `--all` forces a round.
+3. **A round is left.** The ceiling is `REVIEW_ROUND_CAP` rounds on one
+   `merge-base..HEAD` (5 today); after the last one it stops and reports to you.
+
+The default profile is read-only: one round, no edits. `--fix` is a separate
+profile: the orchestrator still changes no code itself, it hands the findings to
+`flow-orchestrator` or `task-implementer`, takes the new head and runs the next
+round, and each re-review counts toward the ceiling.
+
+Reviewers are dispatched in waves split by diff domain: `core` (logic, security,
+architecture) first, then `domain` (frontend, backend, conventions), then `support`
+(style, tests); the verifier runs last and only
+removes findings. For `--all` and a full review a wave holds at most 10 reviewers
+(`keryx review budget --full` prints the plan). A reviewer that answers
+`STATUS: RATE_LIMITED` is requeued with the wave halved and `retry-after`
+honoured; after two halvings the round stops with
+`STATUS: BLOCKED rate_limited`, naming the reviewers still queued.
+
+What the skill does not do: it does not run as a subagent of another orchestrator
+by default, it does not fix code, and it does not shrink the reviewer set to fit a
+budget.
 
 ## Narrow the scope before anyone reads it
 

@@ -4637,7 +4637,7 @@ keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--parallel <n>] [--outstanding <n>]
 keryx review budget [--spent <usd>] [--ceiling <usd>]
-                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
 keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                   [--findings <n>] [--diff-lines <n>]
                   [--verifier execution|site-check|reasoning] [--security]
@@ -5195,7 +5195,7 @@ still gets a bound.
 |---|---|---|---|
 | Findings | **10 per reviewer**, blockers exempt | `--max-findings <n>` | Truncates a reviewer's ordinary findings. `blocker` and `blocking_merge` findings are exempt and do not consume the budget. |
 | Spend | **3.00 USD** per round | `--spent <usd>`, `--spend-ceiling <usd>` | Stops and asks rather than proceeding. |
-| Concurrency | **4** reviewers in flight | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. |
+| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after`; after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
 
 **Every cap records what it dropped**, in the package's `scope.md` under
 `## Caps` and on the terminal — a count, and for the findings cap the id of every
@@ -6103,7 +6103,7 @@ concurrency cap holds across the nesting.
 | `--spent <usd>` | Spend so far. Omitted, the record reads `not recorded` — which is **not** `under`: staying inside the ceiling was never demonstrated. |
 | `--ceiling <usd>` | Override the 3.00 USD default. |
 | `--reviewers a,b` | The reviewer set to plan into waves. |
-| `--parallel <n>` | Override the wave size (default 4). |
+| `--parallel <n>` | Override the wave size (default 10, split by diff domain). |
 | `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
 
 ### `review bot` and `review metrics`

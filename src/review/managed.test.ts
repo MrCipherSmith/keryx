@@ -1268,7 +1268,7 @@ test("AC6/AC10: a spend over the ceiling is recorded as a stop, and the package 
 test("AC7/AC10: a dispatch plan records its waves, its queue and whether it holds across nesting", async () => {
   await fresh();
   const { path: pkg } = await ingestFindings("2026-08-30-cap-concurrency", {
-    concurrency: { reviewers: ["a", "b", "c", "d", "e", "f"] },
+    concurrency: { cap: 4, reviewers: ["a", "b", "c", "d", "e", "f"] },
   });
   const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
 
