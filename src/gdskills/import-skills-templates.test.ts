@@ -510,6 +510,30 @@ describe("a refused template refuses its own package and no other", () => {
     expect(result.rules[0]?.status).toBe("imported");
   });
 
+  test("an installed package with a refused template does not take the rules of a new package in the same run", async () => {
+    const skills = path.join(source, "skills");
+    const installed = await writePackage("review-house", skills);
+    await writeFile(path.join(installed, "SKILL.md"), `${await readFile(path.join(installed, "SKILL.md"), "utf8")}\nStandard: \`house/own.mdc\`.\n`, "utf8");
+    await mkdir(path.join(source, "rules", "house"), { recursive: true });
+    await writeFile(path.join(source, "rules", "house", "own.mdc"), "# own\n", "utf8");
+    await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"] });
+    await rm(path.join(cwd, ".metaproject/rules/house/own.mdc"), { force: true });
+
+    await writeTemplate(installed, "overlay.md", INJECTION);
+    const fresh = await writePackage("review-other", skills);
+    await writeFile(path.join(fresh, "SKILL.md"), `${await readFile(path.join(fresh, "SKILL.md"), "utf8")}\nStandard: \`house/fresh.mdc\`.\n`, "utf8");
+    await writeFile(path.join(source, "rules", "house", "fresh.mdc"), "# fresh\n", "utf8");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"] });
+    const byName = Object.fromEntries(result.imported.map((row) => [row.name, row]));
+    expect(byName["review-house"]?.status).toBe("skipped");
+    expect(byName["review-other"]?.status).toBe("imported");
+    const rules = Object.fromEntries(result.rules.map((row) => [row.ref, row]));
+    expect(rules["house/own.mdc"]?.status).toBe("imported");
+    expect(rules["house/fresh.mdc"]?.status).toBe("imported");
+    expect(await exists(".metaproject/rules/house/own.mdc")).toBe(true);
+  });
+
   test("update --all: the other package still updates, and a dry run says would-refuse without touching anything", async () => {
     const bad = await writePackage("review-house");
     const good = await writePackage("review-other");
@@ -531,6 +555,8 @@ describe("a refused template refuses its own package and no other", () => {
     const real = await updateProjectSkills({ projectRoot: cwd, all: true });
     const rows = Object.fromEntries(real.imported.map((row) => [row.name, row]));
     expect(rows["review-house"]?.status).toBe("refused");
+    expect(rows["review-house"]?.path).toBe(PACKAGE);
+    expect(rows["review-house"]?.origin).toContain("review-house");
     expect(rows["review-other"]?.status).toBe("updated");
     expect(await read(`${OTHER}/templates/overlay.md`)).toBe("g2\n");
     expect(await read(`${TEMPLATES}/overlay.md`)).toBe("b1\n");
@@ -557,6 +583,21 @@ describe("a refused template refuses its own package and no other", () => {
     await expect(updateProjectSkills({ projectRoot: cwd, all: true })).rejects.toThrow(/Nothing was written/);
     expect(await read(`${TEMPLATES}/b.md`)).toBe("b2\n");
     expect(await readFile(path.join(outside, "target.md"), "utf8")).toBe("outside\n");
+  });
+
+  test("update: an outside symlink holding the template's own bytes still refuses the run", async () => {
+    const pkg = await writePackage();
+    await writeTemplate(pkg, "a.md", "a1\n");
+    await importPackage(pkg);
+    const installed = await read(`${PACKAGE}/SKILL.md`);
+    await writeFile(path.join(pkg, "SKILL.md"), `${installed}\nchanged\n`, "utf8");
+    await writeTemplate(pkg, "a.md", "a2\n");
+    await writeFile(path.join(outside, "target.md"), "a2\n", "utf8");
+    await rm(path.join(cwd, TEMPLATES, "a.md"));
+    await symlink(path.join(outside, "target.md"), path.join(cwd, TEMPLATES, "a.md"));
+    await expect(updateProjectSkills({ projectRoot: cwd, all: true })).rejects.toThrow(/Nothing was written/);
+    expect(await read(`${PACKAGE}/SKILL.md`)).toBe(installed);
+    expect(await readFile(path.join(outside, "target.md"), "utf8")).toBe("a2\n");
   });
 });
 

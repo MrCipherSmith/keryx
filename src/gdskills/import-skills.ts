@@ -2047,7 +2047,7 @@ async function planTemplates(
         row: {
           ...base,
           status: "differs",
-          reason: "the package's source changed; pass --force to replace it, or run `keryx skills update`",
+          reason: "the project's copy is another file than the package's; pass --force to replace it, or run `keryx skills update`, which replaces it too",
         },
       });
       continue;
