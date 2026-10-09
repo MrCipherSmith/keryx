@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.19
+Version: 0.29.20
 
 ## Status
 
@@ -17,6 +17,8 @@ carrying the measurement that found it and the reason it was not done then.
 > merge. Only some were ever PUBLISHED: releases fire on a `v*` tag
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
+>
+> - **0.29.20**: [Keryx Evidence Retrieval](keryx-evidence-retrieval/README.md) — **spec ready, runtime not implemented**. Separate untrusted raw-evidence lane, independent hybrid discovery, exact final-request visibility and incremental atomic indexes; implementation phases P0–P5.
 >
 > - **0.29.19**: `keryx-antigravity-agent` — Google's Antigravity CLI (`agy`)
 >   as a third line-stream external agent, **implemented read-only** (flow
