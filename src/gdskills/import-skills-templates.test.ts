@@ -510,6 +510,24 @@ describe("a refused template refuses its own package and no other", () => {
     expect(result.rules[0]?.status).toBe("imported");
   });
 
+  test("with --force an installed package whose template is refused is refused, keeps its SKILL.md and writes no rule only it cites", async () => {
+    const skills = path.join(source, "skills");
+    const pkg = await writePackage("review-house", skills);
+    await writeFile(path.join(pkg, "SKILL.md"), `${await readFile(path.join(pkg, "SKILL.md"), "utf8")}\nStandard: \`house/own.mdc\`.\n`, "utf8");
+    await mkdir(path.join(source, "rules", "house"), { recursive: true });
+    await writeFile(path.join(source, "rules", "house", "own.mdc"), "# own\n", "utf8");
+    await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"] });
+    const installed = await read(`${PACKAGE}/SKILL.md`);
+    await rm(path.join(cwd, ".metaproject/rules/house/own.mdc"), { force: true });
+    await writeTemplate(pkg, "overlay.md", INJECTION);
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"], force: true });
+    expect(result.imported[0]?.status).toBe("refused");
+    expect(result.rules[0]?.status).toBe("skipped");
+    expect(result.rules[0]?.reason).toContain("cited only by a refused package");
+    expect(await read(`${PACKAGE}/SKILL.md`)).toBe(installed);
+    expect(await exists(".metaproject/rules/house/own.mdc")).toBe(false);
+  });
+
   test("an installed package with a refused template does not take the rules of a new package in the same run", async () => {
     const skills = path.join(source, "skills");
     const installed = await writePackage("review-house", skills);
