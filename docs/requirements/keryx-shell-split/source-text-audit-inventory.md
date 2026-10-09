@@ -36,6 +36,15 @@ have dropped to zero read sites because their structural audits now scan
 `src/tui/**` instead of one file, which is what lets them survive P3 rather
 than be broken by it.
 
+Flow 418 (long review runs in the shell) added four more sites, all with no
+exported seam yet: `tui/busy-dispatch.test.ts` gained three (the busy `deferred`
+case pushes a slash line onto `mainQueue`, repaints and tells the user; the queue
+is drained through `runLine` as a command once the turn settles), and `tui/ctrl-c-policy.test.ts` has one (the
+renderer hands Ctrl+C to `createCtrlCPolicy`, a running turn is cancelled, the hint
+is shown). The decision logic itself is covered behaviourally in
+`ctrl-c-policy.ts` and `busy-dispatch.ts`; only the wiring inside
+`launchTuiAgentShell` is read as text.
+
 Flow 304 (`/connect`'s Test/Disconnect row buttons) added one more site:
 `tui/connect-provider-buttons.test.ts` pins that the `/connect` command
 handler's `onDisconnected` callback compares the disconnected provider's name
@@ -456,8 +465,9 @@ decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2
-tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
+tui/busy-dispatch.test.ts | tui/tui-shell.ts | 4
 tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
+tui/ctrl-c-policy.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/external-operator.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
