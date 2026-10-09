@@ -2,9 +2,9 @@
 Version: 0.1.0
 
 ## Inspection baseline
-Static inspection, not executed benchmark proof. PTG-MEM examined at
- db373ee57ad73e967016c082934a89491bc06607. Recheck keryx implementation HEAD before
-coding; shared checkout changes and graph snapshot are not fresh caller proof.
+Static inspection of keryx, not executed benchmark proof. Recheck keryx
+implementation HEAD before coding; shared checkout changes and graph snapshot
+are not fresh caller proof.
 
 | Inspected path | Observation |
 |---|---|
@@ -15,8 +15,6 @@ coding; shared checkout changes and graph snapshot are not fresh caller proof.
 | src/harness/context/manifest.ts | Available context sources mapped trustedAsPolicy=true; not safe unchanged for raw ERL. |
 | src/harness/tool/output-spill.ts | Spilled full text differs from visible preview. |
 | src/sac/proposal-lifecycle.ts | Acceptance human-gated; ERL must not bypass. |
-| forks/memories/PTG-MEM/ptg_mem/engine.py and store.py | Raw-atom ingestion/vector retrieval and persistence ideas. |
-| forks/memories/PTG-MEM/ptg_mem/hooks.py and watcher.py | Capture/current-context handling, not portable final-payload proof. |
 
 ## Decisions and alternatives
 1. Separate evidence owner, not broaden accepted-memory influence: relevance is not truth.
@@ -24,9 +22,9 @@ coding; shared checkout changes and graph snapshot are not fresh caller proof.
 3. Final-request exact spans, not session/time cutoff: compaction changes visibility.
 4. Immutable generations, not in-place catalog/vector edits: consistent readers/crash safety.
 5. Explicit local indexing first, not daemon: observable cost/scope/deletion.
-6. Reuse concepts, not PTG-MEM code; later code reuse needs license/commercial review.
+6. Implement within keryx; any third-party code reuse needs license/commercial review.
 
 ## Deferred
-Code PTG, contradiction inference, global cache, external transcript adapters,
+Code-history graph import, contradiction inference, global cache, external transcript adapters,
 always-on watcher and ANN backend. V1 uses bounded vector scan; choose ANN only
 when measured cost justifies extra dependencies and lifecycle complexity.

@@ -25,6 +25,6 @@ are planned, not existing behavior. Benefits have not yet been benchmarked.
 V1: project-local session archives and explicitly allowlisted UTF-8 files.
 Accepted memory, wiki, SAC, Slate and code graph retain their owners and trust
 contracts. Automatic recall is off by default. No automatic promotion, always-on
-watcher, Code PTG import, global cache or PTG-MEM runtime dependency.
+watcher, code-history graph import, global cache or external memory runtime dependency.
 Related existing seams: src/memory/, src/session/, src/harness/context/,
 src/harness/provider/, src/security/, src/forgetting/ and src/sac/.
