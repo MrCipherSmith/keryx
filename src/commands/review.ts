@@ -143,7 +143,7 @@ import {
 } from "../review/pr-comments";
 import {
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
-  DEFAULT_MAX_PARALLEL_REVIEWERS,
+  MAX_REVIEWERS_PER_WAVE_FULL,
   DEFAULT_SPEND_CEILING_USD,
   evaluateSpendCap,
   planReviewerWaves,
@@ -295,7 +295,7 @@ const CREATE_FLAGS = [
   "--outstanding",
 ] as const;
 
-const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
+const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
 
 export const COMMENTS_COLLECT_FLAGS = [
   "--repo",
@@ -1006,6 +1006,7 @@ async function runBudget(args: string[]): Promise<void> {
   const plan = planReviewerWaves(reviewers, {
     cap: parseNonNegativeInteger(optionValue(args, "--parallel"), "--parallel"),
     outstanding: parseNonNegativeInteger(optionValue(args, "--outstanding"), "--outstanding"),
+    full: args.includes("--full"),
   });
 
   console.log("# review budget");
@@ -4222,7 +4223,7 @@ budget:
   The gate to run BEFORE dispatching, where stopping is still possible. Exits
   non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
   orchestrator asks the operator instead of proceeding. Also prints the reviewer
-  dispatch waves for the concurrency cap (default ${DEFAULT_MAX_PARALLEL_REVIEWERS} in flight).
+  dispatch waves for the concurrency cap (default ${MAX_REVIEWERS_PER_WAVE_FULL} in flight; split by diff domain, never above ${MAX_REVIEWERS_PER_WAVE_FULL} for a full review).
   --outstanding <n> is what an enclosing orchestrator already has in flight.
   WITHOUT it the cap bounds this plan only: keryx cannot observe subagents in
   another process, so it does NOT bind the total across job-orchestrator ->

@@ -1,3 +1,4 @@
+import { ORCHESTRATORS_INLINE_NOTE } from "./orchestrators-inline";
 import { DEFAULT_MODEL_CHOICE_BLOCK_INPUT, renderModelChoicePolicy, type ModelChoiceBlockInput } from "./model-choice";
 
 export type AgentEntrypointFileName = "AGENTS.md" | "CLAUDE.md";
@@ -67,6 +68,7 @@ export function renderProjectMetaprojectReferenceBlock({
     "For commands, search, diff, test logs, lint/build output, and large file reads that can produce long output, use the Metaproject gdctx skill by default before loading raw command output into context.",
     "For a non-trivial navigation, debugging, review, or investigation task, end with a short routing audit: `graph_used`, `wiki_used`, `ctx_used`, and `raw_rg_used: yes/no`. An omitted layer must be justified (`not-relevant`/`unavailable`), not silently skipped.",
     "For implementation, review, refactoring, planning, documentation, or quality tasks, use project-local Metaproject skills first: .metaproject/skills/catalog.md, .metaproject/project-skills/, then .metaproject/skills/gdskills/. External/global skills are fallback only when explicitly needed.",
+    ORCHESTRATORS_INLINE_NOTE,
     "For creating, changing, debugging, reviewing, or running tests, use the Metaproject testing skill and read .metaproject/data/testing/context.md before broad test search or raw logs.",
     "For lessons learned, decisions, constraints, repeated mistakes, and historical project context, use the Metaproject memory skill before broad documentation search.",
     ...(enableTasks ? [flowPolicy] : []),

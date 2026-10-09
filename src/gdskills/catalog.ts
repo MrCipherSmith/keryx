@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ORCHESTRATORS_INLINE_NOTE } from "../lib/orchestrators-inline";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 
 export type GdskillsProfile = "minimal" | "recommended" | "full" | "custom";
@@ -822,6 +823,7 @@ Resolution order:
 - User asks which project skill applies to a file/task: run \`keryx skills route <query-or-target>\` before reading broad files.
 - User asks whether a project skill is still valid: run \`keryx skills verify <skill-or-target>\`.
 - User asks to create/update a Metaproject requirements package, PRD/spec package, or \`docs/requirements/<name>\` documentation: load \`gdskills/planning/docpack-orchestrator/SKILL.md\`; use \`autodoc-orchestrator\` instead only for reverse-engineering documentation from the current codebase.
+- Orchestrators: ${ORCHESTRATORS_INLINE_NOTE}
 
 | Skill | Category | Purpose | Entry |
 |---|---|---|---|

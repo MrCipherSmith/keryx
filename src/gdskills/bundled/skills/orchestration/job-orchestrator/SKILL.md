@@ -22,13 +22,11 @@ metadata:
 license: "MIT"
 ---
 
-<SUBAGENT-STOP>
-If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
-This skill is for orchestrators and interactive session-level routing only.
-Proceed directly with your assigned task.
-</SUBAGENT-STOP>
-
 # Job Orchestrator
+
+## Preflight
+
+Run in the main session: this skill dispatches sub-agents. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose
 
@@ -1064,9 +1062,9 @@ keryx review budget --spent <usd-so-far> --outstanding <subagents this orchestra
 
 `--outstanding` is not optional here. `src/review/caps.ts` names `job-orchestrator`
 as the outermost of the three nesting levels — `job-orchestrator` →
-`flow-orchestrator` → `review-orchestrator` — that its cap of 4 in-flight reviewers
-was chosen to survive. keryx is a CLI invoked once per command; it cannot observe
-subagents running inside another orchestrator's process. **The cap binds the nested
+`flow-orchestrator` → `review-orchestrator` — that its wave size (at most 10
+reviewers) was chosen to survive. keryx is a CLI invoked once per command; it cannot observe
+subagents running inside another orchestrator's process. **The wave size binds the nested
 total only when the parent declares its own in-flight count.** Omit `--outstanding`
 and the cap bounds the reviewer fan-out alone, which the record then states plainly.
 

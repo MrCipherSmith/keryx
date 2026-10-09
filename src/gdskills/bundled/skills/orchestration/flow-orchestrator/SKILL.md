@@ -21,14 +21,16 @@ license: "MIT"
 
 # Flow Orchestrator
 
+## Preflight
+
+Run in the main session: this skill dispatches workers. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+
 ## Purpose
 
 Flow Orchestrator is the Task Manager-aware implementation orchestrator. Plan bridge: publish the tasks with `plan_set` under the ids `T1`…`Tn`, mirror each `keryx flow task done` with `plan_update`, and publish Phase 4's completion choice as `proposed` — see the `session-plan-bridge` rule.
 It wraps the existing gdskills pipeline with `keryx flow` state.
 
 Use this skill instead of `job-orchestrator` when the user wants a managed story/issue lifecycle with frozen acceptance criteria, task state, an explicit completion choice, Code Health, and a durable flow package in `.metaproject/flows/`.
-
-Do not modify `job-orchestrator` or `task-implementer` behavior. They remain usable without Task Manager. This skill coordinates them through flow state.
 
 ## Hard Preconditions
 
@@ -122,9 +124,8 @@ it already tried. The flow package does.
       keryx flow next <id> --json
       ```
 
-      This is the first task whose `status` is not `done` and whose declared
-      `dependsOn` are all `done` — the ordering computed from the package
-      instead of re-derived by you from prose.
+      This is the first task not `done` whose declared `dependsOn` are all
+      `done` — computed from the package, not re-derived from prose.
 
    4. **Read the `resume` field before dispatching anything.** It has three
       answers and they are not interchangeable:
@@ -141,10 +142,9 @@ it already tried. The flow package does.
         or close the task (`keryx flow task done <id> <Tn>`). Re-dispatching
         over an unresolved attempt is how the same work gets done twice.
 
-      `keryx flow next` also lists every OTHER not-done task carrying an
-      unresolved attempt, under `unresolved`. Those are parallel dispatches that
-      never reported back; resolve them the same way before assuming the flow is
-      idle.
+      `keryx flow next` also lists every OTHER not-done task with an unresolved
+      attempt, under `unresolved`: parallel dispatches that never reported back.
+      Resolve them the same way before assuming the flow is idle.
 
    5. Before dispatching a worker for that task, record the attempt:
 
