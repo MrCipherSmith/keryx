@@ -209,10 +209,10 @@ export const DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS = 30 * 60_000;
  * makes at most `max_rounds + 1` requests, and never more than
  * `MAX_SUBAGENT_MAX_ROUNDS + 1`.
  */
-export const DEFAULT_SUBAGENT_MAX_ROUNDS = 10;
+export const DEFAULT_SUBAGENT_MAX_ROUNDS = 40;
 
 /** Per-child hard cap even when the model explicitly asks for more (the wrap-up round comes on top). */
-export const MAX_SUBAGENT_MAX_ROUNDS = 24;
+export const MAX_SUBAGENT_MAX_ROUNDS = 200;
 
 /**
  * Flow 347 T7 (AC4): operator setting for a HARD per-child tool-call cap, in
@@ -736,8 +736,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "label?: string, max_tool_calls?: integer, max_rounds?: integer }. " +
         "max_tool_calls is ADVISORY: it never stops the child, it only sets when the child is warned " +
         "(from 80% of it) to return its result; a hard tool-call cap exists only when the operator " +
-        `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 10, capped ` +
-        "at 24). A child that hits its round budget or the operator's call cap gets one final round to " +
+        `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 40, capped ` +
+        "at 200). A child that hits its round budget or the operator's call cap gets one final round to " +
         "submit a partial result, and the output's first line is then 'status: BudgetExhausted (...)'. " +
         "External runtimes cannot accept these limits. " +
         "Default mode is read_only (no shell). " +
@@ -786,7 +786,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             minimum: 1,
             maximum: Number.MAX_SAFE_INTEGER,
             description:
-              "Model-round budget (default 10, capped at 24). On reaching it the child gets one final " +
+              "Model-round budget (default 40, capped at 200). On reaching it the child gets one final " +
               "round to submit a partial result.",
           },
           /**
