@@ -1983,7 +1983,7 @@ What actually bounds this orchestrator:
 | review → fix rounds | 3 | 2.7, and `max_review_iterations` (`maximum: 3`) in the input contract |
 | repetition, whatever the count says | first repeat | the STUCK CHECK in 2.7, and `keryx review loop` against the durable record |
 | retries per step | recorded, not guessed | `metrics.steps[].retries`, incremented by `keryx job step --status in-progress` and read back with `keryx job status --json` |
-| reviewer fan-out | 4 in flight | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
+| reviewer fan-out | ≤10 per wave | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
 | spend | 3 USD by default | `keryx review budget --spent <usd>` — a non-zero exit means stop and ask |
 
 Each of these is a number some command reads or writes. A guard no command can

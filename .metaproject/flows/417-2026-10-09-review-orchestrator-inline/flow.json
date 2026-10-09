@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "417",
+  "slug": "review-orchestrator-inline",
+  "title": "review-orchestrator runs inline in the main session and never half-runs",
+  "status": "in-progress",
+  "createdAt": "2026-10-09T14:29:08.833Z",
+  "updatedAt": "2026-10-09T15:08:56.912Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "после последнего обновления получилось так, что у меня два агента не смогли нормально запустить ревью оркестратора",
+    "source": "helyx 194482, 2026-10-09T13:03Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered in audits (orchestrator-audit.md, review-orchestrator-skill-audit.md)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T5",
+      "title": "Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T6",
+      "title": "Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T7",
+      "title": "Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T8",
+      "title": "Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T9",
+      "title": "Mutation proof, docs, CHANGELOG (AC14 AC15)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "mutation proof in journal; docs, README, CHANGELOG written"
+    },
+    {
+      "id": "T10",
+      "title": "Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-09T14:29:08.833Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-09T14:38:20.854Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-09T14:38:21.055Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-09T14:38:51.111Z",
+      "event": "task-added",
+      "detail": "T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)"
+    },
+    {
+      "at": "2026-10-09T14:38:51.540Z",
+      "event": "task-added",
+      "detail": "T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)"
+    },
+    {
+      "at": "2026-10-09T14:38:51.913Z",
+      "event": "task-added",
+      "detail": "T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)"
+    },
+    {
+      "at": "2026-10-09T14:38:52.345Z",
+      "event": "task-added",
+      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
+    },
+    {
+      "at": "2026-10-09T14:38:52.760Z",
+      "event": "task-added",
+      "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
+    },
+    {
+      "at": "2026-10-09T14:38:53.201Z",
+      "event": "task-added",
+      "detail": "T10: Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)"
+    },
+    {
+      "at": "2026-10-09T14:38:53.631Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T1, T2, T3, T4 (was empty) — docs and mutation proof need the final behaviour"
+    },
+    {
+      "at": "2026-10-09T14:38:54.042Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T5 (was empty) — smoke runs on the finished change"
+    },
+    {
+      "at": "2026-10-09T14:40:21.845Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T1 (was T1, T2, T3, T4) — correct numbering: default scaffold tasks T1-T4 exist"
+    },
+    {
+      "at": "2026-10-09T14:40:22.048Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T1 (was empty) — after context"
+    },
+    {
+      "at": "2026-10-09T14:40:22.253Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T1 (was empty) — after context"
+    },
+    {
+      "at": "2026-10-09T14:40:22.456Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T5, T6, T7, T8 (was empty) — docs and mutation proof need final behaviour"
+    },
+    {
+      "at": "2026-10-09T14:40:22.664Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T9 (was empty) — smoke runs on the finished change"
+    },
+    {
+      "at": "2026-10-09T14:40:22.868Z",
+      "event": "task-depends-set",
+      "detail": "T2: dependsOn T1 (was empty) — scaffold"
+    },
+    {
+      "at": "2026-10-09T14:40:29.905Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-09T15:00:15.648Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the ceiling of 3, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`. After the third round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.\" -> \"The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the round ceiling, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts` (5 today; the earlier text said 3 by mistake). After the last round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.\" (AC8 named 3 but the code constant REVIEW_ROUND_CAP is 5 (flow 391); the criterion's real content is equality with the constant. Agent error in the original text, found by the implementing fork. No confirmations existed yet.)"
+    },
+    {
+      "at": "2026-10-09T15:08:01.161Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-09T15:08:01.571Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-09T15:08:01.938Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-09T15:08:02.302Z",
+      "event": "task-done",
+      "detail": "T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)"
+    },
+    {
+      "at": "2026-10-09T15:08:02.673Z",
+      "event": "task-done",
+      "detail": "T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)"
+    },
+    {
+      "at": "2026-10-09T15:08:03.048Z",
+      "event": "task-done",
+      "detail": "T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)"
+    },
+    {
+      "at": "2026-10-09T15:08:03.417Z",
+      "event": "task-done",
+      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
+    },
+    {
+      "at": "2026-10-09T15:08:56.912Z",
+      "event": "task-done",
+      "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    },
+    "AC13": {
+      "kind": "unclassified"
+    },
+    "AC14": {
+      "kind": "unclassified"
+    },
+    "AC15": {
+      "kind": "unclassified"
+    },
+    "AC16": {
+      "kind": "unclassified"
+    }
+  }
+}

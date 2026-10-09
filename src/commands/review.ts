@@ -3921,7 +3921,7 @@ Usage:
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
-                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
