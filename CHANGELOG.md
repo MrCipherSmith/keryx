@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.103] - 2026-10-10
+
+### Review
+
+- `keryx shell --review-system review-auto` (or a line such as "сделай автоматическое ревью" / "run an automatic review", or `KERYX_REVIEW_SYSTEM=review-auto`) makes a review run answer its own approval questions: reviewer spawns, including those that follow untrusted external content, and `ask_user` menus. The default `inherit` keeps today's behaviour, where the permission mode decides and `--trust` asks only occasionally. Destructive commands, credential access, publish leases, hook-tightened calls and every non-spawn call that follows untrusted content still ask the human. Only the operator's own top-level line can switch it on; a subagent's task text and non-operator turns cannot. Each automatic answer is recorded as an auto-approval.
+
 ## [0.3.102] - 2026-10-10
 
 ### Agent Runtime

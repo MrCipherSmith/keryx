@@ -43,6 +43,7 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
+import { reviewAutoActive, setReviewSystem } from "../review/review-system";
 import { setExecutionPlan } from "../session/execution-plan";
 import { closeSlateSession, detachSlateSession, openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
@@ -4690,4 +4691,93 @@ test("flow 347 T5 (AC2): the instruction no longer states or implies plan status
   expect(instruction).toMatch(/not what decides when a turn may end|does not decide when a turn may end/);
   // `proposed`/END THE TURN/FOR APPROVAL still documented (previous test).
   expect(instruction).toContain("`proposed`");
+});
+
+function untrustedThenCall(toolName: string, risk: "delegate" | "shell"): { provider: ReturnType<typeof scriptedProvider>["provider"]; tools: InteractiveTool[]; invoked: () => boolean } {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = false;
+  const tools: InteractiveTool[] = [
+    { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+    { definition: { name: toolName, description: "", inputSchema: { type: "object", properties: {} }, risk }, invoke: async () => { invoked = true; return { output: "ran", isError: false }; } },
+  ];
+  return { provider, tools, invoked: () => invoked };
+}
+
+test("review-auto answers the reviewer-spawn approval itself, even after untrusted content, and records it", async () => {
+  setReviewSystem("review-auto");
+  try {
+    const { provider, tools, invoked } = untrustedThenCall("spawn_subagent", "delegate");
+    let asked = 0;
+    const auto: string[] = [];
+    const { io: baseIo } = collectingIo();
+    const io: AgentIO = {
+      ...baseIo,
+      requestApproval: async () => {
+        asked += 1;
+        return false;
+      },
+      onAutoApproved: (tool) => auto.push(tool),
+    };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then review");
+    expect(asked).toBe(0);
+    expect(invoked()).toBe(true);
+    expect(auto).toEqual(["spawn_subagent"]);
+  } finally {
+    setReviewSystem("inherit");
+  }
+});
+
+test("without review-auto the same reviewer spawn still reaches the human", async () => {
+  const { provider, tools, invoked } = untrustedThenCall("spawn_subagent", "delegate");
+  let asked = 0;
+  const { io: baseIo } = collectingIo();
+  const io: AgentIO = { ...baseIo, requestApproval: async () => { asked += 1; return true; } };
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then review");
+  expect(asked).toBe(1);
+  expect(invoked()).toBe(true);
+});
+
+test("review-auto keeps the untrusted-content floor for a shell call: the human is still asked", async () => {
+  setReviewSystem("review-auto");
+  try {
+    const { provider, tools, invoked } = untrustedThenCall("shell_exec", "shell");
+    let asked = 0;
+    const { io: baseIo } = collectingIo();
+    const io: AgentIO = { ...baseIo, requestApproval: async () => { asked += 1; return false; } };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then act");
+    expect(asked).toBe(1);
+    expect(invoked()).toBe(false);
+  } finally {
+    setReviewSystem("inherit");
+  }
+});
+
+test("only the operator's own top-level line switches review-auto on", async () => {
+  const run = async (deps: Partial<AgentDeps>, options: Parameters<typeof runAgentTurn>[4], line: string): Promise<void> => {
+    const { provider } = scriptedProvider([[{ kind: "text_delta", text: "ok" }]]);
+    const { io } = collectingIo();
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [], systemInstruction: "test", idSeq: fixedIdSeq(), ...deps }, [], line, options);
+  };
+  try {
+    await run({ subagentBudget: {} }, undefined, "сделай автоматическое ревью");
+    expect(reviewAutoActive()).toBe(false);
+    await run({}, { origin: "bus-message" }, "сделай автоматическое ревью");
+    expect(reviewAutoActive()).toBe(false);
+    await run({}, undefined, "Проведи ревью через review-orchestrator");
+    expect(reviewAutoActive()).toBe(false);
+    await run({}, undefined, "сделай автоматическое ревью PR 7435");
+    expect(reviewAutoActive()).toBe(true);
+  } finally {
+    setReviewSystem("inherit");
+  }
 });

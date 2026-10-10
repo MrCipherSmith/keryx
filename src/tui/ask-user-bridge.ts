@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
+import { reviewAutoActive } from "../review/review-system";
 
 let host: AskUserFn | undefined;
 
@@ -69,7 +70,7 @@ export function journaledAskUser(cwd: string): AskUserFn {
  * irreversible question is never auto-answered.
  */
 function reviewAutoAnswer(request: Parameters<AskUserFn>[0]): string | undefined {
-  if (process.env.KERYX_REVIEW_AUTO_ANSWER !== "1" || request.irreversible === true) return undefined;
+  if ((process.env.KERYX_REVIEW_AUTO_ANSWER !== "1" && !reviewAutoActive()) || request.irreversible === true) return undefined;
   return (request.options.find((o) => o.recommended === true) ?? request.options[0])?.id;
 }
 
