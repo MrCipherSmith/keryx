@@ -991,7 +991,13 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
     return input.reportText;
   }
   if (input.reportPath) {
-    return readFile(path.resolve(input.cwd, input.reportPath), "utf8");
+    try {
+      return await readFile(path.resolve(input.cwd, input.reportPath), "utf8");
+    } catch (error) {
+      // `start` opens a round before any report exists: a report path that is not there yet is the normal case.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (input.mode === "ingest" || (code !== "ENOENT" && code !== "EISDIR")) throw error;
+    }
   }
   if (input.mode === "ingest") {
     throw new Error("ingest requires --report or reportText");

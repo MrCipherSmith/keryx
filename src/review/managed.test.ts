@@ -243,6 +243,29 @@ test("ingest writes classified findings and skill learning decision", async () =
   expect(learning).toContain("## Skill Learning");
 });
 
+test("start with a report path that does not exist yet opens the round; ingest still refuses it", async () => {
+  await fresh();
+  const started = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "review-flow",
+    reviewId: "2026-10-10-start-no-report",
+    target: { kind: "report", ref: "later/review.md" },
+    reportPath: "later/review.md",
+    now: new Date("2026-10-10T00:00:00Z"),
+  });
+  expect(started.path).toContain("2026-10-10-start-no-report");
+  await expect(
+    createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-10-10-ingest-no-report",
+      target: { kind: "report", ref: "later/review.md" },
+      reportPath: "later/review.md",
+      now: new Date("2026-10-10T00:00:00Z"),
+    }),
+  ).rejects.toThrow();
+});
+
 test("ingest refuses a blocker or major that does not enumerate its class", async () => {
   // The rule exists because eleven rounds across flows 127 and 128 produced
   // fixes that repaired the one site a finding named. Enforced HERE, not only in
