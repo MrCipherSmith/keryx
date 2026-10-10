@@ -10,7 +10,7 @@
   "title": "Verification kind is asked for at every criterion: template, flow and flow-orchestrator skills, freeze warning",
   "status": "in-progress",
   "createdAt": "2026-10-10T20:06:52.448Z",
-  "updatedAt": "2026-10-10T20:39:40.635Z",
+  "updatedAt": "2026-10-10T20:52:58.710Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,15 +84,32 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-10-10T20:41:39.765Z",
+            "outcome": "started",
+            "detail": "review round 1: review-logic (opus), review-testing-practices (sonnet); 2 major, 6 minor"
+          },
+          {
+            "at": "2026-10-10T20:47:53.036Z",
+            "outcome": "failed",
+            "detail": "round 2: R2-1 major (import-policy ratchet 152>150), R2-2/R2-3 minor; all round-1 findings verified fixed"
+          },
+          {
+            "at": "2026-10-10T20:52:58.572Z",
+            "outcome": "started",
+            "detail": "round 3 clean"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -222,6 +239,32 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix review round 1 findings (L1-L5, F-001-F-004)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-10-10T20:41:39.906Z",
+            "outcome": "started",
+            "detail": "422-T12"
+          },
+          {
+            "at": "2026-10-10T20:47:53.187Z",
+            "outcome": "started",
+            "detail": "422-T12 round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -342,6 +385,46 @@
       "at": "2026-10-10T20:39:40.635Z",
       "event": "task-done",
       "detail": "T11: Run every AC command and AC7 invariant"
+    },
+    {
+      "at": "2026-10-10T20:41:39.615Z",
+      "event": "task-added",
+      "detail": "T12: Fix review round 1 findings (L1-L5, F-001-F-004)"
+    },
+    {
+      "at": "2026-10-10T20:41:39.765Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1: review-logic (opus), review-testing-practices (sonnet); 2 major, 6 minor"
+    },
+    {
+      "at": "2026-10-10T20:41:39.906Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 422-T12"
+    },
+    {
+      "at": "2026-10-10T20:47:53.036Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 2: R2-1 major (import-policy ratchet 152>150), R2-2/R2-3 minor; all round-1 findings verified fixed"
+    },
+    {
+      "at": "2026-10-10T20:47:53.187Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 2) — 422-T12 round 2 fixes"
+    },
+    {
+      "at": "2026-10-10T20:52:58.436Z",
+      "event": "task-done",
+      "detail": "T12: Fix review round 1 findings (L1-L5, F-001-F-004)"
+    },
+    {
+      "at": "2026-10-10T20:52:58.572Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — round 3 clean"
+    },
+    {
+      "at": "2026-10-10T20:52:58.710Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {

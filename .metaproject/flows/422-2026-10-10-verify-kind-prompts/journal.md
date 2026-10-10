@@ -45,3 +45,17 @@
 All new tests pass; every local failure reproduces on clean main, so none is caused by this flow. CI is the authority for the environment-dependent suites.
 - 2026-10-10T20:39:40.499Z - task-done: T10: cli-reference and CHANGELOG
 - 2026-10-10T20:39:40.635Z - task-done: T11: Run every AC command and AC7 invariant
+- 2026-10-10T20:41:39.615Z - task-added: T12: Fix review round 1 findings (L1-L5, F-001-F-004)
+- 2026-10-10T20:41:39.765Z - task-attempt: T4: started (attempt 1) — review round 1: review-logic (opus), review-testing-practices (sonnet); 2 major, 6 minor
+- 2026-10-10T20:41:39.906Z - task-attempt: T12: started (attempt 1) — 422-T12
+- 2026-10-10T20:47:53.036Z - task-attempt: T4: failed (attempt 2) — round 2: R2-1 major (import-policy ratchet 152>150), R2-2/R2-3 minor; all round-1 findings verified fixed
+- 2026-10-10T20:47:53.187Z - task-attempt: T12: started (attempt 2) — 422-T12 round 2 fixes
+
+## Review rounds
+
+- Round 1 (review-logic on opus, review-testing-practices on sonnet; review-orchestrator inline, legacy/profile reviewers skipped: no MobX or frontend scope): 2 major (L1 Enter at the prompt cancelled the freeze; F-001 AC6 wiring untested), 6 minor (L2 prompt before freezability check, L3 no `--yes` for PTY agents, L4 goal text could inject a second marker, L5 threshold on unrounded percent, F-002 intake test bypassed the CLI, F-004 interactive-no assertions). F-003 resolved by a comment: title-only init and freeze do no network I/O. Fixed in 554b81aa5.
+- Round 2 (review-logic on opus, fix commit only): every round-1 finding verified fixed; new R2-1 major (import-policy ratchet 152 > 150: `commands/flow.ts -> flow/store` and `research-sync-kinds.ts -> flow/ac-kinds` bypassed the facade), R2-2 minor (freeze preconditions duplicated), R2-3 minor (skills did not tell agents to pass `--yes`). Fixed in 68999b7c6: one private `freezeBlocker` shared by `service.freeze` and the read-only facade export `freezePrecondition`; `parseAcKinds` re-exported through the service facade.
+- Round 3 (review-logic on opus, 68999b7c6): clean, 0 findings at minor or above. Freeze messages and order unchanged; the precondition is advisory, freeze re-checks under its lock.
+- 2026-10-10T20:52:58.436Z - task-done: T12: Fix review round 1 findings (L1-L5, F-001-F-004)
+- 2026-10-10T20:52:58.572Z - task-attempt: T4: started (attempt 3) — round 3 clean
+- 2026-10-10T20:52:58.710Z - task-done: T4: Self-review and prepare draft PR
