@@ -49,7 +49,8 @@ line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
    unclear, ask the operator ONE question listing the criteria with proposed
    kinds, before `flow freeze`.
 8. Re-verify the whole package, then freeze and hand off:
-   `keryx flow freeze <id>` -> `keryx flow start <id>`.
+   `keryx flow freeze <id> --yes` -> `keryx flow start <id>` (the operator
+   already answered the kinds question, so the freeze must not prompt).
 
 Read each worker's `STATUS:` first: `NEEDS_CONTEXT`/`BLOCKED` -> enrich and
 re-dispatch (do not mark done); `DONE`/`DONE_WITH_CONCERNS` -> fold the result

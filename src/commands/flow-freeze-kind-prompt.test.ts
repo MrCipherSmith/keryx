@@ -194,6 +194,35 @@ describe("flow freeze with criteria that have no verification kind", () => {
     expect(logs.join("\n")).not.toContain("no verification kind");
   });
 
+  test("an already-ready flow asks nothing and the service's transition error surfaces", async () => {
+    const { id } = await setup(MIXED);
+    freezePromptIo.interactive = () => false;
+    capture();
+    await flowCommand(["freeze", id]);
+    expect(await status(id)).toBe("ready");
+    let asked = 0;
+    freezePromptIo.interactive = () => true;
+    freezePromptIo.ask = async () => {
+      asked += 1;
+      return true;
+    };
+    process.exitCode = 0;
+    const logs = capture();
+    const errors: string[] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
+    try {
+      await flowCommand(["freeze", id]);
+    } finally {
+      console.error = realError;
+    }
+    expect(process.exitCode).toBe(1);
+    expect(asked).toBe(0);
+    expect(logs.join("\n")).not.toContain("no verification kind");
+    expect(errors.join("\n")).toMatch(/ready/);
+    expect(await status(id)).toBe("ready");
+  });
+
   test("fully marked criteria: no warning and no prompt", async () => {
     const { id } = await setup(["- AC1: a [verify: judged]", "- AC2: b [verify: none — human]"]);
     let asked = 0;

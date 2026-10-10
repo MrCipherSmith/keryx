@@ -285,10 +285,10 @@ did not exist and 24 completed flows shipped with an open task:
 
 Read the `tasks` line in the `flow complete` output. If it says `skipped`, the gate did not run and the task list is yours to verify by hand.
 
-Then freeze and start:
+Then freeze and start (`--yes`: the operator already answered the kinds question, so the freeze must not prompt):
 
 ```bash
-keryx flow freeze <id>
+keryx flow freeze <id> --yes
 keryx flow start <id>
 ```
 

@@ -3,7 +3,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { parseAcKinds } from "../flow/ac-kinds";
+import { parseAcKinds } from "../flow/service";
 
 export const KIND_WINDOW_DAYS = 7;
 /** A share above this (in percent) gets a warning line. */

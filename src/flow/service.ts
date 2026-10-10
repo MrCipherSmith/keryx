@@ -75,6 +75,7 @@ export {
   AC_KINDS,
   buildAcKindReport,
   describeAcKind,
+  parseAcKinds,
   readAcKindRecords,
   renderAcKindDistribution,
   reportFromRecords,
@@ -1034,14 +1035,11 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
 
     async freeze({ cwd, id }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
-      assertTransition(flow.status, "ready");
-      const criteria = await readAcCriteria(cwd, dir);
-      const placeholder = criteria.length === 1 && (await isPlaceholderAc(cwd, dir));
-      if (criteria.length === 0 || placeholder) {
-        throw new Error(
-          "Cannot freeze: acceptance-criteria.md must contain at least one real `- ACn:` criterion.",
-        );
+      const blocker = await freezeBlocker(cwd, dir, flow.status);
+      if (blocker !== undefined) {
+        throw new Error(blocker);
       }
+      const criteria = await readAcCriteria(cwd, dir);
       flow.acChecksum = await acChecksum(cwd, dir);
       // Acceptance layer W0: record the derived kinds beside the seal. Reports,
       // never refuses — a malformed marker reads `unclassified` here and is named
@@ -2372,7 +2370,36 @@ async function confirmationGate(
   };
 }
 
-export async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {
+/** Why a freeze cannot happen now (status transition, then real criteria), or undefined. One predicate for `freeze` and `freezePrecondition`. */
+async function freezeBlocker(cwd: string, dir: string, status: FlowStatus): Promise<string | undefined> {
+  try {
+    assertTransition(status, "ready");
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  const criteria = await readAcCriteria(cwd, dir);
+  if (criteria.length === 0 || (criteria.length === 1 && (await isPlaceholderAc(cwd, dir)))) {
+    return "Cannot freeze: acceptance-criteria.md must contain at least one real `- ACn:` criterion.";
+  }
+  return undefined;
+}
+
+/** Read-only: would `freeze` get past its own checks? Never writes. A read failure answers not ok. */
+export async function freezePrecondition(input: {
+  cwd: string;
+  id: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    const dir = await resolveFlowDir(input.cwd, input.id);
+    const flow = await readFlow(input.cwd, dir);
+    const reason = await freezeBlocker(input.cwd, dir, flow.status);
+    return reason === undefined ? { ok: true } : { ok: false, reason };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {
   const content = await Bun.file(acPath(cwd, dir)).text();
   return content.includes("<replace with a hard, verifiable criterion");
 }

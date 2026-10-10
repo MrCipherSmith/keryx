@@ -11,7 +11,7 @@ import {
   createFlowService,
   describeAcKind,
   effectiveOutcomeAuthor,
-  isPlaceholderAc,
+  freezePrecondition,
   intentNoteForNewFlow,
   originDetailLines,
   readOrigin,
@@ -46,8 +46,7 @@ import {
   symbols,
   nextSteps,
 } from "../lib/ui";
-import { canTransition, taskResumeState, type TaskResumeState } from "../flow/machine";
-import { readAcCriteria } from "../flow/store";
+import { taskResumeState, type TaskResumeState } from "../flow/machine";
 import { ATTEMPT_CLI_OUTCOMES } from "../flow/types";
 import type {
   AttemptCliOutcome,
@@ -877,20 +876,7 @@ async function runSimple(args: string[], action: "freeze" | "start" | "unblock")
  * Any doubt answers false, so the service call runs unwarned and its error surfaces.
  */
 async function freezeCanProceed(cwd: string, id: string): Promise<boolean> {
-  try {
-    const flow = await getService().get({ cwd, id });
-    if (!canTransition(flow.status, "ready")) {
-      return false;
-    }
-    const dir = await resolveFlowDir(cwd, id);
-    const criteria = await readAcCriteria(cwd, dir);
-    if (criteria.length === 0 || (criteria.length === 1 && (await isPlaceholderAc(cwd, dir)))) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  return (await freezePrecondition({ cwd, id })).ok;
 }
 
 /**
