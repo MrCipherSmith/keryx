@@ -19,6 +19,7 @@ import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionS
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
+import { tracePhase } from "../lib/phase-trace";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand } from "../lib/trust-routine-command";
@@ -3540,6 +3541,7 @@ async function runAgentTurnCore(
           ...(signal === undefined ? {} : { signal }),
           ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
         };
+        tracePhase("model request start");
         for await (const event of deps.provider.stream(request, streamOptions)) {
           if (isAborted()) {
             // flow 268 T26: fire `onReasoningEnd` for a round that started
@@ -4340,6 +4342,7 @@ async function runAgentTurnCore(
         await rememberAskUserAnswer(call, result, options, now());
       }
       io.onToolResult?.(call.name, result);
+      tracePhase(`tool ${call.name} result shown`);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
       // not receive a credential a command happened to read.
@@ -4360,6 +4363,7 @@ async function runAgentTurnCore(
               toolCallId: call.id,
             });
       const modelOutput = spilled.text;
+      tracePhase(`tool ${call.name} output spilled`);
       // Flow 393 AC1/AC4 (working-memory mode only): every executed call leaves a Trail entry in
       // slate.json, and its full redacted output is on disk so `recall_step` can page it later.
       // A bookkeeping failure never replaces the real tool result.
@@ -4716,6 +4720,7 @@ async function streamWrapUpRound(
       ...(signal === undefined ? {} : { signal }),
       ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
     };
+    tracePhase("model request start");
     for await (const event of deps.provider.stream(request, streamOptions)) {
       if (signal?.aborted === true) {
         aborted = true;
@@ -5384,7 +5389,15 @@ function composeWithHook(
  * `spawn_subagent` is the one call whose stall parks the whole turn, so it runs under a watchdog that
  * names the stage it was stuck in; every other tool goes straight through.
  */
-function executeCall(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+async function executeCall(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+  const call = args[0];
+  tracePhase(`tool ${call.name} dispatch`);
+  const result = await executeCallTraced(...args);
+  tracePhase(`tool ${call.name} returned isError=${result.isError === true}`);
+  return result;
+}
+
+function executeCallTraced(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
   const call = args[0];
   if (call.name !== "spawn_subagent") return executeCallUnbounded(...args);
   return runWithCallWatchdog(

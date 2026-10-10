@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.102] - 2026-10-10
+
+### Agent Runtime
+
+- `KERYX_PHASE_TRACE=<file>` appends one timestamped line per turn phase (model request start, tool dispatch, tool returned, result shown, output spilled, `spawn_subagent` backstop and watchdog stage changes). A live review hung with no archive trace and neither the 8 minute backstop nor the 12 minute watchdog answering; the trace says which phase a stuck turn was in. Unset, it costs nothing.
+- The call watchdog now answers the call before it aborts the inner signal, and a throwing abort listener can no longer keep it from answering.
+
 ## [0.3.101] - 2026-10-10
 
 ### Agent Runtime
