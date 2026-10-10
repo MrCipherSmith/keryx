@@ -9,7 +9,6 @@ import { reviewCompletionBlockers, reviewsRoot } from "./managed";
 
 export const MAX_REVIEW_GATE_CONTINUES = 20;
 export const MAX_REVIEW_GATE_STALLS = 2;
-const RECENT_PACKAGE_MS = 15 * 60 * 1000;
 
 export type OpenManagedReview = {
   reviewId: string;
@@ -17,7 +16,6 @@ export type OpenManagedReview = {
   blockers: string[];
   /** Changes whenever the package or the working data under it gains or changes an artifact. */
   signature: string;
-  recentlyTouched: boolean;
 };
 
 async function dirSignature(dir: string): Promise<string> {
@@ -35,7 +33,7 @@ async function dirSignature(dir: string): Promise<string> {
 }
 
 /** The newest review-flow package under `cwd` that is not closed, or null. */
-export async function findOpenManagedReview(cwd: string, now: number = Date.now()): Promise<OpenManagedReview | null> {
+export async function findOpenManagedReview(cwd: string): Promise<OpenManagedReview | null> {
   let names: string[];
   try {
     names = (await readdir(reviewsRoot(cwd), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
@@ -70,7 +68,6 @@ export async function findOpenManagedReview(cwd: string, now: number = Date.now(
     packageDir: best.dir,
     blockers,
     signature,
-    recentlyTouched: now - best.mtime < RECENT_PACKAGE_MS,
   };
 }
 
@@ -109,7 +106,7 @@ export function describeBlockers(open: OpenManagedReview): string {
 
 export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
   const { open } = input;
-  if (open === null || !(input.runSeen || open.recentlyTouched)) return { action: "accept" };
+  if (open === null || !input.runSeen) return { action: "accept" };
   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
     return {

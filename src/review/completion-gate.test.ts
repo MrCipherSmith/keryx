@@ -37,7 +37,6 @@ function open(over: Partial<OpenManagedReview> = {}): OpenManagedReview {
     packageDir: "/x",
     blockers: ["missing artifacts: report.md"],
     signature: "sig-a",
-    recentlyTouched: true,
     ...over,
   };
 }
@@ -48,8 +47,8 @@ test("no open package: the stop is accepted", () => {
   expect(decideReviewGate({ ...idle, open: null }).action).toBe("accept");
 });
 
-test("an open package nobody in this session touched is not gated", () => {
-  const decision = decideReviewGate({ ...idle, runSeen: false, open: open({ recentlyTouched: false }) });
+test("an open package in a session that never ran a review is not gated (a checkout carries old drafts)", () => {
+  const decision = decideReviewGate({ ...idle, runSeen: false, open: open() });
   expect(decision.action).toBe("accept");
 });
 
@@ -114,7 +113,6 @@ test("findOpenManagedReview returns the draft review-flow package with its block
   const found = await findOpenManagedReview(root);
   expect(found?.reviewId).toBe("live");
   expect(found?.blockers[0]).toContain("missing artifacts");
-  expect(found?.recentlyTouched).toBe(true);
 });
 
 test("findOpenManagedReview is null with no reviews directory or only closed packages", async () => {
