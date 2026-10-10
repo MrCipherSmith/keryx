@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.90] - 2026-10-09
+
+### Shell
+
+- `spawn_subagent` takes `save_result_to`: a project-relative path where the host writes the child's full final text. The text no longer exists only in a transcript that gets cut, so a review can hand the raw reviewer output to `keryx review complete`. Native children only; the path is confined to the project, symlink escapes, `.env*`, key files and `.git` are refused before the child starts, and an existing target must be a regular file.
+
+### Review Process
+
+- `review-orchestrator` on a shell host saves every reviewer result with `save_result_to`, builds `research.json` (ledger plus `dispatch` evidence) from those files, ingests it once with `--research`, and treats a refused `review complete` as a command to fix rather than a reason to stop (flow 420).
+
 ## [0.3.89] - 2026-10-09
 
 ### Review Process
