@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.91] - 2026-10-10
+
+### Review Process
+
+- `keryx review start --report <path>` opens the round when the report file or its directory does not exist yet (it used to fail with `ENOENT`, and a shell model that read that as a blocker stopped the review after 24 seconds). `ingest` still requires an existing report (flow 420).
+
 ## [0.3.90] - 2026-10-09
 
 ### Shell
