@@ -12,6 +12,12 @@
 
 - The `review-orchestrator` skill passes `model_tier` on every reviewer `spawn_subagent` call (verifier and simple reviewers `light`, normal `standard`, complex `deep`); an omitted tier ran the child on the session model.
 
+## [0.3.96] - 2026-10-10
+
+### Shell
+
+- The managed-review completion gate also holds the turn when the repeated-call guard ends it. Live run 10 stopped through the no-progress branch, which skipped the text-only gate, so a review with an open package ended with "resend the request". Both stop points now share one check (`holdReviewGate`), and the continuation says that a tool loop guard or an empty child result is not a reason to ask the operator to resend or continue: change the arguments, retry the failed pass on a smaller slice, keep going. Unattended runs and subagents are not held.
+
 ## [0.3.94] - 2026-10-10
 
 ### Shell

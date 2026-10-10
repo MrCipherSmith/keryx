@@ -3282,6 +3282,39 @@ async function runAgentTurnCore(
   let reviewGateContinues = 0;
   let reviewGateStalls = 0;
   let lastReviewGateSignature: string | undefined;
+  /** True when the managed-review gate refused this stop and queued a nudge: the caller re-enters the round loop. */
+  const holdReviewGate = async (): Promise<boolean> => {
+    if (subagentBudget !== undefined || deps.unattended === true) return false;
+    const runSeen = reviewRunSeenInHistory(history);
+    const open = runSeen
+      ? await findReviewGateState(process.cwd(), sessionStartedAt(history)).catch(() => null)
+      : null;
+    const gate = decideReviewGate({
+      open,
+      runSeen,
+      continues: reviewGateContinues,
+      stalls: reviewGateStalls,
+      lastSignature: lastReviewGateSignature,
+    });
+    if (gate.action === "continue") {
+      reviewGateContinues += 1;
+      reviewGateStalls = gate.stalls;
+      lastReviewGateSignature = gate.signature;
+      system(`\n[review-gate] Review not complete (continue ${reviewGateContinues}); \`review complete\` still refuses. Continuing.\n`);
+      history.push({
+        role: "user",
+        content: wrapHarnessNudge(gate.message, controlNonce),
+        provenance: "harness",
+        ts: now(),
+      });
+      io.onHistoryChange?.("tool");
+      return true;
+    }
+    if (gate.action === "stop") {
+      system(`\n[review-gate] ${gate.report}\n`);
+    }
+    return false;
+  };
   // The previous toolless reply, normalized. A model that answers the reprompt
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
@@ -3976,36 +4009,7 @@ async function runAgentTurnCore(
       // Flow 421: a managed review run is finished when `keryx review complete`
       // accepts the package, not when the model stops. Independent of the plan
       // (a blocked plan item must not end it); unattended children are excluded.
-      if (subagentBudget === undefined && deps.unattended !== true) {
-        const runSeen = reviewRunSeenInHistory(history);
-        const open = runSeen
-          ? await findReviewGateState(process.cwd(), sessionStartedAt(history)).catch(() => null)
-          : null;
-        const gate = decideReviewGate({
-          open,
-          runSeen,
-          continues: reviewGateContinues,
-          stalls: reviewGateStalls,
-          lastSignature: lastReviewGateSignature,
-        });
-        if (gate.action === "continue") {
-          reviewGateContinues += 1;
-          reviewGateStalls = gate.stalls;
-          lastReviewGateSignature = gate.signature;
-          system(`\n[review-gate] Review not complete (continue ${reviewGateContinues}); \`review complete\` still refuses. Continuing.\n`);
-          history.push({
-            role: "user",
-            content: wrapHarnessNudge(gate.message, controlNonce),
-            provenance: "harness",
-            ts: now(),
-          });
-          io.onHistoryChange?.("tool");
-          continue;
-        }
-        if (gate.action === "stop") {
-          system(`\n[review-gate] ${gate.report}\n`);
-        }
-      }
+      if (await holdReviewGate()) continue;
 
       if (hasActionableExecutionPlanItems(currentPlan)) {
         const actionable = currentPlan?.items.filter(
@@ -4544,6 +4548,9 @@ async function runAgentTurnCore(
       if (subagentBudget !== undefined) {
         return finishSubagentWithSubmitResult("no-progress", undefined);
       }
+      // Run 10: the repeated-signature guard ended the turn here and skipped the
+      // text-only gate, so an incomplete managed review stopped with "resend the request".
+      if (roundState.round < roundState.maxRounds && (await holdReviewGate())) continue;
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
         const wrapUp = await finishWithBudgetSummary(

@@ -29,6 +29,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+import { requiredReviewers } from "../review/coverage";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -497,6 +498,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
+const REQUIRED_FLAGS = ["--mode", "--scope", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -688,6 +690,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "reviewers") {
       await runReviewers(args.slice(1));
+      return;
+    }
+    if (command === "required") {
+      await runRequired(args.slice(1));
       return;
     }
     if (command === "import") {
@@ -2906,6 +2912,22 @@ export async function runReviewers(args: string[], deps: CollectReviewersDeps = 
   }
 }
 
+async function runRequired(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, REQUIRED_FLAGS, "required");
+  const mode = optionValue(args, "--mode") ?? "all";
+  if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff"');
+  const scope = await readScope(optionValue(args, "--scope"));
+  if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
+  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files]);
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(set, null, 2));
+    return;
+  }
+  console.log(`mode: ${set.mode}${set.filesKnown ? "" : " (no scope file list: path-gated reviewers stay required)"}`);
+  console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
+  for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+}
+
 async function runStack(args: string[]): Promise<void> {
   rejectUnknownFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();
@@ -3940,6 +3962,10 @@ Usage:
                      [--max-bytes <n>] [--out <dir>] [--json]
                      Cuts scope A into reviewer-sized slice files plus a manifest;
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
+  keryx review required [--mode all|diff] [--scope <scope.json>] [--json]
+                        The reviewer set a round must dispatch: every available
+                        reviewer for all, the diff-derived set for diff.
+                        \`review complete\` refuses a smaller dispatch.
   keryx review dispatch-check --payload <file|-> [--manifest <file>]
                               [--max-bytes <n>] [--json]
                               Refuses a reviewer payload with no slice, an oversize
