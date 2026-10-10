@@ -263,6 +263,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 | `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
 | `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
+| `--review-system <inherit\|review-auto>` | Who answers a review run's approval questions. `inherit` (default) follows the permission mode; `review-auto` answers them itself (reviewer spawns, `ask_user` menus) while destructive, credential, publish and hook-tightened calls still ask you. Saying "сделай автоматическое ревью" in the session has the same effect. See [Review system](guides/permission-modes.md#review-system). |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.

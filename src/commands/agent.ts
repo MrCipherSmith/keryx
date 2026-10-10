@@ -1,5 +1,6 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
+import { asksForReviewAuto, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -2244,6 +2245,11 @@ export async function runAgentTurn(
   // state its marker in the instruction every request of this turn sends
   // (round loop and both wrap-ups read `deps.systemInstruction`).
   const controlNonce = deps.controlNonce ?? generateControlNonce();
+  // Only the operator's own top-level line can switch the review system on: a child's task text and any
+  // non-operator origin (notifications, peers) are model- or peer-written and never carry that authority.
+  if (options.origin === undefined && deps.subagentBudget === undefined && asksForReviewAuto(userLine)) {
+    setReviewSystem("review-auto");
+  }
   // Flow 393 AC5: a host that keeps working memory says so; every other host's instruction is
   // byte-identical to what it was.
   const memoryContract = isWorkingMemoryHost(deps, options) ? `\n\n${buildWorkingMemoryInstruction()}` : "";
@@ -5451,6 +5457,14 @@ async function executeCallUnbounded(
   const mark = (name: string): void => {
     if (stage !== undefined) stage.current = name;
   };
+  if (requestApproval !== undefined && reviewAutoActive()) {
+    const askHuman = requestApproval;
+    requestApproval = async (name, toolInput, meta) => {
+      if (!reviewAutoGrants(name, meta)) return askHuman(name, toolInput, meta);
+      onAutoApproved?.(name, toolInput, { destructive: false, credentials: false });
+      return true;
+    };
+  }
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
     return { output: `unknown tool: ${call.name}`, isError: true };
