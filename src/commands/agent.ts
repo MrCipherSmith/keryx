@@ -1,4 +1,5 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
+import { decideReviewGate, findOpenManagedReview, reviewRunSeenInHistory } from "../review/completion-gate";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -1322,6 +1323,11 @@ export const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   // call, not to stop it watching one that is working.
   "shell_task_output",
   "shell_task_wait",
+  // Read-only introspection of the model's own state: asking again is how it
+  // checks progress, and refusing the third call ended a review run (flow 421).
+  "plan_get",
+  "slate_trail",
+  "recall_step",
 ]);
 
 /** Env override for how long a `hold` session waits for its own tasks (flow 265). */
@@ -3273,6 +3279,9 @@ async function runAgentTurnCore(
   let toollessReprompts = 0;
   let planFollowThroughCount = 0;
   let lastFollowThroughSignature: string | undefined;
+  let reviewGateContinues = 0;
+  let reviewGateStalls = 0;
+  let lastReviewGateSignature: string | undefined;
   // The previous toolless reply, normalized. A model that answers the reprompt
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
@@ -3961,6 +3970,37 @@ async function runAgentTurnCore(
           });
           io.onHistoryChange?.("tool");
           continue;
+        }
+      }
+
+      // Flow 421: a managed review run is finished when `keryx review complete`
+      // accepts the package, not when the model stops. Independent of the plan
+      // (a blocked plan item must not end it); unattended children are excluded.
+      if (subagentBudget === undefined && deps.unattended !== true) {
+        const open = await findOpenManagedReview(process.cwd()).catch(() => null);
+        const gate = decideReviewGate({
+          open,
+          runSeen: reviewRunSeenInHistory(history),
+          continues: reviewGateContinues,
+          stalls: reviewGateStalls,
+          lastSignature: lastReviewGateSignature,
+        });
+        if (gate.action === "continue") {
+          reviewGateContinues += 1;
+          reviewGateStalls = gate.stalls;
+          lastReviewGateSignature = gate.signature;
+          system(`\n[review-gate] Review not complete (continue ${reviewGateContinues}); \`review complete\` still refuses. Continuing.\n`);
+          history.push({
+            role: "user",
+            content: wrapHarnessNudge(gate.message, controlNonce),
+            provenance: "harness",
+            ts: now(),
+          });
+          io.onHistoryChange?.("tool");
+          continue;
+        }
+        if (gate.action === "stop") {
+          system(`\n[review-gate] ${gate.report}\n`);
         }
       }
 

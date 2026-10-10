@@ -608,6 +608,14 @@ Seeding a local skill from conventions you already keep elsewhere is documented
 in [CLI reference › review learn](../cli-reference.md) — the content comes from
 your own copy, because keryx holds none.
 
+## Running it from the keryx shell
+
+A review run in the shell is finished when `keryx review complete` accepts the package, not when the
+model stops writing. While a review package is open and `review complete` would still refuse, the
+shell does not accept a text-only finish: it names what is still missing, prints a `[review-gate]`
+line in the pane, and continues the turn. It gives up after 20 continues, or after two in a row that
+added no new artifact, and then reports the state instead of looping.
+
 ## Verify
 
 ```console

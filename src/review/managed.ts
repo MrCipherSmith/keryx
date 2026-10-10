@@ -721,6 +721,19 @@ export async function getManagedReviewStatus(cwd: string, ref: string): Promise<
   return JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
 }
 
+/** What `completeManagedReview` would refuse on right now, without closing anything. */
+export async function reviewCompletionBlockers(packageDir: string): Promise<string[]> {
+  const missing = await missingArtifacts(packageDir);
+  if (missing.length > 0) return [`missing artifacts: ${missing.join(", ")}`];
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    const findings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+    return await packageResearchErrors(packageDir, manifest.artifacts, findings);
+  } catch (error) {
+    return [`package unreadable: ${error instanceof Error ? error.message : String(error)}`];
+  }
+}
+
 /**
  * One recorded outcome, naming the finding it is about.
  *
