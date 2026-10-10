@@ -5,6 +5,15 @@
 //
 //   - AC1: <text> [verify: exec `<command>`]
 //   - AC2: <text> [verify: invariant `<command>`]
+//   - AC1: <text> [verify: exec `<command>` · sensitive: revert]
+//
+// An exec/invariant marker may carry one optional sensitivity note after the
+// command: `· sensitive: <value>` (the middle dot) or `; sensitive: <value>`
+// (ASCII semicolon) — both separators are accepted. <value> is `revert`,
+// `mutation` or `failure-scenario`: how the author proved the check can fail.
+// The note is a claim reported, never enforced. On `judged`/`none` it is a
+// parser error, and so is an unknown value.
+//
 //   - AC3: <text> [verify: judged]
 //   - AC4: <text> [verify: none — <reason>]
 //
@@ -21,8 +30,12 @@
 
 export type AcKind = "exec" | "invariant" | "judged" | "none" | "unclassified";
 
+export type AcSensitivity = "revert" | "mutation" | "failure-scenario";
+
+export const AC_SENSITIVITIES: readonly AcSensitivity[] = ["revert", "mutation", "failure-scenario"];
+
 export type AcKindRecord =
-  | { readonly kind: "exec" | "invariant"; readonly check: string }
+  | { readonly kind: "exec" | "invariant"; readonly check: string; readonly sensitivity?: AcSensitivity }
   | { readonly kind: "judged" }
   | { readonly kind: "none"; readonly reason: string }
   | { readonly kind: "unclassified" };
@@ -37,6 +50,14 @@ export interface AcKindReport {
   /** `exec` + `invariant`. */
   readonly runnable: number;
   readonly total: number;
+  /** exec/invariant criteria that carry / lack a sensitivity note, with the note values counted. */
+  readonly sensitivity: AcSensitivityCounts;
+}
+
+export interface AcSensitivityCounts {
+  readonly proven: number;
+  readonly unproven: number;
+  readonly byValue: Readonly<Record<AcSensitivity, number>>;
 }
 
 export interface AcKindError {
@@ -132,11 +153,16 @@ export function parseAcKindText(text: string): { record: AcKindRecord; error?: s
     case "exec":
     case "invariant": {
       if (rest.length === 0) return unclassified(`\`${word}\` requires a backticked command, e.g. [verify: ${word} \`bun test path/to.test.ts\`]`);
-      const command = /^`([^`]*)`$/.exec(rest);
+      const command = /^`([^`]*)`(?:\s*[·;]\s*([\s\S]*))?$/.exec(rest);
       if (command === null) return unclassified(`\`${word}\` requires exactly one backticked command after the kind, e.g. [verify: ${word} \`bun test path/to.test.ts\`]`);
       const check = (command[1] ?? "").trim();
       if (check.length === 0) return unclassified(`\`${word}\` has an empty backticked command`);
-      return { record: { kind: word, check } };
+      if (command[2] === undefined) return { record: { kind: word, check } };
+      const note = /^sensitive\s*:\s*([A-Za-z-]+)$/.exec(command[2].trim());
+      if (note === null) return unclassified(`\`${word}\` takes only a \`· sensitive: ${AC_SENSITIVITIES.join(" | ")}\` note after the command`);
+      const value = AC_SENSITIVITIES.find((v) => v === note[1]);
+      if (value === undefined) return unclassified(`unknown sensitivity "${note[1]}" — expected ${AC_SENSITIVITIES.join(", ")}`);
+      return { record: { kind: word, check, sensitivity: value } };
     }
     case "none": {
       if (rest.length === 0) return unclassified("`none` requires a reason after an em dash, e.g. [verify: none — <reason>]");
@@ -144,6 +170,7 @@ export function parseAcKindText(text: string): { record: AcKindRecord; error?: s
       if (reason === null) return unclassified("`none` requires its reason after an em dash (—), e.g. [verify: none — <reason>]");
       const why = (reason[1] ?? "").trim();
       if (why.length === 0) return unclassified("`none` has an empty reason after the em dash");
+      if (/[·;]\s*sensitive\s*:/.test(why)) return unclassified("a sensitivity note is only for exec or invariant criteria — `none` takes none");
       return { record: { kind: "none", reason: why } };
     }
     default:
@@ -183,13 +210,22 @@ export function buildAcKindReport(flowId: string, content: string): { report: Ac
 
 export function reportFromRecords(flowId: string, criteria: Readonly<Record<string, AcKindRecord>>): AcKindReport {
   const counts = emptyCounts();
-  for (const record of Object.values(criteria)) counts[record.kind] += 1;
+  const byValue: Record<AcSensitivity, number> = { revert: 0, mutation: 0, "failure-scenario": 0 };
+  let proven = 0;
+  for (const record of Object.values(criteria)) {
+    counts[record.kind] += 1;
+    if ((record.kind === "exec" || record.kind === "invariant") && record.sensitivity !== undefined) {
+      proven += 1;
+      byValue[record.sensitivity] += 1;
+    }
+  }
   return {
     flowId,
     criteria,
     counts,
     runnable: counts.exec + counts.invariant,
     total: Object.keys(criteria).length,
+    sensitivity: { proven, unproven: counts.exec + counts.invariant - proven, byValue },
   };
 }
 
@@ -204,12 +240,19 @@ export function renderAcKindDistribution(report: Pick<AcKindReport, "counts" | "
   ];
 }
 
+/** `sensitivity: 3 of 5 runnable proven (revert 2, mutation 1) · 2 unproven`. */
+export function renderAcSensitivityLine(report: Pick<AcKindReport, "runnable" | "sensitivity">): string {
+  const { proven, unproven, byValue } = report.sensitivity;
+  const parts = AC_SENSITIVITIES.filter((v) => byValue[v] > 0).map((v) => `${v} ${byValue[v]}`);
+  return `sensitivity: ${proven} of ${report.runnable} runnable proven${parts.length > 0 ? ` (${parts.join(", ")})` : ""} · ${unproven} unproven`;
+}
+
 /** A one-line human label for a record: `exec  bun test …`, `none  — reason`. */
 export function describeAcKind(record: AcKindRecord): string {
   switch (record.kind) {
     case "exec":
     case "invariant":
-      return `${record.kind} \`${record.check}\``;
+      return `${record.kind} \`${record.check}\`${record.sensitivity === undefined ? "" : ` · sensitive: ${record.sensitivity}`}`;
     case "none":
       return `none — ${record.reason}`;
     default:
@@ -229,7 +272,10 @@ export function readAcKindRecords(value: unknown): Record<string, AcKindRecord> 
     if (typeof raw !== "object" || raw === null) return undefined;
     const record = raw as Record<string, unknown>;
     const kind = record["kind"];
-    if ((kind === "exec" || kind === "invariant") && typeof record["check"] === "string") out[id] = { kind, check: record["check"] };
+    if ((kind === "exec" || kind === "invariant") && typeof record["check"] === "string") {
+      const sens = AC_SENSITIVITIES.find((v) => v === record["sensitivity"]);
+      out[id] = sens === undefined ? { kind, check: record["check"] } : { kind, check: record["check"], sensitivity: sens };
+    }
     else if (kind === "judged") out[id] = { kind };
     else if (kind === "none" && typeof record["reason"] === "string") out[id] = { kind, reason: record["reason"] };
     else if (kind === "unclassified") out[id] = { kind };

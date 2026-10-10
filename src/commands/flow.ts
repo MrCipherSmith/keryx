@@ -18,6 +18,7 @@ import {
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
+  renderAcSensitivityLine,
   resolveFlowDir,
   uncommittedFlowStateNote,
   validateCriterionName,
@@ -996,6 +997,7 @@ async function runAcKinds(args: string[]): Promise<void> {
   for (const line of renderAcKindDistribution(report)) {
     console.log(`  ${line}`);
   }
+  console.log(`  ${renderAcSensitivityLine(report)}`);
   for (const error of errors) {
     console.error(`${style.red(symbols.cross)} ${error.id}: ${error.message}`);
   }
@@ -1216,6 +1218,28 @@ async function runOrigin(args: string[]): Promise<void> {
   );
 }
 
+/** A commit sha (7-40 hex), a path containing `/`, or a URL. */
+export function noteNamesEvidence(note: string | undefined): boolean {
+  if (note === undefined) return false;
+  return note.split(/\s+/).some((token) => /^[0-9a-f]{7,40}$/i.test(token) || token.includes("/") || /^[a-z][a-z0-9+.-]*:\/\//i.test(token));
+}
+
+/**
+ * Flow 423: a criterion that claims `sensitive: <how>` is confirmed with a note that names the evidence of that
+ * run. Warns, never refuses — the confirmation already happened and this reads kinds in the command layer only.
+ */
+async function warnUnevidencedSensitivity(cwd: string, id: string, criterion: string, noteText: string | undefined): Promise<void> {
+  try {
+    const { report } = await getService().acKinds({ cwd, id });
+    const record = report.criteria[criterion.toUpperCase()];
+    if ((record?.kind !== "exec" && record?.kind !== "invariant") || record.sensitivity === undefined) return;
+    if (noteNamesEvidence(noteText)) return;
+    console.log(`  ${style.yellow(WARN)} warning: ${criterion.toUpperCase()} claims sensitive: ${record.sensitivity}, but --note names no evidence of the ${record.sensitivity} run`);
+  } catch {
+    // Reporting only.
+  }
+}
+
 async function runAc(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "confirm") {
@@ -1234,6 +1258,7 @@ async function runAc(args: string[]): Promise<void> {
       ...(await signerIdentityArgs(cwd, values.get("--signed-by"))),
     });
     console.log(`  ${style.green(symbols.ok)} Confirmed ${style.bold(criterion.toUpperCase())} ${style.dim(`(${Object.keys(flow.acConfirmed).length} total)`)}`);
+    await warnUnevidencedSensitivity(cwd, id, criterion, values.get("--note"));
     const signature = flow.signatures?.at(-1);
     if (signature) {
       note(`Signed: ${signature.identity.value ?? "unknown"} [${signature.identity.basis}] — ${signature.identity.source}`);

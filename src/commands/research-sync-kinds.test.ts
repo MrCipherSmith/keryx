@@ -110,3 +110,38 @@ test("runResearchSync puts the verification-kind section and the WARNING into sy
   expect(page).toContain("1 flows, 3 criteria, unclassified 2 (67%)");
   expect(page).toContain("WARNING: unclassified share 67%");
 });
+
+// Flow 423 (AC6): the sensitivity share, reported with no threshold and no warning.
+test("sensitivity line counts exec/invariant criteria that carry a note", async () => {
+  await addFlow("1", "2026-10-10T08:00:00Z", [
+    "a [verify: exec `bun test a` · sensitive: revert]",
+    "b [verify: invariant `bun test b`]",
+    "c [verify: judged]",
+    "d [verify: exec `bun test d`; sensitive: mutation]",
+  ]);
+  const out = await lines();
+  expect(out).toContain("sensitivity, flows frozen in the last 7 days: 2 of 3 exec/invariant criteria carry a sensitivity note (67%)");
+});
+
+test("zero runnable criteria says so and does not divide", async () => {
+  await addFlow("1", "2026-10-10T08:00:00Z", ["a [verify: judged]"]);
+  const out = await lines();
+  expect(out).toContain("sensitivity, flows frozen in the last 7 days: no exec/invariant criteria");
+  expect(out).not.toContain("NaN");
+});
+
+test("runResearchSync puts the sensitivity line into sync-status.md", async () => {
+  const catalog = path.join(root, CATALOG_DIR);
+  await mkdir(catalog, { recursive: true });
+  await writeFile(path.join(catalog, "part1-counts.json"), JSON.stringify({ commit: "abc1234", flows: 1 }));
+  await addFlow("1", "2026-10-10T08:00:00Z", ["a [verify: exec `x` · sensitive: revert]", "b [verify: exec `y`]"]);
+  const outcome = await runResearchSync({
+    root,
+    now: () => NOW,
+    headHash: async () => "abc1234",
+    runCounts: async () => JSON.stringify({ commit: "abc1234", flows: 1 }),
+  });
+  expect(outcome.ok).toBe(true);
+  const page = await readFile(path.join(catalog, STATUS_FILE), "utf8");
+  expect(page).toContain("1 of 2 exec/invariant criteria carry a sensitivity note (50%)");
+});

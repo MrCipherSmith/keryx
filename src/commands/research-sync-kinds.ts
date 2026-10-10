@@ -14,6 +14,9 @@ export interface FrozenFlow {
   frozenAt: Date;
   total: number;
   unclassified: number;
+  /** exec/invariant criteria, and how many of them carry a sensitivity note. */
+  runnable: number;
+  sensitive: number;
 }
 
 /** The flows with a `frozen` history entry, with their criteria counted by the same parser the freeze uses. Unreadable flows are skipped. */
@@ -38,7 +41,14 @@ export async function collectFrozenFlows(root: string): Promise<FrozenFlow[]> {
       }
       if (frozenAt === null) continue;
       const { criteria } = parseAcKinds(await readFile(path.join(flowsDir, name, "acceptance-criteria.md"), "utf8"));
-      out.push({ frozenAt, total: criteria.length, unclassified: criteria.filter((c) => c.record.kind === "unclassified").length });
+      const runnable = criteria.filter((c) => c.record.kind === "exec" || c.record.kind === "invariant");
+      out.push({
+        frozenAt,
+        total: criteria.length,
+        unclassified: criteria.filter((c) => c.record.kind === "unclassified").length,
+        runnable: runnable.length,
+        sensitive: runnable.filter((c) => "sensitivity" in c.record && c.record.sensitivity !== undefined).length,
+      });
     } catch {
       continue;
     }
@@ -64,6 +74,14 @@ export function renderKindShare(flows: readonly FrozenFlow[], now: Date): string
   if (percent > KIND_WARN_PERCENT) {
     lines.push(`- WARNING: unclassified share ${percent}% is above ${KIND_WARN_PERCENT}%: criteria are being frozen without a verification kind.`);
   }
+  // Flow 423 (AC6): reported only, no threshold, no warning.
+  const runnable = inWindow.reduce((sum, flow) => sum + flow.runnable, 0);
+  const sensitive = inWindow.reduce((sum, flow) => sum + flow.sensitive, 0);
+  lines.push(
+    runnable === 0
+      ? `- sensitivity, flows frozen in the last ${KIND_WINDOW_DAYS} days: no exec/invariant criteria`
+      : `- sensitivity, flows frozen in the last ${KIND_WINDOW_DAYS} days: ${sensitive} of ${runnable} exec/invariant criteria carry a sensitivity note (${Math.round((sensitive / runnable) * 100)}%)`,
+  );
   lines.push(definition);
   return lines;
 }
