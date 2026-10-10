@@ -105,6 +105,8 @@ describe("rendering", () => {
 
   test("describeAcKind gives one line per record", () => {
     expect(describeAcKind({ kind: "exec", check: "bun test x" })).toBe("exec `bun test x`");
+    expect(describeAcKind({ kind: "exec", check: "c", sensitivity: "revert" })).toBe("exec `c` · sensitive: revert");
+    expect(describeAcKind({ kind: "invariant", check: "c", sensitivity: "mutation" })).toBe("invariant `c` · sensitive: mutation");
     expect(describeAcKind({ kind: "none", reason: "why" })).toBe("none — why");
     expect(describeAcKind({ kind: "judged" })).toBe("judged");
     expect(describeAcKind({ kind: "unclassified" })).toBe("unclassified");

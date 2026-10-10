@@ -3,7 +3,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { parseAcKinds } from "../flow/service";
+import { buildAcKindReport, parseAcKinds } from "../flow/service";
 
 export const KIND_WINDOW_DAYS = 7;
 /** A share above this (in percent) gets a warning line. */
@@ -40,14 +40,17 @@ export async function collectFrozenFlows(root: string): Promise<FrozenFlow[]> {
         if (!Number.isNaN(at.getTime())) frozenAt = at;
       }
       if (frozenAt === null) continue;
-      const { criteria } = parseAcKinds(await readFile(path.join(flowsDir, name, "acceptance-criteria.md"), "utf8"));
-      const runnable = criteria.filter((c) => c.record.kind === "exec" || c.record.kind === "invariant");
+      const content = await readFile(path.join(flowsDir, name, "acceptance-criteria.md"), "utf8");
+      const { criteria } = parseAcKinds(content);
+      // Sensitivity comes from the report `ac kinds` prints, so a repeated id counts once in both surfaces. The
+      // flow-422 total/unclassified keep counting every `- ACn:` line, as before.
+      const { report } = buildAcKindReport(name, content);
       out.push({
         frozenAt,
         total: criteria.length,
         unclassified: criteria.filter((c) => c.record.kind === "unclassified").length,
-        runnable: runnable.length,
-        sensitive: runnable.filter((c) => "sensitivity" in c.record && c.record.sensitivity !== undefined).length,
+        runnable: report.runnable,
+        sensitive: report.sensitivity.proven,
       });
     } catch {
       continue;

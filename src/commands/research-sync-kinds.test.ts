@@ -123,6 +123,21 @@ test("sensitivity line counts exec/invariant criteria that carry a note", async 
   expect(out).toContain("sensitivity, flows frozen in the last 7 days: 2 of 3 exec/invariant criteria carry a sensitivity note (67%)");
 });
 
+test("a flow frozen 8+ days before NOW is excluded from the sensitivity counts", async () => {
+  await addFlow("1", "2026-10-10T08:00:00Z", ["a [verify: exec `x` · sensitive: revert]", "b [verify: exec `y`]"]);
+  await addFlow("2", "2026-10-03T08:00:00Z", ["c [verify: exec `x` · sensitive: revert]", "d [verify: exec `y` · sensitive: mutation]"]);
+  const out = await lines();
+  expect(out).toContain("1 of 2 exec/invariant criteria carry a sensitivity note (50%)");
+});
+
+test("a repeated criterion id counts once in the sensitivity line, as in `ac kinds`", async () => {
+  await addFlow("1", "2026-10-10T08:00:00Z", ["a [verify: exec `x` · sensitive: revert]", "b [verify: judged]"]);
+  const file = path.join(root, ".metaproject", "flows", "1-fixture", "acceptance-criteria.md");
+  await writeFile(file, "- AC1: a [verify: exec `x` · sensitive: revert]\n- AC1: dup [verify: exec `x` · sensitive: revert]\n");
+  const out = await lines();
+  expect(out).toContain("1 of 1 exec/invariant criteria carry a sensitivity note (100%)");
+});
+
 test("zero runnable criteria says so and does not divide", async () => {
   await addFlow("1", "2026-10-10T08:00:00Z", ["a [verify: judged]"]);
   const out = await lines();

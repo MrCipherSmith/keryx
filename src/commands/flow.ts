@@ -1218,10 +1218,34 @@ async function runOrigin(args: string[]): Promise<void> {
   );
 }
 
-/** A commit sha (7-40 hex), a path containing `/`, or a URL. */
+// Leading `.` is kept: `./x`, `../x` and `.metaproject/x` start with it.
+const EVIDENCE_EDGE_PUNCTUATION = /^[\s"'`()[\]{}<>,;:!?]+|[\s"'`()[\]{}<>.,;:!?]+$/g;
+const EVIDENCE_PATH_PREFIXES = ["./", "../", "~/", "src/", "docs/", "test/", "tests/", ".metaproject/", ".github/"];
+
+/**
+ * Does one whitespace-split token of a note name evidence? Leading/trailing punctuation is stripped first, then it
+ * counts when it is
+ * - a URL (`scheme://`),
+ * - a commit sha: 7-40 hex characters with at least one digit (so `defaced` is a word, not a sha),
+ * - a path: contains `/` and either starts with a known root (`./`, `../`, `~/`, `src/`, `docs/`, `test/`, `tests/`,
+ *   `.metaproject/`, `.github/`), has two or more slashes, or ends in a file extension (`a/b.ts`). A bare word pair
+ *   (`n/a`, `pass/fail`, `and/or`, `a/b`) is prose.
+ */
+function tokenNamesEvidence(raw: string): boolean {
+  const token = raw.replace(EVIDENCE_EDGE_PUNCTUATION, "");
+  if (token === "") return false;
+  if (/^[a-z][a-z0-9+.-]*:\/\/\S+/i.test(token)) return true;
+  if (/^[0-9a-f]{7,40}$/i.test(token) && /\d/.test(token)) return true;
+  if (!token.includes("/")) return false;
+  if (EVIDENCE_PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return true;
+  if (token.split("/").length > 2) return true;
+  return /\.[A-Za-z0-9]+$/.test(token);
+}
+
+/** A note names evidence when any token is a commit sha, a path or a URL (see `tokenNamesEvidence`). */
 export function noteNamesEvidence(note: string | undefined): boolean {
   if (note === undefined) return false;
-  return note.split(/\s+/).some((token) => /^[0-9a-f]{7,40}$/i.test(token) || token.includes("/") || /^[a-z][a-z0-9+.-]*:\/\//i.test(token));
+  return note.split(/\s+/).some(tokenNamesEvidence);
 }
 
 /**
