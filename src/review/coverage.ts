@@ -42,9 +42,9 @@ const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
 function globToRegExp(glob: string): RegExp {
   const body = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*\/?/g, "\u0000")
+    .replace(/\*\*\/?/g, "\uE000")
     .replace(/\*/g, "[^/]*")
-    .replace(/\u0000/g, "(?:.*/)?");
+    .replace(/\uE000/g, "(?:.*/)?");
   return new RegExp(`^${body}$`);
 }
 
