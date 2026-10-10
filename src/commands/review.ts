@@ -267,7 +267,7 @@ import { runModelTurn } from "../harness/provider/single-turn";
  * A misspelling here is always a mistake: there is no case where a review
  * command should do LESS than the operator asked and say nothing.
  */
-const CREATE_FLAGS = [
+export const CREATE_FLAGS = [
   "--target",
   "--ref",
   "--target-ref",
@@ -3919,15 +3919,21 @@ function reviewHelpText(): string {
 
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
-                      [--reviewers a,b] [--report <path>]
+                      [--reviewers a,b] [--report <path>] [--research <ledger.json>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                     [--research <ledger.json>] [--review-id <id>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                      [--research <ledger.json>] [--review-id <id>]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                      [--tokens-in <n>] [--tokens-out <n>]
                       [--parallel <n>] [--outstanding <n>]
+                      --research is the research ledger {version, scopeReviewed, rawReconciled,
+                      obligations, dispatch}; without it the package stays PENDING and
+                      \`review complete\` refuses on scope, raw reconciliation and dispatch evidence.
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
   keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
