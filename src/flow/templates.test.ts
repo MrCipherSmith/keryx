@@ -81,6 +81,8 @@ describe("flow-init skill criteria step", () => {
       "[verify: none — <reason>]",
       "ask the operator ONE question listing the criteria with proposed",
       "before `flow freeze`",
+      "failure path gets its own failure-scenario criterion with an observable",
+      "carries `· sensitive: revert|mutation|failure-scenario`",
     ]) {
       expect(generated.replace(/\s+/g, " ")).toContain(phrase.replace(/\s+/g, " "));
     }
