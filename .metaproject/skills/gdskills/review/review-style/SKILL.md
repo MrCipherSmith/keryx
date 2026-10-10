@@ -64,17 +64,13 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
 Run that script to determine `BASE_SHA` before collecting the diff.
 
-```bash
-# Default mode — all changes from merge-base to working tree
-git diff --name-only "${BASE_SHA}"
-git diff "${BASE_SHA}"
-
-# Explicit range mode
-git diff --name-only <FROM_SHA>..<TO_SHA>
-git diff <FROM_SHA>..<TO_SHA>
-```
-
 Only review code changed in scope. Do not flag style issues in lines outside the diff.
+
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+```bash
+git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+# explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+```
 
 ---
 

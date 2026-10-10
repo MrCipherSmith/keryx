@@ -34,6 +34,7 @@ const REVIEW_LOCAL_SUBCOMMANDS: ReadonlySet<string> = new Set([
   "tier",
   "status",
   "reviewers",
+  "required",
   "ingest",
   "complete",
 ]);

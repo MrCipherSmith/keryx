@@ -163,8 +163,8 @@ rejected anyway, so in practice every finding you report carries one.
 - **Fix**: concrete suggestion
 ```
 
-Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
-This reviewer keeps no table of its own.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; no table here. When dispatched, follow the `reviewer-input.schema.json` payload and return a `REVIEW_RESULT` object compatible with
+`.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess.
 
 ### Shared laws (every reviewer)
 
