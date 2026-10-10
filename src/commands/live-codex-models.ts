@@ -55,6 +55,15 @@ export function startLiveCodexModels(): LiveCodexModels {
   return shared;
 }
 
+/** `detected` with a freshly fetched live Codex list merged in; for one-shot CLI callers that have no shell-lifetime fetch. */
+export async function withLiveCodexModels(
+  detected: readonly DetectedLike[],
+  live: LiveCodexModels = createLiveCodexModels(),
+): Promise<{ name: string; models: readonly string[] }[]> {
+  await live.start();
+  return mergeLiveCodexModels(detected, live.models());
+}
+
 /** `detected` with the live Codex list replacing the curated one; the provider set itself is never widened. */
 export function mergeLiveCodexModels(
   detected: readonly DetectedLike[],
