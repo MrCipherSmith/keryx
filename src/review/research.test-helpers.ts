@@ -15,6 +15,8 @@ export function readyResearchFixture(reviewers: string[] = ["synthetic-reviewer"
     })),
     dispatch: {
       version: 1,
+      mode: "all",
+      override: { operatorQuote: "synthetic fixture", reason: "lifecycle fixture, not a production review" },
       selected: reviewers,
       unresolvedRules: [],
       runs: reviewers.map((reviewer) => ({

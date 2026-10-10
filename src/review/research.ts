@@ -1,4 +1,5 @@
 import { dispatchErrors } from "./dispatch";
+import { coverageErrors, packageScopeFiles, projectRootOfPackage } from "./coverage";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
@@ -30,14 +31,18 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
   return errors;
 }
 /** Absent artifact identifies packages predating this contract, not completed research. */
-export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown): Promise<string[]> {
+export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean } = {}): Promise<string[]> {
   const a = artifacts && typeof artifacts === "object" ? artifacts as Record<string, unknown> : {};
   if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : ["dispatch requires a research artifact"];
   if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return ["invalid dispatch artifact locator"];
   if (a.research !== "research.json") return ["invalid research artifact locator"];
   try {
     const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
-    return [...researchErrors(ledger, findings), ...(a.reviewerDispatch === undefined ? [] : dispatchErrors(ledger?.dispatch))];
+    const dispatch = a.reviewerDispatch === undefined ? [] : dispatchErrors(ledger?.dispatch);
+    const coverage = a.reviewerDispatch === undefined || options.coverage === false || dispatch.length
+      ? []
+      : await coverageErrors(ledger?.dispatch, { root: projectRootOfPackage(packageDir), files: await packageScopeFiles(packageDir) });
+    return [...researchErrors(ledger, findings), ...dispatch, ...coverage];
   }
   catch { return ["research ledger unreadable or invalid JSON"]; }
 }

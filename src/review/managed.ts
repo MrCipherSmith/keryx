@@ -422,6 +422,9 @@ export async function createManagedReviewPackage(
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (input.scope?.files !== undefined) {
+    await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files }, null, 2)}\n`);
+  }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
     renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
