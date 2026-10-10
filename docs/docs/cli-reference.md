@@ -2097,7 +2097,7 @@ keryx research --help
 
 | Subcommand | Description |
 |---|---|
-| `sync` | Run from the repository root. Writes `part1-counts-latest.json` (the unchanged `part1-counts.py` over the flows committed at `HEAD`), `decisions-export-latest.jsonl` (the text-free decisions export from 2026-10-02 on, the same as `keryx decisions export`) and `sync-status.md` (the UTC time of the run, the `HEAD` hash, the counts of the snapshot next to the counts now, the journal summary and the number of rows in `contribution-log.md`). A file is rewritten only when its content changed, so a second run with no new data changes only the run time in `sync-status.md`. It makes no commit, no branch and no pull request. Takes no arguments. When it fails, the previous `-latest` files are left as they were and the reason is written into `sync-status.md`; the exit code is `1`. |
+| `sync` | Run from the repository root. Writes `part1-counts-latest.json` (the unchanged `part1-counts.py` over the flows committed at `HEAD`), `decisions-export-latest.jsonl` (the text-free decisions export from 2026-10-02 on, the same as `keryx decisions export`) and `sync-status.md` (the UTC time of the run, the `HEAD` hash, the counts of the snapshot next to the counts now, the journal summary and the number of rows in `contribution-log.md`, and a "verification kinds" line: the share of unclassified criteria among the flows frozen in the last 7 days, with a warning above 20%). A file is rewritten only when its content changed, so a second run with no new data changes only the run time in `sync-status.md`. It makes no commit, no branch and no pull request. Takes no arguments. When it fails, the previous `-latest` files are left as they were and the reason is written into `sync-status.md`; the exit code is `1`. |
 | `--help`, `-h` | Print `research` usage and exit. |
 
 The daily run is a scheduler entry: when the `keryx serve` scheduler is on and the
@@ -3765,7 +3765,7 @@ keryx flow schema [--out <path>]
 | `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), origin (kind, quote, source; `origin: unknown` for a flow without one), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
-| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
+| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. Criteria with no marker print `warning: no verification kind on AC1, AC2 — …`; on a terminal (not under `NODE_ENV=test` or `CI`) the command then asks `freeze without a verification kind on …? [y/N]`, and only an explicit yes freezes (a no leaves the flow unchanged). A non-interactive run always freezes. Either way that freezes appends one `journal.md` line (the warning, or "operator froze without a verification kind on …"). |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
 | `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. Also reports the task's **resume state** — `never-started`, `ended` (a prior attempt reported how it finished), or `unresolved` (an attempt was opened and no end was recorded, so whether its work landed cannot be told from the record) — plus every other not-done task carrying an unresolved attempt. `--json` carries this as `resume` and `unresolved`. |
@@ -3833,6 +3833,14 @@ frozen before kinds existed has no `acKinds`, which reads as fully unclassified
 (not as zero criteria). A kind is **information only**: it never refuses a
 freeze, a confirmation or a completion, and it never makes a step mandatory.
 `flow check-ac` strips the marker before it looks at a criterion's wording.
+
+Writing the marker: `flow init` scaffolds each criterion as
+`- AC1: <replace …> [verify: <exec|invariant|judged|none>]`, and the
+flow-init and flow-orchestrator skills require a marker on every criterion,
+with one question to the operator before the freeze when a kind is unclear.
+Flows that `/goal --auto` provisions carry `[verify: judged]`. `flow freeze`
+warns about criteria still unclassified (see its entry above); this is the only
+place a missing kind is asked about, and the answer gates nothing.
 
 Where it shows up: the distribution block printed by `flow freeze`;
 `flow ac kinds <id> [--json]` (exit `1` naming the criterion on a malformed

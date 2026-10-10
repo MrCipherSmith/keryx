@@ -1,4 +1,9 @@
 # Changelog
+## [Unreleased]
+### Flow Governance
+- Acceptance criteria are written with a verification kind. The scaffold from `flow init` shows `[verify: <exec|invariant|judged|none>]` on each criterion and states the marker rule, the flow-init and flow-orchestrator skills require a marker on every criterion (one operator question before the freeze when a kind is unclear), and flows that `/goal --auto` provisions carry `[verify: judged]`.
+- `keryx flow freeze` warns `no verification kind on AC1, AC2` for unclassified criteria. On a terminal it asks `freeze without a verification kind on …? [y/N]` and only an explicit yes freezes; a no leaves the flow unchanged. Non-interactive runs always freeze. Both freeze cases append a journal line. A kind still gates nothing.
+- `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
 
 ## [0.3.102] - 2026-10-10
 
