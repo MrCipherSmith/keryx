@@ -26,6 +26,7 @@ import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode }
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
+import { runWithCallWatchdog, type CallStage } from "./call-watchdog";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
 import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
@@ -5379,7 +5380,26 @@ function composeWithHook(
 }
 
 /** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */
-async function executeCall(
+/**
+ * `spawn_subagent` is the one call whose stall parks the whole turn, so it runs under a watchdog that
+ * names the stage it was stuck in; every other tool goes straight through.
+ */
+function executeCall(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+  const call = args[0];
+  if (call.name !== "spawn_subagent") return executeCallUnbounded(...args);
+  return runWithCallWatchdog(
+    call.name,
+    (signal, stage) => {
+      const next = [...args] as unknown as Parameters<typeof executeCallUnbounded>;
+      next[9] = signal;
+      next[18] = stage;
+      return executeCallUnbounded(...next);
+    },
+    { signal: args[9] },
+  );
+}
+
+async function executeCallUnbounded(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
@@ -5413,7 +5433,11 @@ async function executeCall(
   mcpToolFingerprint?: (fqn: string) => string | undefined,
   mcpToolDestructive?: (fqn: string) => boolean,
   beforeMutation?: () => Promise<void>,
+  stage?: CallStage,
 ): Promise<InteractiveToolResult> {
+  const mark = (name: string): void => {
+    if (stage !== undefined) stage.current = name;
+  };
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
     return { output: `unknown tool: ${call.name}`, isError: true };
@@ -5471,6 +5495,7 @@ async function executeCall(
   let hookResult: HookFireResult | undefined;
   if (hooks !== undefined) {
     try {
+      mark("pre-tool-hook");
       hookResult = await firePreToolUseHook(hooks, call, input, risk, isReadOnly, mode);
     } catch (err) {
       // Flow 306 fix (review finding 3): a hook CRASH on PreToolUse — a
@@ -5621,6 +5646,7 @@ async function executeCall(
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
+      mark("approval");
       const response =
         requestApproval === undefined
           ? false
@@ -5630,6 +5656,7 @@ async function executeCall(
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
             });
+      mark("approved");
       if (!isApprovalFor(response, fingerprint)) {
         return { output: untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed", isError: true };
       }
@@ -5745,6 +5772,7 @@ async function executeCall(
   // `/rewind` seam: after every approval, before the tool can touch the work tree.
   if (beforeMutation !== undefined && (risk === "write" || risk === "shell" || risk === "destructive" || risk === "delegate")) {
     try {
+      mark("before-mutation");
       await beforeMutation();
     } catch {
       // A failed snapshot never blocks the tool.
@@ -5752,6 +5780,7 @@ async function executeCall(
   }
   // The context is passed unconditionally: a tool that ignores it is unaffected,
   // and making the parameter conditional would hide which calls are abortable.
+  mark("invoke");
   const result = await tool.invoke(input, {
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
@@ -5765,6 +5794,7 @@ async function executeCall(
   // tests, or any future non-conforming implementation).
   if (hooks !== undefined) {
     const aliasName = aliasHookToolName(call.name);
+    mark("post-tool-hook");
     try {
       await hooks.runtime.fire(
         result.isError ? "PostToolUseFailure" : "PostToolUse",

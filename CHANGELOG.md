@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.101] - 2026-10-10
+
+### Agent Runtime
+
+- A `spawn_subagent` call is bounded as a whole by a harness watchdog (12 minutes, `KERYX_SPAWN_CALL_WATCHDOG_MS`, 0 disables). The 0.3.100 backstop only covered the tool's own `invoke()`; a live review hung 90 minutes outside it, in the pre/post-tool hooks, the approval step or the rewind snapshot, and a parent turn archives nothing until every call of the batch answers. A stalled call now returns an error that names the stage it was stuck in, and the clock stands still while a human is deciding on an approval.
+- Esc on a `spawn_subagent` call that ignores the abort signal answers the call after a 10 second grace instead of leaving the session unrecoverable.
+
 ## [0.3.100] - 2026-10-10
 
 ### Review Process
