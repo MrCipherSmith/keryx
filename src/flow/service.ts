@@ -2372,7 +2372,7 @@ async function confirmationGate(
   };
 }
 
-async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {
+export async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {
   const content = await Bun.file(acPath(cwd, dir)).text();
   return content.includes("<replace with a hard, verifiable criterion");
 }

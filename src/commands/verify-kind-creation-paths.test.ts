@@ -8,8 +8,8 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseAcKinds } from "../flow/ac-kinds";
-import { createFlowService } from "../flow/service";
 import { renderAcceptanceCriteria } from "../flow/templates";
+import { flowCommand } from "./flow";
 import { autoProvisionFlow } from "./goal-command";
 import { createDefaultFlowPort, type KeryxRunner } from "./intake-ports";
 
@@ -26,15 +26,26 @@ const acOf = (dir: string): string => readFileSync(path.join(project, ".metaproj
 
 describe("intake", () => {
   test("a flow made through the intake port gets the acceptance-criteria template with the marker", async () => {
-    const service = createFlowService({ tracker: null, healthGate: async () => ({ status: "skipped", reasons: [] }), now: () => new Date("2026-10-10T10:00:00Z") });
-    // The runner stands in for the `keryx flow init` child: it runs the same service `flow init` runs.
-    const run: KeryxRunner = async (args) => {
-      const title = args[args.indexOf("--title") + 1] ?? "";
-      const source = args[args.indexOf("--source") + 1] ?? "";
-      await service.init({ cwd: project, title, origin: "agent-proposal", originSource: source });
+    // The runner stands in for the `keryx flow init` child: it hands the argv the port built to the real `flow init` handler.
+    const seen: string[][] = [];
+    const run: KeryxRunner = async (args, cwd) => {
+      seen.push(args);
+      const realCwd = process.cwd();
+      const realLog = console.log;
+      console.log = () => {};
+      process.chdir(cwd);
+      try {
+        await flowCommand(args.slice(1));
+      } finally {
+        process.chdir(realCwd);
+        console.log = realLog;
+      }
       return { code: 0, timedOut: false, stdout: "", stderr: "" };
     };
     const result = await createDefaultFlowPort({ run }).init(project, { title: "Speed up checkout", source: "intake card abc123" });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.slice(0, 2)).toEqual(["flow", "init"]);
+    expect(seen[0]).toContain("--title");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const body = acOf(result.dir);
@@ -46,6 +57,8 @@ describe("intake", () => {
 
 describe("goal", () => {
   test("an auto-provisioned goal flow ends its single criterion with a valid marker", async () => {
+    // F-003: autoProvisionFlow uses the default service deps. Here they are safe: title-only init stays offline (no
+    // issue, so the tracker is never asked), and freeze/start never reach the tracker, health or security gates.
     const flowId = await autoProvisionFlow(project, "ship the\nlogin page");
     expect(flowId.length).toBeGreaterThan(0);
     const dir = readdirFlow();
@@ -54,6 +67,16 @@ describe("goal", () => {
     expect(parsed.criteria).toHaveLength(1);
     expect(parsed.criteria[0]?.record).toEqual({ kind: "judged" });
     expect(parsed.criteria[0]?.text).toContain('"ship the login page"');
+  });
+});
+
+describe("goal text carrying its own marker", () => {
+  test("a goal containing [verify: exec `x`] still yields one judged AC1 and no parser errors", async () => {
+    await autoProvisionFlow(project, "do it [verify: exec `x`] now [VERIFY: none — z]");
+    const parsed = parseAcKinds(acOf(readdirFlow()));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.criteria).toHaveLength(1);
+    expect(parsed.criteria[0]?.record).toEqual({ kind: "judged" });
   });
 });
 

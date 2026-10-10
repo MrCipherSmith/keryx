@@ -11,6 +11,7 @@ import {
   createFlowService,
   describeAcKind,
   effectiveOutcomeAuthor,
+  isPlaceholderAc,
   intentNoteForNewFlow,
   originDetailLines,
   readOrigin,
@@ -45,7 +46,8 @@ import {
   symbols,
   nextSteps,
 } from "../lib/ui";
-import { taskResumeState, type TaskResumeState } from "../flow/machine";
+import { canTransition, taskResumeState, type TaskResumeState } from "../flow/machine";
+import { readAcCriteria } from "../flow/store";
 import { ATTEMPT_CLI_OUTCOMES } from "../flow/types";
 import type {
   AttemptCliOutcome,
@@ -840,18 +842,20 @@ async function runNext(args: string[]): Promise<void> {
 }
 
 async function runSimple(args: string[], action: "freeze" | "start" | "unblock"): Promise<void> {
-  const id = requireId(args);
+  const skipPrompt = action === "freeze" && (args.includes("--yes") || process.env["KERYX_NONINTERACTIVE"] === "1");
+  const id = requireId(args.filter((arg) => arg !== "--yes"));
   let unmarked: string[] = [];
   let interactive = false;
-  if (action === "freeze") {
+  // Only warn or ask when the freeze can actually happen; otherwise the service's own error surfaces.
+  if (action === "freeze" && (await freezeCanProceed(process.cwd(), id))) {
     unmarked = await unmarkedCriteria(process.cwd(), id);
     if (unmarked.length > 0) {
       const names = unmarked.join(", ");
       console.log(
         `  ${style.yellow(WARN)} warning: no verification kind on ${names} — add [verify: …] or accept them unclassified`,
       );
-      interactive = freezePromptIo.interactive();
-      if (interactive && !(await freezePromptIo.ask(`freeze without a verification kind on ${names}? [y/N] `))) {
+      interactive = !skipPrompt && freezePromptIo.interactive();
+      if (interactive && !(await freezePromptIo.ask(`freeze without a verification kind on ${names}? [Y/n] `))) {
         // The operator's own answer, not a gate: nothing was written, the flow stays as it was.
         console.log(`  ${style.dim("Freeze cancelled: the flow is unchanged.")}`);
         return;
@@ -869,9 +873,31 @@ async function runSimple(args: string[], action: "freeze" | "start" | "unblock")
 }
 
 /**
+ * Read-only: would `service.freeze` get past its own status and criteria checks?
+ * Any doubt answers false, so the service call runs unwarned and its error surfaces.
+ */
+async function freezeCanProceed(cwd: string, id: string): Promise<boolean> {
+  try {
+    const flow = await getService().get({ cwd, id });
+    if (!canTransition(flow.status, "ready")) {
+      return false;
+    }
+    const dir = await resolveFlowDir(cwd, id);
+    const criteria = await readAcCriteria(cwd, dir);
+    if (criteria.length === 0 || (criteria.length === 1 && (await isPlaceholderAc(cwd, dir)))) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Test seam for the freeze confirmation: whether a human is at the terminal and
  * what they answer. Lives in the command layer; the service-layer freeze never
- * prompts and never refuses. Only an explicit human "no" stops a freeze.
+ * prompts and never refuses. The prompt defaults to proceeding ([Y/n]): an empty
+ * answer, "y" or "yes" freezes; only an explicit "n" or "no" stops it.
  */
 export const freezePromptIo: {
   interactive: () => boolean;
@@ -884,13 +910,18 @@ export const freezePromptIo: {
     const readline = await import("node:readline/promises");
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     try {
-      const answer = (await rl.question(question)).trim().toLowerCase();
-      return answer === "y" || answer === "yes";
+      return freezeAnswerProceeds(await rl.question(question));
     } finally {
       rl.close();
     }
   },
 };
+
+/** The freeze prompt defaults to proceeding: an empty answer, y or yes freezes; only an explicit n or no cancels. */
+export function freezeAnswerProceeds(raw: string): boolean {
+  const answer = raw.trim().toLowerCase();
+  return !(answer === "n" || answer === "no");
+}
 
 /** Ids of the criteria with no verification kind. Reporting only: a read failure yields none. */
 async function unmarkedCriteria(cwd: string, id: string): Promise<string[]> {
@@ -1741,7 +1772,7 @@ function printHelp(): void {
     'keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--require-confirmation]',
     "keryx flow list",
     "keryx flow status <id>",
-    "keryx flow freeze <id>",
+    "keryx flow freeze <id> [--yes]   (--yes or KERYX_NONINTERACTIVE=1 skips the no-verification-kind prompt)",
     "keryx flow start <id>",
     "keryx flow next <id> [--json]   (first task not done whose dependsOn are all done)",
   'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',

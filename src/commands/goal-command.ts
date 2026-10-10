@@ -320,8 +320,8 @@ export async function autoProvisionFlow(cwd: string, goalText: string): Promise<
       "",
       "## Criteria",
       "",
-      // One line: the `[verify: …]` marker is read from the criterion's own `- ACn:` line (flow 422).
-      `- AC1: The stated goal — "${goalText.replace(/\s+/g, " ").trim()}" — is achieved, judged by the verifier subagent this session's continuation loop runs before stopping (flow 186 T10). [verify: judged]`,
+      // One line: goal text must not carry its own `[verify:` (neutralised to `(verify:`), so AC1 keeps exactly one marker; the marker is read from the criterion's own `- ACn:` line (flow 422).
+      `- AC1: The stated goal — "${goalText.replace(/\s+/g, " ").replace(/\[verify:/gi, "(verify:").trim()}" — is achieved, judged by the verifier subagent this session's continuation loop runs before stopping (flow 186 T10). [verify: judged]`,
       "",
     ].join("\n"),
   );

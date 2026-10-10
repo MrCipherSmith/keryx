@@ -60,7 +60,8 @@ export function renderKindShare(flows: readonly FrozenFlow[], now: Date): string
   if (criteria === 0) return [`- verification kinds, flows frozen in the last ${KIND_WINDOW_DAYS} days: ${inWindow.length} flows, 0 criteria`, definition];
   const percent = Math.round((unclassified / criteria) * 100);
   const lines = [`- verification kinds, flows frozen in the last ${KIND_WINDOW_DAYS} days: ${inWindow.length} flows, ${criteria} criteria, unclassified ${unclassified} (${percent}%)`];
-  if ((unclassified / criteria) * 100 > KIND_WARN_PERCENT) {
+  // The rounded percent that is printed is the one compared, so the line and the warning never disagree.
+  if (percent > KIND_WARN_PERCENT) {
     lines.push(`- WARNING: unclassified share ${percent}% is above ${KIND_WARN_PERCENT}%: criteria are being frozen without a verification kind.`);
   }
   lines.push(definition);

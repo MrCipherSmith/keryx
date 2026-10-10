@@ -2,9 +2,10 @@
 // flows directory and an injected clock.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { CATALOG_DIR, STATUS_FILE, runResearchSync } from "./research-sync";
 import { collectFrozenFlows, renderKindShare } from "./research-sync-kinds";
 
 const NOW = new Date("2026-10-11T12:00:00Z");
@@ -76,4 +77,36 @@ test("the window follows the injected clock", async () => {
   const flows = await collectFrozenFlows(root);
   expect(renderKindShare(flows, new Date("2026-10-16T00:00:00Z")).join("\n")).toContain("1 flows, 1 criteria");
   expect(renderKindShare(flows, new Date("2026-10-18T00:00:00Z")).join("\n")).toContain("no flows frozen");
+});
+
+test("13 of 64 unclassified prints 20% and does not warn; 14 of 64 prints 22% and warns", async () => {
+  const mark = (n: number, tagged: boolean): string[] => Array.from({ length: n }, (_, i) => (tagged ? `t${i} [verify: judged]` : `u${i}`));
+  await addFlow("1", "2026-10-10T08:00:00Z", [...mark(13, false), ...mark(51, true)]);
+  const at20 = await lines();
+  expect(at20).toContain("unclassified 13 (20%)");
+  expect(at20).not.toContain("WARNING");
+  await rm(path.join(root, ".metaproject"), { recursive: true, force: true });
+  await addFlow("1", "2026-10-10T08:00:00Z", [...mark(14, false), ...mark(50, true)]);
+  const at22 = await lines();
+  expect(at22).toContain("unclassified 14 (22%)");
+  expect(at22).toContain("WARNING");
+});
+
+// F-001: the sync's own wiring, on a fixture root with injected counts and head (no git, no python).
+test("runResearchSync puts the verification-kind section and the WARNING into sync-status.md", async () => {
+  const catalog = path.join(root, CATALOG_DIR);
+  await mkdir(catalog, { recursive: true });
+  await writeFile(path.join(catalog, "part1-counts.json"), JSON.stringify({ commit: "abc1234", flows: 1 }));
+  await addFlow("1", "2026-10-10T08:00:00Z", ["a", "b", "c [verify: judged]"]);
+  const outcome = await runResearchSync({
+    root,
+    now: () => NOW,
+    headHash: async () => "abc1234",
+    runCounts: async () => JSON.stringify({ commit: "abc1234", flows: 1 }),
+  });
+  expect(outcome.ok).toBe(true);
+  const page = await readFile(path.join(catalog, STATUS_FILE), "utf8");
+  expect(page).toContain("## Виды проверки (verification kinds)");
+  expect(page).toContain("1 flows, 3 criteria, unclassified 2 (67%)");
+  expect(page).toContain("WARNING: unclassified share 67%");
 });
