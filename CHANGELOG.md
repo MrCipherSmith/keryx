@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.104] - 2026-10-10
+
+### Review
+
+- `keryx review ledger build <input-dir> --package <review-dir>` writes the `research.json` that `review ingest --research` and `review complete` demand, from the saved reviewer results, `scope-files.json`, the slice manifest and the retry state. A reviewer is complete only when its result is finished and its payloads cover the slices its path gate requires; `NEEDS_CONTEXT`, `BLOCKED`, `INCOMPLETE`, missing slices and no result stay incomplete or `not-run`, each with the exact `retry-plan` command. Raw findings become obligations closed only by a matching canonical finding or a `--dispositions` entry with evidence and a reason. It prints READY or NOT READY with every gap, using the gate's own validators, and exits 1 when not ready.
+- `NEEDS_CONTEXT` (or an open `needs_context` list) is no longer treated as a finished scope: `review retry-plan` answers `context` once with the questions, then `not-run`.
+- The review-orchestrator skill and the completion gate's next step point at `ledger build` instead of a hand-written ledger.
+
 ## [0.3.103] - 2026-10-10
 
 ### Review

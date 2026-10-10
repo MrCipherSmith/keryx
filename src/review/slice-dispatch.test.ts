@@ -109,6 +109,18 @@ describe("planRetry", () => {
     expect(plan.decision).toBe("not-run");
   });
 
+  test("NEEDS_CONTEXT is not terminal: the first one asks for an answer, the second is not-run", () => {
+    const first = planRetry({ ...base, result: { status: "NEEDS_CONTEXT", needs_context: ["which slices were unread?"] }, state: empty });
+    expect(first.decision).toBe("context");
+    expect(first.needsContext).toEqual(["which slices were unread?"]);
+    expect(first.reason).toContain("scope is not closed");
+    expect(first.newSlices).toEqual([]);
+    expect(first.state.reviewers["review-logic"]).toEqual({ attempt: 1, status: "NEEDS_CONTEXT", notRun: false });
+    const second = planRetry({ ...base, result: { status: "NEEDS_CONTEXT" }, state: first.state });
+    expect(second.decision).toBe("not-run");
+    expect(second.state.reviewers["review-logic"]?.notRun).toBe(true);
+  });
+
   test("a slice too small to halve is not-run rather than an endless retry", () => {
     const tiny = buildSlices(sliceSourceFromDiff(gitFile("src/t.ts", 1)));
     const plan = planRetry({

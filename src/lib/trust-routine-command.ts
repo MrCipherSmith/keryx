@@ -28,6 +28,7 @@ const REVIEW_LOCAL_SUBCOMMANDS: ReadonlySet<string> = new Set([
   "slice",
   "dispatch-check",
   "retry-plan",
+  "ledger",
   "floor",
   "blast-radius",
   "budget",

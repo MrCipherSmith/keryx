@@ -111,10 +111,10 @@ export function sessionStartedAt(history: ReadonlyArray<{ ts?: string | undefine
 
 function nextStep(open: OpenManagedReview): string {
   if (open.packageDir === "") {
-    return "Next: `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ingest ... --research <ledger.json>`, then `keryx review complete`.";
+    return "Next: `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
   }
   if (open.blockers.some((b) => /research|dispatch/.test(b))) {
-    return "Next: dispatch the reviewers per slice, record the dispatch in the research ledger, `keryx review ingest ... --research <ledger.json>`, then `keryx review complete`.";
+    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
   }
   return "Next: write or ingest the missing artifacts (`keryx review ingest`), then `keryx review complete`.";
 }
