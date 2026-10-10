@@ -30,6 +30,7 @@ The script reads only `.metaproject/flows/*` and writes `part1-counts.json` to t
 - `part1-counts.json`: the script output at `04809f4f`.
 - `contribution-log.md`: dated operator decisions that changed the direction of the article, with verbatim quotes (48 rows).
 - `decisions-export-2026-10-04.jsonl`: the recommendation journal exported without text, produced by `keryx decisions export --since 2026-10-02T00:00:00Z`.
+- `retro-verify-tags-410-419.md` and `retro-verify-tags-410-419.json`: verification kinds for the acceptance criteria of flows 410 to 419, assigned retrospectively on 2026-10-10/11 and not at freeze time; the criteria themselves are unchanged.
 
 ## Latest files
 
