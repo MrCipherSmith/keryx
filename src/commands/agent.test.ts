@@ -4061,9 +4061,13 @@ test("AC6 (flow 352 audit): the CONCURRENT spawn batch forwards the turn's real 
   // regardless of what the turn was given — interrupting the parent turn
   // never reached a concurrently spawned child, only a sequentially spawned
   // one.
-  const receivedSignals: (AbortSignal | undefined)[] = [];
+  const turn = new AbortController();
+  const seen: { defined: boolean; abortedBefore: boolean; abortedAfter: boolean }[] = [];
   const spawnTool = delegateSpawnTool(async (input, ctx) => {
-    receivedSignals.push(ctx?.signal);
+    const signal = ctx?.signal;
+    const abortedBefore = signal?.aborted === true;
+    turn.abort();
+    seen.push({ defined: signal !== undefined, abortedBefore, abortedAfter: signal?.aborted === true });
     return { output: `spawned:${String(input.task)}`, isError: false };
   });
 
@@ -4086,14 +4090,14 @@ test("AC6 (flow 352 audit): the CONCURRENT spawn batch forwards the turn's real 
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
   };
-  const turnSignal = new AbortController().signal;
+  await runAgentTurn(io, deps, [], "spawn two concurrently", { signal: turn.signal });
 
-  await runAgentTurn(io, deps, [], "spawn two concurrently", { signal: turnSignal });
-
-  expect(receivedSignals).toHaveLength(2);
-  for (const received of receivedSignals) {
-    expect(received).toBe(turnSignal);
-  }
+  // The call watchdog hands each spawn a signal derived from the turn's, so identity is not
+  // the contract: aborting the turn mid-call must reach every child.
+  expect(seen).toHaveLength(2);
+  expect(seen[0]).toEqual({ defined: true, abortedBefore: false, abortedAfter: true });
+  expect(seen[1]?.defined).toBe(true);
+  expect(seen[1]?.abortedAfter).toBe(true);
 });
 
 // ============================================================================
