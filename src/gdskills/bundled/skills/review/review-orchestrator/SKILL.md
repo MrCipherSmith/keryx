@@ -75,7 +75,7 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` once, 
 - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
 - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract.
 - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`.
-- The model comes from `keryx review tier` (Step 6).
+- The model comes from `keryx review tier` (Step 6). On `spawn_subagent` pass its tier as `model_tier` on every reviewer — `review-verifier` and simple reviewers `light`, normal `standard`, complex `deep`; an omitted tier runs the child on your own model.
 
 ## Shell host (keryx shell, or any host with no file-reading subagent) — mandatory
 

@@ -109,6 +109,8 @@
 // INJECTED agent (`RANK_AGENT_TIMEOUT_MS`), and it only exists when an agent does.
 
 import { createHash } from "node:crypto";
+import { isDeniedModel } from "./model-denylist";
+import { CODEX_TIER_PINS } from "./model-pins";
 import { familyKey, parseModelVersion } from "./model-version";
 import { frontmatterScalar } from "./skill-frontmatter";
 
@@ -217,6 +219,13 @@ export interface ModelRankHint {
   readonly weight: number;
   /** Why this word, for whoever edits it next. */
   readonly note: string;
+  /**
+   * An exact pin rather than a size word: when a matching hint sets this, size
+   * words are ignored and the LAST matching pin's weight is the rank, so a pin
+   * can state "this model is light" whatever its name contains and a later
+   * (operator) pin overrides an earlier (built-in) one.
+   */
+  readonly override?: boolean;
 }
 
 /**
@@ -261,6 +270,19 @@ export const MODEL_RANK_HINTS: readonly ModelRankHint[] = [
   { pattern: "\\bultra\\b", weight: 2, note: "vendor-neutral largest-tier marker" },
 ];
 
+/** The size words plus the built-in pins for codenames (`./model-pins`): what tier resolution ranks with by default. */
+export const TIER_RANK_HINTS: readonly ModelRankHint[] = [...MODEL_RANK_HINTS, ...CODEX_TIER_PINS];
+
+/** Exact-id pins from `(modelId, strength)` pairs, e.g. tiers an operator set with `keryx routing profile set`. */
+export function pinHintsFor(pins: readonly { readonly modelId: string; readonly tier: ModelTier }[]): ModelRankHint[] {
+  return pins.map(({ modelId, tier }) => ({
+    pattern: `^${modelId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+    weight: tier === "light" ? -1 : tier === "deep" ? 1 : 0,
+    override: true,
+    note: `operator-set ${tier} tier for ${modelId}`,
+  }));
+}
+
 /**
  * The ordinal rank of a model id, or `undefined` when no hint applies.
  *
@@ -282,6 +304,7 @@ export function rankModelId(
   if (id.length === 0) return undefined;
   let total = 0;
   let matched = false;
+  let pinned: number | undefined;
   for (const hint of hints) {
     let re: RegExp;
     try {
@@ -290,10 +313,12 @@ export function rankModelId(
       continue;
     }
     if (re.test(id)) {
+      if (hint.override === true) pinned = hint.weight;
       total += hint.weight;
       matched = true;
     }
   }
+  if (pinned !== undefined) return pinned;
   return matched ? total : undefined;
 }
 
@@ -398,7 +423,7 @@ function orderRanked(candidates: readonly string[], hints: readonly ModelRankHin
 export function rankDiscoveredModels(
   session: SessionModelContext,
   catalog: readonly DiscoveredProvider[] = [],
-  hints: readonly ModelRankHint[] = MODEL_RANK_HINTS,
+  hints: readonly ModelRankHint[] = TIER_RANK_HINTS,
 ): ModelRanking {
   const providerId = session.providerId;
   const refuse = (
@@ -433,7 +458,7 @@ export function rankDiscoveredModels(
   for (const raw of provider.models) {
     if (typeof raw !== "string") continue;
     const id = raw.trim();
-    if (id.length === 0) continue;
+    if (id.length === 0 || isDeniedModel(id)) continue;
     const key = normaliseModelId(id);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -816,7 +841,7 @@ export function resolveTierModel(
   session: SessionModelContext,
   tier: ModelTier | string | undefined,
   catalog: readonly DiscoveredProvider[] = [],
-  hints: readonly ModelRankHint[] = MODEL_RANK_HINTS,
+  hints: readonly ModelRankHint[] = TIER_RANK_HINTS,
   prices?: ModelPrices,
 ): TierResolution {
   return resolveTierFromRanking(session, tier, rankDiscoveredModels(session, catalog, hints), prices);
@@ -1231,7 +1256,7 @@ export async function resolveTierModelWithAgent(
   catalog: readonly DiscoveredProvider[] = [],
   options: TierAgentOptions & { readonly hints?: readonly ModelRankHint[] | undefined } = {},
 ): Promise<TierResolution> {
-  const ranking = rankDiscoveredModels(session, catalog, options.hints ?? MODEL_RANK_HINTS);
+  const ranking = rankDiscoveredModels(session, catalog, options.hints ?? TIER_RANK_HINTS);
   return resolveTierWithAgent(session, tier, ranking, options);
 }
 
@@ -1252,7 +1277,7 @@ export interface TierModelSelection {
 export function buildTierMap(
   session: SessionModelContext,
   catalog: readonly DiscoveredProvider[] = [],
-  hints: readonly ModelRankHint[] = MODEL_RANK_HINTS,
+  hints: readonly ModelRankHint[] = TIER_RANK_HINTS,
 ): Record<string, TierModelSelection> {
   const ranking = rankDiscoveredModels(session, catalog, hints);
   const map: Record<string, TierModelSelection> = {};
@@ -1449,7 +1474,7 @@ export function decideDispatchModel(
   session: SessionModelContext,
   signals: TierSignals,
   catalog: readonly DiscoveredProvider[] = [],
-  hints: readonly ModelRankHint[] = MODEL_RANK_HINTS,
+  hints: readonly ModelRankHint[] = TIER_RANK_HINTS,
   prices?: ModelPrices,
 ): DispatchModelDecision {
   const assignment = assignTier(signals);

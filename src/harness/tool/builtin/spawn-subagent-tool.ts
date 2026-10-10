@@ -48,6 +48,7 @@ import { withFileLock } from "../../../lib/fs";
 import {
   applyTierResolution,
   buildTierMap,
+  TIER_RANK_HINTS,
   MODEL_TIERS,
   parseModelTier,
   rankDiscoveredModels,
@@ -55,6 +56,7 @@ import {
   resolveTierWithAgent,
   type DiscoveredProvider,
   type ModelPrices,
+  type ModelRankHint,
   type TierRankAgent,
   type TierRankCache,
 } from "../../../gdskills/model-tier";
@@ -479,6 +481,12 @@ export interface SpawnSubagentToolDeps {
    * through rather than mapping it down to bare names.
    */
   getDetectedProviders: () => readonly { name: string; models?: readonly string[] }[];
+  /**
+   * Rank hints for tier resolution on the session's provider; the host supplies
+   * the operator's `routing profile set --tier` pins here. Absent, the built-in
+   * size words and pins.
+   */
+  getRankHints?: (providerId: string) => readonly ModelRankHint[];
   /**
    * Flow 358 — the tier-ranking agent fallback, all of it optional. Absent, a
    * tier the size words and version cannot settle keeps the session model, exactly
@@ -1245,16 +1253,27 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // did. Derived from the same pure, deterministic resolution the map above
       // is built from — same session, same catalogue, same answer — so the record
       // cannot drift from the map that is actually applied.
-      let tierMap = buildTierMap(session, catalog);
+      const rankHints = deps.getRankHints?.(session.providerId) ?? TIER_RANK_HINTS;
+      let tierMap = buildTierMap(session, catalog, rankHints);
       const tierPrices = deps.tierRank?.prices?.(session.providerId);
       let tierResolution =
-        requestedTier === undefined ? undefined : resolveTierModel(session, requestedTier, catalog, undefined, tierPrices);
+        requestedTier === undefined ? undefined : resolveTierModel(session, requestedTier, catalog, rankHints, tierPrices);
+      if (requestedTier !== undefined && tierResolution?.source === "session-fallback" && tierResolution.ranking?.fallbackReason) {
+        emitFleetEvent({
+          kind: "log",
+          id: workerId,
+          entry: {
+            kind: "system",
+            text: `model_tier ${requestedTier} kept the session model (${session.modelId}): ${tierResolution.ranking.fallbackReason}. Pin tiers with \`keryx routing profile set ${session.providerId}/<model> --tier light|standard|deep\`.`,
+          },
+        });
+      }
       if (requestedTier !== undefined && deps.tierRank !== undefined) {
         // Flow 358: only reaches the agent when the deterministic answer is refused
         // or ambiguous; every other dispatch resolves without a single extra call.
         // A failure inside is a resolution too (the session model, with the reason),
         // so nothing here can fail the dispatch.
-        tierResolution = await resolveTierWithAgent(session, requestedTier, rankDiscoveredModels(session, catalog), {
+        tierResolution = await resolveTierWithAgent(session, requestedTier, rankDiscoveredModels(session, catalog, rankHints), {
           agent: deps.tierRank.agent,
           ...(deps.tierRank.cache !== undefined ? { cache: deps.tierRank.cache } : {}),
           ...(tierPrices !== undefined ? { prices: tierPrices } : {}),
