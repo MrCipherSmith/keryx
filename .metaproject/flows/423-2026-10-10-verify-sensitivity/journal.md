@@ -9,3 +9,5 @@
 - 2026-10-10T21:18:38.182Z - task-added: T5: Parser, ac kinds counts, ac confirm warning (AC1-AC4)
 - 2026-10-10T21:18:38.302Z - task-added: T6: Skills failure-scenario line, sync-status share, docs (AC5 AC6)
 - 2026-10-10T21:18:38.425Z - task-added: T7: Run every AC command and AC7 invariant
+- 2026-10-10T21:19:12.133Z - task-attempt: T5: started (attempt 1) — 423-T5
+- 2026-10-10T21:19:12.267Z - task-attempt: T6: started (attempt 1) — 423-T6

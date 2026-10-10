@@ -10,7 +10,7 @@
   "title": "Verification sensitivity: mark exec/invariant checks proven to catch a failure",
   "status": "in-progress",
   "createdAt": "2026-10-10T21:17:59.701Z",
-  "updatedAt": "2026-10-10T21:18:38.425Z",
+  "updatedAt": "2026-10-10T21:19:12.267Z",
   "source": {
     "type": "description",
     "ref": null
@@ -101,8 +101,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-10T21:19:12.132Z",
+            "outcome": "started",
+            "detail": "423-T5"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -115,8 +121,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-10T21:19:12.266Z",
+            "outcome": "started",
+            "detail": "423-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -180,6 +192,16 @@
       "at": "2026-10-10T21:18:38.425Z",
       "event": "task-added",
       "detail": "T7: Run every AC command and AC7 invariant"
+    },
+    {
+      "at": "2026-10-10T21:19:12.133Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 423-T5"
+    },
+    {
+      "at": "2026-10-10T21:19:12.267Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 423-T6"
     }
   ],
   "acKinds": {
