@@ -10,7 +10,7 @@
   "title": "Verification kind is asked for at every criterion: template, flow and flow-orchestrator skills, freeze warning",
   "status": "in-progress",
   "createdAt": "2026-10-10T20:06:52.448Z",
-  "updatedAt": "2026-10-10T20:28:22.691Z",
+  "updatedAt": "2026-10-10T20:29:05.399Z",
   "source": {
     "type": "description",
     "ref": null
@@ -33,7 +33,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -41,14 +41,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected in the orchestrating session"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,13 +58,32 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T11"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T11"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
       "status": "todo",
       "dependsOn": [],
       "attempts": {
@@ -74,10 +95,93 @@
       "budget": {}
     },
     {
-      "id": "T4",
-      "title": "Self-review and prepare draft PR",
-      "kind": "review",
-      "origin": "scaffold",
+      "id": "T5",
+      "title": "Template rule and placeholder with marker (AC1)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "flow skill step and flow-orchestrator marker rule (AC2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "flow freeze warning, interactive question, journal line (AC3 AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "intake and goal scaffold the marker (AC5)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "sync-status unclassified share and warning (AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "cli-reference and CHANGELOG",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Run every AC command and AC7 invariant",
+      "kind": "verify",
       "status": "todo",
       "dependsOn": [],
       "attempts": {
@@ -102,6 +206,56 @@
     {
       "at": "2026-10-10T20:28:22.691Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-10T20:29:04.247Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-10T20:29:04.372Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-10T20:29:04.501Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-10T20:29:04.630Z",
+      "event": "task-added",
+      "detail": "T5: Template rule and placeholder with marker (AC1)"
+    },
+    {
+      "at": "2026-10-10T20:29:04.758Z",
+      "event": "task-added",
+      "detail": "T6: flow skill step and flow-orchestrator marker rule (AC2)"
+    },
+    {
+      "at": "2026-10-10T20:29:04.880Z",
+      "event": "task-added",
+      "detail": "T7: flow freeze warning, interactive question, journal line (AC3 AC4)"
+    },
+    {
+      "at": "2026-10-10T20:29:05.015Z",
+      "event": "task-added",
+      "detail": "T8: intake and goal scaffold the marker (AC5)"
+    },
+    {
+      "at": "2026-10-10T20:29:05.144Z",
+      "event": "task-added",
+      "detail": "T9: sync-status unclassified share and warning (AC6)"
+    },
+    {
+      "at": "2026-10-10T20:29:05.272Z",
+      "event": "task-added",
+      "detail": "T10: cli-reference and CHANGELOG"
+    },
+    {
+      "at": "2026-10-10T20:29:05.399Z",
+      "event": "task-added",
+      "detail": "T11: Run every AC command and AC7 invariant"
     }
   ],
   "acKinds": {
