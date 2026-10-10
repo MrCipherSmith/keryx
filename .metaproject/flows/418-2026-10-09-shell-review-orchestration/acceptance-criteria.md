@@ -22,5 +22,5 @@ Rules:
 - AC9: A reviewer that returns INCOMPLETE or BLOCKED is retried once with a smaller slice; if it is still incomplete the report names it as not run, and it never counts as a clean pass.
 - AC10: A wave dispatches up to 10 reviewers (the ceiling), not 3, when the plan has them.
 - AC11: A file the read tool cannot open because it is outside the working directory fails with an error that names the cause and the alternative; machine artifacts are never saved through `keryx ctx run` wrapping.
-- AC12: Live: the review of Presight-AI/vantage-frontend PR 7435, started in a keryx shell in trust mode with no input after the task, reaches `review complete` and a report with findings, and the time, tokens and findings are recorded beside the Claude run (17m58s, 2x10 reviewers, 5 Majors).
+- AC12: Live: the review of a PR in a medium-sized work project, started in a keryx shell in trust mode with no input after the task, reaches `review complete` and a report with findings, and the time, tokens and findings are recorded beside the Claude run (17m58s, 2x10 reviewers, 5 Majors).
 - AC13: The CHANGELOG and the shell docs state the trust-mode limit, the queueing of slash commands and the Ctrl+C behavior; the docs site builds with --strict.
