@@ -1,6 +1,6 @@
 # Комплексный аудит Keryx
 
-Дата: 2026-09-06, Asia/Muscat. Репозиторий: `/Users/Goodea/goodea/keryx`. База: `main`, commit `d0a2a011df93c2459cb4329a7dc152fb0fe625a6`, версия 0.2.80.
+Дата: 2026-09-06, Asia/Muscat. Репозиторий: `~/goodea/keryx`. База: `main`, commit `d0a2a011df93c2459cb4329a7dc152fb0fe625a6`, версия 0.2.80.
 
 ## Основной вывод
 

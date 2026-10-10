@@ -24,14 +24,14 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-verification.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-verification.md",
       "kind": "report",
       "exists": true,
       "summary": "Immutable initial verification evidence with the confirmed pre-repair FAIL and exact finding.",
       "hash": "e9c42a8839400c9a5ad9fb9310458be345373125997e8bae5e5f1e7de99c159f"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-recheck.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T13-recheck.md",
       "kind": "report",
       "exists": true,
       "summary": "Successful independent prose, byte-parity, focused-test, and source-CLI recheck with bounded gate semantics.",

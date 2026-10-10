@@ -17,7 +17,7 @@ scenarios, and why.
 
 Every command below is real and was actually run to produce the output quoted
 after it. `$ROOT` is the repo checkout this evidence lives in
-(`/Users/Goodea/goodea/keryx-bus-p4` when reproducing against that checkout).
+(`~/goodea/keryx-bus-p4` when reproducing against that checkout).
 Run the block once to build the sandbox; the `bun` invocations later in this
 file assume these variables are still set in the same shell.
 

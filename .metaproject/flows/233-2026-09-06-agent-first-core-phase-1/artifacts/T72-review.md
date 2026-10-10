@@ -9,7 +9,7 @@ executed, with a raw log path under `.metaproject/data/gdctx/raw/`.
 ## Scope
 
 - Branch `codex/agent-first-core`; base commit `0bc6418fa1a038f8ec909cf949fecba077acf9a4`. Every file
-  under review is **uncommitted** in the main checkout `/Users/Goodea/goodea/keryx`. No worktree was
+  under review is **uncommitted** in the main checkout `~/goodea/keryx`. No worktree was
   entered, no `git stash`, no git or flow state change of any kind.
 - Artifacts read in full: `T66-review.md`, `T71-spec.md`, `T71-implementation.md`,
   `T46-implementation.md` (the surface work T71 corrects), `T73-spec.md` (to confirm the concurrent
@@ -404,8 +404,8 @@ must be bumped **again** when F-001/F-002/F-006 are fixed, since the completenes
 
 ## Evidence
 
-All raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes under
-`/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/`
+All raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes under
+`~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/`
 (`T72-md.ts`, `T72-md-diff.ts`, `T72-boundary.ts`, `T72-gates.ts`, `T72-srcset.ts`, `T72-doc.ts`,
 `T72-perf.ts`, `T72-perf2.ts`, `T72-extra.ts`).
 

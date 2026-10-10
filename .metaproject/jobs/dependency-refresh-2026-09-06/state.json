@@ -3,7 +3,7 @@
   "intent": "implement",
   "job_name": "dependency-refresh-2026-09-06",
   "context": {
-    "project_dir": "/Users/Goodea/goodea/keryx"
+    "project_dir": "~/goodea/keryx"
   },
   "plan": {
     "steps": [

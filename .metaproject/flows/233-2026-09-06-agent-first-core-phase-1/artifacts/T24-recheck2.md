@@ -239,7 +239,7 @@ meaning in one case and mislabels a class of untouched payloads as `redacted`.
   `redaction.state` (a warning banner, an audit counter, a "was anything removed" check) is told a
   redaction occurred when none did; and durable artifacts are silently reformatted on every write
   through the guard, which perturbs diffs and content hashes.
-- **Reproduction:** `bun …/T24-recheck2-repojson.ts <out> /Users/Goodea/goodea/keryx` →
+- **Reproduction:** `bun …/T24-recheck2-repojson.ts <out> ~/goodea/keryx` →
   `{"filesScanned":2041,"bytePreserved":1969,"rejected":0,"normalizedOnly":22,...}`. The 22 are
   `.metaproject/core/gdskills/contracts/*.schema.json`,
   `src/gdskills/bundled/skills/**/​*-contract.schema.json`, `fixtures/change-impacted-test/expected.json`

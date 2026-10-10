@@ -10,7 +10,7 @@ interview answers.
 - [accepted/lesson] OpenTUI: alignSelf on a transcript box collapses its intrinsic height - `.metaproject/memory/lessons/tui-alignself-height-collapse.md`
 - [accepted/task-note] SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка… - `.metaproject/memory/task-notes/sac-proposal-d820f7ae5c4b43af.md`
 - [accepted/task-note] SAC: найди все не завершенные flow - `.metaproject/memory/task-notes/sac-proposal-7854a304859a4170.md`
-- [accepted/task-note] SAC: Anchors: root: /Users/tsaitler.aleksandr/goodea/keryx tre… - `.metaproject/memory/task-notes/sac-proposal-b051e66aebd74f37.md`
+- [accepted/task-note] SAC: Anchors: root: ~/goodea/keryx tre… - `.metaproject/memory/task-notes/sac-proposal-b051e66aebd74f37.md`
 
 ## Code Graph
 

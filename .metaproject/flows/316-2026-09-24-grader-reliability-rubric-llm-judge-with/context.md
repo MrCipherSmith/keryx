@@ -55,7 +55,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-- Base: feat/agent-platform-expansion at 8c7e50da (contains W1-W8 and batch 1, #692 / flow 314). Worktree /Users/Goodea/goodea/keryx-ape-316-graders, branch flow/316-graders.
+- Base: feat/agent-platform-expansion at 8c7e50da (contains W1-W8 and batch 1, #692 / flow 314). Worktree ~/goodea/keryx-ape-316-graders, branch flow/316-graders.
 - Inputs: the flow 314 journal (follow-up entries 23:10Z-00:30Z), the review reports scratchpad/f314/review-r1.md, review-r2.md (R2-6) and review-r3.md, and scratchpad/f314/fix1-contract.md (integrity rules I1-I5).
 - Code:
   - src/gdskills/governance/eval.ts: evalSkill, validateEvalSpec, gradeExpectations, checkStablePackGate, computeSkillEvalDigest.

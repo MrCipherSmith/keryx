@@ -24,55 +24,55 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Implementation spec written before any production edit: RED baseline, the invariants, and the chosen rule per finding."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T26-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "What changed per finding, with per-finding probe evidence and every raw gdctx log path."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-12-32-484Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-12-32-484Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "RED baseline: 14 pass, 5 fail."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-20-357Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-20-357Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Focused security/MCP suite after the fix: 274 pass, 3 skip, 0 fail, 902 assertions, 29 files."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-25-093Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-25-093Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "T24 stage-1 probe after the fix: no leak on F-001..F-004."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-42-358Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-42-358Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "bun run typecheck, exit 0."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-47-396Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-47-396Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "bunx eslint on the four changed files, exit 0 with no output."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-19-57-058Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-19-57-058Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Equivalence proof that the non-JSON text path is byte-identical to the pre-T26 adapter (the pre-existing service.memo.test.ts failure is not caused by T26)."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-20-07-561Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-20-07-561Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Guarded persistence sinks regression: bun test src/memory src/wiki src/gdskills, 569 pass, 0 fail."

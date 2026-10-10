@@ -1,6 +1,6 @@
 # T61 implementation — closing T57 F-002 and F-003
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/security/self-protect.ts`, `src/security/guard.ts`,
 `src/security/guard.test.ts`, `src/security/security.test.ts`,
 `src/health/service.ts`, `src/health/service-gate-exit.test.ts`. Read only
@@ -11,7 +11,7 @@ from this task): `src/security/service.ts` (already correct, per T58),
 needed — its one existing test does not touch a malformed report). Spec
 written before coding: `T61-spec.md` (same directory).
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Defect 1 — F-002: the false incident, and the mode determination
 

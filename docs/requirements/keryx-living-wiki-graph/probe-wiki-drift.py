@@ -24,7 +24,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 
-ROOT = "/Users/tsaitler.aleksandr/goodea/keryx"
+ROOT = "~/goodea/keryx"
 WIKI = os.path.join(ROOT, ".metaproject", "wiki")
 NODES = os.path.join(ROOT, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl")
 

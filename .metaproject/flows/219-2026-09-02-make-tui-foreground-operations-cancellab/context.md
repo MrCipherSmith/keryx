@@ -2,7 +2,7 @@
 
 ## Repository and Delivery
 
-- Worktree: `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/tui-foreground-operation-cancellation`
+- Worktree: `~/goodea/keryx/.worktrees/tui-foreground-operation-cancellation`
 - Branch: `fix/tui-foreground-operation-cancellation`
 - Recorded base branch: `main`
 - Base commit at creation: `09e8555c9079c3142125799c9e560e65d1eeae01` (`origin/main`)
@@ -12,7 +12,7 @@
 ## Live Reproduction
 
 - Session: `eb5de48c-4bf1-454a-994c-d487fa69fce4`
-- Project: `/Users/tsaitler.aleksandr/Presight/Vantage/vantage-frontend`
+- Project: `~/Presight/Vantage/vantage-frontend`
 - Symptom: wiki enrichment held the TUI busy; `/interrupt` and Queue → Force did not stop it, and subsequent input was offered Queue/Side-1 again.
 - The observed run later completed 53 pages with no reported failures; the defect is cancellation/lifecycle behavior, not the final enrichment result.
 

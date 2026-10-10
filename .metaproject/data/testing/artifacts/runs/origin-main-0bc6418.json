@@ -5,7 +5,7 @@
   "status": "pass",
   "scope": "changed since HEAD^",
   "runner": "bun-script",
-  "command": "/Users/Goodea/.bun/bin/bun run test .worktrees/full-review-remediation/src/agents/bootstrap.test.ts .worktrees/full-review-remediation/src/commands/init.escape.test.ts .worktrees/full-review-remediation/src/commands/init.no-git.test.ts .worktrees/full-review-remediation/src/commands/init.test.ts .worktrees/full-review-remediation/src/commands/rules.test.ts .worktrees/full-review-remediation/src/commands/update.test.ts .worktrees/full-review-remediation/src/lib/templates.test.ts .worktrees/project-skill-reviewers/src/agents/bootstrap.test.ts .worktrees/project-skill-reviewers/src/commands/init.escape.test.ts .worktrees/project-skill-reviewers/src/commands/init.no-git.test.ts .worktrees/project-skill-reviewers/src/commands/init.test.ts .worktrees/project-skill-reviewers/src/commands/rules.test.ts .worktrees/project-skill-reviewers/src/commands/update.test.ts .worktrees/project-skill-reviewers/src/lib/templates.test.ts src/agents/bootstrap.test.ts src/capability/golden-rule.test.ts src/commands/init-mcp-offer.test.ts src/commands/init-mcp-runtimes.test.ts src/commands/init.escape.test.ts src/commands/init.no-git.test.ts src/commands/init.test.ts src/commands/mcp-install.test.ts src/commands/module-commands.test.ts src/commands/rules.test.ts src/commands/security-hooks-init.test.ts src/commands/update.test.ts src/lib/security-pre-push.test.ts src/lib/templates.test.ts src/standard/standard.test.ts",
+  "command": "~/.bun/bin/bun run test .worktrees/full-review-remediation/src/agents/bootstrap.test.ts .worktrees/full-review-remediation/src/commands/init.escape.test.ts .worktrees/full-review-remediation/src/commands/init.no-git.test.ts .worktrees/full-review-remediation/src/commands/init.test.ts .worktrees/full-review-remediation/src/commands/rules.test.ts .worktrees/full-review-remediation/src/commands/update.test.ts .worktrees/full-review-remediation/src/lib/templates.test.ts .worktrees/project-skill-reviewers/src/agents/bootstrap.test.ts .worktrees/project-skill-reviewers/src/commands/init.escape.test.ts .worktrees/project-skill-reviewers/src/commands/init.no-git.test.ts .worktrees/project-skill-reviewers/src/commands/init.test.ts .worktrees/project-skill-reviewers/src/commands/rules.test.ts .worktrees/project-skill-reviewers/src/commands/update.test.ts .worktrees/project-skill-reviewers/src/lib/templates.test.ts src/agents/bootstrap.test.ts src/capability/golden-rule.test.ts src/commands/init-mcp-offer.test.ts src/commands/init-mcp-runtimes.test.ts src/commands/init.escape.test.ts src/commands/init.no-git.test.ts src/commands/init.test.ts src/commands/mcp-install.test.ts src/commands/module-commands.test.ts src/commands/rules.test.ts src/commands/security-hooks-init.test.ts src/commands/update.test.ts src/lib/security-pre-push.test.ts src/lib/templates.test.ts src/standard/standard.test.ts",
   "exitCode": 0,
   "durationMs": 3953,
   "counts": {
@@ -168,7 +168,7 @@
   "provenance": {
     "commit": "0bc6418fa1a038f8ec909cf949fecba077acf9a4",
     "branch": "main",
-    "worktree": "/Users/Goodea/goodea/keryx",
+    "worktree": "~/goodea/keryx",
     "sources": [
       {
         "name": "git",

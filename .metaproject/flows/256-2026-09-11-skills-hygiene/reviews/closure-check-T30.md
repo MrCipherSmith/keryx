@@ -3,7 +3,7 @@
 Dispatch `252-T30`. This is a targeted closure check of the user-approved fix past the review-loop bound. It is not a
 full review round, and nothing was ingested.
 
-- ROOT: `/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`, branch `skills/quality-program`.
+- ROOT: `~/goodea/keryx/.claude/worktrees/skills-quality`, branch `skills/quality-program`.
 - HEAD: `8420d5539a5707d4f82e0c13169c62e07ce3f062`, "fix(skills): the orchestrators' task-boundary commit works whether
   or not the worker committed" (T29).
 - Fix diff: `keryx ctx diff HEAD~1..HEAD`. It touches 12 files: flow-orchestrator SKILL.md, the 5 job-orchestrator

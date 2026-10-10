@@ -70,10 +70,10 @@ framework in this wave; `deps {}`.
 - TDD: RED (Sonnet) → impl (Opus) → review (Opus security/UX) → live smoke (orchestrator).
 
 ## Operational
-- keryx = `bun ./src/cli.ts`. Root = `/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-tui).
+- keryx = `bun ./src/cli.ts`. Root = `~/goodea/keryx` (branch feature/keryx-release2-tui).
   Never commit to main; PR at the end (no co-authorship).
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx && pwd` first, write ONLY
+- WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx && pwd` first, write ONLY
   under it. Guard array indexing; async-iterable mocks for stdin/lines; injected fetch/env; no
   real TTY/network in tests.
 - Order: T5 (RED) → T6 (impl) → T7 (review) → T8 (live smoke).

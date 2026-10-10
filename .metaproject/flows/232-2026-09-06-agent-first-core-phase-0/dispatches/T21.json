@@ -15,23 +15,23 @@
     "The correction is behavior-preserving everywhere else: the reviewer's fifteen probe cases, the focused agent, budget and child suites, both TypeScript targets and targeted lint all pass, and the union widening breaks no consumer."
   ],
   "context_refs": [
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
-    "/Users/Goodea/goodea/keryx/src/session/slate-terminal-state.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+    "~/goodea/keryx/src/commands/agent.ts",
+    "~/goodea/keryx/src/commands/agent.test.ts",
+    "~/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "~/goodea/keryx/src/session/slate-terminal-state.ts",
+    "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Root ~/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
     "Read-only on all production and test code, including when checking that a regression fails without the fix: copy the sources into a scratch directory instead of editing the working tree, and never leave the tree modified.",
     "Write only T21-review.md, T21-result.json and probe scripts named T21-*.ts under the flow 232 artifacts dir. Do not modify the earlier review or probe artifacts.",
     "No git state changes, no flow state, no dependency changes, no bun test without file arguments, no network, no model or provider API calls. Deterministic in-memory providers only.",
@@ -41,7 +41,7 @@
   "allowed_actions": ["read", "write", "run-command"],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-result.json"
   },
   "budget": { "max_output_tokens": null },
   "provenance": { "created_at": "2026-09-06T13:44:00+00:00", "created_by": "flow-orchestrator" }

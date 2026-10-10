@@ -30,7 +30,7 @@ would produce the same rows.
 | # | Check | Command | Expected |
 |---|---|---|---|
 | 1 | keryx under measurement is the branch build, not the global one | `harness/bin/keryx --version` | the branch version, **not** the global `main` build |
-| 2 | Target commit present | `git -C /home/altsay/bots/helyx cat-file -e bfad745b` | exit 0 |
+| 2 | Target commit present | `git -C ~/bots/helyx cat-file -e bfad745b` | exit 0 |
 | 3 | Graph builds in a worktree | `keryx gdgraph build` in a fresh worktree | `267 nodes, 656 edges` for `helyx` |
 | 4 | Sandbox launcher, **if C4 is in scope** | `keryx harness exec --allow-real-subprocess -- /bin/echo hi` | not `blocked` |
 | 5 | Every prompt file resolves | `ls prompts/<case>.txt` for each case in the batch | present |

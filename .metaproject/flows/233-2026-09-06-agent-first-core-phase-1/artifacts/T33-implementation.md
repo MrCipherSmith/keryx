@@ -1,6 +1,6 @@
 # T33 implementation — the security gate path no longer fails open
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned files
 only: `src/security/config.ts`, `src/security/service.ts` (the `readLatestReport`
 / `runReport` / `runGate` region), `src/security/types.ts` (additive),
 `src/security/guard.ts`, `src/security/guard.test.ts`. Nothing else was edited.
@@ -9,7 +9,7 @@ only: `src/security/config.ts`, `src/security/service.ts` (the `readLatestReport
 
 Spec written before coding: `T33-spec.md` (same directory).
 
-All raw logs below are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs below are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Baseline (before any edit)
 

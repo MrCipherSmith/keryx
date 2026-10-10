@@ -1,6 +1,6 @@
 # T73 implementation — closing T62 F-004's remaining disclosed sites
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/commands/init.ts`, `.metaproject/modules/security.md`,
 `docs/docs/architecture.md`, `docs/docs/modules.md`,
 `docs/docs/workspace-and-lifecycle.md`, `docs/docs/cli-reference.md`,
@@ -8,7 +8,7 @@ changed: `src/commands/init.ts`, `.metaproject/modules/security.md`,
 `T73-spec.md` (same directory). No behaviour changes — every edit is a
 string/prose correction; nothing in `src/security/*` was touched.
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## What the code actually does (verified, read-only)
 

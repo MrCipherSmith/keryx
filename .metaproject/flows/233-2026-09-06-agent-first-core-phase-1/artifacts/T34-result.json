@@ -23,31 +23,31 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-spec.md",
       "kind": "custom",
       "exists": true,
       "summary": "Pre-implementation spec: baseline probe findings, per-repair plan, regression test plan, non-goals."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full implementation report with per-defect before/after evidence, acceptance table, verification counts and raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent review that reproduced F-003/F-004/F-005 with an executable probe; the specification this task closes."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Executable probe run before and after this task's change, unmodified."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "path": "~/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
       "kind": "custom",
       "exists": true,
       "summary": "Trust/completeness/access policy: the security-scan coverage fold this task must satisfy."

@@ -14,34 +14,34 @@
   ],
   "context_refs": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
       "kind": "context",
       "exists": true
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/plan.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/plan.md",
       "kind": "plan",
       "exists": true
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
       "kind": "custom",
       "exists": true
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T12-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T12-spec.md",
       "kind": "custom",
       "exists": true
     }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/gdskills/contracts.ts",
-    "/Users/Goodea/goodea/keryx/src/gdskills/task-implementer-contract.test.ts",
-    "/Users/Goodea/goodea/keryx/src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
-    "/Users/Goodea/goodea/keryx/.metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json"
+    "~/goodea/keryx/src/gdskills/contracts.ts",
+    "~/goodea/keryx/src/gdskills/task-implementer-contract.test.ts",
+    "~/goodea/keryx/src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+    "~/goodea/keryx/.metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json"
   ],
   "constraints": [
-    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md before code searches/reads.",
+    "Read ~/goodea/keryx/.metaproject/index.md before code searches/reads.",
     "Use local tests-creator skill and testing context; graph/wiki before deeper reads, keryx ctx rg only for code search.",
     "Only write lane-owned tests and artifacts. No implementation code. No commits/staging/checkout/push; parent owns git.",
     "Do not edit flow.json or frozen acceptance criteria; parent owns all flow transitions.",
@@ -57,7 +57,7 @@
   ],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T14-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T14-result.json"
   },
   "budget": {
     "max_output_tokens": null

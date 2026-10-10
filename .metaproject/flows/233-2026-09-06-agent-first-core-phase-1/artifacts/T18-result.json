@@ -24,35 +24,35 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.ts",
+      "path": "~/goodea/keryx/src/lib/contained-read.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Pins owner-root and canonical-target identities before descriptor opening.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/descriptor-read.ts",
+      "path": "~/goodea/keryx/src/lib/descriptor-read.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Checks pinned root and final target identities while retaining descriptor no-follow checks.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.test.ts",
+      "path": "~/goodea/keryx/src/lib/contained-read.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Adds real-owner-directory and same-path-target replacement regressions.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation-spec.md",
       "kind": "custom",
       "exists": true,
       "summary": "Pre-code contract and design for the identity pinning fix.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Implementation and verification report.",

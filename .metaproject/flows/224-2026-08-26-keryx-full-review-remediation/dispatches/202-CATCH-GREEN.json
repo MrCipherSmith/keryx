@@ -12,10 +12,10 @@
   ],
   "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/catch-dispositions.md", "kind": "custom", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/workspace-lifecycle-tool.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/workspace-lifecycle-tool.test.ts"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/workspace-lifecycle-tool.test.ts"
   ],
   "constraints": [
     "Read exact worktree .metaproject/index.md first; use gdgraph/gdctx and keryx ctx rg.",

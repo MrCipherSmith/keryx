@@ -24,7 +24,7 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T29-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T29-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Root cause of the stale expectation, the config-dependent observable used instead, what changed in the test, and before/after evidence with raw log paths.",
