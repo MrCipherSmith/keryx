@@ -70,6 +70,7 @@
     "README.md",
     "package.json"
   ],
+  "dependencies": {},
   "overrides": {
     "fast-uri": "^3.1.6",
     "ip-address": "^10.3.1",
