@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.92] - 2026-10-10
+
+### Shell
+
+- The shell's system instruction tells the model that a skill the user names ("use review-orchestrator") is loaded with `skill_load` as the first tool call, before any `keryx` command, and that a subcommand which only opens a draft (`keryx review start`) is one step of that workflow, not the workflow. A live review run had listed the skills, run `review start`, and reported the task finished without ever reading the skill (flow 420).
+
 ## [0.3.91] - 2026-10-10
 
 ### Review Process

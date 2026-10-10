@@ -1927,6 +1927,11 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "change, and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
     "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
     "only; `/plan` remains the operator's separate read-only permission mode.\n" +
+    "- When the user names a skill (\"use review-orchestrator\", \"по скиллу X\"), your FIRST tool call is " +
+    (offered("skill_load") ? "**skill_load** for it" : "read_file on its SKILL.md") +
+    ", before any `keryx` command, and you follow its section for this host. A subcommand that only opens " +
+    "or drafts something (`keryx review start`) is one step of that workflow, never the workflow: do not " +
+    "report the task done or stopped on its output.\n" +
     "- **Publishing a plan FOR APPROVAL is a real, supported stopping point.** Mark the items `proposed`, " +
     "state the plan in your reply, and END THE TURN — that is exactly what `proposed` is for. When the " +
     "operator approves, move those items to `pending`/`in_progress` and continue. Use `pending` (not " +
