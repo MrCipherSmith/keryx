@@ -7,6 +7,7 @@
 // when nothing configured it. Pure — no fs/network access itself; every layer
 // is handed in already loaded (`config.ts` owns reading `routing.config.json`
 // and the per-user shell config).
+import { isDeniedModel } from "../../gdskills/model-denylist";
 
 /**
  * The catalogue of task categories (PRD §4). All eight ship in Flow A; only
@@ -219,6 +220,7 @@ export function connectedPredicateFrom(providers: readonly FlatPickerProvider[])
     const provider = byName.get(providerId);
     if (provider === undefined) return false;
     if (modelId === undefined) return true;
+    if (isDeniedModel(modelId)) return false;
     const models = provider.models;
     // No reported model list at all -> cannot refute a specific model id;
     // treat the PROVIDER's connectedness as the whole answer rather than

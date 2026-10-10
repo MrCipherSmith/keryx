@@ -37,6 +37,8 @@ import { createBusInbox, type BusInbox } from "../bus/inbox";
 // inbox-overflow notice is the SAME fix for both).
 import { busInboxFullNotice, createBusDropNotifier } from "../tui/bus-wake";
 import { loadOAuthGrant } from "../lib/oauth/grants";
+import { mergeLiveCodexModels, startLiveCodexModels } from "./live-codex-models";
+import { loadRankHints } from "../harness/routing/model-profile";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
 import type {
@@ -3914,8 +3916,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           for (const d of tuiDetected) {
             byName.set(d.name, { name: d.name, models: d.models ?? [] });
           }
-          return [...byName.values()];
+          return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models());
         },
+        getRankHints: (providerId) => loadRankHints(providerId),
         // Flow 358: when the size words and version cannot settle a `model_tier`
         // (ranking refused, or only an older-generation larger class above the
         // session), a one-shot call on this provider's light tier orders the
@@ -4083,6 +4086,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     });
     const tuiInitial = startup.initial;
     const tuiDetected = startup.detected;
+    startLiveCodexModels();
     // The chat TUI's session lease (flow 271), written by `runShell` and
     // released in the `finally` below on every exit from the TUI branch.
     const chatLeaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
@@ -4455,7 +4459,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         makeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
-        getDetectedProviders: () => [{ name: provider }],
+        getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models()),
+        getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read
         // `slateSessionBox.current` BY REFERENCE, at fold time — same
         // "live box" idiom this exact call site already uses for

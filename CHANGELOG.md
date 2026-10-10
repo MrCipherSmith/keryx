@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.97] - 2026-10-10
+
+### Models
+
+- `spawn_subagent` and routing now see the live Codex model list (gpt-6.1-sol, gpt-6-luna) instead of the stale curated stub. The shell fetches `/models` once at start and merges it over the `openai-codex` entry; a failed fetch keeps the curated list.
+- Tier ranking knows the Codex codenames: built-in pins rank `gpt-6*-sol` deep and `gpt-6*-luna` light (other vendors' codenames stay unrankable). Models pinned with `keryx routing profile set <provider>/<model> --tier ...` override the built-ins, and a session-fallback tier now says why in the fleet log.
+- GPT-6 Astra is on a hard denylist: it is never a tier candidate and a routing assignment naming it counts as not connected.
+
+### Review Process
+
+- The `review-orchestrator` skill passes `model_tier` on every reviewer `spawn_subagent` call (verifier and simple reviewers `light`, normal `standard`, complex `deep`); an omitted tier ran the child on the session model.
+
 ## [0.3.96] - 2026-10-10
 
 ### Shell
