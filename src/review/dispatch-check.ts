@@ -27,6 +27,8 @@ export type DispatchCheckResult = {
 const SCHEMA_CANDIDATES = [
   new URL("../gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json", import.meta.url),
   new URL("./bundled/skills/review/review-orchestrator/reviewer-input.schema.json", import.meta.url),
+  // the packaged build runs from dist/, with the bundled skills under src/ one level up
+  new URL("../src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json", import.meta.url),
 ];
 
 /** The reviewer-input contract is deliberately not a registered ContractName, so it is read from the bundled skill. */
