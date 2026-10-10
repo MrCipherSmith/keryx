@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.93] - 2026-10-10
+
+### Review Process
+
+- `keryx review --help` lists every flag `attach`, `start` and `ingest` accept, including `--research <ledger.json>`, `--review-id` and `--tokens-in/--tokens-out`. The usage block omitted `--research`, and a shell model that read it concluded the flag did not exist, never supplied the research ledger and was refused by `review complete` (flow 420). A test pins the help to the parser's flag list.
+
 ## [0.3.92] - 2026-10-10
 
 ### Shell
