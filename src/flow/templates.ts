@@ -85,6 +85,9 @@ export function renderAcceptanceCriteria(): string {
 Rules:
 
 - Criteria lines use the exact format \`- ACn: <criterion>\`.
+- Every criterion ends with [verify: exec \`<command>\`],
+  [verify: invariant \`<command>\`], [verify: judged] or
+  [verify: none — <reason>].
 - After \`flow freeze\` this file is checksum-protected: any edit outside
   \`keryx flow ac update\` fails every gate and status transition.
 - Completion requires every ACn to be confirmed via
@@ -92,7 +95,7 @@ Rules:
 
 ## Criteria
 
-- AC1: <replace with a hard, verifiable criterion before freeze>
+- AC1: <replace with a hard, verifiable criterion before freeze> [verify: <exec|invariant|judged|none>]
 `;
 }
 
@@ -327,7 +330,12 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
    \`keryx flow task done <id> <Tn> --disposition skipped --reason "<why>"\`.
    Nothing closes them on a timer; leaving them open blocks \`flow complete\`.
 7. Write acceptance-criteria.md: hard, verifiable \`- ACn:\` criteria grounded in
-   the collected evidence.
+   the collected evidence. Every criterion ends with one marker:
+   [verify: exec \`<command>\`] or [verify: invariant \`<command>\`] (a
+   backticked command), [verify: judged] (a human checks: live run, operator
+   decision, text quality), or [verify: none — <reason>]. If a kind is
+   unclear, ask the operator ONE question listing the criteria with proposed
+   kinds, before \`flow freeze\`.
 8. Re-verify the whole package, then freeze and hand off:
    \`keryx flow freeze <id>\` -> \`keryx flow start <id>\`.
 

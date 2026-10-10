@@ -298,7 +298,7 @@ function getFlowService(): FlowService {
  * retry. Not user-visible breakage — just accumulating garbage in
  * `.metaproject/flows/` — but a real gap, not a hypothetical one.
  */
-async function autoProvisionFlow(cwd: string, goalText: string): Promise<string> {
+export async function autoProvisionFlow(cwd: string, goalText: string): Promise<string> {
   const service = getFlowService();
   const result = await service.init({ cwd, title: goalText });
   const acFile = path.join(cwd, result.dir, "acceptance-criteria.md");
@@ -320,9 +320,8 @@ async function autoProvisionFlow(cwd: string, goalText: string): Promise<string>
       "",
       "## Criteria",
       "",
-      `- AC1: The stated goal — "${goalText}" — is achieved, judged by the`,
-      "  verifier subagent this session's continuation loop runs before",
-      "  stopping (flow 186 T10).",
+      // One line: the `[verify: …]` marker is read from the criterion's own `- ACn:` line (flow 422).
+      `- AC1: The stated goal — "${goalText.replace(/\s+/g, " ").trim()}" — is achieved, judged by the verifier subagent this session's continuation loop runs before stopping (flow 186 T10). [verify: judged]`,
       "",
     ].join("\n"),
   );

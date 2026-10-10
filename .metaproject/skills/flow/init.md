@@ -42,7 +42,12 @@ line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
    `keryx flow task done <id> <Tn> --disposition skipped --reason "<why>"`.
    Nothing closes them on a timer; leaving them open blocks `flow complete`.
 7. Write acceptance-criteria.md: hard, verifiable `- ACn:` criteria grounded in
-   the collected evidence.
+   the collected evidence. Every criterion ends with one marker:
+   [verify: exec `<command>`] or [verify: invariant `<command>`] (a
+   backticked command), [verify: judged] (a human checks: live run, operator
+   decision, text quality), or [verify: none — <reason>]. If a kind is
+   unclear, ask the operator ONE question listing the criteria with proposed
+   kinds, before `flow freeze`.
 8. Re-verify the whole package, then freeze and hand off:
    `keryx flow freeze <id>` -> `keryx flow start <id>`.
 
