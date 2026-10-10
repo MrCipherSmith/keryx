@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "422",
   "slug": "verify-kind-prompts",
   "title": "Verification kind is asked for at every criterion: template, flow and flow-orchestrator skills, freeze warning",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-10-10T20:06:52.448Z",
-  "updatedAt": "2026-10-10T20:06:52.448Z",
+  "updatedAt": "2026-10-10T20:28:22.691Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -33,34 +33,108 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-10-10T20:06:52.448Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-10T20:28:22.516Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-10T20:28:22.691Z",
+      "event": "started"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/flow/templates.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/flow"
+    },
+    "AC4": {
+      "kind": "invariant",
+      "check": "bun test src/flow/ac-kinds-never-gates.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/intake src/commands/goal"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync"
+    },
+    "AC7": {
+      "kind": "invariant",
+      "check": "git diff --stat origin/main -- .metaproject/flows ':!.metaproject/flows/422-*'"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  }
 }
