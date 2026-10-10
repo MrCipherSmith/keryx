@@ -4687,6 +4687,7 @@ keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes
 keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--json]
 keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>] [--slices a,b]
                         [--state <file>] [--dry-run] [--json]
+keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -5159,7 +5160,7 @@ it almost never costs a direct dependent.
 unaffordable *and* harmful — review quality decays as context grows, and an
 unbounded second scope makes later rounds worse than earlier ones.
 
-### `review slice`, `review dispatch-check`, `review retry-plan`
+### `review slice`, `review dispatch-check`, `review retry-plan`, `review ledger`
 
 A reviewer on a shell host cannot open a path, and one handed the whole diff
 spends its rounds reading. These three commands keep each reviewer's input small
@@ -5196,6 +5197,31 @@ to the manifest); a second failure is `not-run` and prints
 `- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted as a clean pass`.
 Attempts are kept in `retry-state.json` beside the manifest. `--dry-run` plans
 without writing; the exit code is 0 for every decision.
+
+`NEEDS_CONTEXT` (or any result with an open `needs_context` list) is not a finished
+scope either. The first one prints decision `context` with the questions: answer them
+and re-dispatch the same slices once. A second one is `not-run`.
+
+`review ledger build <input-dir> [--package <review-dir>]` writes the
+`research.json` that `review ingest --research` and `review complete` demand, from
+files only: `raw/*.txt` (reviewer replies), `drivers/*.json`, `slices/manifest.json`
+and `slices/retry-state.json` in the input directory, and `scope-files.json`,
+`findings.json` in the package. The latest result of each required reviewer decides.
+`DONE` / `DONE_WITH_CONCERNS` with no open `needs_context`, and every slice its path
+gate requires covered by its dispatched payloads, is a complete source-only run
+(`executionRequired: false`, with the reason). Anything else — `NEEDS_CONTEXT`,
+`BLOCKED`, `INCOMPLETE`, missing slices, no result, a retry-state `not-run` — stays
+`incomplete` or `not-run`: the builder never declares a reviewer complete on its own
+word. Each raw finding becomes an obligation that is closed only by a matching
+canonical finding (same reviewer and id) or by a `--dispositions` entry
+`{id, status: finding|refuted|out-of-scope, evidence, reason, finding?}`; otherwise it
+stays `unresolved`. `scopeReviewed` and `rawReconciled` are true only when
+established. The command prints `READY`, or `NOT READY` with every gap and its next
+step (the exact `retry-plan` command, the uncovered slices, the disposition to add),
+using the gate's own validators; exit 1 when not ready, so
+`ledger build && ingest --research` stops. Flags: `--package`, `--mode all|diff`,
+`--findings`, `--dispositions` (default: the obligations already in `research.json`),
+`--out` (default `<package>/research.json`), `--dry-run`, `--json`.
 
 **The set is under regression check, not under review**, and that is refused in
 code rather than discouraged in prose. Three rules, and every one of them is a

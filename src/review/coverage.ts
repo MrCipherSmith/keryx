@@ -31,7 +31,7 @@ const DATA_FILE = /(\.sql$|(^|\/)prisma\/schema\.prisma$|(^|\/)migrations?\/)/;
 const CODE_FILE = /\.(ts|js|tsx|jsx)$/;
 
 /** Path gates the orchestrator names for the generic convention reviewers. Anything not listed here is not path-gated. */
-const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
+export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
   "review-core-boundaries": (f) => /(^|\/)(src\/)?(core|shared|foundation)\//.test(f),
   "review-flow-graph": (f) => /(^|\/)(src\/core\/flow|src\/graph|src\/shared\/flow)\//.test(f),
   "review-testing-practices": (f) => TEST_FILE.test(f) || /\.msw\.ts$/.test(f),

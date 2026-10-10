@@ -163,7 +163,7 @@ carry one to the end without you typing anything after the task.
   `/remote-control` ends its Telegram topic.
 
 For the review side (`keryx review slice`, `dispatch-check`, `retry-plan`,
-`keryx ctx run --raw`) see the [CLI reference](../cli-reference.md).
+`ledger`, `keryx ctx run --raw`) see the [CLI reference](../cli-reference.md).
 
 ## Read-only mode: `/plan`
 

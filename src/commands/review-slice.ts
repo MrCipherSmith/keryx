@@ -72,11 +72,13 @@ export function printRetryPlanHelp(): void {
                           [--dry-run] [--json]
 
 Decides what follows a reviewer result. --result is the reviewer's result JSON
-({ "reviewer", "status", "slices"? , "attempt"? }). INCOMPLETE and BLOCKED get
-exactly one retry on slices half the size (r1-<reviewer>-NN.diff, appended to the
-manifest); a second failure is decision "not-run" and prints the report line
-"- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted
-as a clean pass". Any other status is "accepted".
+({ "reviewer", "status", "slices"? , "needs_context"?, "attempt"? }). INCOMPLETE and
+BLOCKED get exactly one retry on slices half the size (r1-<reviewer>-NN.diff,
+appended to the manifest); a second failure is decision "not-run" and prints the
+report line "- **Not run:** <reviewer> — <status> after a smaller-slice retry; never
+counted as a clean pass". NEEDS_CONTEXT is not terminal and closes no scope: decision
+"context" lists the open questions ("- context <reviewer>: ...") for one re-dispatch of
+the same slices; asking again is "not-run". Any other status is "accepted".
 Attempts are remembered in ${RETRY_STATE_NAME} beside the manifest (--state to move it).
 --dry-run plans without writing. Exit 0 for every decision.
 `);
@@ -252,6 +254,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
             reason: plan.reason,
             reportLine: plan.reportLine ?? null,
             dispatch,
+            needsContext: plan.needsContext ?? null,
             dryRun: args.includes("--dry-run"),
           },
           null,
@@ -263,6 +266,9 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     console.log(`retry-plan: ${plan.decision} — ${reviewer} (${plan.status || "no status"}): ${plan.reason}`);
     for (const item of dispatch) {
       console.log(`- dispatch ${item.reviewer} on ${item.slice} (${item.bytes} bytes): ${item.path}`);
+    }
+    for (const question of plan.needsContext ?? []) {
+      console.log(`- context ${reviewer}: ${question}`);
     }
     if (plan.reportLine !== undefined) {
       console.log(plan.reportLine);

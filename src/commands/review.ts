@@ -40,6 +40,7 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { runJevRisk } from "./review-jev-risk";
+import { printLedgerHelp, runLedger } from "./review-ledger";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -583,6 +584,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "retry-plan") {
       await runRetryPlan(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "ledger") {
+      await runLedger(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "blast-radius") {
@@ -3920,6 +3925,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["slice", printSliceHelp],
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
+  ["ledger", printLedgerHelp],
   ["tier", printTierHelp],
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],
@@ -3974,7 +3980,14 @@ Usage:
   keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
                           [--slices a,b] [--state <file>] [--dry-run] [--json]
                           One smaller-slice retry for INCOMPLETE/BLOCKED, then
-                          "Not run" — never a clean pass.
+                          "Not run" — never a clean pass. NEEDS_CONTEXT is not terminal:
+                          its questions are answered once, the scope stays open.
+  keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
+                            [--findings <file>] [--dispositions <file>] [--out <file>]
+                            [--dry-run] [--json]
+                            Builds research.json from the raw results, drivers and
+                            slice manifest; READY or the exact next step per gap.
+                            Then: keryx review ingest --research research.json.
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
                      --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
