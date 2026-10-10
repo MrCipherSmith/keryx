@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createLiveCodexModels, mergeLiveCodexModels } from "./live-codex-models";
+import { createLiveCodexModels, mergeLiveCodexModels, withLiveCodexModels } from "./live-codex-models";
 
 const STUB = [{ name: "openai-codex", models: ["gpt-5.3-codex"] }, { name: "anthropic" }];
 
@@ -14,6 +14,17 @@ test("the live list replaces the stale curated codex list and leaves other provi
 test("without a live list the detected catalogue is unchanged, and the provider set is never widened", () => {
   expect(mergeLiveCodexModels(STUB, undefined)[0]?.models).toEqual(["gpt-5.3-codex"]);
   expect(mergeLiveCodexModels([{ name: "anthropic" }], ["gpt-6-luna"])).toEqual([{ name: "anthropic", models: [] }]);
+});
+
+test("withLiveCodexModels awaits the fetch so a one-shot caller sees the live list", async () => {
+  const live = createLiveCodexModels(undefined, {
+    hasGrant: () => true,
+    fetchModels: async () => ({ models: ["gpt-6.1-sol", "gpt-6-luna"], source: "live" }),
+  });
+  expect((await withLiveCodexModels(STUB, live))[0]?.models).toEqual(["gpt-6.1-sol", "gpt-6-luna"]);
+
+  const offline = createLiveCodexModels(undefined, { hasGrant: () => true, fetchModels: async () => { throw new Error("offline"); } });
+  expect((await withLiveCodexModels(STUB, offline))[0]?.models).toEqual(["gpt-5.3-codex"]);
 });
 
 test("a live fetch is cached; a failed or non-live one keeps the curated list", async () => {

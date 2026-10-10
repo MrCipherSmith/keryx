@@ -641,17 +641,41 @@ export class OpenAiProvider implements ProviderPort {
           }
         : {}),
     };
+    // The wait for response headers has its own deadline: a server that accepts
+    // the connection and never answers would otherwise hold the turn until the
+    // caller aborts, and the body deadlines below only start after headers.
+    const headersDeadlineMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const headersAbort = new AbortController();
+    let headersTimedOut = false;
+    const forwardAbort = (): void => headersAbort.abort();
+    if (opts.signal?.aborted === true) {
+      headersAbort.abort();
+    } else {
+      opts.signal?.addEventListener("abort", forwardAbort, { once: true });
+    }
+    const headersTimer = setTimeout(() => {
+      headersTimedOut = true;
+      headersAbort.abort();
+    }, headersDeadlineMs);
     const init: RequestInit = {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
-      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      signal: headersAbort.signal,
     };
 
     let response: Response;
     try {
       response = await this.deps.fetch(url, init);
     } catch (cause) {
+      if (headersTimedOut && opts.signal?.aborted !== true) {
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `OpenAI request timed out waiting for response headers (limit ${headersDeadlineMs}ms)`,
+        });
+        return;
+      }
       if (opts.signal?.aborted === true) {
         yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
         return;
@@ -662,6 +686,9 @@ export class OpenAiProvider implements ProviderPort {
         message: redact(`network request to the OpenAI API failed: ${String(cause)}`),
       });
       return;
+    } finally {
+      clearTimeout(headersTimer);
+      opts.signal?.removeEventListener("abort", forwardAbort);
     }
 
     // Provider negatives: non-2xx -> typed, fail-closed error, no model_end.

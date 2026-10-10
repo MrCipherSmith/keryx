@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.98] - 2026-10-10
+
+### Providers
+
+- The OpenAI Responses provider (and openai-codex on top of it) now has a deadline while waiting for response headers. The first-byte and idle deadlines covered only the body, so a server that accepted the connection and never answered held the request open indefinitely, and a subagent or the shell sat in "waiting" with no error. The wait ends with one retryable `unavailable` error after the first-byte limit; an operator abort still ends as `cancelled`.
+
+### Review Process
+
+- `keryx review tier` now merges the live Codex model list like the shell does. Without it the CLI saw only the stale curated stub, so tier resolution fell back to the session model for most reviewers.
+
 ## [0.3.97] - 2026-10-10
 
 ### Models

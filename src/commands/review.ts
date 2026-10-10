@@ -107,6 +107,7 @@ import {
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
+import { withLiveCodexModels } from "./live-codex-models";
 import { detectProviders } from "./select";
 import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
 import { envWithSavedApiKeys } from "../lib/shell-config";
@@ -1384,7 +1385,7 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
   if (session.providerId === "" || session.modelId === "") {
     return [];
   }
-  return await detectProviders({ fetch, env: envWithSavedApiKeys() });
+  return await withLiveCodexModels(await detectProviders({ fetch, env: envWithSavedApiKeys() }));
 }
 
 /**
