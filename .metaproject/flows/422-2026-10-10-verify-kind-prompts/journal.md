@@ -29,3 +29,19 @@
 - 2026-10-10T20:36:49.747Z - task-done: T8: intake and goal scaffold the marker (AC5)
 - 2026-10-10T20:36:49.883Z - task-done: T9: sync-status unclassified share and warning (AC6)
 - 2026-10-10T20:36:50.009Z - task-attempt: T10: started (attempt 1) — 422-T10
+
+## T11 verification (2026-10-10, local)
+
+| AC | Command | Branch | Clean main baseline |
+|---|---|---|---|
+| AC1 | `bun test src/flow/templates.test.ts` | 9 pass, 0 fail | — |
+| AC2 | `bun test src/gdskills` | 7929 pass, 1 fail | 7922 pass, 1 fail (same test: retired rule in a read-only rules dir) |
+| AC3 | `bun test src/commands/flow` | 27 pass, 9 fail | 23 pass, 9 fail (git-commit fixtures refused by the author-email guard) |
+| AC4 | `bun test src/flow/ac-kinds-never-gates.test.ts` | 6 pass, 0 fail | — |
+| AC5 | `bun test src/commands/intake src/commands/goal` | 80 pass, 0 fail | — |
+| AC6 | `bun test src/commands/research-sync` | 36 pass, 0 fail with `GIT_TEMPLATE_DIR` holding `info/` and `hooks/`; 26 fail without | 26 fail without (same environment cause) |
+| AC7 | `git diff --stat origin/main -- .metaproject/flows ':!.metaproject/flows/422-*'` | empty | — |
+
+All new tests pass; every local failure reproduces on clean main, so none is caused by this flow. CI is the authority for the environment-dependent suites.
+- 2026-10-10T20:39:40.499Z - task-done: T10: cli-reference and CHANGELOG
+- 2026-10-10T20:39:40.635Z - task-done: T11: Run every AC command and AC7 invariant

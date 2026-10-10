@@ -10,7 +10,7 @@
   "title": "Verification kind is asked for at every criterion: template, flow and flow-orchestrator skills, freeze warning",
   "status": "in-progress",
   "createdAt": "2026-10-10T20:06:52.448Z",
-  "updatedAt": "2026-10-10T20:36:50.009Z",
+  "updatedAt": "2026-10-10T20:39:40.635Z",
   "source": {
     "type": "description",
     "ref": null
@@ -191,7 +191,7 @@
       "id": "T10",
       "title": "cli-reference and CHANGELOG",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -205,13 +205,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Run every AC command and AC7 invariant",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -219,7 +220,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -330,6 +332,16 @@
       "at": "2026-10-10T20:36:50.009Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — 422-T10"
+    },
+    {
+      "at": "2026-10-10T20:39:40.499Z",
+      "event": "task-done",
+      "detail": "T10: cli-reference and CHANGELOG"
+    },
+    {
+      "at": "2026-10-10T20:39:40.635Z",
+      "event": "task-done",
+      "detail": "T11: Run every AC command and AC7 invariant"
     }
   ],
   "acKinds": {
