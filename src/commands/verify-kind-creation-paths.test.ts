@@ -29,7 +29,7 @@ describe("intake", () => {
     // The runner stands in for the `keryx flow init` child: it hands the argv the port built to the real `flow init` handler.
     const seen: string[][] = [];
     const run: KeryxRunner = async (args, cwd) => {
-      seen.push(args);
+      seen.push([...args]);
       const realCwd = process.cwd();
       const realLog = console.log;
       console.log = () => {};
