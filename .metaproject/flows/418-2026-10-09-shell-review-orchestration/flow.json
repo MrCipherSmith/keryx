@@ -11,12 +11,12 @@
   "title": "Keryx Shell: review orchestration completes a round (follow-through, trust mode, 200 rounds)",
   "status": "in-progress",
   "createdAt": "2026-10-09T19:42:51.573Z",
-  "updatedAt": "2026-10-09T20:20:09.034Z",
+  "updatedAt": "2026-10-10T20:42:13.686Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc",
+  "acChecksum": "sha256:55c5d69c2482248f1e65941a8a17d38e09936a722cf59c8f2749ac03d04af88a",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -268,6 +268,11 @@
       "at": "2026-10-09T20:20:09.034Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-10T20:42:13.686Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"Live: the review of a PR in a medium-sized work project, started in a keryx shell in trust mode with no input after the task, reaches `review complete` and a report with findings, and the time, tokens and findings are recorded beside the Claude run (17m58s, 2x10 reviewers, 5 Majors).\" -> \"Live: the review of a PR in a medium-sized work project, started in a keryx shell in trust mode with no input after the task, reaches `review complete` and a report with findings, and the time, tokens and findings are recorded beside the Claude run (17m58s, 2x10 reviewers, 5 Majors).\" (privacy: remove private repository name from a public repo)"
     }
   ],
   "acKinds": {
