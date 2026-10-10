@@ -25,6 +25,8 @@ export interface StatusInput {
   latest: Record<string, unknown>;
   report: DecisionsReport;
   contributionRows: number;
+  /** Flow 422: the verification-kind share lines, when the sync computed them. */
+  kindLines?: readonly string[];
 }
 
 function cell(value: unknown): string {
@@ -88,6 +90,7 @@ export function renderStatus(input: StatusInput): string {
     "",
     ...journalSummary(input.report),
     "",
+    ...(input.kindLines === undefined ? [] : ["## Виды проверки (verification kinds)", "", ...input.kindLines, ""]),
   ].join("\n");
 }
 

@@ -136,6 +136,7 @@ describe("where a kind is read", () => {
   const READERS = [
     "src/commands/flow.ts",
     "src/commands/governance.ts",
+    "src/commands/research-sync-kinds.ts",
     "src/flow/ac-kinds.ts",
     "src/flow/check-ac.ts",
     "src/flow/service.ts",

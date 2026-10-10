@@ -242,7 +242,7 @@ Write or update:
 - `context.md` - compact links and findings, not raw dumps;
 - `plan.md` - chosen approach and trade-offs;
 - `tasks.md` - task definitions grouped by context, test, implement, review, docs;
-- `acceptance-criteria.md` - verifiable `ACn` criteria.
+- `acceptance-criteria.md` - verifiable `ACn` criteria, each ending in one marker: [verify: exec `<command>`] or [verify: invariant `<command>`] (a backticked command), [verify: judged] (a human checks: live run, operator decision, text quality), or [verify: none — <reason>]. If a kind is unclear, ask the operator ONE question listing the criteria with proposed kinds, before `flow freeze`.
 
 ### A verification step in the plan is a task, not a sentence
 
@@ -283,13 +283,12 @@ did not exist and 24 completed flows shipped with an open task:
   keryx flow task done <id> <Tn> --disposition skipped --reason "<why it was not needed>"
   ```
 
-Read the `tasks` line in the `flow complete` output. If it says `skipped`, the
-gate did not run and the task list is yours to verify by hand.
+Read the `tasks` line in the `flow complete` output. If it says `skipped`, the gate did not run and the task list is yours to verify by hand.
 
-Then freeze and start:
+Then freeze and start (`--yes`: the operator already answered the kinds question, so the freeze must not prompt):
 
 ```bash
-keryx flow freeze <id>
+keryx flow freeze <id> --yes
 keryx flow start <id>
 ```
 
@@ -692,3 +691,4 @@ Stop and re-read this skill if you are thinking:
 | "The worker returned BLOCKED twice — faster if I implement this task myself." | The implementer never self-accepts and the orchestrator never implements. Block the flow, escalate one concise question, then unblock and re-dispatch. Doing the work here erases the boundary the whole flow model rests on. |
 | "Verification is described in the plan, so it will happen." | A verification step in the plan is a task, not a sentence. If it is not a task with a status, nothing records whether it ran, and the flow reaches `implemented` with an unrun gate. |
 | "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` nests under this skill where keryx cannot see the in-flight subagents. Skipping the check means the cap bounds nothing. |
+| "I'll set the verification kind later." | An `unclassified` criterion cannot become data afterwards without a recorded rewrite: `keryx flow ac update <id> --criterion ACn --text "…" --reason "<why>"`. Put the `[verify: …]` marker on every criterion before `flow freeze`. |

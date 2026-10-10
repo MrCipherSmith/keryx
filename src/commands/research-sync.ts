@@ -15,6 +15,7 @@ import { loadExportWithSummary, loadReport, renderExport } from "../decisions/se
 import { pathExists } from "../lib/fs";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 import { scheduleResearchSync, unscheduleResearchSync } from "../scheduler/research-sync-job";
+import { collectFrozenFlows, renderKindShare } from "./research-sync-kinds";
 import { formatRunTime, reasonLine, renderFailureStatus, renderStatus } from "./research-sync-status";
 
 const run = promisify(execFile);
@@ -185,7 +186,8 @@ async function compute(deps: Required<SyncDeps>): Promise<Computed> {
   const log = (await readIfExists(catalogFile(root, CONTRIBUTION_LOG))) ?? "";
   const contributionRows = (log.match(/^\d{4}-\d{2}-\d{2} · /gm) ?? []).length;
 
-  const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows });
+  const kindLines = renderKindShare(await collectFrozenFlows(root), runAt);
+  const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows, kindLines });
   for (const text of [countsText, exportText, statusText]) {
     if (namesOffLimits(text)) throw new SyncError("output names a repository that must not appear");
   }
