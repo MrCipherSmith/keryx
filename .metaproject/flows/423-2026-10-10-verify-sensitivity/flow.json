@@ -10,7 +10,7 @@
   "title": "Verification sensitivity: mark exec/invariant checks proven to catch a failure",
   "status": "in-progress",
   "createdAt": "2026-10-10T21:17:59.701Z",
-  "updatedAt": "2026-10-10T21:19:12.267Z",
+  "updatedAt": "2026-10-10T21:26:23.750Z",
   "source": {
     "type": "description",
     "ref": null
@@ -87,8 +87,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-10T21:26:23.750Z",
+            "outcome": "started",
+            "detail": "review round 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -98,7 +104,7 @@
       "id": "T5",
       "title": "Parser, ac kinds counts, ac confirm warning (AC1-AC4)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -112,13 +118,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Skills failure-scenario line, sync-status share, docs (AC5 AC6)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -132,13 +139,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Run every AC command and AC7 invariant",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -146,7 +154,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -202,6 +211,26 @@
       "at": "2026-10-10T21:19:12.267Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — 423-T6"
+    },
+    {
+      "at": "2026-10-10T21:26:23.353Z",
+      "event": "task-done",
+      "detail": "T5: Parser, ac kinds counts, ac confirm warning (AC1-AC4)"
+    },
+    {
+      "at": "2026-10-10T21:26:23.498Z",
+      "event": "task-done",
+      "detail": "T6: Skills failure-scenario line, sync-status share, docs (AC5 AC6)"
+    },
+    {
+      "at": "2026-10-10T21:26:23.622Z",
+      "event": "task-done",
+      "detail": "T7: Run every AC command and AC7 invariant"
+    },
+    {
+      "at": "2026-10-10T21:26:23.750Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1"
     }
   ],
   "acKinds": {
