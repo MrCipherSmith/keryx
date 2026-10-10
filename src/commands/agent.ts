@@ -1,5 +1,5 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
-import { decideReviewGate, findOpenManagedReview, reviewRunSeenInHistory } from "../review/completion-gate";
+import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -3977,10 +3977,13 @@ async function runAgentTurnCore(
       // accepts the package, not when the model stops. Independent of the plan
       // (a blocked plan item must not end it); unattended children are excluded.
       if (subagentBudget === undefined && deps.unattended !== true) {
-        const open = await findOpenManagedReview(process.cwd()).catch(() => null);
+        const runSeen = reviewRunSeenInHistory(history);
+        const open = runSeen
+          ? await findReviewGateState(process.cwd(), sessionStartedAt(history)).catch(() => null)
+          : null;
         const gate = decideReviewGate({
           open,
-          runSeen: reviewRunSeenInHistory(history),
+          runSeen,
           continues: reviewGateContinues,
           stalls: reviewGateStalls,
           lastSignature: lastReviewGateSignature,

@@ -8,10 +8,11 @@ import path from "node:path";
 import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
 import {
   decideReviewGate,
-  findOpenManagedReview,
+  findReviewGateState,
   MAX_REVIEW_GATE_CONTINUES,
   type OpenManagedReview,
   reviewRunSeenInHistory,
+  sessionStartedAt,
 } from "./completion-gate";
 
 let root: string;
@@ -62,27 +63,23 @@ test("an open package with a review run seen continues and names what review com
   }
 });
 
-test("an unchanged package soft-stops after two continues with no new artifact", () => {
-  const first = decideReviewGate({ ...idle, open: open() });
-  expect(first.action).toBe("continue");
-  const second = decideReviewGate({
-    open: open(),
-    runSeen: true,
-    continues: 1,
-    stalls: first.action === "continue" ? first.stalls : 0,
-    lastSignature: "sig-a",
-  });
-  expect(second.action).toBe("continue");
-  const third = decideReviewGate({
-    open: open(),
-    runSeen: true,
-    continues: 2,
-    stalls: second.action === "continue" ? second.stalls : 0,
-    lastSignature: "sig-a",
-  });
-  expect(third.action).toBe("stop");
-  if (third.action === "stop") expect(third.report).toContain("missing artifacts: report.md");
+test("an unchanged package soft-stops after three continues with no new artifact", () => {
+  let stalls = 0;
+  let last: string | undefined;
+  const actions: string[] = [];
+  for (let continues = 0; continues < 4; continues += 1) {
+    const d = decideReviewGate({ open: open(), runSeen: true, continues, stalls, lastSignature: last });
+    actions.push(d.action);
+    if (d.action === "continue") {
+      stalls = d.stalls;
+      last = d.signature;
+    } else if (d.action === "stop") {
+      expect(d.report).toContain("missing artifacts: report.md");
+    }
+  }
+  expect(actions).toEqual(["continue", "continue", "continue", "stop"]);
 });
+
 
 test("progress (a changed signature) resets the stall count", () => {
   const decision = decideReviewGate({
@@ -106,36 +103,60 @@ test("the continue cap stops even while the package keeps changing", () => {
   expect(decision.action).toBe("stop");
 });
 
-test("findOpenManagedReview returns the draft review-flow package with its blockers", async () => {
+test("findReviewGateState returns the draft review-flow package with its blockers", async () => {
   await writePackage("old-closed", { mode: "review-flow", status: "closed" });
   await writePackage("other-mode", { mode: "something-else", status: "draft" });
   await writePackage("live", { mode: "review-flow", status: "draft" });
-  const found = await findOpenManagedReview(root);
+  const found = await findReviewGateState(root, Date.now() + 60_000);
   expect(found?.reviewId).toBe("live");
   expect(found?.blockers[0]).toContain("missing artifacts");
 });
 
-test("findOpenManagedReview is null with no reviews directory or only closed packages", async () => {
-  expect(await findOpenManagedReview(root)).toBeNull();
+test("with no package yet the state says review start has not opened one, and names the next step", async () => {
+  const found = await findReviewGateState(root, 0);
+  expect(found?.packageDir).toBe("");
+  expect(found?.blockers[0]).toContain("keryx review start");
+  const decision = decideReviewGate({ ...idle, open: found });
+  expect(decision.action).toBe("continue");
+  if (decision.action === "continue") expect(decision.message).toContain("keryx review start --pr");
+});
+
+test("a package closed since the session began ends the gate; one closed before it does not", async () => {
   await writePackage("done", { mode: "review-flow", status: "closed" });
-  expect(await findOpenManagedReview(root)).toBeNull();
+  expect(await findReviewGateState(root, 0)).toBeNull();
+  const later = await findReviewGateState(root, Date.now() + 60_000);
+  expect(later?.packageDir).toBe("");
+});
+
+test("a draft newer than the closed package keeps the gate on", async () => {
+  await writePackage("done", { mode: "review-flow", status: "closed" });
+  await new Promise((r) => setTimeout(r, 15));
+  await writePackage("live", { mode: "review-flow", status: "draft" });
+  expect((await findReviewGateState(root, 0))?.reviewId).toBe("live");
 });
 
 test("the signature changes when a working file appears under data/review", async () => {
   await writePackage("live", { mode: "review-flow", status: "draft" });
-  const before = await findOpenManagedReview(root);
+  const before = await findReviewGateState(root, 0);
   const data = path.join(root, ".metaproject", "data", "review");
   await mkdir(data, { recursive: true });
   await writeFile(path.join(data, "note.json"), "{}");
-  const after = await findOpenManagedReview(root);
+  const after = await findReviewGateState(root, 0);
   expect(after?.signature).not.toBe(before?.signature);
 });
 
-test("reviewRunSeenInHistory finds the skill or a keryx review command in tool-call arguments", () => {
-  const call = (args: string) => ({ toolCalls: [{ name: "bash", arguments: args }] });
-  expect(reviewRunSeenInHistory([{}, call('{"command":"ls"}')])).toBe(false);
-  expect(reviewRunSeenInHistory([call('{"skill":"review-orchestrator"}')])).toBe(true);
-  expect(reviewRunSeenInHistory([call('{"command":"keryx review scope --pr 1"}')])).toBe(true);
+test("reviewRunSeenInHistory finds a skill_load of the review skill or a keryx review command", () => {
+  const call = (name: string, args: string) => ({ toolCalls: [{ name, arguments: args }] });
+  expect(reviewRunSeenInHistory([{}, call("bash", '{"command":"ls"}')])).toBe(false);
+  expect(reviewRunSeenInHistory([call("bash", '{"command":"keryx ctx rg review-orchestrator"}')])).toBe(false);
+  expect(reviewRunSeenInHistory([call("skill_load", '{"name":"review-orchestrator"}')])).toBe(true);
+  expect(reviewRunSeenInHistory([call("bash", '{"command":"keryx review scope --pr 1"}')])).toBe(true);
+});
+
+test("sessionStartedAt is the first message timestamp", () => {
+  expect(sessionStartedAt([{}, { ts: "2026-10-10T08:00:00.000Z" }, { ts: "2026-10-10T09:00:00.000Z" }])).toBe(
+    Date.parse("2026-10-10T08:00:00.000Z"),
+  );
 });
 
 test("read-only introspection tools are exempt from the repeated-call guard", () => {

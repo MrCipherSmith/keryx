@@ -11,12 +11,12 @@
   "title": "Shell review completion gate",
   "status": "in-progress",
   "createdAt": "2026-10-10T07:54:32.591Z",
-  "updatedAt": "2026-10-10T07:55:01.098Z",
+  "updatedAt": "2026-10-10T08:30:38.816Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:2fa1561d50731eb804b1e6b648d3066412adbd5c6068023665a8649bb04e99f1",
+  "acChecksum": "sha256:1ea89b9053ac59d34b70ac1c753cd4b7661b5d1d71c6acc235763ae9064ec3a7",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -111,6 +111,11 @@
     {
       "at": "2026-10-10T07:55:01.098Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-10T08:30:38.816Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"The gate stops, with a state report, after 20 continues or after 2 consecutive continues that add no artifact; with no open package, or a closed one, the stop is accepted (unit tests).\" -> \"The gate stops, with a state report, after 20 continues or after 3 consecutive continues that add no artifact; with no review run in the session, or a package closed since the session began, the stop is accepted; before review start has opened a package the gate still holds (unit tests).\" (live run 7: the gate must hold before a package exists)"
     }
   ],
   "acKinds": {

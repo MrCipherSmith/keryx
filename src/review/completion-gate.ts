@@ -8,7 +8,7 @@ import path from "node:path";
 import { reviewCompletionBlockers, reviewsRoot } from "./managed";
 
 export const MAX_REVIEW_GATE_CONTINUES = 20;
-export const MAX_REVIEW_GATE_STALLS = 2;
+export const MAX_REVIEW_GATE_STALLS = 3;
 
 export type OpenManagedReview = {
   reviewId: string;
@@ -32,15 +32,21 @@ async function dirSignature(dir: string): Promise<string> {
   }
 }
 
-/** The newest review-flow package under `cwd` that is not closed, or null. */
-export async function findOpenManagedReview(cwd: string): Promise<OpenManagedReview | null> {
+/**
+ * The state `keryx review complete` is waiting on. `null` when a review-flow package was closed since
+ * `since` (the run is done). Otherwise the newest open package, or — before `review start` has opened
+ * one — a placeholder whose blocker is exactly that: a run that built scope and slices but never opened
+ * a package is not finished either.
+ */
+export async function findReviewGateState(cwd: string, since: number): Promise<OpenManagedReview | null> {
   let names: string[];
   try {
     names = (await readdir(reviewsRoot(cwd), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
-    return null;
+    names = [];
   }
   let best: { dir: string; mtime: number; id: string } | null = null;
+  let closedAt = 0;
   for (const name of names) {
     const dir = path.join(reviewsRoot(cwd), name);
     try {
@@ -49,40 +55,66 @@ export async function findOpenManagedReview(cwd: string): Promise<OpenManagedRev
         status?: string;
         reviewId?: string;
       };
-      if (manifest.mode !== "review-flow" || manifest.status === "closed") continue;
+      if (manifest.mode !== "review-flow") continue;
       const info = await stat(path.join(dir, "manifest.json"));
+      if (manifest.status === "closed") {
+        if (info.mtimeMs >= since) closedAt = Math.max(closedAt, info.mtimeMs);
+        continue;
+      }
       if (best === null || info.mtimeMs > best.mtime) best = { dir, mtime: info.mtimeMs, id: manifest.reviewId ?? name };
     } catch {
       continue;
     }
   }
-  if (best === null) return null;
+  if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;
+  const working = await dirSignature(path.join(cwd, ".metaproject", "data", "review"));
+  if (best === null) {
+    return {
+      reviewId: "(no package yet)",
+      packageDir: "",
+      blockers: ["no review package exists: `keryx review start` has not opened one"],
+      signature: `none#${working}`,
+    };
+  }
   const blockers = await reviewCompletionBlockers(best.dir);
-  const signature = [
-    blockers.join("|"),
-    await dirSignature(best.dir),
-    await dirSignature(path.join(cwd, ".metaproject", "data", "review")),
-  ].join("#");
   return {
     reviewId: best.id,
     packageDir: best.dir,
     blockers,
-    signature,
+    signature: [blockers.join("|"), await dirSignature(best.dir), working].join("#"),
   };
 }
 
-/** True when the transcript shows the review skill or a `keryx review` command was used in this session. */
+/** True when the transcript shows the review skill was loaded or a `keryx review` command was run in this session. */
 export function reviewRunSeenInHistory(
   history: ReadonlyArray<{ toolCalls?: ReadonlyArray<{ name: string; arguments: string }> | undefined }>,
 ): boolean {
   for (const message of history) {
     for (const call of message.toolCalls ?? []) {
-      if (call.arguments.includes("review-orchestrator") || /keryx review (start|scope|slice|ingest|complete)/.test(call.arguments)) {
-        return true;
-      }
+      if (call.name === "skill_load" && call.arguments.includes("review-orchestrator")) return true;
+      if (/keryx review (start|scope|slice|ingest|complete)/.test(call.arguments)) return true;
     }
   }
   return false;
+}
+
+/** The earliest message timestamp in the transcript: packages closed before it are not this run's. */
+export function sessionStartedAt(history: ReadonlyArray<{ ts?: string | undefined }>): number {
+  for (const message of history) {
+    const at = message.ts === undefined ? Number.NaN : Date.parse(message.ts);
+    if (!Number.isNaN(at)) return at;
+  }
+  return Date.now();
+}
+
+function nextStep(open: OpenManagedReview): string {
+  if (open.packageDir === "") {
+    return "Next: `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ingest ... --research <ledger.json>`, then `keryx review complete`.";
+  }
+  if (open.blockers.some((b) => /research|dispatch/.test(b))) {
+    return "Next: dispatch the reviewers per slice, record the dispatch in the research ledger, `keryx review ingest ... --research <ledger.json>`, then `keryx review complete`.";
+  }
+  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then `keryx review complete`.";
 }
 
 export type ReviewGateInput = {
@@ -124,6 +156,7 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
     message:
       `The managed review ${open.reviewId} is not finished: it is finished when \`keryx review complete\` accepts the package, not when you stop writing. ` +
       `It still refuses on:\n${describeBlockers(open)}\n` +
+      `${nextStep(open)}\n` +
       "Do the next missing step now. Step 1 (Build Review Context Pack) has no CLI command; it is a prose step, so mark it done and move on. " +
       "A command that is refused is not a blocker: run `keryx review --help` for the accepted usage and retry with the right flags. " +
       "A plan item you marked blocked for such a reason is not blocked: mark it in_progress. " +

@@ -4,7 +4,7 @@
 
 ### Shell
 
-- A managed review run in the shell is no longer finished by the model stopping. While a `review-flow` package is open and `keryx review complete` would still refuse, a text-only finish is not accepted: the harness injects the refusal reasons (missing artifacts, research ledger errors), tells the model that Step 1 of review-orchestrator is a prose step with no command and that a refused `keryx review` command is not a blocker, prints a `[review-gate]` line in the pane, and continues. It stops after 20 continues or two in a row that added no artifact, and reports the state. A blocked plan item no longer ends the gate (flow 421).
+- A managed review run in the shell is no longer finished by the model stopping. Once the session has loaded `review-orchestrator` (or run a `keryx review` command), a text-only finish is not accepted until `keryx review complete` has closed a package: with no package yet the harness says `review start` has not opened one, with an open package it injects the refusal reasons (missing artifacts, research ledger and dispatch errors). The continuation names the next required step, says Step 1 of review-orchestrator is a prose step with no command and that a refused `keryx review` command is not a blocker, prints a `[review-gate]` line in the pane and continues. It stops after 20 continues or three in a row that added no artifact, and reports the state. A blocked plan item no longer ends the gate (flow 421).
 - `plan_get`, `slate_trail` and `recall_step` are exempt from the repeated-call guard: three identical `plan_get` calls ended a live review run.
 
 ### Review Process
