@@ -55,6 +55,26 @@ test("ask_user on a flow's branch records the flow and a real stage, and writes 
   expect(lastAskUserDecisionId()).toBe(open["id"] as string);
 });
 
+test("KERYX_REVIEW_AUTO_ANSWER answers a mid-run menu while a review package is open, never an irreversible one", async () => {
+  const dir = path.join(root, ".metaproject", "reviews", "live");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: "live", mode: "review-flow", status: "draft" }));
+  let asked = 0;
+  setAskUserHost(async () => {
+    asked += 1;
+    return "b";
+  });
+  process.env["KERYX_REVIEW_AUTO_ANSWER"] = "1";
+  try {
+    expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe("a");
+    expect(asked).toBe(0);
+    expect(await journaledAskUser(root)({ question: "Publish?", options: OPTIONS, irreversible: true })).toBe("b");
+    expect(asked).toBeGreaterThan(0);
+  } finally {
+    delete process.env["KERYX_REVIEW_AUTO_ANSWER"];
+  }
+});
+
 test("a journaling failure shows up as a transcript note, and the question still returns (F-008)", async () => {
   await writeFile(path.join(root, ".metaproject", "data"), "in the way", "utf8");
   const notes: string[] = [];

@@ -23,12 +23,12 @@ export function dispatchErrors(value: unknown): string[] {
       errors.push(`${role}: not run${text(run.notRunReason) ? ` (${run.notRunReason})` : ""}; a reviewer that did not run is never a clean pass`);
       continue;
     }
-    if (run.status !== "complete" || run.scopeComplete !== true) errors.push(`${role}: reviewer scope is incomplete`);
+    if (run.status !== "complete" || run.scopeComplete !== true) errors.push(`${role}: reviewer scope is incomplete (status ${JSON.stringify(run.status)}, scopeComplete ${JSON.stringify(run.scopeComplete)}); a partial reviewer is retried per \`keryx review retry-plan\`, not declared complete by hand`);
     if (!text(run.rawEvidence)) errors.push(`${role}: raw result evidence is required`);
     if (!strings(run.ruleEvidence) || !run.ruleEvidence.length) errors.push(`${role}: resolved rule evidence is required`);
     if (typeof run.executionRequired !== "boolean") errors.push(`${role}: execution requirement must be declared`);
     if (run.executionRequired === true && (!strings(run.executionEvidence) || !run.executionEvidence.length))
-      errors.push(`${role}: required execution has no evidence`);
+      errors.push(`${role}: required execution has no evidence; a source-only run declares executionRequired false with an executionReason`);
     if (run.executionRequired === false && !text(run.executionReason)) errors.push(`${role}: non-execution needs a scope justification`);
   }
   for (const role of value.selected) if (!roles.has(role)) errors.push(`${role}: selected reviewer was not dispatched`);
