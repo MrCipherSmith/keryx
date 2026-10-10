@@ -1,4 +1,5 @@
 import { composeAbortSignals } from "../lib/abort-compose";
+import { tracePhase } from "../lib/phase-trace";
 
 export type CallStage = { current: string };
 
@@ -33,7 +34,17 @@ export async function runWithCallWatchdog<T extends CallResult>(
   options: { signal?: AbortSignal | undefined; capMs?: number; abortGraceMs?: number } = {},
 ): Promise<T | CallResult> {
   const capMs = options.capMs ?? resolveCallWatchdogMs();
-  const stage: CallStage = { current: "start" };
+  let currentStage = "start";
+  const stage: CallStage = {
+    get current(): string {
+      return currentStage;
+    },
+    set current(next: string) {
+      currentStage = next;
+      tracePhase(`${name} stage ${next}`);
+    },
+  };
+  tracePhase(`${name} call start (watchdog ${capMs}ms)`);
   if (capMs <= 0) return run(options.signal, stage);
 
   const graceMs = options.abortGraceMs ?? ABORT_GRACE_MS;
@@ -50,13 +61,18 @@ export async function runWithCallWatchdog<T extends CallResult>(
           arm();
           return;
         }
-        inner.abort(new Error(`${name} watchdog`));
+        tracePhase(`${name} watchdog fired at stage ${stage.current}`);
         resolve({
           output:
             `${name} did not finish within ${capMs}ms and was abandoned by the harness watchdog ` +
             `(stuck at stage "${stage.current}"; tune with ${ENV_CALL_WATCHDOG_MS}). Retry on a smaller slice instead of waiting.`,
           isError: true,
         });
+        try {
+          inner.abort(new Error(`${name} watchdog`));
+        } catch {
+          // an abort listener that throws must not undo the answer already given
+        }
       }, capMs);
     };
     arm();
@@ -78,7 +94,9 @@ export async function runWithCallWatchdog<T extends CallResult>(
 
   const running = run(composed.signal, stage);
   try {
-    return await Promise.race([running, stalled]);
+    const outcome = await Promise.race([running, stalled]);
+    tracePhase(`${name} call settled`);
+    return outcome;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
     if (graceTimer !== undefined) clearTimeout(graceTimer);
