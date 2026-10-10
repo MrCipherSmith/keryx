@@ -5,6 +5,7 @@ import { writeFileAtomic } from "../lib/fs";
 import {
   CONFIRMATION_CAVEAT,
   acCriterionKnown,
+  appendJournal,
   completionFixHint,
   confirmPreconditionError,
   createFlowService,
@@ -840,10 +841,87 @@ async function runNext(args: string[]): Promise<void> {
 
 async function runSimple(args: string[], action: "freeze" | "start" | "unblock"): Promise<void> {
   const id = requireId(args);
+  let unmarked: string[] = [];
+  let interactive = false;
+  if (action === "freeze") {
+    unmarked = await unmarkedCriteria(process.cwd(), id);
+    if (unmarked.length > 0) {
+      const names = unmarked.join(", ");
+      console.log(
+        `  ${style.yellow(WARN)} warning: no verification kind on ${names} — add [verify: …] or accept them unclassified`,
+      );
+      interactive = freezePromptIo.interactive();
+      if (interactive && !(await freezePromptIo.ask(`freeze without a verification kind on ${names}? [y/N] `))) {
+        // The operator's own answer, not a gate: nothing was written, the flow stays as it was.
+        console.log(`  ${style.dim("Freeze cancelled: the flow is unchanged.")}`);
+        return;
+      }
+    }
+  }
   const flow = await getService()[action]({ cwd: process.cwd(), id });
   console.log(`  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)}`);
   if (action === "freeze") {
+    if (unmarked.length > 0) {
+      await journalUnmarkedWarning(process.cwd(), flow.id, unmarked, interactive);
+    }
     await printAcKindDistribution(process.cwd(), flow.id);
+  }
+}
+
+/**
+ * Test seam for the freeze confirmation: whether a human is at the terminal and
+ * what they answer. Lives in the command layer; the service-layer freeze never
+ * prompts and never refuses. Only an explicit human "no" stops a freeze.
+ */
+export const freezePromptIo: {
+  interactive: () => boolean;
+  ask: (question: string) => Promise<boolean>;
+} = {
+  // A test run or CI inherits a terminal without a human at it: never prompt there.
+  interactive: () =>
+    Boolean(process.stdin.isTTY && process.stdout.isTTY) && process.env["NODE_ENV"] !== "test" && !process.env["CI"],
+  ask: async (question) => {
+    const readline = await import("node:readline/promises");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const answer = (await rl.question(question)).trim().toLowerCase();
+      return answer === "y" || answer === "yes";
+    } finally {
+      rl.close();
+    }
+  },
+};
+
+/** Ids of the criteria with no verification kind. Reporting only: a read failure yields none. */
+async function unmarkedCriteria(cwd: string, id: string): Promise<string[]> {
+  try {
+    const { report } = await getService().acKinds({ cwd, id });
+    return Object.entries(report.criteria)
+      .filter(([, record]) => record.kind === "unclassified")
+      .map(([criterionId]) => criterionId);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Leave the warning where the next reader of the flow will find it; after an
+ * interactive "yes" it records the operator's decision instead.
+ */
+async function journalUnmarkedWarning(cwd: string, id: string, unmarked: string[], accepted: boolean): Promise<void> {
+  const names = unmarked.join(", ");
+  try {
+    const dir = await resolveFlowDir(cwd, id);
+    await appendJournal(
+      cwd,
+      dir,
+      new Date().toISOString(),
+      accepted
+        ? `operator froze without a verification kind on ${names}`
+        : `warning: no verification kind on ${names} — add [verify: …] or accept them unclassified`,
+    );
+  } catch {
+    // Reporting only; the freeze already happened.
   }
 }
 
