@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.96] - 2026-10-10
+
+### Shell
+
+- The managed-review completion gate also holds the turn when the repeated-call guard ends it. Live run 10 stopped through the no-progress branch, which skipped the text-only gate, so a review with an open package ended with "resend the request". Both stop points now share one check (`holdReviewGate`), and the continuation says that a tool loop guard or an empty child result is not a reason to ask the operator to resend or continue: change the arguments, retry the failed pass on a smaller slice, keep going. Unattended runs and subagents are not held.
+
 ## [0.3.94] - 2026-10-10
 
 ### Shell
