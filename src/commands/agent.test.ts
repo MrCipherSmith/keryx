@@ -4670,6 +4670,13 @@ test("the instruction teaches the agent the `proposed` vocabulary, or the status
   expect(instruction).toContain("FOR APPROVAL");
 });
 
+test("flow 420: the instruction sends a named skill to skill_load first and says a draft step is not the workflow", () => {
+  const instruction = buildAgentSystemInstruction();
+  expect(instruction).toContain("When the user names a skill");
+  expect(instruction).toContain("FIRST tool call");
+  expect(instruction).toContain("never the workflow");
+});
+
 test("flow 347 T5 (AC2): the instruction no longer states or implies plan status decides when a turn may end", () => {
   const instruction = buildAgentSystemInstruction();
   // The regression this guards: "`proposed` never forces another round on
