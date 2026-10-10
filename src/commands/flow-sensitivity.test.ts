@@ -41,6 +41,7 @@ async function setup(criteria: string[]): Promise<string> {
   const { flow, dir } = await createFlowService(deps).init({ cwd: ROOT, title: "Sens" });
   const flowDir = path.join(ROOT, ".metaproject", "flows", path.basename(dir));
   await Bun.write(path.join(flowDir, "acceptance-criteria.md"), ["# Acceptance Criteria", "", "## Criteria", "", ...criteria, ""].join("\n"));
+  await Bun.write(path.join(ROOT, "README.md"), "# fixture\n");
   process.chdir(ROOT);
   return flow.id;
 }
@@ -78,30 +79,49 @@ describe("flow ac kinds sensitivity line", () => {
 });
 
 describe("noteNamesEvidence", () => {
+  const ROOT_DIR = "/repo";
+  const FILES = new Set(["/repo/README.md", "/repo/Makefile", "/repo/lib/foo", "/repo/src/flow/a.ts", "/tmp/x"]);
+  const DIRS = new Set(["/repo/src", "/repo/docs", "/repo/src/flow"]);
+  const fixtureExists = (p: string): "file" | "dir" | null => (FILES.has(p) ? "file" : DIRS.has(p) ? "dir" : null);
   test.each([
     ["reverted in abc1234 and saw it fail", true],
-    ["see src/flow/ac-kinds.ts", true],
-    ["https://example.com/run/1", true],
-    ["see ./notes", true],
-    ["a/b/c", true],
-    ["I reverted it, trust me", false],
-    ["abc12", false],
-    // Punctuation around a token is not part of it.
+    ["abc1234", true],
     ["(abc1234)", true],
-    ["fixed in abc1234.", true],
-    ["abc1234, then green", true],
-    ["see (src/flow/ac-kinds.ts).", true],
-    ["<https://example.com/run/1>", true],
-    // Prose that merely looks like evidence.
+    ["abc1234.", true],
+    ["abc1234…", true],
+    ["abc1234..def5678", true],
+    ["abc1234...def5678", true],
+    ["https://x/y", true],
+    ["<https://x>", true],
+    ["README.md", true],
+    ["src", false],
+    ["docs", false],
+    ["src/flow", true],
+    ["(src/flow/)", true],
+    ["src/flow/)", true],
+    ["Makefile", true],
+    ["lib/foo", true],
+    ["src\\flow\\a.ts", true],
+    ["/tmp/x", true],
+    ["logs/run.log", true],
+    ["see (logs/run.log).", true],
     ["n/a", false],
-    ["pass/fail on revert", false],
+    ["n/a/", false],
+    ["pass/fail", false],
+    ["pass/fail/skip", false],
     ["and/or", false],
-    ["a/b", false],
+    ["e.g./i.e.", false],
     ["defaced", false],
     ["deadbeef", false],
+    ["1234567", false],
+    ["20261011", false],
+    ["took 1234567 ms", false],
+    ["I reverted it, trust me", false],
+    ["abc12", false],
+    ["foo/bar", false],
     ["...", false],
   ] as const)("%j -> %p", (note, expected) => {
-    expect(noteNamesEvidence(note)).toBe(expected);
+    expect(noteNamesEvidence(note, ROOT_DIR, fixtureExists)).toBe(expected);
   });
 
   test("absence is not evidence", () => {
@@ -120,7 +140,7 @@ describe("flow ac confirm sensitivity warning", () => {
   // [label, criterion, --note value (undefined = flag absent), expect a warning]
   const CASES: ReadonlyArray<readonly [string, string, string | undefined, boolean]> = [
     ["noted exec, note with a sha", "AC1", "revert run at abc1234", false],
-    ["noted exec, note with a path", "AC1", "see src/flow/ac-kinds.test.ts", false],
+    ["noted exec, note with an existing path", "AC1", "see README.md", false],
     ["noted exec, note with a URL", "AC1", "https://example.com/run/1", false],
     ["noted exec, no --note", "AC1", undefined, true],
     ["noted exec, vague note", "AC1", "n/a", true],
@@ -138,6 +158,18 @@ describe("flow ac confirm sensitivity warning", () => {
     expect(out.includes(`warning: ${criterion} claims sensitive:`)).toBe(warns);
     expect(out).toContain("Confirmed");
     expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  // `flow` subcommands locate the flow under the cwd, so `ac confirm` itself cannot run from a subdirectory; the
+  // evidence check still resolves against the git toplevel, which is what this pins (default root, real filesystem).
+  test("a root-relative path from a subdirectory is evidence", async () => {
+    await setup(CONFIRM_CRITERIA);
+    await mkdir(path.join(ROOT, ".git"), { recursive: true });
+    await mkdir(path.join(ROOT, "pkg", "deep"), { recursive: true });
+    process.chdir(path.join(ROOT, "pkg", "deep"));
+    expect(noteNamesEvidence("see README.md")).toBe(true);
+    expect(noteNamesEvidence("see pkg/deep")).toBe(true);
+    expect(noteNamesEvidence("see pkg")).toBe(false);
   });
 
   test("the warning names the claimed sensitivity", async () => {

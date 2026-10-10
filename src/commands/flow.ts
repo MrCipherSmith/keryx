@@ -1,7 +1,9 @@
 import { randomInt } from "node:crypto";
+import { statSync } from "node:fs";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
+import { gitToplevelRoot } from "../lib/git-toplevel";
 import {
   CONFIRMATION_CAVEAT,
   acCriterionKnown,
@@ -1218,34 +1220,74 @@ async function runOrigin(args: string[]): Promise<void> {
   );
 }
 
-// Leading `.` is kept: `./x`, `../x` and `.metaproject/x` start with it.
-const EVIDENCE_EDGE_PUNCTUATION = /^[\s"'`()[\]{}<>,;:!?]+|[\s"'`()[\]{}<>.,;:!?]+$/g;
-const EVIDENCE_PATH_PREFIXES = ["./", "../", "~/", "src/", "docs/", "test/", "tests/", ".metaproject/", ".github/"];
+// Edge punctuation (ASCII and Unicode, e.g. `…`) is stripped. A leading `.` survives (`./x`, `../x`, `.metaproject/x`),
+// as do `/`, `\` and `~` on the left (`/tmp/x`, `~/x`) and `/`, `\` on the right (a directory slash, dropped below).
+const EVIDENCE_LEADING_EDGE = /^(?:(?![./\\~])[\p{P}\p{S}\s])+/u;
+const EVIDENCE_TRAILING_EDGE = /(?:(?![/\\])[\p{P}\p{S}\s])+$/u;
+const EVIDENCE_EXTENSION = /\.(?:ts|tsx|js|mjs|json|jsonl|md|log|txt|yml|yaml|sh|py|toml)$/i;
 
-/**
- * Does one whitespace-split token of a note name evidence? Leading/trailing punctuation is stripped first, then it
- * counts when it is
- * - a URL (`scheme://`),
- * - a commit sha: 7-40 hex characters with at least one digit (so `defaced` is a word, not a sha),
- * - a path: contains `/` and either starts with a known root (`./`, `../`, `~/`, `src/`, `docs/`, `test/`, `tests/`,
- *   `.metaproject/`, `.github/`), has two or more slashes, or ends in a file extension (`a/b.ts`). A bare word pair
- *   (`n/a`, `pass/fail`, `and/or`, `a/b`) is prose.
- */
-function tokenNamesEvidence(raw: string): boolean {
-  const token = raw.replace(EVIDENCE_EDGE_PUNCTUATION, "");
-  if (token === "") return false;
-  if (/^[a-z][a-z0-9+.-]*:\/\/\S+/i.test(token)) return true;
-  if (/^[0-9a-f]{7,40}$/i.test(token) && /\d/.test(token)) return true;
-  if (!token.includes("/")) return false;
-  if (EVIDENCE_PATH_PREFIXES.some((prefix) => token.startsWith(prefix))) return true;
-  if (token.split("/").length > 2) return true;
-  return /\.[A-Za-z0-9]+$/.test(token);
+/** `"file"`, `"dir"` or `null` (missing) for an absolute path. Injected in tests. */
+export type EvidenceStat = (absolutePath: string) => "file" | "dir" | null;
+
+function defaultEvidenceStat(absolutePath: string): "file" | "dir" | null {
+  try {
+    const st = statSync(absolutePath);
+    return st.isDirectory() ? "dir" : "file";
+  } catch {
+    return null;
+  }
 }
 
-/** A note names evidence when any token is a commit sha, a path or a URL (see `tokenNamesEvidence`). */
-export function noteNamesEvidence(note: string | undefined): boolean {
+function isShaSide(side: string): boolean {
+  return /^[0-9a-f]{7,40}$/i.test(side) && /[a-f]/i.test(side) && /\d/.test(side);
+}
+
+/**
+ * Does one whitespace-split token of a note name evidence? Per token: strip leading/trailing punctuation (keeping a
+ * leading `.`), turn `\` into `/`, drop a trailing `/`. Then it counts when it is
+ * - a URL (`scheme://...`),
+ * - a commit sha or range: split on `...` / `..`, and any side is 7-40 hex characters holding at least one letter a-f
+ *   AND at least one digit. All-digit tokens (`1234567`, `20261011`) and all-letter hex words (`defaced`) are not
+ *   evidence; a rare all-digit short sha must be written longer,
+ * - a path that exists: relative to the repository root (the git toplevel of the cwd), or absolute (`/tmp/x`,
+ *   `C:/x/y.ts`). A token with a slash may be a file or a directory (`lib/foo`, `src/flow`); one without a slash must
+ *   be a file (`README.md`, `Makefile`), so prose words like `src` or `docs` do not count; or, when it does not exist, one that has a
+ *   slash AND ends in a known evidence extension (`.ts .tsx .js .mjs .json .jsonl .md .log .txt .yml .yaml .sh .py
+ *   .toml`), as a log or script that may since have been removed. Prose such as `n/a`, `pass/fail` or `and/or` neither
+ *   exists nor has such an extension.
+ */
+function tokenNamesEvidence(raw: string, root: string, stat: EvidenceStat): boolean {
+  let token = raw.replace(EVIDENCE_LEADING_EDGE, "").replace(EVIDENCE_TRAILING_EDGE, "");
+  if (token === "") return false;
+  if (/^[a-z][a-z0-9+.-]*:\/\/\S+/i.test(token)) return true;
+  if (token.split(/\.{2,3}/).some(isShaSide)) return true;
+  // Second pass: dropping the directory slash can expose more punctuation (`dir/)`).
+  token = token.replace(/\\/g, "/").replace(/\/+$/, "").replace(EVIDENCE_TRAILING_EDGE, "").replace(/\/+$/, "");
+  if (token === "" || token === "." || token === "..") return false;
+  const absolute = token.startsWith("/") || /^[A-Za-z]:\//.test(token);
+  const hasSlash = token.includes("/");
+  let kind: "file" | "dir" | null = null;
+  try {
+    kind = stat(absolute ? token : path.join(root, token));
+  } catch {
+    // An unusable path is not evidence.
+  }
+  if (kind === "file" || (kind === "dir" && hasSlash)) return true;
+  return hasSlash && EVIDENCE_EXTENSION.test(token);
+}
+
+/**
+ * A note names evidence when any token is a commit sha or range, an existing path (relative to `root`, the flow's
+ * repository root) or a path with a known evidence extension, or a URL (see `tokenNamesEvidence`). `stat` is injected
+ * for tests.
+ */
+export function noteNamesEvidence(
+  note: string | undefined,
+  root: string = gitToplevelRoot(process.cwd()),
+  stat: EvidenceStat = defaultEvidenceStat,
+): boolean {
   if (note === undefined) return false;
-  return note.split(/\s+/).some(tokenNamesEvidence);
+  return note.split(/\s+/).some((token) => tokenNamesEvidence(token, root, stat));
 }
 
 /**
@@ -1257,7 +1299,7 @@ async function warnUnevidencedSensitivity(cwd: string, id: string, criterion: st
     const { report } = await getService().acKinds({ cwd, id });
     const record = report.criteria[criterion.toUpperCase()];
     if ((record?.kind !== "exec" && record?.kind !== "invariant") || record.sensitivity === undefined) return;
-    if (noteNamesEvidence(noteText)) return;
+    if (noteNamesEvidence(noteText, gitToplevelRoot(cwd))) return;
     console.log(`  ${style.yellow(WARN)} warning: ${criterion.toUpperCase()} claims sensitive: ${record.sensitivity}, but --note names no evidence of the ${record.sensitivity} run`);
   } catch {
     // Reporting only.
