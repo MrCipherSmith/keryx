@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.99] - 2026-10-10
+
+### Review Process
+
+- The shell's completion gate now also holds a package that `keryx review ingest --review-id` flipped to `mode: ingest` while it is still a draft from this session. Before, the flip made the gate see no open package and accept a stop with `review complete` still refusing.
+- `dispatch` errors for an incomplete reviewer and for required execution without evidence now say what to do (`keryx review retry-plan`; `executionRequired: false` with an `executionReason` for a source-only run) instead of only naming the failure.
+- `KERYX_REVIEW_AUTO_ANSWER=1` answers the shell's own `ask_user` menus with the recommended option while a managed review package is open, so an unattended live review cannot park on a menu before `review complete`. An irreversible question is never auto-answered.
+
 ## [0.3.98] - 2026-10-10
 
 ### Providers

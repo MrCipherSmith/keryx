@@ -112,6 +112,13 @@ test("findReviewGateState returns the draft review-flow package with its blocker
   expect(found?.blockers[0]).toContain("missing artifacts");
 });
 
+test("an ingest-mode draft written this session keeps the gate on; one from before the session does not", async () => {
+  await writePackage("flipped", { mode: "ingest", status: "draft" });
+  expect((await findReviewGateState(root, 0))?.reviewId).toBe("flipped");
+  const later = await findReviewGateState(root, Date.now() + 60_000);
+  expect(later?.packageDir).toBe("");
+});
+
 test("with no package yet the state says review start has not opened one, and names the next step", async () => {
   const found = await findReviewGateState(root, 0);
   expect(found?.packageDir).toBe("");

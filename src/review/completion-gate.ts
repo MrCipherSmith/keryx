@@ -55,8 +55,10 @@ export async function findReviewGateState(cwd: string, since: number): Promise<O
         status?: string;
         reviewId?: string;
       };
-      if (manifest.mode !== "review-flow") continue;
+      if (manifest.mode !== "review-flow" && manifest.mode !== "ingest") continue;
       const info = await stat(path.join(dir, "manifest.json"));
+      // `ingest --review-id` flips the run's own package to mode ingest; an ingest draft from before this session is not this run's.
+      if (manifest.mode === "ingest" && manifest.status !== "closed" && info.mtimeMs < since) continue;
       if (manifest.status === "closed") {
         if (info.mtimeMs >= since) closedAt = Math.max(closedAt, info.mtimeMs);
         continue;

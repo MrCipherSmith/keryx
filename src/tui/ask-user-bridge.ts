@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { findReviewGateState } from "../review/completion-gate";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 
 let host: AskUserFn | undefined;
@@ -55,7 +56,24 @@ export function setAskUserNotice(fn: ((text: string) => void) | undefined): void
  */
 export function journaledAskUser(cwd: string): AskUserFn {
   const journaled = journalAsk(invokeAskUserHost, journalDeps(cwd));
-  return (request) => (host === undefined ? invokeAskUserHost(request) : journaled(request));
+  const startedAt = Date.now();
+  return async (request) => {
+    const auto = await reviewAutoAnswer(cwd, request, startedAt);
+    if (auto !== undefined) return auto;
+    return host === undefined ? invokeAskUserHost(request) : journaled(request);
+  };
+}
+
+/**
+ * `KERYX_REVIEW_AUTO_ANSWER=1`: a live review run with nobody at the keyboard answers its own mid-run menus
+ * with the recommended option (the first when none is marked) while a managed review package is open, so a
+ * menu cannot park the run before `keryx review complete`. An irreversible question is never auto-answered.
+ */
+async function reviewAutoAnswer(cwd: string, request: Parameters<AskUserFn>[0], startedAt: number): Promise<string | undefined> {
+  if (process.env.KERYX_REVIEW_AUTO_ANSWER !== "1" || request.irreversible === true) return undefined;
+  const open = await findReviewGateState(cwd, startedAt).catch(() => null);
+  if (open === null || open.packageDir === "") return undefined;
+  return (request.options.find((o) => o.recommended === true) ?? request.options[0])?.id;
 }
 
 function journalDeps(cwd: string, extra: Partial<JournalAskDeps> = {}): JournalAskDeps {
