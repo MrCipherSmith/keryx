@@ -4771,7 +4771,7 @@ test("only the operator's own top-level line switches review-auto on", async () 
   try {
     await run({ subagentBudget: {} }, undefined, "сделай автоматическое ревью");
     expect(reviewAutoActive()).toBe(false);
-    await run({}, { origin: "peer" } as Parameters<typeof runAgentTurn>[4], "сделай автоматическое ревью");
+    await run({}, { origin: "bus-message" }, "сделай автоматическое ревью");
     expect(reviewAutoActive()).toBe(false);
     await run({}, undefined, "Проведи ревью через review-orchestrator");
     expect(reviewAutoActive()).toBe(false);
