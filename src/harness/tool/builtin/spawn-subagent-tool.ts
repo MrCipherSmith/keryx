@@ -388,6 +388,60 @@ export function resolveSubagentTimeoutMs(
   return Math.min(n, reservationMs);
 }
 
+/** Slack past the child deadline for setup, hooks and slate cleanup before the harness stops waiting. */
+export const SUBAGENT_HARD_CAP_GRACE_MS = 3 * 60_000;
+
+/** Native children only (an external runtime sets its own pace); `0` when the child deadline is disabled. */
+export function resolveSubagentHardCapMs(
+  input: Record<string, unknown>,
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const runtime = input.runtime;
+  if (typeof runtime === "object" && runtime !== null && Reflect.get(runtime, "kind") === "external") return 0;
+  const deadline = resolveSubagentTimeoutMs(SUBAGENT_CHILD_RESERVATION_MS, env);
+  return deadline === 0 ? 0 : deadline + SUBAGENT_HARD_CAP_GRACE_MS;
+}
+
+/**
+ * Backstop for the whole `invoke()`: the child deadline starts only after setup, and cleanup and hooks run
+ * after it, so a hang on either side parked the parent turn for good (live review run, 85 minutes). Past
+ * `capMs` the call returns a Timeout result and the child is aborted.
+ */
+export async function invokeWithBackstop(
+  invoke: SpawnSubagentTool["invoke"],
+  input: Record<string, unknown>,
+  ctx: InteractiveToolContext | undefined,
+  capMs: number = resolveSubagentHardCapMs(input),
+): Promise<StructuredSubagentResult> {
+  if (capMs <= 0) return invoke(input, ctx);
+  const cap = new AbortController();
+  const composed = composeAbortSignals(ctx?.signal, cap.signal);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<"expired">((resolve) => {
+    timer = setTimeout(() => resolve("expired"), capMs);
+  });
+  const run = invoke(input, { ...ctx, signal: composed.signal });
+  try {
+    const outcome = await Promise.race([run, expired]);
+    if (outcome !== "expired") return outcome;
+    cap.abort();
+    void run.catch(() => {
+      // abandoned call; its result is ignored once the backstop has answered
+    });
+    return {
+      status: "Timeout",
+      output:
+        `spawn_subagent did not return within ${capMs}ms and was abandoned by the harness backstop ` +
+        `(the child deadline plus ${SUBAGENT_HARD_CAP_GRACE_MS}ms for setup and cleanup; tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS}). ` +
+        "Retry the pass on a smaller slice instead of waiting.",
+      isError: true,
+    };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    composed.dispose();
+  }
+}
+
 /** Bound a child summary, marking the cut so the parent can see it happened. */
 function boundSummary(text: string): string {
   if (text.length <= MAX_CHILD_SUMMARY_CHARS) {
@@ -866,7 +920,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
   };
   let childSeq = 0; // only for human labels when the model omits one
 
-  return {
+  const tool: SpawnSubagentTool = {
     definition: {
       name: "spawn_subagent",
       description:
@@ -2149,4 +2203,5 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       }
     },
   };
+  return { ...tool, invoke: (input, toolCtx) => invokeWithBackstop(tool.invoke, input, toolCtx) };
 }

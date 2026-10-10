@@ -55,10 +55,7 @@ test("ask_user on a flow's branch records the flow and a real stage, and writes 
   expect(lastAskUserDecisionId()).toBe(open["id"] as string);
 });
 
-test("KERYX_REVIEW_AUTO_ANSWER answers a mid-run menu while a review package is open, never an irreversible one", async () => {
-  const dir = path.join(root, ".metaproject", "reviews", "live");
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: "live", mode: "review-flow", status: "draft" }));
+test("KERYX_REVIEW_AUTO_ANSWER answers a menu even before a review package exists, never an irreversible one", async () => {
   let asked = 0;
   setAskUserHost(async () => {
     asked += 1;

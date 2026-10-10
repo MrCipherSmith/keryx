@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.100] - 2026-10-10
+
+### Review Process
+
+- `keryx review dispatch-check` works from an npm install. It looked for `reviewer-input.schema.json` (and the `$ref` targets of the review contracts) next to `dist/`, while the package carries them under `src/gdskills/`; a live review had to build its own copy of the CLI to get past "reviewer-input.schema.json is not in this install".
+- `KERYX_REVIEW_AUTO_ANSWER=1` now also answers the plan-confirmation menus that come before `keryx review start` opens a package; before, the run waited for a key press there.
+
+### Agent Runtime
+
+- `spawn_subagent` has a harness backstop on the whole call: the child deadline plus three minutes for setup, hooks and cleanup. A call that does not return by then is answered with a Timeout result and its child is aborted, so the parent turn goes on. A live review run had a retry batch hang for 85 minutes after its children had finished and saved their results.
+
 ## [0.3.99] - 2026-10-10
 
 ### Review Process
