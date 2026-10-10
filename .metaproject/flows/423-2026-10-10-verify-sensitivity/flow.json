@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "423",
   "slug": "verify-sensitivity",
   "title": "Verification sensitivity: mark exec/invariant checks proven to catch a failure",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-10-10T21:17:59.701Z",
-  "updatedAt": "2026-10-10T21:17:59.701Z",
+  "updatedAt": "2026-10-10T21:18:38.425Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -33,34 +33,183 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected in the orchestrating session"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T9"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T9"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Parser, ac kinds counts, ac confirm warning (AC1-AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Skills failure-scenario line, sync-status share, docs (AC5 AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Run every AC command and AC7 invariant",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-10-10T21:17:59.701Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-10T21:18:37.575Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-10T21:18:37.698Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-10T21:18:37.820Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-10T21:18:37.942Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-10T21:18:38.062Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-10T21:18:38.182Z",
+      "event": "task-added",
+      "detail": "T5: Parser, ac kinds counts, ac confirm warning (AC1-AC4)"
+    },
+    {
+      "at": "2026-10-10T21:18:38.302Z",
+      "event": "task-added",
+      "detail": "T6: Skills failure-scenario line, sync-status share, docs (AC5 AC6)"
+    },
+    {
+      "at": "2026-10-10T21:18:38.425Z",
+      "event": "task-added",
+      "detail": "T7: Run every AC command and AC7 invariant"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/flow/ac-kinds.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/flow/ac-kinds.test.ts src/commands/flow"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/flow"
+    },
+    "AC4": {
+      "kind": "invariant",
+      "check": "bun test src/flow/ac-kinds-never-gates.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/gdskills src/flow/templates.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync"
+    },
+    "AC7": {
+      "kind": "invariant",
+      "check": "git diff --stat origin/feat/verify-kind-prompts -- .metaproject/flows ':!.metaproject/flows/423-*'"
+    }
+  }
 }
