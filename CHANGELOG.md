@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.109] - 2026-10-11
+
 ### Review
 
 - An autonomous review no longer hands its orchestration to a subagent: the prompt now keeps the ledger, ingest and complete in the main session and says a subagent has no shell (`nested_dispatch_unavailable`). A live run on a large pull request had delegated the whole review to a subagent, spent 200 rounds, and ended with no reviewer started.
