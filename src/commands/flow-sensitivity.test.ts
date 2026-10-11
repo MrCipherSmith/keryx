@@ -41,7 +41,6 @@ async function setup(criteria: string[]): Promise<string> {
   const { flow, dir } = await createFlowService(deps).init({ cwd: ROOT, title: "Sens" });
   const flowDir = path.join(ROOT, ".metaproject", "flows", path.basename(dir));
   await Bun.write(path.join(flowDir, "acceptance-criteria.md"), ["# Acceptance Criteria", "", "## Criteria", "", ...criteria, ""].join("\n"));
-  await Bun.write(path.join(ROOT, "README.md"), "# fixture\n");
   process.chdir(ROOT);
   return flow.id;
 }
@@ -97,6 +96,15 @@ describe("noteNamesEvidence", () => {
     ["evidence: -", false],
     ["evidence: TBD", false],
     ["evidence: todo; other", false],
+    ["evidence: n/a.", false],
+    ["evidence: none.", false],
+    ["Evidence: TODO.", false],
+    ["evidence: `n/a`", false],
+    ["evidence: (none)", false],
+    ["`evidence:` n/a", false],
+    ["evidence: —", false],
+    ["evidence: <ref>", false],
+    ["evidence: ref", false],
     ["no-evidence: x", false],
     ["noevidence: x", false],
   ] as const)("%j -> %p", (note, expected) => {

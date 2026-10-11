@@ -1218,18 +1218,19 @@ async function runOrigin(args: string[]): Promise<void> {
   );
 }
 
-const EVIDENCE_PLACEHOLDERS = new Set(["n/a", "na", "none", "-", "tbd", "todo"]);
+const EVIDENCE_PLACEHOLDERS = new Set(["n/a", "na", "none", "-", "tbd", "todo", "ref"]);
 
 /**
  * A note names evidence when it carries an `evidence:` label (case-insensitive) followed by a non-empty reference:
  * the text up to the end of the note or the next `;`, trimmed, that is not a placeholder (`n/a`, `na`, `none`, `-`,
- * `tbd`, `todo`). The label needs a word boundary before it that is not a hyphen, so `no-evidence: x` does not count.
+ * `tbd`, `todo`, `ref`) after surrounding punctuation is stripped. The label needs a word boundary before it that is not a hyphen, so `no-evidence: x` does not count.
  * Nothing else is inferred from the note.
  */
 export function noteNamesEvidence(note?: string): boolean {
   if (note === undefined) return false;
   for (const match of note.matchAll(/(?<![\w-])evidence:([^;]*)/gi)) {
-    const ref = (match[1] ?? "").trim();
+    // Surrounding punctuation, symbols and whitespace never make a reference: `n/a.`, `(none)`, `<ref>` and a bare dash all strip to a placeholder or nothing.
+    const ref = (match[1] ?? "").replace(/^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/gu, "");
     if (ref !== "" && !EVIDENCE_PLACEHOLDERS.has(ref.toLowerCase())) return true;
   }
   return false;
