@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
-import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength } from "./slice";
+import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
   | "REVIEWER_INPUT_INVALID"
@@ -47,6 +47,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export type CheckDispatchOptions = {
+  /** Ceiling for what one dispatch carries in total. Defaults to the manifest's wave budget. */
   maxBytes?: number;
   manifest?: SliceManifest;
   /** Bytes of a slice named by a path rather than a manifest id. Undefined when it cannot be read. */
@@ -59,10 +60,12 @@ export type CheckDispatchOptions = {
  * Shape comes from reviewer-input.schema.json. On top of it, a `diff` scope must
  * name its slices or carry a diff that fits the ceiling, and what a reviewer is
  * assigned must fit the ceiling in total — the unbounded `git diff` pasted into
- * a prompt is the case this exists to stop.
+ * a prompt is the case this exists to stop. The ceiling is the manifest's wave budget,
+ * not its slice ceiling: a role owning many slices is dispatched in waves, and each
+ * wave has to fit what a reviewer can finish before its child deadline.
  */
 export async function checkDispatch(payloads: readonly unknown[], options: CheckDispatchOptions = {}): Promise<DispatchCheckResult> {
-  const maxBytes = options.maxBytes ?? options.manifest?.maxBytes ?? DEFAULT_SLICE_MAX_BYTES;
+  const maxBytes = options.maxBytes ?? (options.manifest === undefined ? DEFAULT_SLICE_MAX_BYTES : waveBytesOf(options.manifest));
   const schema = await loadReviewerInputSchema();
   const errors: DispatchCheckError[] = [];
 
@@ -105,7 +108,7 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
       errors.push({
         code: "REVIEWER_INPUT_TOO_LARGE",
         reviewer,
-        message: `assigned slices total ${assigned} bytes, over the ${maxBytes} byte ceiling`,
+        message: `assigned slices total ${assigned} bytes, over the ${maxBytes} byte wave ceiling; dispatch them in waves (\`keryx review retry-plan --manifest <manifest> --reviewer ${reviewer} --next-wave\` hands out the next one)`,
       });
     }
     const diffBytes = byteLength(diff);

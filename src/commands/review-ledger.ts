@@ -32,8 +32,11 @@ valid --dispositions entry ({id, status finding|refuted|out-of-scope, evidence, 
 finding?}; default: the obligations already in research.json). scopeReviewed and rawReconciled
 are true only when established.
 
+Slices are dispatched in waves bounded by the manifest's wave budget; a reviewer that covered
+new slices is not penalised for the rest (retry-state.json keeps what it covered).
+
 Prints READY, or NOT READY with each gap and its next step (the exact retry-plan command,
-the uncovered slices, or the disposition to add). Exit 1 when NOT READY, so
+the uncovered slices and how many waves remain, or the disposition to add). Exit 1 when NOT READY, so
 \`ledger build && ingest --research\` stops. The gate's own validators decide READY.
 `);
 }
@@ -82,7 +85,9 @@ async function loadRetry(...files: string[]): Promise<RetryState> {
     const state = await readJson<RetryState>(file);
     for (const [reviewer, entry] of Object.entries(state?.reviewers ?? {})) {
       const known = merged.reviewers[reviewer];
-      merged.reviewers[reviewer] = { attempt: Math.max(known?.attempt ?? 0, entry.attempt), status: entry.status, notRun: known?.notRun === true || entry.notRun === true };
+      const covered = [...new Set([...(known?.covered ?? []), ...(entry.covered ?? [])])].sort();
+      const stalls = Math.max(known?.stalls ?? known?.attempt ?? 0, entry.stalls ?? entry.attempt);
+      merged.reviewers[reviewer] = { attempt: Math.max(known?.attempt ?? 0, entry.attempt), status: entry.status, notRun: known?.notRun === true || entry.notRun === true, stalls, covered };
     }
   }
   return merged;
@@ -92,6 +97,8 @@ export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: 
   const verb = dryRun ? "would be written" : "written";
   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
   for (const gap of gaps) lines.push(`- gap${gap.reviewer ? ` [${gap.reviewer}]` : ""}: ${gap.detail}\n    next: ${gap.next}`);
+  const waves = gaps.filter((gap) => gap.reviewer !== undefined && gap.waves !== undefined && gap.waves > 0);
+  if (waves.length > 0) lines.push(`remaining waves: ${waves.map((gap) => `${gap.reviewer} ${gap.waves}`).join(", ")}`);
   if (!ready) for (const blocker of blockers.slice(0, 10)) lines.push(`- gate: ${blocker}`);
   if (blockers.length > 10) lines.push(`- gate: … and ${blockers.length - 10} more`);
   if (ignored.length > 0) lines.push(`ignored (not reviewer results): ${ignored.join(", ")}`);

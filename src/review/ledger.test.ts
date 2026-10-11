@@ -166,6 +166,51 @@ describe("buildLedger", () => {
     const result = buildLedger({ ...base, raws: [...base.raws, later] });
     expect((result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!.status).toBe("incomplete");
   });
+
+  test("uncovered slices name the waves left and the exact next-wave command", async () => {
+    const base = await inputs();
+    const result = buildLedger({ ...base, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01"] } });
+    const gap = result.gaps.find((g) => g.reviewer === "review-logic")!;
+    expect(gap.waves).toBe(1);
+    expect(gap.detail).toContain("1 wave(s)");
+    expect(gap.next).toContain("keryx review retry-plan --manifest slices/manifest.json --reviewer review-logic --result raw/review-logic.txt --next-wave");
+  });
+
+  test("a result already counted in retry-state is not named again in the next command", async () => {
+    const base = await inputs();
+    const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ["slice-01"] } } : r));
+    const retry = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 0, status: "DONE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
+    const gap = buildLedger({ ...base, raws, retry }).gaps.find((g) => g.reviewer === "review-logic")!;
+    expect(gap.next).not.toContain("--result");
+    expect(gap.next).toContain("--next-wave");
+  });
+
+  test("slices covered in earlier rounds, recorded in retry-state, finish an incomplete reviewer's scope", async () => {
+    const base = await inputs();
+    const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ["slice-02"] } } : r));
+    const retry = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
+    const result = buildLedger({ ...base, raws, retry });
+    expect(result.gaps.find((g) => g.reviewer === "review-logic")).toBeUndefined();
+  });
+
+  test("an incomplete reviewer's gap counts the waves still owed", async () => {
+    const base = await inputs();
+    const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, status: "INCOMPLETE", slices: ["slice-01"] } } : r));
+    const gap = buildLedger({ ...base, raws }).gaps.find((g) => g.reviewer === "review-logic")!;
+    expect(gap.waves).toBe(1);
+    expect(gap.detail).toContain("1 slice(s) uncovered");
+    expect(gap.next).toBe("keryx review retry-plan --manifest slices/manifest.json --result raw/review-logic.txt --reviewer review-logic");
+  });
+
+  test("a partly covered re-cut does not close the slice it was cut from", async () => {
+    const base = await inputs();
+    const pieces = [slice("r1-review-logic-01", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1, reviewer: "review-logic" }), slice("r1-review-logic-02", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1, reviewer: "review-logic" })];
+    const manifest = { ...MANIFEST, slices: [...MANIFEST.slices, ...pieces] } as SliceManifest;
+    const partial = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
+    expect(partial.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("slice-02");
+    const whole = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01", "r1-review-logic-02"] } });
+    expect(whole.gaps).toEqual([]);
+  });
 });
 
 describe("raw findings", () => {
