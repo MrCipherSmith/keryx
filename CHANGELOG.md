@@ -1,10 +1,4 @@
 # Changelog
-## [Unreleased]
-### Flow Governance
-- Acceptance criteria are written with a verification kind. The scaffold from `flow init` shows `[verify: <exec|invariant|judged|none>]` on each criterion and states the marker rule, the flow-init and flow-orchestrator skills require a marker on every criterion (one operator question before the freeze when a kind is unclear), and flows that `/goal --auto` provisions carry `[verify: judged]`.
-- `keryx flow freeze` warns `no verification kind on AC1, AC2` for unclassified criteria. On a terminal it asks `freeze without a verification kind on …? [Y/n]`: an empty answer or yes freezes, and only an explicit no cancels and leaves the flow unchanged. `--yes` or `KERYX_NONINTERACTIVE=1` skips the prompt; non-interactive runs always freeze. Nothing is asked when the freeze cannot happen. Both freeze cases append a journal line. A kind still gates nothing.
-- `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
-- `exec` and `invariant` verification markers take an optional sensitivity note, `[verify: exec \`<command>\` · sensitive: revert]` (an ASCII `;` also separates), with the values `revert`, `mutation` and `failure-scenario`; `judged` and `none` reject it. `keryx flow ac kinds` shows how many criteria carry it, `keryx flow ac confirm` warns (and still confirms) when a criterion carries the note and `--note` has no `evidence: <ref>` label (a non-empty reference up to the next `;`, not `n/a`, `na`, `none`, `-`, `tbd`, `todo`, `ref` or the `<ref>` template; surrounding punctuation is ignored), and `sync-status.md` gains a sensitivity share line with no threshold. The flow-init and flow-orchestrator skills ask for a failure-scenario criterion on behaviour with an external dependency or a failure path.
 
 ## [Unreleased]
 
@@ -14,6 +8,14 @@
 - A run leaves `summary.json` and `report.md` in `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. A lock stops two runs on one pull request; a re-run on a head already reviewed to the end reuses the result, and one on a head left open resumes its package.
 - `keryx schedule add --review-pr <URL>` schedules the same review on the OS timer (systemd, launchd or cron); `keryx trigger schedule <name>` prints the cron line and unit pair. The run's report is copied to `.metaproject/data/trigger/reports/<name>/`.
 - In `keryx shell`, `/autoreview start|list|stop` runs and watches reviews, a sidebar section shows the phase, rounds and tokens of each, and `keryx serve` sends one Telegram line at the start and one at the end. Guide: "Review a pull request with nobody at the keyboard".
+
+## [0.3.106] - 2026-10-11
+
+### Flow Governance
+- Acceptance criteria are written with a verification kind. The scaffold from `flow init` shows `[verify: <exec|invariant|judged|none>]` on each criterion and states the marker rule, the flow-init and flow-orchestrator skills require a marker on every criterion (one operator question before the freeze when a kind is unclear), and flows that `/goal --auto` provisions carry `[verify: judged]`.
+- `keryx flow freeze` warns `no verification kind on AC1, AC2` for unclassified criteria. On a terminal it asks `freeze without a verification kind on …? [Y/n]`: an empty answer or yes freezes, and only an explicit no cancels and leaves the flow unchanged. `--yes` or `KERYX_NONINTERACTIVE=1` skips the prompt; non-interactive runs always freeze. Nothing is asked when the freeze cannot happen. Both freeze cases append a journal line. A kind still gates nothing.
+- `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
+- `exec` and `invariant` verification markers take an optional sensitivity note, `[verify: exec \`<command>\` · sensitive: revert]` (an ASCII `;` also separates), with the values `revert`, `mutation` and `failure-scenario`; `judged` and `none` reject it. `keryx flow ac kinds` shows how many criteria carry it, `keryx flow ac confirm` warns (and still confirms) when a criterion carries the note and `--note` has no `evidence: <ref>` label (a non-empty reference up to the next `;`, not `n/a`, `na`, `none`, `-`, `tbd`, `todo`, `ref` or the `<ref>` template; surrounding punctuation is ignored), and `sync-status.md` gains a sensitivity share line with no threshold. The flow-init and flow-orchestrator skills ask for a failure-scenario criterion on behaviour with an external dependency or a failure path.
 
 ### Shell
 
