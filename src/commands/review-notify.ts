@@ -2,8 +2,8 @@
 // with no `keryx serve`, no paired bot or a slow network is never held up or failed by its note.
 
 import { RemoteClient, type RemoteClientOptions } from "../remote/client";
-import type { AutonomousSummary } from "./autonomous-summary";
-import type { AutonomousTarget } from "./autonomous-profile";
+import type { AutonomousSummary } from "../review/autonomous-summary";
+import type { AutonomousTarget } from "../review/autonomous-profile";
 
 export interface RunNotifier {
   started(line: string): Promise<void>;

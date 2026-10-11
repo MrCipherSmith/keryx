@@ -5,7 +5,7 @@
 
 import path from "node:path";
 import { optionValue } from "../lib/args";
-import { createTelegramNotifier, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "../review/autonomous-notify";
+import { createTelegramNotifier, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "./review-notify";
 import { AUTONOMOUS_PROFILE, parseAutonomousTarget } from "../review/autonomous-profile";
 import { AutonomousRunLockedError, runAutonomousReview, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 

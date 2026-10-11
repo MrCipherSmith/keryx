@@ -1,7 +1,7 @@
 // `keryx review run --autonomous`: the command line, the exit code and the notes sent around a run.
 
 import { describe, expect, test } from "bun:test";
-import { endLine, createTelegramNotifier, startLine, type RunNotifier } from "../review/autonomous-notify";
+import { endLine, createTelegramNotifier, startLine, type RunNotifier } from "./review-notify";
 import { parseAutonomousTarget } from "../review/autonomous-profile";
 import { AutonomousRunLockedError, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 import type { AutonomousSummary } from "../review/autonomous-summary";

@@ -7,7 +7,7 @@
 
 import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { createTelegramNotifier, endLine, startLine, type RunNotifier } from "../review/autonomous-notify";
+import { createTelegramNotifier, endLine, startLine, type RunNotifier } from "./review-notify";
 import { parseAutonomousTarget } from "../review/autonomous-profile";
 import { AutonomousRunLockedError, runAutonomousReview, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 import type { AgentTaskAction, TriggerEntry } from "../trigger/config";
