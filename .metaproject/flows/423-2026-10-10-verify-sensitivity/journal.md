@@ -22,3 +22,13 @@
 - 2026-10-10T21:26:23.498Z - task-done: T6: Skills failure-scenario line, sync-status share, docs (AC5 AC6)
 - 2026-10-10T21:26:23.622Z - task-done: T7: Run every AC command and AC7 invariant
 - 2026-10-10T21:26:23.750Z - task-attempt: T4: started (attempt 1) — review round 1
+- 2026-10-10T21:28:04.468Z - task-added: T8: Fix review round 1 findings (RL-1..3, T1..T6)
+- 2026-10-10T21:28:04.602Z - task-attempt: T8: started (attempt 1) — 423-T8
+- 2026-10-10T21:33:49.877Z - task-attempt: T4: failed (attempt 2) — round 2: RL2-1..3 minor, all evidence-heuristic false positives/negatives; round-1 findings all fixed
+- 2026-10-10T21:38:38.500Z - task-attempt: T8: started (attempt 2) — 423-T8 round 2: evidence rule redesigned (filesystem paths)
+
+## Re-plan: evidence check (2026-10-11)
+
+Three review rounds in a row found new false positives/negatives in the inferred evidence check of `ac confirm` (round 1: `n/a`, `defaced`; round 2: all-digit numbers, prose triples, `README.md`, Windows paths; round 3: case-insensitive filesystem matching `license`/`install`, Markdown links, `~/`, nested workspace roots). Guessing evidence from free text does not converge. Operator decision (2026-10-11, asked in session): replace inference with an explicit label. The warning is silent when the note contains `evidence: <ref>` with a non-empty ref other than `n/a`/`none`/`-`; no filesystem, sha or URL guessing. Skills and docs tell the writer to use the label. Trade-off accepted: a label can be written formally, but it is visible and a human can check it.
+- 2026-10-11T07:27:53.446Z - task-attempt: T4: failed (attempt 3) — round 3: 4 minor, all in the inferred evidence check; re-planned to explicit evidence: label (operator decision)
+- 2026-10-11T07:27:53.608Z - task-attempt: T8: started (attempt 3) — 423-T8 round 3: explicit evidence: label
