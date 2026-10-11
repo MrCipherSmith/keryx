@@ -1,0 +1,358 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "423",
+  "slug": "verify-sensitivity",
+  "title": "Verification sensitivity: mark exec/invariant checks proven to catch a failure",
+  "status": "in-progress",
+  "createdAt": "2026-10-10T21:17:59.701Z",
+  "updatedAt": "2026-10-11T07:38:29.013Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected in the orchestrating session"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T9"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-10-10T21:26:23.750Z",
+            "outcome": "started",
+            "detail": "review round 1"
+          },
+          {
+            "at": "2026-10-10T21:33:49.877Z",
+            "outcome": "failed",
+            "detail": "round 2: RL2-1..3 minor, all evidence-heuristic false positives/negatives; round-1 findings all fixed"
+          },
+          {
+            "at": "2026-10-11T07:27:53.446Z",
+            "outcome": "failed",
+            "detail": "round 3: 4 minor, all in the inferred evidence check; re-planned to explicit evidence: label (operator decision)"
+          },
+          {
+            "at": "2026-10-11T07:38:28.875Z",
+            "outcome": "started",
+            "detail": "round 4 approved; minors fixed and probed"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Parser, ac kinds counts, ac confirm warning (AC1-AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-10T21:19:12.132Z",
+            "outcome": "started",
+            "detail": "423-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Skills failure-scenario line, sync-status share, docs (AC5 AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-10T21:19:12.266Z",
+            "outcome": "started",
+            "detail": "423-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Run every AC command and AC7 invariant",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Fix review round 1 findings (RL-1..3, T1..T6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-10-10T21:28:04.602Z",
+            "outcome": "started",
+            "detail": "423-T8"
+          },
+          {
+            "at": "2026-10-10T21:38:38.500Z",
+            "outcome": "started",
+            "detail": "423-T8 round 2: evidence rule redesigned (filesystem paths)"
+          },
+          {
+            "at": "2026-10-11T07:27:53.608Z",
+            "outcome": "started",
+            "detail": "423-T8 round 3: explicit evidence: label"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-10T21:17:59.701Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-10T21:18:37.575Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-10T21:18:37.698Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-10T21:18:37.820Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-10T21:18:37.942Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-10T21:18:38.062Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-10T21:18:38.182Z",
+      "event": "task-added",
+      "detail": "T5: Parser, ac kinds counts, ac confirm warning (AC1-AC4)"
+    },
+    {
+      "at": "2026-10-10T21:18:38.302Z",
+      "event": "task-added",
+      "detail": "T6: Skills failure-scenario line, sync-status share, docs (AC5 AC6)"
+    },
+    {
+      "at": "2026-10-10T21:18:38.425Z",
+      "event": "task-added",
+      "detail": "T7: Run every AC command and AC7 invariant"
+    },
+    {
+      "at": "2026-10-10T21:19:12.133Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 423-T5"
+    },
+    {
+      "at": "2026-10-10T21:19:12.267Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 423-T6"
+    },
+    {
+      "at": "2026-10-10T21:26:23.353Z",
+      "event": "task-done",
+      "detail": "T5: Parser, ac kinds counts, ac confirm warning (AC1-AC4)"
+    },
+    {
+      "at": "2026-10-10T21:26:23.498Z",
+      "event": "task-done",
+      "detail": "T6: Skills failure-scenario line, sync-status share, docs (AC5 AC6)"
+    },
+    {
+      "at": "2026-10-10T21:26:23.622Z",
+      "event": "task-done",
+      "detail": "T7: Run every AC command and AC7 invariant"
+    },
+    {
+      "at": "2026-10-10T21:26:23.750Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — review round 1"
+    },
+    {
+      "at": "2026-10-10T21:28:04.468Z",
+      "event": "task-added",
+      "detail": "T8: Fix review round 1 findings (RL-1..3, T1..T6)"
+    },
+    {
+      "at": "2026-10-10T21:28:04.602Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 423-T8"
+    },
+    {
+      "at": "2026-10-10T21:33:49.877Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 2: RL2-1..3 minor, all evidence-heuristic false positives/negatives; round-1 findings all fixed"
+    },
+    {
+      "at": "2026-10-10T21:38:38.500Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 2) — 423-T8 round 2: evidence rule redesigned (filesystem paths)"
+    },
+    {
+      "at": "2026-10-11T07:27:53.446Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 3) — round 3: 4 minor, all in the inferred evidence check; re-planned to explicit evidence: label (operator decision)"
+    },
+    {
+      "at": "2026-10-11T07:27:53.608Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 3) — 423-T8 round 3: explicit evidence: label"
+    },
+    {
+      "at": "2026-10-11T07:38:28.733Z",
+      "event": "task-done",
+      "detail": "T8: Fix review round 1 findings (RL-1..3, T1..T6)"
+    },
+    {
+      "at": "2026-10-11T07:38:28.875Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 4) — round 4 approved; minors fixed and probed"
+    },
+    {
+      "at": "2026-10-11T07:38:29.013Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/flow/ac-kinds.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/flow/ac-kinds.test.ts src/commands/flow"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/flow"
+    },
+    "AC4": {
+      "kind": "invariant",
+      "check": "bun test src/flow/ac-kinds-never-gates.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/gdskills src/flow/templates.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/research-sync"
+    },
+    "AC7": {
+      "kind": "invariant",
+      "check": "git diff --stat origin/feat/verify-kind-prompts -- .metaproject/flows ':!.metaproject/flows/423-*'"
+    }
+  }
+}

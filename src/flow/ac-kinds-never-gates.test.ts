@@ -127,6 +127,45 @@ describe("a kind never gates a freeze, a confirmation or a completion", () => {
     expect(outcomes[0]).toEqual(outcomes[1]);
     expect(outcomes[0]?.confirmed).toEqual(["AC1", "AC2"]);
   });
+
+  test("a sensitivity note on exec and invariant criteria gates nothing: noted and plain twins behave the same", async () => {
+    await freshRoot();
+    const service = createFlowService(deps());
+    const NOTED = [
+      "- AC1: a [verify: exec `bun test a` · sensitive: revert]",
+      "- AC2: b [verify: invariant `bun test b` · sensitive: mutation]",
+    ];
+    const PLAIN = ["- AC1: a [verify: exec `bun test a`]", "- AC2: b [verify: invariant `bun test b`]"];
+    const outcomes: Array<{ status: string; gates: string[]; confirmed: string[] }> = [];
+    for (const [title, criteria] of [
+      ["Twin noted", NOTED],
+      ["Twin plain", PLAIN],
+    ] as const) {
+      const id = await newFlow(title, [...criteria]);
+      process.chdir(ROOT);
+      const logs: string[] = [];
+      console.log = (...args: unknown[]) => void logs.push(args.map(String).join(" "));
+      await flowCommand(["freeze", id]);
+      expect(process.exitCode ?? 0).toBe(0);
+      expect((await service.get({ cwd: ROOT, id })).status).toBe("ready");
+      await service.start({ cwd: ROOT, id });
+      await service.implemented({ cwd: ROOT, id, prUrl: "https://github.com/acme/app/pull/9" });
+      // Confirm without any evidence in the note: a warning at most, never a refusal.
+      await flowCommand(["ac", "confirm", id, "AC1"]);
+      await flowCommand(["ac", "confirm", id, "AC2", "--note", "n/a"]);
+      expect(process.exitCode ?? 0).toBe(0);
+      console.log = realLog;
+      const result = await service.complete({ cwd: ROOT, id });
+      outcomes.push({
+        status: result.flow.status,
+        gates: result.gates.map((gate) => `${gate.name}:${gate.status}`),
+        confirmed: Object.keys(result.flow.acConfirmed),
+      });
+      expect(result.gates.find((gate) => gate.name === "acceptance-criteria")?.status).toBe("pass");
+    }
+    expect(outcomes[0]).toEqual(outcomes[1]);
+    expect(outcomes[0]?.confirmed).toEqual(["AC1", "AC2"]);
+  });
 });
 
 describe("where a kind is read", () => {
@@ -136,6 +175,7 @@ describe("where a kind is read", () => {
   const READERS = [
     "src/commands/flow.ts",
     "src/commands/governance.ts",
+    "src/commands/research-sync-kinds.ts",
     "src/flow/ac-kinds.ts",
     "src/flow/check-ac.ts",
     "src/flow/service.ts",

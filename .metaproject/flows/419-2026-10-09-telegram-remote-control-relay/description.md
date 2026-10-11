@@ -1,7 +1,7 @@
 # Keryx Telegram: remote-control relays approvals, questions and progress
 
 Status: approved by operator (helyx 195233), frozen
-Source: live run of the review of PR 7435 on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).
+Source: live run of the review of a PR in a work project on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).
 
 ## Problem
 

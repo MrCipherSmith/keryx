@@ -30,7 +30,7 @@ which the honesty note partly covers.
 
 ### 3. Measure the context economy
 
-Observed: the earlier measurement run (`results/vantage-context-measurement`,
+Observed: the earlier measurement run (`results/<work-project>-context-measurement`,
 unmerged) was negative on both passes; README still implies savings. Augment
 claims −32 %; OpenCode is criticised for ×4.7 overhead.
 Direction: a repeatable benchmark on three repositories, published numbers,
