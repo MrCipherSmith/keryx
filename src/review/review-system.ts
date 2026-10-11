@@ -34,6 +34,40 @@ export function asksForReviewAuto(userLine: string): boolean {
   return REVIEW_AUTO_PHRASE.test(userLine);
 }
 
+const operatorDenials = new Set<string>();
+
+/** Remember an action the operator refused, so review-auto can neither grant it again nor ask itself to overturn it. */
+export function recordOperatorDenial(fingerprint: string): void {
+  operatorDenials.add(fingerprint);
+}
+
+export function operatorDenied(fingerprint: string): boolean {
+  return operatorDenials.has(fingerprint);
+}
+
+export function resetOperatorDenials(): void {
+  operatorDenials.clear();
+}
+
+const PERMISSION_WORDS =
+  /\b(?:allow|deny|denied|permit|permission|grant|approve|approval|consent|authori[sz]e)\b|разреш|запрет|одобр|отклон|согласи|доступ|привилег/i;
+
+/**
+ * Whether review-auto may answer an `ask_user` menu itself. Not for an irreversible question, and not for a
+ * permission-style choice once the operator has refused an action in this shell: the agent cannot ask itself
+ * to overturn a refusal.
+ */
+export function reviewAutoMayAnswer(request: {
+  question: string;
+  options: ReadonlyArray<{ id: string; label: string; description: string }>;
+  irreversible?: boolean;
+}): boolean {
+  if (request.irreversible === true) return false;
+  if (operatorDenials.size === 0) return true;
+  const text = [request.question, ...request.options.flatMap((o) => [o.id, o.label, o.description])].join("\n");
+  return !PERMISSION_WORDS.test(text);
+}
+
 /**
  * Whether review-auto answers an approval question itself. A bounded reviewer child is granted even after
  * untrusted content (it has no shell); any other tool only when no floor applies: destructive, credential,
