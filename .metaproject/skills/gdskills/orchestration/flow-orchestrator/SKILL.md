@@ -242,7 +242,7 @@ Write or update:
 - `context.md` - compact links and findings, not raw dumps;
 - `plan.md` - chosen approach and trade-offs;
 - `tasks.md` - task definitions grouped by context, test, implement, review, docs;
-- `acceptance-criteria.md` - verifiable `ACn` criteria, each ending in one marker: [verify: exec `<command>`] or [verify: invariant `<command>`] (a backticked command), [verify: judged] (a human checks: live run, operator decision, text quality), or [verify: none — <reason>]. If a kind is unclear, ask the operator ONE question listing the criteria with proposed kinds, before `flow freeze`.
+- `acceptance-criteria.md` - verifiable `ACn` criteria, each ending in one marker: [verify: exec `<command>`] or [verify: invariant `<command>`] (a backticked command), [verify: judged] (a human checks: live run, operator decision, text quality), or [verify: none — <reason>]. If a kind is unclear, ask the operator ONE question listing the criteria with proposed kinds, before `flow freeze`. Behaviour with an external dependency or a failure path gets its own failure-scenario criterion with an observable result (saved, error visible, retry creates no duplicate); a check claimed to catch a regression carries `· sensitive: revert|mutation|failure-scenario` and the confirm note carries `evidence: <ref>` (revert/mutation run or failure-scenario reference).
 
 ### A verification step in the plan is a task, not a sentence
 

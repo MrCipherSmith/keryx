@@ -78,12 +78,14 @@ export {
   parseAcKinds,
   readAcKindRecords,
   renderAcKindDistribution,
+  renderAcSensitivityLine,
   reportFromRecords,
   stripVerifyMarker,
   type AcKind,
   type AcKindError,
   type AcKindRecord,
   type AcKindReport,
+  type AcSensitivity,
 } from "./ac-kinds";
 import { buildAcKindReport, type AcKindRecord } from "./ac-kinds";
 // Flow 344: re-exported so a client reads the review-gate config path

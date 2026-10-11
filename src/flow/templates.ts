@@ -335,7 +335,11 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
    backticked command), [verify: judged] (a human checks: live run, operator
    decision, text quality), or [verify: none — <reason>]. If a kind is
    unclear, ask the operator ONE question listing the criteria with proposed
-   kinds, before \`flow freeze\`.
+   kinds, before \`flow freeze\`. Behaviour with an external dependency or a
+   failure path gets its own failure-scenario criterion with an observable
+   result (saved, error visible, retry creates no duplicate); a check claimed to
+   catch a regression carries \`· sensitive: revert|mutation|failure-scenario\`
+   and the confirm note carries \`evidence: <ref>\` (revert/mutation run or failure-scenario reference).
 8. Re-verify the whole package, then freeze and hand off:
    \`keryx flow freeze <id> --yes\` -> \`keryx flow start <id>\` (the operator
    already answered the kinds question, so the freeze must not prompt).
