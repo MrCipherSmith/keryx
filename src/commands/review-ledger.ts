@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
-import { type RetryState, emptyRetryState } from "../review/retry-plan";
+import { type RetryState, emptyRetryState, scopeFingerprint } from "../review/retry-plan";
 import type { SliceManifest } from "../review/slice";
 
 export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--dry-run", "--json", "--help", "-h"] as const;
@@ -79,10 +80,12 @@ async function loadRaws(inputDir: string): Promise<{ raws: RawFile[]; ignored: s
   return { raws, ignored };
 }
 
-async function loadRetry(...files: string[]): Promise<RetryState> {
+async function loadRetry(fingerprint: string | undefined, ...files: string[]): Promise<RetryState> {
   const merged = emptyRetryState();
   for (const file of files) {
     const state = await readJson<RetryState>(file);
+    if (fingerprint === undefined || state?.scopeFingerprint !== fingerprint) continue;
+    merged.scopeFingerprint = fingerprint;
     for (const [reviewer, entry] of Object.entries(state?.reviewers ?? {})) {
       const known = merged.reviewers[reviewer];
       const covered = [...new Set([...(known?.covered ?? []), ...(entry.covered ?? [])])].sort();
@@ -105,6 +108,14 @@ export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: 
   return lines.join("\n");
 }
 
+/** Ambiguous raw-to-dispatch references never contribute implicit coverage. */
+export function assignRawDispatch(raws: RawFile[], assignments: ReadonlyMap<string, readonly string[][]>): void {
+  for (const raw of raws) {
+    const matches = assignments.get(`${raw.result?.reviewer}\0${raw.name}`);
+    if (matches !== undefined) raw.assignedSlices = matches.length === 1 ? [...matches[0]!] : [];
+  }
+}
+
 export async function runLedger(args: string[], deps: { rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void }): Promise<void> {
   if (args.includes("--help") || args.includes("-h") || args[0] === undefined) return printLedgerHelp();
   if (args[0] !== "build") throw new Error(`Unknown ledger subcommand "${args[0]}". See \`keryx review ledger --help\`.`);
@@ -124,6 +135,12 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const files = await packageScopeFiles(packageDir);
   const manifestPath = path.join(inputDir, "slices", "manifest.json");
   const manifest = await readJson<SliceManifest>(manifestPath);
+  if (manifest !== undefined) for (const entry of manifest.slices) {
+    const hash = await readFile(path.resolve(path.dirname(manifestPath), entry.path))
+      .then((body) => createHash("sha256").update(body).digest("hex")).catch(() => undefined);
+    if (hash === undefined) delete entry.contentHash;
+    else entry.contentHash = hash;
+  }
   const { raws, ignored } = await loadRaws(inputDir);
   const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json")))) ?? [];
   const out = path.resolve(optionValue(rest, "--out") ?? path.join(packageDir, "research.json"));
@@ -132,26 +149,37 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const dispositions = (Array.isArray(given) ? given : given?.obligations) ?? [];
 
   const payloadSlices: Record<string, string[]> = {};
+  const payloadDispatchCounts: Record<string, number> = {};
   const ruleFiles: Record<string, string> = {};
+  const assignments = new Map<string, string[][]>();
   for (const file of await jsonFiles(path.join(inputDir, "drivers"))) {
-    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown }>(file);
+    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown; result?: unknown }>(file);
     if (typeof driver?.reviewer !== "string") continue;
+    payloadDispatchCounts[driver.reviewer] = (payloadDispatchCounts[driver.reviewer] ?? 0) + 1;
     if (Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === "string")) (payloadSlices[driver.reviewer] ??= []).push(...(driver.slices as string[]));
+    if (typeof driver.result === "string" && Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === "string")) {
+      const key = `${driver.reviewer}\0${driver.result}`;
+      const matches = assignments.get(key) ?? [];
+      matches.push(driver.slices as string[]);
+      assignments.set(key, matches);
+    }
     if (typeof driver.definition === "string") {
       const definition = path.resolve(root, driver.definition);
       if (existsSync(definition)) ruleFiles[driver.reviewer] = path.relative(root, definition);
     }
   }
 
+  assignRawDispatch(raws, assignments);
   const required = await requiredReviewers(root, mode, files);
   const { ledger, gaps } = buildLedger({
     mode,
     selected: required.required,
     manifest,
     payloadSlices,
+    payloadDispatchCounts,
     ruleFiles,
     raws,
-    retry: await loadRetry(path.join(inputDir, "slices", "retry-state.json"), path.join(packageDir, "retry-state.json")),
+    retry: await loadRetry(manifest === undefined ? undefined : scopeFingerprint(manifest), path.join(inputDir, "slices", "retry-state.json"), path.join(packageDir, "retry-state.json")),
     canonical,
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
+import { askFloor } from "../review/arbiter-floor";
 import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
 import { consultArbiter, installQuestionArbiter } from "../commands/review-arbiter-install";
 
@@ -90,6 +91,7 @@ export function journaledAskUser(cwd: string): AskUserFn {
  * irreversible question is never auto-answered.
  */
 function reviewAutoAnswer(request: Parameters<AskUserFn>[0]): string | undefined {
+  if (askFloor(request) !== undefined) return undefined;
   if ((process.env.KERYX_REVIEW_AUTO_ANSWER !== "1" && !reviewAutoActive()) || !reviewAutoMayAnswer(request)) return undefined;
   return (request.options.find((o) => o.recommended === true) ?? request.options[0])?.id;
 }

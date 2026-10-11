@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { buildReviewScope, type ReviewScopeConfig, type ScopedRegion, type ScopeDrop } from "./scope";
 
 /** Per-reviewer ceiling for one slice, in bytes. A reviewer that must read more than this burns its round budget. */
@@ -16,6 +17,7 @@ export type SliceEntry = {
   id: string;
   path: string;
   bytes: number;
+  contentHash?: string;
   files: string[];
   domain: string;
   /** The deepest cut this slice needed: a whole domain, one file of a big domain, or one hunk of a big file. */
@@ -441,6 +443,7 @@ export function buildSlices(
       id,
       path: `${dir}${id}.diff`,
       bytes: byteLength(text),
+      contentHash: createHash("sha256").update(text).digest("hex"),
       files: draft.files,
       domain: domainLabel(draft.domains),
       split: draft.split,

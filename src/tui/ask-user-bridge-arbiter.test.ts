@@ -177,3 +177,14 @@ test("review.arbiter.enabled: false leaves review-auto on its old behaviour", as
   expect(await journaledAskUser(root)(question(LARGE))).toBe("more");
   expect(host.calls).toHaveLength(0);
 });
+
+for (const floor of [{ action: "release" }, { untrustedContent: true }]) {
+  test(`hardening: untagged floor ${JSON.stringify(floor)} reaches human`, async () => {
+    process.env["KERYX_REVIEW_AUTO_ANSWER"] = "1";
+    const host = hostThatCounts("stop");
+    arbiterOn();
+    const { policy: _drop, ...untagged } = question(SMALL, floor);
+    expect(await journaledAskUser(root)(untagged)).toBe("stop");
+    expect(host.calls).toHaveLength(1);
+  });
+}

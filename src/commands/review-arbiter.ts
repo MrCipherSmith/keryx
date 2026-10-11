@@ -325,7 +325,7 @@ export function createArbiter(deps: ArbiterDeps): Arbiter {
     const rulesInForce = loaded.rules;
     const ruleMeta = { rulesVersion: rulesInForce.version, rulesHash: rulesInForce.hash } as const;
 
-    const key = cacheKey(question);
+    const key = `${cacheKey(question)}:${JSON.stringify(request.options.map((option) => option.id))}`;
     const hit = cache.get(key);
     if (hit !== undefined) {
       log({ ...base, ...ruleMeta, verdict: hit.verdict, rule: hit.rule, reason: "cache", cached: true, ...(hit.answer === undefined ? {} : { answer: hit.answer }) });

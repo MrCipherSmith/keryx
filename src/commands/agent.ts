@@ -5697,6 +5697,9 @@ async function executeCallUnbounded(
       }
     }
   } else if (risk === "delegate") {
+    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
+      return { output: REFUSED_EARLIER, isError: true };
+    }
     // Fail-closed like `shell`: a delegate with no approver present is denied,
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
@@ -5739,6 +5742,9 @@ async function executeCallUnbounded(
       }
     }
   } else if (risk === "write") {
+    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
+      return { output: REFUSED_EARLIER, isError: true };
+    }
     // ADR-0010: `write` joins the shell/destructive/delegate gate. Same
     // shape as the shell branch, but the escalation input is chosen PER TOOL
     // (flow 275 T6, specification §7.1), not shared by every `write`-risk
