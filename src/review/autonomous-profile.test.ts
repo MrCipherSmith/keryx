@@ -65,6 +65,12 @@ describe("prompt", () => {
     expect(text).toMatch(/nobody (is )?(at the keyboard|answering)/i);
   });
 
+  test("keeps the orchestration in the main session and says why a subagent cannot take it", () => {
+    const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7" });
+    expect(text).toContain("Run the whole orchestration yourself in this session");
+    expect(text).toContain("nested_dispatch_unavailable");
+  });
+
   test("a resumed run names the package to continue", () => {
     const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7", resumePackage: "rv-123" });
     expect(text).toContain("rv-123");
