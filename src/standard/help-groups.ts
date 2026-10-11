@@ -345,7 +345,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "review",
     group: "Managed work",
-    summary: "Managed review packages and lightweight report-only review mode.",
+    summary: "Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands.",
   },
   { kind: "slash", name: "/flows", group: "Managed work", summary: "Browse project flows and inspect one." },
   {

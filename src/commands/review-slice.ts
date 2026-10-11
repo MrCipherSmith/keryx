@@ -3,9 +3,10 @@ import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
+import { parseReviewResult } from "../review/ledger";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
-import { type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
-import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes } from "../review/slice";
+import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
 export type SliceDeps = {
@@ -15,9 +16,9 @@ export type SliceDeps = {
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
 };
 
-export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--out", "--json", "--help", "-h"] as const;
+export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--out", "--json", "--help", "-h"] as const;
 export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--json", "--help", "-h"] as const;
-export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--state", "--dry-run", "--json", "--help", "-h"] as const;
+export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--covered", "--next-wave", "--state", "--dry-run", "--json", "--help", "-h"] as const;
 
 const DEFAULT_SLICE_DIR = ".metaproject/data/review/slices";
 const MANIFEST_NAME = "manifest.json";
@@ -31,11 +32,13 @@ export function printSliceHelp(): void {
   console.log(`keryx review slice — usage:
 
   keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
-                     [--max-bytes <n>] [--out <dir>] [--json]
+                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
 
 Cuts the scoped diff into reviewer-sized slices, no model call. Each slice is a
 file of at most --max-bytes (default ${DEFAULT_SLICE_MAX_BYTES}) holding whole domains where they fit; a domain over the
-limit is cut by file, a file over it by hunk. Data ledgers (csv, tsv, jsonl,
+limit is cut by file, a file over it by hunk. --wave-bytes (default ${DEFAULT_WAVE_BYTES}, at least
+--max-bytes) is what one reviewer dispatch may carry in total: a role owning more
+is dispatched in waves, so each dispatch fits the reviewer's child deadline. Data ledgers (csv, tsv, jsonl,
 parquet), lockfiles, snapshots, generated and oversize json are never sliced:
 they are listed under omissions with their reason and size.
 
@@ -56,7 +59,8 @@ Validates reviewer payload(s) before dispatch: one reviewer-input object, an
 array of them, or { "dispatches": [...] }. Shape comes from
 reviewer-input.schema.json; a scope_mode "diff" payload must name its \`slices\`
 (ids from the manifest) or carry a \`diff\` that fits, and what it is assigned
-must total at most --max-bytes (default: the manifest's, else ${DEFAULT_SLICE_MAX_BYTES}).
+must total at most --max-bytes (default: the manifest's wave budget, else
+${DEFAULT_SLICE_MAX_BYTES}); more than that is dispatched in waves (\`retry-plan --next-wave\`).
 
 Codes: REVIEWER_INPUT_INVALID, REVIEWER_INPUT_NO_SLICE,
 REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE.
@@ -68,16 +72,28 @@ export function printRetryPlanHelp(): void {
   console.log(`keryx review retry-plan — usage:
 
   keryx review retry-plan --manifest <manifest.json> --result <file|->
-                          [--reviewer <id>] [--slices a,b] [--state <file>]
-                          [--dry-run] [--json]
+                          [--reviewer <id>] [--slices a,b] [--covered a,b]
+                          [--next-wave] [--state <file>] [--dry-run] [--json]
 
 Decides what follows a reviewer result. --result is the reviewer's result JSON
-({ "reviewer", "status", "slices"? , "attempt"? }). INCOMPLETE and BLOCKED get
-exactly one retry on slices half the size (r1-<reviewer>-NN.diff, appended to the
-manifest); a second failure is decision "not-run" and prints the report line
-"- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted
-as a clean pass". Any other status is "accepted".
-Attempts are remembered in ${RETRY_STATE_NAME} beside the manifest (--state to move it).
+({ "reviewer", "status", "slices"? , "needs_context"?, "attempt"? }); "slices" are the
+ones the reviewer covered. An attempt is spent only by a result that covers no slice
+the reviewer had not covered before: a reviewer that makes progress is handed the
+next wave of what is still uncovered (decision "retry" or "wave") and is not
+penalised. A result with no new coverage re-cuts the open slices at half the size
+(r<n>-<reviewer>-NN.diff, appended to the manifest) and halves the wave; two such
+results in a row, or ${MAX_RETRY_ROUNDS} failed rounds in all, are decision "not-run" and print the
+report line "- **Not run:** <reviewer> — <status> after a smaller-slice retry; never
+counted as a clean pass". NEEDS_CONTEXT is not terminal and closes no scope: decision
+"context" lists the open questions ("- context <reviewer>: ...") for a re-dispatch;
+asking again with nothing new covered is "not-run". A finished result with slices
+still open is decision "wave". Any other finished result is "accepted".
+--next-wave plans the next wave without a result (--result becomes optional), or
+after a finished one; --covered adds slice ids covered by earlier results.
+The dispatch list is the next wave, at most the manifest's wave budget; "remaining"
+counts what is left. Only the operator can accept a smaller set than that, with
+their own quote, at \`review complete\`.
+Progress is remembered in ${RETRY_STATE_NAME} beside the manifest (--state to move it).
 --dry-run plans without writing. Exit 0 for every decision.
 `);
 }
@@ -103,7 +119,9 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const outDir = path.resolve(optionValue(args, "--out") ?? DEFAULT_SLICE_DIR);
 
   const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
-  const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines }), { maxBytes });
+  const rawWave = optionValue(args, "--wave-bytes");
+  const waveBytes = rawWave === undefined ? undefined : validateWaveBytes(Number(rawWave), maxBytes);
+  const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
 
   await mkdir(outDir, { recursive: true });
   for (const entry of await readdir(outDir)) {
@@ -138,6 +156,25 @@ async function readJsonSource<T>(source: string, label: string): Promise<T> {
 }
 
 class UnreadableInput extends Error {}
+
+/** A reviewer result: plain JSON, or a saved raw reply carrying a REVIEW_RESULT block (what the ledger's next command names). */
+async function readResult(source: string): Promise<ReviewerResult> {
+  let raw: string;
+  try {
+    raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
+  } catch (error) {
+    throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
+  }
+  try {
+    return JSON.parse(raw) as ReviewerResult;
+  } catch {
+    const parsed = parseReviewResult(raw);
+    if (parsed === undefined) {
+      throw new UnreadableInput(`result is not valid JSON and holds no REVIEW_RESULT block: ${source}`);
+    }
+    return parsed as ReviewerResult;
+  }
+}
 
 function failUnreadable(error: unknown): void {
   if (error instanceof UnreadableInput) {
@@ -200,15 +237,16 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
   deps.rejectUnknownFlags(args, RETRY_PLAN_FLAGS, "retry-plan");
   const manifestSource = optionValue(args, "--manifest");
   const resultSource = optionValue(args, "--result");
-  if (manifestSource === undefined || resultSource === undefined) {
-    throw new Error("Missing --manifest <file> or --result <file|->. See `keryx review retry-plan --help`.");
+  const nextWave = args.includes("--next-wave");
+  if (manifestSource === undefined || (resultSource === undefined && !nextWave)) {
+    throw new Error("Missing --manifest <file> or --result <file|-> (--result is optional with --next-wave). See `keryx review retry-plan --help`.");
   }
 
   try {
     const manifestPath = path.resolve(manifestSource);
     const manifestDir = path.dirname(manifestPath);
     const manifest = await readJsonSource<SliceManifest>(manifestPath, "manifest");
-    const result = await readJsonSource<ReviewerResult>(resultSource, "result");
+    const result = resultSource === undefined ? {} : await readResult(resultSource);
     const statePath = path.resolve(optionValue(args, "--state") ?? path.join(manifestDir, RETRY_STATE_NAME));
     const state = existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState();
     const reviewer = optionValue(args, "--reviewer") ?? result.reviewer;
@@ -216,11 +254,14 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       throw new Error("The result names no reviewer; pass --reviewer <id>.");
     }
     const sliceList = optionValue(args, "--slices");
+    const coveredList = optionValue(args, "--covered");
     const plan = planRetry({
       manifest,
       result,
       reviewer,
       ...(sliceList === undefined ? {} : { sliceIds: sliceList.split(",").map((item) => item.trim()).filter(Boolean) }),
+      ...(coveredList === undefined ? {} : { covered: coveredList.split(",").map((item) => item.trim()).filter(Boolean) }),
+      ...(nextWave ? { nextWave } : {}),
       state,
       readSliceText: (entry) => {
         const file = path.resolve(manifestDir, entry.path);
@@ -240,7 +281,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
     }
 
-    const dispatch = plan.newSlices.map((slice) => ({ reviewer, slice: slice.id, path: slice.path, bytes: slice.bytes }));
+    const dispatch = plan.wave.map((slice) => ({ reviewer, slice: slice.id, path: slice.path, bytes: slice.bytes }));
     if (args.includes("--json")) {
       console.log(
         JSON.stringify(
@@ -252,6 +293,10 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
             reason: plan.reason,
             reportLine: plan.reportLine ?? null,
             dispatch,
+            remaining: plan.remaining,
+            progress: plan.progress,
+            stalls: plan.stalls,
+            needsContext: plan.needsContext ?? null,
             dryRun: args.includes("--dry-run"),
           },
           null,
@@ -261,8 +306,14 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       return;
     }
     console.log(`retry-plan: ${plan.decision} — ${reviewer} (${plan.status || "no status"}): ${plan.reason}`);
+    if (plan.remaining.slices > 0) {
+      console.log(`remaining: ${plan.remaining.slices} slice(s), ${plan.remaining.bytes} bytes, ${plan.remaining.waves} wave(s) including this one`);
+    }
     for (const item of dispatch) {
       console.log(`- dispatch ${item.reviewer} on ${item.slice} (${item.bytes} bytes): ${item.path}`);
+    }
+    for (const question of plan.needsContext ?? []) {
+      console.log(`- context ${reviewer}: ${question}`);
     }
     if (plan.reportLine !== undefined) {
       console.log(plan.reportLine);

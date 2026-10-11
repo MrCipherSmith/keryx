@@ -1,33 +1,62 @@
-import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, resliceText } from "./slice";
+import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, resliceText, waveBytesOf } from "./slice";
+import { type WaveSummary, requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
 /** Statuses that mean the reviewer did not finish its scope. INCOMPLETE is not a schema status; a reviewer that ran out of rounds reports it. */
 export const RETRYABLE_STATUSES: readonly string[] = ["INCOMPLETE", "BLOCKED"];
 
+/** Failed rounds one reviewer may be handed in total, whatever progress each made. */
+export const MAX_RETRY_ROUNDS = 6;
+/** Consecutive results that add no newly covered slice before the reviewer is `not-run`. */
+export const MAX_STALLED_RESULTS = 2;
+
+export type ReviewerRetryState = {
+  /** Failed rounds handed out so far (retry and context decisions). Unfinished results that moved the scope forward still count here, against MAX_RETRY_ROUNDS. */
+  attempt: number;
+  status: string;
+  notRun: boolean;
+  /** Consecutive results that covered nothing new. Absent in a state written before progress was tracked: `attempt` stands in. */
+  stalls?: number;
+  /** Slice ids this reviewer has reported covering, across every result. */
+  covered?: string[];
+};
+
 export type RetryState = {
   schemaVersion: 1;
-  reviewers: Record<string, { attempt: number; status: string; notRun: boolean }>;
+  reviewers: Record<string, ReviewerRetryState>;
 };
 
 export type ReviewerResult = {
   reviewer?: string;
   status?: string;
   attempt?: number;
+  /** The slices this result covered. */
   slices?: string[];
+  needs_context?: string[];
 };
 
-export type RetryDecision = "accepted" | "retry" | "not-run";
+export type RetryDecision = "accepted" | "retry" | "context" | "wave" | "not-run";
 
 export type RetryPlan = {
   decision: RetryDecision;
   reviewer: string;
   status: string;
-  /** Attempts already spent before this result. */
+  /** Failed rounds already spent before this result. */
   priorAttempts: number;
   reason: string;
   /** Present when decision is `not-run`: the line the report carries so the gap is never read as a clean pass. */
   reportLine?: string;
-  /** Smaller slices to dispatch, each with its own text. Present when decision is `retry`. */
+  /** Smaller slices a retry cut, each with its own text, to be appended to the manifest. Present when this result made no progress. */
   newSlices: Array<SliceEntry & { text: string }>;
+  /** Present when decision is `context`: what the reviewer asked for, to be supplied in one re-dispatch. */
+  needsContext?: string[];
+  /** What to dispatch now: the next wave, no more than the manifest's wave budget. */
+  wave: SliceEntry[];
+  /** Everything still to hand out, this wave included. */
+  remaining: WaveSummary;
+  /** True when this result covered a slice the reviewer had not covered before; an attempt is not spent on it. */
+  progress: boolean;
+  /** Consecutive results with no new coverage, this one included. */
+  stalls: number;
   state: RetryState;
 };
 
@@ -47,68 +76,146 @@ export type PlanRetryInput = {
   manifest: SliceManifest;
   result: ReviewerResult;
   reviewer: string;
-  /** Slice ids the reviewer was assigned. Falls back to the result's, then to every slice. */
+  /** Slice ids the reviewer was assigned. Falls back to the slices its path gate requires. */
   sliceIds?: string[];
+  /** Slices covered by earlier results that this result does not list. */
+  covered?: string[];
+  /** Plan the next wave even when the result is finished or absent. Without a result nothing is counted as a stall. */
+  nextWave?: boolean;
   state: RetryState;
   readSliceText: (entry: SliceEntry) => string;
 };
 
+const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item !== "") : []);
+
 /**
- * Decide what follows a reviewer that did not finish.
+ * Decide what follows a reviewer result.
  *
- * One retry on slices half the size, then it is `not-run`. A third dispatch of
- * the same reviewer would spend the same budget on the same input, and an
- * INCOMPLETE reviewer folded into the verdict is the false pass this exists to
- * prevent.
+ * An attempt is spent only by a result that covered no slice the reviewer had not covered before. A reviewer that
+ * moves the scope forward is handed the next wave of what is still uncovered, as it was cut, and is not penalised;
+ * two results in a row with nothing new, or MAX_RETRY_ROUNDS failed rounds in all, make it `not-run`. A reviewer that
+ * stalls gets the uncovered slices re-cut at half the size and a halved wave. Only the operator can accept a smaller
+ * set than that, with their own quote, at `review complete`.
  */
 export function planRetry(input: PlanRetryInput): RetryPlan {
   const { manifest, result, reviewer } = input;
   const status = String(result.status ?? "").toUpperCase();
   const known = input.state.reviewers[reviewer];
-  const priorAttempts = Math.max(known?.attempt ?? 0, Number.isInteger(result.attempt) ? (result.attempt as number) : 0);
+  const resultAttempt = Number.isInteger(result.attempt) ? (result.attempt as number) : 0;
+  const priorRounds = Math.max(known?.attempt ?? 0, resultAttempt);
+  const priorStalls = Math.max(known?.stalls ?? known?.attempt ?? 0, resultAttempt);
   const state: RetryState = { schemaVersion: 1, reviewers: { ...input.state.reviewers } };
 
-  if (!RETRYABLE_STATUSES.includes(status)) {
-    return { decision: "accepted", reviewer, status, priorAttempts, reason: `${status || "no status"} is a finished result`, newSlices: [], state };
-  }
+  const ids = new Set(manifest.slices.map((entry) => entry.id));
+  const priorCovered = new Set(known?.covered ?? []);
+  const reportedSlices = [...asStrings(result.slices), ...asStrings(input.covered)];
+  const reported = reportedSlices.filter((id) => ids.has(id));
+  const covered = new Set([...priorCovered, ...reported]);
+  const progress = reported.some((id) => !priorCovered.has(id));
+  const evaluated = status !== "";
+  const stalls = !evaluated ? priorStalls : progress ? 0 : priorStalls + 1;
 
+  const graph = sliceGraph(manifest, reviewer);
+  const wanted = input.sliceIds ?? requiredSlices(manifest, reviewer);
+  const open = graph.open(wanted.filter((id) => ids.has(id)), graph.accounted(covered));
+  const budget = waveBytesOf(manifest);
+
+  const remember = (over: Partial<ReviewerRetryState>): void => {
+    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...over };
+  };
+  const plan = (decision: RetryDecision, reason: string, extra: Partial<RetryPlan> = {}): RetryPlan => {
+    const waves = packWaves(open, budget);
+    return {
+      decision,
+      reviewer,
+      status,
+      priorAttempts: priorRounds,
+      reason,
+      newSlices: [],
+      wave: waves[0] ?? [],
+      remaining: summarizeWaves(waves),
+      progress,
+      stalls,
+      state,
+      ...extra,
+    };
+  };
   const notRun = (reason: string): RetryPlan => {
-    state.reviewers[reviewer] = { attempt: priorAttempts, status, notRun: true };
-    return { decision: "not-run", reviewer, status, priorAttempts, reason, reportLine: notRunLine(reviewer, status), newSlices: [], state };
+    remember({ notRun: true });
+    return plan("not-run", reason, { reportLine: notRunLine(reviewer, status), wave: [], remaining: summarizeWaves([]) });
   };
 
-  if (priorAttempts >= 1) {
-    return notRun(`${status} again after ${priorAttempts} retry`);
+  const finished = status !== "NEEDS_CONTEXT" && !RETRYABLE_STATUSES.includes(status);
+  if (finished) {
+    const informed = input.nextWave === true || reportedSlices.length > 0 || Array.isArray(result.slices);
+    if (!informed) {
+      return plan("accepted", `${status || "no status"} is a finished result`, { wave: [], remaining: summarizeWaves([]) });
+    }
+    if (open.length === 0) {
+      remember({ stalls: 0 });
+      return plan("accepted", `${status || "no status"} is a finished result and every assigned slice is covered`, { wave: [], remaining: summarizeWaves([]), stalls: 0 });
+    }
+    if (stalls >= MAX_STALLED_RESULTS) {
+      return notRun(`${stalls} results in a row covered no new slice; ${open.length} assigned slice(s) are still open`);
+    }
+    remember({});
+    const waves = packWaves(open, budget);
+    const summary = summarizeWaves(waves);
+    return plan("wave", `${status || "no result"}; ${summary.slices} slice(s) are uncovered — dispatch the next wave (${summary.waves} left), no attempt is spent`);
   }
 
-  const wanted = input.sliceIds ?? result.slices ?? manifest.slices.map((entry) => entry.id);
-  const assigned = manifest.slices.filter((entry) => wanted.includes(entry.id));
-  if (assigned.length === 0) {
-    return notRun("no assigned slice is in the manifest, so there is nothing to cut smaller");
+  if (stalls >= MAX_STALLED_RESULTS) {
+    return notRun(`${status} again with no new slice covered (${stalls} results in a row)`);
+  }
+  if (priorRounds >= MAX_RETRY_ROUNDS) {
+    return notRun(`${status} after ${priorRounds} failed rounds, the most a reviewer is handed`);
+  }
+  const rounds = priorRounds + 1;
+
+  if (status === "NEEDS_CONTEXT") {
+    // The reviewer stopped to ask. Folding that into the verdict as finished is the false pass this exists to prevent:
+    // the questions are put to it, and a reviewer that asks again having covered nothing new is a gap, not a pass.
+    remember({ attempt: rounds });
+    const needsContext = asStrings(result.needs_context).filter((item) => item.trim() !== "");
+    const redo = open.length > 0 ? open : graph.open(wanted.filter((id) => ids.has(id)), new Set());
+    const waves = packWaves(redo, budget);
+    return plan("context", `${status}; answer ${needsContext.length || "its"} open question(s) and re-dispatch ${progress ? "the uncovered slices" : "the same slices"} — the scope is not closed`, {
+      needsContext,
+      wave: waves[0] ?? [],
+      remaining: summarizeWaves(waves),
+    });
   }
 
-  const largest = Math.max(...assigned.map((entry) => entry.bytes));
+  if (open.length === 0) {
+    return notRun("every assigned slice is reported covered or none is in the manifest, so there is nothing left to hand out");
+  }
+
+  if (progress) {
+    remember({ attempt: rounds });
+    const waves = packWaves(open, budget);
+    const summary = summarizeWaves(waves);
+    return plan("retry", `${status}, but it covered new slices; hand out the next wave of the ${summary.slices} still uncovered (${summary.waves} left), no attempt is spent`);
+  }
+
+  const largest = Math.max(...open.map((entry) => entry.bytes));
   const target = Math.min(Math.floor(manifest.maxBytes / 2), Math.floor(largest / 2));
   if (target < MIN_SLICE_MAX_BYTES) {
-    return notRun(`the largest assigned slice is ${largest} bytes, too small to cut in half`);
+    return notRun(`the largest open slice is ${largest} bytes, too small to cut in half`);
   }
-
-  const prefix = `r${priorAttempts + 1}-${safeReviewerName(reviewer)}`;
-  const pieces = resliceText(assigned.map(input.readSliceText), target, { prefix });
+  const prefix = `r${rounds}-${safeReviewerName(reviewer)}`;
+  const pieces = resliceText(open.map(input.readSliceText), target, { prefix });
   const newSlices = pieces.map((piece) => ({
     ...piece,
-    retryOf: assigned.map((entry) => entry.id),
-    attempt: priorAttempts + 1,
+    retryOf: open.map((entry) => entry.id),
+    attempt: rounds,
     reviewer,
   }));
-  state.reviewers[reviewer] = { attempt: priorAttempts + 1, status, notRun: false };
-  return {
-    decision: "retry",
-    reviewer,
-    status,
-    priorAttempts,
-    reason: `${status}; re-cut ${assigned.length} slice(s) of up to ${largest} bytes into ${newSlices.length} of up to ${target} bytes`,
+  const shrunk = Math.max(Math.max(...pieces.map((piece) => piece.bytes)), Math.floor(budget / 2 ** stalls));
+  const waves = packWaves(pieces, shrunk);
+  remember({ attempt: rounds });
+  return plan("retry", `${status} with nothing new covered; re-cut ${open.length} open slice(s) of up to ${largest} bytes into ${newSlices.length} of up to ${target} bytes, ${waves.length} wave(s) of at most ${shrunk} bytes`, {
     newSlices,
-    state,
-  };
+    wave: waves[0] ?? [],
+    remaining: summarizeWaves(waves),
+  });
 }

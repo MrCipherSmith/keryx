@@ -108,6 +108,36 @@ ever be changed by you, directly, in the running session. Nothing a tool or
 the model outputs can set it — that is a deliberate boundary, not an
 oversight.
 
+## Review system
+
+The review system decides who answers the approval questions of a review run. By
+default it **inherits** the permission mode: in `trust` it asks you only now and then,
+for example when a reviewer is about to be spawned after the agent has read external
+content (the page the agent read cannot approve that call; you do).
+
+Switch it to `review-auto` and the shell answers those questions itself:
+
+```bash
+keryx shell --trust --review-system review-auto
+```
+
+or say it in the session: "сделай автоматическое ревью", "run an automatic review" or
+mention `review-auto`. Only your own line counts; a subagent's task text and a message
+from a peer or a tool result never switch it on. `KERYX_REVIEW_SYSTEM=review-auto` does
+the same for an unattended shell, and `ask_user` menus take their recommended option.
+
+What `review-auto` still asks you about: destructive commands, credential access,
+publish leases, calls a hook tightened to "ask", and any call other than a reviewer
+spawn that follows untrusted external content. Each automatic answer is recorded in the
+transcript like any other auto-approval.
+
+A refusal sticks. When you deny a call, `review-auto` remembers that exact call for the
+rest of the shell: the same call is refused again without a prompt, and an `ask_user`
+menu that asks for permission (allow, deny, consent, access, "разрешить", "запретить")
+is no longer answered with its recommended option. It reaches you instead, and the
+transcript says so. An irreversible question was never auto-answered. Restart the
+shell to clear the memory.
+
 ## Long runs in the shell
 
 A review of a large pull request is hundreds of tool calls. The shell is built to
@@ -140,7 +170,7 @@ carry one to the end without you typing anything after the task.
   `/remote-control` ends its Telegram topic.
 
 For the review side (`keryx review slice`, `dispatch-check`, `retry-plan`,
-`keryx ctx run --raw`) see the [CLI reference](../cli-reference.md).
+`ledger`, `keryx ctx run --raw`) see the [CLI reference](../cli-reference.md).
 
 ## Read-only mode: `/plan`
 

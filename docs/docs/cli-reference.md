@@ -263,6 +263,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 | `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
 | `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
+| `--review-system <inherit\|review-auto>` | Who answers a review run's approval questions. `inherit` (default) follows the permission mode; `review-auto` answers them itself (reviewer spawns, `ask_user` menus) while destructive, credential, publish and hook-tightened calls still ask you. Saying "сделай автоматическое ревью" in the session has the same effect. See [Review system](guides/permission-modes.md#review-system). |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -4704,10 +4705,11 @@ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
                           [--json|--brief] [--out <file>]
-keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--out <dir>] [--json]
+keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
 keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--json]
-keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>] [--slices a,b]
+keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
                         [--state <file>] [--dry-run] [--json]
+keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -5180,7 +5182,7 @@ it almost never costs a direct dependent.
 unaffordable *and* harmful — review quality decays as context grows, and an
 unbounded second scope makes later rounds worse than earlier ones.
 
-### `review slice`, `review dispatch-check`, `review retry-plan`
+### `review slice`, `review dispatch-check`, `review retry-plan`, `review ledger`
 
 A reviewer on a shell host cannot open a path, and one handed the whole diff
 spends its rounds reading. These three commands keep each reviewer's input small
@@ -5200,23 +5202,60 @@ never sliced: they are listed under `omissions` with their reason and byte count
 | `--ref <base>` / `--diff <file\|->` | Where the diff comes from. Default: `git diff`. |
 | `--context <n>` | Context lines kept around a change. |
 | `--max-bytes <n>` | Slice ceiling, at least 200. |
+| `--wave-bytes <n>` | What one reviewer dispatch may total (default **60000**, never below `--max-bytes`). The manifest records it as `waveBytes`. |
 | `--out <dir>` | Where the slices and the manifest are written. |
 | `--json` | Print the manifest plus `dir` and `manifestPath`. |
 
 `review dispatch-check` validates reviewer payloads (one object, an array, or
 `{"dispatches": [...]}`) against `reviewer-input.schema.json`. A `diff`-scope
 payload must name its `slices` or carry a `diff` that fits, and what it is
-assigned must total at most the ceiling. Codes: `REVIEWER_INPUT_INVALID`,
+assigned must total at most the manifest's wave budget (`--max-bytes` overrides it): a role owning more is dispatched in slice waves, and each wave has to fit the reviewer's child deadline. Codes: `REVIEWER_INPUT_INVALID`,
 `REVIEWER_INPUT_NO_SLICE`, `REVIEWER_INPUT_SLICE_UNKNOWN`,
 `REVIEWER_INPUT_TOO_LARGE`. Exit 0 ok, 1 refused, 2 payload or manifest
 unreadable.
 
-`review retry-plan` decides what follows a reviewer result. `INCOMPLETE` and
-`BLOCKED` get one retry on slices half the size (`r1-<reviewer>-NN.diff`, appended
-to the manifest); a second failure is `not-run` and prints
+`review retry-plan` decides what follows a reviewer result. `--result` is the
+reviewer's result JSON, or its saved raw reply (the last `REVIEW_RESULT` block is
+read); its `slices` list is what the reviewer covered. An attempt is spent only by
+a result that covered no slice the reviewer had not covered before. A reviewer that
+makes progress is handed the next wave of the slices still uncovered (decision
+`retry`, or `wave` after a finished result with slices still open) and is not
+penalised. A result with nothing new covered cuts the open slices in half
+(`r<n>-<reviewer>-NN.diff`, appended to the manifest) and halves the wave; two such
+results in a row, or six failed rounds in all, are `not-run` and print
 `- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted as a clean pass`.
-Attempts are kept in `retry-state.json` beside the manifest. `--dry-run` plans
-without writing; the exit code is 0 for every decision.
+The dispatch list is the next wave, at most the manifest's wave budget, and
+`remaining` counts what is left. `--next-wave` plans the next wave without a result
+(`--result` becomes optional) and counts no stall; `--covered a,b` adds slice ids
+covered by earlier results. Progress is kept in `retry-state.json` beside the
+manifest. `--dry-run` plans without writing; the exit code is 0 for every decision.
+Only the operator can accept a smaller set than that, with their own quote at
+`review complete`.
+
+`NEEDS_CONTEXT` (or any result with an open `needs_context` list) is not a finished
+scope either. It prints decision `context` with the questions: answer them and
+re-dispatch the uncovered slices. Asking again with nothing new covered is `not-run`.
+
+`review ledger build <input-dir> [--package <review-dir>]` writes the
+`research.json` that `review ingest --research` and `review complete` demand, from
+files only: `raw/*.txt` (reviewer replies), `drivers/*.json`, `slices/manifest.json`
+and `slices/retry-state.json` in the input directory, and `scope-files.json`,
+`findings.json` in the package. The latest result of each required reviewer decides.
+`DONE` / `DONE_WITH_CONCERNS` with no open `needs_context`, and every slice its path
+gate requires covered by its dispatched payloads, is a complete source-only run
+(`executionRequired: false`, with the reason). Anything else — `NEEDS_CONTEXT`,
+`BLOCKED`, `INCOMPLETE`, missing slices, no result, a retry-state `not-run` — stays
+`incomplete` or `not-run`: the builder never declares a reviewer complete on its own
+word. Each raw finding becomes an obligation that is closed only by a matching
+canonical finding (same reviewer and id) or by a `--dispositions` entry
+`{id, status: finding|refuted|out-of-scope, evidence, reason, finding?}`; otherwise it
+stays `unresolved`. `scopeReviewed` and `rawReconciled` are true only when
+established. The command prints `READY`, or `NOT READY` with every gap and its next
+step (the exact `retry-plan --next-wave` command with the waves left, the uncovered slices, the disposition to add),
+using the gate's own validators; exit 1 when not ready, so
+`ledger build && ingest --research` stops. Flags: `--package`, `--mode all|diff`,
+`--findings`, `--dispositions` (default: the obligations already in `research.json`),
+`--out` (default `<package>/research.json`), `--dry-run`, `--json`.
 
 **The set is under regression check, not under review**, and that is refused in
 code rather than discouraged in prose. Three rules, and every one of them is a

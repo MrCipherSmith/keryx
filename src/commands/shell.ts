@@ -115,6 +115,7 @@ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
+import { parseReviewSystem, setReviewSystem, type ReviewSystem } from "../review/review-system";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
@@ -3254,6 +3255,8 @@ export interface ShellCliFlags {
    * leftover flag from a shell alias should not fail the whole launch.
    */
   permissionModeFlag?: PermissionMode;
+  /** `--review-system <inherit|review-auto>`: `review-auto` answers a review run's approval questions itself. */
+  reviewSystemFlag?: ReviewSystem;
   /**
    * `--deny-tools <a,b>` — tool names this session must not have.
    *
@@ -3366,6 +3369,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let fork: boolean | undefined;
   let takeOver: boolean | undefined;
   let permissionModeFlag: PermissionMode | undefined;
+  let reviewSystemFlag: ReviewSystem | undefined;
   let denyTools: string[] | undefined;
   let printPromptArg: string | undefined;
   let eventsFile: string | undefined;
@@ -3423,6 +3427,10 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       permissionModeFlag = next as PermissionMode;
     } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
       permissionModeFlag = arg.slice(2) as PermissionMode;
+    } else if (arg === "--review-system") {
+      const parsed = parseReviewSystem(valueAfter(i++));
+      if (parsed === undefined) invalid("--review-system must be inherit or review-auto");
+      reviewSystemFlag = parsed;
     } else if (arg === "--deny-tools") {
       // Comma-separated, like every other value-taking flag here. Repeated use
       // ACCUMULATES rather than replacing, so `--deny-tools a --deny-tools b`
@@ -3491,6 +3499,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(fork === true ? { fork: true } : {}),
     ...(takeOver === true ? { takeOver: true } : {}),
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
+    ...(reviewSystemFlag !== undefined ? { reviewSystemFlag } : {}),
     ...(denyTools !== undefined ? { denyTools } : {}),
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
     ...(eventsFile !== undefined ? { eventsFile } : {}),
@@ -3613,6 +3622,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     return;
   }
   const flags = parseShellCliFlags(args);
+  if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
   if (flags.help) {
     console.log(`Usage: keryx shell [options]
 
@@ -3630,6 +3640,9 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --permission-mode <mode>      Agent permissions: ask, trust or auto
   --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
+  --review-system <mode>        inherit (default: approvals follow the permission mode) or review-auto
+                                (the review's own approval questions are answered automatically;
+                                destructive, credential, publish and hook-tightened calls still ask)
   --print, -p <prompt>          Run one agent turn on this prompt and exit
   --events-file <path>          Append an NDJSON transcript (turns, tools, usage)
   --events-max-field <n>        Per-field character cap in that transcript (default 4000)

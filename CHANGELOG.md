@@ -6,6 +6,32 @@
 - `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
 - `exec` and `invariant` verification markers take an optional sensitivity note, `[verify: exec \`<command>\` · sensitive: revert]` (an ASCII `;` also separates), with the values `revert`, `mutation` and `failure-scenario`; `judged` and `none` reject it. `keryx flow ac kinds` shows how many criteria carry it, `keryx flow ac confirm` warns (and still confirms) when a criterion carries the note and `--note` has no `evidence: <ref>` label (a non-empty reference up to the next `;`, not `n/a`, `na`, `none`, `-`, `tbd`, `todo`, `ref` or the `<ref>` template; surrounding punctuation is ignored), and `sync-status.md` gains a sensitivity share line with no threshold. The flow-init and flow-orchestrator skills ask for a failure-scenario criterion on behaviour with an external dependency or a failure path.
 
+## [0.3.105] - 2026-10-11
+
+### Review
+
+- `keryx review retry-plan` counts a retry by progress, not by attempts: a result that covers a new slice does not spend the reviewer's attempt, two results in a row that cover nothing new (or six failed rounds) make it `not-run`. `--next-wave` hands out the next wave of only the uncovered slices; a stalled result halves the wave and re-cuts the open slices.
+- `keryx review slice --wave-bytes` (default 60000, never below `--max-bytes`) sets the size of a dispatch wave; `dispatch-check` enforces it instead of the slice ceiling. `ledger build` reports the waves left and the exact `retry-plan --next-wave` command.
+- The operator's own-quote override for a smaller reviewer set is unchanged.
+
+### Shell
+
+- In `--review-system review-auto`, an action the operator refused stays refused: the same call is declined without a new question, and an `ask_user` menu about permission is sent to the operator instead of taking its recommended option.
+
+## [0.3.104] - 2026-10-10
+
+### Review
+
+- `keryx review ledger build <input-dir> --package <review-dir>` writes the `research.json` that `review ingest --research` and `review complete` demand, from the saved reviewer results, `scope-files.json`, the slice manifest and the retry state. A reviewer is complete only when its result is finished and its payloads cover the slices its path gate requires; `NEEDS_CONTEXT`, `BLOCKED`, `INCOMPLETE`, missing slices and no result stay incomplete or `not-run`, each with the exact `retry-plan` command. Raw findings become obligations closed only by a matching canonical finding or a `--dispositions` entry with evidence and a reason. It prints READY or NOT READY with every gap, using the gate's own validators, and exits 1 when not ready.
+- `NEEDS_CONTEXT` (or an open `needs_context` list) is no longer treated as a finished scope: `review retry-plan` answers `context` once with the questions, then `not-run`.
+- The review-orchestrator skill and the completion gate's next step point at `ledger build` instead of a hand-written ledger.
+
+## [0.3.103] - 2026-10-10
+
+### Review
+
+- `keryx shell --review-system review-auto` (or a line such as "сделай автоматическое ревью" / "run an automatic review", or `KERYX_REVIEW_SYSTEM=review-auto`) makes a review run answer its own approval questions: reviewer spawns, including those that follow untrusted external content, and `ask_user` menus. The default `inherit` keeps today's behaviour, where the permission mode decides and `--trust` asks only occasionally. Destructive commands, credential access, publish leases, hook-tightened calls and every non-spawn call that follows untrusted content still ask the human. Only the operator's own top-level line can switch it on; a subagent's task text and non-operator turns cannot. Each automatic answer is recorded as an auto-approval.
+
 ## [0.3.102] - 2026-10-10
 
 ### Agent Runtime

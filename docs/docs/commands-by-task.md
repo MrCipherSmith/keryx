@@ -95,7 +95,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `keryx flow` | Agent-first flow lifecycle (Task Manager). |
 | `keryx job` | Agent-first job packages (job-orchestrator state, steps, documents). |
-| `keryx review` | Managed review packages and lightweight report-only review mode. |
+| `keryx review` | Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands. |
 
 | Shell command | Summary |
 |---|---|

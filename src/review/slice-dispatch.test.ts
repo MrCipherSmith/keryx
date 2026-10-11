@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { checkDispatch } from "./dispatch-check";
-import { notRunLine, planRetry } from "./retry-plan";
-import { buildSlices, sliceSourceFromDiff } from "./slice";
+import { MAX_RETRY_ROUNDS, type RetryState, notRunLine, planRetry } from "./retry-plan";
+import { DEFAULT_WAVE_BYTES, buildSlices, packWaves, sliceSourceFromDiff, validateWaveBytes, waveBytesOf } from "./slice";
 
 function payload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -90,7 +90,7 @@ describe("planRetry", () => {
       expect(slice.id.startsWith("r1-review-logic-")).toBe(true);
       expect(slice.attempt).toBe(1);
     }
-    expect(plan.state.reviewers["review-logic"]).toEqual({ attempt: 1, status: "INCOMPLETE", notRun: false });
+    expect(plan.state.reviewers["review-logic"]).toEqual({ attempt: 1, status: "INCOMPLETE", notRun: false, stalls: 1, covered: [] });
   });
 
   test("a second failure is not-run with the report line, and is never retried again", () => {
@@ -109,6 +109,18 @@ describe("planRetry", () => {
     expect(plan.decision).toBe("not-run");
   });
 
+  test("NEEDS_CONTEXT is not terminal: the first one asks for an answer, the second is not-run", () => {
+    const first = planRetry({ ...base, result: { status: "NEEDS_CONTEXT", needs_context: ["which slices were unread?"] }, state: empty });
+    expect(first.decision).toBe("context");
+    expect(first.needsContext).toEqual(["which slices were unread?"]);
+    expect(first.reason).toContain("scope is not closed");
+    expect(first.newSlices).toEqual([]);
+    expect(first.state.reviewers["review-logic"]).toEqual({ attempt: 1, status: "NEEDS_CONTEXT", notRun: false, stalls: 1, covered: [] });
+    const second = planRetry({ ...base, result: { status: "NEEDS_CONTEXT" }, state: first.state });
+    expect(second.decision).toBe("not-run");
+    expect(second.state.reviewers["review-logic"]?.notRun).toBe(true);
+  });
+
   test("a slice too small to halve is not-run rather than an endless retry", () => {
     const tiny = buildSlices(sliceSourceFromDiff(gitFile("src/t.ts", 1)));
     const plan = planRetry({
@@ -119,5 +131,125 @@ describe("planRetry", () => {
       readSliceText: () => tiny.slices[0]!.text,
     });
     expect(plan.decision).toBe("not-run");
+  });
+});
+
+describe("waves", () => {
+  const diff = Array.from({ length: 12 }, (_, index) => gitFile(`src/w${index}/f.ts`, 200)).join("");
+  const built = buildSlices(sliceSourceFromDiff(diff), { maxBytes: 6_000, waveBytes: 12_000 });
+  const ids = built.manifest.slices.map((slice) => slice.id);
+  const textOf = (id: string): string => built.slices.find((slice) => slice.id === id)!.text;
+  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: (entry: { id: string }) => textOf(entry.id) };
+  const empty: RetryState = { schemaVersion: 1, reviewers: {} };
+
+  test("the manifest carries a wave budget no smaller than the slice ceiling", () => {
+    expect(built.manifest.waveBytes).toBe(12_000);
+    expect(waveBytesOf(buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 3)), { maxBytes: 10_000 }).manifest)).toBe(DEFAULT_WAVE_BYTES);
+    expect(waveBytesOf({ maxBytes: built.manifest.maxBytes })).toBe(Math.max(built.manifest.maxBytes, DEFAULT_WAVE_BYTES));
+    expect(() => validateWaveBytes(100, 6_000)).toThrow("Invalid --wave-bytes");
+  });
+
+  test("packWaves keeps each wave within the budget and lets an oversize entry travel alone", () => {
+    const waves = packWaves(built.manifest.slices, 12_000);
+    for (const wave of waves) {
+      const total = wave.reduce((sum, slice) => sum + slice.bytes, 0);
+      expect(total <= 12_000 || wave.length === 1).toBe(true);
+    }
+    expect(waves.flat().map((slice) => slice.id)).toEqual(ids);
+    expect(packWaves([{ bytes: 50 }, { bytes: 10 }], 20)).toEqual([[{ bytes: 50 }], [{ bytes: 10 }]]);
+  });
+
+  test("dispatch-check allows a wave at the wave ceiling and refuses one above it", async () => {
+    const wave = packWaves(built.manifest.slices, 12_000)[0]!.map((slice) => slice.id);
+    const fits = await checkDispatch([payload({ slices: wave })], { manifest: built.manifest });
+    expect(fits.errors).toEqual([]);
+    expect(fits.maxBytes).toBe(12_000);
+    const over = await checkDispatch([payload({ slices: ids.slice(0, wave.length + 1) })], { manifest: built.manifest });
+    expect(over.errors.map((error) => error.code)).toEqual(["REVIEWER_INPUT_TOO_LARGE"]);
+    expect(over.errors[0]!.message).toContain("retry-plan");
+  });
+
+  test("a reviewer that covers new slices is not spent: the next wave is handed out with no stall", () => {
+    let state = empty;
+    const covered: string[] = [];
+    for (let round = 1; round <= 5; round += 1) {
+      const next = ids.filter((id) => !covered.includes(id)).slice(0, 2);
+      const plan = planRetry({ ...base, result: { status: "INCOMPLETE", slices: next }, state });
+      covered.push(...next);
+      expect(plan.progress).toBe(true);
+      expect(plan.stalls).toBe(0);
+      expect(plan.decision).toBe("retry");
+      expect(plan.newSlices).toEqual([]);
+      expect(plan.wave.every((slice) => !covered.includes(slice.id))).toBe(true);
+      state = plan.state;
+    }
+    expect(state.reviewers["review-logic"]?.covered?.length).toBe(10);
+  });
+
+  test("a result with nothing new spends an attempt; the second in a row is not-run", () => {
+    const first = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [ids[0]!] }, state: empty });
+    const stalled = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [ids[0]!] }, state: first.state });
+    expect(stalled.progress).toBe(false);
+    expect(stalled.stalls).toBe(1);
+    expect(stalled.decision).toBe("retry");
+    expect(stalled.newSlices.length).toBeGreaterThan(0);
+    const dead = planRetry({ ...base, result: { status: "BLOCKED", slices: [ids[0]!] }, state: stalled.state });
+    expect(dead.decision).toBe("not-run");
+    expect(dead.state.reviewers["review-logic"]?.notRun).toBe(true);
+  });
+
+  test("progress resets the stall count, so progress between stalls keeps the reviewer alive", () => {
+    const a = planRetry({ ...base, result: { status: "INCOMPLETE" }, state: empty });
+    expect(a.stalls).toBe(1);
+    const b = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [ids[0]!] }, state: a.state });
+    expect(b.stalls).toBe(0);
+    expect(b.decision).toBe("retry");
+  });
+
+  test("the round cap ends a reviewer that keeps making slow progress", () => {
+    let state = empty;
+    let decision = "";
+    for (let round = 0; round <= MAX_RETRY_ROUNDS; round += 1) {
+      const plan = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [ids[round % ids.length]!] }, state });
+      decision = plan.decision;
+      state = plan.state;
+      if (round < MAX_RETRY_ROUNDS) expect(plan.decision).toBe("retry");
+    }
+    expect(decision).toBe("not-run");
+  });
+
+  test("a finished result with slices still open is a wave, and with all covered it is accepted", () => {
+    const partial = planRetry({ ...base, result: { status: "DONE", slices: ids.slice(0, 2) }, state: empty });
+    expect(partial.decision).toBe("wave");
+    expect(partial.remaining.slices).toBe(ids.length - 2);
+    expect(partial.remaining.waves).toBeGreaterThan(1);
+    expect(partial.wave.reduce((sum, slice) => sum + slice.bytes, 0)).toBeLessThanOrEqual(12_000);
+    const rest = planRetry({ ...base, result: { status: "DONE", slices: ids.slice(2) }, state: partial.state });
+    expect(rest.decision).toBe("accepted");
+    expect(rest.remaining.slices).toBe(0);
+  });
+
+  test("--next-wave with no result plans the first wave and counts no stall", () => {
+    const plan = planRetry({ ...base, result: {}, nextWave: true, state: empty });
+    expect(plan.decision).toBe("wave");
+    expect(plan.stalls).toBe(0);
+    expect(plan.wave.length).toBeGreaterThan(0);
+    expect(plan.remaining.slices).toBe(ids.length);
+    expect(plan.state.reviewers["review-logic"]?.attempt).toBe(0);
+  });
+
+  test("a retry state written before progress was tracked still bounds the reviewer", () => {
+    const legacy = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false } } };
+    expect(planRetry({ ...base, result: { status: "BLOCKED" }, state: legacy }).decision).toBe("not-run");
+  });
+
+  test("covering one piece of a re-cut does not credit the slice it was cut from", () => {
+    const failed = planRetry({ ...base, result: { status: "INCOMPLETE" }, state: empty });
+    const added = { ...built.manifest, slices: [...built.manifest.slices, ...failed.newSlices.map(({ text: _text, ...entry }) => entry)] };
+    const piece = failed.newSlices[0]!.id;
+    const next = planRetry({ ...base, manifest: added, result: { status: "INCOMPLETE", slices: [piece] }, state: failed.state });
+    expect(next.progress).toBe(true);
+    expect(next.remaining.slices).toBeGreaterThan(0);
+    expect(next.wave.map((slice) => slice.id)).not.toContain(piece);
   });
 });
