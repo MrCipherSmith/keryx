@@ -340,6 +340,73 @@ describe("answers", () => {
   });
 });
 
+describe("arbiter log (flow 425 AC6)", () => {
+  const record = (rule: string, verdict = "allow") => ({ at: "t", kind: "budget", verdict, rule, reason: "model", cached: false, ms: 1 });
+
+  test("the child is told where to write its arbiter log, inside the run directory", async () => {
+    const seen: ChildSpec[] = [];
+    await runAutonomousReview(options(scripted(() => 0, seen)));
+    expect(seen[0]!.env["KERYX_ARBITER_LOG"]).toBe(path.join(seen[0]!.runDir, "arbiter.log"));
+  });
+
+  test("the log is copied into the package the run ended with, closed or not", async () => {
+    for (const status of ["closed", "reviewed"]) {
+      rmSync(path.join(cwd, ".metaproject", "reviews"), { recursive: true, force: true });
+      mkdirSync(path.join(cwd, ".metaproject", "reviews"), { recursive: true });
+      const run = await runAutonomousReview(
+        options(
+          scripted(async (c) => {
+            appendFileSync(path.join(c.spec.runDir, "arbiter.log"), `${JSON.stringify(record("R-04"))}\n`);
+            writePackage("rv-1", status);
+            return 0;
+          }),
+          { out: `out-${status}` },
+        ),
+      );
+      const copied = path.join(cwd, ".metaproject", "reviews", "rv-1", "arbiter.log");
+      expect(existsSync(copied)).toBe(true);
+      expect(readFileSync(copied, "utf8")).toBe(readFileSync(path.join(run.runDir, "arbiter.log"), "utf8"));
+    }
+  });
+
+  test("a run that asked nothing leaves no arbiter.log in the package", async () => {
+    await runAutonomousReview(
+      options(
+        scripted(async () => {
+          writePackage("rv-1", "closed");
+          return 0;
+        }),
+      ),
+    );
+    expect(existsSync(path.join(cwd, ".metaproject", "reviews", "rv-1", "arbiter.log"))).toBe(false);
+  });
+
+  test("a new head starts a new log and keeps the old one beside it", async () => {
+    let head = "aaaaaaa1";
+    const spawn = scripted(async (c) => {
+      appendFileSync(path.join(c.spec.runDir, "arbiter.log"), `${JSON.stringify(record(head === "aaaaaaa1" ? "R-01" : "R-02"))}\n`);
+      return 0;
+    });
+    const first = await runAutonomousReview(options(spawn, { resolveHead: async () => head }));
+    head = "bbbbbbb2";
+    await runAutonomousReview(options(spawn, { resolveHead: async () => head }));
+    const now = readFileSync(path.join(first.runDir, "arbiter.log"), "utf8");
+    expect(now).toContain("R-02");
+    expect(now).not.toContain("R-01");
+    expect(readFileSync(path.join(first.runDir, "arbiter.aaaaaaa1.log"), "utf8")).toContain("R-01");
+  });
+
+  test("a resumed run on the same head keeps appending to one log", async () => {
+    const spawn = scripted(async (c) => {
+      appendFileSync(path.join(c.spec.runDir, "arbiter.log"), `${JSON.stringify(record("R-03"))}\n`);
+      return 0;
+    });
+    const first = await runAutonomousReview(options(spawn));
+    await runAutonomousReview(options(spawn));
+    expect(readFileSync(path.join(first.runDir, "arbiter.log"), "utf8").trim().split("\n")).toHaveLength(2);
+  });
+});
+
 describe("one run per pull request", () => {
   test("a second start while one is running is refused by name", async () => {
     const first = runAutonomousReview(

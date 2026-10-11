@@ -1,4 +1,5 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
+import { rememberArbiterSession } from "../review/arbiter-session";
 import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
 import { REFUSED_EARLIER, asksForReviewAuto, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 import { classifyApprovalCause } from "./approval-cause";
@@ -3185,6 +3186,11 @@ async function runAgentTurnCore(
   // (see the `risk !== "read"` check) — a `read` tool cannot carry out a side
   // effect an injected instruction asked for, so it stays usable.
   let untrustedContentSeen = false;
+  // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
+  // so a reviewer subagent on a lighter model does not move the arbiter's tier.
+  if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {
+    rememberArbiterSession({ providerId: deps.providerId, modelId: deps.modelId });
+  }
 
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -4329,6 +4335,8 @@ async function runAgentTurnCore(
             io.mcpToolFingerprint,
             io.mcpToolDestructive,
             deps.unattended === true ? undefined : io.beforeMutation,
+            undefined,
+            untrustedContentSeen,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -5457,6 +5465,8 @@ async function executeCallUnbounded(
   mcpToolDestructive?: (fqn: string) => boolean,
   beforeMutation?: () => Promise<void>,
   stage?: CallStage,
+  // Flow 425: untrusted content was read earlier in this turn; `ask_user` carries it onto the question.
+  untrustedContentSeen = false,
 ): Promise<InteractiveToolResult> {
   const mark = (name: string): void => {
     if (stage !== undefined) stage.current = name;
@@ -5867,6 +5877,7 @@ async function executeCallUnbounded(
   const result = await tool.invoke(input, {
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
+    ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
   });
 
   // Flow 306 (W6 T9): PostToolUse/PostToolUseFailure — observe-only, fired

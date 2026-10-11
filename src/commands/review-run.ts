@@ -5,8 +5,9 @@
 
 import path from "node:path";
 import { optionValue } from "../lib/args";
-import { createTelegramNotifier, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "./review-notify";
+import { createTelegramNotifier, arbiterEscalateLine, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "./review-notify";
 import { AUTONOMOUS_PROFILE, parseAutonomousTarget } from "../review/autonomous-profile";
+import { ARBITER_LOG_NAME, readArbiterLog } from "../review/arbiter-log";
 import { AutonomousRunLockedError, runAutonomousReview, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 
 export const RUN_FLAGS = [
@@ -136,6 +137,8 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
       ...(parsed.model === undefined ? {} : { model: parsed.model }),
     });
     await notifier.finished(endLine(result.summary));
+    const escalated = arbiterEscalateLine(result.summary, readArbiterLog(path.join(result.runDir, ARBITER_LOG_NAME)));
+    if (escalated !== undefined) await notifier.finished(escalated);
     if (parsed.json) log(JSON.stringify(result.summary, null, 2));
     else {
       log(`${result.reused ? "reused" : result.status}: ${result.summary.reason}`);

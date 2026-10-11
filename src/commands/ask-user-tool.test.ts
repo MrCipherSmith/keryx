@@ -74,3 +74,48 @@ test("S-1: the tool description says what the fields mean and gives no guidance 
   expect(text).toContain("irreversible");
   expect(text).toContain("action");
 });
+
+// Flow 425 (AC4/AC8): a policy tag travels from the model's input to the host, and the loop's own
+// untrusted-content flag, never the model's, is what marks a question as shaped by outside content.
+test("flow 425: a well-formed policy tag reaches the host as given", async () => {
+  const seen: AskUserRequest[] = [];
+  const tool = createAskUserTool(async (req) => {
+    seen.push(req);
+    return "a";
+  });
+  const policy = { kind: "budget", facts: { budgetUsedPercent: 20, raisesBudget: false } };
+  await tool.invoke({ question: "Which?", options: options(["a"]), policy });
+  expect(seen[0]?.policy).toEqual(policy);
+});
+
+test("flow 425: a malformed policy tag is dropped, and the question is still asked", async () => {
+  const seen: AskUserRequest[] = [];
+  const tool = createAskUserTool(async (req) => {
+    seen.push(req);
+    return "a";
+  });
+  const bad = ["budget", [], null, { kind: "", facts: {} }, { kind: "budget" }, { kind: "budget", facts: [] }, { kind: "x".repeat(65), facts: {} }];
+  for (const policy of bad) {
+    const result = await tool.invoke({ question: "Which?", options: options(["a"]), policy });
+    expect(result.isError).toBe(false);
+  }
+  expect(seen).toHaveLength(bad.length);
+  for (const request of seen) expect(request.policy).toBeUndefined();
+});
+
+test("flow 425: untrustedContent is set from the loop's context, not from the model's input", async () => {
+  const seen: AskUserRequest[] = [];
+  const tool = createAskUserTool(async (req) => {
+    seen.push(req);
+    return "a";
+  });
+  await tool.invoke({ question: "Which?", options: options(["a"]), untrustedContent: true });
+  await tool.invoke({ question: "Which?", options: options(["a"]) }, { untrustedContentSeen: true } as never);
+  expect(seen[0]?.untrustedContent).toBeUndefined();
+  expect(seen[1]?.untrustedContent).toBe(true);
+});
+
+test("flow 425: the description names the policy field and the closed kinds", () => {
+  expect(ASK_USER_DESCRIPTION).toContain("policy");
+  expect(ASK_USER_DESCRIPTION).toContain("slice_order");
+});

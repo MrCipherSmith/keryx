@@ -280,7 +280,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 424 (AC10): the unattended pull request review. Starts `keryx review run --autonomous` as
     // a separate process; the sidebar shows its phase, rounds, tokens and last automatic answer.
     name: "/autoreview",
-    description: "Autonomous PR review: /autoreview start <URL> [--budget-minutes N] [--budget-tokens N], list, stop",
+    description: "Autonomous PR review: /autoreview start <URL> [--budget-minutes N] [--budget-tokens N], list, stop, arbiter",
     modes: AGENT_ONLY,
   },
   {

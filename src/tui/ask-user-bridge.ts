@@ -8,6 +8,7 @@ import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
 import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
+import { consultArbiter, installQuestionArbiter } from "../commands/review-arbiter-install";
 
 let host: AskUserFn | undefined;
 
@@ -60,7 +61,18 @@ export function journaledAskUser(cwd: string): AskUserFn {
   return async (request) => {
     const autonomousFile = process.env[ENV_AUTONOMOUS_ANSWERS_FILE];
     if (autonomousFile !== undefined && autonomousFile.length > 0) {
+      installQuestionArbiter(cwd);
       return answerAutonomously(request, { file: autonomousFile });
+    }
+    if (process.env.KERYX_REVIEW_AUTO_ANSWER === "1" || reviewAutoActive()) {
+      // Flow 425: a question that carries a policy tag is the arbiter's, not the word heuristic's. Its allow takes
+      // the recommended option; deny, escalate and failure leave the question to the operator.
+      const outcome = await consultArbiter(cwd, request);
+      if (outcome.kind === "answer") return outcome.answer;
+      if (outcome.kind === "human") {
+        notice?.(outcome.notice);
+        return host === undefined ? invokeAskUserHost(request) : journaled(request);
+      }
     }
     const auto = reviewAutoAnswer(request);
     if (auto !== undefined) return auto;

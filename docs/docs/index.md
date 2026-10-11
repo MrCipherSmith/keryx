@@ -44,6 +44,7 @@ the one that describes shipped behaviour.
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)
 - [Review every pull request with a bot, and measure it](guides/review-as-a-pr-bot.md)
 - [Run a review unattended, on a schedule or a trigger](guides/autonomous-review.md)
+- [Let an arbiter answer the orchestrator's questions](guides/review-arbiter.md)
 - [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md)
 - [Get a GitHub and board digest on a schedule](guides/scheduled-digest.md)
 - [Take work in from GitHub as cards in Telegram](guides/work-intake.md)

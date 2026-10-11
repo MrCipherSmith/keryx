@@ -90,6 +90,7 @@ nav:
       - Review with a durable record: guides/review-with-a-record.md
       - Review as a pull request bot: guides/review-as-a-pr-bot.md
       - Review a pull request with nobody at the keyboard: guides/autonomous-review.md
+      - Let the review arbiter answer policy questions: guides/review-arbiter.md
       - Jev in the delivery loop: guides/jev-in-the-delivery-loop.md
       - Get a GitHub and board digest on a schedule: guides/scheduled-digest.md
       - Take work in from GitHub as cards in Telegram: guides/work-intake.md

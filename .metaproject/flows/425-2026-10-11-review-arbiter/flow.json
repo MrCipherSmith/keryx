@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -9,15 +9,60 @@
   "id": "425",
   "slug": "review-arbiter",
   "title": "Keryx Review: arbiter sub-agent answers orchestrator questions by written rules",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-10-11T07:20:28.378Z",
-  "updatedAt": "2026-10-11T07:20:28.378Z",
+  "updatedAt": "2026-10-11T10:00:29.928Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-11T10:00:24.749Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC2": {
+      "at": "2026-10-11T10:00:25.256Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC3": {
+      "at": "2026-10-11T10:00:25.782Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC4": {
+      "at": "2026-10-11T10:00:26.321Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC5": {
+      "at": "2026-10-11T10:00:26.852Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC6": {
+      "at": "2026-10-11T10:00:27.376Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC7": {
+      "at": "2026-10-11T10:00:27.880Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC8": {
+      "at": "2026-10-11T10:00:28.376Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC9": {
+      "at": "2026-10-11T10:00:28.878Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC10": {
+      "at": "2026-10-11T10:00:29.397Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    },
+    "AC12": {
+      "at": "2026-10-11T10:00:29.928Z",
+      "note": "evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -38,34 +83,291 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-10-11T07:20:28.378Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-11T09:19:02.502Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-11T09:19:03.588Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-11T10:00:24.750Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:25.256Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:25.782Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:26.321Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:26.852Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:27.376Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:27.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:28.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:28.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:29.397Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-11T10:00:29.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: evidence: bun test src/review/ src/tui/ src/commands (3646 pass, 2 pre-existing ci-triage fails); tsc 0; commits on feat/review-arbiter (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-11T10:00:24.749Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:25.256Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:25.782Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:26.321Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:26.852Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:27.376Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:27.880Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:28.376Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:28.878Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:29.397Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
+    },
+    {
+      "at": "2026-10-11T10:00:29.928Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74"
     }
   ]
 }

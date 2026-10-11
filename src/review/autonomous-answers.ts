@@ -8,6 +8,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { CANCEL_ANSWER } from "../decisions/service";
 import type { AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
+import { askFloor } from "./arbiter-floor";
 
 /** Set by the runner on the child shell; its presence turns the autonomous answer path on. */
 export const ENV_AUTONOMOUS_ANSWERS_FILE = "KERYX_AUTONOMOUS_ANSWERS_FILE";
@@ -21,6 +22,7 @@ export type AutoAnswerBasis =
   | "recommended"
   | "first"
   | "refused-irreversible"
+  | "refused-floor"
   | "refused-no-option"
   | "arbiter"
   | "arbiter-deny"
@@ -72,6 +74,11 @@ export async function answerAutonomously(request: AskUserRequest, options: Answe
   };
 
   if (request.irreversible === true) return finish(CANCEL_ANSWER, "refused-irreversible");
+
+  // Flow 425: a floor-class question (a named action, content read from outside, a refused action) is never
+  // decided by the arbiter and never by the safe default either: it is refused, and the journal says why.
+  const floor = askFloor(request);
+  if (floor !== undefined) return finish(CANCEL_ANSWER, "refused-floor", `floor:${floor}`);
 
   if (arbiter !== undefined) {
     let verdict: ArbiterVerdict | undefined;

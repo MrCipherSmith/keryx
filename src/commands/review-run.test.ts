@@ -1,6 +1,9 @@
 // `keryx review run --autonomous`: the command line, the exit code and the notes sent around a run.
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { endLine, createTelegramNotifier, startLine, type RunNotifier } from "./review-notify";
 import { parseAutonomousTarget } from "../review/autonomous-profile";
 import { AutonomousRunLockedError, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
@@ -86,6 +89,41 @@ describe("parseRunArgs", () => {
 
   test("an unknown option is refused", () => {
     expect(() => parseRunArgs([...BASE, "--budgit-minutes", "5"])).toThrow("Unknown option");
+  });
+});
+
+describe("arbiter escalate line (flow 425 AC10)", () => {
+  const entry = (verdict: string, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ at: "t", kind: "budget", verdict, rule: "none", reason: "model-error", cached: false, ms: 1, ...extra });
+
+  async function withLog(lines: string[], status: AutonomousSummary["status"], code: number) {
+    const dir = mkdtempSync(path.join(tmpdir(), "review-run-arbiter-"));
+    try {
+      writeFileSync(path.join(dir, "arbiter.log"), lines.length === 0 ? "" : `${lines.join("\n")}\n`);
+      return await drive(BASE, async () => ({ ...result(status, code), runDir: dir }));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("an escalate that ended an unfinished run sends a second line naming the kind and the reason", async () => {
+    const driven = await withLog([entry("allow", { rule: "R-04", reason: "model" }), entry("escalate", { detail: "provider timed out" })], "incomplete", 2);
+    expect(driven.notifier.lines).toHaveLength(3);
+    expect(driven.notifier.lines[2]).toContain("Arbiter escalated and the run stopped");
+    expect(driven.notifier.lines[2]).toContain("budget escalate");
+    expect(driven.notifier.lines[2]).toContain("provider timed out");
+  });
+
+  test("no line when the run completed, when nothing was escalated, or when the arbiter recovered after an escalate", async () => {
+    expect((await withLog([entry("escalate")], "complete", 0)).notifier.lines).toHaveLength(2);
+    expect((await withLog([entry("deny", { rule: "R-07", reason: "model" })], "incomplete", 2)).notifier.lines).toHaveLength(2);
+    expect((await withLog([entry("escalate"), entry("allow", { rule: "R-04", reason: "model" })], "stalled", 5)).notifier.lines).toHaveLength(2);
+    expect((await withLog([], "incomplete", 2)).notifier.lines).toHaveLength(2);
+  });
+
+  test("a run with no arbiter.log at all is unchanged", async () => {
+    const driven = await drive(BASE, async () => result("incomplete", 2));
+    expect(driven.notifier.lines).toHaveLength(2);
   });
 });
 
