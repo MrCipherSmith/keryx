@@ -210,7 +210,7 @@ test("dropQueuedBySource splits the Telegram lines out in queue order and keeps 
   expect(dropQueuedBySource([q("x", "typed")], "tg").dropped).toEqual([]);
 });
 
-// Flow 423 AC6: a queued message says what it waits for.
+// Flow 426 AC6: a queued message says what it waits for.
 
 test("AC6: the wait reason names the turn, or the call whose approval is pending", () => {
   expect(queueWaitReason({ kind: "turn" })).toBe("waits for the current turn");

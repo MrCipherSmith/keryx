@@ -1692,7 +1692,7 @@ export async function pickShellApproval(
   // about a specific call is not a property of the command text either, and
   // must never be answerable from a remembered grant.
   hookAsk = false,
-  // Flow 423 (AC5): the one-line cause of this prompt, shown above the command.
+  // Flow 426 (AC5): the one-line cause of this prompt, shown above the command.
   cause?: ApprovalCause,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
@@ -5309,7 +5309,7 @@ export async function launchTuiAgentShell(opts: {
       );
       return id === "send";
     };
-    // Flow 423 (AC6): while an approval is pending, the queue says the queued messages wait for it.
+    // Flow 426 (AC6): while an approval is pending, the queue says the queued messages wait for it.
     let pendingApprovalCall: string | undefined;
     const queueWait = (): QueueWait =>
       pendingApprovalCall !== undefined ? { kind: "approval", call: pendingApprovalCall } : { kind: "turn" };
@@ -5333,7 +5333,7 @@ export async function launchTuiAgentShell(opts: {
       )
         .map((line) => `◇ ${line}`)
         .join("\n")}\n`;
-    // Flow 423 (AC5): every approval modal is preceded by the same one-line cause the Telegram relay carries.
+    // Flow 426 (AC5): every approval modal is preceded by the same one-line cause the Telegram relay carries.
     const addCauseLine = (tool: string, meta: Parameters<typeof causeOfMeta>[1]): void => {
       transcript.add(
         new otui.TextRenderable(r, {

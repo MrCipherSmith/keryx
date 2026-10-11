@@ -2237,7 +2237,7 @@ otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)
   h.renderer.destroy();
 });
 
-// Flow 423 AC6: the queue panel says what each queued message waits for.
+// Flow 426 AC6: the queue panel says what each queued message waits for.
 otuiTest("AC6: the queue panel renders its state and the approval it waits for (headless)", async () => {
   const otui = requireOtui();
   const h = await mountApprovalDock(otui, { width: 160 });
@@ -2285,7 +2285,7 @@ otuiTest("AC6: without an approval pending the queue panel says it waits for the
   h.renderer.destroy();
 });
 
-// Flow 423 AC5: the modal shows the one-line cause, one test per cause.
+// Flow 426 AC5: the modal shows the one-line cause, one test per cause.
 for (const cause of APPROVAL_CAUSES) {
   otuiTest(`AC5: the shell approval modal shows the ${cause} cause line (headless)`, async () => {
     const otui = requireOtui();

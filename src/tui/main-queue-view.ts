@@ -1,6 +1,6 @@
 // The renderables of the main-queue panel: one row per queued message (text, state, wait reason,
 // Force/Edit/Delete) and the single line that explains [Force]. Split from `tui-shell.ts` so the
-// panel can be rendered headless with an approval pending (flow 423, AC6).
+// panel can be rendered headless with an approval pending (flow 426, AC6).
 
 import { smallActionButton } from "./action-button";
 import { formatQueueRow, QUEUE_FORCE_HELP, type QueueWait } from "./main-queue";

@@ -1,5 +1,5 @@
 // Why an approval prompt appears: one cause from a closed set, one line the operator reads
-// in the TUI modal, the readline shell and the Telegram relay (flow 423 AC5). Pure.
+// in the TUI modal, the readline shell and the Telegram relay (flow 426 AC5). Pure.
 
 import type { ApprovalMeta } from "./agent";
 

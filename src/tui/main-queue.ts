@@ -189,7 +189,7 @@ export function drainIdleMainQueue<T extends QueuedMainQuestion>(
   return true;
 }
 
-/** What a queued message waits for (flow 423, AC6). */
+/** What a queued message waits for (flow 426, AC6). */
 export type QueueWait = { kind: "turn" } | { kind: "approval"; call: string };
 
 export const QUEUE_FORCE_HELP =

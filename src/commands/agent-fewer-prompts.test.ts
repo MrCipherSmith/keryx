@@ -1,4 +1,4 @@
-// Flow 423: fewer approval prompts in trust and review-auto. The routine table lifts the untrusted-content
+// Flow 426: fewer approval prompts in trust and review-auto. The routine table lifts the untrusted-content
 // latch (AC1/AC2), the floors stay (AC3), a refusal is remembered across spellings (AC4) and every prompt
 // carries its cause (AC5).
 
