@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { BUNDLED_PATH_GATES, coverageErrors, type ReviewMode } from "./coverage";
+import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { researchErrors } from "./research";
 import type { RetryState } from "./retry-plan";
-import type { SliceManifest } from "./slice";
+import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
+import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
@@ -38,7 +39,8 @@ export type Disposition = {
   reason?: string;
 };
 
-export type LedgerGap = { reviewer?: string; detail: string; next: string };
+/** `waves` is how many dispatches of the reviewer's uncovered slices remain, when the gap is about uncovered slices. */
+export type LedgerGap = { reviewer?: string; detail: string; next: string; waves?: number };
 
 export type LedgerInputs = {
   mode: ReviewMode;
@@ -100,25 +102,25 @@ function sliceIdsOf(value: unknown): string[] {
   return Array.isArray(value) ? value.map((v) => (typeof v === "string" ? v : (v as { id?: unknown })?.id)).filter(text) : [];
 }
 
-/** Slices a reviewer must have seen: the manifest's original slices, narrowed to the files its path gate matches. */
-function requiredSlices(manifest: SliceManifest, reviewer: string): string[] {
-  const gate = BUNDLED_PATH_GATES[reviewer];
-  return manifest.slices.filter((s) => s.retryOf === undefined && (gate === undefined || s.files.some(gate))).map((s) => s.id);
-}
-
-/** Ids a set of dispatched slices accounts for: themselves, and the originals a smaller retry slice was cut from. */
-function accountedFor(manifest: SliceManifest, ids: Iterable<string>): Set<string> {
-  const byId = new Map(manifest.slices.map((s) => [s.id, s]));
-  const out = new Set<string>();
-  for (const id of ids) {
-    out.add(id);
-    for (const origin of byId.get(id)?.retryOf ?? []) out.add(origin);
-  }
-  return out;
+/** Ids a set of dispatched slices accounts for: themselves, and an original whose smaller retry slices were all covered. */
+function accountedFor(manifest: SliceManifest, reviewer: string, ids: Iterable<string>): Set<string> {
+  return sliceGraph(manifest, reviewer).accounted(ids);
 }
 
 function retryNext(reviewer: string, raw: RawFile, manifestPath: string | undefined): string {
   return `keryx review retry-plan --manifest ${manifestPath ?? "<slices/manifest.json>"} --result ${raw.name} --reviewer ${reviewer}`;
+}
+
+/** The dispatches still owed to a reviewer: its uncovered required slices, packed under the manifest's wave budget. */
+function wavesLeft(manifest: SliceManifest, reviewer: string, seen: ReadonlySet<string>): { slices: number; waves: number; bytes: number } {
+  const graph = sliceGraph(manifest, reviewer);
+  return summarizeWaves(packWaves(graph.open(requiredSlices(manifest, reviewer), seen), waveBytesOf(manifest)));
+}
+
+function waveNext(reviewer: string, manifestPath: string | undefined, processed: RawFile | undefined): string {
+  const manifest = manifestPath ?? "<slices/manifest.json>";
+  const result = processed === undefined ? "" : ` --result ${processed.name}`;
+  return `keryx review retry-plan --manifest ${manifest} --reviewer ${reviewer}${result} --next-wave  (hands out the next wave of uncovered slices; dispatch-check it, save the reply under raw/, run this again until it prints accepted)`;
 }
 
 /**
@@ -149,7 +151,13 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     }
     if (latest === undefined) {
       runs.push({ reviewer, executionId: `${reviewer}:not-run`, status: "not-run", notRunReason: "no reviewer result recorded", scopeComplete: false });
-      gaps.push({ reviewer, detail: `${reviewer}: no result recorded`, next: `dispatch ${reviewer} on its slices, save the reply to raw/${reviewer}.txt, run keryx review dispatch-check first` });
+      const left = manifest === undefined ? undefined : wavesLeft(manifest, reviewer, accountedFor(manifest, reviewer, known?.covered ?? []));
+      gaps.push({
+        reviewer,
+        detail: `${reviewer}: no result recorded${left === undefined ? "" : `; ${left.slices} slice(s) to cover in ${left.waves} wave(s) of at most ${waveBytesOf(manifest!)} bytes`}`,
+        next: manifest === undefined ? `dispatch ${reviewer} on its slices, save the reply to raw/${reviewer}.txt, run keryx review dispatch-check first` : waveNext(reviewer, input.manifestPath, undefined),
+        ...(left === undefined ? {} : { waves: left.waves }),
+      });
       continue;
     }
     const result = latest.result!;
@@ -160,12 +168,21 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
+    const claimed = new Set<string>(sliceIdsOf(result.slices));
+    if (manifest !== undefined) {
+      if (finished) for (const id of input.payloadSlices[reviewer] ?? []) if (result.slices === undefined) claimed.add(id);
+      for (const earlier of mine.slice(0, -1)) sliceIdsOf(earlier.result?.slices).forEach((id) => claimed.add(id));
+      for (const id of known?.covered ?? []) claimed.add(id);
+    }
+    const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
     if (!finished) {
       run.status = "incomplete";
       run.scopeComplete = false;
       run.executionReason = "not claimed: the reviewer did not finish its scope";
       const why = asked.length > 0 ? `open needs_context (${asked.length}): ${asked.slice(0, 3).join(" | ")}` : status;
-      gaps.push({ reviewer, detail: `${reviewer}: ${why}; scope not closed`, next: retryNext(reviewer, latest, input.manifestPath) });
+      const left = manifest === undefined ? undefined : wavesLeft(manifest, reviewer, seen);
+      const tail = left === undefined || left.slices === 0 ? "" : `; ${left.slices} slice(s) uncovered, ${left.waves} wave(s) left`;
+      gaps.push({ reviewer, detail: `${reviewer}: ${why}; scope not closed${tail}`, next: retryNext(reviewer, latest, input.manifestPath), ...(left === undefined ? {} : { waves: left.waves }) });
       runs.push(run);
       continue;
     }
@@ -173,15 +190,13 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     run.executionReason = "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command";
     let scopeComplete = true;
     if (manifest !== undefined) {
-      const claimed = new Set<string>(sliceIdsOf(result.slices));
-      for (const id of input.payloadSlices[reviewer] ?? []) if (result.slices === undefined) claimed.add(id);
-      for (const earlier of mine.slice(0, -1)) if (FINISHED.has(String(earlier.result?.status).toUpperCase())) sliceIdsOf(earlier.result?.slices).forEach((id) => claimed.add(id));
-      const seen = accountedFor(manifest, claimed);
       const missing = requiredSlices(manifest, reviewer).filter((id) => !seen.has(id));
       if (missing.length > 0) {
         scopeComplete = false;
         const shown = missing.slice(0, 8).join(", ") + (missing.length > 8 ? `, … (+${missing.length - 8})` : "");
-        gaps.push({ reviewer, detail: `${reviewer}: ${missing.length} slice(s) not covered by any dispatched payload: ${shown}`, next: `dispatch ${reviewer} on those slices (keryx review dispatch-check --payload … --manifest ${input.manifestPath ?? "<manifest>"}), then rebuild` });
+        const left = wavesLeft(manifest, reviewer, seen);
+        const processed = known?.covered !== undefined && sliceIdsOf(result.slices).every((id) => known.covered!.includes(id)) ? undefined : latest;
+        gaps.push({ reviewer, detail: `${reviewer}: ${missing.length} slice(s) not covered by any dispatched payload: ${shown}; ${left.waves} wave(s) of at most ${waveBytesOf(manifest)} bytes left`, next: waveNext(reviewer, input.manifestPath, processed), waves: left.waves });
       } else complete.set(reviewer, seen);
     } else complete.set(reviewer, new Set());
     run.scopeComplete = scopeComplete;

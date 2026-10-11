@@ -1623,3 +1623,55 @@ test("`review retry-plan` retries once on smaller slices, then reports Not run",
   expect(second.reportLine).toContain("- **Not run:** review-logic");
   expect(second.dispatch).toEqual([]);
 });
+
+test("`review slice --wave-bytes` records the wave budget and refuses one below the slice ceiling", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 6 }, (_, i) => sliceGitFile(`src/w${i}/f.ts`, 120)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "4000", "--wave-bytes", "9000", "--out", "out", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(logs.join("\n")).waveBytes).toBe(9000);
+
+  errors = [];
+  process.exitCode = 0;
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "4000", "--wave-bytes", "3000", "--out", "out2"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--wave-bytes");
+});
+
+test("`review retry-plan --next-wave` hands out bounded waves without a result, and progress costs no attempt", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 6 }, (_, i) => sliceGitFile(`src/w${i}/f.ts`, 120)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "4000", "--wave-bytes", "9000", "--out", "out"]);
+  const manifest = JSON.parse(await readFile(path.join(ROOT, "out", "manifest.json"), "utf8"));
+  const ids: string[] = manifest.slices.map((s: { id: string }) => s.id);
+
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--reviewer", "review-logic", "--next-wave", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const first = JSON.parse(logs.join("\n"));
+  expect(first.decision).toBe("wave");
+  expect(first.dispatch.length).toBeGreaterThan(0);
+  expect(first.dispatch.reduce((sum: number, d: { bytes: number }) => sum + d.bytes, 0)).toBeLessThanOrEqual(9000);
+  expect(first.remaining.slices).toBe(ids.length);
+
+  for (let round = 1; round <= 2; round += 1) {
+    const state = JSON.parse(await readFile(path.join(ROOT, "out", "retry-state.json"), "utf8"));
+    const done: string[] = state.reviewers["review-logic"].covered ?? [];
+    const next = ids.filter((id) => !done.includes(id)).slice(0, 2);
+    await writeFile(path.join(ROOT, "result.json"), JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE", slices: next }), "utf8");
+    logs = [];
+    await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "result.json", "--json"]);
+    const plan = JSON.parse(logs.join("\n"));
+    expect(plan.progress).toBe(true);
+    expect(plan.stalls).toBe(0);
+    expect(plan.decision).toBe("retry");
+  }
+});
+
+test("`review retry-plan` reads a saved raw reply carrying a REVIEW_RESULT block", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 4 }, (_, i) => sliceGitFile(`src/m/f${i}.ts`, 80)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "30000", "--out", "out"]);
+  await writeFile(path.join(ROOT, "raw.txt"), 'findings below\n\n```json\n{"reviewer":"review-logic","status":"DONE","slices":["slice-01"]}\n```\n', "utf8");
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "raw.txt", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(logs.join("\n")).reviewer).toBe("review-logic");
+});

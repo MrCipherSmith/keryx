@@ -4,6 +4,11 @@ import { buildReviewScope, type ReviewScopeConfig, type ScopedRegion, type Scope
 export const DEFAULT_SLICE_MAX_BYTES = 150_000;
 /** Below this a header alone would not fit, so a smaller ceiling is refused rather than silently exceeded. */
 export const MIN_SLICE_MAX_BYTES = 200;
+/**
+ * Default ceiling for what one reviewer dispatch (a wave) carries in total. A spawned reviewer has a 300 s child
+ * deadline, so a role owning dozens of slices is fanned out over several dispatches instead of one.
+ */
+export const DEFAULT_WAVE_BYTES = 60_000;
 
 export type SliceSplit = "domain" | "file" | "hunk";
 
@@ -32,6 +37,8 @@ export type SliceOmission = {
 export type SliceManifest = {
   schemaVersion: 1;
   maxBytes: number;
+  /** Total bytes one dispatch may carry. Absent in a manifest written before waves existed. */
+  waveBytes?: number;
   source: "diff" | "scoped-diff";
   slices: SliceEntry[];
   omissions: SliceOmission[];
@@ -51,6 +58,31 @@ const encoder = new TextEncoder();
 
 export function byteLength(text: string): number {
   return encoder.encode(text).length;
+}
+
+/** The total a dispatch may carry: the manifest's own, else the default, never below one slice. */
+export function waveBytesOf(manifest: Pick<SliceManifest, "maxBytes" | "waveBytes">): number {
+  return manifest.waveBytes ?? Math.max(manifest.maxBytes, DEFAULT_WAVE_BYTES);
+}
+
+/** Cut an ordered list of slices into dispatches of at most `budget` bytes; a slice over the budget travels alone. */
+export function packWaves<T extends { bytes: number }>(entries: readonly T[], budget: number): T[][] {
+  const waves: T[][] = [];
+  let current: T[] = [];
+  let used = 0;
+  for (const entry of entries) {
+    if (current.length > 0 && used + entry.bytes > budget) {
+      waves.push(current);
+      current = [];
+      used = 0;
+    }
+    current.push(entry);
+    used += entry.bytes;
+  }
+  if (current.length > 0) {
+    waves.push(current);
+  }
+  return waves;
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +340,8 @@ function domainLabel(domains: readonly string[]): string {
 
 export type BuildSlicesOptions = {
   maxBytes?: number;
+  /** Total bytes per dispatch. Defaults to {@link DEFAULT_WAVE_BYTES}, and never below `maxBytes`. */
+  waveBytes?: number;
   /** Prefix for slice `path` values. Left empty, `path` is the bare file name. */
   dir?: string;
   /** Slice id and file prefix, e.g. `slice`. */
@@ -319,6 +353,13 @@ export type BuildSlicesOptions = {
 export function validateSliceMaxBytes(value: number): number {
   if (!Number.isInteger(value) || value < MIN_SLICE_MAX_BYTES) {
     throw new Error(`Invalid --max-bytes: ${value}. Expected an integer of at least ${MIN_SLICE_MAX_BYTES}.`);
+  }
+  return value;
+}
+
+export function validateWaveBytes(value: number, maxBytes: number): number {
+  if (!Number.isInteger(value) || value < maxBytes) {
+    throw new Error(`Invalid --wave-bytes: ${value}. Expected an integer of at least the slice ceiling (${maxBytes}), or one slice could never be dispatched.`);
   }
   return value;
 }
@@ -411,6 +452,7 @@ export function buildSlices(
   const manifest: SliceManifest = {
     schemaVersion: 1,
     maxBytes: max,
+    waveBytes: validateWaveBytes(options.waveBytes ?? Math.max(max, DEFAULT_WAVE_BYTES), max),
     source: source.source ?? "diff",
     slices: slices.map(({ text: _text, ...entry }) => entry),
     omissions,
@@ -437,8 +479,11 @@ export function resliceText(
 }
 
 export function renderSliceSummary(manifest: SliceManifest): string {
+  const waveBytes = waveBytesOf(manifest);
+  const waves = packWaves(manifest.slices, waveBytes).length;
   const lines = [
     `slices: ${manifest.totals.slices} (<= ${manifest.maxBytes} bytes each, ${manifest.totals.bytes} bytes total, ${manifest.totals.files} files)`,
+    `waves: ${waves} for one reviewer owning every slice (<= ${waveBytes} bytes per dispatch)`,
     ...manifest.slices.map((slice) => `- ${slice.id}  ${slice.bytes} bytes  ${slice.files.length} files  [${slice.split}]  ${slice.domain}`),
     `omitted: ${manifest.totals.omittedFiles} files (${manifest.totals.omittedBytes} bytes of diff)`,
     ...manifest.omissions.map((omission) => `- ${omission.path}  ${omission.reason}  ${omission.bytes} bytes`),

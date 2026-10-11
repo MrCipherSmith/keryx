@@ -3966,22 +3966,26 @@ Usage:
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
   keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
-                     [--max-bytes <n>] [--out <dir>] [--json]
+                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
                      Cuts scope A into reviewer-sized slice files plus a manifest;
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
+                     --wave-bytes is the most one reviewer dispatch carries.
   keryx review required [--mode all|diff] [--scope <scope.json>] [--json]
                         The reviewer set a round must dispatch: every available
                         reviewer for all, the diff-derived set for diff.
                         \`review complete\` refuses a smaller dispatch.
   keryx review dispatch-check --payload <file|-> [--manifest <file>]
                               [--max-bytes <n>] [--json]
-                              Refuses a reviewer payload with no slice, an oversize
-                              slice, or a shape the reviewer-input schema rejects.
+                              Refuses a reviewer payload with no slice, one over the
+                              manifest's wave budget, or a shape the schema rejects.
   keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
-                          [--slices a,b] [--state <file>] [--dry-run] [--json]
-                          One smaller-slice retry for INCOMPLETE/BLOCKED, then
-                          "Not run" — never a clean pass. NEEDS_CONTEXT is not terminal:
-                          its questions are answered once, the scope stays open.
+                          [--slices a,b] [--covered a,b] [--next-wave] [--state <file>]
+                          [--dry-run] [--json]
+                          Hands out the next wave of uncovered slices. A reviewer that
+                          covered new slices keeps its attempt; two results in a row with
+                          nothing new, or 6 failed rounds, are "Not run" — never a clean
+                          pass. NEEDS_CONTEXT is not terminal: its questions are answered,
+                          the scope stays open. --result is optional with --next-wave.
   keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
                             [--findings <file>] [--dispositions <file>] [--out <file>]
                             [--dry-run] [--json]
