@@ -339,7 +339,7 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
    failure path gets its own failure-scenario criterion with an observable
    result (saved, error visible, retry creates no duplicate); a check claimed to
    catch a regression carries \`· sensitive: revert|mutation|failure-scenario\`
-   and the confirm note names the evidence.
+   and the confirm note carries \`evidence: <ref>\` (revert/mutation run or failure-scenario reference).
 8. Re-verify the whole package, then freeze and hand off:
    \`keryx flow freeze <id> --yes\` -> \`keryx flow start <id>\` (the operator
    already answered the kinds question, so the freeze must not prompt).
