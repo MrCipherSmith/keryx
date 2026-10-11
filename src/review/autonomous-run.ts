@@ -9,6 +9,7 @@
 import { execFile, spawn as nodeSpawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { ARBITER_LOG_NAME, ENV_ARBITER_LOG, copyArbiterLogToPackage } from "./arbiter-log";
 import { ENV_AUTONOMOUS_ANSWERS_FILE, readAutoAnswers } from "./autonomous-answers";
 import {
   AUTONOMOUS_PROFILE,
@@ -244,6 +245,11 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   } else if (prior !== undefined && existsSync(summaryFile)) {
     renameSync(summaryFile, path.join(runDir, `summary.${(prior.head ?? "previous").slice(0, 8)}.json`));
   }
+  const arbiterLog = path.join(runDir, ARBITER_LOG_NAME);
+  if (!sameHead && existsSync(arbiterLog)) {
+    // a new head is a new review: the old head's decisions stay beside it, not in this run's log
+    renameSync(arbiterLog, path.join(runDir, `arbiter.${(prior?.head ?? "previous").slice(0, 8)}.log`));
+  }
 
   const state: RunState = sameHead
     ? { ...prior, head, attempts: prior.attempts + 1 }
@@ -270,7 +276,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
       provider: options.provider,
       model: options.model,
     }),
-    env: { [ENV_REVIEW_SYSTEM]: AUTONOMOUS_PROFILE.reviewSystem, [ENV_AUTONOMOUS_ANSWERS_FILE]: answersFile },
+    env: { [ENV_REVIEW_SYSTEM]: AUTONOMOUS_PROFILE.reviewSystem, [ENV_AUTONOMOUS_ANSWERS_FILE]: answersFile, [ENV_ARBITER_LOG]: arbiterLog },
     cwd,
     runDir,
     eventsFile,
@@ -442,6 +448,8 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   };
 
   writeSummary(runDir, summary);
+  // the arbiter's record belongs with the review it helped decide, whatever way the run ended
+  if (found !== undefined) copyArbiterLogToPackage(arbiterLog, found.dir);
   writeJson(stateFile, {
     head,
     attempts: state.attempts,
