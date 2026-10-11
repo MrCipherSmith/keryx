@@ -4814,7 +4814,7 @@ Questions the model asks are answered by the safe default (the recommended optio
 an irreversible one is refused) and each answer is recorded with its basis in `answers.ndjson`. The
 run directory also holds `summary.json`, `report.md`, `events.ndjson`, `progress.json`, `lock.json`,
 `run.json` and `child.log`. A run on the same head resumes an open package; a run on a new head
-starts fresh. In `keryx shell`, `/autoreview start|list|stop` runs and watches the same command.
+starts fresh. In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
 See [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 ### `review comments`

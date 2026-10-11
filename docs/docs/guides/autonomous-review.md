@@ -36,7 +36,10 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
   cancelled). Any other question takes the recommended option, or the first one when none is
   recommended. A question with nothing to choose from is refused. Every automatic answer is
   written to `answers.ndjson` with its basis (`recommended`, `first`, `refused-irreversible`,
-  `refused-no-option`), so you can read later what was decided for you.
+  `refused-no-option`), so you can read later what was decided for you. A question the review
+  skill tagged as policy (scope, budget, partial coverage, a smaller slice) goes to the
+  [review arbiter](review-arbiter.md) instead: it answers from numbered rules, and a `deny` or
+  an `escalate` is a refusal, with its basis in `answers.ndjson`.
 - **A floor.** The calls that always need a human (destructive, credentials, publishing)
   are refused, not granted. A refused call stays refused: the same call in any spelling is
   declined without a new question, and the run is told to choose another path. A run that can
@@ -62,6 +65,7 @@ Everything is under `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/` 
 | `report.md` | The same for a person: the verdict first, then the findings and what was decided for you. |
 | `events.ndjson` | The child's event stream. |
 | `answers.ndjson` | Every automatic answer, with its basis. |
+| `arbiter.log` | One line per policy question the [review arbiter](review-arbiter.md) was asked: verdict, rule, model and cost. Copied into the review package when the run ends. |
 | `progress.json` | The phase, rounds and tokens now. `/autoreview list` and the sidebar read this. |
 | `lock.json` | The pid and start time of the run that holds the pull request. |
 | `child.log` | The child's own output, for a failed run. |
@@ -81,7 +85,10 @@ whose process has died is taken over.
 /autoreview start https://github.com/owner/repo/pull/123 [--budget-minutes N] [--budget-tokens N]
 /autoreview list
 /autoreview stop 123
+/autoreview arbiter [123]
 ```
+
+`arbiter` lists what the run's [arbiter](review-arbiter.md) was asked and what it answered.
 
 `start` runs the command above in a detached process and returns at once. `stop` sends it
 SIGTERM, so the run writes its partial summary; with one live run the argument can be left out.
@@ -98,6 +105,9 @@ ends. The end line has the verdict, finding counts, tokens and time:
 ```
 Autonomous review incomplete (exit 2): owner/repo PR #123, 0 blocker, 2 major, 5 minor, 412000 tokens, 1840 s. stopped by the operator; last phase: ingest; package rev-… kept at ingested
 ```
+
+A run that stopped because the arbiter escalated sends one more line naming the question and
+the reason; the log is in the package as `arbiter.log`.
 
 The note is best effort. With no serve, no paired bot or a slow network, the run is neither
 held up nor failed. `--no-notify` turns it off.
