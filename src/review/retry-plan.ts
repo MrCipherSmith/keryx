@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, resliceText, waveBytesOf } from "./slice";
 import { type WaveSummary, requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
@@ -22,12 +23,15 @@ export type ReviewerRetryState = {
 
 export type RetryState = {
   schemaVersion: 1;
+  scopeFingerprint?: string;
   reviewers: Record<string, ReviewerRetryState>;
 };
 
 export type ReviewerResult = {
   reviewer?: string;
   status?: string;
+  /** Scope identity from the dispatch that produced this result. */
+  scopeFingerprint?: string;
   attempt?: number;
   /** The slices this result covered. */
   slices?: string[];
@@ -59,6 +63,17 @@ export type RetryPlan = {
   stalls: number;
   state: RetryState;
 };
+
+/** Retry children do not change the original scope identity. Missing content identity fails closed. */
+export function scopeFingerprint(manifest: SliceManifest, read?: (entry: SliceEntry) => string): string | undefined {
+  const originals = manifest.slices.filter((entry) => entry.retryOf === undefined);
+  const slices = originals.map((entry) => {
+    const contentHash = read === undefined ? entry.contentHash : createHash("sha256").update(read(entry)).digest("hex");
+    return { ...entry, contentHash };
+  });
+  if (slices.some((entry) => entry.contentHash === undefined)) return undefined;
+  return createHash("sha256").update(JSON.stringify({ source: manifest.source, maxBytes: manifest.maxBytes, waveBytes: manifest.waveBytes, omissions: manifest.omissions, slices })).digest("hex");
+}
 
 export function emptyRetryState(): RetryState {
   return { schemaVersion: 1, reviewers: {} };
@@ -100,11 +115,25 @@ const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.fi
 export function planRetry(input: PlanRetryInput): RetryPlan {
   const { manifest, result, reviewer } = input;
   const status = String(result.status ?? "").toUpperCase();
-  const known = input.state.reviewers[reviewer];
+  const fingerprint = scopeFingerprint(manifest, input.readSliceText);
+  const current = fingerprint !== undefined && input.state.scopeFingerprint === fingerprint;
+  const hasIncoming = status !== "" || result.attempt !== undefined || asStrings(result.slices).length > 0 || asStrings(input.covered).length > 0;
+  const hasPriorScope = input.state.scopeFingerprint !== undefined || Object.keys(input.state.reviewers).length > 0;
+  if (hasIncoming && (
+    (result.scopeFingerprint !== undefined && result.scopeFingerprint !== fingerprint) ||
+    (!current && hasPriorScope && result.scopeFingerprint !== fingerprint)
+  )) {
+    throw new Error("Reviewer result is not bound to the current scope; re-dispatch before importing coverage or attempts.");
+  }
+  if (result.reviewer !== undefined && result.reviewer !== reviewer) {
+    throw new Error("Reviewer result belongs to a different reviewer.");
+  }
+
+  const known = current ? input.state.reviewers[reviewer] : undefined;
   const resultAttempt = Number.isInteger(result.attempt) ? (result.attempt as number) : 0;
   const priorRounds = Math.max(known?.attempt ?? 0, resultAttempt);
   const priorStalls = Math.max(known?.stalls ?? known?.attempt ?? 0, resultAttempt);
-  const state: RetryState = { schemaVersion: 1, reviewers: { ...input.state.reviewers } };
+  const state: RetryState = { schemaVersion: 1, ...(fingerprint === undefined ? {} : { scopeFingerprint: fingerprint }), reviewers: current ? { ...input.state.reviewers } : {} };
 
   const ids = new Set(manifest.slices.map((entry) => entry.id));
   const priorCovered = new Set(known?.covered ?? []);
@@ -145,7 +174,10 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     return plan("not-run", reason, { reportLine: notRunLine(reviewer, status), wave: [], remaining: summarizeWaves([]) });
   };
 
-  const finished = status !== "NEEDS_CONTEXT" && !RETRYABLE_STATUSES.includes(status);
+  const hasContext = asStrings(result.needs_context).some((item) => item.trim() !== "");
+  const planningOnly = status === "" && input.nextWave === true;
+  const finished = !hasContext && (status === "DONE" || status === "DONE_WITH_CONCERNS" || planningOnly);
+  if (!finished && status !== "NEEDS_CONTEXT" && !RETRYABLE_STATUSES.includes(status) && !hasContext) return notRun(`unrecognized or missing reviewer status: ${status || "missing"}`);
   if (finished) {
     const informed = input.nextWave === true || reportedSlices.length > 0 || Array.isArray(result.slices);
     if (!informed) {
@@ -172,7 +204,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   }
   const rounds = priorRounds + 1;
 
-  if (status === "NEEDS_CONTEXT") {
+  if (status === "NEEDS_CONTEXT" || hasContext) {
     // The reviewer stopped to ask. Folding that into the verdict as finished is the false pass this exists to prevent:
     // the questions are put to it, and a reviewer that asks again having covered nothing new is a gap, not a pass.
     remember({ attempt: rounds });

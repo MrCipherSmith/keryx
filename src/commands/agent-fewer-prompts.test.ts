@@ -312,3 +312,23 @@ test("AC7: the approval log of runs 17-19 replayed in review-auto leaves 5 of 12
   // The probe and the wave spec the operator denied in the log stay denied.
   expect(ran.filter((entry) => entry.includes("127.0.0.1") || entry.includes("harness wave --spec"))).toEqual([]);
 });
+
+for (const risk of ["write", "delegate"] as const) {
+  test(`hardening: refused ${risk} is checked before autoapproval`, async () => {
+    setReviewSystem("review-auto");
+    const ran: string[] = [];
+    const tool: InteractiveTool = {
+      definition: { name: `test_${risk}`, description: "test", risk, inputSchema: { type: "object", properties: {} } },
+      invoke: async () => { ran.push(risk); return { output: "ran", isError: false }; },
+    };
+    const asked: Asked[] = [];
+    const first = scriptedProvider([callRound("f", "fetch_page", "{}"), callRound("w", tool.definition.name, "{}"), [...okReply]]);
+    await runAgentTurn(ioWith("trust", asked, false), makeDeps(first.provider, { tools: [fetchTool(), tool] }), [], "first");
+    expect(asked).toHaveLength(1);
+    const second = scriptedProvider([callRound("w2", tool.definition.name, "{}"), [...okReply]]);
+    await runAgentTurn(ioWith("trust", asked, false), makeDeps(second.provider, { tools: [tool] }), [], "retry");
+    expect(ran).toEqual([]);
+    expect(asked).toHaveLength(1);
+    expect(JSON.stringify(second.requests.at(-1))).toContain(REFUSED_EARLIER);
+  });
+}

@@ -165,15 +165,9 @@ async function readResult(source: string): Promise<ReviewerResult> {
   } catch (error) {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
-  try {
-    return JSON.parse(raw) as ReviewerResult;
-  } catch {
-    const parsed = parseReviewResult(raw);
-    if (parsed === undefined) {
-      throw new UnreadableInput(`result is not valid JSON and holds no REVIEW_RESULT block: ${source}`);
-    }
-    return parsed as ReviewerResult;
-  }
+  const parsed = parseReviewResult(raw);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no status-bearing JSON object: ${source}`);
+  return parsed as ReviewerResult;
 }
 
 function failUnreadable(error: unknown): void {
@@ -289,6 +283,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
             decision: plan.decision,
             reviewer,
             status: plan.status,
+            scopeFingerprint: plan.state.scopeFingerprint ?? null,
             priorAttempts: plan.priorAttempts,
             reason: plan.reason,
             reportLine: plan.reportLine ?? null,

@@ -486,3 +486,13 @@ test("replayed recorded replies are used in order", async () => {
   expect((await arbiter.decide(ask("budget", { budgetUsedPercent: 20, raisesBudget: false })))?.reason).toBe("invalid-output");
   expect((await arbiter.decide(ask("budget", { budgetUsedPercent: 21, raisesBudget: false })))?.verdict).toBe("allow");
 });
+
+test("hardening: cached allow binds current recommended option", async () => {
+  const arbiter = make(ruleFollowingModel());
+  await arbiter.decide(ask("budget", GOOD_FACTS));
+  const decision = await arbiter.decide(ask("budget", GOOD_FACTS, {
+    options: [{ id: "retry", label: "Retry", description: "Retry", recommended: true }, { id: "a", label: "Stop", description: "Stop" }],
+  }));
+  expect(decision).toMatchObject({ verdict: "allow", answer: "retry", cached: false });
+  expect(readArbiterLog(LOG()).at(-1)?.answer).toBe("retry");
+});

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
 import { type LedgerInputs, type RawFile, buildLedger, ledgerBlockers, parseReviewResult } from "./ledger";
+import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
 import type { SliceManifest } from "./slice";
 
 let root: string;
@@ -28,7 +29,7 @@ afterEach(async () => {
 const FILES = ["src/a.ts", "src/b.test.ts"];
 
 function slice(id: string, files: string[], extra: Record<string, unknown> = {}) {
-  return { id, path: `${id}.diff`, bytes: 100, files, domain: "src", split: "domain" as const, ...extra };
+  return { id, path: `${id}.diff`, bytes: 100, contentHash: `test-content-${id}`, files, domain: "src", split: "domain" as const, ...extra };
 }
 
 const MANIFEST = {
@@ -53,6 +54,7 @@ async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInpu
     selected: required,
     manifest: MANIFEST,
     payloadSlices: Object.fromEntries(required.map((r) => [r, ["slice-01", "slice-02"]])),
+    payloadDispatchCounts: Object.fromEntries(required.map((r) => [r, 1])),
     ruleFiles: Object.fromEntries(required.map((r) => [r, `.metaproject/skills/gdskills/review/${r}/SKILL.md`])),
     raws: required.map((r) => raw(r, "DONE")),
     retry: { schemaVersion: 1, reviewers: {} },
@@ -146,7 +148,7 @@ describe("buildLedger", () => {
 
   test("a reviewer the retry state gave up on stays not-run and the gap says no retry is left", async () => {
     const base = await inputs();
-    const result = buildLedger({ ...base, retry: { schemaVersion: 1, reviewers: { "review-logic": { attempt: 1, status: "BLOCKED", notRun: true } } } });
+    const result = buildLedger({ ...base, retry: { schemaVersion: 1, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { "review-logic": { attempt: 1, status: "BLOCKED", notRun: true } } } });
     const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
     expect(logic.status).toBe("not-run");
     expect(result.gaps.find((g) => g.reviewer === "review-logic")!.next).toContain("no retry is left");
@@ -179,7 +181,7 @@ describe("buildLedger", () => {
   test("a result already counted in retry-state is not named again in the next command", async () => {
     const base = await inputs();
     const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ["slice-01"] } } : r));
-    const retry = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 0, status: "DONE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
+    const retry = { schemaVersion: 1 as const, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { "review-logic": { attempt: 0, status: "DONE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
     const gap = buildLedger({ ...base, raws, retry }).gaps.find((g) => g.reviewer === "review-logic")!;
     expect(gap.next).not.toContain("--result");
     expect(gap.next).toContain("--next-wave");
@@ -188,7 +190,7 @@ describe("buildLedger", () => {
   test("slices covered in earlier rounds, recorded in retry-state, finish an incomplete reviewer's scope", async () => {
     const base = await inputs();
     const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ["slice-02"] } } : r));
-    const retry = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
+    const retry = { schemaVersion: 1 as const, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
     const result = buildLedger({ ...base, raws, retry });
     expect(result.gaps.find((g) => g.reviewer === "review-logic")).toBeUndefined();
   });
@@ -269,4 +271,83 @@ describe("raw files", () => {
     const base = await inputs();
     expect(JSON.stringify(buildLedger(base))).toBe(JSON.stringify(buildLedger(base)));
   });
+});
+
+// Flow 427: coverage must not be inferred from the union of unrelated dispatch payloads.
+describe("autonomy hardening regressions", () => {
+  test("bare JSON reviewer output is parsed", () => {
+    expect(parseReviewResult('{"reviewer":"review-logic","status":"DONE","findings":[],"needs_context":[]}')?.status).toBe("DONE");
+  });
+
+  test("BLOCKED A and DONE B without slice claims do not close payload union A+B", async () => {
+    const base = await inputs();
+    const earlier = raw("review-logic", "BLOCKED", {}, "raw/logic-a.txt");
+    const later = raw("review-logic", "DONE", {}, "raw/logic-b.txt");
+    const result = buildLedger({ ...base, raws: [...base.raws.filter(r => r.result?.reviewer !== "review-logic"), earlier, later] });
+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find(r => r.reviewer === "review-logic")!;
+    expect(logic.scopeComplete).toBe(false);
+    expect(result.ledger.scopeReviewed).toBe(false);
+  });
+});
+
+describe("dispatch attribution", () => {
+  test("one raw result cannot implicitly close multiple dispatches", async () => {
+    const base = await inputs();
+    const result = buildLedger({ ...base, payloadDispatchCounts: { ...base.payloadDispatchCounts, "review-logic": 2 } });
+    expect(result.ledger.scopeReviewed).toBe(false);
+    expect(result.gaps.some(g => g.reviewer === "review-logic")).toBe(true);
+  });
+  test("explicit result assignments close only their own slices", async () => {
+    const base = await inputs();
+    const a = { ...raw("review-logic", "DONE", {}, "raw/a.txt"), assignedSlices: ["slice-01"] };
+    const b = { ...raw("review-logic", "DONE", {}, "raw/b.txt"), assignedSlices: ["slice-02"] };
+    const others = base.raws.filter(r => r.result?.reviewer !== "review-logic");
+    expect(buildLedger({ ...base, raws: [...others, a, b] }).ledger.scopeReviewed).toBe(true);
+    const hostile = { ...b, result: { ...b.result!, slices: ["slice-01", "slice-02"] } };
+    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: "BLOCKED" } }, hostile] }).ledger.scopeReviewed).toBe(false);
+  });
+  test("prose and JSON strings containing escaped quotes and braces parse", () => {
+    const object = { status: "DONE", summary: 'brace } and "quote"', reviewer: "review-logic" };
+    expect(parseReviewResult(`prose {not JSON}\n${JSON.stringify(object)}\nend`)).toEqual(object);
+  });
+});
+
+ test("labelled context result is not replaced by a trailing JSON example", () => {
+  expect(parseReviewResult('```REVIEW_RESULT\n{"status":"NEEDS_CONTEXT"}\n```\nExample: {"status":"DONE"}')?.status).toBe("NEEDS_CONTEXT");
+  expect(parseReviewResult('```REVIEW_RESULT\ninvalid\n```\n{"status":"DONE"}')).toBeUndefined();
+});
+
+
+test("deterministic lifecycle: dispatch, context, redispatch and completion gate", async () => {
+  const input = await inputs();
+  const reviewer = "review-logic";
+  const readSliceText = () => "fixture diff";
+  const dispatch = planRetry({ manifest: MANIFEST, reviewer, result: {}, state: emptyRetryState(), nextWave: true, readSliceText });
+  expect(dispatch.decision).toBe("wave");
+  expect(dispatch.wave.length).toBeGreaterThan(0);
+  const fingerprint = scopeFingerprint(MANIFEST, readSliceText)!;
+  const pendingPayload = { reviewer, status: "DONE", scopeFingerprint: fingerprint, needs_context: ["Explain the caller contract"], findings: [] };
+  const pending = parseReviewResult(JSON.stringify(pendingPayload))!;
+  expect(pending).toEqual(pendingPayload);
+  const context = planRetry({ manifest: MANIFEST, reviewer, result: pendingPayload, state: dispatch.state, readSliceText });
+  expect(context.decision).toBe("context");
+  expect(context.needsContext).toEqual(["Explain the caller contract"]);
+  const pendingRaw: RawFile = { ...raw(reviewer, "DONE"), result: pending, assignedSlices: context.wave.map(s => s.id) };
+  const pendingLedger = buildLedger({ ...input, raws: [...input.raws.filter(r => r.result?.reviewer !== reviewer), pendingRaw] });
+  expect(pendingLedger.ledger.scopeReviewed).toBe(false);
+  expect((await blockersOf(pendingLedger)).length).toBeGreaterThan(0);
+  const assigned = MANIFEST.slices.map(s => s.id);
+  const finishedPayload = { reviewer, status: "DONE", scopeFingerprint: fingerprint, slices: assigned, needs_context: [], findings: [] };
+  const finished = parseReviewResult(JSON.stringify(finishedPayload))!;
+  expect(finished).toEqual(finishedPayload);
+  const accepted = planRetry({ manifest: MANIFEST, reviewer, result: finishedPayload, state: context.state, readSliceText });
+  expect(accepted.decision).toBe("accepted");
+  expect(accepted.remaining.slices).toBe(0);
+  const finishedRaw: RawFile = { ...raw(reviewer, "DONE", {}, "raw/review-logic-second.txt"), result: finished, assignedSlices: assigned };
+  const complete = buildLedger({ ...input, payloadDispatchCounts: { ...input.payloadDispatchCounts, [reviewer]: 2 }, raws: [...input.raws.filter(r => r.result?.reviewer !== reviewer), pendingRaw, finishedRaw] });
+  expect(complete.gaps).toEqual([]);
+  expect(complete.ledger.scopeReviewed).toBe(true);
+  expect(await blockersOf(complete)).toEqual([]);
+  const changed = { ...MANIFEST, slices: MANIFEST.slices.map(s => ({ ...s, contentHash: "changed-content" })) };
+  expect(() => planRetry({ manifest: changed, reviewer, result: finishedPayload, state: accepted.state, readSliceText: () => "changed diff" })).toThrow("not bound to the current scope");
 });

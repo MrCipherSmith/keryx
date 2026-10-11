@@ -5,6 +5,7 @@
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { reviewCompletionBlockers, reviewsRoot } from "./managed";
 
 export const MAX_REVIEW_GATE_CONTINUES = 20;
@@ -23,8 +24,12 @@ async function dirSignature(dir: string): Promise<string> {
     const entries = await readdir(dir, { withFileTypes: true });
     const parts: string[] = [];
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      const info = await stat(path.join(dir, entry.name)).catch(() => null);
-      parts.push(`${entry.name}:${info?.size ?? 0}`);
+      const file = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      const content = entry.isDirectory()
+        ? await dirSignature(file)
+        : await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
+      parts.push(`${entry.name}:${content}`);
     }
     return parts.join(",");
   } catch {

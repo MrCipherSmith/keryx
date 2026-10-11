@@ -238,9 +238,14 @@ describe("waves", () => {
     expect(plan.state.reviewers["review-logic"]?.attempt).toBe(0);
   });
 
-  test("a retry state written before progress was tracked still bounds the reviewer", () => {
+  test("a legacy retry state without scope identity is invalidated", () => {
     const legacy = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false } } };
-    expect(planRetry({ ...base, result: { status: "BLOCKED" }, state: legacy }).decision).toBe("not-run");
+    expect(() => planRetry({ ...base, result: { status: "BLOCKED" }, state: legacy })).toThrow("current scope");
+    const fresh = planRetry({ ...base, result: {}, nextWave: true, state: legacy });
+    expect(fresh.decision).toBe("wave");
+    expect(fresh.priorAttempts).toBe(0);
+    expect(fresh.stalls).toBe(0);
+    expect(fresh.remaining.slices).toBe(ids.length);
   });
 
   test("covering one piece of a re-cut does not credit the slice it was cut from", () => {
@@ -252,4 +257,51 @@ describe("waves", () => {
     expect(next.remaining.slices).toBeGreaterThan(0);
     expect(next.wave.map((slice) => slice.id)).not.toContain(piece);
   });
+});
+
+describe("autonomy hardening retry regressions", () => {
+  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
+  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: () => built.slices[0]!.text };
+  test("DONE with open needs_context requests context instead of acceptance", () => {
+    const plan = planRetry({ ...base, result: { status: "DONE", needs_context: ["which contract applies?"] }, state: { schemaVersion: 1, reviewers: {} } });
+    expect(plan.decision).toBe("context");
+    expect(plan.needsContext).toEqual(["which contract applies?"]);
+  });
+  test("legacy covered IDs do not accept a regenerated manifest without fresh review", () => {
+    const stale = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "DONE", notRun: false, covered: built.manifest.slices.map(s => s.id), stalls: 0 } } };
+    const changed = buildSlices(sliceSourceFromDiff(gitFile("src/new.ts", 20)));
+    const plan = planRetry({ ...base, manifest: changed.manifest, readSliceText: () => changed.slices[0]!.text, result: {}, nextWave: true, state: stale });
+    expect(plan.decision).toBe("wave");
+    expect(plan.remaining.slices).toBeGreaterThan(0);
+  });
+});
+
+test("same-size content rewrite invalidates coverage and stalls", () => {
+  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
+  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: () => built.slices[0]!.text };
+  const first = planRetry({ ...base, result: { status: "DONE", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} } });
+  expect(first.decision).toBe("accepted");
+  const next = planRetry({ ...base, readSliceText: () => built.slices[0]!.text.replace("src/a.ts", "src/z.ts"), result: {}, nextWave: true, state: first.state });
+  expect(next.decision).toBe("wave");
+  expect(next.priorAttempts).toBe(0);
+  expect(next.remaining.slices).toBeGreaterThan(0);
+});
+
+test("stale incoming coverage and attempts cannot repopulate a changed scope", () => {
+  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
+  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: () => built.slices[0]!.text };
+  const first = planRetry({ ...base, result: { status: "DONE", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} } });
+  const changed = { ...base, readSliceText: () => built.slices[0]!.text.replace("src/a.ts", "src/z.ts"), state: first.state };
+  const stale = { status: "DONE", attempt: 6, slices: built.manifest.slices.map(s => s.id) };
+  expect(() => planRetry({ ...changed, result: stale })).toThrow("current scope");
+  expect(() => planRetry({ ...changed, result: { ...stale, scopeFingerprint: first.state.scopeFingerprint! } })).toThrow("current scope");
+  const fresh = planRetry({ ...changed, result: {}, nextWave: true });
+  expect(fresh.priorAttempts).toBe(0);
+  expect(fresh.decision).toBe("wave");
+});
+
+test("unknown reviewer status never accepts scope", () => {
+  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
+  const plan = planRetry({ manifest: built.manifest, reviewer: "review-logic", result: { status: "FAILED", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} }, readSliceText: () => built.slices[0]!.text });
+  expect(plan.decision).toBe("not-run");
 });

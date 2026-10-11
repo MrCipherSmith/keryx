@@ -171,3 +171,16 @@ test("read-only introspection tools are exempt from the repeated-call guard", ()
     expect(REPEATABLE_TOOL_NAMES.has(name)).toBe(true);
   }
 });
+
+test("hardening: nested same-size rewrite counts as progress", async () => {
+  await writePackage("live", { mode: "review-flow", status: "draft" });
+  const data = path.join(root, ".metaproject", "data", "review", "run", "raw");
+  await mkdir(data, { recursive: true });
+  const file = path.join(data, "logic.txt");
+  await writeFile(file, "aaaa");
+  const before = await findReviewGateState(root, 0);
+  await writeFile(file, "bbbb");
+  const after = await findReviewGateState(root, 0);
+  expect(after?.signature).not.toBe(before?.signature);
+  expect(decideReviewGate({ ...idle, open: after, stalls: 2, lastSignature: before?.signature })).toMatchObject({ action: "continue", stalls: 0 });
+});

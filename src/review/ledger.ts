@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { researchErrors } from "./research";
-import type { RetryState } from "./retry-plan";
+import { scopeFingerprint, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
@@ -24,6 +24,8 @@ export type RawFile = {
   name: string;
   hash: string;
   mtimeMs: number;
+  /** Slice assignment from the driver explicitly naming this result file. */
+  assignedSlices?: string[];
   result?: ParsedResult;
   /** True for a file a reviewer left empty ("(subagent produced no text)"): lost output, not a result to reconcile. */
   empty: boolean;
@@ -49,6 +51,8 @@ export type LedgerInputs = {
   manifest?: SliceManifest | undefined;
   /** Reviewer → slice ids named by its dispatched payloads. */
   payloadSlices: Record<string, string[]>;
+  /** Only one dispatch may supply a legacy implicit assignment. */
+  payloadDispatchCounts?: Record<string, number>;
   /** Reviewer → resolved rule file, only when it exists. */
   ruleFiles: Record<string, string>;
   raws: RawFile[];
@@ -75,23 +79,39 @@ const text = (v: unknown): v is string => typeof v === "string" && v.trim().leng
 
 /** The reviewer's result: the last fenced block that parses to an object carrying `status`. Never guessed from prose. */
 export function parseReviewResult(raw: string): ParsedResult | undefined {
-  const candidates: string[] = [];
-  for (const match of raw.matchAll(/```[A-Za-z_]*[ \t]*\r?\n([\s\S]*?)\r?\n```/g)) candidates.push(match[1]!);
-  const marker = raw.indexOf("REVIEW_RESULT");
-  if (marker >= 0) {
-    const start = raw.indexOf("{", marker);
-    const end = raw.lastIndexOf("}");
-    if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1));
-  }
-  for (const candidate of candidates.reverse()) {
+  const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
+  if (labelled.length > 0) {
     try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed.status === "string") return parsed as ParsedResult;
-    } catch {
-      /* not this block */
+      const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
+      return parsed !== null && typeof parsed === "object" && typeof parsed.status === "string"
+        ? parsed as ParsedResult : undefined;
+    } catch { return undefined; }
+  }
+  let result: ParsedResult | undefined;
+  for (let start = 0; start < raw.length; start += 1) {
+    if (raw[start] !== "{") continue;
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (let end = start; end < raw.length; end += 1) {
+      const char = raw[end];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') quoted = false;
+      } else if (char === '"') quoted = true;
+      else if (char === "{") depth += 1;
+      else if (char === "}" && --depth === 0) {
+        try {
+          const parsed = JSON.parse(raw.slice(start, end + 1));
+          if (typeof parsed.status === "string") result = parsed as ParsedResult;
+          start = end;
+        } catch { /* prose brace: try the next candidate */ }
+        break;
+      }
     }
   }
-  return undefined;
+  return result;
 }
 
 export function isEmptyOutput(raw: string): boolean {
@@ -143,7 +163,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   for (const reviewer of input.selected) {
     const mine = attributed.filter((r) => r.result!.reviewer === reviewer).sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
     const latest = mine[mine.length - 1];
-    const known = input.retry.reviewers[reviewer];
+    const fingerprint = manifest === undefined ? undefined : scopeFingerprint(manifest);
+    const known = fingerprint !== undefined && input.retry.scopeFingerprint === fingerprint ? input.retry.reviewers[reviewer] : undefined;
     if (known?.notRun === true) {
       runs.push({ reviewer, executionId: `${reviewer}:not-run`, status: "not-run", notRunReason: `${known.status} after the allowed retry (retry-state)`, scopeComplete: false });
       gaps.push({ reviewer, detail: `${reviewer}: not run (${known.status} after the allowed retry)`, next: "no retry is left; the report carries the Not run line, and only the operator can accept a smaller set (dispatch override with their own quote)" });
@@ -168,10 +189,17 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
-    const claimed = new Set<string>(sliceIdsOf(result.slices));
+    const claimed = new Set<string>();
     if (manifest !== undefined) {
-      if (finished) for (const id of input.payloadSlices[reviewer] ?? []) if (result.slices === undefined) claimed.add(id);
-      for (const earlier of mine.slice(0, -1)) sliceIdsOf(earlier.result?.slices).forEach((id) => claimed.add(id));
+      for (const raw of mine) {
+        const reply = raw.result!;
+        const closed = FINISHED.has(String(reply.status).toUpperCase()) && (!Array.isArray(reply.needs_context) || reply.needs_context.filter(text).length === 0);
+        const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
+        if (assigned === undefined) continue;
+        const allowed = new Set(assigned);
+        const ids = reply.slices === undefined && closed ? assigned : sliceIdsOf(reply.slices);
+        for (const id of ids) if (allowed.has(id)) claimed.add(id);
+      }
       for (const id of known?.covered ?? []) claimed.add(id);
     }
     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
