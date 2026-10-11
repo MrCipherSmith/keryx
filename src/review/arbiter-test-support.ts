@@ -30,13 +30,13 @@ export function readPrompt(user: string): { kind: ArbiterKind; facts: ArbiterFac
 
 /** A model that follows the written rules: it picks the strictest rule that holds for the facts it was shown. */
 export function ruleFollowingModel(seen?: SeenTurns, rules: ArbiterRules = bundledArbiterRules()): (input: ModelTurnInput) => Promise<ModelTurnResult> {
-  const order = { allow: 0, escalate: 1, deny: 2 } as const;
+const order = (kind: string): number => (kind === "deny" ? 2 : kind === "escalate" ? 1 : 0);
   return async (input) => {
     seen?.turns.push(input);
     const { kind, facts, recommended } = readPrompt(input.user);
     const holding = rulesForKind(rules, kind).filter((rule) => rule.when !== undefined && ruleHolds(rule, facts));
     const picked =
-      holding.sort((a, b) => order[b.verdict] - order[a.verdict])[0] ?? rulesForKind(rules, kind).find((rule) => rule.when === undefined && rule.verdict === "escalate");
+      holding.sort((a, b) => order(b.verdict) - order(a.verdict))[0] ?? rulesForKind(rules, kind).find((rule) => rule.when === undefined && rule.verdict === "escalate");
     const answer =
       picked === undefined
         ? { verdict: "escalate", rule: "R-99" }

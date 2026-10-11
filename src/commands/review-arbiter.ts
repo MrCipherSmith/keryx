@@ -110,7 +110,7 @@ const SYSTEM_PROMPT =
   "Reply with one JSON object and nothing else: " +
   '{"verdict":"allow|deny|escalate","rule":"R-NN","option":<the recommended option number, allow only>,"reason":"<one short sentence>"}.';
 
-const STRICTNESS: Record<ArbiterVerdictKind, number> = { allow: 0, escalate: 1, deny: 2 };
+const strictness = (kind: ArbiterVerdictKind): number => (kind === "deny" ? 2 : kind === "escalate" ? 1 : 0);
 
 export interface ParsedQuestion {
   readonly kind: ArbiterKind;
@@ -240,7 +240,7 @@ export function checkModelAnswer(answer: ModelAnswer, question: ParsedQuestion, 
   let rule = cited.id;
   for (const other of covering) {
     if (other.when === undefined || !ruleHolds(other, question.facts)) continue;
-    if (STRICTNESS[other.verdict] > STRICTNESS[verdict]) {
+    if (strictness(other.verdict) > strictness(verdict)) {
       verdict = other.verdict;
       rule = other.id;
     }
