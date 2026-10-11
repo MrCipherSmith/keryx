@@ -3,7 +3,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { parseAcKinds } from "../flow/service";
+import { buildAcKindReport, parseAcKinds } from "../flow/service";
 
 export const KIND_WINDOW_DAYS = 7;
 /** A share above this (in percent) gets a warning line. */
@@ -14,6 +14,9 @@ export interface FrozenFlow {
   frozenAt: Date;
   total: number;
   unclassified: number;
+  /** exec/invariant criteria, and how many of them carry a sensitivity note. */
+  runnable: number;
+  sensitive: number;
 }
 
 /** The flows with a `frozen` history entry, with their criteria counted by the same parser the freeze uses. Unreadable flows are skipped. */
@@ -37,8 +40,18 @@ export async function collectFrozenFlows(root: string): Promise<FrozenFlow[]> {
         if (!Number.isNaN(at.getTime())) frozenAt = at;
       }
       if (frozenAt === null) continue;
-      const { criteria } = parseAcKinds(await readFile(path.join(flowsDir, name, "acceptance-criteria.md"), "utf8"));
-      out.push({ frozenAt, total: criteria.length, unclassified: criteria.filter((c) => c.record.kind === "unclassified").length });
+      const content = await readFile(path.join(flowsDir, name, "acceptance-criteria.md"), "utf8");
+      const { criteria } = parseAcKinds(content);
+      // Sensitivity comes from the report `ac kinds` prints, so a repeated id counts once in both surfaces. The
+      // flow-422 total/unclassified keep counting every `- ACn:` line, as before.
+      const { report } = buildAcKindReport(name, content);
+      out.push({
+        frozenAt,
+        total: criteria.length,
+        unclassified: criteria.filter((c) => c.record.kind === "unclassified").length,
+        runnable: report.runnable,
+        sensitive: report.sensitivity.proven,
+      });
     } catch {
       continue;
     }
@@ -64,6 +77,14 @@ export function renderKindShare(flows: readonly FrozenFlow[], now: Date): string
   if (percent > KIND_WARN_PERCENT) {
     lines.push(`- WARNING: unclassified share ${percent}% is above ${KIND_WARN_PERCENT}%: criteria are being frozen without a verification kind.`);
   }
+  // Flow 423 (AC6): reported only, no threshold, no warning.
+  const runnable = inWindow.reduce((sum, flow) => sum + flow.runnable, 0);
+  const sensitive = inWindow.reduce((sum, flow) => sum + flow.sensitive, 0);
+  lines.push(
+    runnable === 0
+      ? `- sensitivity, flows frozen in the last ${KIND_WINDOW_DAYS} days: no exec/invariant criteria`
+      : `- sensitivity, flows frozen in the last ${KIND_WINDOW_DAYS} days: ${sensitive} of ${runnable} exec/invariant criteria carry a sensitivity note (${Math.round((sensitive / runnable) * 100)}%)`,
+  );
   lines.push(definition);
   return lines;
 }

@@ -17,6 +17,8 @@ describe("flow-orchestrator: the verification kind of every criterion", () => {
     "[verify: judged] (a human checks: live run, operator decision, text quality)",
     "[verify: none — <reason>]",
     "ask the operator ONE question listing the criteria with proposed kinds, before `flow freeze`",
+    "gets its own failure-scenario criterion with an observable result (saved, error visible, retry creates no duplicate)",
+    "carries `· sensitive: revert|mutation|failure-scenario` and the confirm note carries `evidence: <ref>` (revert/mutation run or failure-scenario reference)",
   ])("the criteria step says: %s", (phrase) => {
     expect(flat(SKILL)).toContain(phrase);
   });
