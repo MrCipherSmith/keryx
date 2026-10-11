@@ -43,3 +43,11 @@ Three review rounds in a row found new false positives/negatives in the inferred
 - 2026-10-11T07:38:28.733Z - task-done: T8: Fix review round 1 findings (RL-1..3, T1..T6)
 - 2026-10-11T07:38:28.875Z - task-attempt: T4: started (attempt 4) — round 4 approved; minors fixed and probed
 - 2026-10-11T07:38:29.013Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-11T08:29:30.194Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/964 (warning: PR is not a draft)
+- 2026-10-11T08:29:30.378Z - ac-confirmed: AC1: evidence: src/flow/ac-kinds.test.ts (accept on exec/invariant, reject on judged/none, old forms unchanged); PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:29:30.525Z - ac-confirmed: AC2: evidence: src/commands/flow-sensitivity.test.ts ac kinds text and --json counts; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:29:30.724Z - ac-confirmed: AC3: evidence: src/commands/flow-sensitivity.test.ts table-driven ac confirm cases; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:29:30.889Z - ac-confirmed: AC4: evidence: src/flow/ac-kinds-never-gates.test.ts noted-vs-plain twin test; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:29:31.045Z - ac-confirmed: AC5: evidence: src/gdskills/flow-orchestrator-verify-kind.test.ts and src/flow/templates.test.ts phrase pins, copies byte-identical; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:29:31.207Z - ac-confirmed: AC6: evidence: src/commands/research-sync-kinds.test.ts sensitivity share incl. 7-day window and runResearchSync wiring; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:29:31.368Z - ac-confirmed: AC7: evidence: git diff of #964 touches no flow dir other than 423 (plus one wiki link fix) (signed: claude-agent (session 2026-10-11) [stated])
