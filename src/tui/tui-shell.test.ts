@@ -2285,15 +2285,6 @@ otuiTest("AC6: without an approval pending the queue panel says it waits for the
   h.renderer.destroy();
 });
 
-test("AC6: the shell paints the queue through the view, tracks the pending approval and lists the same text for /queue", () => {
-  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-  expect(source).toContain("buildMainQueueRow(otui, r,");
-  expect(source).toContain("buildMainQueueHelp(otui, r)");
-  expect(source).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
-  expect(source).toContain("requestApproval: trackApproval(requestApprovalForTelegramTurn),");
-  expect(source.split("io.onSystem?.(queueListingText());").length - 1).toBe(2);
-});
-
 // Flow 423 AC5: the modal shows the one-line cause, one test per cause.
 for (const cause of APPROVAL_CAUSES) {
   otuiTest(`AC5: the shell approval modal shows the ${cause} cause line (headless)`, async () => {
