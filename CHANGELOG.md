@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.107] - 2026-10-11
+
 ### Review
 
 - `keryx review run --autonomous --target pr --ref <pull request URL>` reviews a pull request with nobody at the keyboard, in the new `review-autonomous` profile (`trust` mode under `review-auto`, source only, no terminal needed). Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused. `--budget-minutes`, `--budget-tokens` and `--stall-minutes` (default 10) bound the run; a model question is answered by the recorded safe default (the recommended option, else the first; an irreversible one is refused).
