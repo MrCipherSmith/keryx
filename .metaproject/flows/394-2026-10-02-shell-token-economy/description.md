@@ -1,7 +1,7 @@
 # keryx shell spends fewer tokens than competing harnesses without losing quality
 
 Status: draft (flow-init skill formalizes this)
-Source: user description (Aleksandr Tsaitler, 2026-10-02)
+Source: user description (MrCipherSmith, 2026-10-02)
 
 ## Problem
 
@@ -38,7 +38,7 @@ harnesses studied in `~/sandbox/forks`.
 
 ## Outcome criteria
 
-Effects requested by Aleksandr Tsaitler (owner, outcome author: human):
+Effects requested by MrCipherSmith (owner, outcome author: human):
 
 - I want to see that keryx / `keryx shell` saves tokens better than other harnesses, and helps
   save them without losing quality.

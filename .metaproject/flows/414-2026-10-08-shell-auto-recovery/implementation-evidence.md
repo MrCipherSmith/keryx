@@ -6,7 +6,7 @@
 > focused fixtures, broader failures and limits. Flow remains in-progress with
 > zero AC confirmations. No git publication occurred.
 
-Date: 2026-10-08. Worktree: `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/shell-auto-recovery`.
+Date: 2026-10-08. Worktree: `~/goodea/keryx/.worktrees/shell-auto-recovery`.
 Branch: `feat/shell-auto-recovery`. Both checked before writes and again at handoff.
 No commit, push, merge, tag, release, stash or other-worktree edit was performed.
 
