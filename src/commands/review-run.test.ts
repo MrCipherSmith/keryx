@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { endLine, createTelegramNotifier, startLine, type RunNotifier } from "../review/autonomous-notify";
+import { endLine, createTelegramNotifier, startLine, type RunNotifier } from "./review-notify";
 import { parseAutonomousTarget } from "../review/autonomous-profile";
 import { AutonomousRunLockedError, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 import type { AutonomousSummary } from "../review/autonomous-summary";

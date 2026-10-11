@@ -7,9 +7,9 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { ANTHROPIC_MODELS, GEMINI_MODELS, OPENAI_MODELS } from "../commands/curated-model-lists";
-import { providerByName } from "../commands/providers";
-import { REVIEW_GATE_CONFIG_PATH } from "../flow/review-gate";
+import { ANTHROPIC_MODELS, GEMINI_MODELS, OPENAI_MODELS } from "./curated-model-lists";
+import { providerByName } from "./providers";
+import { REVIEW_GATE_CONFIG_PATH } from "../flow/service";
 import { isDeniedModel } from "../gdskills/model-denylist";
 import {
   buildTierMap,

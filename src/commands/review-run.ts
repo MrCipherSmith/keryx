@@ -5,7 +5,7 @@
 
 import path from "node:path";
 import { optionValue } from "../lib/args";
-import { createTelegramNotifier, arbiterEscalateLine, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "../review/autonomous-notify";
+import { createTelegramNotifier, arbiterEscalateLine, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "./review-notify";
 import { AUTONOMOUS_PROFILE, parseAutonomousTarget } from "../review/autonomous-profile";
 import { ARBITER_LOG_NAME, readArbiterLog } from "../review/arbiter-log";
 import { AutonomousRunLockedError, runAutonomousReview, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";

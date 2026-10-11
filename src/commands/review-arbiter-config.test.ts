@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createArbiter } from "./arbiter";
+import { createArbiter } from "./review-arbiter";
 import {
   ARBITER_TIERS,
   DEFAULT_ARBITER_TIER,
@@ -14,9 +14,9 @@ import {
   parseArbiterConfig,
   readArbiterConfig,
   resolveArbiterModel,
-} from "./arbiter-config";
-import { readArbiterLog } from "./arbiter-log";
-import { ruleFollowingModel, type SeenTurns } from "./arbiter-test-support";
+} from "./review-arbiter-config";
+import { readArbiterLog } from "../review/arbiter-log";
+import { ruleFollowingModel, type SeenTurns } from "../review/arbiter-test-support";
 
 let root: string;
 beforeEach(() => {

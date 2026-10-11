@@ -21,9 +21,9 @@ import type { AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
 import { runModelTurn, type ModelTurnInput, type ModelTurnResult } from "../harness/provider/single-turn";
 import { loadModelPrices } from "../harness/routing/tier-rank-agent";
 import type { ModelPrices, SessionModelContext } from "../gdskills/model-tier";
-import type { ArbiterVerdict } from "./autonomous-answers";
-import { readArbiterConfig, resolveArbiterModel, type ArbiterConfig, type ResolveModelDeps } from "./arbiter-config";
-import { askFloor, type FloorClass } from "./arbiter-floor";
+import type { ArbiterVerdict } from "../review/autonomous-answers";
+import { readArbiterConfig, resolveArbiterModel, type ArbiterConfig, type ResolveModelDeps } from "./review-arbiter-config";
+import { askFloor, type FloorClass } from "../review/arbiter-floor";
 import {
   ARBITER_FACTS,
   ARBITER_KIND_FACTS,
@@ -37,9 +37,9 @@ import {
   type ArbiterKind,
   type ArbiterRules,
   type ArbiterVerdictKind,
-} from "./arbiter-rules";
-import { appendArbiterLog, resolveArbiterLogFile, type ArbiterLogRecord, type ArbiterReason } from "./arbiter-log";
-import { arbiterSession } from "./arbiter-session";
+} from "../review/arbiter-rules";
+import { appendArbiterLog, resolveArbiterLogFile, type ArbiterLogRecord, type ArbiterReason } from "../review/arbiter-log";
+import { arbiterSession } from "../review/arbiter-session";
 
 /**
  * What the arbiter is allowed to be. No tool of any kind: no shell, no file write, no web, no MCP. It is one

@@ -8,7 +8,7 @@ import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
 import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
-import { consultArbiter, installQuestionArbiter } from "../review/arbiter-install";
+import { consultArbiter, installQuestionArbiter } from "../commands/review-arbiter-install";
 
 let host: AskUserFn | undefined;
 

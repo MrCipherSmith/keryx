@@ -6,12 +6,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
-import { createArbiter, type RunTurn } from "./arbiter";
-import { parseArbiterConfig } from "./arbiter-config";
-import { readArbiterLog } from "./arbiter-log";
-import { hostileModel, replayModel, ruleFollowingModel, type SeenTurns } from "./arbiter-test-support";
-import adversarial from "./arbiter-adversarial.fixtures.json";
-import evaluation from "./arbiter-eval.fixtures.json";
+import { createArbiter, type RunTurn } from "./review-arbiter";
+import { parseArbiterConfig } from "./review-arbiter-config";
+import { readArbiterLog } from "../review/arbiter-log";
+import { hostileModel, replayModel, ruleFollowingModel, type SeenTurns } from "../review/arbiter-test-support";
+import adversarial from "../review/arbiter-adversarial.fixtures.json";
+import evaluation from "../review/arbiter-eval.fixtures.json";
 
 let root: string;
 const SESSION = { providerId: "anthropic", modelId: "claude-opus-4-7" };

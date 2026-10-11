@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CANCEL_ANSWER } from "../decisions/service";
-import type { ApprovalMeta } from "../commands/agent";
+import type { ApprovalMeta } from "./agent";
 import type { AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
 import type { ModelTurnInput, ModelTurnResult } from "../harness/provider/single-turn";
 import {
@@ -18,14 +18,14 @@ import {
   parseQuestion,
   type ParsedQuestion,
   type RunTurn,
-} from "./arbiter";
-import { parseArbiterConfig } from "./arbiter-config";
-import { approvalFloor, askFloor, FLOOR_CLASSES } from "./arbiter-floor";
-import { readArbiterLog } from "./arbiter-log";
-import { ARBITER_KINDS, ARBITER_KIND_FACTS, bundledArbiterRules } from "./arbiter-rules";
-import { replayModel, ruleFollowingModel, type SeenTurns } from "./arbiter-test-support";
-import { answerAutonomously, readAutoAnswers, setQuestionArbiter } from "./autonomous-answers";
-import { recordOperatorDenial, resetOperatorDenials } from "./review-system";
+} from "./review-arbiter";
+import { parseArbiterConfig } from "./review-arbiter-config";
+import { approvalFloor, askFloor, FLOOR_CLASSES } from "../review/arbiter-floor";
+import { readArbiterLog } from "../review/arbiter-log";
+import { ARBITER_KINDS, ARBITER_KIND_FACTS, bundledArbiterRules } from "../review/arbiter-rules";
+import { replayModel, ruleFollowingModel, type SeenTurns } from "../review/arbiter-test-support";
+import { answerAutonomously, readAutoAnswers, setQuestionArbiter } from "../review/autonomous-answers";
+import { recordOperatorDenial, resetOperatorDenials } from "../review/review-system";
 
 let root: string;
 const SESSION = { providerId: "anthropic", modelId: "claude-opus-4-7" };

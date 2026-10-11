@@ -7,9 +7,9 @@
 // `ask` mode never comes through here: the operator is asked, as before.
 
 import type { AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
-import { setQuestionArbiter } from "./autonomous-answers";
-import { asQuestionArbiter, createArbiter, type Arbiter, type ArbiterDeps } from "./arbiter";
-import { readArbiterConfig } from "./arbiter-config";
+import { setQuestionArbiter } from "../review/autonomous-answers";
+import { asQuestionArbiter, createArbiter, type Arbiter, type ArbiterDeps } from "./review-arbiter";
+import { readArbiterConfig } from "./review-arbiter-config";
 
 let current: { readonly cwd: string; readonly arbiter: Arbiter } | undefined;
 

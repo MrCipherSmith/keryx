@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { RunNotifier } from "../review/autonomous-notify";
+import type { RunNotifier } from "./review-notify";
 import { AutonomousRunLockedError, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 import type { AutonomousSummary } from "../review/autonomous-summary";
 import { scheduleStorePath } from "../trigger/config";
