@@ -5,6 +5,9 @@
 // `AgentIO` (createTuiAgentIo), then the captured frame is asserted to contain the
 // streamed assistant text and a tool line. `@opentui/core` is optional + loaded
 // via dynamic import; the tests skip when it is absent.
+import { APPROVAL_CAUSES, approvalCauseLine } from "../commands/approval-cause";
+import { buildMainQueueHelp, buildMainQueueRow } from "./main-queue-view";
+import { QUEUE_FORCE_HELP } from "./main-queue";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -2234,6 +2237,84 @@ otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)
   h.renderer.destroy();
 });
 
+// Flow 426 AC6: the queue panel says what each queued message waits for.
+otuiTest("AC6: the queue panel renders its state and the approval it waits for (headless)", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui, { width: 160 });
+  const wait = { kind: "approval", call: "keryx harness wave --spec tier.json" } as const;
+  for (const [index, text] of ["review the next slice", "then run the ledger"].entries()) {
+    const built = buildMainQueueRow(otui.core, h.renderer, {
+      id: `q${index}`,
+      index,
+      text,
+      wait,
+      onForce: () => {},
+      onEdit: () => {},
+      onDelete: () => {},
+    });
+    h.dock.add(built.box);
+  }
+  h.dock.add(buildMainQueueHelp(otui.core, h.renderer));
+  h.dock.visible = true;
+  await h.flush();
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("> q1 (1) review the next slice");
+  expect(frame).toContain("queued · waits for approval of: keryx harness wave --spec tier.json");
+  expect(frame).toContain("> q2 (2) then run the ledger");
+  expect(frame).toContain("[Force]");
+  expect(frame).toContain(QUEUE_FORCE_HELP);
+  h.renderer.destroy();
+});
+
+otuiTest("AC6: without an approval pending the queue panel says it waits for the current turn (headless)", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui, { width: 160 });
+  const built = buildMainQueueRow(otui.core, h.renderer, {
+    id: "q0",
+    index: 0,
+    text: "one more thing",
+    wait: { kind: "turn" },
+    onForce: () => {},
+    onEdit: () => {},
+    onDelete: () => {},
+  });
+  h.dock.add(built.box);
+  h.dock.visible = true;
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("queued · waits for the current turn");
+  h.renderer.destroy();
+});
+
+// Flow 426 AC5: the modal shows the one-line cause, one test per cause.
+for (const cause of APPROVAL_CAUSES) {
+  otuiTest(`AC5: the shell approval modal shows the ${cause} cause line (headless)`, async () => {
+    const otui = requireOtui();
+    const h = await mountApprovalDock(otui, { width: 160 });
+    const command = "keryx harness wave --spec tier.json";
+    const choice = pickShellApproval(
+      otui.core,
+      h.renderer,
+      h.dock,
+      command,
+      async () => "",
+      false,
+      false,
+      {},
+      false,
+      undefined,
+      false,
+      cause,
+    );
+    await h.flush();
+    const frame = h.captureCharFrame();
+    expect(frame).toContain(approvalCauseLine(cause));
+    expect(frame).toContain(command);
+    await pressEscapeAndSettle(h);
+    expect(await choice).toBe("deny");
+    h.renderer.destroy();
+  });
+}
+
 otuiTest("a failing approval-context loader still renders a default-deny approval (headless)", async () => {
   const otui = requireOtui();
   const command = "rm -rf build";
@@ -2846,7 +2927,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
     expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
-    expect(fnBodyPlan).toContain("io.requestApproval = requestApprovalLocally;");
+    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
     expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
     expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
   });

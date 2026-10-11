@@ -80,6 +80,7 @@ import {
   type RemotePolicyDeps,
 } from "../commands/remote-policy-command";
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
@@ -394,13 +395,15 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
-import type { QueuedMainQuestion } from "./main-queue";
+import type { QueuedMainQuestion, QueueWait } from "./main-queue";
 import {
-  formatMainQueueMarker,
+  describePendingCall,
+  formatQueueListing,
   drainIdleMainQueue,
   parseQueueCommand,
   removeMainQueueItem,
 } from "./main-queue";
+import { buildMainQueueHelp, buildMainQueueRow } from "./main-queue-view";
 import { createRemoteQueueWiring } from "./remote-queue-wiring";
 import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
 import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
@@ -1689,6 +1692,8 @@ export async function pickShellApproval(
   // about a specific call is not a property of the command text either, and
   // must never be answerable from a remembered grant.
   hookAsk = false,
+  // Flow 426 (AC5): the one-line cause of this prompt, shown above the command.
+  cause?: ApprovalCause,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1753,7 +1758,7 @@ export async function pickShellApproval(
           : "Allow shell command?",
     // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
     // focusable box (its own defensive char cap), not a single collapsed line.
-    subtitle: command,
+    subtitle: cause !== undefined ? `${approvalCauseLine(cause)}\n${command}` : command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
@@ -2890,7 +2895,7 @@ function pickConnectedProviderStep(
     // registration order and stops at the first handler that calls
     // `stopPropagation()` — confirmed against the bundled implementation,
     // `node_modules/@opentui/core/chunk-bun-t2myhmwd.js`'s `emit`/`onInternal`
-    // pair, the same investigation technique `mainQueueButton`'s own mouse-
+    // pair, the same investigation technique the queue buttons' own mouse-
     // bubbling comment used). When nothing is armed this does nothing and
     // the key falls through to `openStepSurface`'s own Escape handler
     // (`onEscape` below) unchanged — so a SECOND Esc still leaves, matching
@@ -5304,6 +5309,39 @@ export async function launchTuiAgentShell(opts: {
       );
       return id === "send";
     };
+    // Flow 426 (AC6): while an approval is pending, the queue says the queued messages wait for it.
+    let pendingApprovalCall: string | undefined;
+    const queueWait = (): QueueWait =>
+      pendingApprovalCall !== undefined ? { kind: "approval", call: pendingApprovalCall } : { kind: "turn" };
+    const trackApproval =
+      (inner: NonNullable<TuiAgentIo["requestApproval"]>): NonNullable<TuiAgentIo["requestApproval"]> =>
+      async (tool, inputJson, meta) => {
+        const before = pendingApprovalCall;
+        pendingApprovalCall = describePendingCall(tool, inputJson);
+        if (mainQueue.length > 0) paintMainQueue();
+        try {
+          return await inner(tool, inputJson, meta);
+        } finally {
+          pendingApprovalCall = before;
+          if (mainQueue.length > 0) paintMainQueue();
+        }
+      };
+    const queueListingText = (): string =>
+      `${formatQueueListing(
+        mainQueue.map((item) => (item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion)),
+        queueWait(),
+      )
+        .map((line) => `◇ ${line}`)
+        .join("\n")}\n`;
+    // Flow 426 (AC5): every approval modal is preceded by the same one-line cause the Telegram relay carries.
+    const addCauseLine = (tool: string, meta: Parameters<typeof causeOfMeta>[1]): void => {
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta)))}`,
+        }),
+      );
+    };
     const requestApprovalLocally: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
@@ -5321,6 +5359,7 @@ export async function launchTuiAgentShell(opts: {
       // `confirmScheduleCard`'s schedule-install wording is wrong for a chat
       // message.
       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
+        addCauseLine(tool, meta);
         return confirmUserPromptCard(meta.card);
       }
 
@@ -5328,6 +5367,7 @@ export async function launchTuiAgentShell(opts: {
       // card is printed verbatim, the only choices are yes/no, and the answer is
       // never remembered — no mode and no saved pattern answers it.
       if (meta?.alwaysAsk === true && meta.card !== undefined) {
+        addCauseLine(tool, meta);
         return confirmScheduleCard(meta.card);
       }
 
@@ -5370,6 +5410,7 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title:
@@ -5438,6 +5479,7 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: "Approve apply_patch?",
@@ -5514,6 +5556,7 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu();
         setMainAgent("blocked", "approval");
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: described.title,
@@ -5592,6 +5635,7 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("blocked", "approval");
         const elicitationSubtitle =
           described.message.length > 80 ? `${described.message.slice(0, 77)}…` : described.message;
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: "Approve codex elicitation?",
@@ -5684,6 +5728,7 @@ export async function launchTuiAgentShell(opts: {
       setMainAgent("blocked", "approval");
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+      addCauseLine(tool, meta);
       const choice = await chrome.withOverlay(() =>
         pickShellApproval(
           otui,
@@ -5705,6 +5750,7 @@ export async function launchTuiAgentShell(opts: {
           // Flow 306 (W6 T9): never offer to remember while a `PreToolUse`
           // hook asked about this specific call.
           ev.hookAsk || ev.untrustedOrigin,
+          causeOfMeta(tool, meta),
         ),
       );
       input.focus();
@@ -5821,7 +5867,7 @@ export async function launchTuiAgentShell(opts: {
       if (decision !== "allow") return false;
       return approvedAnswer();
     };
-    io.requestApproval = requestApprovalLocally;
+    io.requestApproval = trackApproval(requestApprovalLocally);
 
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
@@ -6039,7 +6085,7 @@ export async function launchTuiAgentShell(opts: {
     // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
     // lets an MCP `use_tool` skip the question there.
     const telegramTurnIo: TurnScopedIo = {
-      requestApproval: requestApprovalForTelegramTurn,
+      requestApproval: trackApproval(requestApprovalForTelegramTurn),
       permissionMode: () => modeForTurn(true).mode,
       onAutoApproved: autoApprovedFor(true),
       mcpGrantsApply: () => false,
@@ -7727,13 +7773,7 @@ export async function launchTuiAgentShell(opts: {
       setRowActive: (active: boolean) => void;
       buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
     }> = [];
-    // Small styled label mimicking a clickable button -- `smallActionButton`
-    // (`./action-button`) holds the actual
-    // implementation now; `/connect`'s row-list step (flow 304) builds its
-    // Test/Disconnect buttons the SAME way, off the SAME function, rather
-    // than a parallel copy.
-    const mainQueueButton = (label: string, id: string, color: string, onMouseDown: () => void) =>
-      smallActionButton(otui, r, label, id, color, onMouseDown);
+    let mainQueueHelp: InstanceType<typeof otui.TextRenderable> | undefined;
     /** Repaint the queue-nav highlight only -- no rebuild, mirrors
      * composer-choice.ts's paintOptions() re-highlight-on-change shape. */
     const applyQueueNavHighlight = (): void => {
@@ -7785,43 +7825,38 @@ export async function launchTuiAgentShell(opts: {
         }
       }
       mainQueueBlocks = [];
+      if (mainQueueHelp !== undefined) {
+        try {
+          chrome.queueDock.remove(mainQueueHelp);
+        } catch {
+          // ignore
+        }
+        mainQueueHelp = undefined;
+      }
       selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, mainQueue.length);
       if (mainQueue.length === 0) {
         // Queue-nav only makes sense while there is something to act on.
         exitQueueNav();
       }
-      const theme = getTheme();
       for (let i = 0; i < mainQueue.length; i++) {
         const item = mainQueue[i];
         if (item === undefined) continue;
         const index = i;
-        const row = new otui.BoxRenderable(r, {
-          id: `mq-${item.id}`,
-          width: "100%",
-          flexDirection: "row",
-        });
-        const label = new otui.TextRenderable(r, {
-          id: `mq-${item.id}-t`,
-          flexGrow: 1,
-          minWidth: 0,
-          content: otui.t`${dimChunk(otui, `${formatMainQueueMarker(index)} ${item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion}`)}`,
-        });
-        row.add(label);
-        const force = mainQueueButton("Force", `mq-force-${item.id}`, theme.focus, () => forceMainQueue(index));
-        const edit = mainQueueButton("Edit", `mq-edit-${item.id}`, theme.text, () => editMainQueue(index));
-        const del = mainQueueButton("Delete", `mq-del-${item.id}`, theme.error, () => removeMainQueue(index));
-        row.add(force.box);
-        row.add(edit.box);
-        row.add(del.box);
-        chrome.queueDock.add(row);
-        mainQueueBlocks.push({
+        const built = buildMainQueueRow(otui, r, {
           id: item.id,
-          box: row,
-          setRowActive: (active) => {
-            row.backgroundColor = active ? theme.highlight : undefined;
-          },
-          buttons: { force, edit, delete: del },
+          index,
+          text: item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion,
+          wait: queueWait(),
+          onForce: () => forceMainQueue(index),
+          onEdit: () => editMainQueue(index),
+          onDelete: () => removeMainQueue(index),
         });
+        chrome.queueDock.add(built.box);
+        mainQueueBlocks.push({ id: item.id, box: built.box, setRowActive: built.setRowActive, buttons: built.buttons });
+      }
+      if (mainQueue.length > 0) {
+        mainQueueHelp = buildMainQueueHelp(otui, r);
+        chrome.queueDock.add(mainQueueHelp);
       }
       chrome.queueDock.visible = mainQueue.length > 0;
       applyQueueNavHighlight();
@@ -8223,7 +8258,12 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "queue": {
-            const parsed = parseQueueCommand(line.trim().split(/\s+/).slice(1).join(" "));
+            const queueArgs = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+            if (queueArgs === "" || queueArgs === "list") {
+              io.onSystem?.(queueListingText());
+              return;
+            }
+            const parsed = parseQueueCommand(queueArgs);
             if (parsed === undefined) {
               io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
               return;
@@ -9148,7 +9188,7 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/queue") {
           // The queue only exists while main is busy (FIFO-drain empties it
           // the instant a turn frees up), so outside a busy turn it is empty.
-          io.onSystem?.("◇ main queue is empty.\n");
+          io.onSystem?.(queueListingText());
           return;
         }
         if (command.name === "/delegate") {

@@ -8,6 +8,8 @@ import {
   operatorDenied,
   parseReviewSystem,
   recordOperatorDenial,
+  refusalFingerprint,
+  REFUSED_EARLIER,
   resetOperatorDenials,
   reviewAutoActive,
   reviewAutoGrants,
@@ -92,4 +94,44 @@ test("--review-system parses to a flag and refuses an unknown value", () => {
   expect(parseShellCliFlags(["--review-system", "inherit"]).reviewSystemFlag).toBe("inherit");
   expect(parseShellCliFlags(["--trust"]).reviewSystemFlag).toBeUndefined();
   expect(() => parseShellCliFlags(["--review-system", "yolo"])).toThrow(/review-auto/);
+});
+
+const shell = (command: string): string => JSON.stringify({ command });
+
+test("AC4: the refused-earlier message is the frozen sentence", () => {
+  expect(REFUSED_EARLIER).toBe("refused earlier: choose another path");
+});
+
+test("AC4: spellings of one command normalize to one fingerprint", () => {
+  const key = (command: string): string => refusalFingerprint("shell_exec", shell(command), "fallback");
+  const base = key("keryx harness wave --spec tier.json");
+  expect(key("keryx   harness   wave --spec tier.json")).toBe(base);
+  expect(key('keryx harness wave "--spec" \'tier.json\'')).toBe(base);
+  expect(key("keryx harness wave --spec=tier.json")).toBe(base);
+  expect(key("keryx harness wave --spec tier.json --json")).toBe(base);
+  expect(key("keryx harness wave --json --spec tier.json")).toBe(base);
+  expect(key("keryx harness wave --spec tier.json --help")).toBe(base);
+  expect(key("keryx harness wave --spec tier.json --format json --no-color")).toBe(base);
+});
+
+test("AC4: argument order of flag pairs does not matter, but their pairing does", () => {
+  const key = (command: string): string => refusalFingerprint("shell_exec", shell(command), "fallback");
+  expect(key("keryx review run --base main --head feat")).toBe(key("keryx review run --head feat --base main"));
+  expect(key("keryx review run --base main --head feat")).not.toBe(key("keryx review run --base feat --head main"));
+});
+
+test("AC4: different commands, subcommands and values keep different fingerprints", () => {
+  const key = (command: string): string => refusalFingerprint("shell_exec", shell(command), "fallback");
+  const base = key("keryx harness wave --spec tier.json");
+  expect(key("keryx harness wave --spec other.json")).not.toBe(base);
+  expect(key("keryx harness status --spec tier.json")).not.toBe(base);
+  expect(key("keryx harness wave")).not.toBe(base);
+  expect(key("keryx harness wave --spec tier.json && rm -rf build")).not.toBe(base);
+  expect(key("keryx harness wave --spec tier.json; rm -rf build")).not.toBe(base);
+});
+
+test("AC4: a call without a command falls back to the exact fingerprint", () => {
+  expect(refusalFingerprint("apply_patch", JSON.stringify({ patch: "x" }), "exact-fp")).toBe("exact-fp");
+  expect(refusalFingerprint("shell_exec", "not json", "exact-fp")).toBe("exact-fp");
+  expect(refusalFingerprint("shell_exec", JSON.stringify({ command: "" }), "exact-fp")).toBe("exact-fp");
 });

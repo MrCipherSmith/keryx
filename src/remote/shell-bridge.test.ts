@@ -411,7 +411,9 @@ test("describeApprovalForTopic shows the command a human would read and the risk
   expect(text).not.toContain("{");
 
   expect(describeApprovalForTopic("edit", "not json")).toContain("not json");
-  expect(describeApprovalForTopic("x", "{}", { card: ["Card line 1", "Card line 2"] })).toBe("Card line 1\nCard line 2");
+  expect(describeApprovalForTopic("x", "{}", { card: ["Card line 1", "Card line 2"] })).toBe(
+    "Card line 1\nCard line 2\nwhy: the permission mode asks before this call",
+  );
   expect(describeApprovalForTopic("bash", JSON.stringify({ command: "z".repeat(5000) })).length).toBeLessThan(1_700);
   expect(describeApprovalForTopic("bash", "{}", { credentials: true })).toContain("credential");
 });

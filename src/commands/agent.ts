@@ -1,6 +1,8 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
-import { asksForReviewAuto, operatorDenied, recordOperatorDenial, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
+import { REFUSED_EARLIER, asksForReviewAuto, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
+import { classifyApprovalCause } from "./approval-cause";
+import type { ApprovalCause } from "./approval-cause";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -23,7 +25,7 @@ import { validateAgainstSchemaObject } from "../contracts/validator";
 import { tracePhase } from "../lib/phase-trace";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
-import { isTrustRoutineCommand } from "../lib/trust-routine-command";
+import { isTrustRoutineCommand, isTrustRoutineTool } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
@@ -238,6 +240,8 @@ export interface ApprovalMeta {
    * `autoApprove` exactly like `publishLease`.
    */
   hookAsk?: boolean;
+  /** Flow 426 AC5: why this prompt appears; every approver shows its one-line form. */
+  cause?: ApprovalCause;
   /**
    * Aborted when the caller stops waiting for this answer — the ACP client's
    * approval timeout (flow 292 T13). An approver holding a resource for the
@@ -5457,13 +5461,24 @@ async function executeCallUnbounded(
   const mark = (name: string): void => {
     if (stage !== undefined) stage.current = name;
   };
+  // Set when the wrapper below answered "no" from the refusal memory instead of asking, so the model reads
+  // "refused earlier" rather than the generic denial text.
+  let refusedEarlier = false;
+  const denialOutput = (generic: string): string => (refusedEarlier ? REFUSED_EARLIER : generic);
   if (requestApproval !== undefined && reviewAutoActive()) {
     const askHuman = requestApproval;
     requestApproval = async (name, toolInput, meta) => {
-      if (meta !== undefined && operatorDenied(meta.fingerprint)) return false;
+      const spelled = meta === undefined ? undefined : refusalFingerprint(name, toolInput, meta.fingerprint);
+      if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {
+        refusedEarlier = true;
+        return false;
+      }
       if (!reviewAutoGrants(name, meta)) {
         const response = await askHuman(name, toolInput, meta);
-        if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) recordOperatorDenial(meta.fingerprint);
+        if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {
+          recordOperatorDenial(meta.fingerprint);
+          recordOperatorDenial(spelled!);
+        }
         return response;
       }
       onAutoApproved?.(name, toolInput, { destructive: false, credentials: false });
@@ -5556,6 +5571,11 @@ async function executeCallUnbounded(
     // missing dimension. Escalation only — it never denies on its own (ADR-0009),
     // because a "safe" verdict from an incomplete list must never read as a grant.
     const command = typeof input.command === "string" ? input.command : "";
+    // Flow 426 AC4: what the operator refused stays refused in any spelling, even where the mode would run it.
+    if (reviewAutoActive() && command.length > 0 && !isTrustRoutineCommand(command)) {
+      const key = refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input));
+      if (operatorDenied(key)) return { output: REFUSED_EARLIER, isError: true };
+    }
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
     // Flow 299: SAC's `confirm-review` and `flow confirm` share this floor.
@@ -5579,9 +5599,14 @@ async function executeCallUnbounded(
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
     // The untrusted-content latch must not stall a long trust-mode review on routine local commands.
+    // Flow 426 AC1: the routine table also lifts it in review-auto, where the wrapper above answers the ask.
     const untrustedGate =
       untrustedOrigin &&
-      !(mode === "trust" && gated.decision === "auto" && !gated.hookAsked && isTrustRoutineCommand(command));
+      !(
+        !gated.hookAsked &&
+        isTrustRoutineCommand(command) &&
+        ((mode === "trust" && gated.decision === "auto") || reviewAutoActive())
+      );
     // The model supplies this name, but cannot grant it: only a validated
     // operator response from the host below can put it in the session set.
     const mcpFqn = call.name === "use_tool" && typeof input.tool_name === "string" ? input.tool_name : undefined;
@@ -5629,6 +5654,15 @@ async function executeCallUnbounded(
                 : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedGate ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({
+                destructive,
+                credentials,
+                confirmation: sacReviewConfirmation,
+                publishLease,
+                hookAsk: gated.hookAsked,
+                untrusted: untrustedGate,
+                shell: true,
+              }),
               ...(mcpTrustPossible
                 ? mcpDestructive
                   ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" as const }
@@ -5639,7 +5673,7 @@ async function executeCallUnbounded(
               ...(mcpGranted ? { mcpTrusted: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedGate ? untrustedDenial : "command not approved by the user; not executed", isError: true };
+        return { output: denialOutput(untrustedGate ? untrustedDenial : "command not approved by the user; not executed"), isError: true };
       }
       if (
         mcpFqn !== undefined &&
@@ -5687,10 +5721,11 @@ async function executeCallUnbounded(
               destructive: false,
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({ hookAsk: gated.hookAsked, untrusted: untrustedOrigin }),
             });
       mark("approved");
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed", isError: true };
+        return { output: denialOutput(untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed"), isError: true };
       }
     }
   } else if (risk === "write") {
@@ -5753,11 +5788,18 @@ async function executeCallUnbounded(
               ...(card !== undefined ? { alwaysAsk: true, card } : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({
+                destructive,
+                credentials,
+                confirmation: card !== undefined,
+                hookAsk: gated.hookAsked,
+                untrusted: untrustedOrigin,
+              }),
             });
       if (!isApprovalFor(response, fingerprint)) {
         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
         return {
-          output: untrustedOrigin ? untrustedDenial : card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
+          output: denialOutput(untrustedOrigin ? untrustedDenial : card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`),
           isError: true,
         };
       }
@@ -5784,14 +5826,23 @@ async function executeCallUnbounded(
     if (gated.decision === "deny") {
       return { output: gated.denyMessage ?? `tool "${call.name}" refused by a policy hook`, isError: true };
     }
-    if (gated.decision === "ask" || untrustedOrigin) {
+    // Flow 426 AC1: the session's own notes never wait on untrusted content in trust or review-auto.
+    const slateLift = !gated.hookAsked && isTrustRoutineTool(call.name) && (mode === "trust" || reviewAutoActive());
+    const readUntrusted = untrustedOrigin && !slateLift;
+    if (gated.decision === "ask" || readUntrusted) {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
         requestApproval === undefined
           ? false
-          : await requestApproval(call.name, call.input, { fingerprint, destructive: false, ...(gated.hookAsked ? { hookAsk: true } : {}), ...(untrustedOrigin ? { untrustedOrigin: true } : {}) });
+          : await requestApproval(call.name, call.input, {
+              fingerprint,
+              destructive: false,
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
+              ...(readUntrusted ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({ hookAsk: gated.hookAsked, untrusted: readUntrusted }),
+            });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedOrigin ? untrustedDenial : `${call.name} not approved by the user; not executed`, isError: true };
+        return { output: denialOutput(readUntrusted ? untrustedDenial : `${call.name} not approved by the user; not executed`), isError: true };
       }
     }
   } else {

@@ -1,4 +1,5 @@
 import type { ApprovalMeta } from "../commands/agent";
+import { splitSegments } from "../lib/shell-syntax";
 
 export type ReviewSystem = "inherit" | "review-auto";
 
@@ -32,6 +33,74 @@ const REVIEW_AUTO_PHRASE =
 /** True when the operator's own line asks for an automatic review. Only ever fed the operator's text, never tool output. */
 export function asksForReviewAuto(userLine: string): boolean {
   return REVIEW_AUTO_PHRASE.test(userLine);
+}
+
+/** What the model reads when it repeats a call the operator or policy already refused. */
+export const REFUSED_EARLIER = "refused earlier: choose another path";
+
+const OUTPUT_FLAGS: ReadonlySet<string> = new Set([
+  "--json",
+  "--yaml",
+  "--raw",
+  "--quiet",
+  "--silent",
+  "--no-color",
+  "--plain",
+  "--pretty",
+  "--compact",
+]);
+const OUTPUT_VALUE_FLAGS: ReadonlySet<string> = new Set(["--format", "--output-format"]);
+
+function normalizeSegmentWords(words: readonly string[]): string {
+  const expanded = words.flatMap((w) => {
+    const eq = w.indexOf("=");
+    return w.startsWith("--") && eq > 2 ? [w.slice(0, eq), w.slice(eq + 1)] : [w];
+  });
+  const kept: string[] = [];
+  for (let i = 0; i < expanded.length; i += 1) {
+    const w = expanded[i]!;
+    if (OUTPUT_FLAGS.has(w)) continue;
+    if (OUTPUT_VALUE_FLAGS.has(w)) {
+      if (expanded[i + 1] !== undefined && !expanded[i + 1]!.startsWith("-")) i += 1;
+      continue;
+    }
+    kept.push(w);
+  }
+  if (kept.length > 1 && kept[kept.length - 1] === "--help") kept.pop();
+  const firstDash = kept.findIndex((w) => w.startsWith("-"));
+  const head = firstDash === -1 ? kept : kept.slice(0, firstDash);
+  const rest = firstDash === -1 ? [] : kept.slice(firstDash);
+  const units: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const w = rest[i]!;
+    const next = rest[i + 1];
+    if (w.startsWith("-") && next !== undefined && !next.startsWith("-")) {
+      units.push(`${w}\u001f${next}`);
+      i += 1;
+    } else {
+      units.push(w);
+    }
+  }
+  return `${head.join("\u001f")}\u001e${units.sort().join("\u001e")}`;
+}
+
+/**
+ * The key a refusal is remembered under. A shell command is normalized so that spacing, quoting,
+ * `--flag=value`, the order of flag pairs, output-style flags (`--json`) and a trailing `--help` do not
+ * make a refused call look new. Any other call (or an unreadable command) keeps `fallback`, its exact hash.
+ */
+export function refusalFingerprint(tool: string, rawInput: string, fallback: string): string {
+  let command: unknown;
+  try {
+    command = (JSON.parse(rawInput) as { command?: unknown } | null)?.command;
+  } catch {
+    return fallback;
+  }
+  if (typeof command !== "string" || command.trim().length === 0) return fallback;
+  const segments = splitSegments(command);
+  if (segments.length === 0) return fallback;
+  const parts = segments.map((seg) => `${seg.precededBy ?? ""}\u001d${normalizeSegmentWords(seg.words)}`);
+  return `${tool}\u0000cmd:${parts.join("\u001d")}`;
 }
 
 const operatorDenials = new Set<string>();

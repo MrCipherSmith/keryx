@@ -6,6 +6,15 @@
 - `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
 - `exec` and `invariant` verification markers take an optional sensitivity note, `[verify: exec \`<command>\` · sensitive: revert]` (an ASCII `;` also separates), with the values `revert`, `mutation` and `failure-scenario`; `judged` and `none` reject it. `keryx flow ac kinds` shows how many criteria carry it, `keryx flow ac confirm` warns (and still confirms) when a criterion carries the note and `--note` has no `evidence: <ref>` label (a non-empty reference up to the next `;`, not `n/a`, `na`, `none`, `-`, `tbd`, `todo`, `ref` or the `<ref>` template; surrounding punctuation is ignored), and `sync-status.md` gains a sensitivity share line with no threshold. The flow-init and flow-orchestrator skills ask for a failure-scenario criterion on behaviour with an external dependency or a failure path.
 
+## [Unreleased]
+
+### Shell
+
+- Fewer approval prompts in `trust` and `review-auto`. One table (`TRUST_ROUTINE_KEYRYX`) lists the read-only keryx commands (`help`, `<command> --help`, `harness list|status`, `agents external list --no-probe`, `review …`, `flow status|list|check|next`, `gdgraph …`, `ctx rg|read|diff`) and the `slate_note` and `slate_trail` tools that run with no prompt even after untrusted content. A command outside the table, or one that chains with `;`, pipes to an unlisted command, redirects outside the working tree or uses a subshell, still asks. Destructive, credential, publish-lease, hook-ask and human-confirmation calls are unchanged.
+- In `review-auto`, a refused call is remembered by its normalized fingerprint: the same call in any spelling is answered "refused earlier: choose another path" with no modal, until the shell restarts.
+- Every approval modal, the readline prompt and the Telegram relay carry one `why:` line from a closed set (`destructive`, `credentials`, `publish`, `hook-ask`, `untrusted-content`, `not-in-routine-list`, `mode-ask`).
+- A message queued while a turn runs shows its state and why it waits ("waits for the current turn", "waits for approval of: <call>"); `/queue` lists the same text, and one line explains `[Force]`.
+
 ## [0.3.105] - 2026-10-11
 
 ### Review

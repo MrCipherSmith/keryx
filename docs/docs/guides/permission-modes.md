@@ -128,15 +128,59 @@ the same for an unattended shell, and `ask_user` menus take their recommended op
 
 What `review-auto` still asks you about: destructive commands, credential access,
 publish leases, calls a hook tightened to "ask", and any call other than a reviewer
-spawn that follows untrusted external content. Each automatic answer is recorded in the
-transcript like any other auto-approval.
+spawn or a routine command (below) that follows untrusted external content. Each
+automatic answer is recorded in the transcript like any other auto-approval.
 
-A refusal sticks. When you deny a call, `review-auto` remembers that exact call for the
-rest of the shell: the same call is refused again without a prompt, and an `ask_user`
+A refusal sticks. When you deny a call, `review-auto` remembers it for the rest of the
+shell. The same call, in any spelling that normalizes to the same fingerprint
+(`keryx  harness wave --spec x` and `keryx harness wave --spec=x`), is not shown again:
+the agent gets "refused earlier: choose another path" and no modal opens. An `ask_user`
 menu that asks for permission (allow, deny, consent, access, "разрешить", "запретить")
 is no longer answered with its recommended option. It reaches you instead, and the
 transcript says so. An irreversible question was never auto-answered. Restart the
-shell to clear the memory.
+shell to clear the memory; nothing else does. The memory is scoped to `review-auto`;
+under `inherit` a denied call is asked again.
+
+### Routine commands: no prompt after untrusted content
+
+In `trust` and in `review-auto`, the commands below run without a prompt even after a
+web or MCP result entered the turn. They are read-only or local and write nothing
+outside the working tree. This table is the single list; the code reads it from
+`src/lib/trust-routine-command.ts`.
+
+| Command | Notes |
+|---|---|
+| `keryx help` | |
+| `keryx <command> --help` | up to four words, no other flags |
+| `keryx harness list`, `status`, `--help` | |
+| `keryx agents external list --no-probe` | only with `--no-probe` |
+| `keryx review attach`, `start`, `scope`, `slice`, `dispatch-check`, `retry-plan`, `ledger`, `floor`, `blast-radius`, `budget`, `tier`, `status`, `reviewers`, `required`, `ingest`, `complete` | |
+| `keryx flow status`, `list`, `check`, `next` | |
+| `keryx gdgraph find`, `context`, `affected`, `cycles`, `orphans` | |
+| `keryx ctx rg`, `read`, `diff` | |
+| `slate_note`, `slate_trail` (tools) | the session's own notes |
+
+A command outside the table still asks. So does a command that chains with `;`, pipes
+to a command that is not listed, redirects outside the working tree, or uses a
+subshell, `$(…)` or backticks: every segment has to be in the table. The hard floors
+are not lifted by the table: destructive commands, credential access, human
+confirmation (`flow confirm`, SAC review, scheduler control), publish leases and a
+hook that says "ask".
+
+### Why am I being asked?
+
+Every approval modal, the readline prompt and the Telegram relay carry one line that
+names the cause, from a closed set:
+
+| Cause | Line |
+|---|---|
+| `destructive` | why: destructive command — no mode lifts this |
+| `credentials` | why: touches credentials or needs your confirmation — no mode lifts this |
+| `publish` | why: a git-publish lease applies — no mode lifts this |
+| `hook-ask` | why: a policy hook asked about this call |
+| `untrusted-content` | why: this turn holds untrusted external content |
+| `not-in-routine-list` | why: untrusted external content in this turn, and the command is not in the routine list |
+| `mode-ask` | why: the permission mode asks before this call |
 
 ## Long runs in the shell
 
@@ -147,11 +191,11 @@ carry one to the end without you typing anything after the task.
   `trust`**. The limit follows the mode in force when the turn starts, so `/mode
   trust` takes effect on the next turn. `KERYX_AGENT_MAX_ROUNDS` still overrides
   both. When the limit is hit, the "reset" choice adds the limit of the current mode.
-- **No prompt for routine commands.** In `trust`, a short `&&` chain of `cd`,
-  `keryx review`, `keryx ctx rg|read|diff|run --`, read-only `keryx flow`, `gdgraph`
-  and `git` subcommands, and `bun test` runs without asking, even after the turn has
-  read untrusted content (web or MCP results). Destructive commands, credential
-  access, SAC and publish gates, and every other command still ask.
+- **No prompt for routine commands.** In `trust` and `review-auto`, a short `&&` chain
+  of `cd`, the commands in the [routine table](#routine-commands-no-prompt-after-untrusted-content),
+  `keryx ctx run --`, read-only `git` subcommands and `bun test` runs without asking,
+  even after the turn has read untrusted content (web or MCP results). Destructive
+  commands, credential access, SAC and publish gates, and every other command still ask.
 - **Open plans do not end the turn.** In `trust`, a turn that would end with open
   plan items continues on its own, at most 8 times in a row, and stops earlier when
   the model makes no progress.
@@ -162,7 +206,10 @@ carry one to the end without you typing anything after the task.
   (at most 200 per subagent).
 - **Slash commands are queued, not dropped.** A command typed while a turn runs is
   shown as `queued as qN` and runs when the turn ends; `/queue` lists, edits and
-  removes. `/new`, `/clear` and `/resume` are refused while busy, because running
+  removes. Each queued message shows its state and why it waits — "waits for the
+  current turn", or "waits for approval of: <call>" when an approval modal is open —
+  in the panel and in `/queue`, and one line explains `[Force]`: it interrupts the
+  current turn and runs the message now. `/new`, `/clear` and `/resume` are refused while busy, because running
   them later would swap the session under the questions queued behind them.
 - **Ctrl+C cancels the turn.** During a turn, one Ctrl+C cancels it and returns to the
   prompt. At an idle prompt, the first Ctrl+C shows a hint and a second one within 2
