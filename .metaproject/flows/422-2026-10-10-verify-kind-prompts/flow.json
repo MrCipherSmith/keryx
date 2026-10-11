@@ -8,17 +8,46 @@
   "id": "422",
   "slug": "verify-kind-prompts",
   "title": "Verification kind is asked for at every criterion: template, flow and flow-orchestrator skills, freeze warning",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-10T20:06:52.448Z",
-  "updatedAt": "2026-10-10T20:52:58.710Z",
+  "updatedAt": "2026-10-11T08:11:44.712Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-11T08:11:43.781Z",
+      "note": "PR #957 CI green on 9df3af029; bun test src/flow/templates.test.ts 9/0 (journal T11)"
+    },
+    "AC2": {
+      "at": "2026-10-11T08:11:43.934Z",
+      "note": "bun test src/gdskills: only the known clean-main failure (install.test.ts); phrase pins in src/gdskills/flow-orchestrator-verify-kind.test.ts; CI green"
+    },
+    "AC3": {
+      "at": "2026-10-11T08:11:44.095Z",
+      "note": "src/commands/flow-freeze-kind-prompt.test.ts (non-interactive journal, interactive yes/no/empty, --yes, env); CI green"
+    },
+    "AC4": {
+      "at": "2026-10-11T08:11:44.261Z",
+      "note": "src/flow/ac-kinds-never-gates.test.ts green locally and in CI; service freeze reads no kind (freezePrecondition)"
+    },
+    "AC5": {
+      "at": "2026-10-11T08:11:44.413Z",
+      "note": "src/commands/verify-kind-creation-paths.test.ts drives intake through the real flow init handler and goal autoProvisionFlow; CI green"
+    },
+    "AC6": {
+      "at": "2026-10-11T08:11:44.562Z",
+      "note": "src/commands/research-sync-kinds.test.ts incl. runResearchSync wiring and 7-day window; CI green"
+    },
+    "AC7": {
+      "at": "2026-10-11T08:11:44.712Z",
+      "note": "git diff --stat of #957 against its merge-base touches no flow dir other than 422"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/957"
   },
   "baseBranch": "main",
   "owner": {
@@ -425,6 +454,46 @@
       "at": "2026-10-10T20:52:58.710Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-11T08:11:43.603Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/957 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-11T08:11:43.781Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #957 CI green on 9df3af029; bun test src/flow/templates.test.ts 9/0 (journal T11) (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:11:43.934Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/gdskills: only the known clean-main failure (install.test.ts); phrase pins in src/gdskills/flow-orchestrator-verify-kind.test.ts; CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:11:44.095Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/commands/flow-freeze-kind-prompt.test.ts (non-interactive journal, interactive yes/no/empty, --yes, env); CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:11:44.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: src/flow/ac-kinds-never-gates.test.ts green locally and in CI; service freeze reads no kind (freezePrecondition) (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:11:44.413Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/commands/verify-kind-creation-paths.test.ts drives intake through the real flow init handler and goal autoProvisionFlow; CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:11:44.562Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/commands/research-sync-kinds.test.ts incl. runResearchSync wiring and 7-day window; CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:11:44.712Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: git diff --stat of #957 against its merge-base touches no flow dir other than 422 (signed: claude-agent (session 2026-10-11) [stated])"
     }
   ],
   "acKinds": {
@@ -459,5 +528,84 @@
     "AC8": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-11T08:11:43.781Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-11T08:11:43.934Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-11T08:11:44.095Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-11T08:11:44.261Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-11T08:11:44.413Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-11T08:11:44.562Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-11T08:11:44.712Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    }
+  ]
 }
