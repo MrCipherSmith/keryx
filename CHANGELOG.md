@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.105] - 2026-10-11
+
+### Review
+
+- `keryx review retry-plan` counts a retry by progress, not by attempts: a result that covers a new slice does not spend the reviewer's attempt, two results in a row that cover nothing new (or six failed rounds) make it `not-run`. `--next-wave` hands out the next wave of only the uncovered slices; a stalled result halves the wave and re-cuts the open slices.
+- `keryx review slice --wave-bytes` (default 60000, never below `--max-bytes`) sets the size of a dispatch wave; `dispatch-check` enforces it instead of the slice ceiling. `ledger build` reports the waves left and the exact `retry-plan --next-wave` command.
+- The operator's own-quote override for a smaller reviewer set is unchanged.
+
+### Shell
+
+- In `--review-system review-auto`, an action the operator refused stays refused: the same call is declined without a new question, and an `ask_user` menu about permission is sent to the operator instead of taking its recommended option.
+
 ## [0.3.104] - 2026-10-10
 
 ### Review
