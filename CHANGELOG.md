@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.3.110] - 2026-10-11
+
+### Review
+
+- Bind ledger coverage to the assigned dispatch slices instead of combining unrelated reviewer payloads. Ambiguous results cannot close unreviewed slices.
+- Bind retry state to the current slice manifest and payload identity; changed inputs cannot inherit stale coverage. A `DONE` result with open `needs_context` remains incomplete.
+- Share tolerant result parsing between ledger and retry handling, including bare JSON and prose containing JSON.
+- Include current option IDs in the arbiter cache identity and track nested artifact content changes in the completion watchdog.
+- Add regression and deterministic lifecycle tests without model calls. These checks do not claim a successful live autonomous review.
+
+### Shell
+
+- Check remembered refusals before automatic write/delegate approval. Review-auto questions involving safety floors or untrusted content return to the operator instead of selecting an automatic answer.
+
 ## [0.3.109] - 2026-10-11
 
 ### Review
