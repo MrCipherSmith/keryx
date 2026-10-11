@@ -11,12 +11,12 @@
   "title": "review-orchestrator runs inline in the main session and never half-runs",
   "status": "in-progress",
   "createdAt": "2026-10-09T14:29:08.833Z",
-  "updatedAt": "2026-10-09T15:08:56.912Z",
+  "updatedAt": "2026-10-11T07:31:54.056Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8",
+  "acChecksum": "sha256:be5d4ef7c365f22bf2ec5ad0c416a604fc0748e75689c437916377e0650ef542",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -245,7 +245,7 @@
     {
       "at": "2026-10-09T14:38:52.345Z",
       "event": "task-added",
-      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
+      "detail": "T8: Facades and routing text: catalog, routing, managed block, work-project facades (AC12 AC13)"
     },
     {
       "at": "2026-10-09T14:38:52.760Z",
@@ -340,12 +340,17 @@
     {
       "at": "2026-10-09T15:08:03.417Z",
       "event": "task-done",
-      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
+      "detail": "T8: Facades and routing text: catalog, routing, managed block, work-project facades (AC12 AC13)"
     },
     {
       "at": "2026-10-09T15:08:56.912Z",
       "event": "task-done",
       "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
+    },
+    {
+      "at": "2026-10-11T07:31:54.056Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"The facades `<work-project>-review` and `<work-project>-job`, where this repository generates their text, state the precondition and the depth budget: \"the main agent runs the skill inline and does not spawn this agent for it\". Where the text is generated outside this repository, the flow's journal names the owner of that text instead.\" -> \"The facades for review and job in the work project's overlay, where this repository generates their text, state the precondition and the depth budget: \"the main agent runs the skill inline and does not spawn this agent for it\". Where the text is generated outside this repository, the flow's journal names the owner of that text instead.\" (privacy: remove private work-project name from a public repo)"
     }
   ],
   "acKinds": {
