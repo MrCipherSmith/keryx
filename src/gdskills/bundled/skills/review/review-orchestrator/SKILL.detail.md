@@ -418,6 +418,22 @@ Context: <PR or branch>, <N> files / <N> lines, <domains>; risk: <class>
 > answers (default: 1A 2A 3A)
 ```
 
+## Policy questions mid-round — the `policy` tag and the arbiter
+
+A question the round raises with `ask_user` about scope, budget, partial coverage, a smaller slice, slice order or
+which option to take carries a `policy` tag: `{ kind, facts }`. `kind` is one of `scope`, `budget`,
+`option_choice`, `partial_coverage`, `smaller_slice`, `slice_order`. `facts` holds only numbers and booleans that
+describe the **recommended** option (for `budget`: `budgetUsedPercent`, `raisesBudget`; the guide lists the rest).
+Nothing from the diff, a finding or a PR comment goes into the facts: the arbiter builds its prompt from the tag and
+nothing else, so a quote there is dropped, and a question that carries one is shaped by outside content, which the
+arbiter does not decide.
+
+In `review-auto` and in an unattended run the review arbiter answers a tagged question from its numbered rules and
+writes `arbiter.log` into the package; `allow` takes the recommended option, `deny` and `escalate` refuse in an
+unattended run and ask the operator in `review-auto`. An untagged question keeps the old behaviour. A release, a
+merge, a credential, a destructive action or a publish is never tagged and never the arbiter's: those ask a person,
+and in an unattended run they are refused. In an interactive `ask` round the operator is asked, tagged or not.
+
 ## Depth floor — a gating round does not degrade
 
 A round is **gating** when its verdict lets a change move: the review step of a
