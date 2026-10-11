@@ -1,0 +1,548 @@
+[
+  {
+    "flow": 410,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-identifier-sweep.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-identifier-sweep.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC3",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-identifier-sweep.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC4",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-identifier-sweep.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC5",
+    "kind": "invariant",
+    "command": "bun test src/security/detect/pii-linear-time.test.ts src/security/detect/pii-phone-linear-time.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC6",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC7",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 410,
+    "criterion": "AC8",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/tui/routing-classifier-source.test.ts src/tui/routing-classifier-shell-wiring.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/tui/routing-classifier-source.test.ts src/tui/routing-classifier-shell-wiring.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC3",
+    "kind": "exec",
+    "command": "bun test src/harness/decision/classify-turn.test.ts src/tui/routing-classifier-source.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC4",
+    "kind": "exec",
+    "command": "bun test src/harness/decision/classify-turn.test.ts src/harness/routing/classifier-model.test.ts src/tui/routing-classifier-source.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC5",
+    "kind": "exec",
+    "command": "bun test src/tui/routing-classifier-source.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC6",
+    "kind": "exec",
+    "command": "bun test src/tui/routing-classifier-source.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC7",
+    "kind": "exec",
+    "command": "bun test src/tui/routing-classifier-source.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC8",
+    "kind": "exec",
+    "command": "bun test src/harness/decision/classify-turn.test.ts src/harness/decision/jev-client.test.ts src/tui/routing-classifier-shell-wiring.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC9",
+    "kind": "exec",
+    "command": "bun test src/tui/routing-classifier-source.test.ts src/tui/routing-classifier-shell-wiring.test.ts src/tui/tui-shell.test.ts src/harness/decision/classify-turn.test.ts src/harness/decision/jev-client.test.ts src/harness/routing/classifier-model.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC10",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 411,
+    "criterion": "AC11",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 412,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-flow412-joined-phone.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 412,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-flow412-glue.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 412,
+    "criterion": "AC3",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-flow412-separators.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 412,
+    "criterion": "AC4",
+    "kind": "exec",
+    "command": "bun test src/security/detect/pii-flow412-separators.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 412,
+    "criterion": "AC5",
+    "kind": "invariant",
+    "command": "bun test src/security/detect/pii-flow412-uuid-hash.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 412,
+    "criterion": "AC6",
+    "kind": "invariant",
+    "command": "bun test src/security/detect/pii-linear-time.test.ts src/security/detect/pii-phone-linear-time.test.ts src/security/detect/pii-flow412-coverage.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 413,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/tui/composer-choice.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 413,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/tui/shell-chrome.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 413,
+    "criterion": "AC3",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 413,
+    "criterion": "AC4",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 413,
+    "criterion": "AC5",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/commands/agent.recovery.test.ts src/commands/shell-agent-repl.test.ts src/tui/tui-shell.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/commands/agent.recovery.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC3",
+    "kind": "exec",
+    "command": "bun test src/commands/agent.recovery.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC4",
+    "kind": "invariant",
+    "command": "bun test src/commands/agent.recovery.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC5",
+    "kind": "exec",
+    "command": "bun test src/commands/agent.recovery.test.ts src/tui/foreground-operation.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC6",
+    "kind": "exec",
+    "command": "bun test src/commands/agent.recovery.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC7",
+    "kind": "invariant",
+    "command": "bun test src/commands/agent.recovery.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC8",
+    "kind": "exec",
+    "command": "bun test src/commands/shell-agent-repl.test.ts src/tui/tui-shell.test.ts",
+    "resolution": "test found (was '?'): readline event test and headless OpenTUI recovery test"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC9",
+    "kind": "exec",
+    "command": "bun test src/commands/agent.recovery.test.ts src/commands/shell-agent-repl.test.ts src/tui/tui-shell.test.ts src/harness/provider/",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 414,
+    "criterion": "AC10",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC3",
+    "kind": "invariant",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC4",
+    "kind": "exec",
+    "command": "bun test src/agents/tools.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC5",
+    "kind": "exec",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts",
+    "resolution": "test found (was 'judged?'): the AC5 block of the preflight test pins each element of the spawn recipe"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC6",
+    "kind": "exec",
+    "command": "bun test src/review/caps.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC7",
+    "kind": "exec",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts src/review/round-need.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC8",
+    "kind": "exec",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts",
+    "resolution": "test found (was 'judged?'): a test asserts the skill's round ceiling equals REVIEW_ROUND_CAP"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC9",
+    "kind": "exec",
+    "command": "bun test src/review/caps.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC10",
+    "kind": "exec",
+    "command": "bun test src/gdskills/review-orchestrator-preflight.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC11",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC12",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC13",
+    "kind": "exec",
+    "command": "bun test src/lib/orchestrators-inline.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC14",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC15",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 417,
+    "criterion": "AC16",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC1",
+    "kind": "exec",
+    "command": "bun test src/commands/agent-trust-orchestration.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC2",
+    "kind": "exec",
+    "command": "bun test src/commands/agent-trust-orchestration.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC3",
+    "kind": "exec",
+    "command": "bun test src/commands/agent-trust-orchestration.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC4",
+    "kind": "exec",
+    "command": "bun test src/commands/agent-trust-orchestration.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC5",
+    "kind": "exec",
+    "command": "bun test src/tui/busy-dispatch.test.ts",
+    "resolution": "test found (was '?'): busy slash commands are deferred, queued with a notice and drained when the turn settles"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC6",
+    "kind": "exec",
+    "command": "bun test src/tui/ctrl-c-policy.test.ts",
+    "resolution": "test found (was '?'): Ctrl+C policy tests"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC7",
+    "kind": "exec",
+    "command": "bun test src/review/slice-dispatch.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC8",
+    "kind": "exec",
+    "command": "bun test src/review/slice.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC9",
+    "kind": "exec",
+    "command": "bun test src/review/slice-dispatch.test.ts src/review/dispatch.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC10",
+    "kind": "exec",
+    "command": "bun test src/commands/agent-trust-orchestration.test.ts src/review/caps.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC11",
+    "kind": "exec",
+    "command": "bun test src/harness/tool/builtin/interactive-tools.test.ts src/commands/ctx.test.ts",
+    "resolution": "proposal; test file located from the flow's shipped diff"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC12",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 418,
+    "criterion": "AC13",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC1",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC2",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC3",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC4",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC5",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC6",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC7",
+    "kind": "judged",
+    "command": null,
+    "resolution": "no test -> judged"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC8",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  },
+  {
+    "flow": 419,
+    "criterion": "AC9",
+    "kind": "judged",
+    "command": null,
+    "resolution": "proposal"
+  }
+]
