@@ -1,6 +1,6 @@
 # Flow 414 continuation report — independent-review blockers
 
-Date: 2026-10-08. Worktree: `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/shell-auto-recovery`.
+Date: 2026-10-08. Worktree: `~/goodea/keryx/.worktrees/shell-auto-recovery`.
 
 Both reported blockers are repaired in this worktree. No commit, push, rebase,
 merge, tag, release, stash, PR publication, or other-worktree edit was performed.

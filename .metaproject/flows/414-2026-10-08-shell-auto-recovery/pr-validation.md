@@ -1,6 +1,6 @@
 # Flow 414 PR validation
 
-Validated on 2026-10-08 in `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/shell-auto-recovery`, branch `feat/shell-auto-recovery`.
+Validated on 2026-10-08 in `~/goodea/keryx/.worktrees/shell-auto-recovery`, branch `feat/shell-auto-recovery`.
 PR: https://github.com/MrCipherSmith/keryx/pull/926
 Reviewed HEAD: `e90ae7d41249a7b3cbb44bc7c9e216cf01544fee`.
 Local comparison ref: `origin/main` at `13dda292684bac008b01841928c25fce238e4896`.

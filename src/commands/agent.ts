@@ -240,7 +240,7 @@ export interface ApprovalMeta {
    * `autoApprove` exactly like `publishLease`.
    */
   hookAsk?: boolean;
-  /** Flow 423 AC5: why this prompt appears; every approver shows its one-line form. */
+  /** Flow 426 AC5: why this prompt appears; every approver shows its one-line form. */
   cause?: ApprovalCause;
   /**
    * Aborted when the caller stops waiting for this answer — the ACP client's
@@ -5571,7 +5571,7 @@ async function executeCallUnbounded(
     // missing dimension. Escalation only — it never denies on its own (ADR-0009),
     // because a "safe" verdict from an incomplete list must never read as a grant.
     const command = typeof input.command === "string" ? input.command : "";
-    // Flow 423 AC4: what the operator refused stays refused in any spelling, even where the mode would run it.
+    // Flow 426 AC4: what the operator refused stays refused in any spelling, even where the mode would run it.
     if (reviewAutoActive() && command.length > 0 && !isTrustRoutineCommand(command)) {
       const key = refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input));
       if (operatorDenied(key)) return { output: REFUSED_EARLIER, isError: true };
@@ -5599,7 +5599,7 @@ async function executeCallUnbounded(
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
     // The untrusted-content latch must not stall a long trust-mode review on routine local commands.
-    // Flow 423 AC1: the routine table also lifts it in review-auto, where the wrapper above answers the ask.
+    // Flow 426 AC1: the routine table also lifts it in review-auto, where the wrapper above answers the ask.
     const untrustedGate =
       untrustedOrigin &&
       !(
@@ -5826,7 +5826,7 @@ async function executeCallUnbounded(
     if (gated.decision === "deny") {
       return { output: gated.denyMessage ?? `tool "${call.name}" refused by a policy hook`, isError: true };
     }
-    // Flow 423 AC1: the session's own notes never wait on untrusted content in trust or review-auto.
+    // Flow 426 AC1: the session's own notes never wait on untrusted content in trust or review-auto.
     const slateLift = !gated.hookAsked && isTrustRoutineTool(call.name) && (mode === "trust" || reviewAutoActive());
     const readUntrusted = untrustedOrigin && !slateLift;
     if (gated.decision === "ask" || readUntrusted) {

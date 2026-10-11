@@ -1,4 +1,4 @@
-// Flow 423 AC5: every approval prompt carries one cause line from a closed set.
+// Flow 426 AC5: every approval prompt carries one cause line from a closed set.
 
 import { expect, test } from "bun:test";
 import {

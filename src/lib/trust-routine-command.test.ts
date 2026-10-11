@@ -1,4 +1,4 @@
-// Flow 423 AC1/AC2: the routine-command table is one named list, every row has a command that runs
+// Flow 426 AC1/AC2: the routine-command table is one named list, every row has a command that runs
 // without a prompt, and everything outside it (or joined to it in a risky way) still asks.
 
 import { expect, test } from "bun:test";

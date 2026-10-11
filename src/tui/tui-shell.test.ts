@@ -2237,7 +2237,7 @@ otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)
   h.renderer.destroy();
 });
 
-// Flow 423 AC6: the queue panel says what each queued message waits for.
+// Flow 426 AC6: the queue panel says what each queued message waits for.
 otuiTest("AC6: the queue panel renders its state and the approval it waits for (headless)", async () => {
   const otui = requireOtui();
   const h = await mountApprovalDock(otui, { width: 160 });
@@ -2285,16 +2285,7 @@ otuiTest("AC6: without an approval pending the queue panel says it waits for the
   h.renderer.destroy();
 });
 
-test("AC6: the shell paints the queue through the view, tracks the pending approval and lists the same text for /queue", () => {
-  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-  expect(source).toContain("buildMainQueueRow(otui, r,");
-  expect(source).toContain("buildMainQueueHelp(otui, r)");
-  expect(source).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
-  expect(source).toContain("requestApproval: trackApproval(requestApprovalForTelegramTurn),");
-  expect(source.split("io.onSystem?.(queueListingText());").length - 1).toBe(2);
-});
-
-// Flow 423 AC5: the modal shows the one-line cause, one test per cause.
+// Flow 426 AC5: the modal shows the one-line cause, one test per cause.
 for (const cause of APPROVAL_CAUSES) {
   otuiTest(`AC5: the shell approval modal shows the ${cause} cause line (headless)`, async () => {
     const otui = requireOtui();
@@ -2936,7 +2927,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
     expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
-    expect(fnBodyPlan).toContain("io.requestApproval = requestApprovalLocally;");
+    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
     expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
     expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
   });

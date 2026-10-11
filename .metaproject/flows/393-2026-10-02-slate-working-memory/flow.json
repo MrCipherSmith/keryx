@@ -423,7 +423,7 @@
     {
       "at": "2026-10-02T16:26:30.802Z",
       "event": "owner-changed",
-      "detail": "Aleksandr Tsaitler -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))"
+      "detail": "MrCipherSmith -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))"
     },
     {
       "at": "2026-10-02T19:04:37.073Z",
