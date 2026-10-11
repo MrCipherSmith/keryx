@@ -117,6 +117,7 @@ import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type Inta
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
 import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
+import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
 import { classifyBusyDispatch, deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
@@ -3821,6 +3822,7 @@ export async function launchTuiAgentShell(opts: {
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
   let liveSchedules: SchedulesSidebar | undefined;
+  let liveAutoReview: AutoReviewSidebar | undefined;
   let liveReviewsPanel: ReviewsPanelHandle | undefined;
   // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
   // `busWakeController` below: the bridge's host closes over `runLine` and
@@ -3936,6 +3938,7 @@ export async function launchTuiAgentShell(opts: {
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
+        liveAutoReview?.dispose();
         liveReviewsPanel?.dispose();
         liveRemotePanel?.dispose();
         liveChannelsPanel?.dispose();
@@ -4454,6 +4457,17 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveSchedules = schedules;
+    // Flow 424 (AC10): the autonomous review's phase, rounds, tokens and last automatic answer, and
+    // `/autoreview start | list | stop`. It reads the run directory's files; it never touches the turn.
+    const autoReview = mountAutoReviewSidebar({
+      otui,
+      renderer: r,
+      parent: sidebar,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveAutoReview = autoReview;
     // `/reviews`: the managed pull request reviews, mounted after Schedules with the open-findings
     // count; a click opens the same modal the slash command does.
     const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
@@ -8363,6 +8377,10 @@ export async function launchTuiAgentShell(opts: {
             routeSchedulesCommand(line, true, schedules);
             return;
           }
+          case "autoreview": {
+            routeAutoReviewCommand(line, true, autoReview);
+            return;
+          }
           case "approvals": {
             routeApprovalsCommand(line, true, approvals);
             return;
@@ -8803,6 +8821,9 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeSchedulesCommand(line, false, schedules)) {
+          return;
+        }
+        if (routeAutoReviewCommand(line, false, autoReview)) {
           return;
         }
         if (routeApprovalsCommand(line, false, approvals)) {
@@ -10183,6 +10204,7 @@ export async function launchTuiAgentShell(opts: {
     // where its output goes; the ledger watcher shows its outcome next start.
     // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
     liveSchedules?.dispose();
+    liveAutoReview?.dispose();
     liveReviewsPanel?.dispose();
     liveApprovals?.dispose();
     liveIntake?.dispose();
