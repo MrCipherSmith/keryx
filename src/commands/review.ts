@@ -3815,10 +3815,6 @@ function targetKindFromArgs(mode: ManagedReviewMode, args: string[]): ReviewTarg
 function printScopeHelp(): void {
   console.log(`keryx review scope — usage:
 
-  keryx review run --autonomous --target pr --ref <pull request URL> [--budget-minutes N] [--budget-tokens N]
-                   [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
-                   One unattended review (profile review-autonomous). Exit 0 complete, 2 incomplete,
-                   3 floor, 4 budget, 5 stalled, 1 refused.
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>] [--reviewers a,b]
 
@@ -4003,6 +3999,10 @@ Usage:
                             Builds research.json from the raw results, drivers and
                             slice manifest; READY or the exact next step per gap.
                             Then: keryx review ingest --research research.json.
+  keryx review run --autonomous --target pr --ref <pull request URL> [--budget-minutes N]
+                   [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
+                   One unattended review (profile review-autonomous). Exit 0 complete,
+                   2 incomplete, 3 floor, 4 budget, 5 stalled, 1 refused.
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
                      --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
