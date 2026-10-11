@@ -63,6 +63,8 @@ export interface AutonomousRunOptions {
   readonly command?: { readonly execPath: string; readonly script: string } | undefined;
   readonly resolveHead?: ((target: AutonomousTarget, cwd: string) => Promise<string | null>) | undefined;
   readonly onProgress?: ((progress: RunProgress) => void) | undefined;
+  /** Aborting it stops the run at the next poll: the child is ended and the package kept. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 export interface RunProgress {
@@ -299,6 +301,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   let lastGrowth = Date.now();
   let lastSeen = -1;
   let stalled = false;
+  let stopped = false;
   let budgetReason: string | undefined;
   let budgetHitAt = 0;
   let lastProgressJson = "";
@@ -357,6 +360,11 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
     }
     publish("running");
     if (exitCode !== undefined) break;
+    if (options.signal?.aborted === true) {
+      stopped = true;
+      await terminate();
+      break;
+    }
     if (now - lastGrowth >= stallMs) {
       stalled = true;
       await terminate();
@@ -387,6 +395,9 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   if (found?.status === "closed") {
     status = "complete";
     reason = `package ${found.id} closed`;
+  } else if (stopped) {
+    status = "incomplete";
+    reason = `stopped by the operator; last phase: ${progress.phase}${found === undefined ? "" : `; package ${found.id} kept at ${found.status}`}`;
   } else if (stalled) {
     status = "stalled";
     reason = `no event for ${stallMinutes} minutes; last phase: ${progress.phase}`;

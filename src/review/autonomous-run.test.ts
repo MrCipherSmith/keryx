@@ -187,6 +187,28 @@ describe("exit codes", () => {
     expect(kills.length).toBeGreaterThan(0);
   });
 
+  test("2: an operator stop ends the child, keeps the package and says it was stopped", async () => {
+    const stop = new AbortController();
+    const kills: string[] = [];
+    const run = await runAutonomousReview(
+      options(
+        scripted(async (c) => {
+          writePackage("rv-1", "draft");
+          c.emit(call("keryx review ingest --id rv-1"));
+          setTimeout(() => stop.abort(), 30);
+          await c.sleep(10_000);
+          return 0;
+        }, undefined, kills),
+        { signal: stop.signal },
+      ),
+    );
+    expect(run.exitCode).toBe(2);
+    expect(run.status).toBe("incomplete");
+    expect(run.summary.reason).toContain("stopped by the operator");
+    expect(run.summary.package?.id).toBe("rv-1");
+    expect(kills.length).toBeGreaterThan(0);
+  });
+
   test("4: the wall-clock budget stops a run that never ends", async () => {
     const run = await runAutonomousReview(
       options(

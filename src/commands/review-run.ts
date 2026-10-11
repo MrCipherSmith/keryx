@@ -118,11 +118,16 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
   const target = parseAutonomousTarget(parsed.ref);
   const notifier = deps.notifier ?? (parsed.notify ? createTelegramNotifier({ project: path.basename(cwd), target }) : NO_NOTIFIER);
   const run = deps.run ?? runAutonomousReview;
+  const stop = new AbortController();
+  const onSignal = (): void => stop.abort();
+  process.on("SIGTERM", onSignal);
+  process.on("SIGINT", onSignal);
   try {
     await notifier.started(startLine(target, 1));
     const result = await run({
       cwd,
       ref: parsed.ref,
+      signal: stop.signal,
       stallMs: parsed.stallMinutes * 60_000,
       ...(parsed.budgetMinutes === undefined ? {} : { budgetMinutes: parsed.budgetMinutes }),
       ...(parsed.budgetTokens === undefined ? {} : { budgetTokens: parsed.budgetTokens }),
@@ -145,6 +150,8 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
     error(problem instanceof Error ? problem.message : String(problem));
     return 1;
   } finally {
+    process.off("SIGTERM", onSignal);
+    process.off("SIGINT", onSignal);
     await notifier.close();
   }
 }
