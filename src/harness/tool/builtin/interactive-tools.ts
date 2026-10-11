@@ -57,6 +57,11 @@ export interface InteractiveToolContext {
    * something on confirmation can refuse an invoke that never went through the card.
    */
   confirmationToken?: string;
+  /**
+   * Flow 425: untrusted external content was read earlier in this turn. `ask_user` copies it onto the question, so
+   * the review arbiter can tell a question that may have been shaped by that content and never decide it.
+   */
+  untrustedContentSeen?: boolean;
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */
