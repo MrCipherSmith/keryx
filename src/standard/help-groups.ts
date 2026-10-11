@@ -542,7 +542,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/autoreview",
     group: "Automation",
-    summary: "Autonomous PR review with nobody at the keyboard: start, list, stop — phase, rounds and tokens in the sidebar.",
+    summary: "Autonomous PR review with nobody at the keyboard: start, list, stop, arbiter — phase, rounds and tokens in the sidebar; arbiter lists what the question arbiter decided.",
   },
   {
     kind: "slash",

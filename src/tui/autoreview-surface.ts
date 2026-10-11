@@ -3,7 +3,8 @@
 //   - sidebar section `sb-autoreview`: for each running review its phase, rounds, tokens and the
 //     last answer it gave itself; the most recent finished one for a day. Hidden when there is none.
 //   - `/autoreview [list]`, `/autoreview start <PR URL> [--budget-minutes N] [--budget-tokens N]`,
-//     `/autoreview stop [PR URL | number]`.
+//     `/autoreview stop [PR URL | number]`, `/autoreview arbiter [PR URL | number]` (flow 425: the run's
+//     arbiter log, one line per question: kind, verdict, rule).
 //
 // A started review is `keryx review run --autonomous` in a detached child — the same command a
 // terminal or a scheduled timer runs — so the surface reads its files and never talks to it: the
@@ -14,6 +15,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { findAgentCommand } from "../commands/agent-commands";
+import { ARBITER_LOG_NAME, describeArbiterRecord, readArbiterLog, type ArbiterLogRecord } from "../review/arbiter-log";
 import { parseAutonomousTarget } from "../review/autonomous-profile";
 import { autonomousRunDir, type RunProgress } from "../review/autonomous-run";
 import { classifyBusyDispatch } from "./busy-dispatch";
@@ -27,7 +29,7 @@ type OpenTui = typeof import("@opentui/core");
 
 export const AUTOREVIEW_COMMAND = "/autoreview";
 export const AUTOREVIEW_USAGE =
-  "/autoreview [list] | /autoreview start <pull request URL> [--budget-minutes N] [--budget-tokens N] | /autoreview stop [pull request URL | number]";
+  "/autoreview [list] | /autoreview start <pull request URL> [--budget-minutes N] [--budget-tokens N] | /autoreview stop [pull request URL | number] | /autoreview arbiter [pull request URL | number]";
 
 const FINISHED_VISIBLE_MS = 24 * 60 * 60 * 1000;
 const POLL_MS = 5000;
@@ -36,6 +38,7 @@ export type AutoReviewCommand =
   | { readonly kind: "list" }
   | { readonly kind: "start"; readonly ref: string; readonly budgetMinutes?: number; readonly budgetTokens?: number }
   | { readonly kind: "stop"; readonly selector?: string }
+  | { readonly kind: "arbiter"; readonly selector?: string }
   | { readonly kind: "error"; readonly message: string };
 
 export function parseAutoReviewArgs(line: string): AutoReviewCommand {
@@ -43,6 +46,7 @@ export function parseAutoReviewArgs(line: string): AutoReviewCommand {
   const verb = words[0] ?? "list";
   const rest = words.slice(1);
   if (verb === "list" || verb === "ls") return { kind: "list" };
+  if (verb === "arbiter") return { kind: "arbiter", ...(rest[0] === undefined ? {} : { selector: rest[0] }) };
   if (verb === "stop") return { kind: "stop", ...(rest[0] === undefined ? {} : { selector: rest[0] }) };
   if (verb !== "start") return { kind: "error", message: `unknown subcommand "${verb}". ${AUTOREVIEW_USAGE}` };
 
@@ -95,6 +99,8 @@ export interface AutoReviewRun {
   readonly updatedAt: string | undefined;
   readonly lastAnswer: RunProgress["lastAnswer"];
   readonly reason: string | undefined;
+  /** What the review arbiter did in this run (flow 425); absent when it was never consulted. */
+  readonly arbiter?: { readonly asked: number; readonly escalated: number };
 }
 
 function readJson<T>(file: string): T | undefined {
@@ -127,6 +133,12 @@ export function autoReviewRoot(cwd: string): string {
   return path.join(cwd, ".metaproject", "data", "review-autonomous");
 }
 
+function arbiterCounts(dir: string): { arbiter?: { asked: number; escalated: number } } {
+  const records = readArbiterLog(path.join(dir, ARBITER_LOG_NAME));
+  if (records.length === 0) return {};
+  return { arbiter: { asked: records.length, escalated: records.filter((record) => record.verdict === "escalate").length } };
+}
+
 /** Every run directory, newest first. A directory with neither a progress file nor a live lock is not a run. */
 export function readAutoReviewRuns(cwd: string): AutoReviewRun[] {
   const root = autoReviewRoot(cwd);
@@ -155,6 +167,7 @@ export function readAutoReviewRuns(cwd: string): AutoReviewRun[] {
       updatedAt: progress?.updatedAt,
       lastAnswer: progress?.lastAnswer,
       reason: progress?.reason,
+      ...arbiterCounts(dir),
     });
   }
   const stamp = (run: AutoReviewRun): number => Date.parse(run.updatedAt ?? run.startedAt) || 0;
@@ -214,6 +227,11 @@ export function projectAutoReviewPanel(runs: readonly AutoReviewRun[], options: 
     if (run.lastAnswer !== undefined) {
       rows.push({ id: `sb-autoreview-${run.slug}-a`, chunks: [{ role: "muted", text: `  ${fit(`auto: ${run.lastAnswer.answer}`, w - 2)}` }] });
     }
+    if (run.arbiter !== undefined) {
+      const { asked, escalated } = run.arbiter;
+      const text = `arbiter ${asked}${escalated > 0 ? ` · ${escalated} escalated` : " asked"}`;
+      rows.push({ id: `sb-autoreview-${run.slug}-b`, chunks: [{ role: escalated > 0 ? "attention" : "muted", text: `  ${fit(text, w - 2)}` }] });
+    }
   }
   return { visible: true, rows };
 }
@@ -223,10 +241,31 @@ export function autoReviewListText(runs: readonly AutoReviewRun[]): string {
   const lines = runs.map((run) => {
     const bits = [`${run.label.padEnd(24)} ${run.state.padEnd(10)}`, `${run.phase}`, `round ${run.rounds}`, `${formatTokens(run.tokens)} tok`];
     if (run.pid !== undefined) bits.push(`pid ${run.pid}`);
+    if (run.arbiter !== undefined) bits.push(`arbiter ${run.arbiter.asked}${run.arbiter.escalated > 0 ? ` (${run.arbiter.escalated} escalated)` : ""}`);
     if (run.reason !== undefined && !run.live) bits.push(run.reason);
     return `  ${bits.join(" · ")}`;
   });
   return `Autonomous reviews:\n${lines.join("\n")}\n`;
+}
+
+const ARBITER_LINES_SHOWN = 30;
+
+/** The run's arbiter log for a transcript: one line per question, kind and verdict and rule, newest last. */
+export function arbiterLogText(run: AutoReviewRun, records: readonly ArbiterLogRecord[]): string {
+  if (records.length === 0) return `${run.label}: the arbiter has not been consulted in this run.\n`;
+  const shown = records.slice(-ARBITER_LINES_SHOWN);
+  const lines = shown.map((record) => {
+    const time = record.at.length >= 19 ? record.at.slice(11, 19) : record.at;
+    const why = record.verdict === "allow" || record.reason === "model" || record.reason === "cache" ? "" : ` · ${record.reason}`;
+    return `  ${time}  ${describeArbiterRecord(record)}${why}`;
+  });
+  const hidden = records.length - shown.length;
+  const escalated = records.filter((record) => record.verdict === "escalate").length;
+  return [
+    `Arbiter log for ${run.label}: ${records.length} question(s), ${escalated} escalated`,
+    ...(hidden > 0 ? [`  (${hidden} earlier not shown; the full log is arbiter.log in the run directory)`] : []),
+    ...lines,
+  ].join("\n") + "\n";
 }
 
 export interface AutoReviewStartSpec {
@@ -242,6 +281,8 @@ export interface AutoReviewDeps {
   /** Starts `keryx <args>` detached and returns its pid. */
   readonly start?: (spec: AutoReviewStartSpec) => number | undefined;
   readonly stop?: (pid: number) => void;
+  /** The records of one run's arbiter log. */
+  readonly readArbiter?: (cwd: string, run: AutoReviewRun) => ArbiterLogRecord[];
 }
 
 function defaultStart(spec: AutoReviewStartSpec): number | undefined {
@@ -253,6 +294,10 @@ function defaultStart(spec: AutoReviewStartSpec): number | undefined {
   child.on("error", () => {});
   child.unref();
   return child.pid;
+}
+
+function defaultReadArbiter(cwd: string, run: AutoReviewRun): ArbiterLogRecord[] {
+  return readArbiterLog(path.join(autoReviewRoot(cwd), run.slug, ARBITER_LOG_NAME));
 }
 
 const defaultStop = (pid: number): void => {
@@ -272,6 +317,7 @@ export function createAutoReviewController(deps: AutoReviewDeps): AutoReviewCont
   const read = deps.read ?? readAutoReviewRuns;
   const start = deps.start ?? defaultStart;
   const stop = deps.stop ?? defaultStop;
+  const readArbiter = deps.readArbiter ?? defaultReadArbiter;
   const say = (text: string): void => deps.notice(text.endsWith("\n") ? text : `${text}\n`);
 
   return {
@@ -284,6 +330,24 @@ export function createAutoReviewController(deps: AutoReviewDeps): AutoReviewCont
       }
       if (command.kind === "list") {
         say(autoReviewListText(read(deps.cwd)));
+        return true;
+      }
+      if (command.kind === "arbiter") {
+        const runs = read(deps.cwd);
+        const live = runs.filter((run) => run.live);
+        // no selector: the run in progress, else the newest one
+        const chosen = command.selector === undefined ? (live.length === 1 ? live[0] : live.length === 0 ? runs[0] : undefined) : runs.find((run) => matches(run, command.selector!));
+        if (chosen === undefined) {
+          say(
+            runs.length === 0
+              ? "/autoreview: no autonomous review yet, so there is no arbiter log."
+              : command.selector === undefined
+                ? `/autoreview: say which one: ${live.map((run) => run.label).join(", ")}.`
+                : `/autoreview: no review matches "${command.selector}": ${runs.map((run) => run.label).join(", ")}.`,
+          );
+          return true;
+        }
+        say(arbiterLogText(chosen, readArbiter(deps.cwd, chosen)));
         return true;
       }
       if (command.kind === "start") {
@@ -439,6 +503,7 @@ export interface AutoReviewSidebarOptions {
   read?: AutoReviewDeps["read"];
   start?: AutoReviewDeps["start"];
   stop?: AutoReviewDeps["stop"];
+  readArbiter?: AutoReviewDeps["readArbiter"];
 }
 
 export interface AutoReviewSidebar extends AutoReviewController {
@@ -453,6 +518,7 @@ export function mountAutoReviewSidebar(options: AutoReviewSidebarOptions): AutoR
     ...(options.read === undefined ? {} : { read: options.read }),
     ...(options.start === undefined ? {} : { start: options.start }),
     ...(options.stop === undefined ? {} : { stop: options.stop }),
+    ...(options.readArbiter === undefined ? {} : { readArbiter: options.readArbiter }),
   };
   const base = createAutoReviewController(deps);
   const panel = mountAutoReviewPanel(options.otui, options.renderer, options.parent, {
