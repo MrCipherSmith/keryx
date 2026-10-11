@@ -19,6 +19,7 @@
 //
 // Nothing here prints the shell token or reads it: that stays in `client.ts`.
 
+import { approvalCauseLine, classifyApprovalCause, type ApprovalCause } from "../commands/approval-cause";
 import { redactSensitiveText } from "../security/service";
 import type { AskUserAnswer, AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
@@ -210,7 +211,13 @@ export function composeApprovalPrompt(prompt: string): string {
 export function describeApprovalForTopic(
   tool: string,
   inputJson: string,
-  meta?: { destructive?: boolean; credentials?: boolean; untrustedOrigin?: boolean; card?: readonly string[] },
+  meta?: {
+    destructive?: boolean;
+    credentials?: boolean;
+    untrustedOrigin?: boolean;
+    card?: readonly string[];
+    cause?: ApprovalCause;
+  },
 ): string {
   const lines: string[] = [];
   if (meta?.card !== undefined && meta.card.length > 0) {
@@ -239,6 +246,15 @@ export function describeApprovalForTopic(
   if (meta?.destructive === true) lines.push("Warning: this can delete or overwrite files.");
   if (meta?.credentials === true) lines.push("Warning: this touches the agent's own permission or credential files.");
   if (meta?.untrustedOrigin === true) lines.push("Warning: this follows content fetched from outside.");
+  const cause =
+    meta?.cause ??
+    classifyApprovalCause({
+      destructive: meta?.destructive === true,
+      credentials: meta?.credentials === true,
+      untrusted: meta?.untrustedOrigin === true,
+      shell: tool === "shell_exec" || tool === "shell",
+    });
+  lines.push(approvalCauseLine(cause));
   return lines.join("\n");
 }
 

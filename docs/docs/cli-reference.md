@@ -263,7 +263,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 | `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
 | `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
-| `--review-system <inherit\|review-auto>` | Who answers a review run's approval questions. `inherit` (default) follows the permission mode; `review-auto` answers them itself (reviewer spawns, `ask_user` menus) while destructive, credential, publish and hook-tightened calls still ask you. Saying "сделай автоматическое ревью" in the session has the same effect. See [Review system](guides/permission-modes.md#review-system). |
+| `--review-system <inherit\|review-auto>` | Who answers a review run's approval questions. `inherit` (default) follows the permission mode; `review-auto` answers them itself (reviewer spawns, `ask_user` menus) while destructive, credential, publish and hook-tightened calls still ask you. A call you refuse stays refused (same fingerprint, any spelling: "refused earlier: choose another path", no modal) until the shell restarts. Saying "сделай автоматическое ревью" in the session has the same effect. See [Review system](guides/permission-modes.md#review-system). |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -1006,8 +1006,12 @@ Refusals print their code and exit non-zero (except where noted):
   in a dedicated panel above the composer input and drains FIFO right after
   the current turn completes. Each queued item shows clickable Force/Edit/Delete
   buttons in the panel; `Ctrl+Q` opens a keyboard-only selector for the same
-  actions (↑/↓ select, ←/→ choose action, Enter fire, Esc exit). The `/queue`
-  text command (`remove`/`edit`/`force`) remains available unchanged.
+  actions (↑/↓ select, ←/→ choose action, Enter fire, Esc exit). Each item also
+  says why it waits ("waits for the current turn", "waits for approval of:
+  <call>"), and one line under the panel explains `[Force]`. The `/queue` text
+  command (`remove`/`edit`/`force`) remains available and lists the same text.
+  Every approval modal (and its Telegram relay) starts with one `why:` line naming
+  the cause; see [Why am I being asked?](guides/permission-modes.md#why-am-i-being-asked).
 
 When side-worker context is still processing, queued questions do not block the
 session state and still see recent context about the busy main turn.

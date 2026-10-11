@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Shell
+
+- Fewer approval prompts in `trust` and `review-auto`. One table (`TRUST_ROUTINE_KEYRYX`) lists the read-only keryx commands (`help`, `<command> --help`, `harness list|status`, `agents external list --no-probe`, `review …`, `flow status|list|check|next`, `gdgraph …`, `ctx rg|read|diff`) and the `slate_note` and `slate_trail` tools that run with no prompt even after untrusted content. A command outside the table, or one that chains with `;`, pipes to an unlisted command, redirects outside the working tree or uses a subshell, still asks. Destructive, credential, publish-lease, hook-ask and human-confirmation calls are unchanged.
+- In `review-auto`, a refused call is remembered by its normalized fingerprint: the same call in any spelling is answered "refused earlier: choose another path" with no modal, until the shell restarts.
+- Every approval modal, the readline prompt and the Telegram relay carry one `why:` line from a closed set (`destructive`, `credentials`, `publish`, `hook-ask`, `untrusted-content`, `not-in-routine-list`, `mode-ask`).
+- A message queued while a turn runs shows its state and why it waits ("waits for the current turn", "waits for approval of: <call>"); `/queue` lists the same text, and one line explains `[Force]`.
+
 ## [0.3.105] - 2026-10-11
 
 ### Review

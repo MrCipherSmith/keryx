@@ -53,6 +53,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
+import { approvalCauseLine, causeOfMeta } from "./approval-cause";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import {
   catalogDestructiveResolver,
@@ -2084,6 +2085,7 @@ export async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
+      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta)))}\n`);
       // Flow 275 (agent bus P4, T8; specification §4.4): a `git-publish` pause
       // lease that applies to this command must not be remembered, exactly
       // like `destructive`/`credentials`/`sacReviewConfirmation` — a saved
