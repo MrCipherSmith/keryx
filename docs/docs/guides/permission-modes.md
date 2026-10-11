@@ -309,3 +309,6 @@ Permission modes apply to the interactive `keryx shell` session only:
 - [Run an agent without giving it your machine](contain-an-agent.md) — the OS
   sandbox, an independent containment layer: it bounds *what* a command can
   touch regardless of whether it was asked about.
+- [Review a pull request with nobody at the keyboard](autonomous-review.md) — the
+  `review-autonomous` profile: `trust` mode under `review-auto`, with every question answered
+  by a recorded safe default.

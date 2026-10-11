@@ -540,6 +540,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/autoreview",
+    group: "Automation",
+    summary: "Autonomous PR review with nobody at the keyboard: start, list, stop — phase, rounds and tokens in the sidebar.",
+  },
+  {
+    kind: "slash",
     name: "/approvals",
     group: "Automation",
     summary: "Pending remote approvals with scope, consequence and expiry — allow or deny one call, once.",

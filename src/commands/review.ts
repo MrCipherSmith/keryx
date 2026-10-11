@@ -39,6 +39,7 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 // any of them.
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
+import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
@@ -627,6 +628,11 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "metrics") {
       await runReviewMetricsCommand(args.slice(1));
+      return;
+    }
+    // flow 424: one unattended review of a pull request (the review-autonomous profile).
+    if (command === "run") {
+      await runReviewRun(args.slice(1));
       return;
     }
     // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
@@ -3930,6 +3936,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],
   ["import", printImportHelp],
+  ["run", () => console.log(RUN_HELP)],
 ]);
 
 /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
@@ -3992,6 +3999,10 @@ Usage:
                             Builds research.json from the raw results, drivers and
                             slice manifest; READY or the exact next step per gap.
                             Then: keryx review ingest --research research.json.
+  keryx review run --autonomous --target pr --ref <pull request URL> [--budget-minutes N]
+                   [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
+                   One unattended review (profile review-autonomous). Exit 0 complete,
+                   2 incomplete, 3 floor, 4 budget, 5 stalled, 1 refused.
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
                      --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,

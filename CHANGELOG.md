@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Review
+
+- `keryx review run --autonomous --target pr --ref <pull request URL>` reviews a pull request with nobody at the keyboard, in the new `review-autonomous` profile (`trust` mode under `review-auto`, source only, no terminal needed). Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused. `--budget-minutes`, `--budget-tokens` and `--stall-minutes` (default 10) bound the run; a model question is answered by the recorded safe default (the recommended option, else the first; an irreversible one is refused).
+- A run leaves `summary.json` and `report.md` in `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. A lock stops two runs on one pull request; a re-run on a head already reviewed to the end reuses the result, and one on a head left open resumes its package.
+- `keryx schedule add --review-pr <URL>` schedules the same review on the OS timer (systemd, launchd or cron); `keryx trigger schedule <name>` prints the cron line and unit pair. The run's report is copied to `.metaproject/data/trigger/reports/<name>/`.
+- In `keryx shell`, `/autoreview start|list|stop` runs and watches reviews, a sidebar section shows the phase, rounds and tokens of each, and `keryx serve` sends one Telegram line at the start and one at the end. Guide: "Review a pull request with nobody at the keyboard".
+
 ## [0.3.106] - 2026-10-11
 
 ### Flow Governance

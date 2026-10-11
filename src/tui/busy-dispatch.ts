@@ -102,6 +102,11 @@ export type BusyDispatchTarget =
    */
   | "schedules"
   /**
+   * `/autoreview` (flow 424): start, list and stop an autonomous pull request review. It starts and
+   * signals a separate process and reads its run files; it never touches the main turn.
+   */
+  | "autoreview"
+  /**
    * `/approvals` (flow 369): the pending remote approvals. Listing is read-only and an
    * answer is one call, once, in the store; neither touches the main turn.
    */
@@ -165,6 +170,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/intake") return "intake";
   if (commandName === "/remote-policy") return "remote-policy";
   if (commandName === "/schedules") return "schedules";
+  if (commandName === "/autoreview") return "autoreview";
   if (commandName === "/approvals") return "approvals";
   if (commandName === "/permissions") return "permissions";
   if (commandName === "/decisions") return "decisions";
