@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.3.108] - 2026-10-11
+
+### Review
+
+- A review arbiter answers policy questions in `review-auto` and in autonomous runs, in place of the word heuristic. It is a sub-agent with no shell, write or network access, it judges numeric and boolean facts about the recommended option (six closed question kinds: `scope`, `budget`, `option_choice`, `partial_coverage`, `smaller_slice`, `slice_order`) against numbered rules in a versioned file (`src/review/arbiter-rules.json`, verdicts `allow`, `deny`, `escalate`), and keryx re-checks the rule it cites. The prompt is built from validated fields only. Invalid output, a timeout, a model error, a cap hit or an unknown kind is an `escalate`: a person in `review-auto`, a refusal plus a journal line in an autonomous run. Floor-class calls are never sent to it. In `ask` mode the person is asked.
+- `.metaproject/review/arbiter-rules.json` replaces the bundled rules for a project; an invalid file makes every question escalate. `review.arbiter` in `tasks.config.json` sets `enabled`, `tier` (`light` or `standard`, a step below the flagship), an optional `provider/model` pin, `callCap` (default 20) and `timeoutMs` (default 20000). GPT-6 Astra is refused by name.
+- Every question writes a line to `arbiter.log` (kind, facts, verdict, rule, model, cost, rules version and hash); an identical question in a run is answered from a cache. An autonomous run copies the log into its review package. `/autoreview arbiter` lists the log in `keryx shell`, the run's sidebar section shows the counts, and a run stopped by an escalate sends one more Telegram line. An eval set (26 fixtures, at least 95% agreement) and an adversarial set (28 cases, all `deny` or `escalate`) run in CI. Guide: "Let the review arbiter answer policy questions".
+
 ## [0.3.107] - 2026-10-11
 
 ### Review
@@ -10,9 +18,6 @@
 - A run leaves `summary.json` and `report.md` in `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. A lock stops two runs on one pull request; a re-run on a head already reviewed to the end reuses the result, and one on a head left open resumes its package.
 - `keryx schedule add --review-pr <URL>` schedules the same review on the OS timer (systemd, launchd or cron); `keryx trigger schedule <name>` prints the cron line and unit pair. The run's report is copied to `.metaproject/data/trigger/reports/<name>/`.
 - In `keryx shell`, `/autoreview start|list|stop` runs and watches reviews, a sidebar section shows the phase, rounds and tokens of each, and `keryx serve` sends one Telegram line at the start and one at the end. Guide: "Review a pull request with nobody at the keyboard".
-- A review arbiter answers policy questions in `review-auto` and in autonomous runs, in place of the word heuristic. It is a sub-agent with no shell, write or network access, it judges numeric and boolean facts about the recommended option (six closed question kinds: `scope`, `budget`, `option_choice`, `partial_coverage`, `smaller_slice`, `slice_order`) against numbered rules in a versioned file (`src/review/arbiter-rules.json`, verdicts `allow`, `deny`, `escalate`), and keryx re-checks the rule it cites. The prompt is built from validated fields only. Invalid output, a timeout, a model error, a cap hit or an unknown kind is an `escalate`: a person in `review-auto`, a refusal plus a journal line in an autonomous run. Floor-class calls are never sent to it. In `ask` mode the person is asked.
-- `.metaproject/review/arbiter-rules.json` replaces the bundled rules for a project; an invalid file makes every question escalate. `review.arbiter` in `tasks.config.json` sets `enabled`, `tier` (`light` or `standard`, a step below the flagship), an optional `provider/model` pin, `callCap` (default 20) and `timeoutMs` (default 20000). GPT-6 Astra is refused by name.
-- Every question writes a line to `arbiter.log` (kind, facts, verdict, rule, model, cost, rules version and hash); an identical question in a run is answered from a cache. An autonomous run copies the log into its review package. `/autoreview arbiter` lists the log in `keryx shell`, the run's sidebar section shows the counts, and a run stopped by an escalate sends one more Telegram line. An eval set (26 fixtures, at least 95% agreement) and an adversarial set (28 cases, all `deny` or `escalate`) run in CI. Guide: "Let the review arbiter answer policy questions".
 
 ## [0.3.106] - 2026-10-11
 
