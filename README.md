@@ -1159,6 +1159,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
 - **[Review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md)** — the GitHub Action, secrets, the same-repository rule, dry run, cost, and the precision and resolved-before-merge metrics.
+- **[Review a pull request with nobody at the keyboard](docs/docs/guides/autonomous-review.md)** — `keryx review run --autonomous`: exit codes, safe-default answers, budgets, the stall watchdog, `summary.json` and `report.md`, `/autoreview`, and a scheduled review on cron or a systemd timer.
 - **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 

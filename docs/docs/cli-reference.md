@@ -2551,6 +2551,9 @@ keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
 keryx schedule add --digest --name <name> --every "<cadence>" \
     --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
     [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
+keryx schedule add --review-pr <pull request URL> --name <name> --every "<cadence>" \
+    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    [--budget-minutes N] [--budget-tokens N] [--stall-minutes 10] [--max-seconds N] [--yes]
 keryx schedule list
 keryx schedule show <name>
 keryx schedule pause <name>
@@ -2593,6 +2596,17 @@ closed, effect not checked" chain, in Telegram. See the guide
   no changes has no items.
 - **Seeing it.** `list` and `show` print the digest, its next run, the last run's status and
   the last delivery; `/schedules` in `keryx shell` shows the same, with `p` to pause or resume.
+
+**Autonomous review (`add --review-pr`).** A schedule that reviews one pull request with nobody at
+the keyboard. Each fire runs [`keryx review run --autonomous`](#review-run) through the OS timer, so
+it needs no `--prompt` and is covered by the same confirmation card; the pull request, the profile
+and the budgets are part of what you confirm. `--budget-minutes` and `--budget-tokens` stop a run at
+a safe point and `--stall-minutes` (default 10) stops one that makes no progress; they belong to a
+review and are refused without `--review-pr`. `--digest` and `--review-pr` cannot be combined. A fire
+on a head that was already reviewed to the end reuses the finished review; a fire that finds the
+previous run alive refuses. The run's `report.md` is copied to
+`.metaproject/data/trigger/reports/<name>/<runId>.md`. See
+[Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 **Drafting checks the provider before the card is even shown.** `add`, `/schedule`
 and the agent's `schedule_create` tool all draft through the same code, which
@@ -4641,6 +4655,8 @@ keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                     [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--parallel <n>] [--outstanding <n>]
+keryx review run --autonomous --target pr --ref <pull request URL>
+                 [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
 keryx review budget [--spent <usd>] [--ceiling <usd>]
                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
 keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
@@ -4738,6 +4754,46 @@ left off and the gate reports it as unobserved.
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
 by the review service.
+
+### `review run` {#review-run}
+
+```text
+keryx review run --autonomous --target pr --ref <pull request URL>
+                 [--budget-minutes N] [--budget-tokens N] [--stall-minutes N]
+                 [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+```
+
+One review of one pull request with nobody at the keyboard, in the `review-autonomous` profile
+(`keryx shell --print` in `trust` mode under `--review-system review-auto`, source only). It needs no
+terminal. It starts the review package, dispatches the reviewers, ingests their findings and closes
+the package with `review complete`.
+
+| Flag | Meaning |
+|---|---|
+| `--autonomous` | Required: the only mode. |
+| `--target pr`, `--ref <URL>` | Required. `--ref` is `https://github.com/<owner>/<repo>/pull/<n>`. |
+| `--budget-minutes N`, `--budget-tokens N` | Stop at a safe point when spent. Exit 4. Default: none. |
+| `--stall-minutes N` | Stop a run with no new event for this long. Exit 5. Default 10. |
+| `--out <dir>` | Where the run directory goes. Default `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. |
+| `--provider`, `--model` | Passed to the child shell. |
+| `--no-notify` | Send no Telegram line at start and end. |
+| `--json` | Print `summary.json` instead of two lines. |
+
+| Exit code | Status |
+|---|---|
+| 0 | `complete`: the package was closed. A re-run on a head already reviewed to the end also exits 0 (`reused`). |
+| 2 | `incomplete`: ended or stopped (SIGTERM, SIGINT) before the package was closed. |
+| 3 | `floor`: an action that always needs a human was refused and the run could go no further. |
+| 4 | `budget`: `--budget-minutes` or `--budget-tokens` was spent. |
+| 5 | `stalled`: no progress for `--stall-minutes`. |
+| 1 | Refused: bad arguments, or another run of the same pull request holds the lock. |
+
+Questions the model asks are answered by the safe default (the recommended option, else the first;
+an irreversible one is refused) and each answer is recorded with its basis in `answers.ndjson`. The
+run directory also holds `summary.json`, `report.md`, `events.ndjson`, `progress.json`, `lock.json`,
+`run.json` and `child.log`. A run on the same head resumes an open package; a run on a new head
+starts fresh. In `keryx shell`, `/autoreview start|list|stop` runs and watches the same command.
+See [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 ### `review comments`
 
