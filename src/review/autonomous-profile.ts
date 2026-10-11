@@ -84,6 +84,7 @@ export function buildAutonomousPrompt(input: { readonly ref: string; readonly re
     `Nobody is at the keyboard and nobody is answering questions. Do not wait for anyone: take the recommended option of any menu, and when an action is refused choose another path instead of repeating it.`,
     `Review the source only (source-only): skip any check that needs a browser or a running app and say that it was skipped.`,
     `Open at most ${AUTONOMOUS_PROFILE.roundLimit} review rounds and dispatch at most ${AUTONOMOUS_PROFILE.waveSize} reviewers per wave. Stop opening rounds when a round finds no new blocker or major.`,
+    `Run the whole orchestration yourself in this session. A subagent has no shell and cannot dispatch reviewers (it answers BLOCKED nested_dispatch_unavailable), so hand a subagent only the review of one slice, never the orchestration, the ledger, the ingest or the complete.`,
     `The run is finished only when keryx review complete has closed the package.`,
   ];
   if (input.resumePackage !== undefined) {
