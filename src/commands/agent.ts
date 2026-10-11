@@ -1,6 +1,6 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
-import { asksForReviewAuto, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
+import { asksForReviewAuto, operatorDenied, recordOperatorDenial, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -5460,7 +5460,12 @@ async function executeCallUnbounded(
   if (requestApproval !== undefined && reviewAutoActive()) {
     const askHuman = requestApproval;
     requestApproval = async (name, toolInput, meta) => {
-      if (!reviewAutoGrants(name, meta)) return askHuman(name, toolInput, meta);
+      if (meta !== undefined && operatorDenied(meta.fingerprint)) return false;
+      if (!reviewAutoGrants(name, meta)) {
+        const response = await askHuman(name, toolInput, meta);
+        if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) recordOperatorDenial(meta.fingerprint);
+        return response;
+      }
       onAutoApproved?.(name, toolInput, { destructive: false, credentials: false });
       return true;
     };

@@ -8,6 +8,7 @@ import path from "node:path";
 import { assignArm, reasonSubsample, saltFile } from "../decisions/arms";
 import { REASON_SUBSAMPLE_ENV } from "../decisions/journal";
 import { createFlowService } from "../flow/service";
+import { recordOperatorDenial, resetOperatorDenials } from "../review/review-system";
 import { journaledAskUser, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 
 let root: string;
@@ -69,6 +70,42 @@ test("KERYX_REVIEW_AUTO_ANSWER answers a menu even before a review package exist
     expect(asked).toBeGreaterThan(0);
   } finally {
     delete process.env["KERYX_REVIEW_AUTO_ANSWER"];
+  }
+});
+
+test("after the operator refused an action, review-auto routes a permission-style menu to the human", async () => {
+  const notes: string[] = [];
+  setAskUserNotice((text) => notes.push(text));
+  let asked = 0;
+  setAskUserHost(async () => {
+    asked += 1;
+    return "deny";
+  });
+  const allowMenu = {
+    question: "Allow the local HTTP check on 127.0.0.1?",
+    options: [
+      { id: "allow", label: "Allow", description: "run it", recommended: true },
+      { id: "deny", label: "Deny", description: "skip it" },
+    ],
+  };
+  process.env["KERYX_REVIEW_AUTO_ANSWER"] = "1";
+  try {
+    expect(await journaledAskUser(root)(allowMenu)).toBe("allow");
+    expect(asked).toBe(0);
+    recordOperatorDenial("shell_exec:probe");
+    expect(await journaledAskUser(root)(allowMenu)).toBe("deny");
+    expect(asked).toBeGreaterThan(0);
+    expect(notes.some((text) => text.includes("review-auto: this permission question is yours"))).toBe(true);
+    asked = 0;
+    setAskUserHost(async () => {
+      asked += 1;
+      return "b";
+    });
+    expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe("a");
+    expect(asked).toBe(0);
+  } finally {
+    delete process.env["KERYX_REVIEW_AUTO_ANSWER"];
+    resetOperatorDenials();
   }
 });
 

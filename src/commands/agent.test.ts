@@ -43,7 +43,7 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
-import { reviewAutoActive, setReviewSystem } from "../review/review-system";
+import { resetOperatorDenials, reviewAutoActive, setReviewSystem } from "../review/review-system";
 import { setExecutionPlan } from "../session/execution-plan";
 import { closeSlateSession, detachSlateSession, openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
@@ -4759,6 +4759,42 @@ test("review-auto keeps the untrusted-content floor for a shell call: the human 
     expect(invoked()).toBe(false);
   } finally {
     setReviewSystem("inherit");
+  }
+});
+
+test("review-auto does not ask again for an action the operator refused: the same call is refused without a prompt", async () => {
+  setReviewSystem("review-auto");
+  resetOperatorDenials();
+  try {
+    const { provider } = scriptedProvider([
+      [
+        { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+        { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+      ],
+      [
+        { kind: "tool_call_start", toolCallId: "c1", toolName: "shell_exec" },
+        { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      ],
+      [
+        { kind: "tool_call_start", toolCallId: "c2", toolName: "shell_exec" },
+        { kind: "tool_call_end", toolCallId: "c2", input: "{}" },
+      ],
+      [{ kind: "text_delta", text: "done" }],
+    ]);
+    let invoked = 0;
+    const tools: InteractiveTool[] = [
+      { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+      { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { invoked += 1; return { output: "ran", isError: false }; } },
+    ];
+    let asked = 0;
+    const { io: baseIo } = collectingIo();
+    const io: AgentIO = { ...baseIo, requestApproval: async () => { asked += 1; return false; } };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then act");
+    expect(asked).toBe(1);
+    expect(invoked).toBe(0);
+  } finally {
+    setReviewSystem("inherit");
+    resetOperatorDenials();
   }
 });
 

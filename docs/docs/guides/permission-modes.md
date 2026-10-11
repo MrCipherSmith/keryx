@@ -131,6 +131,13 @@ publish leases, calls a hook tightened to "ask", and any call other than a revie
 spawn that follows untrusted external content. Each automatic answer is recorded in the
 transcript like any other auto-approval.
 
+A refusal sticks. When you deny a call, `review-auto` remembers that exact call for the
+rest of the shell: the same call is refused again without a prompt, and an `ask_user`
+menu that asks for permission (allow, deny, consent, access, "разрешить", "запретить")
+is no longer answered with its recommended option. It reaches you instead, and the
+transcript says so. An irreversible question was never auto-answered. Restart the
+shell to clear the memory.
+
 ## Long runs in the shell
 
 A review of a large pull request is hundreds of tool calls. The shell is built to
