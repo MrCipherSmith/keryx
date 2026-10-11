@@ -10,15 +10,44 @@
   "title": "Verification sensitivity: mark exec/invariant checks proven to catch a failure",
   "status": "in-progress",
   "createdAt": "2026-10-10T21:17:59.701Z",
-  "updatedAt": "2026-10-11T07:38:29.013Z",
+  "updatedAt": "2026-10-11T08:29:45.657Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-11T08:29:30.378Z",
+      "note": "evidence: src/flow/ac-kinds.test.ts (accept on exec/invariant, reject on judged/none, old forms unchanged); PR #964 CI green"
+    },
+    "AC2": {
+      "at": "2026-10-11T08:29:30.525Z",
+      "note": "evidence: src/commands/flow-sensitivity.test.ts ac kinds text and --json counts; PR #964 CI green"
+    },
+    "AC3": {
+      "at": "2026-10-11T08:29:30.724Z",
+      "note": "evidence: src/commands/flow-sensitivity.test.ts table-driven ac confirm cases; PR #964 CI green"
+    },
+    "AC4": {
+      "at": "2026-10-11T08:29:30.889Z",
+      "note": "evidence: src/flow/ac-kinds-never-gates.test.ts noted-vs-plain twin test; PR #964 CI green"
+    },
+    "AC5": {
+      "at": "2026-10-11T08:29:31.045Z",
+      "note": "evidence: src/gdskills/flow-orchestrator-verify-kind.test.ts and src/flow/templates.test.ts phrase pins, copies byte-identical; PR #964 CI green"
+    },
+    "AC6": {
+      "at": "2026-10-11T08:29:31.207Z",
+      "note": "evidence: src/commands/research-sync-kinds.test.ts sensitivity share incl. 7-day window and runResearchSync wiring; PR #964 CI green"
+    },
+    "AC7": {
+      "at": "2026-10-11T08:29:31.368Z",
+      "note": "evidence: git diff of #964 touches no flow dir other than 423 (plus one wiki link fix)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/964"
   },
   "baseBranch": "main",
   "owner": {
@@ -323,6 +352,60 @@
       "at": "2026-10-11T07:38:29.013Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-11T08:29:30.194Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/964 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-11T08:29:30.378Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: evidence: src/flow/ac-kinds.test.ts (accept on exec/invariant, reject on judged/none, old forms unchanged); PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:30.525Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: evidence: src/commands/flow-sensitivity.test.ts ac kinds text and --json counts; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:30.724Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: evidence: src/commands/flow-sensitivity.test.ts table-driven ac confirm cases; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:30.889Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: evidence: src/flow/ac-kinds-never-gates.test.ts noted-vs-plain twin test; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:31.045Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: evidence: src/gdskills/flow-orchestrator-verify-kind.test.ts and src/flow/templates.test.ts phrase pins, copies byte-identical; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:31.207Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: evidence: src/commands/research-sync-kinds.test.ts sensitivity share incl. 7-day window and runResearchSync wiring; PR #964 CI green (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:31.368Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: evidence: git diff of #964 touches no flow dir other than 423 (plus one wiki link fix) (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-11T08:29:40.996Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-11T08:29:45.655Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-10-11T08:29:45.657Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/423-2026-10-10-verify-sensitivity/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#964 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__964.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 964 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
     }
   ],
   "acKinds": {
@@ -354,5 +437,143 @@
       "kind": "invariant",
       "check": "git diff --stat origin/feat/verify-kind-prompts -- .metaproject/flows ':!.metaproject/flows/423-*'"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-11T08:29:30.378Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    },
+    {
+      "at": "2026-10-11T08:29:30.525Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    },
+    {
+      "at": "2026-10-11T08:29:30.724Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    },
+    {
+      "at": "2026-10-11T08:29:30.889Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    },
+    {
+      "at": "2026-10-11T08:29:31.045Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    },
+    {
+      "at": "2026-10-11T08:29:31.207Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    },
+    {
+      "at": "2026-10-11T08:29:31.368Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "claude-agent (session 2026-10-11)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-11T08:29:45.655Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "373721e0b is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "373721e0b is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "skipped",
+          "detail": "folder-committed gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/423-2026-10-10-verify-sensitivity/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#964 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__964.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 964 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:a8386632ea33b31165bd699dec768ed0ecb057fff65ea587c4103905207b65e6"
+    }
+  ]
 }

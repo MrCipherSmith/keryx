@@ -59,3 +59,11 @@ All new tests pass; every local failure reproduces on clean main, so none is cau
 - 2026-10-10T20:52:58.436Z - task-done: T12: Fix review round 1 findings (L1-L5, F-001-F-004)
 - 2026-10-10T20:52:58.572Z - task-attempt: T4: started (attempt 3) — round 3 clean
 - 2026-10-10T20:52:58.710Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-11T08:11:43.603Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/957 (warning: PR is not a draft)
+- 2026-10-11T08:11:43.781Z - ac-confirmed: AC1: PR #957 CI green on 9df3af029; bun test src/flow/templates.test.ts 9/0 (journal T11) (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:11:43.934Z - ac-confirmed: AC2: bun test src/gdskills: only the known clean-main failure (install.test.ts); phrase pins in src/gdskills/flow-orchestrator-verify-kind.test.ts; CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:11:44.095Z - ac-confirmed: AC3: src/commands/flow-freeze-kind-prompt.test.ts (non-interactive journal, interactive yes/no/empty, --yes, env); CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:11:44.261Z - ac-confirmed: AC4: src/flow/ac-kinds-never-gates.test.ts green locally and in CI; service freeze reads no kind (freezePrecondition) (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:11:44.413Z - ac-confirmed: AC5: src/commands/verify-kind-creation-paths.test.ts drives intake through the real flow init handler and goal autoProvisionFlow; CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:11:44.562Z - ac-confirmed: AC6: src/commands/research-sync-kinds.test.ts incl. runResearchSync wiring and 7-day window; CI green (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-11T08:11:44.712Z - ac-confirmed: AC7: git diff --stat of #957 against its merge-base touches no flow dir other than 422 (signed: claude-agent (session 2026-10-11) [stated])
