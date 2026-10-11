@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -9,14 +9,14 @@
   "id": "425",
   "slug": "review-arbiter",
   "title": "Keryx Review: arbiter sub-agent answers orchestrator questions by written rules",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-10-11T07:20:28.378Z",
-  "updatedAt": "2026-10-11T07:20:28.378Z",
+  "updatedAt": "2026-10-11T09:19:03.588Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:42de24da634e3b3735ab3286290d649cd452f555b3998a7879910c34a8f7df74",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -38,34 +38,113 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-10-11T07:20:28.378Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-11T09:19:02.502Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-11T09:19:03.588Z",
+      "event": "started"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    }
+  }
 }
