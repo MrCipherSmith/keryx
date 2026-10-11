@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
+import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
 
 let host: AskUserFn | undefined;
 
@@ -57,6 +58,10 @@ export function setAskUserNotice(fn: ((text: string) => void) | undefined): void
 export function journaledAskUser(cwd: string): AskUserFn {
   const journaled = journalAsk(invokeAskUserHost, journalDeps(cwd));
   return async (request) => {
+    const autonomousFile = process.env[ENV_AUTONOMOUS_ANSWERS_FILE];
+    if (autonomousFile !== undefined && autonomousFile.length > 0) {
+      return answerAutonomously(request, { file: autonomousFile });
+    }
     const auto = reviewAutoAnswer(request);
     if (auto !== undefined) return auto;
     if ((process.env.KERYX_REVIEW_AUTO_ANSWER === "1" || reviewAutoActive()) && request.irreversible !== true && !reviewAutoMayAnswer(request)) {
