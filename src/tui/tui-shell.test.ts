@@ -2936,7 +2936,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
     expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
-    expect(fnBodyPlan).toContain("io.requestApproval = requestApprovalLocally;");
+    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
     expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
     expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
   });
