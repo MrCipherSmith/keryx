@@ -32,3 +32,14 @@
 Three review rounds in a row found new false positives/negatives in the inferred evidence check of `ac confirm` (round 1: `n/a`, `defaced`; round 2: all-digit numbers, prose triples, `README.md`, Windows paths; round 3: case-insensitive filesystem matching `license`/`install`, Markdown links, `~/`, nested workspace roots). Guessing evidence from free text does not converge. Operator decision (2026-10-11, asked in session): replace inference with an explicit label. The warning is silent when the note contains `evidence: <ref>` with a non-empty ref other than `n/a`/`none`/`-`; no filesystem, sha or URL guessing. Skills and docs tell the writer to use the label. Trade-off accepted: a label can be written formally, but it is visible and a human can check it.
 - 2026-10-11T07:27:53.446Z - task-attempt: T4: failed (attempt 3) — round 3: 4 minor, all in the inferred evidence check; re-planned to explicit evidence: label (operator decision)
 - 2026-10-11T07:27:53.608Z - task-attempt: T8: started (attempt 3) — 423-T8 round 3: explicit evidence: label
+
+## Review rounds
+
+- Round 1 (review-logic on opus, review-testing-practices on sonnet): 3 medium test gaps, 3 low; 2 minor + 1 info logic (evidence heuristic false positives, punctuation, counts not from the `ac kinds` report). Fixed in b0f5af769.
+- Round 2 (opus, fix commit): all round-1 findings fixed; 3 minor, all in the evidence heuristic. Redesigned to filesystem paths in ad2f6d1fe.
+- Round 3 (opus): 4 minor, again all in the inferred evidence check. Re-planned (see above) to an explicit `evidence:` label, 1d941c3a5.
+- Round 4 (opus): approved; 2 minor (placeholders wrapped in punctuation, the `<ref>` template counted). Fixed in ddbb54391; the orchestrator verified every round-4 case by a direct probe of `noteNamesEvidence` and the pinned test table, rather than spending a fifth reviewer round on a two-line change.
+- Final verification after ddbb54391: AC suites 8182 pass, 1 fail (the known clean-main failure in `src/gdskills/install.test.ts`); `tsc --noEmit` exit 0; AC7 diff empty.
+- 2026-10-11T07:38:28.733Z - task-done: T8: Fix review round 1 findings (RL-1..3, T1..T6)
+- 2026-10-11T07:38:28.875Z - task-attempt: T4: started (attempt 4) — round 4 approved; minors fixed and probed
+- 2026-10-11T07:38:29.013Z - task-done: T4: Self-review and prepare draft PR

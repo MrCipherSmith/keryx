@@ -10,7 +10,7 @@
   "title": "Verification sensitivity: mark exec/invariant checks proven to catch a failure",
   "status": "in-progress",
   "createdAt": "2026-10-10T21:17:59.701Z",
-  "updatedAt": "2026-10-11T07:27:53.608Z",
+  "updatedAt": "2026-10-11T07:38:29.013Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,10 +84,10 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 3,
+        "count": 4,
         "log": [
           {
             "at": "2026-10-10T21:26:23.750Z",
@@ -103,12 +103,18 @@
             "at": "2026-10-11T07:27:53.446Z",
             "outcome": "failed",
             "detail": "round 3: 4 minor, all in the inferred evidence check; re-planned to explicit evidence: label (operator decision)"
+          },
+          {
+            "at": "2026-10-11T07:38:28.875Z",
+            "outcome": "started",
+            "detail": "round 4 approved; minors fixed and probed"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -171,7 +177,7 @@
       "id": "T8",
       "title": "Fix review round 1 findings (RL-1..3, T1..T6)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 3,
@@ -195,7 +201,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -301,6 +308,21 @@
       "at": "2026-10-11T07:27:53.608Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 3) — 423-T8 round 3: explicit evidence: label"
+    },
+    {
+      "at": "2026-10-11T07:38:28.733Z",
+      "event": "task-done",
+      "detail": "T8: Fix review round 1 findings (RL-1..3, T1..T6)"
+    },
+    {
+      "at": "2026-10-11T07:38:28.875Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 4) — round 4 approved; minors fixed and probed"
+    },
+    {
+      "at": "2026-10-11T07:38:29.013Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
