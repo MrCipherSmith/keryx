@@ -31,7 +31,7 @@ export interface RoundNeed {
 //  3. No directory is a steering directory, singular or plural (agent(s), skill(s),
 //     command(s), rule(s), prompt(s), instruction(s), persona(s), steering, hook(s)).
 //  4. The file name is not steering: it does not start with a steering stem (SKILL,
-//     AGENT(S), CLAUDE, ...), does not end in .local/.override/.instructions/.prompt
+//     AGENT(S), CLAUDE, ...), does not end in .local/.override/.instructions/.prompt/.agent/.chatmode
 //     before its extension, and does not contain prompt, instruction or system.
 //  5. Then one of:
 //     - README or CHANGELOG at any depth, with a doc extension;
@@ -41,22 +41,24 @@ export interface RoundNeed {
 //       the six names above (all-uppercase stems such as AGENT or WARP are steering
 //       by convention);
 //     - a data file under coverage/ or __generated__/ with a generated-data extension.
+// Known limit: a path cannot show a symlink or an @docs/x.md import from a steering file.
 // Everything else is code: lockfiles, committed dist/, CI, auth, migrations, config
 // JSON, flow descriptions, acceptance criteria and tasks (gate inputs).
 
 /** Steering directory names; "(s)" marks an optional plural. */
 export const STEERING_SEGMENT_TOKENS = ["agent(s)", "skill(s)", "command(s)", "rule(s)", "prompt(s)", "instruction(s)", "persona(s)", "steering", "hook(s)"] as const;
 /** File-name prefixes of steering files, in any case. */
-export const STEERING_STEM_TOKENS = ["SKILL", "AGENT", "CLAUDE", "GEMINI", "QWEN", "CODEX", "WARP", "CRUSH", "JULES", "GUIDELINES", "CONVENTIONS", "copilot-instructions"] as const;
+export const STEERING_STEM_TOKENS = ["SKILL", "AGENT", "CLAUDE", "GEMINI", "QWEN", "CODEX", "WARP", "CRUSH", "JULES", "KNOWLEDGE", "GUIDELINES", "CONVENTIONS", "copilot-instructions"] as const;
 /** Suffixes before the extension that mark a steering file. */
-export const STEERING_SUFFIX_TOKENS = [".local", ".override", ".instructions", ".prompt"] as const;
+export const STEERING_SUFFIX_TOKENS = [".local", ".override", ".instructions", ".prompt", ".agent", ".chatmode"] as const;
 /** A file name containing one of these is steering. */
 export const STEERING_WORD_TOKENS = ["prompt", "instruction", "system"] as const;
 /** Prose at any depth. */
 export const PROSE_ANY_DEPTH_NAMES = ["README", "CHANGELOG"] as const;
 /** Prose at the top level only. */
 export const PROSE_TOP_LEVEL_NAMES = ["CONTRIBUTING", "LICENSE", "SECURITY", "CODE_OF_CONDUCT"] as const;
-export const DOC_EXTENSIONS = ["md", "mdx", "rst", "adoc"] as const;
+// mdx is deliberately absent: MDX executes JavaScript at site build, so it is code.
+export const DOC_EXTENSIONS = ["md", "rst", "adoc"] as const;
 /** The only extensions skipped under coverage/ and __generated__/. */
 export const GENERATED_DATA_EXTENSIONS = ["lcov", "info", "map"] as const;
 

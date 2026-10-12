@@ -96,7 +96,7 @@ Before step 0 it checks three things:
    gets `round not needed: <reason>` and launches no reviewer. Prose is exactly:
    README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT
    at the top level; and, under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a
-   flow's `journal.md`, a file with extension `.md`, `.mdx`, `.rst` or `.adoc` whose
+   flow's `journal.md`, a file with extension `.md`, `.rst` or `.adoc` whose
    name holds a lowercase letter. An all-uppercase name (`AGENT.md`, `WARP.md`,
    `CONTEXT.md`) is steering by convention. Machine-written data is a file under
    `coverage/` or `__generated__/` with extension `.lcov`, `.info` or `.map`; json, txt,
@@ -107,8 +107,8 @@ Before step 0 it checks three things:
    skill, command, rule, prompt, instruction, persona, steering or hook; any path
    segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`); a name starting
    with `SKILL`, `AGENT`, `CLAUDE`, `GEMINI`, `QWEN`, `CODEX`, `WARP`, `CRUSH`, `JULES`,
-   `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending in `.local`,
-   `.override`, `.instructions` or `.prompt`, or containing `prompt`, `instruction` or
+   `KNOWLEDGE`, `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending in `.local`,
+   `.override`, `.instructions`, `.prompt`, `.agent` or `.chatmode`, or containing `prompt`, `instruction` or
    `system`. A path with `..`, a backslash, a leading `./` or `//` also counts as
    code. `--all`, an explicit reviewer list or a gating round forces a round. The files
    are listed with `git diff --name-status --no-renames <base>...HEAD`, so a rename
