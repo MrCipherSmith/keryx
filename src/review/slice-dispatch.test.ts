@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { checkDispatch } from "./dispatch-check";
-import { MAX_RETRY_ROUNDS, type RetryState, notRunLine, planRetry } from "./retry-plan";
+import { MAX_RETRY_ROUNDS, type RetryState, notRunLine, planRetry, readSliceIds } from "./retry-plan";
 import { DEFAULT_WAVE_BYTES, buildSlices, packWaves, sliceSourceFromDiff, validateWaveBytes, waveBytesOf } from "./slice";
 
 function payload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -105,8 +105,39 @@ describe("planRetry", () => {
 
     test("a mixed list counts every id once", () => {
       const slices = [allIds[0]!, { id: allIds[0]! }, { id: allIds[1]!, status: "DONE" }, allIds[1]!];
+      expect(readSliceIds(slices).ids).toEqual([allIds[0]!, allIds[1]!]);
       const plan = planRetry({ ...base, result: { status: "DONE", slices }, state: empty });
       expect(coveredOf(plan.state)).toEqual([allIds[0]!, allIds[1]!].sort());
+    });
+
+    test("an empty list covers nothing and names nothing", () => {
+      expect(readSliceIds([])).toEqual({ ids: [], unusable: 0, notCovered: [] });
+      const plan = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [] }, state: empty });
+      expect(plan.decision).toBe("retry");
+      expect(coveredOf(plan.state)).toEqual([]);
+      expect(plan.reason).not.toContain("without a usable id");
+    });
+
+    test("an object whose status is not done does not cover its slice, and the reason names it", () => {
+      const many = buildSlices(sliceSourceFromDiff(diff), { maxBytes: 1_000 });
+      const ids = many.manifest.slices.map((slice) => slice.id);
+      expect(ids.length).toBeGreaterThanOrEqual(6);
+      const slices = [{ id: ids[0]!, status: "DONE" }, { id: ids[1]!, status: "NOT_READ" }, { id: ids[2]!, status: "partial" }, { id: ids[3]!, status: "ok" }, { id: ids[4]!, status: "" }, { id: ids[5]! }];
+      const plan = planRetry({ ...base, manifest: many.manifest, readSliceText: (entry) => many.slices.find((slice) => slice.id === entry.id)!.text, result: { status: "DONE", slices }, state: empty });
+      expect(coveredOf(plan.state)).toEqual([ids[0]!, ids[3]!, ids[4]!, ids[5]!].sort());
+      expect(plan.reason).toContain("2 slice(s) reported with a status that is not done, counted as uncovered");
+      expect(plan.reason).toContain(`${ids[1]!} (NOT_READ)`);
+      expect(plan.reason).toContain(`${ids[2]!} (partial)`);
+    });
+
+    test("a status that is not a string fails closed, and an id covered once by a done entry stays covered", () => {
+      const reading = readSliceIds([{ id: "a", status: 1 }, { id: "b", status: "SKIPPED" }, { id: "b", status: "DONE" }]);
+      expect(reading.ids).toEqual(["b"]);
+      expect(reading.notCovered).toEqual([{ id: "a", status: "1" }]);
+    });
+
+    test("the dispatch list reads a driver's slices as assigned: status is ignored", () => {
+      expect(readSliceIds([{ id: "a", status: "NOT_READ" }, "b"], "assigned").ids).toEqual(["a", "b"]);
     });
 
     test("an entry without a usable id is ignored and named in the reason", () => {
@@ -120,6 +151,11 @@ describe("planRetry", () => {
       const plan = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [{ status: "DONE" }] }, state: empty });
       expect(plan.decision).toBe("retry");
       expect(plan.reason).toContain("1 slice entry without a usable id ignored");
+    });
+
+    test("a driver-style list with one unusable entry reports it by count and keeps the usable ids", () => {
+      const reading = readSliceIds(["a", { coverage: "x" }, "b"], "assigned");
+      expect(reading).toEqual({ ids: ["a", "b"], unusable: 1, notCovered: [] });
     });
   });
 

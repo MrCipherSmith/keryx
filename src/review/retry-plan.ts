@@ -33,7 +33,7 @@ export type ReviewerResult = {
   /** Scope identity from the dispatch that produced this result. */
   scopeFingerprint?: string;
   attempt?: number;
-  /** The slices this result covered: id strings, or objects carrying an `id` (reviewers write both). */
+  /** The slices this result covered: id strings, or objects carrying an `id` (reviewers write both). An object whose `status` is set and not done-like does not cover its slice. */
   slices?: unknown;
   needs_context?: string[];
 };
@@ -103,17 +103,50 @@ export type PlanRetryInput = {
 
 const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item !== "") : []);
 
-/** Slice ids of a reviewer's `slices`: each entry is an id string or an object with a string `id`. Anything else is counted, not read. */
-export function readSliceIds(value: unknown): { ids: string[]; unusable: number } {
-  if (!Array.isArray(value)) return { ids: [], unusable: 0 };
+/** An object entry in a reviewer's `slices` covers its slice only when it carries no status or one of these. */
+const DONE_SLICE_STATUSES = new Set(["DONE", "COMPLETE", "COMPLETED", "COVERED", "OK"]);
+
+export type SliceReading = {
+  /** Ids that count: strings, and objects whose status is absent or done-like. */
+  ids: string[];
+  /** Entries with no usable id. */
+  unusable: number;
+  /** Objects with an id whose status says the slice was not finished; the id is not in `ids` unless another entry covers it. */
+  notCovered: Array<{ id: string; status: string }>;
+};
+
+/**
+ * Slice ids of a `slices` list: each entry is an id string or an object with a string `id`. Anything else is counted, not read.
+ * `covered` (a reviewer's result) reads an object's `status`; `assigned` (a driver's dispatch list) is an assignment, so it does not.
+ * `retry-plan` and `ledger build` both read a result through this, so they cannot disagree on what a reviewer covered.
+ */
+export function readSliceIds(value: unknown, as: "covered" | "assigned" = "covered"): SliceReading {
+  if (!Array.isArray(value)) return { ids: [], unusable: 0, notCovered: [] };
   const ids = new Set<string>();
+  const notCovered = new Map<string, string>();
   let unusable = 0;
   for (const entry of value) {
-    const id = typeof entry === "string" ? entry : entry !== null && typeof entry === "object" ? (entry as { id?: unknown }).id : undefined;
-    if (typeof id === "string" && id.trim() !== "") ids.add(id);
-    else unusable += 1;
+    const object = entry !== null && typeof entry === "object" ? (entry as { id?: unknown; status?: unknown }) : undefined;
+    const id = typeof entry === "string" ? entry : object?.id;
+    if (typeof id !== "string" || id.trim() === "") { unusable += 1; continue; }
+    const status = object?.status;
+    if (as === "covered" && status !== undefined && status !== null && !(typeof status === "string" && (status.trim() === "" || DONE_SLICE_STATUSES.has(status.trim().toUpperCase())))) {
+      notCovered.set(id, String(status));
+    } else ids.add(id);
   }
-  return { ids: [...ids], unusable };
+  return { ids: [...ids], unusable, notCovered: [...notCovered].filter(([id]) => !ids.has(id)).map(([id, status]) => ({ id, status })) };
+}
+
+/** What a reading dropped, worded once for `retry-plan` and `ledger build`. */
+export function sliceReadingNotes(reading: SliceReading): string[] {
+  const notes: string[] = [];
+  if (reading.unusable > 0) notes.push(`${reading.unusable} slice entr${reading.unusable === 1 ? "y" : "ies"} without a usable id ignored`);
+  if (reading.notCovered.length > 0) {
+    const shown = reading.notCovered.slice(0, 5).map((entry) => `${entry.id} (${entry.status})`).join(", ");
+    const more = reading.notCovered.length > 5 ? `, … (+${reading.notCovered.length - 5})` : "";
+    notes.push(`${reading.notCovered.length} slice(s) reported with a status that is not done, counted as uncovered: ${shown}${more}`);
+  }
+  return notes;
 }
 
 /**
@@ -173,7 +206,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
       reviewer,
       status,
       priorAttempts: priorRounds,
-      reason: incoming.unusable === 0 ? reason : `${reason}; ${incoming.unusable} slice entr${incoming.unusable === 1 ? "y" : "ies"} without a usable id ignored`,
+      reason: [reason, ...sliceReadingNotes(incoming)].join("; "),
       newSlices: [],
       wave: waves[0] ?? [],
       remaining: summarizeWaves(waves),

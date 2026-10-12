@@ -190,8 +190,13 @@ describe("a result reports the slices it covered (flow 430 AC2)", () => {
     expect(await errorsFor(result(["slice-01", { id: "slice-02" }]), FINDING)).toEqual([]);
   });
 
+  test("an empty list and an object entry carrying a status or coverage note validate", async () => {
+    expect(await errorsFor(result([]), FINDING)).toEqual([]);
+    expect(await errorsFor(result([{ id: "slice-01", status: "NOT_READ", coverage: "ran out of budget" }]), FINDING)).toEqual([]);
+  });
+
   test("an entry with no id, an empty id, or another type is refused", async () => {
-    expect((await errorsFor(result([{ status: "DONE" }]), FINDING)).join(" ")).toContain("id");
+    expect(await errorsFor(result([{ status: "DONE" }]), FINDING)).toEqual(["$.slices[0].id: Missing required property"]);
     expect(await errorsFor(result([{ id: "" }]), FINDING)).not.toEqual([]);
     expect(await errorsFor(result([""]), FINDING)).not.toEqual([]);
     expect(await errorsFor(result([7]), FINDING)).not.toEqual([]);

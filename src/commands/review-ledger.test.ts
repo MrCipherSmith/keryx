@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, isAttendedRun } from "../review/coverage";
+import { coverageErrors, isAttendedRun, requiredReviewers } from "../review/coverage";
 import type { RawFile } from "../review/ledger";
 import { pendingMutants } from "../review/mutate";
-import { assignRawDispatch, definitionCandidates, isReviewerReply, readDrivers } from "./review-ledger";
+import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, readDrivers, runLedger } from "./review-ledger";
 
 describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
   test("a rule file is found under definition, skill_path, or either key inside payload", () => {
@@ -102,6 +103,135 @@ describe("the close rule for a mutation pass (flow 428 AC5)", () => {
       expect(await pendingMutants(pkg)).toEqual([]);
     } finally {
       await rm(pkg, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => {
+  type Out = { ready: boolean; gaps: Array<{ reviewer?: string; detail: string }>; ignored: string[]; ledger: Record<string, unknown> & { setAside?: string[] } };
+
+  async function fixture(raws: Record<string, string>, drivers: Record<string, object> = {}): Promise<{ pkg: string; cleanup: () => Promise<void> }> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f430-ledger-"));
+    const pkg = path.join(root, ".metaproject", "reviews", "pkg");
+    await mkdir(path.join(pkg, "raw"), { recursive: true });
+    await mkdir(path.join(pkg, "drivers"), { recursive: true });
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }));
+    for (const [name, body] of Object.entries(raws)) await writeFile(path.join(pkg, "raw", name), body);
+    for (const [name, body] of Object.entries(drivers)) await writeFile(path.join(pkg, "drivers", name), JSON.stringify(body));
+    return { pkg, cleanup: () => rm(root, { recursive: true, force: true }) };
+  }
+
+  async function build(pkg: string): Promise<Out> {
+    const lines: string[] = [];
+    const log = console.log;
+    const exitCode = process.exitCode;
+    console.log = (...args: unknown[]) => { lines.push(args.join(" ")); };
+    try {
+      await runLedger(["build", pkg, "--mode", "all", "--json"], { rejectUnknownFlags: () => undefined });
+    } finally {
+      console.log = log;
+      process.exitCode = exitCode;
+    }
+    return JSON.parse(lines.join("\n")) as Out;
+  }
+
+  const noBlock = (out: Out, file: string) => out.gaps.filter((gap) => gap.detail.includes(`raw/${file}`) && gap.detail.includes("no parseable REVIEW_RESULT block"));
+
+  test("a verification payload filed in raw/ is set aside, listed, kept on disk, and does not block the ledger", async () => {
+    const { pkg, cleanup } = await fixture({ "verification.txt": '{"claims": []}' });
+    try {
+      const out = await build(pkg);
+      expect(out.ignored).toHaveLength(1);
+      expect(out.ignored[0]).toContain("raw/verification.txt (set aside:");
+      expect(noBlock(out, "verification.txt")).toEqual([]);
+      expect(out.ledger.rawReconciled).toBe(true);
+      expect(out.ledger.setAside).toEqual(["raw/verification.txt"]);
+      expect(JSON.parse(await readFile(path.join(pkg, "research.json"), "utf8")).setAside).toEqual(["raw/verification.txt"]);
+      expect(existsSync(path.join(pkg, "raw", "verification.txt"))).toBe(true);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a file that holds REVIEW_RESULT but no parseable block is a gap that blocks, never set aside", async () => {
+    const { pkg, cleanup } = await fixture({ "notes.txt": "REVIEW_RESULT: this is where the block should be, but it is cut off" });
+    try {
+      const out = await build(pkg);
+      expect(noBlock(out, "notes.txt")).toHaveLength(1);
+      expect(out.ledger.rawReconciled).toBe(false);
+      expect(out.ledger.setAside).toBeUndefined();
+      expect(out.ready).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a file a driver names as its result, with no parseable block, is a gap that blocks", async () => {
+    const { pkg, cleanup } = await fixture(
+      { "custom-output.txt": "the reviewer wrote prose and never emitted a result" },
+      { "review-logic.json": { reviewer: "review-logic", slices: ["S1"], result: "raw/custom-output.txt" } },
+    );
+    try {
+      const out = await build(pkg);
+      expect(noBlock(out, "custom-output.txt")).toHaveLength(1);
+      expect(out.ledger.rawReconciled).toBe(false);
+      expect(out.ledger.setAside).toBeUndefined();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a file named after a required reviewer is protected even when no driver names it", async () => {
+    const probe = await fixture({});
+    let reviewer: string;
+    try {
+      reviewer = (await requiredReviewers(path.resolve(probe.pkg, "..", "..", ".."), "all", ["src/a.ts"])).required[0]!;
+    } finally {
+      await probe.cleanup();
+    }
+    expect(reviewer).toBeDefined();
+    const { pkg, cleanup } = await fixture({ [`${reviewer}.txt`]: "prose, no block" });
+    try {
+      const out = await build(pkg);
+      expect(noBlock(out, `${reviewer}.txt`)).toHaveLength(1);
+      expect(out.ignored).toEqual([]);
+      expect(out.ledger.rawReconciled).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("loadRaws names the set-aside files and keeps them out of raws", async () => {
+    const { pkg, cleanup } = await fixture({ "verification.txt": '{"claims": []}', "empty.txt": "" });
+    try {
+      const loaded = await loadRaws(pkg, { files: new Set(), reviewers: [] });
+      expect(loaded.setAside).toEqual(["raw/verification.txt"]);
+      expect(loaded.raws.map((raw) => raw.name)).toEqual(["raw/empty.txt"]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a driver with an entry that has no usable id is reported by count and hands over none of its slices", async () => {
+    const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: ["S1", { coverage: "no id" }, ""], result: "raw/review-logic.txt" } });
+    try {
+      const out = await build(pkg);
+      const gap = out.gaps.find((g) => g.detail.includes("drivers/review-logic.json"));
+      expect(gap?.reviewer).toBe("review-logic");
+      expect(gap?.detail).toContain("2 slice entries without a usable id");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("readDrivers reads an object entry's status as an assignment, not as coverage", async () => {
+    const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: [{ id: "S1", status: "NOT_READ" }, "S2"], result: "raw/review-logic.txt" } });
+    try {
+      const drivers = await readDrivers(pkg, pkg);
+      expect(drivers.payloadSlices).toEqual({ "review-logic": ["S1", "S2"] });
+      expect(drivers.dropped).toEqual([]);
+    } finally {
+      await cleanup();
     }
   });
 });

@@ -186,7 +186,7 @@
     },
     "slices": {
       "title": "Slices this result covered",
-      "description": "The ids of the dispatched slices the reviewer read. An entry is an id string, or an object with an `id` and an optional `coverage` note. `keryx review retry-plan` and `ledger build` read both; an entry with no id counts for nothing.",
+      "description": "The ids of the dispatched slices the reviewer read. An entry is an id string, or an object with an `id`, an optional `coverage` note and an optional `status`. `keryx review retry-plan` and `ledger build` read both. An object counts as covered only when its `status` is absent or one of DONE, COMPLETE, COMPLETED, COVERED, OK (any case); any other status (NOT_READ, INCOMPLETE, SKIPPED, PARTIAL, …) leaves the slice uncovered and is named in the plan reason or the ledger gap. An entry with no id counts for nothing.",
       "type": "array",
       "items": {
         "type": ["string", "object"],

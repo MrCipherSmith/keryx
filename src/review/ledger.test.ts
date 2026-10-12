@@ -97,6 +97,36 @@ describe("buildLedger", () => {
     expect(String(run.rawEvidence)).toContain("#sha256:");
   });
 
+  describe("a reply's `slices` as objects (flow 430 AC1)", () => {
+    const logicGap = (result: ReturnType<typeof buildLedger>) => result.gaps.find((g) => g.reviewer === "review-logic");
+    const withLogic = async (slices: unknown) => {
+      const base = await inputs();
+      return buildLedger({ ...base, raws: base.selected.map((r) => (r === "review-logic" ? raw(r, "DONE", { slices }) : raw(r, "DONE"))) });
+    };
+
+    test("objects with an id and a done status or none cover their slices", async () => {
+      const result = await withLogic([{ id: "slice-01", status: "DONE" }, { id: "slice-02", coverage: "read in full" }]);
+      expect(logicGap(result)).toBeUndefined();
+      expect(await blockersOf(result)).toEqual([]);
+    });
+
+    test("an object whose status is not done leaves its slice uncovered and the gap names it", async () => {
+      const result = await withLogic([{ id: "slice-01", status: "DONE" }, { id: "slice-02", status: "NOT_READ" }]);
+      const gap = logicGap(result)!;
+      expect(gap.detail).toContain("1 slice(s) not covered by any dispatched payload: slice-02");
+      expect(gap.detail).toContain("slice-02 (NOT_READ)");
+      expect(result.ledger.scopeReviewed).toBe(false);
+      expect((await blockersOf(result)).join("\n")).toContain("review-logic");
+    });
+
+    test("an entry with no usable id is reported by count in the gap, not dropped silently", async () => {
+      const result = await withLogic([{ id: "slice-01" }, { status: "DONE" }, ""]);
+      const gap = logicGap(result)!;
+      expect(gap.detail).toContain("slice-02");
+      expect(gap.detail).toContain("2 slice entries without a usable id ignored");
+    });
+  });
+
   test("no fabrication: a NEEDS_CONTEXT reviewer stays incomplete and the gap carries the exact retry-plan command", async () => {
     const base = await inputs();
     const raws = [raw("review-architecture", "DONE"), raw("review-logic", "NEEDS_CONTEXT", { needs_context: ["finish the unread slices"] }), raw("review-testing-practices", "DONE")];

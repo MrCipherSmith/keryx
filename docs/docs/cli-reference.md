@@ -5286,7 +5286,10 @@ unreadable.
 reviewer's result JSON, or its saved raw reply (the last `REVIEW_RESULT` block is
 read); its `slices` list is what the reviewer covered, written as slice ids or as
 objects carrying an `id` (`{"id": "slice-03", "status": "DONE", "coverage": "…"}`).
-An entry with no usable id covers nothing and is named in the plan's reason. An attempt is spent only by
+An object counts as covered only when its `status` is absent or DONE, COMPLETE, COMPLETED,
+COVERED or OK (any case); NOT_READ, INCOMPLETE, SKIPPED, PARTIAL or any other status leaves
+that slice uncovered, and the plan's reason names those slices with their statuses. An entry
+with no usable id covers nothing and is named by count in the plan's reason. An attempt is spent only by
 a result that covered no slice the reviewer had not covered before. A reviewer that
 makes progress is handed the next wave of the slices still uncovered (decision
 `retry`, or `wave` after a finished result with slices still open) and is not
@@ -5333,9 +5336,12 @@ The rule file is taken from `definition`, or from a `skill_path` at the top leve
 inside a `payload` object, whichever names a file that exists; a reviewer with none
 stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.
 A file there with no `REVIEW_RESULT` block, that no driver names as its `result`, and
-whose name does not start with a dispatched reviewer's id is not a reply: the
-ledger lists it under `ignored` as `set aside: …` and leaves it where it is, never
-deleting it. A file that holds a `REVIEW_RESULT` block, or is named by a driver, still
+whose name does not start with a dispatched or required reviewer's id is not a reply:
+the ledger lists it under `ignored` as `set aside: …`, records it in `setAside` in
+`research.json`, and leaves it where it is, never deleting it. A driver's `slices` is
+the list of slices handed to the reviewer, so a `status` on one of its entries is not
+read; an entry with no usable id there is reported as a gap by count, and none of that
+dispatch's slices counts as handed out until it is fixed. A file that holds a `REVIEW_RESULT` block, or is named by a driver, still
 has to be reconciled.
 
 **The set is under regression check, not under review**, and that is refused in
