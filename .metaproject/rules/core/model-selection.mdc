@@ -326,6 +326,12 @@ recording them is one copy rather than four decisions.
   remove.
 - **Do not ask the operator which model to use per dispatch.** Asking every time
   is what made adaptive selection impossible.
+- **An interactive review round shows the computed plan once.** It is the third
+  start question of `review-orchestrator` (`model_strategy: ask`, the
+  interactive default): the complexity the round's signals give, each role's tier
+  and the model it resolves to here. The operator accepts it, takes every role to
+  `deep`, or sets it — for that round. An unattended round dispatches the
+  computed plan without asking (`adaptive`).
 - Never write a concrete model name into a skill, a rule, a dispatch template, or
   the resolution code.
 - Take the candidate set from runtime detection. Never from a literal list of

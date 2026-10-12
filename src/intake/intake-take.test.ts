@@ -76,7 +76,7 @@ describe("take (AC6)", () => {
       }
       const card = await seedCard(env.root);
       const fakes = makeFakes();
-      await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+      await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
       expect(fakes.flows.initCalls).toHaveLength(1);
       expect(Object.keys(fakes.flows.initCalls[0]!.input).sort()).toEqual(["issueUrl", "source"]);
       expect(existsSync(log)).toBe(false);

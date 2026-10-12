@@ -17,6 +17,7 @@ import { loadReport, machineExport, machineFileName, mergeMachineRows, parseMach
 import { pathExists } from "../lib/fs";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 import { scheduleResearchSync, unscheduleResearchSync } from "../scheduler/research-sync-job";
+import { collectFrozenFlows, renderKindShare } from "./research-sync-kinds";
 import { formatRunTime, reasonLine, renderFailureStatus, renderStatus } from "./research-sync-status";
 
 const run = promisify(execFile);
@@ -220,7 +221,8 @@ async function compute(deps: Required<SyncDeps>): Promise<Computed> {
   const log = (await readIfExists(catalogFile(root, CONTRIBUTION_LOG))) ?? "";
   const contributionRows = (log.match(/^\d{4}-\d{2}-\d{2} · /gm) ?? []).length;
 
-  const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows, machines });
+  const kindLines = renderKindShare(await collectFrozenFlows(root), runAt);
+  const statusText = renderStatus({ runAt, head, snapshot, latest, report, contributionRows, machines, kindLines });
   for (const text of [countsText, exportText, statusText, ownRaw?.text ?? ""]) {
     if (namesOffLimits(text)) throw new SyncError("output names a repository that must not appear");
   }

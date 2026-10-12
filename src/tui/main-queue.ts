@@ -188,3 +188,42 @@ export function drainIdleMainQueue<T extends QueuedMainQuestion>(
   options.dispatch(next);
   return true;
 }
+
+/** What a queued message waits for (flow 426, AC6). */
+export type QueueWait = { kind: "turn" } | { kind: "approval"; call: string };
+
+export const QUEUE_FORCE_HELP =
+  "[Force] interrupts the current turn and runs this message now · [Edit] moves it back to the composer · [Delete] removes it";
+
+const PENDING_CALL_CHARS = 60;
+
+/** One short line naming the call an approval is pending for: the shell command, else the tool name. */
+export function describePendingCall(tool: string, inputJson: string): string {
+  let shown = tool;
+  try {
+    const parsed: unknown = JSON.parse(inputJson);
+    if (parsed !== null && typeof parsed === "object") {
+      const command = (parsed as { command?: unknown }).command;
+      if (typeof command === "string" && command.trim().length > 0) shown = command;
+    }
+  } catch {
+    // not JSON: the tool name stands for the call
+  }
+  const oneLine = shown.replace(/\s+/g, " ").trim();
+  return oneLine.length > PENDING_CALL_CHARS ? `${oneLine.slice(0, PENDING_CALL_CHARS - 1)}…` : oneLine;
+}
+
+export function queueWaitReason(wait: QueueWait): string {
+  return wait.kind === "turn" ? "waits for the current turn" : `waits for approval of: ${wait.call}`;
+}
+
+/** The queue row: marker, text, state, and the reason it waits. */
+export function formatQueueRow(index: number, text: string, wait: QueueWait): string {
+  return `${formatMainQueueMarker(index)} ${text} — queued · ${queueWaitReason(wait)}`;
+}
+
+/** What `/queue` prints: the same rows the panel shows, then the one-line [Force] explanation. */
+export function formatQueueListing(texts: readonly string[], wait: QueueWait): string[] {
+  if (texts.length === 0) return ["main queue is empty."];
+  return [...texts.map((text, index) => formatQueueRow(index, text, wait)), QUEUE_FORCE_HELP];
+}

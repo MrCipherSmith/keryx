@@ -88,7 +88,7 @@
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 // A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
-import { retryableFor } from "../provider-port";
+import { isTransportFailure, retryableFor, withRetryAfter } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
   NormalizedError,
@@ -767,6 +767,7 @@ export class GeminiProvider implements ProviderPort {
         // Non-JSON error body: classify by HTTP status alone.
         error = classifyGeminiError(response.status, undefined);
       }
+      withRetryAfter(error, response.headers, this.deps.clock);
       error.message = redact(providerMessage);
       yield stamp({ kind: "provider_error", error });
       return;
@@ -805,6 +806,7 @@ export class GeminiProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       });
       return;
     }
@@ -880,9 +882,10 @@ export class GeminiProvider implements ProviderPort {
           return;
         }
         yield errorEvent({
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
+          kind: isTransportFailure(cause) ? "unavailable" : "malformed",
+          retryable: isTransportFailure(cause),
           message: redact(`Gemini SSE body read failed: ${String(cause)}`),
+          ...(isTransportFailure(cause) ? { detail: { incompleteStream: true } } : {}),
         });
         return;
       }
@@ -1078,6 +1081,7 @@ export class GeminiProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("Gemini SSE stream ended mid-record (torn stream)"),
+        detail: { incompleteStream: true },
       };
     } else if (!receivedAnyChunk) {
       // A 200 with literally zero bytes never sets `sawFirstChunk` and would
@@ -1087,12 +1091,14 @@ export class GeminiProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       };
     } else if (sawFirstChunk && !sawFinish) {
       malformed = {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("Gemini SSE stream ended before a finishReason was reported (truncated stream)"),
+        detail: { incompleteStream: true },
       };
     }
 

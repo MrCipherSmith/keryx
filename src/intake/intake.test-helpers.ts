@@ -3,6 +3,7 @@
 // (a `GhRunner` answering from fixtures and recording every call), a fake Telegram sink,
 // a scripted model, a registered fake board reader, and a clock the test moves by hand.
 
+import { setSystemTime } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -72,6 +73,8 @@ export async function setupIntakeEnv(options: { config?: Partial<IntakeConfig> }
     logged.push(parts.map(String).join(" "));
   };
   process.exitCode = 0;
+  // A card has an expiry measured from the wall clock; pin it so the suite does not depend on the date it runs on.
+  setSystemTime(local(10, 30));
   const env: Record<string, string | undefined> = {
     PATH: `${aside}${path.delimiter}${process.env["PATH"] ?? ""}`,
     HOME: home,
@@ -87,6 +90,7 @@ export async function setupIntakeEnv(options: { config?: Partial<IntakeConfig> }
     setBoard: (entries) => setBoardReader(entries),
     teardown: async () => {
       registerBoardReader(undefined);
+      setSystemTime();
       console.log = realLog;
       console.error = realError;
       process.exitCode = 0;

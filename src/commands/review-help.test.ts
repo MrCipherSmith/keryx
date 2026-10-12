@@ -6,7 +6,7 @@
 // flags the parsers accept.
 
 import { afterEach, expect, test } from "bun:test";
-import { COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, printReviewHelpFor } from "./review";
+import { COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, printReviewHelpFor } from "./review";
 
 const realLog = console.log;
 
@@ -61,6 +61,15 @@ test("comments collect lists every flag its parser accepts, in both helps", () =
 test("the group help and the comments help print the same usage entry", () => {
   expect(usageEntry(GROUP(), "reply")).toBe(usageEntry(OWN(), "reply"));
   expect(usageEntry(GROUP(), "collect")).toBe(usageEntry(OWN(), "collect"));
+});
+
+test("flow 420: the group help lists every flag attach, start and ingest accept", () => {
+  const help = GROUP();
+  for (const flag of CREATE_FLAGS) {
+    if (flag === "--target-ref") continue;
+    expect(help).toContain(flag);
+  }
+  expect(help).toContain("--research <ledger.json>");
 });
 
 test("--outcomes is shown as required for reply, as the parser requires it", () => {

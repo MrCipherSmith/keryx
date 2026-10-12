@@ -528,6 +528,18 @@ async function attemptJevRequest(
  * exactly one call per `callJevSystemOne` invocation regardless of how many
  * attempts it took underneath.
  */
+async function cancellableJevSleep(sleep: JevSleepFn, ms: number, signal: AbortSignal | undefined, timeoutMs: number): Promise<void> {
+  if (signal === undefined) return sleep(ms);
+  if (signal.aborted) throw new JevTimeoutError(timeoutMs);
+  let onAbort: () => void = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new JevTimeoutError(timeoutMs));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try { await Promise.race([sleep(ms), aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
+}
+
 export async function callJevSystemOne(
   fetchFn: typeof fetch = globalThis.fetch,
   input: JevRequestInput,
@@ -574,6 +586,7 @@ export async function callJevSystemOne(
   let text: string;
   let attempt = 0;
   for (;;) {
+    if (external?.aborted) throw new JevTimeoutError(timeoutMs);
     attempt += 1;
     const outcome = await attemptJevRequest(fetchFn, apiKey, body, timeoutMs, external);
 
@@ -587,7 +600,7 @@ export async function callJevSystemOne(
       if (attempt >= JEV_MAX_ATTEMPTS) {
         throw new JevNetworkError(attempt, outcome.cause);
       }
-      await sleepFn(jevBackoffMs(attempt));
+      await cancellableJevSleep(sleepFn, jevBackoffMs(attempt), external, timeoutMs);
       continue;
     }
 
@@ -601,7 +614,7 @@ export async function callJevSystemOne(
 
     if (JEV_RETRYABLE_STATUSES.has(status) && attempt < JEV_MAX_ATTEMPTS) {
       const retryAfterMs = retryAfterMsFromHeader(outcome.retryAfterHeader);
-      await sleepFn(retryAfterMs ?? jevBackoffMs(attempt));
+      await cancellableJevSleep(sleepFn, retryAfterMs ?? jevBackoffMs(attempt), external, timeoutMs);
       continue;
     }
 

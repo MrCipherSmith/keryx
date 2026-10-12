@@ -89,6 +89,9 @@ export type ManagedReviewManifest = {
     findings: string;
     learning: string;
     decisions: string;
+    /** Package-local evidence locators; absent only on legacy packages. */
+    research?: string | undefined;
+    reviewerDispatch?: string | undefined;
   };
   coverage: ReviewCoverageEntry[];
   /**

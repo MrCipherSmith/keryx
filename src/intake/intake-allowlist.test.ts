@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createIntakeCardSink } from "./card";
 import { makeFakes, seedCard } from "./intake-actions.test-helpers";
-import { setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
+import { local, setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
 import { createIntakePressHandler } from "./press";
 import { appendIntakeRecord, readIntakeCardView } from "./store";
 import { type Harness, makeHarness, OWNER_ID, STRANGER_ID, until } from "../remote/remote.test-helpers";
@@ -26,7 +26,7 @@ async function setup() {
   h = makeHarness();
   const hub = h.makeHub();
   const fakes = makeFakes();
-  hub.registerIntakeCallbackHandler(createIntakePressHandler({ hub, roots: () => [env.root], actionDeps: fakes.deps }));
+  hub.registerIntakeCallbackHandler(createIntakePressHandler({ hub, roots: () => [env.root], now: () => local(10, 42), actionDeps: fakes.deps }));
   const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
   if (!reg.ok) throw new Error("register failed");
   await hub.start();

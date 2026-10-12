@@ -338,25 +338,51 @@ export function spendFromTokens(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * How many reviewer subagents one dispatch plan may have in flight.
- *
- * **4.** Chosen with the nesting in mind and with the honest limit of that
- * choice stated below.
- *
- * The numbers it is chosen against: the harness allows on the order of 20
- * concurrent subagents; `review-orchestrator` has fourteen reviewers to
- * dispatch; and it runs nested under `flow-orchestrator`, which runs nested
- * under `job-orchestrator`. Three levels each opening an unbounded fan-out is
- * how a fourteen-way dispatch becomes a rate-limit incident. 4 gives four
- * waves for a full reviewer set and leaves room for two enclosing levels to
- * hold work of their own without the total approaching the harness limit.
- *
- * It is not tuned to a measured throughput number, and claiming otherwise would
- * be the kind of unbacked precision this programme exists to remove. It is a
- * conservative bound picked so that the *nested worst case* stays inside a limit
- * that is known.
+ * The most reviewers one wave holds. A full review (`--all`) is split by diff
+ * domain and no wave exceeds this; `--parallel <n>` can only lower it.
  */
-export const DEFAULT_MAX_PARALLEL_REVIEWERS = 4;
+export const MAX_REVIEWERS_PER_WAVE_FULL = 10;
+
+/** Halvings of the wave size a run of `STATUS: RATE_LIMITED` answers may cause before the round stops. */
+export const MAX_RATE_HALVINGS = 2;
+
+export type ReviewerDomain = "core" | "domain" | "support";
+
+const CORE_REVIEWERS = new Set([
+  "review-logic",
+  "review-security-code",
+  "review-architecture",
+  "review-highload",
+  "review-regression",
+  "review-core-boundaries",
+  "code-boss-reviewer",
+  "code-ai-review",
+]);
+
+const SUPPORT_REVIEWERS = new Set([
+  "review-style",
+  "review-clean-code",
+  "review-testing-practices",
+  "review-vantage-testing",
+  "review-vantage-styling",
+  "review-layout",
+  "code-style-review",
+]);
+
+/**
+ * The diff domain a reviewer belongs to: `core` (logic and security), `domain`
+ * (frontend, backend and anything not named elsewhere), `support` (style and
+ * tests). Wave order follows that order.
+ */
+export function reviewerDomain(reviewer: string): ReviewerDomain {
+  if (CORE_REVIEWERS.has(reviewer)) {
+    return "core";
+  }
+  if (SUPPORT_REVIEWERS.has(reviewer)) {
+    return "support";
+  }
+  return "domain";
+}
 
 export type ConcurrencyPlan = {
   cap: number;
@@ -395,14 +421,23 @@ export type ConcurrencyPlan = {
 };
 
 export type ConcurrencyPlanOptions = {
-  /** Defaults to {@link DEFAULT_MAX_PARALLEL_REVIEWERS}. */
+  /** Wave size setting (`--parallel`). Defaults to {@link MAX_REVIEWERS_PER_WAVE_FULL}. */
   cap?: number | undefined;
   /** Subagents the caller already has in flight, if it knows. */
   outstanding?: number | undefined;
+  /** A full review or `--all`: the wave size is held to {@link MAX_REVIEWERS_PER_WAVE_FULL} whatever `cap` says. */
+  full?: boolean | undefined;
 };
 
+const DOMAIN_ORDER: readonly ReviewerDomain[] = ["core", "domain", "support"];
+
 /**
- * Partition reviewers into dispatch waves of at most the effective cap.
+ * Partition reviewers into dispatch waves.
+ *
+ * The set is split by diff domain, logic and security first, frontend and
+ * backend next, style and tests last, and a domain bigger than the wave size is
+ * split again. Waves never mix domains,
+ * so the order of the waves is the order of the dependency between them.
  *
  * Nothing is dropped: a reviewer past the first wave is *queued*, and `queued`
  * is on the record so a plan that deferred ten reviewers cannot read as a plan
@@ -418,28 +453,84 @@ export function planReviewerWaves(
   reviewers: readonly string[],
   options: ConcurrencyPlanOptions = {},
 ): ConcurrencyPlan {
-  const cap = options.cap ?? DEFAULT_MAX_PARALLEL_REVIEWERS;
+  const cap = options.cap ?? MAX_REVIEWERS_PER_WAVE_FULL;
   if (!Number.isInteger(cap) || cap < 1) {
     throw new Error(
-      `Invalid concurrency cap: ${cap}. Expected a positive integer; the default is ${DEFAULT_MAX_PARALLEL_REVIEWERS}.`,
+      `Invalid concurrency cap: ${cap}. Expected a positive integer; the default is ${MAX_REVIEWERS_PER_WAVE_FULL}.`,
     );
   }
   const outstanding = options.outstanding;
   if (outstanding !== undefined && (!Number.isInteger(outstanding) || outstanding < 0)) {
     throw new Error(`Invalid outstanding subagent count: ${outstanding}. Expected a non-negative integer.`);
   }
-  const effective = Math.max(1, cap - (outstanding ?? 0));
+  const ceiling = options.full === true ? Math.min(cap, MAX_REVIEWERS_PER_WAVE_FULL) : cap;
+  const effective = Math.max(1, ceiling - (outstanding ?? 0));
   const waves: string[][] = [];
-  for (let index = 0; index < reviewers.length; index += effective) {
-    waves.push([...reviewers.slice(index, index + effective)]);
+  for (const domain of DOMAIN_ORDER) {
+    const group = reviewers.filter((name) => reviewerDomain(name) === domain);
+    for (let index = 0; index < group.length; index += effective) {
+      waves.push(group.slice(index, index + effective));
+    }
   }
   return {
-    cap,
+    cap: ceiling,
     outstanding,
     effective,
     waves,
     queued: Math.max(0, reviewers.length - (waves[0]?.length ?? 0)),
     holdsAcrossNesting: outstanding !== undefined,
+  };
+}
+
+export type RateLimitState = { waveSize: number; halvings: number };
+
+export type RateLimitDecision =
+  | {
+      action: "requeue";
+      state: RateLimitState;
+      /** Limited reviewers first, then the rest of the queue. */
+      queue: string[];
+      waitSeconds: number | undefined;
+    }
+  | { action: "blocked"; status: "BLOCKED rate_limited"; queue: string[]; line: string };
+
+export function rateLimitState(waveSize: number): RateLimitState {
+  if (!Number.isInteger(waveSize) || waveSize < 1) {
+    throw new Error(`Invalid wave size: ${waveSize}. Expected a positive integer.`);
+  }
+  return { waveSize, halvings: 0 };
+}
+
+/**
+ * What the orchestrator does after reviewers answered `STATUS: RATE_LIMITED`:
+ * halve the wave (never below 1), put the limited reviewers back at the front of
+ * the queue and wait `retry-after` when one was given. After
+ * {@link MAX_RATE_HALVINGS} halvings a further rate limit stops the round with
+ * `BLOCKED rate_limited` and the queue that was left.
+ */
+export function nextAfterRateLimit(
+  state: RateLimitState,
+  limited: readonly string[],
+  remaining: readonly string[],
+  retryAfterSeconds?: number,
+): RateLimitDecision {
+  if (retryAfterSeconds !== undefined && (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds < 0)) {
+    throw new Error(`Invalid retry-after: ${retryAfterSeconds}. Expected a non-negative number of seconds.`);
+  }
+  const queue = [...limited, ...remaining];
+  if (state.halvings >= MAX_RATE_HALVINGS) {
+    return {
+      action: "blocked",
+      status: "BLOCKED rate_limited",
+      queue,
+      line: `STATUS: BLOCKED rate_limited — queue left: ${queue.join(", ")}`,
+    };
+  }
+  return {
+    action: "requeue",
+    state: { waveSize: Math.max(1, Math.floor(state.waveSize / 2)), halvings: state.halvings + 1 },
+    queue,
+    waitSeconds: retryAfterSeconds,
   };
 }
 

@@ -27,6 +27,8 @@ export interface StatusInput {
   contributionRows: number;
   /** The merged journal of every machine; the two lines about it are left out when absent. */
   machines?: MachinesSummary;
+  /** Flow 422: the verification-kind share lines, when the sync computed them. */
+  kindLines?: readonly string[];
 }
 
 export interface MachinesSummary {
@@ -107,6 +109,7 @@ export function renderStatus(input: StatusInput): string {
     ...journalSummary(input.report),
     ...(input.machines === undefined ? [] : machinesSummary(input.machines)),
     "",
+    ...(input.kindLines === undefined ? [] : ["## Виды проверки (verification kinds)", "", ...input.kindLines, ""]),
   ].join("\n");
 }
 

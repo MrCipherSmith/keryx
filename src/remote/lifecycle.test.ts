@@ -1,8 +1,9 @@
 // AC1: a session registers, gets a topic, exchanges messages with it, and the
-// topic is deleted when the session deregisters.
+// topic is archived (a closing note, closed, history kept) when the session deregisters.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { type Harness, makeHarness, OWNER_ID, until } from "./remote.test-helpers";
+import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
+import { type Harness, makeHarness, OWNER_ID, STALE_MS, until } from "./remote.test-helpers";
 
 let h: Harness;
 afterEach(async () => {
@@ -48,7 +49,7 @@ describe("remote session lifecycle", () => {
     expect(await hub.send("unknown-session", "nobody home")).toBe(false);
   });
 
-  test("deregister deletes the topic and later messages in it are ignored", async () => {
+  test("deregister archives the topic with a closing note and later messages in it are ignored", async () => {
     h = makeHarness();
     const hub = h.makeHub();
     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/work/app" });
@@ -56,14 +57,41 @@ describe("remote session lifecycle", () => {
     await hub.start();
 
     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: true });
-    expect(h.api.topics()).toEqual([]);
-    expect(h.api.deletedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
+    expect(h.api.topics().map((t) => t.messageThreadId)).toEqual([reg.threadId]);
+    expect(h.api.deletedTopics).toEqual([]);
+    expect(h.api.closedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
+    expect(h.api.sentTo(reg.threadId).map((m) => m.text).some((t) => /history stays here/i.test(t))).toBe(true);
     expect(hub.list()).toEqual([]);
 
     h.api.pushMessage({ fromId: OWNER_ID, text: "anyone?", threadId: reg.threadId });
     await until(() => h.api.pendingUpdates().length === 0, "update consumed");
     expect(h.deliveries).toEqual([]);
     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: false });
+  });
+
+  test("flow 419 AC7: topic and history survive a shell that exits and a shell that is killed with Ctrl+C", async () => {
+    h = makeHarness();
+    const hub = h.makeHub();
+    const exits = await hub.register({ sessionId: "sess-exit-0001", project: "/work/app", name: "exits" });
+    const killed = await hub.register({ sessionId: "sess-kill-0002", project: "/work/app", name: "killed" });
+    if (!exits.ok || !killed.ok) throw new Error("register failed");
+    await hub.start();
+    await hub.send("sess-exit-0001", "first reply");
+    await hub.send("sess-kill-0002", "second reply");
+
+    // An orderly exit deregisters. A Ctrl+C sends nothing: serve only notices the silence.
+    await hub.deregister("sess-exit-0001");
+    await h.clock.advance(STALE_MS);
+    await h.clock.advance(10 * 60_000 + SESSION_LEASE_HEARTBEAT_MS);
+    await until(() => h.api.closedTopics.length === 2, "both topics archived");
+
+    expect(h.api.deletedTopics).toEqual([]);
+    for (const thread of [exits.threadId, killed.threadId]) {
+      expect(h.api.topic(thread)).toBeDefined();
+      expect(h.api.sentTo(thread).some((m) => /history stays here/i.test(m.text))).toBe(true);
+    }
+    expect(h.api.sentTo(exits.threadId).map((m) => m.text)).toContain("first reply");
+    expect(h.api.sentTo(killed.threadId).map((m) => m.text)).toContain("second reply");
   });
 
   test("a heartbeat from an unregistered session is refused with a reason", async () => {

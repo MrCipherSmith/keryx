@@ -1,5 +1,453 @@
 # Changelog
 
+## [Unreleased]
+
+### Review depth (flow 430)
+
+- `keryx review retry-plan` and `ledger build` read a reviewer's `slices` as ids or as objects with an `id`. A reviewer that listed every assigned slice as objects is no longer retired as `not-run`. An object whose `status` is not done (anything but DONE, COMPLETE, COVERED, OK, or none) leaves its slice uncovered; entries with no usable id are ignored. Both are reported by count in the plan's reason and in the ledger gap, with the affected ids for a status.
+- The reviewer output schema defines `slices`, and the review-orchestrator skill asks reviewers for it and documents `drivers/<reviewer>.json` (`reviewer`, `slices`, `result`, `definition`). `ledger build` also resolves the rule file from `skill_path`, top level or inside `payload`.
+- `ledger build` names a file in `raw/` that is not a reviewer reply (no `REVIEW_RESULT` block, not named by a driver, not named after a dispatched or required reviewer) as `set aside` instead of demanding a result from it. The file is left in place and listed in `research.json` under `setAside`. A driver whose `slices` holds an entry with no usable id is reported as a gap.
+
+## [0.3.112] - 2026-10-12
+
+### Review depth
+
+- A managed review round dispatches every applicable reviewer by default (`mode all`). A diff-only dispatch needs the operator's own words recorded in the dispatch record; an unattended run always uses `all`.
+- Project reviewer path globs are derived from the project's description, and a trailing `/**` matches the files under it. `review-regression` is required exactly when a blast radius was computed for the package.
+- `keryx review mutate` runs the proposed mutants in a scratch copy and records the table. `keryx review complete` refuses an attended round that still has runnable mutants unrun, unless the dispatch record carries a waiver with the operator's quote.
+- `keryx review severity-audit` raises a finding that cites a surviving mutant on a changed file from a low severity to major; a cited mutant no run executed is labelled `unproven`. It never deletes a finding.
+- `keryx review context-collect` gathers the pull request's description, linked issues and comments for the reviewers. `keryx review compare-reference` classifies a reference report's items against a package.
+- `/reviews` has a "Review depth" tab, and the readline `/reviews` prints the same block: mode, reviewers dispatched against required, excluded reviewers with the reason, and the mutation tally.
+
+## [0.3.112] - 2026-10-12
+
+### Agent Runtime
+
+- Native `spawn_subagent` reservations now honor `timeout_ms` or `runtime.kind: "keryx"` with `timeoutMs`, bounded by the operator timeout, instead of always reserving the default child deadline.
+- A non-mutating preflight reports budget availability and child capabilities without reserving budget or starting a child. It is a snapshot, not a guarantee that a later spawn will succeed; shell and nested dispatch remain unavailable to native children.
+- One integrated end-to-end regression exercises refusal, a smaller reservation, preflight immutability, operator limits, reservation release and a native child tool call. Its model transport is scripted, not a live-provider review.
+- AC9 remains open: these runtime checks do not establish complete or higher-quality live review coverage.
+
+## [0.3.111] - 2026-10-12
+
+### Remote control
+
+- Every approval, `ask_user` question and queue dialog the shell raises is mirrored to the Telegram topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other exactly once (`prompt-close`).
+- An unanswered question gets a reminder in the topic every 2 minutes, at most 3 times.
+- `/route` is on the topic menu (`/route on|off` ask first). `/route`, `/external`, `/external-agents` and `/model` are queued with a notice while main is busy and run when it goes idle, instead of being refused. `/mode` takes effect at once.
+- Progress notes in the topic at subagent wave boundaries and after tool-heavy stretches, at most one a minute: counts, tool names and labels only, never tool output. A short status question ("how is it going?") is answered from session state while the turn runs.
+- Closing the shell archives the topic (closing note, topic and history stay readable) instead of deleting it; a killed shell is archived after the orphan window. Only channel Disconnect deletes topics.
+
+## [0.3.110] - 2026-10-11
+
+### Review
+
+- Bind ledger coverage to the assigned dispatch slices instead of combining unrelated reviewer payloads. Ambiguous results cannot close unreviewed slices.
+- Bind retry state to the current slice manifest and payload identity; changed inputs cannot inherit stale coverage. A `DONE` result with open `needs_context` remains incomplete.
+- Share tolerant result parsing between ledger and retry handling, including bare JSON and prose containing JSON.
+- Include current option IDs in the arbiter cache identity and track nested artifact content changes in the completion watchdog.
+- Add regression and deterministic lifecycle tests without model calls. These checks do not claim a successful live autonomous review.
+
+### Shell
+
+- Check remembered refusals before automatic write/delegate approval. Review-auto questions involving safety floors or untrusted content return to the operator instead of selecting an automatic answer.
+
+## [0.3.109] - 2026-10-11
+
+### Review
+
+- An autonomous review no longer hands its orchestration to a subagent: the prompt now keeps the ledger, ingest and complete in the main session and says a subagent has no shell (`nested_dispatch_unavailable`). A live run on a large pull request had delegated the whole review to a subagent, spent 200 rounds, and ended with no reviewer started.
+
+## [0.3.108] - 2026-10-11
+
+### Review
+
+- A review arbiter answers policy questions in `review-auto` and in autonomous runs, in place of the word heuristic. It is a sub-agent with no shell, write or network access, it judges numeric and boolean facts about the recommended option (six closed question kinds: `scope`, `budget`, `option_choice`, `partial_coverage`, `smaller_slice`, `slice_order`) against numbered rules in a versioned file (`src/review/arbiter-rules.json`, verdicts `allow`, `deny`, `escalate`), and keryx re-checks the rule it cites. The prompt is built from validated fields only. Invalid output, a timeout, a model error, a cap hit or an unknown kind is an `escalate`: a person in `review-auto`, a refusal plus a journal line in an autonomous run. Floor-class calls are never sent to it. In `ask` mode the person is asked.
+- `.metaproject/review/arbiter-rules.json` replaces the bundled rules for a project; an invalid file makes every question escalate. `review.arbiter` in `tasks.config.json` sets `enabled`, `tier` (`light` or `standard`, a step below the flagship), an optional `provider/model` pin, `callCap` (default 20) and `timeoutMs` (default 20000). GPT-6 Astra is refused by name.
+- Every question writes a line to `arbiter.log` (kind, facts, verdict, rule, model, cost, rules version and hash); an identical question in a run is answered from a cache. An autonomous run copies the log into its review package. `/autoreview arbiter` lists the log in `keryx shell`, the run's sidebar section shows the counts, and a run stopped by an escalate sends one more Telegram line. An eval set (26 fixtures, at least 95% agreement) and an adversarial set (28 cases, all `deny` or `escalate`) run in CI. Guide: "Let the review arbiter answer policy questions".
+
+## [0.3.107] - 2026-10-11
+
+### Review
+
+- `keryx review run --autonomous --target pr --ref <pull request URL>` reviews a pull request with nobody at the keyboard, in the new `review-autonomous` profile (`trust` mode under `review-auto`, source only, no terminal needed). Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused. `--budget-minutes`, `--budget-tokens` and `--stall-minutes` (default 10) bound the run; a model question is answered by the recorded safe default (the recommended option, else the first; an irreversible one is refused).
+- A run leaves `summary.json` and `report.md` in `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. A lock stops two runs on one pull request; a re-run on a head already reviewed to the end reuses the result, and one on a head left open resumes its package.
+- `keryx schedule add --review-pr <URL>` schedules the same review on the OS timer (systemd, launchd or cron); `keryx trigger schedule <name>` prints the cron line and unit pair. The run's report is copied to `.metaproject/data/trigger/reports/<name>/`.
+- In `keryx shell`, `/autoreview start|list|stop` runs and watches reviews, a sidebar section shows the phase, rounds and tokens of each, and `keryx serve` sends one Telegram line at the start and one at the end. Guide: "Review a pull request with nobody at the keyboard".
+
+## [0.3.106] - 2026-10-11
+
+### Flow Governance
+- Acceptance criteria are written with a verification kind. The scaffold from `flow init` shows `[verify: <exec|invariant|judged|none>]` on each criterion and states the marker rule, the flow-init and flow-orchestrator skills require a marker on every criterion (one operator question before the freeze when a kind is unclear), and flows that `/goal --auto` provisions carry `[verify: judged]`.
+- `keryx flow freeze` warns `no verification kind on AC1, AC2` for unclassified criteria. On a terminal it asks `freeze without a verification kind on …? [Y/n]`: an empty answer or yes freezes, and only an explicit no cancels and leaves the flow unchanged. `--yes` or `KERYX_NONINTERACTIVE=1` skips the prompt; non-interactive runs always freeze. Nothing is asked when the freeze cannot happen. Both freeze cases append a journal line. A kind still gates nothing.
+- `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
+- `exec` and `invariant` verification markers take an optional sensitivity note, `[verify: exec \`<command>\` · sensitive: revert]` (an ASCII `;` also separates), with the values `revert`, `mutation` and `failure-scenario`; `judged` and `none` reject it. `keryx flow ac kinds` shows how many criteria carry it, `keryx flow ac confirm` warns (and still confirms) when a criterion carries the note and `--note` has no `evidence: <ref>` label (a non-empty reference up to the next `;`, not `n/a`, `na`, `none`, `-`, `tbd`, `todo`, `ref` or the `<ref>` template; surrounding punctuation is ignored), and `sync-status.md` gains a sensitivity share line with no threshold. The flow-init and flow-orchestrator skills ask for a failure-scenario criterion on behaviour with an external dependency or a failure path.
+
+### Shell
+
+- Fewer approval prompts in `trust` and `review-auto`. One table (`TRUST_ROUTINE_KEYRYX`) lists the read-only keryx commands (`help`, `<command> --help`, `harness list|status`, `agents external list --no-probe`, `review …`, `flow status|list|check|next`, `gdgraph …`, `ctx rg|read|diff`) and the `slate_note` and `slate_trail` tools that run with no prompt even after untrusted content. A command outside the table, or one that chains with `;`, pipes to an unlisted command, redirects outside the working tree or uses a subshell, still asks. Destructive, credential, publish-lease, hook-ask and human-confirmation calls are unchanged.
+- In `review-auto`, a refused call is remembered by its normalized fingerprint: the same call in any spelling is answered "refused earlier: choose another path" with no modal, until the shell restarts.
+- Every approval modal, the readline prompt and the Telegram relay carry one `why:` line from a closed set (`destructive`, `credentials`, `publish`, `hook-ask`, `untrusted-content`, `not-in-routine-list`, `mode-ask`).
+- A message queued while a turn runs shows its state and why it waits ("waits for the current turn", "waits for approval of: <call>"); `/queue` lists the same text, and one line explains `[Force]`.
+
+## [0.3.105] - 2026-10-11
+
+### Review
+
+- `keryx review retry-plan` counts a retry by progress, not by attempts: a result that covers a new slice does not spend the reviewer's attempt, two results in a row that cover nothing new (or six failed rounds) make it `not-run`. `--next-wave` hands out the next wave of only the uncovered slices; a stalled result halves the wave and re-cuts the open slices.
+- `keryx review slice --wave-bytes` (default 60000, never below `--max-bytes`) sets the size of a dispatch wave; `dispatch-check` enforces it instead of the slice ceiling. `ledger build` reports the waves left and the exact `retry-plan --next-wave` command.
+- The operator's own-quote override for a smaller reviewer set is unchanged.
+
+### Shell
+
+- In `--review-system review-auto`, an action the operator refused stays refused: the same call is declined without a new question, and an `ask_user` menu about permission is sent to the operator instead of taking its recommended option.
+
+## [0.3.104] - 2026-10-10
+
+### Review
+
+- `keryx review ledger build <input-dir> --package <review-dir>` writes the `research.json` that `review ingest --research` and `review complete` demand, from the saved reviewer results, `scope-files.json`, the slice manifest and the retry state. A reviewer is complete only when its result is finished and its payloads cover the slices its path gate requires; `NEEDS_CONTEXT`, `BLOCKED`, `INCOMPLETE`, missing slices and no result stay incomplete or `not-run`, each with the exact `retry-plan` command. Raw findings become obligations closed only by a matching canonical finding or a `--dispositions` entry with evidence and a reason. It prints READY or NOT READY with every gap, using the gate's own validators, and exits 1 when not ready.
+- `NEEDS_CONTEXT` (or an open `needs_context` list) is no longer treated as a finished scope: `review retry-plan` answers `context` once with the questions, then `not-run`.
+- The review-orchestrator skill and the completion gate's next step point at `ledger build` instead of a hand-written ledger.
+
+## [0.3.103] - 2026-10-10
+
+### Review
+
+- `keryx shell --review-system review-auto` (or a line such as "сделай автоматическое ревью" / "run an automatic review", or `KERYX_REVIEW_SYSTEM=review-auto`) makes a review run answer its own approval questions: reviewer spawns, including those that follow untrusted external content, and `ask_user` menus. The default `inherit` keeps today's behaviour, where the permission mode decides and `--trust` asks only occasionally. Destructive commands, credential access, publish leases, hook-tightened calls and every non-spawn call that follows untrusted content still ask the human. Only the operator's own top-level line can switch it on; a subagent's task text and non-operator turns cannot. Each automatic answer is recorded as an auto-approval.
+
+## [0.3.102] - 2026-10-10
+
+### Agent Runtime
+
+- `KERYX_PHASE_TRACE=<file>` appends one timestamped line per turn phase (model request start, tool dispatch, tool returned, result shown, output spilled, `spawn_subagent` backstop and watchdog stage changes). A live review hung with no archive trace and neither the 8 minute backstop nor the 12 minute watchdog answering; the trace says which phase a stuck turn was in. Unset, it costs nothing.
+- The call watchdog now answers the call before it aborts the inner signal, and a throwing abort listener can no longer keep it from answering.
+
+## [0.3.101] - 2026-10-10
+
+### Agent Runtime
+
+- A `spawn_subagent` call is bounded as a whole by a harness watchdog (12 minutes, `KERYX_SPAWN_CALL_WATCHDOG_MS`, 0 disables). The 0.3.100 backstop only covered the tool's own `invoke()`; a live review hung 90 minutes outside it, in the pre/post-tool hooks, the approval step or the rewind snapshot, and a parent turn archives nothing until every call of the batch answers. A stalled call now returns an error that names the stage it was stuck in, and the clock stands still while a human is deciding on an approval.
+- Esc on a `spawn_subagent` call that ignores the abort signal answers the call after a 10 second grace instead of leaving the session unrecoverable.
+
+## [0.3.100] - 2026-10-10
+
+### Review Process
+
+- `keryx review dispatch-check` works from an npm install. It looked for `reviewer-input.schema.json` (and the `$ref` targets of the review contracts) next to `dist/`, while the package carries them under `src/gdskills/`; a live review had to build its own copy of the CLI to get past "reviewer-input.schema.json is not in this install".
+- `KERYX_REVIEW_AUTO_ANSWER=1` now also answers the plan-confirmation menus that come before `keryx review start` opens a package; before, the run waited for a key press there.
+
+### Agent Runtime
+
+- `spawn_subagent` has a harness backstop on the whole call: the child deadline plus three minutes for setup, hooks and cleanup. A call that does not return by then is answered with a Timeout result and its child is aborted, so the parent turn goes on. A live review run had a retry batch hang for 85 minutes after its children had finished and saved their results.
+
+## [0.3.99] - 2026-10-10
+
+### Review Process
+
+- The shell's completion gate now also holds a package that `keryx review ingest --review-id` flipped to `mode: ingest` while it is still a draft from this session. Before, the flip made the gate see no open package and accept a stop with `review complete` still refusing.
+- `dispatch` errors for an incomplete reviewer and for required execution without evidence now say what to do (`keryx review retry-plan`; `executionRequired: false` with an `executionReason` for a source-only run) instead of only naming the failure.
+- `KERYX_REVIEW_AUTO_ANSWER=1` answers the shell's own `ask_user` menus with the recommended option while a managed review package is open, so an unattended live review cannot park on a menu before `review complete`. An irreversible question is never auto-answered.
+
+## [0.3.98] - 2026-10-10
+
+### Providers
+
+- The OpenAI Responses provider (and openai-codex on top of it) now has a deadline while waiting for response headers. The first-byte and idle deadlines covered only the body, so a server that accepted the connection and never answered held the request open indefinitely, and a subagent or the shell sat in "waiting" with no error. The wait ends with one retryable `unavailable` error after the first-byte limit; an operator abort still ends as `cancelled`.
+
+### Review Process
+
+- `keryx review tier` now merges the live Codex model list like the shell does. Without it the CLI saw only the stale curated stub, so tier resolution fell back to the session model for most reviewers.
+
+## [0.3.97] - 2026-10-10
+
+### Models
+
+- `spawn_subagent` and routing now see the live Codex model list (gpt-6.1-sol, gpt-6-luna) instead of the stale curated stub. The shell fetches `/models` once at start and merges it over the `openai-codex` entry; a failed fetch keeps the curated list.
+- Tier ranking knows the Codex codenames: built-in pins rank `gpt-6*-sol` deep and `gpt-6*-luna` light (other vendors' codenames stay unrankable). Models pinned with `keryx routing profile set <provider>/<model> --tier ...` override the built-ins, and a session-fallback tier now says why in the fleet log.
+- GPT-6 Astra is on a hard denylist: it is never a tier candidate and a routing assignment naming it counts as not connected.
+
+### Review Process
+
+- The `review-orchestrator` skill passes `model_tier` on every reviewer `spawn_subagent` call (verifier and simple reviewers `light`, normal `standard`, complex `deep`); an omitted tier ran the child on the session model.
+
+## [0.3.96] - 2026-10-10
+
+### Shell
+
+- The managed-review completion gate also holds the turn when the repeated-call guard ends it. Live run 10 stopped through the no-progress branch, which skipped the text-only gate, so a review with an open package ended with "resend the request". Both stop points now share one check (`holdReviewGate`), and the continuation says that a tool loop guard or an empty child result is not a reason to ask the operator to resend or continue: change the arguments, retry the failed pass on a smaller slice, keep going. Unattended runs and subagents are not held.
+
+## [0.3.94] - 2026-10-10
+
+### Shell
+
+- A managed review run in the shell is no longer finished by the model stopping. Once the session has loaded `review-orchestrator` (or run a `keryx review` command), a text-only finish is not accepted until `keryx review complete` has closed a package: with no package yet the harness says `review start` has not opened one, with an open package it injects the refusal reasons (missing artifacts, research ledger and dispatch errors). The continuation names the next required step, says Step 1 of review-orchestrator is a prose step with no command and that a refused `keryx review` command is not a blocker, prints a `[review-gate]` line in the pane and continues. It stops after 20 continues or three in a row that added no artifact, and reports the state. A blocked plan item no longer ends the gate (flow 421).
+- `plan_get`, `slate_trail` and `recall_step` are exempt from the repeated-call guard: three identical `plan_get` calls ended a live review run.
+
+### Review Process
+
+- The `review-orchestrator` skill says Step 1 (Build Review Context Pack) has no CLI command. The read-only check of what `review complete` would refuse on is now a function the shell calls (`reviewCompletionBlockers`).
+
+## [0.3.93] - 2026-10-10
+
+### Review Process
+
+- `keryx review --help` lists every flag `attach`, `start` and `ingest` accept, including `--research <ledger.json>`, `--review-id` and `--tokens-in/--tokens-out`. The usage block omitted `--research`, and a shell model that read it concluded the flag did not exist, never supplied the research ledger and was refused by `review complete` (flow 420). A test pins the help to the parser's flag list.
+
+## [0.3.92] - 2026-10-10
+
+### Shell
+
+- The shell's system instruction tells the model that a skill the user names ("use review-orchestrator") is loaded with `skill_load` as the first tool call, before any `keryx` command, and that a subcommand which only opens a draft (`keryx review start`) is one step of that workflow, not the workflow. A live review run had listed the skills, run `review start`, and reported the task finished without ever reading the skill (flow 420).
+
+## [0.3.91] - 2026-10-10
+
+### Review Process
+
+- `keryx review start --report <path>` opens the round when the report file or its directory does not exist yet (it used to fail with `ENOENT`, and a shell model that read that as a blocker stopped the review after 24 seconds). `ingest` still requires an existing report (flow 420).
+
+## [0.3.90] - 2026-10-09
+
+### Shell
+
+- `spawn_subagent` takes `save_result_to`: a project-relative path where the host writes the child's full final text. The text no longer exists only in a transcript that gets cut, so a review can hand the raw reviewer output to `keryx review complete`. Native children only; the path is confined to the project, symlink escapes, `.env*`, key files and `.git` are refused before the child starts, and an existing target must be a regular file.
+
+### Review Process
+
+- `review-orchestrator` on a shell host saves every reviewer result with `save_result_to`, builds `research.json` (ledger plus `dispatch` evidence) from those files, ingests it once with `--research`, and treats a refused `review complete` as a command to fix rather than a reason to stop (flow 420).
+
+## [0.3.89] - 2026-10-09
+
+### Review Process
+
+- On a shell host `review-orchestrator` publishes its checklist as the first action, so the shell keeps the turn going instead of ending it on a text reply; it also writes `keryx review scope` output to a file instead of printing hundreds of KB, takes the base from `origin/HEAD`, and treats a missing `.metaproject/data/review/` as a command to run (flow 420).
+
+## [0.3.88] - 2026-10-09
+
+### Shell
+
+- A turn can start up to 16 subagents at once and 32 in total (it was 6 at once: the 30-minute runtime pool divided by the 5-minute reservation, so reviewers 7 to 12 were refused with `budget inheritance denied`). The runtime pool is now 80 minutes, so a turn's worst-case spend is larger than before.
+- `spawn_subagent` takes `context_files`: project-relative files (review slices) the host copies into the child's task. A read-only child can no longer be left without the text it must review, and the dispatcher no longer retypes a 150 KB slice for every reviewer. Native children only; `.env*`, key files and `.git` are refused; the file text goes to the child's prompt, not to fleet events, hooks or the artifact hash.
+
+### Review Process
+
+- `review-orchestrator` passes slices through `context_files`, treats an `auto` or `trust` shell session as unattended for the start questions, and tells a reviewer to keep at least 40 rounds (flow 420).
+
+## [0.3.87] - 2026-10-09
+
+### Shell
+
+- In `trust` mode a turn may use 200 tool rounds (40 in `ask` and `auto`); the limit follows the mode at the start of the turn and `KERYX_AGENT_MAX_ROUNDS` still overrides it. Subagents get 40 rounds by default and up to 200, and a wave runs up to 10 of them at once instead of 3 (flow 418).
+- In `trust`, routine commands (`keryx review`, `keryx ctx rg|read|diff|run --`, read-only `flow`/`gdgraph`/`git`, `bun test`, chained with `cd`) no longer ask for approval after the turn read untrusted content; destructive, credential, SAC and publish commands still ask.
+- A turn with open plan items continues on its own in `trust` (at most 8 times in a row), and answers to questions the agent asks are kept in the session slate instead of being asked again.
+- A slash command typed while a turn runs is queued (`queued as qN`) and runs when the turn ends, instead of being dropped; `/new`, `/clear` and `/resume` are refused while busy.
+- Ctrl+C cancels the running turn; at an idle prompt a second Ctrl+C within 2 seconds exits, and `/exit` always does.
+
+### Review Process
+
+- `keryx review slice` cuts a large diff by domain into slices of at most 150 KB with a manifest, and leaves data ledgers, lockfiles, snapshots and generated files out, listing them as omissions. `keryx review dispatch-check` refuses a reviewer payload without a slice assignment before it is sent, and `keryx review retry-plan` retries an INCOMPLETE or BLOCKED reviewer once on a smaller slice, then reports it as not run. `review-orchestrator` has a shell-host section that uses them.
+- `keryx ctx run --raw -- <cmd>` passes the command output through unchanged, for machine artifacts; the read tool's error for a path outside the working directory names the cause and the alternative.
+
+## [0.3.86] - 2026-10-09
+
+### Review Process
+
+- `review-orchestrator`, `flow-orchestrator` and `job-orchestrator` open with a preflight: the agent that loads the skill is the orchestrator and runs inline in the main session; without the `Agent` tool or with the nesting depth spent, the output is the single line `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`. The `SUBAGENT-STOP` block is gone (flow 417).
+- A diff that only touches docs, lockfiles or generated files ends in `round not needed: <reason>` and launches no reviewer; `--all` forces a round. The default profile is read-only; `--fix` hands findings to `flow-orchestrator` or `task-implementer` and each re-review counts toward `REVIEW_ROUND_CAP`.
+- Reviewer waves are split by diff domain, at most 10 reviewers per wave for `--all`; `DEFAULT_MAX_PARALLEL_REVIEWERS` (4) is replaced by that rule. `STATUS: RATE_LIMITED` halves the wave at most twice, then `BLOCKED rate_limited`. `keryx review budget` gains `--full`.
+- The exported agent vocabulary can express the spawn tool, and an orchestrating agent keeps it. The managed block, `catalog.md` and `routing.md` say the orchestrators run in the main session.
+- Skill hygiene: dead schema reference, double step numbering and a raw `find` fixed; the `review-orchestrator` ceiling drops from 1712 to 1615 lines.
+
+## [0.3.85] - 2026-10-09
+
+Range: `v0.3.84..3c4d68f6` plus the release version and notes.
+
+### Review Process
+
+- Managed review completion and flow gates validate research and dispatch evidence, including scope census, unresolved research obligations and raw-to-canonical reconciliation. A closed round is revalidated rather than trusted solely by its closed status (PR #915, flow 405).
+- Review CLI, schemas and orchestrator instructions carry the research/dispatch contract; successful test fixtures provide explicitly synthetic evidence, while missing-ledger and post-close tampering remain negative cases.
+
+### Tests and Reliability
+
+- Add contract regressions and stabilize asynchronous fixture cleanup, injected clocks, review artifact paths, skill projections and bus heartbeat fixtures without weakening production review gates.
+- The final PR HEAD passed GitHub CI: AC8 full suite at 5000 ms with preload, 30,263 passed, 47 skipped, zero failed; core gate, 21,062 passed, 13 skipped, zero failed.
+
+### Known Limitation
+
+- **AC9 remains open.** These changes improve enforcement and evidence accounting; they do not establish improved first-round defect detection. Blind-review evaluations still missed substantial reference findings, and a live evaluation after updating is pending. This release does not claim review-completeness acceptance.
+
+## [0.3.84] - 2026-10-09
+
+Range: `v0.3.83..87dd2c8d` plus the release version and notes.
+
+### Features
+
+- `keryx skills import` and `keryx skills update` copy a package's `templates/` files next to its `SKILL.md`, under the same security gate and symlink containment as the rest of the import; `keryx skills remove` deletes them with the package. A package that ships a report overlay now carries it into the project, so a skill no longer reads the overlay from the source repository. The JSON result gains a `templates` field (PR #935, flow 416).
+
+## [0.3.83] - 2026-10-09
+
+Range: `v0.3.82..d31ee742` plus the release version and notes.
+
+### Documentation
+
+- The review-orchestrator report is posted as the body of one formal PR review (Request changes, Approve or Comment by the verdict) instead of a comment; a merged or closed PR still gets a plain comment. On the reviewer's own PR, where GitHub rejects Request changes and Approve, the review falls back to Comment (PR #933).
+- The report template gains overlay slots (`pre-verdict`, `after-verdict`, `verified-clean`, `how-run`) so a project overlay can extend the report without reordering base sections; finding links point at the reviewed head SHA and finding ids stay stable across rounds.
+- job-orchestrator wording follows: the published report is a PR review.
+
+## [0.3.82] - 2026-10-08
+
+Range: `v0.3.81..3743ee29` plus the release version and notes.
+
+### Bug Fixes
+
+- `keryx init` and `keryx update` create the core and data directories that `modules.sac` declares, so a fresh install no longer lists directories that do not exist (PR #931).
+- A wiki page's Version and changelog stay monotonic across `wiki restore --run` followed by `collect`, and a duplicated Reference heading is no longer produced.
+- Module wiki pages link only to modules that have a page: neighbours past the page limit are named as code paths, and relative links in README excerpts resolve against the README directory instead of the wiki folder.
+
+### Tests
+
+- Add regressions for the sac directories, page version/changelog order after restore and collect, and module and README links.
+
+## [0.3.81] - 2026-10-08
+
+Range: `v0.3.80..c87d3e58` plus the release version and notes.
+
+### Bug Fixes
+
+- `keryx sync --apply` no longer prunes wiki pages of modules that still exist: orphan pruning now checks every module in the graph instead of the top 500 by file count, and prunes nothing when the graph is unavailable or empty; the page of a module that shrank below the two-file page minimum is still pruned, since collect no longer refreshes it (PR #930).
+
+### Tests
+
+- Add regressions for a graph with more modules than the collect limit and for pruning without a graph.
+
+## [0.3.80] - 2026-10-08
+
+Range: `v0.3.79..3701acf515bce0f6ab27e9cd4962e4e41d61c35d` plus the release version and notes.
+
+### Bug Fixes
+
+- Recover the same interactive shell turn automatically after transient provider failures and broken streams, in readline and TUI (flow 414, PR #926).
+- Preserve completed tool results, approvals and budgets across bounded retries; display cancellable backoff instead of requiring a new user message.
+- Retry interrupted transport reads across provider adapters; keep permanent authentication and access failures, including generic HTTP 403, non-retryable.
+
+### Tests
+
+- Add recovery, stream-interruption, cancellation and session-lifecycle regressions; align source audits with recovery exception boundaries.
+
+
+## [0.3.79] - 2026-10-08
+
+### Routing and Test Reliability
+
+- Include the routing catalog and classifier source fixes from PR923, with Unicode scalar boundary handling for email PII detection and runtime-compatible regression expectations.
+- Bound asynchronous digest fixture repository setup and restore the test environment on setup failure (PR924), reducing intermittent beforeEach timeouts.
+- Combined release includes PR922, PR923 and PR924. Shell provider auto-recovery from flow 414 is not included.
+
+### Bug Fixes
+
+- Bound mounted completed TUI history to 256 unprotected top-level elements, destroying evicted views while preserving active streaming, focused elements and the on-disk session archive. Evicted history is no longer available by scrolling in the current TUI; a notice marks the trimmed history.
+- Restore composer focus after busy-agent Main/Side choices without stealing focus from newer menus or modals; preserve user scrolling during history eviction and destroy detached streaming containers.
+
+### Verification
+
+- Flow 413: 150 focused tests, TypeScript checks and an independent static review. Streaming PTY checks delivered all 120 input probes and verified Main/Side delivery and subsequent typing.
+- At 4,000 synthetic history messages, mounted UI nodes decreased from 22,093 to 795 and median input latency from 145.4 ms to 25.5 ms. Rare long stalls remain (730.7 ms maximum in the verification run); this is not a guarantee of stall-free input.
+
+## [0.3.78] - 2026-10-08
+
+Range: `v0.3.77..99385ae9f0c96c9fd875a8324fad97d174b3a6e8` (all changes since the last published release).
+
+### Summary
+
+- Routing assignments remain effective across `/model` changes; classifier selection enforces external policy and supports JEV/fallback with shared cancellation and deadline handling.
+- PII detection fixes separator, glue, Unicode, IBAN, phone and SSN misses, reduces false positives, and makes long-input scanning linear.
+- Generated digest report locators remain usable without relaxing redaction of surrounding status text.
+- Dependency security updates, deterministic regression fixtures, full-check diagnostics and bounded APT waits improve release reliability.
+
+### Bug Fixes
+
+- fix(ci): bound APT transport and installation waits (`ea7a480f4f1d`).
+- fix: route digest security imports through facade and render Esc test frames (`3481ea659899`).
+- fix(scheduler): preserve generated digest report locators (`c59edc7da9d3`).
+- fix(routing): enforce external policy before classifier selection (`e7e8586f74fe`).
+- fix(ci): stabilize routing flow regression gates (`290591c7b553`).
+- fix(security): close PII detector separator and glue misses (flow 412) (`09674039104d`).
+- fix(pii): satisfy noUncheckedIndexedAccess in the phone scanner (`a751b1de8ad8`).
+- fix(pii): remove unused countDigits left by the guard removal (`826bc71a3a64`).
+- fix(pii): report a phone before a list marker, stop the rescan inventing phones (`0996c33f3509`).
+- fix(routing): preserve assignments across model changes (flow 411) (`054fcd63d0b9`).
+- fix(pii): report an SSN joined to a hash, keep only UUID-internal suppression (`dd1258bba269`).
+- fix(pii): close the residual detector findings (iban, phone, ssn, unicode) (`78a69c94d365`).
+- fix(pii): close six round-4 findings in the ssn identifier guard (`6ab3b73b6b5a`).
+- fix(pii): avoid a control character in the ascii-only regex (`f6068a19dd36`).
+- fix(pii): fold the label window per code point and widen the invisible set (`37d19f1caafb`).
+- fix(pii): normalise the label window and close the remaining label gaps (`3aa5b61cde2e`).
+- fix(pii): suppress ssn only next to 32/40/64-char hashes, widen the label veto (`bf0ce9dce65a`).
+- fix(security): veto pii.ssn suppression on a trailing label, drop dead branches (`1280d3b29d19`).
+- fix(security): drop unused ALNUM_CHAR constant in pii.ssn guard (`9cb8ddc365bd`).
+- fix(security): tighten pii.ssn identifier-fragment guard (`7078e6c9d991`).
+- fix(security): give pii.ssn the phone rule's identifier-fragment guard (flow 261) (`07b86da14c2c`).
+
+### Documentation
+
+- docs(flow411): publish final 212f55f gates and review evidence (`00ab6425f3bb`).
+- docs(flow411): record draft PR and full CI blockers (`3e722231bc65`).
+- docs(flow): record poll 99 scope decisions for flows 409 and 410 (`3af9948daa9a`).
+
+### Tests
+
+- test(core): pin added security facade exports (`212f55f14707`).
+- test(pii): cover list-marker phones, rescan false positives and span coalescing (`ad89dcb671c3`).
+- test(intake): pin the clock in setupIntakeEnv so cards do not expire with the date (`0fd5e4e52183`).
+- test(pii): cover the residual findings and make the linear-time gate robust (`d6305b706ed7`).
+- test(pii): make the ssn truncation guard test able to fail (`fefa7eae76ed`).
+- test(security): pin SSN label window bounds (flow 261) (`19321fa3b6e0`).
+
+### Maintenance
+
+- chore(flow): close tasks of flow 412 (`632126cb1cfa`).
+- chore(flow): confirm AC1-AC5 of flow 412 (`568824dc89d9`).
+- chore(flow): record PR 921 on flow 412 (`9fa6807f5e7b`).
+- chore(flow): reword AC6 of flow 412 for the UUID exception, confirm it (`cc7a24441e01`).
+- chore(flow): rewrite AC2-AC4 of flow 410 and confirm all eight (`82bcc4dc9be5`).
+- chore(flow): carry round 6 deferred findings forward with decided-by (`a84cd891e386`).
+- chore(flow): open flow 412, PII detector separator and glue misses (`bba463a498be`).
+- chore(flow): record review round 6 for flow 410 (`2b51a6c4ce4f`).
+- chore(deps): bump @modelcontextprotocol/sdk and sharp to clear audit advisories (`8d60227e0a2d`).
+- chore(flow-410): round 5 review of the PII detection code at 5d7fe70b, verifier verdict for sec-F-003 (`69a2b1a4f9da`).
+- chore(flow): record r3-sec-F-003 as fixed by the linear-time detectPii PRs (`5d7fe70bf558`).
+- chore(deps): bump proxy-addr to 2.0.8 for GHSA-jqcg-44mw-7w3h (`cf2ff22cbb75`).
+- chore(flow): rewrite AC5 of flow 410 to cover a linear phone rule (operator, poll 101) (`dd4c5f6f72b1`).
+- chore(flow): record poll 99 accepted residuals for flow 410 findings (`c9de1f8a8dee`).
+- chore(flow): record round 4 and the post-fix verifier pass for flow 410 (`72fc801ec703`).
+- chore(flow): record the three real review rounds for flow 410 (`3ca24287aead`).
+- chore(flow): fix the verifier label in the flow 261 journal note (`de4600416f30`).
+- chore(flow): mark flow 261 review rounds as reconstructed, point to flow 410 (`93fc0d383b60`).
+- chore(flow): open flow 410 (second review of the ssn guard), add reviewer findings to flow 409 (`e80b6e597751`).
+- chore(flow): close flow 261 (pii.ssn identifier-fragment guard) (`77e369d7a394`).
+- chore(flow): open flows 408 and 409, keep blocked test flow 407 (`1441b9e0c177`).
+- chore(flow): record flow 261 tasks done (`9bb2e504b85b`).
+
+### Refactoring
+
+- refactor(pii): drop the unreachable SSN identifier guard and its label machinery (`dcfba9f98b39`).
+
+### CI and Release
+
+- ci: run full gate diagnostic on isolated routing fix branch (`071702e416a7`).
+- ci: add no-publish full gate diagnostic and cwd regression tests (`35bdaa37690f`).
+
+### Performance
+
+- perf(pii): make the phone rule linear on very long inputs (`595fd9a508cb`).
+- perf(pii): make detectPii linear on very long inputs (`4e78bd9bb727`).
+
+Coverage: 79 commits reviewed; 57 individual changes listed; 22 merge commits deliberately omitted to avoid double-counting.
+
+### Release preparation
+
+- Bump package version to 0.3.78 and bound APT waits in the release workflow; existing publication gates remain mandatory.
+
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 

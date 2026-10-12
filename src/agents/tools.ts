@@ -2,7 +2,7 @@
 // per-target mapping from that vocabulary onto each host harness's own tool
 // names (W2 §Design, `src/agents/tools.ts` in plan.md's module layout).
 //
-// The vocabulary is exactly the ten interactive tools keryx-shell's builtin
+// The vocabulary is exactly the eleven interactive tools keryx-shell's builtin
 // registry defines under `src/harness/tool/builtin/` — never re-derived, and
 // checked against the real `name: "..."` literals by `tools.test.ts` rather
 // than trusted by inspection:
@@ -12,6 +12,7 @@
 //   shell_exec                         (shell-exec-tool.ts)
 //   web_fetch                          (web-fetch-tool.ts)
 //   web_search                         (web-search-tool.ts)
+//   spawn_subagent                     (spawn-subagent-tool.ts)
 //
 // A tool with no mapping entry for a target is DROPPED from that target's
 // export and reported in `droppedTools` — never silently. codex/kiro ship
@@ -30,6 +31,7 @@ export const AGENT_TOOL_VOCABULARY = [
   "shell_exec",
   "web_fetch",
   "web_search",
+  "spawn_subagent",
 ] as const;
 
 export type AgentToolName = (typeof AGENT_TOOL_VOCABULARY)[number];
@@ -125,4 +127,33 @@ export function mapToolsForTarget(tools: readonly string[], target: HostToolTarg
     }
   }
   return { mappedTools: [...mapped], droppedTools: dropped };
+}
+
+/** The tool an orchestrating agent uses to start a sub-agent. No host harness exposes an analogue it can be mapped onto, so it drops (reported) everywhere but keryx-shell. */
+export const SPAWN_TOOL: AgentToolName = "spawn_subagent";
+
+/** Agents that coordinate other agents. The main agent runs them inline; an exported agent file for one must keep SPAWN_TOOL in `tools`. */
+export const ORCHESTRATOR_AGENT_NAMES = ["review-orchestrator", "flow-orchestrator", "job-orchestrator"] as const;
+
+export function isOrchestratorAgent(name: string): boolean {
+  return (ORCHESTRATOR_AGENT_NAMES as readonly string[]).includes(name);
+}
+
+/** Targets where an agent that is itself a sub-agent may spawn another. Claude Code, OpenCode, Codex and Kiro sub-agents cannot. */
+export const HOSTS_WITH_NESTED_SPAWN: readonly (HostToolTarget | "keryx-shell")[] = ["keryx-shell"];
+
+/** Violations of the orchestrator contract for `agent` exported to `host`; empty when it holds. */
+export function orchestratorToolProblems(
+  agent: { readonly name: string; readonly tools: readonly string[] },
+  host: HostToolTarget | "keryx-shell" = "keryx-shell",
+): string[] {
+  const problems: string[] = [];
+  const spawns = agent.tools.includes(SPAWN_TOOL);
+  if (isOrchestratorAgent(agent.name) && !spawns) {
+    problems.push(`orchestrator ${agent.name} must keep ${SPAWN_TOOL} in tools`);
+  }
+  if (spawns && !HOSTS_WITH_NESTED_SPAWN.includes(host)) {
+    problems.push(`${agent.name} names ${SPAWN_TOOL} but host ${host} does not support nested spawn`);
+  }
+  return problems;
 }

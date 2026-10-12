@@ -1,0 +1,748 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "417",
+  "slug": "review-orchestrator-inline",
+  "title": "review-orchestrator runs inline in the main session and never half-runs",
+  "status": "implemented",
+  "createdAt": "2026-10-09T14:29:08.833Z",
+  "updatedAt": "2026-10-12T04:53:23.940Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-09T16:04:19.818Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; src/gdskills/review-orchestrator-preflight.test.ts pins inline statement + 3-point preflight in first 60 lines, before checklist and Step 5"
+    },
+    "AC2": {
+      "at": "2026-10-09T16:04:20.238Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; test pins the single BLOCKED line; mutation replacing it fails review-orchestrator-preflight.test.ts"
+    },
+    "AC3": {
+      "at": "2026-10-09T16:04:20.661Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; AC3 test in src/gdskills; mutation of the preflight line in flow- and job-orchestrator each fails 2 tests (AC3 preflight, AC14 mirror), run 2026-10-09 on merged main"
+    },
+    "AC4": {
+      "at": "2026-10-09T16:04:21.106Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; src/agents/tools.ts SPAWN_TOOL/orchestratorToolProblems; mutation adding claude to HOSTS_WITH_NESTED_SPAWN fails tools.test.ts"
+    },
+    "AC5": {
+      "at": "2026-10-09T16:04:21.318Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; spawn recipe pinned element by element in review-orchestrator-preflight.test.ts"
+    },
+    "AC6": {
+      "at": "2026-10-09T16:04:21.506Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; src/review/caps.ts domain split + MAX_REVIEWERS_PER_WAVE_FULL=10; caps.test.ts covers 3/14/20; mutation 10->20 fails 5 tests"
+    },
+    "AC7": {
+      "at": "2026-10-09T16:04:21.696Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; src/review/round-need.ts + round-need.test.ts docs-only/code fixtures, --all forces a round, fails open"
+    },
+    "AC8": {
+      "at": "2026-10-09T16:04:21.889Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; default read-only, --fix profile; test asserts skill ceiling equals REVIEW_ROUND_CAP (5)"
+    },
+    "AC9": {
+      "at": "2026-10-09T16:04:22.082Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; nextAfterRateLimit/MAX_RATE_HALVINGS in caps.ts; caps.test.ts for 1 and 3 limits; mutation 2->5 fails 2 tests"
+    },
+    "AC10": {
+      "at": "2026-10-09T16:04:22.284Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; unattended-defaults test fails for a prompt without a default"
+    },
+    "AC11": {
+      "at": "2026-10-09T16:04:22.469Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; schema/file reference test; skill-length ceiling lowered not raised"
+    },
+    "AC12": {
+      "at": "2026-10-09T16:04:22.654Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; Keryx side done; facade text owner ~/.claude/vantage-source named in the flow journal"
+    },
+    "AC13": {
+      "at": "2026-10-09T16:04:22.844Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; catalog, routing and managed-block text say orchestrators run in the main session; test covers regeneration"
+    },
+    "AC14": {
+      "at": "2026-10-09T16:04:23.036Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; mutation table in journal; flow-/job-orchestrator mutations killed on merged main; review-first-round-completeness passes"
+    },
+    "AC15": {
+      "at": "2026-10-09T16:04:23.230Z",
+      "note": "PR #939 merged 628d6e5e, CI 19/19; guide, cli-reference, README, CHANGELOG 0.3.86 updated; mkdocs build --strict passed in CI"
+    },
+    "AC16": {
+      "at": "2026-10-12T04:53:18.777Z",
+      "note": "Shell half met 2026-10-12: autonomous review of PR 7840 on 0.3.110 reached review complete (418 AC12). Claude half 2026-10-09: inline in the main session 17m58s, 5 Majors; subagent without Agent ends BLOCKED. Operator accepted 198741; depth parity tracked in a separate flow."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/939"
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "после последнего обновления получилось так, что у меня два агента не смогли нормально запустить ревью оркестратора",
+    "source": "helyx 194482, 2026-10-09T13:03Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered in audits (orchestrator-audit.md, review-orchestrator-skill-audit.md)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T5",
+      "title": "Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T6",
+      "title": "Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T7",
+      "title": "Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T8",
+      "title": "Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
+    },
+    {
+      "id": "T9",
+      "title": "Mutation proof, docs, CHANGELOG (AC14 AC15)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "mutation proof in journal; docs, README, CHANGELOG written"
+    },
+    {
+      "id": "T10",
+      "title": "Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-09T19:40:52.077Z",
+            "outcome": "blocked",
+            "detail": "Live run 2026-10-09 on Presight-AI/vantage-frontend PR 7435. Claude half done: skill ran inline in the main session, 17m58s, 2 waves x 10 reviewers, 5 Majors. keryx shell half (openai-codex/gpt-6-luna) NOT completed after 4 Wave A attempts, ~2h20m, 4.3M input tokens, 0 findings: shell stops its turn with open plan items, the executors hit their round limit reading a 1.65 MB diff, scope-B and schemas, and return INCOMPLETE/BLOCKED (shell correctly counted none). Operator decision 2026-10-09 (poll 125): stop the shell half and record AC16 as not met. Outside flow 417 (Claude skill). 21 shell findings and 6 Telegram findings in ~/notes/flow-417-ac16-findings.md; shell and Telegram flows to be opened separately."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Live smoke: Claude half 2026-10-09, shell half 2026-10-12 PR 7840 on 0.3.110 (complete, 3 major). Operator accepted 198741."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-09T14:29:08.833Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-09T14:38:20.854Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-09T14:38:21.055Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-09T14:38:51.111Z",
+      "event": "task-added",
+      "detail": "T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)"
+    },
+    {
+      "at": "2026-10-09T14:38:51.540Z",
+      "event": "task-added",
+      "detail": "T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)"
+    },
+    {
+      "at": "2026-10-09T14:38:51.913Z",
+      "event": "task-added",
+      "detail": "T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)"
+    },
+    {
+      "at": "2026-10-09T14:38:52.345Z",
+      "event": "task-added",
+      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
+    },
+    {
+      "at": "2026-10-09T14:38:52.760Z",
+      "event": "task-added",
+      "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
+    },
+    {
+      "at": "2026-10-09T14:38:53.201Z",
+      "event": "task-added",
+      "detail": "T10: Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)"
+    },
+    {
+      "at": "2026-10-09T14:38:53.631Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T1, T2, T3, T4 (was empty) — docs and mutation proof need the final behaviour"
+    },
+    {
+      "at": "2026-10-09T14:38:54.042Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T5 (was empty) — smoke runs on the finished change"
+    },
+    {
+      "at": "2026-10-09T14:40:21.845Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T1 (was T1, T2, T3, T4) — correct numbering: default scaffold tasks T1-T4 exist"
+    },
+    {
+      "at": "2026-10-09T14:40:22.048Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T1 (was empty) — after context"
+    },
+    {
+      "at": "2026-10-09T14:40:22.253Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T1 (was empty) — after context"
+    },
+    {
+      "at": "2026-10-09T14:40:22.456Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T5, T6, T7, T8 (was empty) — docs and mutation proof need final behaviour"
+    },
+    {
+      "at": "2026-10-09T14:40:22.664Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T9 (was empty) — smoke runs on the finished change"
+    },
+    {
+      "at": "2026-10-09T14:40:22.868Z",
+      "event": "task-depends-set",
+      "detail": "T2: dependsOn T1 (was empty) — scaffold"
+    },
+    {
+      "at": "2026-10-09T14:40:29.905Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-09T15:00:15.648Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the ceiling of 3, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`. After the third round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.\" -> \"The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the round ceiling, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts` (5 today; the earlier text said 3 by mistake). After the last round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.\" (AC8 named 3 but the code constant REVIEW_ROUND_CAP is 5 (flow 391); the criterion's real content is equality with the constant. Agent error in the original text, found by the implementing fork. No confirmations existed yet.)"
+    },
+    {
+      "at": "2026-10-09T15:08:01.161Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-09T15:08:01.571Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-09T15:08:01.938Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-09T15:08:02.302Z",
+      "event": "task-done",
+      "detail": "T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)"
+    },
+    {
+      "at": "2026-10-09T15:08:02.673Z",
+      "event": "task-done",
+      "detail": "T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)"
+    },
+    {
+      "at": "2026-10-09T15:08:03.048Z",
+      "event": "task-done",
+      "detail": "T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)"
+    },
+    {
+      "at": "2026-10-09T15:08:03.417Z",
+      "event": "task-done",
+      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
+    },
+    {
+      "at": "2026-10-09T15:08:56.912Z",
+      "event": "task-done",
+      "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
+    },
+    {
+      "at": "2026-10-09T16:04:19.819Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #939 merged 628d6e5e, CI 19/19; src/gdskills/review-orchestrator-preflight.test.ts pins inline statement + 3-point preflight in first 60 lines, before checklist and Step 5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:20.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: PR #939 merged 628d6e5e, CI 19/19; test pins the single BLOCKED line; mutation replacing it fails review-orchestrator-preflight.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:20.661Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PR #939 merged 628d6e5e, CI 19/19; AC3 test in src/gdskills; mutation of the preflight line in flow- and job-orchestrator each fails 2 tests (AC3 preflight, AC14 mirror), run 2026-10-09 on merged main (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:21.106Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: PR #939 merged 628d6e5e, CI 19/19; src/agents/tools.ts SPAWN_TOOL/orchestratorToolProblems; mutation adding claude to HOSTS_WITH_NESTED_SPAWN fails tools.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:21.318Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #939 merged 628d6e5e, CI 19/19; spawn recipe pinned element by element in review-orchestrator-preflight.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:21.506Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: PR #939 merged 628d6e5e, CI 19/19; src/review/caps.ts domain split + MAX_REVIEWERS_PER_WAVE_FULL=10; caps.test.ts covers 3/14/20; mutation 10->20 fails 5 tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:21.696Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: PR #939 merged 628d6e5e, CI 19/19; src/review/round-need.ts + round-need.test.ts docs-only/code fixtures, --all forces a round, fails open (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:21.889Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: PR #939 merged 628d6e5e, CI 19/19; default read-only, --fix profile; test asserts skill ceiling equals REVIEW_ROUND_CAP (5) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:22.082Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: PR #939 merged 628d6e5e, CI 19/19; nextAfterRateLimit/MAX_RATE_HALVINGS in caps.ts; caps.test.ts for 1 and 3 limits; mutation 2->5 fails 2 tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:22.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: PR #939 merged 628d6e5e, CI 19/19; unattended-defaults test fails for a prompt without a default (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:22.469Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: PR #939 merged 628d6e5e, CI 19/19; schema/file reference test; skill-length ceiling lowered not raised (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:22.655Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: PR #939 merged 628d6e5e, CI 19/19; Keryx side done; facade text owner ~/.claude/vantage-source named in the flow journal (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:22.844Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: PR #939 merged 628d6e5e, CI 19/19; catalog, routing and managed-block text say orchestrators run in the main session; test covers regeneration (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:23.037Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: PR #939 merged 628d6e5e, CI 19/19; mutation table in journal; flow-/job-orchestrator mutations killed on merged main; review-first-round-completeness passes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T16:04:23.230Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: PR #939 merged 628d6e5e, CI 19/19; guide, cli-reference, README, CHANGELOG 0.3.86 updated; mkdocs build --strict passed in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T19:40:52.077Z",
+      "event": "task-attempt",
+      "detail": "T10: blocked (attempt 1) — Live run 2026-10-09 on Presight-AI/vantage-frontend PR 7435. Claude half done: skill ran inline in the main session, 17m58s, 2 waves x 10 reviewers, 5 Majors. keryx shell half (openai-codex/gpt-6-luna) NOT completed after 4 Wave A attempts, ~2h20m, 4.3M input tokens, 0 findings: shell stops its turn with open plan items, the executors hit their round limit reading a 1.65 MB diff, scope-B and schemas, and return INCOMPLETE/BLOCKED (shell correctly counted none). Operator decision 2026-10-09 (poll 125): stop the shell half and record AC16 as not met. Outside flow 417 (Claude skill). 21 shell findings and 6 Telegram findings in ~/notes/flow-417-ac16-findings.md; shell and Telegram flows to be opened separately."
+    },
+    {
+      "at": "2026-10-12T04:53:18.777Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: Shell half met 2026-10-12: autonomous review of PR 7840 on 0.3.110 reached review complete (418 AC12). Claude half 2026-10-09: inline in the main session 17m58s, 5 Majors; subagent without Agent ends BLOCKED. Operator accepted 198741; depth parity tracked in a separate flow. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-12T04:53:21.846Z",
+      "event": "task-done",
+      "detail": "T10: Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)"
+    },
+    {
+      "at": "2026-10-12T04:53:23.940Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/939 (warning: PR is not a draft) (base: main)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    },
+    "AC13": {
+      "kind": "unclassified"
+    },
+    "AC14": {
+      "kind": "unclassified"
+    },
+    "AC15": {
+      "kind": "unclassified"
+    },
+    "AC16": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-09T16:04:19.818Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:20.238Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:20.661Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:21.106Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:21.318Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:21.506Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:21.696Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:21.889Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:22.082Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:22.284Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:22.469Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:22.654Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:22.844Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:23.036Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-09T16:04:23.230Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    },
+    {
+      "at": "2026-10-12T04:53:18.777Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8"
+    }
+  ],
+  "baseBranch": "main"
+}

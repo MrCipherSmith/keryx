@@ -128,12 +128,12 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
         return;
       }
       if (bridge?.active !== true) return;
-      // The close is asynchronous (it deregisters, which deletes the topic): say it is
+      // The close is asynchronous (it deregisters, which archives the topic): say it is
       // being turned off now, and that the topic is gone only once it really is. `disable`
       // takes the queued Telegram lines out before its first await, so none is left behind.
       const closing = bridge.disable();
-      deps.say("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
-      void closing.then(() => deps.say("◇ remote control off: the topic is deleted.\n"));
+      deps.say("◇ remote control is turning off: the session changed, and its Telegram topic is being archived. Turn it on again with /remote-control <name>.\n");
+      void closing.then(() => deps.say("◇ remote control off: the topic is archived.\n"));
     },
 
     dropQueuedTelegramLines() {
@@ -169,7 +169,7 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
 
     wrapOnToolCall(base) {
       return (...args) => {
-        deps.getBridge()?.toolCall();
+        deps.getBridge()?.toolCall(typeof args[0] === "string" ? args[0] : undefined);
         base?.(...args);
       };
     },

@@ -308,8 +308,11 @@ describe("the intake modules reach the world only through their seams", () => {
       expect(stamp).toBeGreaterThanOrEqual(before);
       expect(stamp).toBeLessThanOrEqual(Date.now());
     } finally {
-      await wall.teardown();
-      await injected.teardown();
+      try {
+        await wall.teardown();
+      } finally {
+        await injected.teardown();
+      }
     }
   });
 });

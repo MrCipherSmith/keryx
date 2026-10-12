@@ -41,7 +41,7 @@ describe("review-flow (AC9)", () => {
   test("with no clone of the repository nothing is created and the card may be pressed again", async () => {
     const card = await seedCard(env.root, { kind: "review", repo: OTHER_REPO });
     const fakes = makeFakes();
-    const result = await decideIntakeCard(env.root, card.id, "review-flow", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "review-flow", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(result.ok).toBe(false);
     expect(fakes.flows.flows).toEqual([]);
     expect((await readIntakeCardView(env.root, card.id))!.state).toBe("failed");
@@ -50,7 +50,7 @@ describe("review-flow (AC9)", () => {
   test("«Пропустить» on the same kind creates nothing", async () => {
     const card = await seedCard(env.root, { kind: "review" });
     const fakes = makeFakes();
-    await decideIntakeCard(env.root, card.id, "skip", { decidedBy: "1", deps: fakes.deps });
+    await decideIntakeCard(env.root, card.id, "skip", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(fakes.flows.initCalls).toEqual([]);
   });
 });

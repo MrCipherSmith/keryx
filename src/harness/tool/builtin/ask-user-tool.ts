@@ -29,6 +29,22 @@ export interface AskUserRequest {
   irreversible?: boolean;
   /** Which surface asked (journal `source`), set by the host code that asks, never by the model. */
   source?: string;
+  /**
+   * Flow 425: the question's kind and the structured facts about the recommended option, for the review arbiter. It is
+   * the only part of a question the arbiter reads; everything else in the request (question, labels, descriptions) is
+   * free text and never reaches the arbiter's prompt. Unvalidated here: the arbiter validates it.
+   */
+  policy?: AskUserPolicy;
+  /**
+   * Set by the agent loop, never by the model: untrusted external content was read earlier in this turn, so the
+   * question may have been shaped by it and no automatic answerer may decide it.
+   */
+  untrustedContent?: boolean;
+}
+
+export interface AskUserPolicy {
+  kind: string;
+  facts: Record<string, unknown>;
 }
 
 /**
@@ -52,7 +68,17 @@ export const ASK_USER_DESCRIPTION =
   "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean }. " +
   "Returns the chosen option id (or freeform text if allow_freeform). " +
   "irreversible: true means the question decides something that cannot be undone (release, publish, deploy, delete, push, merge to a shared branch, drop, force, reset, tag a version). " +
-  "action names that irreversible action (e.g. action: \"release\").";
+  "action names that irreversible action (e.g. action: \"release\"). " +
+  "policy: { kind, facts } optionally tags a review question with its kind (scope, budget, option_choice, partial_coverage, smaller_slice, slice_order) " +
+  "and numeric or boolean facts about the recommended option; only the automatic answerer reads it, as numbers and flags, never as text.";
+
+function policyOf(raw: unknown): AskUserPolicy | undefined {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const { kind, facts } = raw as Record<string, unknown>;
+  if (typeof kind !== "string" || kind.trim().length === 0 || kind.length > 64) return undefined;
+  if (facts === null || typeof facts !== "object" || Array.isArray(facts)) return undefined;
+  return { kind: kind.trim(), facts: facts as Record<string, unknown> };
+}
 
 /**
  * Build the `ask_user` tool. `ask` is injected by the host (TUI wires the
@@ -87,13 +113,22 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
           allow_freeform: { type: "boolean" },
           action: { type: "string" },
           irreversible: { type: "boolean" },
+          policy: {
+            type: "object",
+            properties: {
+              kind: { type: "string" },
+              facts: { type: "object" },
+            },
+            required: ["kind", "facts"],
+            additionalProperties: false,
+          },
         },
         required: ["question", "options"],
         additionalProperties: false,
       },
       risk: "read",
     },
-    invoke: async (input) => {
+    invoke: async (input, ctx) => {
       const question = typeof input.question === "string" ? input.question.trim() : "";
       if (question.length === 0) {
         return { output: "ask_user requires a non-empty 'question'", isError: true };
@@ -138,6 +173,8 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
           ...(input.allow_freeform === true ? { allowFreeform: true } : {}),
           ...(typeof input.action === "string" && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
           ...(input.irreversible === true ? { irreversible: true } : {}),
+          ...(policyOf(input.policy) === undefined ? {} : { policy: policyOf(input.policy) as AskUserPolicy }),
+          ...(ctx?.untrustedContentSeen === true ? { untrustedContent: true } : {}),
         });
         if (typeof given !== "string" && given.kind === "own") {
           const text = given.text.trim();

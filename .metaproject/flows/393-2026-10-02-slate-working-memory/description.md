@@ -1,7 +1,7 @@
 # Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools
 
 Status: draft (flow-init skill formalizes this)
-Source: user description (Aleksandr Tsaitler, 2026-10-02), follow-up to flow 394 (shell token economy; created as 387, renumbered twice after id collisions)
+Source: user description (MrCipherSmith, 2026-10-02), follow-up to flow 394 (shell token economy; created as 387, renumbered twice after id collisions)
 
 ## Problem
 
@@ -23,7 +23,7 @@ search over the session archive). The request size stops growing with session le
 
 ## Outcome criteria
 
-Effect requested by Aleksandr Tsaitler (owner, outcome author: human):
+Effect requested by MrCipherSmith (owner, outcome author: human):
 
 - The model works via slate — it knows where it is, what it did (references) and where to look for what
   it will do, and has a few tools to request context precisely — so keryx spends fewer tokens than flow

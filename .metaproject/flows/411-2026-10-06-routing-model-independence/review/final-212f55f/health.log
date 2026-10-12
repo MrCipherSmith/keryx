@@ -1,0 +1,15 @@
+$ bun ./src/cli.ts health run --changed --source "eslint,typescript"
+# Code Health: PASS
+
+scope: changed:HEAD
+project score: 97 (trend: improved)
+findings: 0
+
+- OPTIONAL: tests source skipped
+- OPTIONAL: dependencyAudit source skipped
+- OPTIONAL: sonarqube source skipped
+- PASS: no gate conditions triggered
+- COVERAGE: partial — optional source(s) produced no result: tests, dependencyAudit
+
+report: .metaproject/data/health/artifacts/latest.md
+json: .metaproject/data/health/artifacts/latest.json

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "logic-F-001",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Label gaps: `SS #`, `S S N`, `SS number`, `SS no`, `SS-Nr`, `Sozialversicherung`, `Sozialversicherungsnr.`, `SV-Nummer`, `Versicherungsnummer`, `N.S.S.`, `Soc.Sec.#` and fullwidth forms do not veto suppression.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): label gaps closed"
+    }
+  },
+  {
+    "id": "logic-F-002",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A label that straddles the 64-character window edge does not veto.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): label straddling the 64-char window edge now vetoes"
+    }
+  },
+  {
+    "id": "logic-F-003",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The SSN `\\b` boundary does not match underscore-glued, letter-glued or fullwidth-digit SSNs. Pre-existing, not introduced by this PR.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against PR #909 at head bf0ce9dce as pre-existing; tracked in flow 409.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-003",
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "pre-existing, not introduced by PR #909; deferred to flow 409"
+    }
+  },
+  {
+    "id": "logic-F-004",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The `nss` label over-matches. The reviewer classed this as safe: the only effect is a false redaction.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-004",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "reviewer classed it safe (false redaction only); not changed"
+    }
+  },
+  {
+    "id": "logic-F-005",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Test gaps: two mutants survived, a scan limit changed from 192 to 100 and `s\\.\\s*s\\.\\s*n` changed to `s\\.s\\.n`.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Mutation by the reviewer: both mutants left the tests passing. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`, the same class as the survived-mutant finding in round A.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#logic-F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): tests added so both surviving mutants (scan limit 192 to 100; s\\\\.\\\\s*s\\\\.\\\\s*n to s\\\\.s\\\\.n) are caught"
+    }
+  },
+  {
+    "id": "sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label veto is cheap to defeat: zero-width and soft-hyphen characters, fullwidth forms, `S-S-N` and `numéro de sécu` all get past it.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against PR #909 at head bf0ce9dce.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#sec-F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3aa5b61c (PR #909): zero-width and soft-hyphen characters, fullwidth forms, S-S-N and numéro de sécu now veto"
+    }
+  },
+  {
+    "id": "sec-F-002",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "The SSN `\\b` boundary issue, pre-existing and not introduced by this PR.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against PR #909 at head bf0ce9dce as pre-existing; tracked in flow 409.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#sec-F-002",
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "pre-existing, not introduced by PR #909; deferred to flow 409"
+    }
+  },
+  {
+    "id": "sec-F-003",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Quadratic time on large inputs, pre-existing and identical to the baseline.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against PR #909 at head bf0ce9dce as pre-existing, same as the baseline.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909#sec-F-003",
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "pre-existing, identical to the baseline, not introduced by PR #909; no flow named for it in the information given"
+    }
+  }
+]

@@ -1,5 +1,5 @@
 // Flow 402: the part 1 materials for the article stay what they claim to be. The directory holds exactly
-// the six files, the protocol is byte-equal to version 2, the recommendation export
+// the eight files, the protocol is byte-equal to version 2, the recommendation export
 // carries no words, and the directory names none of the terms kept out of it.
 
 import { describe, expect, it } from "bun:test";
@@ -19,10 +19,13 @@ const allFiles = (dir = ""): string[] =>
 const FILES = [
   "README.md",
   "contribution-log.md",
+  "journal-merge.md",
   "decisions-export-2026-10-04.jsonl",
   "part1-counts.json",
   "part1-counts.py",
   "protocol-part2.md",
+  "retro-verify-tags-410-419.json",
+  "retro-verify-tags-410-419.md",
 ];
 
 // Flow 404: the three files `keryx research sync` writes next to them. They may be absent (before the first
@@ -47,7 +50,7 @@ const FORBIDDEN_KEYS = ["question", "options", "reason", "ownAnswer", "answer", 
 const FORBIDDEN_TERMS = ["frontend", "backend", "board", "process-metrics"];
 
 describe("the part 1 materials directory (flow 402)", () => {
-  it("holds the six files and nothing else, apart from the files the sync writes and the two subdirectories", () => {
+  it("holds the material files and nothing else, apart from the files the sync writes and the two subdirectories", () => {
     const names = readdirSync(DIR).filter((name) => !SYNC_FILES.includes(name));
     expect(names.filter((name) => !isDir(name)).sort()).toEqual([...FILES].sort());
     expect(names.filter(isDir).every((name) => SUBDIRS.includes(name))).toBe(true);

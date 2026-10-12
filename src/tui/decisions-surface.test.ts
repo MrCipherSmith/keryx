@@ -516,7 +516,11 @@ otuiTest("/decisions arms and a click on the arms row open the arm modal; /decis
   const state: { n: number; report: unknown } = { n: 2, report: ARM_REPORT };
   const { sidebar } = mountArms(h, state);
   try {
+    // Renderer settling does not await the journal reads in the initial refresh.
+    // Wait for the sidebar state before querying and clicking its arms row.
+    await sidebar.refresh();
     await settle(h);
+    expect(sidebar.armsProjection().visible).toBe(true);
     expect(sidebar.handleCommand("/decisions arms")).toBe(true);
     await settle(h);
     await clickNode(h, findById(h.chrome.sidebarTop, "sb-decisions-arms-row"));

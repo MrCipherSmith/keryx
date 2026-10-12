@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { INTAKE_ACTION_LABELS, intakeCallbackData, intakeKeyboard, parseIntakeCallbackData } from "./card";
 import { decideIntakeCard } from "./actions";
 import { makeFakes, seedCard } from "./intake-actions.test-helpers";
-import { setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
+import { local, setupIntakeEnv, type IntakeTestEnv } from "./intake.test-helpers";
 import { readIntakeCardView } from "./store";
 import { INTAKE_ACTIONS, type IntakeCardView, type IntakeEventKind } from "./types";
 
@@ -38,7 +38,7 @@ describe("buttons per kind (AC5)", () => {
     const view = (await readIntakeCardView(env.root, card.id))!;
     expect(labelsOf(view)).toEqual(["Отклонить", "Позже"]);
     const fakes = makeFakes();
-    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(result.ok).toBe(false);
     expect(fakes.flows.initCalls).toEqual([]);
     expect((await readIntakeCardView(env.root, card.id))!.state).toBe("sent");
@@ -53,7 +53,7 @@ describe("buttons per kind (AC5)", () => {
   test("an action outside the card's kind is refused and changes nothing", async () => {
     const card = await seedCard(env.root, { kind: "review" });
     const fakes = makeFakes();
-    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    const result = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(result.ok).toBe(false);
     expect(fakes.flows.initCalls).toEqual([]);
     expect((await readIntakeCardView(env.root, card.id))!.state).toBe("sent");

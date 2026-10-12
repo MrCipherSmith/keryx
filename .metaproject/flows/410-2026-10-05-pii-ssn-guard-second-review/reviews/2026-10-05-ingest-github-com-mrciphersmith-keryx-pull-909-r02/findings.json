@@ -1,0 +1,77 @@
+[
+  {
+    "id": "logic-R3-1",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The label fold iterates UTF-16 code units, so astral characters (a math-bold `ssn`) and wider invisible characters (LRM/RLM, U+202A to U+202E, U+2062, U+180E, U+3164, tag characters) defeat the label.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against 3aa5b61c.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#logic-R3-1",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 37d19f1c (PR #909): code-point fold, Default_Ignorable_Code_Point plus Cf plus M stripped, up to 12 separators, small confusable table; verified by tests and mutation (sweep file 39 tests, bun test src/security/detect 239 pass); NOT re-reviewed by a fourth round"
+    }
+  },
+  {
+    "id": "sec-F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label fold iterates UTF-16 code units, so astral characters (a math-bold `ssn`) and wider invisible characters (LRM/RLM, U+202A to U+202E, U+2062, U+180E, U+3164, tag characters) defeat the label. Same defect as logic-R3-1, raised independently.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against 3aa5b61c.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 37d19f1c (PR #909): code-point fold, Default_Ignorable_Code_Point plus Cf plus M stripped, up to 12 separators, small confusable table; verified by tests and mutation (sweep file 39 tests, bun test src/security/detect 239 pass); NOT re-reviewed by a fourth round"
+    }
+  },
+  {
+    "id": "sec-F-002",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The label can be defeated with `S/S/N`, `S:S:N`, long separator runs, and Cyrillic and Greek lookalike letters.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against 3aa5b61c. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`, the same class as sec-F-001 of this round.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 37d19f1c (PR #909): code-point fold, Default_Ignorable_Code_Point plus Cf plus M stripped, up to 12 separators, small confusable table; verified by tests and mutation (sweep file 39 tests, bun test src/security/detect 239 pass); NOT re-reviewed by a fourth round"
+    }
+  },
+  {
+    "id": "logic-R3-2",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "`nss` and `social` are unanchored, so `dnssec`, `libnss3`, `Jonsson` and `socialite` next to a real hash are redacted. The effect is false redaction only.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-logic against 3aa5b61c. Not changed: this follows the operator rule to redact when ambiguous. Left OPEN for the operator to decide; the recorder does not dismiss it.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#logic-R3-2",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: operator, poll 99 (2026-10-05T22:28Z): accepted residual; the unanchored nss/social over-match gives a false redaction only (dnssec, libnss3, Jonsson, socialite next to a hash), no leak"
+    }
+  },
+  {
+    "id": "sec-F-003",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Performance: the fold cost grew 10 to 20 times per candidate; the worst case is about 2 s at 160k characters, and it is linear.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Reported by review-security-code against 3aa5b61c. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`.",
+    "confidence": "medium",
+    "global_id": "2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "reduced in 37d19f1c (PR #909) from a worst case of about 2 s at 160k characters to about 292 ms at 160k, linear; checked by measurement; NOT re-reviewed by a fourth round"
+    }
+  }
+]

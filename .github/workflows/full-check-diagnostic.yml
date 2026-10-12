@@ -1,0 +1,81 @@
+name: Full check diagnostic (no publish)
+
+# The branch trigger lets us check this workflow before it reaches the default
+# branch, where GitHub exposes workflow_dispatch. No tag trigger or publishing.
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/411-routing-model-independence]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-check-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update || echo "apt update reported errors; installation is the gate"
+          sudo apt-get install -y ripgrep
+          rg --version
+      - name: Record diagnostic context
+        run: |
+          mkdir -p "$RUNNER_TEMP/full-check-diagnostic"
+          {
+            printf 'sha=%s\nref=%s\n' "$GITHUB_SHA" "$GITHUB_REF"
+            printf 'cwd=%s\n' "$PWD"
+            bun --version
+            node --version
+            git status --short
+          } | tee "$RUNNER_TEMP/full-check-diagnostic/context.log"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Run literal full gate
+        run: |
+          set +e
+          echo "=== Starting bun run check ==="
+          bun run check 2>&1 | tee "$RUNNER_TEMP/full-check-diagnostic/check.log"
+          statuses=("${PIPESTATUS[@]}")
+          check_exit=${statuses[0]}
+          tee_exit=${statuses[1]}
+          printf '%s\n' "$check_exit" > "$RUNNER_TEMP/full-check-diagnostic/exit-code.txt"
+          printf '%s\n' "$tee_exit" > "$RUNNER_TEMP/full-check-diagnostic/log-exit-code.txt"
+          {
+            echo "## Full check diagnostic"
+            printf '\nSHA: `%s`\n' "$GITHUB_SHA"
+            printf '\n`bun run check` exit code: **%s**\n' "$check_exit"
+            printf '\nLog writer exit code: **%s**\n' "$tee_exit"
+            echo "No release, npm publish or AC11 confirmation is performed."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "=== Finished bun run check: exit=$check_exit, log_exit=$tee_exit ==="
+          if [ "$check_exit" -ne 0 ]; then exit "$check_exit"; fi
+          exit "$tee_exit"
+      - name: Upload logs even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-check-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/full-check-diagnostic/
+          if-no-files-found: warn
+          retention-days: 14
+      # If GitHub kills the job at its time limit, an exit code may not exist;
+      # the run is inconclusive/failed, never a passing gate.

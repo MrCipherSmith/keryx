@@ -1,0 +1,7 @@
+full-check	Run literal full gate	2026-10-07T17:17:07.1488897Z ^[[36;1mcheck_exit=${statuses[0]}^[[0m
+full-check	Run literal full gate	2026-10-07T17:17:07.1493135Z ^[[36;1mecho "=== Finished bun run check: exit=$check_exit, log_exit=$tee_exit ==="^[[0m
+full-check	Run literal full gate	2026-10-07T17:33:53.9668057Z  29920 pass
+full-check	Run literal full gate	2026-10-07T17:33:53.9668329Z  48 skip
+full-check	Run literal full gate	2026-10-07T17:33:53.9668585Z  0 fail
+full-check	Run literal full gate	2026-10-07T17:33:53.9669397Z Ran 29968 tests across 1542 files. [918.30s]
+full-check	Run literal full gate	2026-10-07T17:33:54.1257917Z === Finished bun run check: exit=0, log_exit=0 ===

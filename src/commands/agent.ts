@@ -1,3 +1,9 @@
+import { isTransportFailure } from "../harness/provider/provider-port";
+import { rememberArbiterSession } from "../review/arbiter-session";
+import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
+import { REFUSED_EARLIER, asksForReviewAuto, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
+import { classifyApprovalCause } from "./approval-cause";
+import type { ApprovalCause } from "./approval-cause";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
 //
 // `runAgentTurn(io, deps, history, userLine)` is the injectable, deterministic
@@ -17,12 +23,15 @@
 // injected `InteractiveTool` executors.
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
+import { tracePhase } from "../lib/phase-trace";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
+import { isTrustRoutineCommand, isTrustRoutineTool } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
+import { runWithCallWatchdog, type CallStage } from "./call-watchdog";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
 import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
@@ -100,6 +109,7 @@ import {
   renderExecutionPlanSnapshot,
   type ExecutionPlan,
 } from "../session/execution-plan";
+import { findStoredAnswer, rememberAnswer } from "../session/ask-answer-notes";
 import { courseFromSlate } from "../session/slate-course";
 import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
@@ -231,6 +241,8 @@ export interface ApprovalMeta {
    * `autoApprove` exactly like `publishLease`.
    */
   hookAsk?: boolean;
+  /** Flow 426 AC5: why this prompt appears; every approver shows its one-line form. */
+  cause?: ApprovalCause;
   /**
    * Aborted when the caller stops waiting for this answer — the ACP client's
    * approval timeout (flow 292 T13). An approver holding a resource for the
@@ -260,7 +272,8 @@ export interface AgentIO {
   /**
    * A durable-history checkpoint is needed. Emitted after every history
    * mutation, including streamed assistant deltas, so interrupted turns are
-   * recoverable instead of being lost at the end of a model turn.
+   * recoverable instead of being lost at the end of a model turn. Interactive
+   * recovery defers provisional assistant deltas until a valid model_end.
    */
   onHistoryChange?: (kind: "user" | "assistant_delta" | "assistant_final" | "tool") => void;
   /**
@@ -300,6 +313,8 @@ export interface AgentIO {
    * before the span closed, else omitted.
    */
   onReasoningEnd?: (info: { text: string; redacted: boolean; durationMs?: number; tokens?: number }) => void;
+  /** An unsuccessful provisional stream was discarded; reset live output/preview. */
+  onAttemptInterrupted?: () => void;
   /** Provider-reported token usage for this run (forwarded from `usage_update`). */
   onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
@@ -509,10 +524,11 @@ export interface AgentDeps {
    * `in_progress` items left simply ends on the model's text reply, and the
    * operator gets a one-line `[plan]` system() note naming the actionable
    * items instead. Set `true` only for a caller that has decided it wants the
-   * shell to push a single synthetic `role: "user"` "still has actionable
-   * items" message and force one more round when the model stops early with
-   * work still open (still capped at ONE follow-through per turn — see
-   * `planFollowThroughUsed` in the round loop). `/goal`'s own `--auto`
+   * shell to push a synthetic `role: "user"` "still has actionable items"
+   * message and force another round when the model stops early with work still
+   * open (capped at MAX_PLAN_FOLLOW_THROUGHS per turn; a blocked item or a
+   * nudge that moved nothing stops it). Flow 418: left unset it defaults ON in
+   * `trust` mode; an explicit `false` keeps it off. `/goal`'s own `--auto`
    * continuation loop (`goal-command.ts`) is independent of this flag and is
    * unaffected either way.
    */
@@ -755,7 +771,56 @@ export interface AgentDeps {
   hooks?: ShellHookContext;
 }
 
+/** Same-round recovery seams; production uses an abortable timer and Math.random. */
+export interface InteractiveRecovery {
+  wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  random?: () => number;
+  /** A host with a spend/time ceiling can refuse the next paid request. */
+  canRequest?: () => boolean;
+}
+
+export const RECOVERY_MAX_DELAY_MS = 60_000;
+export const RECOVERY_MAX_RETRY_AFTER_MS = 300_000;
+
+export function recoveryDelayMs(attempt: number, retryAfterMs: number | undefined, random: () => number): number {
+  const ceiling = Math.min(RECOVERY_MAX_DELAY_MS, 1_000 * 2 ** Math.min(attempt - 1, 6));
+  const sample = random();
+  const jitter = Number.isFinite(sample) ? Math.max(0, Math.min(1, sample)) : 0.5;
+  const delay = Math.round(ceiling * (0.5 + jitter * 0.5));
+  const hint = retryAfterMs !== undefined && Number.isFinite(retryAfterMs)
+    ? Math.max(0, Math.min(RECOVERY_MAX_RETRY_AFTER_MS, retryAfterMs)) : 0;
+  return Math.max(delay, hint);
+}
+
+export function waitForRecovery(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(new Error("recovery cancelled"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
+function retryStructuredError(error: NormalizedError | undefined): boolean {
+  if (error === undefined) return false;
+  // Never let a generic auth/access/request error become an endless recovery.
+  if (["authentication", "invalid_request", "context_overflow", "cancelled"].includes(error.kind)) return false;
+  if (/\b403\b/.test(error.message) && !["unavailable", "overloaded", "rate_limit"].includes(error.kind)) return false;
+  return error.retryable || (error.kind === "malformed"
+    && (error.detail?.incompleteStream === true || error.detail?.pendingToolCallId !== undefined));
+}
+
+
 export interface RunAgentTurnOptions {
+  /** Interactive hosts only. Absent for print, unattended and child runs. */
+  recovery?: InteractiveRecovery;
   /** Abort signal for a running turn (UI hard-stop support). */
   signal?: AbortSignal;
   /**
@@ -945,6 +1010,12 @@ export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";
 /** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
 export const MAX_AGENT_MAX_ROUNDS = 200;
 
+/** Round budget of a `trust`-mode turn: a long review orchestration must reach its end unattended. */
+export const TRUST_MODE_MAX_ROUNDS = 200;
+
+/** Turn-level cap on automatic plan follow-through continuations (a stalled one ends the turn earlier). */
+export const MAX_PLAN_FOLLOW_THROUGHS = 8;
+
 /**
  * Conservative default cap on how many sibling `spawn_subagent` calls in ONE
  * turn's tool-call batch run CONCURRENTLY (flow 171, Phase D / D1c). The
@@ -959,7 +1030,7 @@ export const MAX_AGENT_MAX_ROUNDS = 200;
  * things" fan-out, while staying safe as the default for an unknown
  * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
  */
-export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3;
+export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
 
 /**
  * Resolve model-round-trip budget for an interactive agent turn.
@@ -970,14 +1041,16 @@ export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3;
  */
 export function resolveAgentMaxRounds(
   env: Record<string, string | undefined> = process.env,
+  mode?: PermissionMode,
 ): number {
+  const fallback = mode === "trust" ? TRUST_MODE_MAX_ROUNDS : DEFAULT_MAX_ROUNDS;
   const raw = env[ENV_AGENT_MAX_ROUNDS];
   if (raw === undefined || raw.trim().length === 0) {
-    return DEFAULT_MAX_ROUNDS;
+    return fallback;
   }
   const n = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(n) || n < 1) {
-    return DEFAULT_MAX_ROUNDS;
+    return fallback;
   }
   return Math.min(n, MAX_AGENT_MAX_ROUNDS);
 }
@@ -1258,6 +1331,11 @@ export const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   // call, not to stop it watching one that is working.
   "shell_task_output",
   "shell_task_wait",
+  // Read-only introspection of the model's own state: asking again is how it
+  // checks progress, and refusing the third call ended a review run (flow 421).
+  "plan_get",
+  "slate_trail",
+  "recall_step",
 ]);
 
 /** Env override for how long a `hold` session waits for its own tasks (flow 265). */
@@ -1863,6 +1941,11 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "change, and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
     "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
     "only; `/plan` remains the operator's separate read-only permission mode.\n" +
+    "- When the user names a skill (\"use review-orchestrator\", \"по скиллу X\"), your FIRST tool call is " +
+    (offered("skill_load") ? "**skill_load** for it" : "read_file on its SKILL.md") +
+    ", before any `keryx` command, and you follow its section for this host. A subcommand that only opens " +
+    "or drafts something (`keryx review start`) is one step of that workflow, never the workflow: do not " +
+    "report the task done or stopped on its output.\n" +
     "- **Publishing a plan FOR APPROVAL is a real, supported stopping point.** Mark the items `proposed`, " +
     "state the plan in your reply, and END THE TURN — that is exactly what `proposed` is for. When the " +
     "operator approves, move those items to `pending`/`in_progress` and continue. Use `pending` (not " +
@@ -2167,6 +2250,11 @@ export async function runAgentTurn(
   // state its marker in the instruction every request of this turn sends
   // (round loop and both wrap-ups read `deps.systemInstruction`).
   const controlNonce = deps.controlNonce ?? generateControlNonce();
+  // Only the operator's own top-level line can switch the review system on: a child's task text and any
+  // non-operator origin (notifications, peers) are model- or peer-written and never carry that authority.
+  if (options.origin === undefined && deps.subagentBudget === undefined && asksForReviewAuto(userLine)) {
+    setReviewSystem("review-auto");
+  }
   // Flow 393 AC5: a host that keeps working memory says so; every other host's instruction is
   // byte-identical to what it was.
   const memoryContract = isWorkingMemoryHost(deps, options) ? `\n\n${buildWorkingMemoryInstruction()}` : "";
@@ -2377,6 +2465,51 @@ function computeReasoningDurationMs(startedAt: string | undefined, endedAt: stri
  */
 function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
   return options.slateSession !== undefined ? slateSessionDir(options.slateSession) : undefined;
+}
+
+function askUserQuestion(call: PendingCall): string | undefined {
+  const question = parseToolInput(call.input).question;
+  return call.name === "ask_user" && typeof question === "string" ? question : undefined;
+}
+
+/** An irreversible decision is asked every time; the stored answer is for ordinary questions only. */
+function isIrreversibleAsk(call: PendingCall): boolean {
+  const input = parseToolInput(call.input);
+  return input.irreversible === true || (typeof input.action === "string" && input.action.trim().length > 0);
+}
+
+/** The operator's earlier answer to this same question, when the session slate is open and still ours. */
+async function storedAskUserAnswer(call: PendingCall, options: RunAgentTurnOptions): Promise<string | undefined> {
+  const question = askUserQuestion(call);
+  const dir = liveSessionDir(options);
+  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call)) {
+    return undefined;
+  }
+  try {
+    const answer = await findStoredAnswer(dir, question);
+    return answer === undefined ? undefined : `Already answered by the operator earlier in this session (no new prompt shown): ${answer}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keep a real operator answer as a Note keyed by the question; bookkeeping never changes the tool result. */
+async function rememberAskUserAnswer(
+  call: PendingCall,
+  result: InteractiveToolResult,
+  options: RunAgentTurnOptions,
+  ts: string,
+): Promise<void> {
+  const question = askUserQuestion(call);
+  const dir = liveSessionDir(options);
+  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call) || result.isError === true) {
+    return;
+  }
+  try {
+    await rememberAnswer(dir, question, result.output, ts);
+  } catch {
+    // a full shelf or a closed slate just means the question may be asked again
+  }
 }
 
 /**
@@ -2738,7 +2871,7 @@ async function runAgentTurnCore(
   // output) enters `history`, so echoed content can never carry the marker.
   const controlNonce = deps.controlNonce ?? generateControlNonce();
   const scrub = (text: string): string => scrubControlNonce(text, controlNonce);
-  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
+  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds(process.env, io.permissionMode?.());
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   // Flow 347 T7: a subagent's advisory call target (warning threshold only).
   const subagentBudget = deps.subagentBudget;
@@ -2876,6 +3009,7 @@ async function runAgentTurnCore(
   }
   const signal = options.signal;
   const isAborted = (): boolean => signal?.aborted === true;
+  const recovery = deps.unattended === true || deps.subagentBudget !== undefined ? undefined : options.recovery;
 
   if (isAborted()) {
     io.onSystem?.("\n[stopped] Model turn interrupted by user.\n");
@@ -3052,6 +3186,11 @@ async function runAgentTurnCore(
   // (see the `risk !== "read"` check) — a `read` tool cannot carry out a side
   // effect an injected instruction asked for, so it stays usable.
   let untrustedContentSeen = false;
+  // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
+  // so a reviewer subagent on a lighter model does not move the arbiter's tier.
+  if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {
+    rememberArbiterSession({ providerId: deps.providerId, modelId: deps.modelId });
+  }
 
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -3072,7 +3211,7 @@ async function runAgentTurnCore(
       await emitTerminalState(io, deps, options, "budget_exhausted");
       return "stop";
     }
-    const resolution = await offerRoundLimitReset(deps, roundState, system);
+    const resolution = await offerRoundLimitReset(deps, roundState, system, io.permissionMode?.());
     if (resolution === "reset") {
       return "reset";
     }
@@ -3156,7 +3295,44 @@ async function runAgentTurnCore(
   // Loop: request → stream → (execute tool calls, re-request) until a text-only
   // finish or an independent model-round/tool-call guard trips.
   let toollessReprompts = 0;
-  let planFollowThroughUsed = false;
+  let planFollowThroughCount = 0;
+  let lastFollowThroughSignature: string | undefined;
+  let reviewGateContinues = 0;
+  let reviewGateStalls = 0;
+  let lastReviewGateSignature: string | undefined;
+  /** True when the managed-review gate refused this stop and queued a nudge: the caller re-enters the round loop. */
+  const holdReviewGate = async (): Promise<boolean> => {
+    if (subagentBudget !== undefined || deps.unattended === true) return false;
+    const runSeen = reviewRunSeenInHistory(history);
+    const open = runSeen
+      ? await findReviewGateState(process.cwd(), sessionStartedAt(history)).catch(() => null)
+      : null;
+    const gate = decideReviewGate({
+      open,
+      runSeen,
+      continues: reviewGateContinues,
+      stalls: reviewGateStalls,
+      lastSignature: lastReviewGateSignature,
+    });
+    if (gate.action === "continue") {
+      reviewGateContinues += 1;
+      reviewGateStalls = gate.stalls;
+      lastReviewGateSignature = gate.signature;
+      system(`\n[review-gate] Review not complete (continue ${reviewGateContinues}); \`review complete\` still refuses. Continuing.\n`);
+      history.push({
+        role: "user",
+        content: wrapHarnessNudge(gate.message, controlNonce),
+        provenance: "harness",
+        ts: now(),
+      });
+      io.onHistoryChange?.("tool");
+      return true;
+    }
+    if (gate.action === "stop") {
+      system(`\n[review-gate] ${gate.report}\n`);
+    }
+    return false;
+  };
   // The previous toolless reply, normalized. A model that answers the reprompt
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
@@ -3295,7 +3471,7 @@ async function runAgentTurnCore(
     const request: NormalizedRequest =
       signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
-    let assistantText = "";
+    let assistantText: string;
     let assistantMessage: NormalizedMessage | undefined;
     let reasoningText = "";
     let reasoningFlushed = false;
@@ -3317,7 +3493,9 @@ async function runAgentTurnCore(
     // e.g. a reasoning+tool-call round) has it available at that point.
     let reasoningTokens: number | undefined;
     let reasoningEndFlushed = false;
+    let attemptComplete = false;
     const flushReasoning = (): void => {
+      if (recovery !== undefined && !attemptComplete) return;
       if (reasoningText.length > 0 && !reasoningFlushed) {
         io.onReasoning?.(reasoningText);
         reasoningFlushed = true;
@@ -3339,103 +3517,214 @@ async function runAgentTurnCore(
     };
     const nameById = new Map<string, string>();
     const calls: PendingCall[] = [];
-    let errored = false;
+    let errored: boolean;
     // Flow 387 T6: the round's normalized provider error, held back (not yet
     // printed) when it is a context overflow that may still be recovered.
     let pendingOverflowError: NormalizedError | undefined;
 
-    try {
-      const streamOptions = {
-        attemptId: deps.idSeq(),
-        ...(signal === undefined ? {} : { signal }),
-        ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
-      };
-      for await (const event of deps.provider.stream(request, streamOptions)) {
+    let recoveryAttempt = 0;
+    for (;;) {
+      if (isAborted()) {
+        io.onAttemptInterrupted?.();
+        system("\n[stopped] Model turn interrupted by user.\n");
+        return recovery === undefined ? {} : { finishReason: "interrupted" };
+      }
+      if (recovery?.canRequest?.() === false) {
+        system("\n[budget] Recovery stopped: request budget exhausted.\n");
+        return { finishReason: "budget" };
+      }
+      let terminalSeen = false;
+      let retryable = false;
+      let attemptUsageKnown = false;
+      let attemptError: NormalizedError | undefined;
+      let transportCause: unknown;
+      assistantText = "";
+      assistantMessage = undefined;
+      reasoningText = "";
+      reasoningFlushed = false;
+      reasoningRedacted = false;
+      reasoningReplay.length = 0;
+      reasoningStartedAt = undefined;
+      reasoningEndedAt = undefined;
+      reasoningTokens = undefined;
+      reasoningEndFlushed = false;
+      nameById.clear();
+      calls.length = 0;
+      errored = false;
+      try {
+        const streamOptions = {
+          attemptId: deps.idSeq(),
+          ...(signal === undefined ? {} : { signal }),
+          ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+        };
+        tracePhase("model request start");
+        for await (const event of deps.provider.stream(request, streamOptions)) {
+          if (isAborted()) {
+            // flow 268 T26: fire `onReasoningEnd` for a round that started
+            // reasoning before the abort landed — otherwise a live TUI preview
+            // (`attachBlockIo`) never sees its end-of-round reset and the next
+            // turn's `reasoning_delta`s land appended to this round's stale
+            // text. Never attaches `roundReasoning` to `history` here (the
+            // early `return {}` still skips that, same as before this fix) —
+            // only the display/durable-summary forwarding callbacks fire.
+            flushReasoning();
+            if (recovery !== undefined) {
+              io.onAttemptInterrupted?.();
+              if (assistantText.length > 0 || reasoningText.length > 0 || reasoningReplay.length > 0 || nameById.size > 0) {
+                system("\n[interrupted output] Incomplete model output discarded.\n");
+              }
+            }
+            system("\n[stopped] Model turn interrupted by user.\n");
+            return recovery === undefined ? {} : { finishReason: "interrupted" };
+          }
+          if (
+            reasoningStartedAt !== undefined &&
+            reasoningEndedAt === undefined &&
+            event.kind !== "reasoning_delta" &&
+            event.kind !== "reasoning_replay"
+          ) {
+            reasoningEndedAt = now(); // first non-reasoning event closes the span
+          }
+          if (event.kind === "reasoning_delta") {
+            if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+            reasoningText += event.text ?? "";
+            if (event.redacted === true) reasoningRedacted = true;
+            io.onReasoningDelta?.(reasoningDeltaPayload(event));
+          } else if (event.kind === "reasoning_replay") {
+            if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+            if (event.replay !== undefined) reasoningReplay.push(event.replay);
+          } else if (event.kind === "text_delta") {
+            flushReasoning(); // reasoning precedes the answer → surface it first
+            const text = event.text ?? "";
+            io.write(text);
+            assistantText += text;
+            if (assistantMessage === undefined) {
+              assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };
+              if (recovery === undefined) history.push(assistantMessage);
+            } else {
+              assistantMessage.content += text;
+            }
+            if (recovery === undefined) io.onHistoryChange?.("assistant_delta");
+          } else if (event.kind === "tool_call_start") {
+            if (event.toolCallId !== undefined && event.toolName !== undefined) {
+              nameById.set(event.toolCallId, event.toolName);
+            }
+          } else if (event.kind === "tool_call_end") {
+            if (event.toolCallId !== undefined) {
+              calls.push({
+                id: event.toolCallId,
+                name: nameById.get(event.toolCallId) ?? event.toolName ?? "",
+                input: event.input ?? "",
+              });
+            }
+          } else if (event.kind === "usage_update") {
+            if (event.usage !== undefined) {
+              attemptUsageKnown = true;
+              io.onUsage?.(event.usage);
+              reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
+              // Flow 387 T7: remember the provider's own input-token count for this request.
+              const newAnchor = toUsageAnchor(requestSnapshot, event.usage.inputTokens);
+              if (newAnchor !== undefined) {
+                usageAnchors.set(history, { anchor: newAnchor, providerId: deps.providerId, modelId: deps.modelId });
+              }
+            }
+          } else if (event.kind === "provider_error") {
+            attemptError = event.error;
+            retryable = retryStructuredError(event.error);
+            if (!overflowRetried && isContextOverflowError(event.error)) {
+              pendingOverflowError = event.error;
+            } else if (recovery === undefined) {
+              system(formatProviderErrorMessage(event.error));
+            }
+            errored = true;
+            break;
+          } else if (event.kind === "model_end") {
+            terminalSeen = true;
+            break;
+          }
+        }
+      } catch (cause) {
         if (isAborted()) {
-          // flow 268 T26: fire `onReasoningEnd` for a round that started
-          // reasoning before the abort landed — otherwise a live TUI preview
-          // (`attachBlockIo`) never sees its end-of-round reset and the next
-          // turn's `reasoning_delta`s land appended to this round's stale
-          // text. Never attaches `roundReasoning` to `history` here (the
-          // early `return {}` still skips that, same as before this fix) —
-          // only the display/durable-summary forwarding callbacks fire.
+          // Same flush-before-abort-return fix as the in-loop check above —
+          // an abort caught here (e.g. mid-read) must still close the round's
+          // reasoning span exactly once.
           flushReasoning();
-          system("\n[stopped] Model turn interrupted by user.\n");
-          return {};
-        }
-        if (
-          reasoningStartedAt !== undefined &&
-          reasoningEndedAt === undefined &&
-          event.kind !== "reasoning_delta" &&
-          event.kind !== "reasoning_replay"
-        ) {
-          reasoningEndedAt = now(); // first non-reasoning event closes the span
-        }
-        if (event.kind === "reasoning_delta") {
-          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
-          reasoningText += event.text ?? "";
-          if (event.redacted === true) reasoningRedacted = true;
-          io.onReasoningDelta?.(reasoningDeltaPayload(event));
-        } else if (event.kind === "reasoning_replay") {
-          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
-          if (event.replay !== undefined) reasoningReplay.push(event.replay);
-        } else if (event.kind === "text_delta") {
-          flushReasoning(); // reasoning precedes the answer → surface it first
-          const text = event.text ?? "";
-          io.write(text);
-          assistantText += text;
-          if (assistantMessage === undefined) {
-            assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };
-            history.push(assistantMessage);
-          } else {
-            assistantMessage.content += text;
-          }
-          io.onHistoryChange?.("assistant_delta");
-        } else if (event.kind === "tool_call_start") {
-          if (event.toolCallId !== undefined && event.toolName !== undefined) {
-            nameById.set(event.toolCallId, event.toolName);
-          }
-        } else if (event.kind === "tool_call_end") {
-          if (event.toolCallId !== undefined) {
-            calls.push({
-              id: event.toolCallId,
-              name: nameById.get(event.toolCallId) ?? event.toolName ?? "",
-              input: event.input ?? "",
-            });
-          }
-        } else if (event.kind === "usage_update") {
-          if (event.usage !== undefined) {
-            io.onUsage?.(event.usage);
-            reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
-            // Flow 387 T7: remember the provider's own input-token count for this request.
-            const newAnchor = toUsageAnchor(requestSnapshot, event.usage.inputTokens);
-            if (newAnchor !== undefined) {
-              usageAnchors.set(history, { anchor: newAnchor, providerId: deps.providerId, modelId: deps.modelId });
+          if (recovery !== undefined) {
+            io.onAttemptInterrupted?.();
+            if (assistantText.length > 0 || reasoningText.length > 0 || reasoningReplay.length > 0 || nameById.size > 0) {
+              system("\n[interrupted output] Incomplete model output discarded.\n");
             }
           }
-        } else if (event.kind === "provider_error") {
-          if (!overflowRetried && isContextOverflowError(event.error)) {
-            pendingOverflowError = event.error;
-          } else {
-            system(formatProviderErrorMessage(event.error));
-          }
+          system("\n[stopped] Model turn interrupted by user.\n");
+          return recovery === undefined ? {} : { finishReason: "interrupted" };
+        }
+        transportCause = cause;
+        retryable = isTransportFailure(cause);
+        if (recovery === undefined) system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
+        errored = true;
+      }
+
+      if (recovery !== undefined) {
+        if (!errored && !terminalSeen) {
           errored = true;
-          break;
-        } else if (event.kind === "model_end") {
-          break;
+          retryable = true;
+          attemptError = { kind: "unavailable", retryable: true, message: "Stream ended without model_end" };
+        }
+        if (errored || isAborted()) {
+          io.onAttemptInterrupted?.();
+          if (assistantText.length > 0 || reasoningText.length > 0 || reasoningReplay.length > 0 || nameById.size > 0 || calls.length > 0) {
+            system("\n[interrupted output] Incomplete model output discarded; retry starts from the last completed round.\n");
+          }
+          // Nothing provisional ever entered history or its durable checkpoints.
+          assistantMessage = undefined;
+          assistantText = "";
+          reasoningText = "";
+          reasoningReplay.length = 0;
+          reasoningRedacted = false;
+          calls.length = 0;
+          if (isAborted()) {
+            system("\n[stopped] Model turn interrupted by user.\n");
+            return { finishReason: "interrupted" };
+          }
+          if (!attemptUsageKnown) system("\n[recovery usage] Failed-attempt usage unknown; provider may have billed it.\n");
+          if (retryable) {
+            if (recovery.canRequest?.() === false) {
+              system("\n[budget] Recovery stopped: request budget exhausted.\n");
+              return { finishReason: "budget" };
+            }
+            recoveryAttempt += 1;
+            const delay = recoveryDelayMs(recoveryAttempt, attemptError?.retryAfterMs, recovery.random ?? Math.random);
+            system(`\n[recovering] Attempt ${recoveryAttempt} interrupted. Next probe in ${(delay / 1_000).toFixed(1)}s; cancel to stop.\n`);
+            try {
+              await (recovery.wait ?? waitForRecovery)(delay, signal);
+            } catch {
+              if (!isAborted()) {
+                system("\n[error] Recovery wait failed; turn stopped.\n");
+                return { finishReason: "interrupted" };
+              }
+            }
+            continue;
+          }
+          if (pendingOverflowError === undefined) {
+            if (attemptError?.kind === "cancelled") {
+              system("\n[stopped] Provider attempt cancelled.\n");
+              return { finishReason: "interrupted" };
+            }
+            const message = attemptError === undefined
+              ? `\n[error] ${redactSensitiveText(transportCause instanceof Error ? transportCause.message : String(transportCause))}\n`
+              : formatProviderErrorMessage(attemptError);
+            system(message);
+            if (["authentication", "invalid_request"].includes(attemptError?.kind ?? "") || /\b403\b/.test(attemptError?.message ?? "")) {
+              system("Check /connect and your provider account, model entitlement and access policy; reconnect after correcting access. This error is not retried automatically.\n");
+            }
+            return { finishReason: "interrupted" };
+          }
+        } else if (assistantMessage !== undefined) {
+          history.push(assistantMessage);
         }
       }
-    } catch (cause) {
-      if (isAborted()) {
-        // Same flush-before-abort-return fix as the in-loop check above —
-        // an abort caught here (e.g. mid-read) must still close the round's
-        // reasoning span exactly once.
-        flushReasoning();
-        system("\n[stopped] Model turn interrupted by user.\n");
-        return {};
-      }
-      system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
-      errored = true;
+      attemptComplete = !errored;
+      break;
     }
 
     flushReasoning(); // reasoning-only round (e.g. before a tool call) still surfaces it
@@ -3701,40 +3990,53 @@ async function runAgentTurnCore(
       }
 
       // Flow 347 T5 (AC1): the plan is a display-only projection of intent,
-      // never a completion signal — so by default (`deps.planFollowThrough`
-      // unset/false) a turn with actionable items still ends here, on the
-      // model's own text reply, with nothing injected into `history`. Only an
-      // explicit opt-in reintroduces the single synthetic follow-through round
-      // below (still capped at one per turn via `planFollowThroughUsed`).
+      // never a completion signal — so with follow-through off (the default
+      // outside `trust`) a turn with actionable items still ends here, on the
+      // model's own text reply, with nothing injected into `history`.
+      // Flow 418: in `trust` it defaults on, bounded by MAX_PLAN_FOLLOW_THROUGHS
+      // per turn; it also stops on a blocked item or a nudge that moved nothing.
+      const followThroughOn =
+        deps.planFollowThrough ?? (subagentBudget === undefined && io.permissionMode?.() === "trust");
+      const planHasBlocker = currentPlan?.items.some((item) => item.status === "blocked") ?? false;
       if (
-        deps.planFollowThrough === true &&
-        !planFollowThroughUsed &&
+        followThroughOn &&
+        !planHasBlocker &&
+        planFollowThroughCount < MAX_PLAN_FOLLOW_THROUGHS &&
         hasActionableExecutionPlanItems(currentPlan)
       ) {
-        planFollowThroughUsed = true;
-        history.push({
-          role: "user",
-          content: wrapHarnessNudge(
-            "The current execution plan still has actionable items remaining. Continue the work now. " +
-              "Do not give another final reply until the plan is complete or genuinely blocked.",
-            controlNonce,
-          ),
-          // Flow 347 T6 (AC9): "harness", not "project" — this is the keryx
-          // shell's own synthesized control nudge, not operator input.
-          provenance: "harness",
-          ts: now(),
-        });
-        io.onHistoryChange?.("tool");
-        continue;
+        const progressSignature = `${currentPlan?.items.map((item) => `${item.id}:${item.status}`).join(",")}|${invocationBudget.invoked}`;
+        if (progressSignature !== lastFollowThroughSignature) {
+          lastFollowThroughSignature = progressSignature;
+          planFollowThroughCount += 1;
+          history.push({
+            role: "user",
+            content: wrapHarnessNudge(
+              "The current execution plan still has actionable items remaining. Continue the work now. " +
+                "Do not give another final reply until the plan is complete or genuinely blocked.",
+              controlNonce,
+            ),
+            // Flow 347 T6 (AC9): "harness", not "project" — this is the keryx
+            // shell's own synthesized control nudge, not operator input.
+            provenance: "harness",
+            ts: now(),
+          });
+          io.onHistoryChange?.("tool");
+          continue;
+        }
       }
+
+      // Flow 421: a managed review run is finished when `keryx review complete`
+      // accepts the package, not when the model stops. Independent of the plan
+      // (a blocked plan item must not end it); unattended children are excluded.
+      if (await holdReviewGate()) continue;
 
       if (hasActionableExecutionPlanItems(currentPlan)) {
         const actionable = currentPlan?.items.filter(
           (item) => item.status === "pending" || item.status === "in_progress",
         ) ?? [];
-        if (planFollowThroughUsed) {
-          // After the (opt-in) follow-through round already ran once: the
-          // itemised list, so the operator sees exactly what is still open.
+        if (planFollowThroughCount > 0) {
+          // After follow-through already ran: the itemised list, so the
+          // operator sees exactly what is still open.
           const shown = actionable.slice(0, 7).map((item) => {
             const title = item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title;
             return `- ${item.id} [${item.status}]: ${title}`;
@@ -3742,14 +4044,16 @@ async function runAgentTurnCore(
           if (actionable.length > shown.length) {
             shown.push(`- … ${actionable.length - shown.length} more actionable item(s)`);
           }
-          system(`\n[plan] Actionable items remain after the single follow-through:\n${shown.join("\n")}\n`);
+          const after = planFollowThroughCount === 1 ? "the single follow-through" : `${planFollowThroughCount} follow-throughs`;
+          system(`\n[plan] Actionable items remain after ${after}:\n${shown.join("\n")}\n`);
         } else {
           // Flow 347 AC1, review F-016: the default-off path is ONE line
           // naming the open item ids — the plan is display-only here, so
           // this is a notice, not a report.
           const ids = actionable.slice(0, 7).map((item) => item.id);
           if (actionable.length > ids.length) ids.push(`… ${actionable.length - ids.length} more`);
-          system(`\n[plan] Turn ending with open plan items (follow-through is off): ${ids.join(", ")}\n`);
+          const state = followThroughOn ? "a blocked item stops follow-through" : "follow-through is off";
+          system(`\n[plan] Turn ending with open plan items (${state}): ${ids.join(", ")}\n`);
         }
       }
 
@@ -4003,8 +4307,11 @@ async function runAgentTurnCore(
       // executes exactly as before.
       const precomputedResult = concurrentSpawnResults?.get(call.id);
       let result: InteractiveToolResult;
+      const storedAnswer = precomputedResult === undefined ? await storedAskUserAnswer(call, options) : undefined;
       if (precomputedResult !== undefined) {
         result = precomputedResult;
+      } else if (storedAnswer !== undefined) {
+        result = { output: storedAnswer, isError: false };
       } else {
         try {
           result = await executeCall(
@@ -4028,6 +4335,8 @@ async function runAgentTurnCore(
             io.mcpToolFingerprint,
             io.mcpToolDestructive,
             deps.unattended === true ? undefined : io.beforeMutation,
+            undefined,
+            untrustedContentSeen,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -4047,7 +4356,11 @@ async function runAgentTurnCore(
           caughtToolErrors.push({ toolName: call.name, message });
         }
       }
+      if (precomputedResult === undefined && storedAnswer === undefined) {
+        await rememberAskUserAnswer(call, result, options, now());
+      }
       io.onToolResult?.(call.name, result);
+      tracePhase(`tool ${call.name} result shown`);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
       // not receive a credential a command happened to read.
@@ -4068,6 +4381,7 @@ async function runAgentTurnCore(
               toolCallId: call.id,
             });
       const modelOutput = spilled.text;
+      tracePhase(`tool ${call.name} output spilled`);
       // Flow 393 AC1/AC4 (working-memory mode only): every executed call leaves a Trail entry in
       // slate.json, and its full redacted output is on disk so `recall_step` can page it later.
       // A bookkeeping failure never replaces the real tool result.
@@ -4257,6 +4571,9 @@ async function runAgentTurnCore(
       if (subagentBudget !== undefined) {
         return finishSubagentWithSubmitResult("no-progress", undefined);
       }
+      // Run 10: the repeated-signature guard ended the turn here and skipped the
+      // text-only gate, so an incomplete managed review stopped with "resend the request".
+      if (roundState.round < roundState.maxRounds && (await holdReviewGate())) continue;
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
         const wrapUp = await finishWithBudgetSummary(
@@ -4308,6 +4625,7 @@ export async function offerRoundLimitReset(
   deps: AgentDeps,
   roundState: { round: number; maxRounds: number },
   system: (text: string) => void,
+  mode?: PermissionMode,
 ): Promise<"reset" | "cancel"> {
   if (deps.askUser === undefined) {
     return "cancel";
@@ -4342,7 +4660,7 @@ export async function offerRoundLimitReset(
   if (choice !== "reset") {
     return "cancel";
   }
-  roundState.maxRounds += resolveAgentMaxRounds();
+  roundState.maxRounds += resolveAgentMaxRounds(process.env, mode);
   system(`\n[budget] Round limit increased — ${roundState.maxRounds} rounds. Continuing…\n`);
   return "reset";
 }
@@ -4420,6 +4738,7 @@ async function streamWrapUpRound(
       ...(signal === undefined ? {} : { signal }),
       ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
     };
+    tracePhase("model request start");
     for await (const event of deps.provider.stream(request, streamOptions)) {
       if (signal?.aborted === true) {
         aborted = true;
@@ -5084,7 +5403,34 @@ function composeWithHook(
 }
 
 /** Resolve, gate (risk + approval + permission mode), validate, and invoke a call → a content result. */
-async function executeCall(
+/**
+ * `spawn_subagent` is the one call whose stall parks the whole turn, so it runs under a watchdog that
+ * names the stage it was stuck in; every other tool goes straight through.
+ */
+async function executeCall(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+  const call = args[0];
+  tracePhase(`tool ${call.name} dispatch`);
+  const result = await executeCallTraced(...args);
+  tracePhase(`tool ${call.name} returned isError=${result.isError === true}`);
+  return result;
+}
+
+function executeCallTraced(...args: Parameters<typeof executeCallUnbounded>): Promise<InteractiveToolResult> {
+  const call = args[0];
+  if (call.name !== "spawn_subagent") return executeCallUnbounded(...args);
+  return runWithCallWatchdog(
+    call.name,
+    (signal, stage) => {
+      const next = [...args] as unknown as Parameters<typeof executeCallUnbounded>;
+      next[9] = signal;
+      next[18] = stage;
+      return executeCallUnbounded(...next);
+    },
+    { signal: args[9] },
+  );
+}
+
+async function executeCallUnbounded(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
@@ -5118,7 +5464,37 @@ async function executeCall(
   mcpToolFingerprint?: (fqn: string) => string | undefined,
   mcpToolDestructive?: (fqn: string) => boolean,
   beforeMutation?: () => Promise<void>,
+  stage?: CallStage,
+  // Flow 425: untrusted content was read earlier in this turn; `ask_user` carries it onto the question.
+  untrustedContentSeen = false,
 ): Promise<InteractiveToolResult> {
+  const mark = (name: string): void => {
+    if (stage !== undefined) stage.current = name;
+  };
+  // Set when the wrapper below answered "no" from the refusal memory instead of asking, so the model reads
+  // "refused earlier" rather than the generic denial text.
+  let refusedEarlier = false;
+  const denialOutput = (generic: string): string => (refusedEarlier ? REFUSED_EARLIER : generic);
+  if (requestApproval !== undefined && reviewAutoActive()) {
+    const askHuman = requestApproval;
+    requestApproval = async (name, toolInput, meta) => {
+      const spelled = meta === undefined ? undefined : refusalFingerprint(name, toolInput, meta.fingerprint);
+      if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {
+        refusedEarlier = true;
+        return false;
+      }
+      if (!reviewAutoGrants(name, meta)) {
+        const response = await askHuman(name, toolInput, meta);
+        if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {
+          recordOperatorDenial(meta.fingerprint);
+          recordOperatorDenial(spelled!);
+        }
+        return response;
+      }
+      onAutoApproved?.(name, toolInput, { destructive: false, credentials: false });
+      return true;
+    };
+  }
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
     return { output: `unknown tool: ${call.name}`, isError: true };
@@ -5176,6 +5552,7 @@ async function executeCall(
   let hookResult: HookFireResult | undefined;
   if (hooks !== undefined) {
     try {
+      mark("pre-tool-hook");
       hookResult = await firePreToolUseHook(hooks, call, input, risk, isReadOnly, mode);
     } catch (err) {
       // Flow 306 fix (review finding 3): a hook CRASH on PreToolUse — a
@@ -5204,6 +5581,11 @@ async function executeCall(
     // missing dimension. Escalation only — it never denies on its own (ADR-0009),
     // because a "safe" verdict from an incomplete list must never read as a grant.
     const command = typeof input.command === "string" ? input.command : "";
+    // Flow 426 AC4: what the operator refused stays refused in any spelling, even where the mode would run it.
+    if (reviewAutoActive() && command.length > 0 && !isTrustRoutineCommand(command)) {
+      const key = refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input));
+      if (operatorDenied(key)) return { output: REFUSED_EARLIER, isError: true };
+    }
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
     // Flow 299: SAC's `confirm-review` and `flow confirm` share this floor.
@@ -5226,6 +5608,15 @@ async function executeCall(
       publishLease,
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
+    // The untrusted-content latch must not stall a long trust-mode review on routine local commands.
+    // Flow 426 AC1: the routine table also lifts it in review-auto, where the wrapper above answers the ask.
+    const untrustedGate =
+      untrustedOrigin &&
+      !(
+        !gated.hookAsked &&
+        isTrustRoutineCommand(command) &&
+        ((mode === "trust" && gated.decision === "auto") || reviewAutoActive())
+      );
     // The model supplies this name, but cannot grant it: only a validated
     // operator response from the host below can put it in the session set.
     const mcpFqn = call.name === "use_tool" && typeof input.tool_name === "string" ? input.tool_name : undefined;
@@ -5256,7 +5647,7 @@ async function executeCall(
     }
     // A trust grant is not a way around the untrusted-content floor: with
     // external content in this turn the call asks even for a trusted tool.
-    if ((gated.decision === "auto" && !untrustedOrigin) || (trustedMcp && !untrustedOrigin && !gated.hookAsked && !isReadOnly)) {
+    if ((gated.decision === "auto" && !untrustedGate) || (trustedMcp && !untrustedGate && !gated.hookAsked && !isReadOnly)) {
       onAutoApproved?.(call.name, call.input, { destructive, credentials, ...(trustedMcp ? { mcpTrusted: true } : {}) });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -5272,18 +5663,27 @@ async function executeCall(
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
-              ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              ...(untrustedGate ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({
+                destructive,
+                credentials,
+                confirmation: sacReviewConfirmation,
+                publishLease,
+                hookAsk: gated.hookAsked,
+                untrusted: untrustedGate,
+                shell: true,
+              }),
               ...(mcpTrustPossible
                 ? mcpDestructive
                   ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" as const }
-                  : untrustedOrigin
+                  : untrustedGate
                     ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "untrusted-origin" as const }
                     : { mcpTrustAvailable: true }
                 : {}),
               ...(mcpGranted ? { mcpTrusted: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedOrigin ? untrustedDenial : "command not approved by the user; not executed", isError: true };
+        return { output: denialOutput(untrustedGate ? untrustedDenial : "command not approved by the user; not executed"), isError: true };
       }
       if (
         mcpFqn !== undefined &&
@@ -5291,12 +5691,15 @@ async function executeCall(
         typeof response === "object" &&
         response.trustMcpTool === true &&
         mcpTrustEligible &&
-        !untrustedOrigin
+        !untrustedGate
       ) {
         trustedMcpTools?.set(mcpFqn, currentMcpFingerprint);
       }
     }
   } else if (risk === "delegate") {
+    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
+      return { output: REFUSED_EARLIER, isError: true };
+    }
     // Fail-closed like `shell`: a delegate with no approver present is denied,
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
@@ -5322,6 +5725,7 @@ async function executeCall(
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
+      mark("approval");
       const response =
         requestApproval === undefined
           ? false
@@ -5330,12 +5734,17 @@ async function executeCall(
               destructive: false,
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({ hookAsk: gated.hookAsked, untrusted: untrustedOrigin }),
             });
+      mark("approved");
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed", isError: true };
+        return { output: denialOutput(untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed"), isError: true };
       }
     }
   } else if (risk === "write") {
+    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
+      return { output: REFUSED_EARLIER, isError: true };
+    }
     // ADR-0010: `write` joins the shell/destructive/delegate gate. Same
     // shape as the shell branch, but the escalation input is chosen PER TOOL
     // (flow 275 T6, specification §7.1), not shared by every `write`-risk
@@ -5395,11 +5804,18 @@ async function executeCall(
               ...(card !== undefined ? { alwaysAsk: true, card } : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({
+                destructive,
+                credentials,
+                confirmation: card !== undefined,
+                hookAsk: gated.hookAsked,
+                untrusted: untrustedOrigin,
+              }),
             });
       if (!isApprovalFor(response, fingerprint)) {
         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
         return {
-          output: untrustedOrigin ? untrustedDenial : card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
+          output: denialOutput(untrustedOrigin ? untrustedDenial : card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`),
           isError: true,
         };
       }
@@ -5426,14 +5842,23 @@ async function executeCall(
     if (gated.decision === "deny") {
       return { output: gated.denyMessage ?? `tool "${call.name}" refused by a policy hook`, isError: true };
     }
-    if (gated.decision === "ask" || untrustedOrigin) {
+    // Flow 426 AC1: the session's own notes never wait on untrusted content in trust or review-auto.
+    const slateLift = !gated.hookAsked && isTrustRoutineTool(call.name) && (mode === "trust" || reviewAutoActive());
+    const readUntrusted = untrustedOrigin && !slateLift;
+    if (gated.decision === "ask" || readUntrusted) {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
         requestApproval === undefined
           ? false
-          : await requestApproval(call.name, call.input, { fingerprint, destructive: false, ...(gated.hookAsked ? { hookAsk: true } : {}), ...(untrustedOrigin ? { untrustedOrigin: true } : {}) });
+          : await requestApproval(call.name, call.input, {
+              fingerprint,
+              destructive: false,
+              ...(gated.hookAsked ? { hookAsk: true } : {}),
+              ...(readUntrusted ? { untrustedOrigin: true } : {}),
+              cause: classifyApprovalCause({ hookAsk: gated.hookAsked, untrusted: readUntrusted }),
+            });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: untrustedOrigin ? untrustedDenial : `${call.name} not approved by the user; not executed`, isError: true };
+        return { output: denialOutput(readUntrusted ? untrustedDenial : `${call.name} not approved by the user; not executed`), isError: true };
       }
     }
   } else {
@@ -5446,6 +5871,7 @@ async function executeCall(
   // `/rewind` seam: after every approval, before the tool can touch the work tree.
   if (beforeMutation !== undefined && (risk === "write" || risk === "shell" || risk === "destructive" || risk === "delegate")) {
     try {
+      mark("before-mutation");
       await beforeMutation();
     } catch {
       // A failed snapshot never blocks the tool.
@@ -5453,9 +5879,11 @@ async function executeCall(
   }
   // The context is passed unconditionally: a tool that ignores it is unaffected,
   // and making the parameter conditional would hide which calls are abortable.
+  mark("invoke");
   const result = await tool.invoke(input, {
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
+    ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
   });
 
   // Flow 306 (W6 T9): PostToolUse/PostToolUseFailure — observe-only, fired
@@ -5466,6 +5894,7 @@ async function executeCall(
   // tests, or any future non-conforming implementation).
   if (hooks !== undefined) {
     const aliasName = aliasHookToolName(call.name);
+    mark("post-tool-hook");
     try {
       await hooks.runtime.fire(
         result.isError ? "PostToolUseFailure" : "PostToolUse",

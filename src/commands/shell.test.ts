@@ -1255,7 +1255,7 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
     // so it reads the same whether called directly or drained from the held
     // queue) — the slate-session threading itself is unchanged.
     expect(replBody).toContain(
-      "await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession, pruneArchive: true } : {});",
+      "...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),",
     );
   });
 });

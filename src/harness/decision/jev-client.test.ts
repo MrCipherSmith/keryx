@@ -647,3 +647,24 @@ describe("Flow 346: the EXTERNAL switch's choke point (AC1) — checked before a
     expect((fetchFn as unknown as { calls: unknown[] }).calls).toHaveLength(0);
   });
 });
+
+
+test("flow411: cancellation interrupts retry backoff and starts no second request", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  let sleeps = 0;
+  const fetchFn = (async () => {
+    calls += 1;
+    return new Response("busy", { status: 503 });
+  }) as unknown as typeof fetch;
+  await expect(callJevSystemOne(fetchFn, { state: "s", questions: ONE_QUESTION }, {
+    env: ENV_WITH_KEY, signal: controller.signal, timeoutMs: 1000,
+    sleepFn: () => {
+      sleeps += 1;
+      controller.abort();
+      return new Promise<void>(() => {});
+    },
+  })).rejects.toBeInstanceOf(JevTimeoutError);
+  expect(calls).toBe(1);
+  expect(sleeps).toBe(1);
+});

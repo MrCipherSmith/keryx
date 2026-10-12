@@ -43,6 +43,7 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
+import { resetOperatorDenials, reviewAutoActive, setReviewSystem } from "../review/review-system";
 import { setExecutionPlan } from "../session/execution-plan";
 import { closeSlateSession, detachSlateSession, openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
@@ -3978,7 +3979,7 @@ test("D1 regression: a batch with exactly ONE spawn_subagent call never takes th
 });
 
 test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave never overwrites an EARLIER wave's real successes — only the genuinely-failed call gets the synthesized error", async () => {
-  expect(DEFAULT_MAX_SUBAGENT_CONCURRENCY).toBe(3); // sanity: 4 calls must split into a 3-call wave then a 1-call wave
+  // The cap is pinned to 3 below: 4 calls must split into a 3-call wave then a 1-call wave.
 
   const invoked: string[] = [];
   const spawnTool = delegateSpawnTool(async (input) => {
@@ -4008,7 +4009,7 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
     onToolResult: (_name, r) => toolResultOutputs.push(r.output),
     // c1/c2/c3 (taskIds "c1".."c3", sorted first by `planWaves`' byTaskId
     // order) land in wave 0 and approve normally; c4 lands alone in wave 1
-    // (default `maxSubagentConcurrency` = 3, so 4 candidates split 3-then-1)
+    // (`maxSubagentConcurrency` is pinned to 3, so 4 candidates split 3-then-1)
     // and its approval callback THROWS — the finding's documented
     // reproduction path (a throwing `requestApproval`, not a literal
     // ledger/tool bug) for an exception inside a LATER wave.
@@ -4026,6 +4027,7 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
     tools: [spawnTool],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    maxSubagentConcurrency: 3,
   };
   const history: NormalizedMessage[] = [];
 
@@ -4060,9 +4062,13 @@ test("AC6 (flow 352 audit): the CONCURRENT spawn batch forwards the turn's real 
   // regardless of what the turn was given — interrupting the parent turn
   // never reached a concurrently spawned child, only a sequentially spawned
   // one.
-  const receivedSignals: (AbortSignal | undefined)[] = [];
+  const turn = new AbortController();
+  const seen: { defined: boolean; abortedBefore: boolean; abortedAfter: boolean }[] = [];
   const spawnTool = delegateSpawnTool(async (input, ctx) => {
-    receivedSignals.push(ctx?.signal);
+    const signal = ctx?.signal;
+    const abortedBefore = signal?.aborted === true;
+    turn.abort();
+    seen.push({ defined: signal !== undefined, abortedBefore, abortedAfter: signal?.aborted === true });
     return { output: `spawned:${String(input.task)}`, isError: false };
   });
 
@@ -4085,14 +4091,14 @@ test("AC6 (flow 352 audit): the CONCURRENT spawn batch forwards the turn's real 
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
   };
-  const turnSignal = new AbortController().signal;
+  await runAgentTurn(io, deps, [], "spawn two concurrently", { signal: turn.signal });
 
-  await runAgentTurn(io, deps, [], "spawn two concurrently", { signal: turnSignal });
-
-  expect(receivedSignals).toHaveLength(2);
-  for (const received of receivedSignals) {
-    expect(received).toBe(turnSignal);
-  }
+  // The call watchdog hands each spawn a signal derived from the turn's, so identity is not
+  // the contract: aborting the turn mid-call must reach every child.
+  expect(seen).toHaveLength(2);
+  expect(seen[0]).toEqual({ defined: true, abortedBefore: false, abortedAfter: true });
+  expect(seen[1]?.defined).toBe(true);
+  expect(seen[1]?.abortedAfter).toBe(true);
 });
 
 // ============================================================================
@@ -4669,6 +4675,13 @@ test("the instruction teaches the agent the `proposed` vocabulary, or the status
   expect(instruction).toContain("FOR APPROVAL");
 });
 
+test("flow 420: the instruction sends a named skill to skill_load first and says a draft step is not the workflow", () => {
+  const instruction = buildAgentSystemInstruction();
+  expect(instruction).toContain("When the user names a skill");
+  expect(instruction).toContain("FIRST tool call");
+  expect(instruction).toContain("never the workflow");
+});
+
 test("flow 347 T5 (AC2): the instruction no longer states or implies plan status decides when a turn may end", () => {
   const instruction = buildAgentSystemInstruction();
   // The regression this guards: "`proposed` never forces another round on
@@ -4678,4 +4691,129 @@ test("flow 347 T5 (AC2): the instruction no longer states or implies plan status
   expect(instruction).toMatch(/not what decides when a turn may end|does not decide when a turn may end/);
   // `proposed`/END THE TURN/FOR APPROVAL still documented (previous test).
   expect(instruction).toContain("`proposed`");
+});
+
+function untrustedThenCall(toolName: string, risk: "delegate" | "shell"): { provider: ReturnType<typeof scriptedProvider>["provider"]; tools: InteractiveTool[]; invoked: () => boolean } {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+    ],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = false;
+  const tools: InteractiveTool[] = [
+    { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+    { definition: { name: toolName, description: "", inputSchema: { type: "object", properties: {} }, risk }, invoke: async () => { invoked = true; return { output: "ran", isError: false }; } },
+  ];
+  return { provider, tools, invoked: () => invoked };
+}
+
+test("review-auto answers the reviewer-spawn approval itself, even after untrusted content, and records it", async () => {
+  setReviewSystem("review-auto");
+  try {
+    const { provider, tools, invoked } = untrustedThenCall("spawn_subagent", "delegate");
+    let asked = 0;
+    const auto: string[] = [];
+    const { io: baseIo } = collectingIo();
+    const io: AgentIO = {
+      ...baseIo,
+      requestApproval: async () => {
+        asked += 1;
+        return false;
+      },
+      onAutoApproved: (tool) => auto.push(tool),
+    };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then review");
+    expect(asked).toBe(0);
+    expect(invoked()).toBe(true);
+    expect(auto).toEqual(["spawn_subagent"]);
+  } finally {
+    setReviewSystem("inherit");
+  }
+});
+
+test("without review-auto the same reviewer spawn still reaches the human", async () => {
+  const { provider, tools, invoked } = untrustedThenCall("spawn_subagent", "delegate");
+  let asked = 0;
+  const { io: baseIo } = collectingIo();
+  const io: AgentIO = { ...baseIo, requestApproval: async () => { asked += 1; return true; } };
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then review");
+  expect(asked).toBe(1);
+  expect(invoked()).toBe(true);
+});
+
+test("review-auto keeps the untrusted-content floor for a shell call: the human is still asked", async () => {
+  setReviewSystem("review-auto");
+  try {
+    const { provider, tools, invoked } = untrustedThenCall("shell_exec", "shell");
+    let asked = 0;
+    const { io: baseIo } = collectingIo();
+    const io: AgentIO = { ...baseIo, requestApproval: async () => { asked += 1; return false; } };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then act");
+    expect(asked).toBe(1);
+    expect(invoked()).toBe(false);
+  } finally {
+    setReviewSystem("inherit");
+  }
+});
+
+test("review-auto does not ask again for an action the operator refused: the same call is refused without a prompt", async () => {
+  setReviewSystem("review-auto");
+  resetOperatorDenials();
+  try {
+    const { provider } = scriptedProvider([
+      [
+        { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+        { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+      ],
+      [
+        { kind: "tool_call_start", toolCallId: "c1", toolName: "shell_exec" },
+        { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      ],
+      [
+        { kind: "tool_call_start", toolCallId: "c2", toolName: "shell_exec" },
+        { kind: "tool_call_end", toolCallId: "c2", input: "{}" },
+      ],
+      [{ kind: "text_delta", text: "done" }],
+    ]);
+    let invoked = 0;
+    const tools: InteractiveTool[] = [
+      { definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" }, invoke: async () => ({ output: "external", isError: false, untrusted: true }) },
+      { definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" }, invoke: async () => { invoked += 1; return { output: "ran", isError: false }; } },
+    ];
+    let asked = 0;
+    const { io: baseIo } = collectingIo();
+    const io: AgentIO = { ...baseIo, requestApproval: async () => { asked += 1; return false; } };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools, systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch it, then act");
+    expect(asked).toBe(1);
+    expect(invoked).toBe(0);
+  } finally {
+    setReviewSystem("inherit");
+    resetOperatorDenials();
+  }
+});
+
+test("only the operator's own top-level line switches review-auto on", async () => {
+  const run = async (deps: Partial<AgentDeps>, options: Parameters<typeof runAgentTurn>[4], line: string): Promise<void> => {
+    const { provider } = scriptedProvider([[{ kind: "text_delta", text: "ok" }]]);
+    const { io } = collectingIo();
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [], systemInstruction: "test", idSeq: fixedIdSeq(), ...deps }, [], line, options);
+  };
+  try {
+    await run({ subagentBudget: {} }, undefined, "сделай автоматическое ревью");
+    expect(reviewAutoActive()).toBe(false);
+    await run({}, { origin: "bus-message" }, "сделай автоматическое ревью");
+    expect(reviewAutoActive()).toBe(false);
+    await run({}, undefined, "Проведи ревью через review-orchestrator");
+    expect(reviewAutoActive()).toBe(false);
+    await run({}, undefined, "сделай автоматическое ревью PR 7435");
+    expect(reviewAutoActive()).toBe(true);
+  } finally {
+    setReviewSystem("inherit");
+  }
 });

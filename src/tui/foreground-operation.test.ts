@@ -8,6 +8,7 @@ import {
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
   runAfterForegroundSettlement,
+  settleForegroundOperation,
 } from "./foreground-operation";
 
 // Two Force presses arriving while one operation is still settling.
@@ -304,4 +305,44 @@ test("flow 396: the hooks of a Telegram turn reach that turn's facade only, neve
   owner.settle(operation);
   expect(telegramTurn.permissionMode?.()).toBe("ask");
   expect(await telegramTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+});
+
+
+test("ordinary cancellation still accepts stopped callbacks and finalization", () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  const painted: string[] = [];
+  const facade = createForegroundAgentIoFacade(owner, token, { write: () => {}, onSystem: s => painted.push(s) });
+  owner.cancel("user interruption");
+  facade.onSystem?.("[stopped]");
+  expect(painted).toEqual(["[stopped]"]);
+  expect(settleForegroundOperation(owner, token)).toBe(true);
+});
+
+test("a settlement handoff cannot dispatch into a replacement session", async () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  let dispatched = 0;
+  const pending = runAfterForegroundSettlement(owner, () => { dispatched += 1; });
+  owner.invalidateSession();
+  owner.settle(token);
+  await pending;
+  expect(dispatched).toBe(0);
+});
+
+
+test("session switch clears old Force selections and permits a fresh settlement handoff", async () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  const handoff = createForegroundForceHandoff<string>();
+  const dispatched: string[] = [];
+  const old = forceForegroundQueueItem(owner, handoff, "old", { run: item => dispatched.push(item) });
+  owner.invalidateSession();
+  handoff.clear();
+  const fresh = forceForegroundQueueItem(owner, handoff, "fresh", { run: item => dispatched.push(item) });
+  owner.settle(token);
+  await Promise.all([old, fresh]);
+  expect(dispatched).toEqual(["fresh"]);
+  expect(handoff.hasPending).toBe(false);
+  expect(handoff.isAwaitingSettlement).toBe(false);
 });

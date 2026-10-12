@@ -1,0 +1,34 @@
+# Flow Journal
+
+- 2026-10-09T19:42:51.573Z - flow created
+- 2026-10-09T19:45:41.390Z - frozen: 13 criteria; checksum recorded
+- 2026-10-09T19:45:50.262Z - started
+- 2026-10-09T19:52:50.484Z - task-added: T5: Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests
+- 2026-10-09T19:52:50.668Z - task-added: T6: TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests
+- 2026-10-09T19:52:50.860Z - task-added: T7: Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests
+- 2026-10-09T19:52:55.779Z - task-added: T8: Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)
+- 2026-10-09T19:52:55.967Z - task-attempt: T5: started (attempt 1) — worker dispatched in keryx-f418
+- 2026-10-09T19:52:56.152Z - task-attempt: T6: started (attempt 1) — worker dispatched in keryx-f418
+- 2026-10-09T19:52:56.338Z - task-attempt: T7: started (attempt 1) — worker dispatched in keryx-f418
+- 2026-10-09T20:16:28.231Z - task-done: T5: Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests
+- 2026-10-09T20:16:28.442Z - task-done: T6: TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests
+- 2026-10-09T20:16:28.656Z - task-done: T7: Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests
+- 2026-10-09T20:16:28.869Z - task-done: T1: Collect remaining context
+- 2026-10-09T20:16:29.081Z - task-done: T2: Implement per plan
+- 2026-10-09T20:16:29.278Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-09T20:20:08.818Z - task-done: T8: Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)
+- 2026-10-09T20:20:09.034Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-09T20:57:12.605Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/940 (warning: PR is not a draft) (base: main)
+- 2026-10-09T20:57:26.034Z - ac-confirmed: AC1: src/commands/agent.test.ts + agent-trust-orchestration.test.ts: round 41 runs in trust, refused in ask; TRUST_MODE_MAX_ROUNDS=200 named constant (PR 940, CI green) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:26.230Z - ac-confirmed: AC2: agent-trust-orchestration.test.ts: trust session with routine review command (isTrustRoutineCommand allowlist) observes zero prompts; non-allowlisted commands and escalation floors still prompt; src/lib/trust-routine-command.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:26.432Z - ac-confirmed: AC3: agent-trust-orchestration.test.ts: four-item plan finishes with no operator message, bound MAX_PLAN_FOLLOW_THROUGHS=8, stops on no progress (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:26.626Z - ac-confirmed: AC4: agent-trust-orchestration.test.ts + src/session/ask-answer-notes.ts: question asked twice yields one prompt; answer survives compaction as slate note; irreversible questions always asked (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:26.818Z - ac-confirmed: AC5: src/tui/busy-dispatch.test.ts: slash line queued while busy, queuedCommandNotice shown, drained via runLine after the turn; /new /clear /resume refused while busy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:27.011Z - ac-confirmed: AC6: src/tui/ctrl-c-policy.test.ts + shell-pty-launch.smoke.test.ts (two Ctrl+C presses): turn cancelled on first, idle exit on second within 2000 ms, /exit always exits (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:27.208Z - ac-confirmed: AC7: src/review/dispatch-check.test.ts: REVIEWER_INPUT_INVALID / _NO_SLICE / _SLICE_UNKNOWN / _TOO_LARGE refuse before dispatch, exit 1; skill text updated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:27.410Z - ac-confirmed: AC8: src/review/slice.test.ts + review-slice.ts: 150000-byte ceiling, domain slices with manifest, data ledgers (csv, lockfile, snapshot) omitted and listed in omissions (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:27.597Z - ac-confirmed: AC9: src/review/retry-plan.test.ts + dispatch.ts not-run branch: one smaller-slice retry, then Not run, never counted as a clean pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:27.783Z - ac-confirmed: AC10: spawn-subagent-tool.test.ts: DEFAULT_MAX_SUBAGENT_CONCURRENCY=10, effective concurrency was 3; agent-trust-orchestration.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:27.971Z - ac-confirmed: AC11: interactive-tools.ts: outside-cwd read error names the cause and the alternative; keryx ctx run --raw added for machine artifacts; tests in interactive-tools and ctx suites (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-09T20:57:28.168Z - ac-confirmed: AC13: CHANGELOG [0.3.87]; docs/docs/guides/permission-modes.md section Long runs in the shell; mkdocs build --strict passed in CI on PR 940 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-12T04:53:18.552Z - ac-confirmed: AC12: Live 2026-10-12 on Presight-AI/vantage-frontend PR 7840 (0.3.110, openai-codex gpt-6.1-sol, keryx review run --autonomous): complete, exit 0, package closed via ingest, 2 rounds, 950 s, 5.86M tokens, 0 blocker 3 major 3 minor, 0 floor refusals. Claude run on the same PR: 10 reviewers + verifier + blast radius + design-system pass, 2 major. Compared by the operator 2026-10-12; depth parity (blast radius, verifier, mutation, design-system reviewer) moves to a separate flow. Operator accepted 198741. (signed: MrCipherSmith [stated])

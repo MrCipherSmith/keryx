@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import {
   applyFindingsCap,
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
-  DEFAULT_MAX_PARALLEL_REVIEWERS,
+  MAX_RATE_HALVINGS,
+  MAX_REVIEWERS_PER_WAVE_FULL,
+  nextAfterRateLimit,
+  rateLimitState,
+  reviewerDomain,
   DEFAULT_SPEND_CEILING_USD,
   evaluateSpendCap,
   planReviewerWaves,
@@ -204,19 +208,84 @@ test("an invalid ceiling or spend is refused rather than silently ignored", () =
 
 const FOURTEEN_REVIEWERS = Array.from({ length: 14 }, (_, index) => `reviewer-${index + 1}`);
 
-test("AC7: the default parallel dispatch cap is 4 and lives in code", () => {
-  expect(DEFAULT_MAX_PARALLEL_REVIEWERS).toBe(4);
+const REAL_FOURTEEN = [
+  "review-logic",
+  "review-security-code",
+  "review-architecture",
+  "review-highload",
+  "review-frontend",
+  "review-backend",
+  "review-frontend-conventions",
+  "review-performance",
+  "review-greptile",
+  "review-flow-graph",
+  "review-style",
+  "review-clean-code",
+  "review-testing-practices",
+  "code-style-review",
+];
+const TWENTY_REVIEWERS = [
+  ...REAL_FOURTEEN,
+  ...Array.from({ length: 6 }, (_, index) => `review-vantage-extra-${index + 1}`),
+];
 
-  const plan = planReviewerWaves(FOURTEEN_REVIEWERS);
+test("AC6: the ceiling for a full review is 10 and lives in code", () => {
+  expect(MAX_REVIEWERS_PER_WAVE_FULL).toBe(10);
+  expect(MAX_RATE_HALVINGS).toBe(2);
+});
 
-  // Fails without the cap: an uncapped dispatch is one wave of fourteen.
-  expect(plan.waves[0]).toHaveLength(4);
-  expect(plan.waves).toHaveLength(4);
-  expect(plan.queued).toBe(10);
+test("AC6: reviewers map to the logic-and-security, frontend-and-backend, style-and-tests domains", () => {
+  expect(reviewerDomain("review-logic")).toBe("core");
+  expect(reviewerDomain("review-security-code")).toBe("core");
+  expect(reviewerDomain("review-frontend")).toBe("domain");
+  expect(reviewerDomain("review-backend")).toBe("domain");
+  expect(reviewerDomain("review-style")).toBe("support");
+  expect(reviewerDomain("review-testing-practices")).toBe("support");
+  expect(reviewerDomain("some-project-reviewer")).toBe("domain");
+});
+
+test("AC6: a set of 3 reviewers is split by diff domain, core first, nothing is dropped", () => {
+  const plan = planReviewerWaves(["review-style", "review-frontend", "review-logic"]);
+
+  expect(plan.waves).toEqual([["review-logic"], ["review-frontend"], ["review-style"]]);
+  expect(plan.queued).toBe(2);
+  expect(plan.effective).toBe(10);
+});
+
+test("AC6: --full holds a wave to 10 even when a larger --parallel is given", () => {
+  const plan = planReviewerWaves(TWENTY_REVIEWERS, { cap: 30, full: true });
+
+  expect(plan.waves.every((wave) => wave.length <= MAX_REVIEWERS_PER_WAVE_FULL)).toBe(true);
+});
+
+test("AC6: a set of 14 splits by diff domain, core first, support last, none above 10", () => {
+  const plan = planReviewerWaves(REAL_FOURTEEN);
+
+  expect(plan.waves.length).toBeGreaterThan(1);
+  expect(plan.waves.every((wave) => wave.length <= MAX_REVIEWERS_PER_WAVE_FULL)).toBe(true);
+  expect(plan.waves[0]?.every((name) => reviewerDomain(name) === "core")).toBe(true);
+  expect(plan.waves.at(-1)?.every((name) => reviewerDomain(name) === "support")).toBe(true);
+  for (const wave of plan.waves) {
+    expect(new Set(wave.map(reviewerDomain)).size).toBe(1);
+  }
+  expect([...plan.waves.flat()].sort()).toEqual([...REAL_FOURTEEN].sort());
+});
+
+test("AC6: a set of 20 never puts more than 10 in a wave and drops nobody", () => {
+  const plan = planReviewerWaves(TWENTY_REVIEWERS);
+
+  expect(plan.waves.every((wave) => wave.length <= MAX_REVIEWERS_PER_WAVE_FULL)).toBe(true);
+  expect([...plan.waves.flat()].sort()).toEqual([...TWENTY_REVIEWERS].sort());
+  expect(plan.queued).toBe(20 - (plan.waves[0]?.length ?? 0));
+});
+
+test("AC6: the cap is a setting that can lower the wave size and never lift it past 10 for a full review", () => {
+  expect(planReviewerWaves(TWENTY_REVIEWERS, { cap: 3 }).waves.every((wave) => wave.length <= 3)).toBe(true);
+  expect(planReviewerWaves(TWENTY_REVIEWERS, { cap: 40, full: true }).effective).toBe(10);
 });
 
 test("AC7: a declared outstanding count shrinks the wave, which is the only way the cap reaches the nesting", () => {
-  const plan = planReviewerWaves(FOURTEEN_REVIEWERS, { outstanding: 3 });
+  const plan = planReviewerWaves(FOURTEEN_REVIEWERS, { outstanding: 9 });
 
   expect(plan.effective).toBe(1);
   expect(plan.holdsAcrossNesting).toBe(true);
@@ -249,10 +318,10 @@ test("AC10: the concurrency cap records what it QUEUED, and queued is not droppe
   const plan = planReviewerWaves(FOURTEEN_REVIEWERS);
   const markdown = renderCapsMarkdown({ concurrency: plan });
 
-  expect(markdown).toContain("reviewers_queued: 10");
+  expect(markdown).toContain(`reviewers_queued: ${plan.queued}`);
   expect(markdown).toContain("were QUEUED, not dropped");
   // Every reviewer is still in the plan; the cap deferred, it did not discard.
-  expect(plan.waves.flat()).toEqual(FOURTEEN_REVIEWERS);
+  expect([...plan.waves.flat()].sort()).toEqual([...FOURTEEN_REVIEWERS].sort());
 });
 
 test("AC10: an absent dispatch plan renders `not recorded`, not a one-wave plan", () => {
@@ -265,4 +334,55 @@ test("AC10: an absent dispatch plan renders `not recorded`, not a one-wave plan"
 test("a cap below 1 is refused: dispatching nothing is not a plan", () => {
   expect(() => planReviewerWaves(["a"], { cap: 0 })).toThrow(/positive integer/);
   expect(() => planReviewerWaves(["a"], { outstanding: -1 })).toThrow(/non-negative integer/);
+});
+
+// ---------------------------------------------------------------------------
+// AC9 — rate limits halve the wave, at most twice
+// ---------------------------------------------------------------------------
+
+test("AC9: one rate limit halves the wave, requeues the reviewer at the front and keeps going", () => {
+  const decision = nextAfterRateLimit(rateLimitState(10), ["review-logic"], ["review-style", "review-backend"]);
+
+  expect(decision).toEqual({
+    action: "requeue",
+    state: { waveSize: 5, halvings: 1 },
+    queue: ["review-logic", "review-style", "review-backend"],
+    waitSeconds: undefined,
+  });
+});
+
+test("AC9: retry-after is honoured when the reviewer gave one", () => {
+  const decision = nextAfterRateLimit(rateLimitState(10), ["review-logic"], [], 42);
+
+  expect(decision.action).toBe("requeue");
+  if (decision.action === "requeue") {
+    expect(decision.waitSeconds).toBe(42);
+  }
+  expect(() => nextAfterRateLimit(rateLimitState(10), ["a"], [], -1)).toThrow(/retry-after/);
+});
+
+test("AC9: three consecutive rate limits halve twice and then stop with BLOCKED rate_limited naming the queue", () => {
+  const first = nextAfterRateLimit(rateLimitState(10), ["a"], ["b", "c"]);
+  if (first.action !== "requeue") throw new Error("expected requeue");
+  const second = nextAfterRateLimit(first.state, ["a"], ["b", "c"]);
+  if (second.action !== "requeue") throw new Error("expected requeue");
+  expect(second.state).toEqual({ waveSize: 2, halvings: 2 });
+
+  const third = nextAfterRateLimit(second.state, ["a"], ["b", "c"]);
+
+  expect(third).toEqual({
+    action: "blocked",
+    status: "BLOCKED rate_limited",
+    queue: ["a", "b", "c"],
+    line: "STATUS: BLOCKED rate_limited — queue left: a, b, c",
+  });
+});
+
+test("AC9: the wave never halves below one reviewer", () => {
+  const decision = nextAfterRateLimit(rateLimitState(1), ["a"], []);
+
+  expect(decision.action).toBe("requeue");
+  if (decision.action === "requeue") {
+    expect(decision.state.waveSize).toBe(1);
+  }
 });

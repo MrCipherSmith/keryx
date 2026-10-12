@@ -117,6 +117,9 @@ Usage:
   keryx schedule add --digest --name <name> --every "<cadence>" \\
       --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
       [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
+  keryx schedule add --review-pr <pull request URL> --name <name> --every "<cadence>" \\
+      --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
+      [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--max-seconds N] [--yes]
   keryx schedule list
   keryx schedule show <name>
   keryx schedule pause <name>
@@ -148,6 +151,12 @@ project's remote session topic, or the "Digest" topic (--topic renames it) when 
 none. It needs no --prompt. \`keryx serve\` runs it; there is no OS timer, so keep serve
 running. The first run is a baseline and reports no changes. --ceiling, --max-seconds and
 --memory-mb are its per-run limits (the ceiling only covers the optional model summary).
+
+"add --review-pr" schedules an autonomous review of one pull request: each fire runs
+\`keryx review run --autonomous\` (profile review-autonomous) with nobody at the keyboard. A
+second fire on the same PR head reuses the finished review, and one that finds the first still
+running refuses. --budget-minutes and --budget-tokens stop a run at a safe point; --stall-minutes
+(default 10) stops one that makes no progress. It needs no --prompt and uses the OS timer.
 
 Keryx runs no daemon for ordinary schedules. The OS scheduler (systemd --user, launchd, or cron) calls
 \`keryx trigger run <name>\`. The machine must be on. systemd and launchd catch up one
@@ -224,7 +233,10 @@ function numberFlag(args: readonly string[], name: string): number | undefined {
 /** Parse `keryx schedule add` flags into a request. Missing required flags are reported together. */
 export function requestFromArgs(args: readonly string[]): ScheduleRequest {
   const isDigest = args.includes("--digest");
-  const missing = ["--name", ...(isDigest ? [] : ["--prompt"]), "--provider", "--model", "--rates", "--ceiling"].filter((f) => flag(args, f) === undefined);
+  const reviewRef = flag(args, "--review-pr");
+  if (args.includes("--review-pr") && reviewRef === undefined) throw new Error("--review-pr needs a pull request URL");
+  if (isDigest && reviewRef !== undefined) throw new Error("--digest and --review-pr cannot be combined");
+  const missing = ["--name", ...(isDigest || reviewRef !== undefined ? [] : ["--prompt"]), "--provider", "--model", "--rates", "--ceiling"].filter((f) => flag(args, f) === undefined);
   const cadence = flag(args, "--every") ?? flag(args, "--cron");
   if (cadence === undefined) missing.push("--every (or --cron)");
   if (missing.length > 0) throw new Error(`missing ${missing.join(", ")} — see \`keryx schedule --help\``);
@@ -248,10 +260,26 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
   const memoryMb = numberFlag(args, "--memory-mb");
   const topic = flag(args, "--topic");
   if (!isDigest && (topic !== undefined || memoryMb !== undefined)) throw new Error("--topic and --memory-mb belong to a digest: add --digest");
+  const budgetMinutes = numberFlag(args, "--budget-minutes");
+  const budgetTokens = numberFlag(args, "--budget-tokens");
+  const stallMinutes = numberFlag(args, "--stall-minutes");
+  if (reviewRef === undefined && (budgetMinutes !== undefined || budgetTokens !== undefined || stallMinutes !== undefined)) {
+    throw new Error("--budget-minutes, --budget-tokens and --stall-minutes belong to a review: add --review-pr <url>");
+  }
   return {
     name: flag(args, "--name")!,
     cadence: cadence!,
     prompt: flag(args, "--prompt") ?? "",
+    ...(reviewRef !== undefined
+      ? {
+          review: {
+            ref: reviewRef,
+            ...(budgetMinutes !== undefined ? { budgetMinutes } : {}),
+            ...(budgetTokens !== undefined ? { budgetTokens } : {}),
+            ...(stallMinutes !== undefined ? { stallMinutes } : {}),
+          },
+        }
+      : {}),
     ...(isDigest ? { digest: { ...(topic !== undefined ? { topic } : {}), ...(memoryMb !== undefined ? { memoryLimitMb: memoryMb } : {}) } } : {}),
     provider: flag(args, "--provider")!,
     model: flag(args, "--model")!,
@@ -304,12 +332,13 @@ async function addSubcommand(cwd: string, args: string[], deps: ScheduleCommandD
 
 function formatSummary(s: ScheduleSummary): string {
   const digest = s.entry.action.digest !== undefined;
+  const review = s.entry.action.review;
   const last =
     s.last === undefined
       ? "never ran"
       : `${s.last.outcome}${s.last.refusal !== undefined ? ` (${s.last.refusal})` : ""} at ${s.last.at}${s.last.usd !== undefined ? `, $${s.last.usd.toFixed(4)}` : ""}`;
   return (
-    `  - ${s.name}${digest ? " (digest)" : ""}  [${s.enabled ? "enabled" : "paused"}]  cron "${s.cron}"  ${digest ? "runs in keryx serve" : s.installed ? "installed" : "NOT installed"}` +
+    `  - ${s.name}${digest ? " (digest)" : ""}${review !== undefined ? ` (review ${review.ref})` : ""}  [${s.enabled ? "enabled" : "paused"}]  cron "${s.cron}"  ${digest ? "runs in keryx serve" : s.installed ? "installed" : "NOT installed"}` +
     `  next: ${s.nextRun?.toISOString() ?? "—"}  last: ${last}  report: ${s.reportPath ?? "none yet"}`
   );
 }

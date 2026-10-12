@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { busLeasesFromClient, readlineAgentHelpText, runAgentRepl } from "./shell";
-import type { AgentDeps } from "./agent";
+import { waitForRecovery, type AgentDeps, type InteractiveRecovery } from "./agent";
+import { scriptedProvider as recoveryProvider } from "./agent.test-helpers";
+import type { ShellEvent, ShellEventSink } from "./shell-events";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ShellSessionOpts } from "./shell-types";
 import type { BusClient } from "../bus/client";
@@ -102,6 +104,9 @@ async function repl(
     configDir?: string;
     /** Flow 354 (L-15) — see `runAgentRepl`'s own `rich.onCompletionWaitersSize` doc. */
     onCompletionWaitersSize?: (size: number) => void;
+    recovery?: InteractiveRecovery;
+    signal?: AbortSignal;
+    events?: ShellEventSink;
   } = {},
 ): Promise<string> {
   const out: string[] = [];
@@ -111,6 +116,8 @@ async function repl(
       printPrompt: () => {},
       safeBoundary: undefined,
       write: (s) => out.push(s),
+      ...(opts.recovery === undefined ? {} : { recovery: opts.recovery }),
+      ...(opts.signal === undefined ? {} : { signal: opts.signal }),
       ...(opts.onCompletionWaitersSize !== undefined
         ? { onCompletionWaitersSize: opts.onCompletionWaitersSize }
         : {}),
@@ -122,7 +129,7 @@ async function repl(
     { cwd, enabled: false, ...opts.session },
     undefined,
     undefined,
-    undefined,
+    opts.events,
     opts.configDir ?? path.join(root, "config"),
   );
   return out.join("");
@@ -1314,4 +1321,90 @@ describe("flow 360: /mcp trust in the readline REPL", () => {
     expect(output).toContain("TUI-only");
     expect(output).toContain("/mcp trust list");
   });
+});
+
+
+test("readline recovery completes the original operator prompt without another input or early turn_end", async () => {
+  const { provider, requests } = recoveryProvider([
+    [{ kind: "text_delta", text: "partial" }, { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "Recovered in readline." }, { kind: "model_end" }],
+  ]);
+  const events: ShellEvent[] = [];
+  const out = await repl(["hello", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id", maxRounds: 1 }),
+    events: { emit: (event) => events.push(event) },
+    recovery: { random: () => 0, wait: async () => {
+      expect(events.filter((e) => e.type === "turn_start")).toHaveLength(1);
+      expect(events.some((e) => e.type === "turn_end")).toBe(false);
+      expect(events.some((e) => e.type === "assistant")).toBe(false);
+    } },
+  });
+  expect(requests).toHaveLength(2);
+  expect(out).toContain("[recovering]");
+  expect(out).toContain("[interrupted output]");
+  expect(out).toContain("Recovered in readline.");
+  expect(events.filter((e) => e.type === "turn_start")).toHaveLength(1);
+  expect(events.filter((e) => e.type === "turn_end")).toEqual([
+    { type: "turn_end", text: "Recovered in readline.", toolCalls: 0 },
+  ]);
+});
+
+test("readline shutdown signal aborts recovery wait, emits a stopped outcome and sends no late request", async () => {
+  const controller = new AbortController();
+  const { provider, requests } = recoveryProvider([
+    [{ kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "must not run" }, { kind: "model_end" }],
+  ]);
+  const events: ShellEvent[] = [];
+  const out = await repl(["hello", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }), signal: controller.signal,
+    events: { emit: (event) => events.push(event) },
+    recovery: { wait: (ms, signal) => { const waiting = waitForRecovery(ms, signal); controller.abort(); return waiting; } },
+  });
+  expect(requests).toHaveLength(1);
+  expect(out).toContain("[stopped]");
+  const end = events.find((e) => e.type === "turn_end");
+  expect(end?.type === "turn_end" && end.errorMessage).toContain("[stopped]");
+});
+
+
+test("readline lease loss aborts recovery without a late request", async () => {
+  const { openLeasedSession } = await import("../session/lease");
+  const { provider, requests } = recoveryProvider([
+    [{ kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "must not run" }, { kind: "model_end" }],
+  ]);
+  let lose!: () => void;
+  let lost = false;
+  const out = await repl(["hello", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }),
+    session: { enabled: true, openLeased: (opts) => {
+      const opened = openLeasedSession(opts);
+      return { ...opened, lease: { ...opened.lease,
+        get lost() { return lost; }, checkLost: () => lost,
+        onLost: (callback) => { lose = () => { lost = true; callback(); }; return () => {}; },
+      } };
+    } },
+    recovery: { wait: (ms, signal) => { const waiting = waitForRecovery(ms, signal); lose(); return waiting; } },
+  });
+  expect(requests).toHaveLength(1);
+  expect(out).toContain("[stopped]");
+});
+
+
+test("readline turn totals include billed failed recovery attempts and reset for the next turn", async () => {
+  const { provider } = recoveryProvider([
+    [{ kind: "usage_update", usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cacheReadTokens: 3, cacheWriteTokens: 1, exact: true } }, { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "recovered" }, { kind: "usage_update", usage: { inputTokens: 20, outputTokens: 4, totalTokens: 24, cacheReadTokens: 5, cacheWriteTokens: 2, exact: true } }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "next turn" }, { kind: "usage_update", usage: { inputTokens: 1, outputTokens: 1 } }, { kind: "model_end" }],
+  ]);
+  const events: ShellEvent[] = [];
+  await repl(["hello", "next", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }),
+    events: { emit: event => events.push(event) }, recovery: { wait: async () => {} },
+  });
+  const ends = events.filter(e => e.type === "turn_end");
+  expect(ends[0]?.type === "turn_end" && ends[0].usage).toEqual({ inputTokens: 30, outputTokens: 6, totalTokens: 36, cacheReadTokens: 8, cacheWriteTokens: 3, exact: true } as import("../harness/provider/types").NormalizedUsage);
+  expect(ends[1]?.type === "turn_end" && ends[1].usage).toEqual({ inputTokens: 1, outputTokens: 1, exact: false } as import("../harness/provider/types").NormalizedUsage);
+  expect(events.filter(e => e.type === "usage")).toHaveLength(3);
 });

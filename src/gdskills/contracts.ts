@@ -697,6 +697,9 @@ async function resolveRef(
 const SCHEMA_ROOTS: string[] = [
   fileURLToPath(new URL("./contracts/", import.meta.url)),
   fileURLToPath(new URL("./bundled/skills/review/review-orchestrator/", import.meta.url)),
+  // the packaged build runs from dist/, with the schemas under src/gdskills/ one level up
+  fileURLToPath(new URL("../src/gdskills/contracts/", import.meta.url)),
+  fileURLToPath(new URL("../src/gdskills/bundled/skills/review/review-orchestrator/", import.meta.url)),
 ];
 
 function matchesType(value: unknown, type: string | string[]): boolean {

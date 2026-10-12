@@ -61,6 +61,18 @@ There is no session-to-workspace linkage: every call above needs an explicit
 `;
 }
 
+export function renderSacCoreReadme(): string {
+  return `# SAC Core
+
+The \`sac\` module (Shared Agent Context) keeps no scripts here: its logic ships
+with the \`keryx\` CLI (\`keryx workspace ...\`). Workspaces and accepted context
+are created lazily under \`.metaproject/workspaces/\` and
+\`.metaproject/context-operations/\`.
+
+See \`.metaproject/modules/sac.md\` for the command surface.
+`;
+}
+
 export function renderSacSkillReadme(): string {
   return `---
 name: sac
