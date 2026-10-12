@@ -82,6 +82,8 @@ import {
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
+import { type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
@@ -1983,6 +1985,14 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
  * renderer before it does (the startup picker) and in the chat shell, which
  * keep the full-screen overlay.
  */
+/** The dock side of an approval: `race` is set when the question is also in the Telegram topic. */
+type LocalApproval = (
+  tool: string,
+  inputJson: string,
+  meta: Parameters<NonNullable<TuiAgentIo["requestApproval"]>>[2],
+  race?: DockRace,
+) => ReturnType<NonNullable<TuiAgentIo["requestApproval"]>>;
+
 type StepTarget = Renderer | ModalChrome;
 
 /** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
@@ -3942,7 +3952,7 @@ export async function launchTuiAgentShell(opts: {
         liveReviewsPanel?.dispose();
         liveRemotePanel?.dispose();
         liveChannelsPanel?.dispose();
-        // Closing the shell deregisters: the topic goes with it. Best effort here
+        // Closing the shell deregisters: the topic is archived (closing note, history kept). Best effort here
         // (this callback is synchronous); the `finally` below awaits the same call.
         void remoteBridge?.disable();
         liveApprovals?.dispose();
@@ -5250,7 +5260,8 @@ export async function launchTuiAgentShell(opts: {
     // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
     // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
     // offers exactly two choices; Esc/cancel is "no".
-    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {
+    const confirmScheduleCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
+      const dockSignal = race?.signal ?? foregroundOperation.signal;
       for (const line of card) {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
@@ -5261,8 +5272,11 @@ export async function launchTuiAgentShell(opts: {
           title: "Create this schedule and install its background timer?",
           subtitle: card[0] ?? "",
           cancelId: "cancel",
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
+          onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+          signal: dockSignal,
           options: [
             { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
             { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
@@ -5270,6 +5284,7 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
       input.focus();
+      if (race?.topicWon() === true) return false;
       setMainAgent("running", id === "create" ? "schedule" : "denied");
       transcript.add(
         new otui.TextRenderable(r, {
@@ -5291,7 +5306,8 @@ export async function launchTuiAgentShell(opts: {
     // chat message may reach the model. Same card-then-choice shape, accurate
     // wording, never remembered — like `confirmScheduleCard`, this answers a
     // gate a hook raised, not a grant a saved pattern could stand in for.
-    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {
+    const confirmUserPromptCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
+      const dockSignal = race?.signal ?? foregroundOperation.signal;
       for (const line of card) {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
@@ -5302,8 +5318,11 @@ export async function launchTuiAgentShell(opts: {
           title: "Send this message to the model?",
           subtitle: card[0] ?? "",
           cancelId: "cancel",
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
+          onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+          signal: dockSignal,
           options: [
             { id: "send", label: "Send", description: "Let the message reach the model as written" },
             { id: "cancel", label: "Cancel", description: "The message is not sent" },
@@ -5311,6 +5330,7 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
       input.focus();
+      if (race?.topicWon() === true) return false;
       setMainAgent("running", id === "send" ? "prompt" : "denied");
       transcript.add(
         new otui.TextRenderable(r, {
@@ -5356,7 +5376,8 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
     };
-    const requestApprovalLocally: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
+    const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
+      const dockSignal = race?.signal ?? foregroundOperation.signal;
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
         // the call outright — this says why the operator is being asked.
@@ -5374,7 +5395,7 @@ export async function launchTuiAgentShell(opts: {
       // message.
       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
         addCauseLine(tool, meta);
-        return confirmUserPromptCard(meta.card);
+        return confirmUserPromptCard(meta.card, race);
       }
 
       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
@@ -5382,7 +5403,7 @@ export async function launchTuiAgentShell(opts: {
       // never remembered — no mode and no saved pattern answers it.
       if (meta?.alwaysAsk === true && meta.card !== undefined) {
         addCauseLine(tool, meta);
-        return confirmScheduleCard(meta.card);
+        return confirmScheduleCard(meta.card, race);
       }
 
       // Multi-agent spawn: auto-allow read_only; ask for general.
@@ -5433,8 +5454,11 @@ export async function launchTuiAgentShell(opts: {
                 : "Spawn general subagent?",
             subtitle: taskPreview,
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               {
                 id: "allow",
@@ -5447,6 +5471,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "subagent" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5499,8 +5524,11 @@ export async function launchTuiAgentShell(opts: {
             title: "Approve apply_patch?",
             subtitle: "Diff shown above · Esc denies",
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
               { id: "deny", label: "Deny", description: "Do not write anything" },
@@ -5508,6 +5536,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "write" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5578,8 +5607,11 @@ export async function launchTuiAgentShell(opts: {
             // so no payload prefix can occupy the line read first.
             subtitle: summariseUseToolApproval(described),
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
               ...(canTrustMcp
@@ -5590,6 +5622,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         // Keep the allow/trust/deny mapping in a tested, fail-closed helper.
         const verdict = mcpDockVerdict(id, canTrustMcp, meta?.fingerprint);
         const allowed = verdict !== false;
@@ -5655,8 +5688,11 @@ export async function launchTuiAgentShell(opts: {
             title: "Approve codex elicitation?",
             subtitle: elicitationSubtitle,
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
               { id: "deny", label: "Deny", description: "codex's action is refused" },
@@ -5664,6 +5700,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "write" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5753,8 +5790,11 @@ export async function launchTuiAgentShell(opts: {
           destructive,
           meta?.credentials === true,
           {
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
           },
           // Flow 275 T7 (specification §4.4): never offer to remember while a
           // peer's `git-publish` lease applies to this command.
@@ -5768,6 +5808,7 @@ export async function launchTuiAgentShell(opts: {
         ),
       );
       input.focus();
+      if (race?.topicWon() === true) return false;
 
       if (choice === "deny") {
         transcript.add(
@@ -5881,7 +5922,33 @@ export async function launchTuiAgentShell(opts: {
       if (decision !== "allow") return false;
       return approvedAnswer();
     };
-    io.requestApproval = trackApproval(requestApprovalLocally);
+    // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
+    // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
+    // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
+    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above.
+    const mirrorApprovalToTopic =
+      (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
+      async (tool, inputJson, meta) => {
+        const bridge = remoteBridge;
+        if (bridge === undefined || !bridge.active || bridge.telegramTurnActive) {
+          return inner(tool, inputJson, meta);
+        }
+        const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+        const outcome = await raceApproval({
+          turnSignal: foregroundOperation.signal,
+          dock: (race) => inner(tool, inputJson, meta, race),
+          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+        });
+        if (outcome.from === "dock") return outcome.result;
+        const allowed = outcome.answer.decision === "allow";
+        input.focus();
+        setMainAgent("running", allowed ? "approved (telegram)" : "denied");
+        io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
+        if (!allowed) return false;
+        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      };
+    io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
 
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
@@ -5899,8 +5966,8 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
         }),
       );
-      // flow 401: a question of a Telegram-started turn is also put in the topic; the first answer wins
-      const topicBridge = remoteBridge?.telegramTurnActive === true ? remoteBridge : undefined;
+      // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
+      const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;
       const outcome = await raceAskUser({
         turnSignal: foregroundOperation.signal,
         ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
@@ -10183,7 +10250,7 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
-    // Flow 376: closing the shell deregisters from serve, which deletes the topic.
+    // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.
     await remoteBridge?.disable();
     // review r1 F9: leave the bus before releasing the lease (specification

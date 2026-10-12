@@ -74,7 +74,7 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   provider: "it asks for provider keys and addresses, which are never typed into a chat",
   "search-provider": "it asks for provider keys, which are never typed into a chat",
   "search-connect": "it changes where searches are sent",
-  "remote-control": "turning remote control off would delete this topic, and its panel is local",
+  "remote-control": "turning remote control off would archive this topic, and its panel is local",
   integrate: "it edits other tools' configuration on this machine",
   copy: "it uses this machine's clipboard",
   game: "it needs the shell's screen",
@@ -191,7 +191,7 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
 
   if (canonical === "remote-control") {
     const sub = args.split(/\s+/)[0]?.toLowerCase() ?? "";
-    return refuse(canonical, sub === "off" ? "it would delete this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
+    return refuse(canonical, sub === "off" ? "it would archive this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
   }
   if (spec === undefined) {
     if (refusedReason !== undefined) {

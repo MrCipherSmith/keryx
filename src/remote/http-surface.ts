@@ -900,11 +900,14 @@ export class RemoteHttpSurface {
     if (!isSessionId(value.sessionId)) {
       return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
     }
-    if (typeof value.promptId !== "string" || !isPromptId(value.promptId)) {
-      return invalid("promptId must be a prompt id this serve issued.");
+    if (typeof value.promptId !== "string" || !(isPromptId(value.promptId) || isApprovalId(value.promptId))) {
+      return invalid("promptId must be a prompt or approval id this serve issued.");
     }
     if (value.by !== undefined && value.by !== "shell" && value.by !== "cancelled") {
       return invalid("by must be 'shell' or 'cancelled'.");
+    }
+    if (isApprovalId(value.promptId)) {
+      return this.closeApproval(value.promptId, value.sessionId, value.by);
     }
     const entry = this.choices.get(value.promptId);
     if (entry === undefined || entry.sessionId !== value.sessionId) {
@@ -925,6 +928,27 @@ export class RemoteHttpSurface {
     this.finishApproval(value.promptId, entry.sessionId, entry.messageId, entry.text, {
       result: answered ? `Answered in the shell at ${when}.` : `Cancelled at ${when}: the question is no longer open.`,
       shortReply: answered ? "Answered in the shell." : "That question is no longer open.",
+    });
+    return ok({ closed: true });
+  }
+
+  /**
+   * Flow 419: the shell answered an approval at the keyboard (or the turn stopped) while the buttons were
+   * still in the topic. The buttons go away and the message says where it was answered. An approval that was
+   * already pressed in the topic is left alone: that press is the answer and is being delivered.
+   */
+  private closeApproval(approvalId: string, sessionId: string, by: "shell" | "cancelled" | undefined): Response {
+    const entry = this.approvals.get(approvalId);
+    if (entry === undefined || entry.sessionId !== sessionId) {
+      return ok({ closed: false });
+    }
+    this.dropApproval(approvalId);
+    this.rememberDecided(approvalId, sessionId);
+    const when = clockText(this.now());
+    const answered = by !== "cancelled";
+    this.finishApproval(approvalId, sessionId, entry.messageId, entry.text, {
+      result: answered ? `Answered in the shell at ${when}.` : `Cancelled at ${when}: the request is no longer open.`,
+      shortReply: answered ? "Answered in the shell." : "That approval is no longer open.",
     });
     return ok({ closed: true });
   }

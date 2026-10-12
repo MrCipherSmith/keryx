@@ -30,6 +30,8 @@ export interface RemoteSessionRecord {
   status: RemoteSessionStatus;
   /** When the heartbeat went stale; the orphan timeout runs from here. */
   unavailableSince?: number;
+  /** The closing note is queued and the topic is being archived; a retry must not queue it again. */
+  closing?: boolean;
 }
 
 const REGISTRY_VERSION = 1;

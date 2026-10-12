@@ -1,5 +1,5 @@
 // AC1: a session registers, gets a topic, exchanges messages with it, and the
-// topic is deleted when the session deregisters.
+// topic is archived (a closing note, closed, history kept) when the session deregisters.
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { type Harness, makeHarness, OWNER_ID, until } from "./remote.test-helpers";
@@ -48,7 +48,7 @@ describe("remote session lifecycle", () => {
     expect(await hub.send("unknown-session", "nobody home")).toBe(false);
   });
 
-  test("deregister deletes the topic and later messages in it are ignored", async () => {
+  test("deregister archives the topic with a closing note and later messages in it are ignored", async () => {
     h = makeHarness();
     const hub = h.makeHub();
     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/work/app" });
@@ -56,8 +56,10 @@ describe("remote session lifecycle", () => {
     await hub.start();
 
     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: true });
-    expect(h.api.topics()).toEqual([]);
-    expect(h.api.deletedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
+    expect(h.api.topics().map((t) => t.messageThreadId)).toEqual([reg.threadId]);
+    expect(h.api.deletedTopics).toEqual([]);
+    expect(h.api.closedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
+    expect(h.api.sentTo(reg.threadId).map((m) => m.text).some((t) => /history stays here/i.test(t))).toBe(true);
     expect(hub.list()).toEqual([]);
 
     h.api.pushMessage({ fromId: OWNER_ID, text: "anyone?", threadId: reg.threadId });

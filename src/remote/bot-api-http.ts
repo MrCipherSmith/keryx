@@ -227,6 +227,12 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
         message_thread_id: params.messageThreadId,
       });
     },
+    async closeForumTopic(params) {
+      await call<boolean>("closeForumTopic", {
+        chat_id: params.chatId,
+        message_thread_id: params.messageThreadId,
+      });
+    },
     async editForumTopic(params) {
       await call<boolean>("editForumTopic", {
         chat_id: params.chatId,

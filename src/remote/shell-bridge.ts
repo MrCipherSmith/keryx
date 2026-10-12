@@ -6,7 +6,7 @@
 //
 //   - the lifecycle: OFF by default, turned on only by `enable()` (the explicit
 //     `/remote-control` command), turned off by `disable()` or when the shell
-//     closes (`disable()` deregisters, which deletes the topic);
+//     closes (`disable()` deregisters, which archives the topic: a closing note, history kept);
 //   - a line from Telegram: idle, it runs as a typed line; busy, it goes through
 //     the host's ordinary user queue. It does not invent a queue of its own;
 //   - the reply: the final assistant text of a Telegram-originated turn,
@@ -500,7 +500,7 @@ export class RemoteBridge {
   }
 
   /**
-   * Turn it off: deregisters, which deletes the topic. Safe when already off. A
+   * Turn it off: deregisters, which archives the topic (closing note, history kept). Safe when already off. A
    * second call while the first is still closing waits for it (and returns false):
    * "off" is only true once the topic is actually gone.
    */
@@ -742,7 +742,7 @@ export class RemoteBridge {
       this.runTimer = setTimeout(() => {
         this.timedOut = true;
         this.push("error", "run time limit reached; stopping the turn");
-        this.turnAbort?.abort();
+        this.turnAbort?.abort("cancelled");
         this.host.cancelTurn();
       }, limit);
     }
@@ -759,7 +759,7 @@ export class RemoteBridge {
     if (this.stoppedByUser) return "stopped";
     this.stoppedByUser = true;
     this.push("command", "/stop: stopping the turn");
-    this.turnAbort?.abort();
+    this.turnAbort?.abort("cancelled");
     this.host.cancelTurn();
     return "stopped";
   }
@@ -833,7 +833,7 @@ export class RemoteBridge {
     this.lastAssistantText = "";
     this.timedOut = false;
     this.stoppedByUser = false;
-    this.turnAbort?.abort();
+    this.turnAbort?.abort("cancelled");
     this.turnAbort = undefined;
     if (this.runTimer !== undefined) {
       clearTimeout(this.runTimer);
@@ -855,7 +855,10 @@ export class RemoteBridge {
    * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
    * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
    */
-  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {
+  async askApproval(
+    prompt: string,
+    options: { remember?: string; signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<RemoteApprovalAnswer> {
     const client = this.client;
     if (client === undefined || !client.connected) {
       this.push("approval", "denied: not connected");
@@ -865,9 +868,10 @@ export class RemoteBridge {
     let answer: RemoteApprovalAnswer;
     try {
       const text = composeApprovalPrompt(prompt);
-      const timeoutMs = this.approvalTimeoutMs;
+      const timeoutMs = options.timeoutMs ?? this.approvalTimeoutMs;
       if (client.askApproval !== undefined) {
-        const signal = this.turnAbort?.signal;
+        const signals = [this.turnAbort?.signal, options.signal].filter((one): one is AbortSignal => one !== undefined);
+        const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
         const got = await client.askApproval(text, timeoutMs, {
           ...(options.remember === undefined ? {} : { remember: options.remember }),
           ...(signal === undefined ? {} : { signal }),
