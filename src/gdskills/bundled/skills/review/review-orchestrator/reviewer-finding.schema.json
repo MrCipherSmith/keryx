@@ -184,6 +184,22 @@
         "type": "string"
       }
     },
+    "slices": {
+      "title": "Slices this result covered",
+      "description": "The ids of the dispatched slices the reviewer read. An entry is an id string, or an object with an `id` and an optional `coverage` note. `keryx review retry-plan` and `ledger build` read both; an entry with no id counts for nothing.",
+      "type": "array",
+      "items": {
+        "type": ["string", "object"],
+        "minLength": 1,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "coverage": { "type": "string" },
+          "status": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
     "stats": {
       "type": "object",
       "required": [

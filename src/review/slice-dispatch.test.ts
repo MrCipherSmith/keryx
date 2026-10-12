@@ -92,6 +92,37 @@ describe("planRetry", () => {
     expect(plan.decision).toBe("accepted");
   });
 
+  describe("the shapes a reviewer writes `slices` in (flow 430 AC1)", () => {
+    const allIds = built.manifest.slices.map((slice) => slice.id);
+    const coveredOf = (state: RetryState): string[] => [...(state.reviewers["review-logic"]?.covered ?? [])].sort();
+
+    test("objects carrying an id are read like id strings: all assigned slices as objects is accepted", () => {
+      const slices = allIds.map((id) => ({ id, status: "DONE", coverage: "read in full" }));
+      const plan = planRetry({ ...base, result: { status: "DONE", slices }, state: empty });
+      expect(plan.decision).toBe("accepted");
+      expect(coveredOf(plan.state)).toEqual([...allIds].sort());
+    });
+
+    test("a mixed list counts every id once", () => {
+      const slices = [allIds[0]!, { id: allIds[0]! }, { id: allIds[1]!, status: "DONE" }, allIds[1]!];
+      const plan = planRetry({ ...base, result: { status: "DONE", slices }, state: empty });
+      expect(coveredOf(plan.state)).toEqual([allIds[0]!, allIds[1]!].sort());
+    });
+
+    test("an entry without a usable id is ignored and named in the reason", () => {
+      const slices = [{ id: allIds[0]! }, { status: "DONE" }, { id: "" }, 7, null];
+      const plan = planRetry({ ...base, result: { status: "DONE", slices }, state: empty });
+      expect(coveredOf(plan.state)).toEqual([allIds[0]!]);
+      expect(plan.reason).toContain("4 slice entries without a usable id ignored");
+    });
+
+    test("a list of unusable entries is not coverage: it still counts as a stall, not as an accepted result", () => {
+      const plan = planRetry({ ...base, result: { status: "INCOMPLETE", slices: [{ status: "DONE" }] }, state: empty });
+      expect(plan.decision).toBe("retry");
+      expect(plan.reason).toContain("1 slice entry without a usable id ignored");
+    });
+  });
+
   test("the first INCOMPLETE gets one retry on slices at most half the size", () => {
     const largest = Math.max(...built.manifest.slices.map((slice) => slice.bytes));
     const plan = planRetry({ ...base, result: { status: "INCOMPLETE" }, state: empty });

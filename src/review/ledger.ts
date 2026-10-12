@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { researchErrors } from "./research";
-import { scopeFingerprint, type RetryState } from "./retry-plan";
+import { readSliceIds, scopeFingerprint, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
@@ -118,9 +118,7 @@ export function isEmptyOutput(raw: string): boolean {
   return raw.trim() === "" || /^\(subagent produced no text\)$/.test(raw.trim());
 }
 
-function sliceIdsOf(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((v) => (typeof v === "string" ? v : (v as { id?: unknown })?.id)).filter(text) : [];
-}
+const sliceIdsOf = (value: unknown): string[] => readSliceIds(value).ids;
 
 /** Ids a set of dispatched slices accounts for: themselves, and an original whose smaller retry slices were all covered. */
 function accountedFor(manifest: SliceManifest, reviewer: string, ids: Iterable<string>): Set<string> {

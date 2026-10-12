@@ -7,7 +7,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
-import { type RetryState, emptyRetryState, scopeFingerprint } from "../review/retry-plan";
+import { type RetryState, emptyRetryState, readSliceIds, scopeFingerprint } from "../review/retry-plan";
 import type { SliceManifest } from "../review/slice";
 
 export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--dry-run", "--json", "--help", "-h"] as const;
@@ -60,11 +60,28 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   }
 }
 
+type DriverFile = { reviewer?: unknown; slices?: unknown; definition?: unknown; skill_path?: unknown; payload?: unknown; result?: unknown };
+
+/** Where a driver file names the reviewer's rule file: a top-level `definition` or `skill_path`, or the same keys inside the dispatch `payload`. */
+export function definitionCandidates(driver: DriverFile): string[] {
+  const payload = driver.payload !== null && typeof driver.payload === "object" ? (driver.payload as DriverFile) : {};
+  return [driver.definition, driver.skill_path, payload.definition, payload.skill_path].filter((v): v is string => typeof v === "string" && v.trim() !== "");
+}
+
 async function jsonFiles(dir: string): Promise<string[]> {
   return existsSync(dir) ? (await readdir(dir)).filter((n) => n.endsWith(".json")).sort().map((n) => path.join(dir, n)) : [];
 }
 
-async function loadRaws(inputDir: string): Promise<{ raws: RawFile[]; ignored: string[] }> {
+/** A raw file is a reviewer reply when a driver names it or it is named after a reviewer; anything else without a REVIEW_RESULT block is set aside. */
+export type ReplyNames = { files: ReadonlySet<string>; reviewers: readonly string[] };
+
+export function isReviewerReply(name: string, body: string, replies: ReplyNames): boolean {
+  if (/REVIEW_RESULT/i.test(body) || replies.files.has(name)) return true;
+  const stem = name.replace(/\.txt$/, "");
+  return replies.reviewers.some((reviewer) => stem === reviewer || stem.startsWith(`${reviewer}-`) || stem.startsWith(`${reviewer}.`));
+}
+
+async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{ raws: RawFile[]; ignored: string[] }> {
   const raws: RawFile[] = [];
   const ignored: string[] = [];
   const dir = path.join(inputDir, "raw");
@@ -72,6 +89,10 @@ async function loadRaws(inputDir: string): Promise<{ raws: RawFile[]; ignored: s
     const file = path.join(dir, name);
     const body = await readFile(file, "utf8");
     const result = isEmptyOutput(body) ? undefined : parseReviewResult(body);
+    if (result === undefined && !isEmptyOutput(body) && !isReviewerReply(name, body, replies)) {
+      ignored.push(`raw/${name} (set aside: not a reviewer reply — no REVIEW_RESULT block and no driver names it; the file is left in place)`);
+      continue;
+    }
     if (result !== undefined && result.reviewer === undefined && !Array.isArray(result.findings)) {
       ignored.push(`raw/${name}`);
       continue;
@@ -95,6 +116,47 @@ async function loadRetry(fingerprint: string | undefined, ...files: string[]): P
     }
   }
   return merged;
+}
+
+export type DriverRecords = {
+  payloadSlices: Record<string, string[]>;
+  payloadDispatchCounts: Record<string, number>;
+  ruleFiles: Record<string, string>;
+  assignments: Map<string, string[][]>;
+  replies: ReplyNames;
+};
+
+/** Reads `<input-dir>/drivers/*.json`: what each dispatch handed a reviewer, the file its reply goes to, and the rule file it ran under. */
+export async function readDrivers(inputDir: string, root: string): Promise<DriverRecords> {
+  const payloadSlices: Record<string, string[]> = {};
+  const payloadDispatchCounts: Record<string, number> = {};
+  const ruleFiles: Record<string, string> = {};
+  const assignments = new Map<string, string[][]>();
+  const replyFiles = new Set<string>();
+  const replyReviewers = new Set<string>();
+  for (const file of await jsonFiles(path.join(inputDir, "drivers"))) {
+    const driver = await readJson<DriverFile>(file);
+    if (typeof driver?.reviewer !== "string") continue;
+    payloadDispatchCounts[driver.reviewer] = (payloadDispatchCounts[driver.reviewer] ?? 0) + 1;
+    replyReviewers.add(driver.reviewer);
+    const slices = readSliceIds(driver.slices);
+    const complete = Array.isArray(driver.slices) && slices.unusable === 0;
+    if (complete) (payloadSlices[driver.reviewer] ??= []).push(...slices.ids);
+    if (typeof driver.result === "string") {
+      replyFiles.add(path.basename(driver.result));
+      if (complete) {
+        const key = `${driver.reviewer}\0${driver.result}`;
+        const matches = assignments.get(key) ?? [];
+        matches.push(slices.ids);
+        assignments.set(key, matches);
+      }
+    }
+    for (const candidate of definitionCandidates(driver)) {
+      const definition = path.resolve(root, candidate);
+      if (existsSync(definition)) { ruleFiles[driver.reviewer] = path.relative(root, definition); break; }
+    }
+  }
+  return { payloadSlices, payloadDispatchCounts, ruleFiles, assignments, replies: { files: replyFiles, reviewers: [...replyReviewers] } };
 }
 
 export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false): string {
@@ -142,33 +204,14 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     if (hash === undefined) delete entry.contentHash;
     else entry.contentHash = hash;
   }
-  const { raws, ignored } = await loadRaws(inputDir);
   const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json")))) ?? [];
   const out = path.resolve(optionValue(rest, "--out") ?? path.join(packageDir, "research.json"));
   const dispositionSource = optionValue(rest, "--dispositions");
   const given = await readJson<Disposition[] | { obligations?: Disposition[] }>(path.resolve(dispositionSource ?? out));
   const dispositions = (Array.isArray(given) ? given : given?.obligations) ?? [];
 
-  const payloadSlices: Record<string, string[]> = {};
-  const payloadDispatchCounts: Record<string, number> = {};
-  const ruleFiles: Record<string, string> = {};
-  const assignments = new Map<string, string[][]>();
-  for (const file of await jsonFiles(path.join(inputDir, "drivers"))) {
-    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown; result?: unknown }>(file);
-    if (typeof driver?.reviewer !== "string") continue;
-    payloadDispatchCounts[driver.reviewer] = (payloadDispatchCounts[driver.reviewer] ?? 0) + 1;
-    if (Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === "string")) (payloadSlices[driver.reviewer] ??= []).push(...(driver.slices as string[]));
-    if (typeof driver.result === "string" && Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === "string")) {
-      const key = `${driver.reviewer}\0${driver.result}`;
-      const matches = assignments.get(key) ?? [];
-      matches.push(driver.slices as string[]);
-      assignments.set(key, matches);
-    }
-    if (typeof driver.definition === "string") {
-      const definition = path.resolve(root, driver.definition);
-      if (existsSync(definition)) ruleFiles[driver.reviewer] = path.relative(root, definition);
-    }
-  }
+  const { payloadSlices, payloadDispatchCounts, ruleFiles, assignments, replies } = await readDrivers(inputDir, root);
+  const { raws, ignored } = await loadRaws(inputDir, replies);
 
   assignRawDispatch(raws, assignments);
   const blastRadius = await packageHasBlastRadius(packageDir);

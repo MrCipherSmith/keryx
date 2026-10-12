@@ -174,6 +174,31 @@ describe("cross_repo can describe a producer that has not merged", () => {
   });
 });
 
+describe("a result reports the slices it covered (flow 430 AC2)", () => {
+  const result = (slices: unknown): Record<string, unknown> => ({
+    status: "DONE",
+    reviewer: "review-logic",
+    summary: "nothing found",
+    findings: [],
+    stats: { blocker: 0, major: 0, minor: 0, info: 0 },
+    slices,
+  });
+
+  test("ids, objects with an id, and a mix of both validate", async () => {
+    expect(await errorsFor(result(["slice-01", "slice-02"]), FINDING)).toEqual([]);
+    expect(await errorsFor(result([{ id: "slice-01", status: "DONE", coverage: "read in full" }]), FINDING)).toEqual([]);
+    expect(await errorsFor(result(["slice-01", { id: "slice-02" }]), FINDING)).toEqual([]);
+  });
+
+  test("an entry with no id, an empty id, or another type is refused", async () => {
+    expect((await errorsFor(result([{ status: "DONE" }]), FINDING)).join(" ")).toContain("id");
+    expect(await errorsFor(result([{ id: "" }]), FINDING)).not.toEqual([]);
+    expect(await errorsFor(result([""]), FINDING)).not.toEqual([]);
+    expect(await errorsFor(result([7]), FINDING)).not.toEqual([]);
+    expect(await errorsFor(result("slice-01"), FINDING)).not.toEqual([]);
+  });
+});
+
 describe("a finding can name the repository its evidence lives in", () => {
   function report(finding: Record<string, unknown>): Record<string, unknown> {
     return {

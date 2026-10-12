@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Review depth (flow 430)
+
+- `keryx review retry-plan` and `ledger build` read a reviewer's `slices` as ids or as objects with an `id`. A reviewer that listed every assigned slice as objects is no longer retired as `not-run`; an entry with no usable id is ignored and named in the plan's reason.
+- The reviewer output schema defines `slices`, and the review-orchestrator skill asks reviewers for it and documents `drivers/<reviewer>.json` (`reviewer`, `slices`, `result`, `definition`). `ledger build` also resolves the rule file from `skill_path`, top level or inside `payload`.
+- `ledger build` names a file in `raw/` that is not a reviewer reply (no `REVIEW_RESULT` block, not named by a driver) as `set aside` instead of demanding a result from it. The file is left in place.
+
 ## [0.3.112] - 2026-10-12
 
 ### Review depth

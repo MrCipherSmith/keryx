@@ -33,8 +33,8 @@ export type ReviewerResult = {
   /** Scope identity from the dispatch that produced this result. */
   scopeFingerprint?: string;
   attempt?: number;
-  /** The slices this result covered. */
-  slices?: string[];
+  /** The slices this result covered: id strings, or objects carrying an `id` (reviewers write both). */
+  slices?: unknown;
   needs_context?: string[];
 };
 
@@ -103,6 +103,19 @@ export type PlanRetryInput = {
 
 const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item !== "") : []);
 
+/** Slice ids of a reviewer's `slices`: each entry is an id string or an object with a string `id`. Anything else is counted, not read. */
+export function readSliceIds(value: unknown): { ids: string[]; unusable: number } {
+  if (!Array.isArray(value)) return { ids: [], unusable: 0 };
+  const ids = new Set<string>();
+  let unusable = 0;
+  for (const entry of value) {
+    const id = typeof entry === "string" ? entry : entry !== null && typeof entry === "object" ? (entry as { id?: unknown }).id : undefined;
+    if (typeof id === "string" && id.trim() !== "") ids.add(id);
+    else unusable += 1;
+  }
+  return { ids: [...ids], unusable };
+}
+
 /**
  * Decide what follows a reviewer result.
  *
@@ -117,7 +130,8 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   const status = String(result.status ?? "").toUpperCase();
   const fingerprint = scopeFingerprint(manifest, input.readSliceText);
   const current = fingerprint !== undefined && input.state.scopeFingerprint === fingerprint;
-  const hasIncoming = status !== "" || result.attempt !== undefined || asStrings(result.slices).length > 0 || asStrings(input.covered).length > 0;
+  const incoming = readSliceIds(result.slices);
+  const hasIncoming = status !== "" || result.attempt !== undefined || incoming.ids.length > 0 || asStrings(input.covered).length > 0;
   const hasPriorScope = input.state.scopeFingerprint !== undefined || Object.keys(input.state.reviewers).length > 0;
   if (hasIncoming && (
     (result.scopeFingerprint !== undefined && result.scopeFingerprint !== fingerprint) ||
@@ -137,7 +151,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
 
   const ids = new Set(manifest.slices.map((entry) => entry.id));
   const priorCovered = new Set(known?.covered ?? []);
-  const reportedSlices = [...asStrings(result.slices), ...asStrings(input.covered)];
+  const reportedSlices = [...incoming.ids, ...asStrings(input.covered)];
   const reported = reportedSlices.filter((id) => ids.has(id));
   const covered = new Set([...priorCovered, ...reported]);
   const progress = reported.some((id) => !priorCovered.has(id));
@@ -159,7 +173,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
       reviewer,
       status,
       priorAttempts: priorRounds,
-      reason,
+      reason: incoming.unusable === 0 ? reason : `${reason}; ${incoming.unusable} slice entr${incoming.unusable === 1 ? "y" : "ies"} without a usable id ignored`,
       newSlices: [],
       wave: waves[0] ?? [],
       remaining: summarizeWaves(waves),

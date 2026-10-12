@@ -5,7 +5,47 @@ import path from "node:path";
 import { coverageErrors, isAttendedRun } from "../review/coverage";
 import type { RawFile } from "../review/ledger";
 import { pendingMutants } from "../review/mutate";
-import { assignRawDispatch } from "./review-ledger";
+import { assignRawDispatch, definitionCandidates, isReviewerReply, readDrivers } from "./review-ledger";
+
+describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
+  test("a rule file is found under definition, skill_path, or either key inside payload", () => {
+    expect(definitionCandidates({ definition: "a.md" })).toEqual(["a.md"]);
+    expect(definitionCandidates({ skill_path: "b.md" })).toEqual(["b.md"]);
+    expect(definitionCandidates({ payload: { skill_path: "c.md", definition: "d.md" } })).toEqual(["d.md", "c.md"]);
+    expect(definitionCandidates({ definition: "", payload: {} })).toEqual([]);
+  });
+
+  test("readDrivers resolves a payload skill_path and still names a missing definition as no rule", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f430-"));
+    try {
+      await mkdir(path.join(root, "in", "drivers"), { recursive: true });
+      await mkdir(path.join(root, "rules"), { recursive: true });
+      await writeFile(path.join(root, "rules", "logic.md"), "# logic\n");
+      const put = (name: string, body: object) => writeFile(path.join(root, "in", "drivers", name), JSON.stringify(body));
+      await put("review-logic.json", { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt", payload: { skill_path: "rules/logic.md" } });
+      await put("review-style.json", { reviewer: "review-style", slices: [{ id: "S2", status: "DONE" }], result: "raw/review-style.txt", definition: "rules/missing.md" });
+      const drivers = await readDrivers(path.join(root, "in"), root);
+      expect(drivers.ruleFiles).toEqual({ "review-logic": path.join("rules", "logic.md") });
+      expect(drivers.payloadSlices).toEqual({ "review-logic": ["S1"], "review-style": ["S2"] });
+      expect([...drivers.replies.files].sort()).toEqual(["review-logic.txt", "review-style.txt"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  const replies = { files: new Set(["review-logic.txt"]), reviewers: ["review-logic"] };
+
+  test("a verification payload filed in raw/ is not a reviewer reply", () => {
+    expect(isReviewerReply("verification.txt", '{"claims": []}', replies)).toBe(false);
+  });
+
+  test("a file holding REVIEW_RESULT, named by a driver, or named after a reviewer still is one", () => {
+    expect(isReviewerReply("verification.txt", "REVIEW_RESULT: {}", replies)).toBe(true);
+    expect(isReviewerReply("review-logic.txt", "no block here", replies)).toBe(true);
+    expect(isReviewerReply("review-logic-retry.txt", "no block here", replies)).toBe(true);
+    expect(isReviewerReply("review-logic.2.txt", "no block here", replies)).toBe(true);
+  });
+});
 
 for (const [label, reviewer, slices, expected] of [
   ["ambiguous raw does not cover union", "reviewer", [["A"], ["B"]], []],
