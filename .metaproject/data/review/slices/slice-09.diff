@@ -1,0 +1,512 @@
+--- src/review/caps.test.ts
+@@ 2,12 @@
+ import {
+   applyFindingsCap,
+   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
+-  DEFAULT_MAX_PARALLEL_REVIEWERS,
++  MAX_RATE_HALVINGS,
++  MAX_REVIEWERS_PER_WAVE_FULL,
++  nextAfterRateLimit,
++  rateLimitState,
++  reviewerDomain,
+   DEFAULT_SPEND_CEILING_USD,
+   evaluateSpendCap,
+   planReviewerWaves,
+
+--- src/review/caps.test.ts
+@@ 208,291 @@
+ 
+ const FOURTEEN_REVIEWERS = Array.from({ length: 14 }, (_, index) => `reviewer-${index + 1}`);
+ 
+-test("AC7: the default parallel dispatch cap is 4 and lives in code", () => {
+-  expect(DEFAULT_MAX_PARALLEL_REVIEWERS).toBe(4);
++const REAL_FOURTEEN = [
++  "review-logic",
++  "review-security-code",
++  "review-architecture",
++  "review-highload",
++  "review-frontend",
++  "review-backend",
++  "review-frontend-conventions",
++  "review-performance",
++  "review-greptile",
++  "review-flow-graph",
++  "review-style",
++  "review-clean-code",
++  "review-testing-practices",
++  "code-style-review",
++];
++const TWENTY_REVIEWERS = [
++  ...REAL_FOURTEEN,
++  ...Array.from({ length: 6 }, (_, index) => `review-vantage-extra-${index + 1}`),
++];
++
++test("AC6: the ceiling for a full review is 10 and lives in code", () => {
++  expect(MAX_REVIEWERS_PER_WAVE_FULL).toBe(10);
++  expect(MAX_RATE_HALVINGS).toBe(2);
++});
+ 
+-  const plan = planReviewerWaves(FOURTEEN_REVIEWERS);
++test("AC6: reviewers map to the logic-and-security, frontend-and-backend, style-and-tests domains", () => {
++  expect(reviewerDomain("review-logic")).toBe("core");
++  expect(reviewerDomain("review-security-code")).toBe("core");
++  expect(reviewerDomain("review-frontend")).toBe("domain");
++  expect(reviewerDomain("review-backend")).toBe("domain");
++  expect(reviewerDomain("review-style")).toBe("support");
++  expect(reviewerDomain("review-testing-practices")).toBe("support");
++  expect(reviewerDomain("some-project-reviewer")).toBe("domain");
++});
++
++test("AC6: a set of 3 reviewers is split by diff domain, core first, nothing is dropped", () => {
++  const plan = planReviewerWaves(["review-style", "review-frontend", "review-logic"]);
++
++  expect(plan.waves).toEqual([["review-logic"], ["review-frontend"], ["review-style"]]);
++  expect(plan.queued).toBe(2);
++  expect(plan.effective).toBe(10);
++});
++
++test("AC6: --full holds a wave to 10 even when a larger --parallel is given", () => {
++  const plan = planReviewerWaves(TWENTY_REVIEWERS, { cap: 30, full: true });
++
++  expect(plan.waves.every((wave) => wave.length <= MAX_REVIEWERS_PER_WAVE_FULL)).toBe(true);
++});
+ 
+-  // Fails without the cap: an uncapped dispatch is one wave of fourteen.
+-  expect(plan.waves[0]).toHaveLength(4);
+-  expect(plan.waves).toHaveLength(4);
+-  expect(plan.queued).toBe(10);
++test("AC6: a set of 14 splits by diff domain, core first, support last, none above 10", () => {
++  const plan = planReviewerWaves(REAL_FOURTEEN);
++
++  expect(plan.waves.length).toBeGreaterThan(1);
++  expect(plan.waves.every((wave) => wave.length <= MAX_REVIEWERS_PER_WAVE_FULL)).toBe(true);
++  expect(plan.waves[0]?.every((name) => reviewerDomain(name) === "core")).toBe(true);
++  expect(plan.waves.at(-1)?.every((name) => reviewerDomain(name) === "support")).toBe(true);
++  for (const wave of plan.waves) {
++    expect(new Set(wave.map(reviewerDomain)).size).toBe(1);
++  }
++  expect([...plan.waves.flat()].sort()).toEqual([...REAL_FOURTEEN].sort());
++});
++
++test("AC6: a set of 20 never puts more than 10 in a wave and drops nobody", () => {
++  const plan = planReviewerWaves(TWENTY_REVIEWERS);
++
++  expect(plan.waves.every((wave) => wave.length <= MAX_REVIEWERS_PER_WAVE_FULL)).toBe(true);
++  expect([...plan.waves.flat()].sort()).toEqual([...TWENTY_REVIEWERS].sort());
++  expect(plan.queued).toBe(20 - (plan.waves[0]?.length ?? 0));
++});
++
++test("AC6: the cap is a setting that can lower the wave size and never lift it past 10 for a full review", () => {
++  expect(planReviewerWaves(TWENTY_REVIEWERS, { cap: 3 }).waves.every((wave) => wave.length <= 3)).toBe(true);
++  expect(planReviewerWaves(TWENTY_REVIEWERS, { cap: 40, full: true }).effective).toBe(10);
+ });
+ 
+ test("AC7: a declared outstanding count shrinks the wave, which is the only way the cap reaches the nesting", () => {
+-  const plan = planReviewerWaves(FOURTEEN_REVIEWERS, { outstanding: 3 });
++  const plan = planReviewerWaves(FOURTEEN_REVIEWERS, { outstanding: 9 });
+ 
+   expect(plan.effective).toBe(1);
+   expect(plan.holdsAcrossNesting).toBe(true);
+
+--- src/review/caps.test.ts
+@@ 318,327 @@
+   const plan = planReviewerWaves(FOURTEEN_REVIEWERS);
+   const markdown = renderCapsMarkdown({ concurrency: plan });
+ 
+-  expect(markdown).toContain("reviewers_queued: 10");
++  expect(markdown).toContain(`reviewers_queued: ${plan.queued}`);
+   expect(markdown).toContain("were QUEUED, not dropped");
+   // Every reviewer is still in the plan; the cap deferred, it did not discard.
+-  expect(plan.waves.flat()).toEqual(FOURTEEN_REVIEWERS);
++  expect([...plan.waves.flat()].sort()).toEqual([...FOURTEEN_REVIEWERS].sort());
+ });
+ 
+ test("AC10: an absent dispatch plan renders `not recorded`, not a one-wave plan", () => {
+
+--- src/review/caps.test.ts
+@@ 335,388 @@
+   expect(() => planReviewerWaves(["a"], { cap: 0 })).toThrow(/positive integer/);
+   expect(() => planReviewerWaves(["a"], { outstanding: -1 })).toThrow(/non-negative integer/);
+ });
++
++// ---------------------------------------------------------------------------
++// AC9 — rate limits halve the wave, at most twice
++// ---------------------------------------------------------------------------
++
++test("AC9: one rate limit halves the wave, requeues the reviewer at the front and keeps going", () => {
++  const decision = nextAfterRateLimit(rateLimitState(10), ["review-logic"], ["review-style", "review-backend"]);
++
++  expect(decision).toEqual({
++    action: "requeue",
++    state: { waveSize: 5, halvings: 1 },
++    queue: ["review-logic", "review-style", "review-backend"],
++    waitSeconds: undefined,
++  });
++});
++
++test("AC9: retry-after is honoured when the reviewer gave one", () => {
++  const decision = nextAfterRateLimit(rateLimitState(10), ["review-logic"], [], 42);
++
++  expect(decision.action).toBe("requeue");
++  if (decision.action === "requeue") {
++    expect(decision.waitSeconds).toBe(42);
++  }
++  expect(() => nextAfterRateLimit(rateLimitState(10), ["a"], [], -1)).toThrow(/retry-after/);
++});
++
++test("AC9: three consecutive rate limits halve twice and then stop with BLOCKED rate_limited naming the queue", () => {
++  const first = nextAfterRateLimit(rateLimitState(10), ["a"], ["b", "c"]);
++  if (first.action !== "requeue") throw new Error("expected requeue");
++  const second = nextAfterRateLimit(first.state, ["a"], ["b", "c"]);
++  if (second.action !== "requeue") throw new Error("expected requeue");
++  expect(second.state).toEqual({ waveSize: 2, halvings: 2 });
++
++  const third = nextAfterRateLimit(second.state, ["a"], ["b", "c"]);
++
++  expect(third).toEqual({
++    action: "blocked",
++    status: "BLOCKED rate_limited",
++    queue: ["a", "b", "c"],
++    line: "STATUS: BLOCKED rate_limited — queue left: a, b, c",
++  });
++});
++
++test("AC9: the wave never halves below one reviewer", () => {
++  const decision = nextAfterRateLimit(rateLimitState(1), ["a"], []);
++
++  expect(decision.action).toBe("requeue");
++  if (decision.action === "requeue") {
++    expect(decision.state.waveSize).toBe(1);
++  }
++});
+
+--- src/review/managed.test.ts
+@@ 1268,1274 @@
+ test("AC7/AC10: a dispatch plan records its waves, its queue and whether it holds across nesting", async () => {
+   await fresh();
+   const { path: pkg } = await ingestFindings("2026-08-30-cap-concurrency", {
+-    concurrency: { reviewers: ["a", "b", "c", "d", "e", "f"] },
++    concurrency: { cap: 4, reviewers: ["a", "b", "c", "d", "e", "f"] },
+   });
+   const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
+ 
+
+--- src/review/round-need.test.ts
+@@ 1,60 @@
++import { describe, expect, test } from "bun:test";
++import { classifyRoundNeed } from "./round-need";
++
++const DOCS_ONLY = ["README.md", "docs/guide/setup.md", "CHANGELOG.md", "bun.lock"];
++const CODE = ["src/review/caps.ts", "README.md"];
++
++describe("classifyRoundNeed", () => {
++  test("a docs-only diff needs no round and names the reason", () => {
++    const need = classifyRoundNeed({ files: DOCS_ONLY });
++    expect(need.needed).toBe(false);
++    expect(need.reason).toContain("docs");
++  });
++
++  test("a diff with code needs a round", () => {
++    expect(classifyRoundNeed({ files: CODE })).toEqual({ needed: true, reason: "code or rule-bearing files in the diff" });
++  });
++
++  test.each([
++    ["src/build/index.ts"],
++    ["scripts/build/release.ts"],
++    ["requirements.txt"],
++    ["constraints.txt"],
++    ["CMakeLists.txt"],
++    [".claude/agents/reviewer.md"],
++    [".claude/commands/ship.md"],
++    [".metaproject/skills/x/references/a.md"],
++    ["GEMINI.md"],
++    [".github/copilot-instructions.md"],
++    ["skills/foo/skill.md"],
++  ])("%s fails open: it needs a round", (file) => {
++    expect(classifyRoundNeed({ files: [file] }).needed).toBe(true);
++  });
++
++  test.each([["dist/app.js"], ["coverage/lcov.info"], ["src/__generated__/types.ts"]])(
++    "%s is machine-written and needs no round",
++    (file) => {
++      expect(classifyRoundNeed({ files: [file] }).needed).toBe(false);
++    },
++  );
++
++  test.each([
++    [".github/workflows/ci.yml"],
++    ["db/migrations/0042_add_column.sql"],
++    ["src/auth/session.ts"],
++    ["package.json"],
++    ["tsconfig.json"],
++  ])("%s is never treated as docs", (file) => {
++    expect(classifyRoundNeed({ files: ["README.md", file] }).needed).toBe(true);
++  });
++
++  test("--all, an explicit reviewer list or a gating round forces a round on a docs-only diff", () => {
++    expect(classifyRoundNeed({ files: DOCS_ONLY, all: true }).needed).toBe(true);
++    expect(classifyRoundNeed({ files: DOCS_ONLY, explicitReviewers: ["review-style"] }).needed).toBe(true);
++    expect(classifyRoundNeed({ files: DOCS_ONLY, gating: true }).needed).toBe(true);
++  });
++
++  test("an empty diff needs no round", () => {
++    expect(classifyRoundNeed({ files: [] }).needed).toBe(false);
++  });
++});
+
+--- src/review/caps.ts
+@@ 338,388 @@
+ // ---------------------------------------------------------------------------
+ 
+ /**
+- * How many reviewer subagents one dispatch plan may have in flight.
+- *
+- * **4.** Chosen with the nesting in mind and with the honest limit of that
+- * choice stated below.
+- *
+- * The numbers it is chosen against: the harness allows on the order of 20
+- * concurrent subagents; `review-orchestrator` has fourteen reviewers to
+- * dispatch; and it runs nested under `flow-orchestrator`, which runs nested
+- * under `job-orchestrator`. Three levels each opening an unbounded fan-out is
+- * how a fourteen-way dispatch becomes a rate-limit incident. 4 gives four
+- * waves for a full reviewer set and leaves room for two enclosing levels to
+- * hold work of their own without the total approaching the harness limit.
+- *
+- * It is not tuned to a measured throughput number, and claiming otherwise would
+- * be the kind of unbacked precision this programme exists to remove. It is a
+- * conservative bound picked so that the *nested worst case* stays inside a limit
+- * that is known.
++ * The most reviewers one wave holds. A full review (`--all`) is split by diff
++ * domain and no wave exceeds this; `--parallel <n>` can only lower it.
+  */
+-export const DEFAULT_MAX_PARALLEL_REVIEWERS = 4;
++export const MAX_REVIEWERS_PER_WAVE_FULL = 10;
++
++/** Halvings of the wave size a run of `STATUS: RATE_LIMITED` answers may cause before the round stops. */
++export const MAX_RATE_HALVINGS = 2;
++
++export type ReviewerDomain = "core" | "domain" | "support";
++
++const CORE_REVIEWERS = new Set([
++  "review-logic",
++  "review-security-code",
++  "review-architecture",
++  "review-highload",
++  "review-regression",
++  "review-core-boundaries",
++  "code-boss-reviewer",
++  "code-ai-review",
++]);
++
++const SUPPORT_REVIEWERS = new Set([
++  "review-style",
++  "review-clean-code",
++  "review-testing-practices",
++  "review-vantage-testing",
++  "review-vantage-styling",
++  "review-layout",
++  "code-style-review",
++]);
++
++/**
++ * The diff domain a reviewer belongs to: `core` (logic and security), `domain`
++ * (frontend, backend and anything not named elsewhere), `support` (style and
++ * tests). Wave order follows that order.
++ */
++export function reviewerDomain(reviewer: string): ReviewerDomain {
++  if (CORE_REVIEWERS.has(reviewer)) {
++    return "core";
++  }
++  if (SUPPORT_REVIEWERS.has(reviewer)) {
++    return "support";
++  }
++  return "domain";
++}
+ 
+ export type ConcurrencyPlan = {
+   cap: number;
+
+--- src/review/caps.ts
+@@ 421,443 @@
+ };
+ 
+ export type ConcurrencyPlanOptions = {
+-  /** Defaults to {@link DEFAULT_MAX_PARALLEL_REVIEWERS}. */
++  /** Wave size setting (`--parallel`). Defaults to {@link MAX_REVIEWERS_PER_WAVE_FULL}. */
+   cap?: number | undefined;
+   /** Subagents the caller already has in flight, if it knows. */
+   outstanding?: number | undefined;
++  /** A full review or `--all`: the wave size is held to {@link MAX_REVIEWERS_PER_WAVE_FULL} whatever `cap` says. */
++  full?: boolean | undefined;
+ };
+ 
++const DOMAIN_ORDER: readonly ReviewerDomain[] = ["core", "domain", "support"];
++
+ /**
+- * Partition reviewers into dispatch waves of at most the effective cap.
++ * Partition reviewers into dispatch waves.
++ *
++ * The set is split by diff domain, logic and security first, frontend and
++ * backend next, style and tests last, and a domain bigger than the wave size is
++ * split again. Waves never mix domains,
++ * so the order of the waves is the order of the dependency between them.
+  *
+  * Nothing is dropped: a reviewer past the first wave is *queued*, and `queued`
+  * is on the record so a plan that deferred ten reviewers cannot read as a plan
+
+--- src/review/caps.ts
+@@ 453,479 @@
+   reviewers: readonly string[],
+   options: ConcurrencyPlanOptions = {},
+ ): ConcurrencyPlan {
+-  const cap = options.cap ?? DEFAULT_MAX_PARALLEL_REVIEWERS;
++  const cap = options.cap ?? MAX_REVIEWERS_PER_WAVE_FULL;
+   if (!Number.isInteger(cap) || cap < 1) {
+     throw new Error(
+-      `Invalid concurrency cap: ${cap}. Expected a positive integer; the default is ${DEFAULT_MAX_PARALLEL_REVIEWERS}.`,
++      `Invalid concurrency cap: ${cap}. Expected a positive integer; the default is ${MAX_REVIEWERS_PER_WAVE_FULL}.`,
+     );
+   }
+   const outstanding = options.outstanding;
+   if (outstanding !== undefined && (!Number.isInteger(outstanding) || outstanding < 0)) {
+     throw new Error(`Invalid outstanding subagent count: ${outstanding}. Expected a non-negative integer.`);
+   }
+-  const effective = Math.max(1, cap - (outstanding ?? 0));
++  const ceiling = options.full === true ? Math.min(cap, MAX_REVIEWERS_PER_WAVE_FULL) : cap;
++  const effective = Math.max(1, ceiling - (outstanding ?? 0));
+   const waves: string[][] = [];
+-  for (let index = 0; index < reviewers.length; index += effective) {
+-    waves.push([...reviewers.slice(index, index + effective)]);
++  for (const domain of DOMAIN_ORDER) {
++    const group = reviewers.filter((name) => reviewerDomain(name) === domain);
++    for (let index = 0; index < group.length; index += effective) {
++      waves.push(group.slice(index, index + effective));
++    }
+   }
+   return {
+-    cap,
++    cap: ceiling,
+     outstanding,
+     effective,
+     waves,
+
+--- src/review/caps.ts
+@@ 482,539 @@
+   };
+ }
+ 
++export type RateLimitState = { waveSize: number; halvings: number };
++
++export type RateLimitDecision =
++  | {
++      action: "requeue";
++      state: RateLimitState;
++      /** Limited reviewers first, then the rest of the queue. */
++      queue: string[];
++      waitSeconds: number | undefined;
++    }
++  | { action: "blocked"; status: "BLOCKED rate_limited"; queue: string[]; line: string };
++
++export function rateLimitState(waveSize: number): RateLimitState {
++  if (!Number.isInteger(waveSize) || waveSize < 1) {
++    throw new Error(`Invalid wave size: ${waveSize}. Expected a positive integer.`);
++  }
++  return { waveSize, halvings: 0 };
++}
++
++/**
++ * What the orchestrator does after reviewers answered `STATUS: RATE_LIMITED`:
++ * halve the wave (never below 1), put the limited reviewers back at the front of
++ * the queue and wait `retry-after` when one was given. After
++ * {@link MAX_RATE_HALVINGS} halvings a further rate limit stops the round with
++ * `BLOCKED rate_limited` and the queue that was left.
++ */
++export function nextAfterRateLimit(
++  state: RateLimitState,
++  limited: readonly string[],
++  remaining: readonly string[],
++  retryAfterSeconds?: number,
++): RateLimitDecision {
++  if (retryAfterSeconds !== undefined && (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds < 0)) {
++    throw new Error(`Invalid retry-after: ${retryAfterSeconds}. Expected a non-negative number of seconds.`);
++  }
++  const queue = [...limited, ...remaining];
++  if (state.halvings >= MAX_RATE_HALVINGS) {
++    return {
++      action: "blocked",
++      status: "BLOCKED rate_limited",
++      queue,
++      line: `STATUS: BLOCKED rate_limited — queue left: ${queue.join(", ")}`,
++    };
++  }
++  return {
++    action: "requeue",
++    state: { waveSize: Math.max(1, Math.floor(state.waveSize / 2)), halvings: state.halvings + 1 },
++    queue,
++    waitSeconds: retryAfterSeconds,
++  };
++}
++
+ // ---------------------------------------------------------------------------
+ // The record (AC10)
+ // ---------------------------------------------------------------------------
+
+--- src/review/round-need.ts
+@@ 1,57 @@
++// Preflight check 2 of review-orchestrator: a diff that only touches prose or
++// machine-written files has nothing a reviewer can find, so no round runs.
++// Anything not positively recognised as prose counts as code, so the check can
++// only err toward running a round.
++
++export interface RoundNeedInput {
++  files: readonly string[];
++  /** `--all` was passed. */
++  all?: boolean;
++  /** The operator named reviewers explicitly. */
++  explicitReviewers?: readonly string[];
++  /** The caller is a gate that requires a round (flow review gate). */
++  gating?: boolean;
++}
++
++export interface RoundNeed {
++  needed: boolean;
++  reason: string;
++}
++
++const LOCKFILES = new Set([
++  "bun.lock",
++  "bun.lockb",
++  "package-lock.json",
++  "yarn.lock",
++  "pnpm-lock.yaml",
++  "Cargo.lock",
++  "poetry.lock",
++  "Gemfile.lock",
++  "go.sum",
++]);
++
++// Markdown that steers agents: a change to it changes behaviour, so it is code.
++const RULE_BEARING =
++  /(^|\/)(SKILL(\.detail)?\.md|CLAUDE\.md|AGENTS\.md|GEMINI\.md|copilot-instructions\.md|[^/]+\.mdc)$|(^|\/)\.(claude|cursor|github|metaproject)\/(agents|commands|skills|rules)\//i;
++const PROSE = /\.(md|mdx|rst|adoc)$/i;
++const GENERATED = /^(dist|coverage)\/|(^|\/)__generated__\//;
++
++function isProse(file: string): boolean {
++  if (RULE_BEARING.test(file)) return false;
++  const base = file.slice(file.lastIndexOf("/") + 1);
++  if (LOCKFILES.has(base)) return true;
++  if (GENERATED.test(file)) return true;
++  return PROSE.test(file);
++}
++
++export function classifyRoundNeed(input: RoundNeedInput): RoundNeed {
++  if (input.all === true) return { needed: true, reason: "--all forces a round" };
++  if ((input.explicitReviewers?.length ?? 0) > 0) return { needed: true, reason: "an explicit reviewer list forces a round" };
++  if (input.gating === true) return { needed: true, reason: "a gating round is always run" };
++  if (input.files.length === 0) return { needed: false, reason: "empty diff" };
++  if (input.files.every(isProse)) {
++    return { needed: false, reason: "docs, markdown, lockfiles or generated files only; no code, CI, auth, migration or rule-bearing config" };
++  }
++  return { needed: true, reason: "code or rule-bearing files in the diff" };
++}
+

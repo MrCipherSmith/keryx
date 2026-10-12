@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 30000,
+  "waveBytes": 90000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 26793,
+      "contentHash": "fb2c3d335e3701654c6f2973e69310de0c291d8a79f62cc65677629410f611bb",
+      "files": [
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/acceptance-criteria.md",
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/context.md",
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/description.md",
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/journal.md",
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/plan.md",
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/tasks.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "file"
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 28283,
+      "contentHash": "784339f843b2baa91b8008afa01e9e469be54029542cc14627a88eec34cf0269",
+      "files": [
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/planning/autodoc-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "hunk"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 23084,
+      "contentHash": "48f4d99a8c31ea57081514b74fbf086875f3acd1a1fcb441970d2628c8310787",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "hunk"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 28240,
+      "contentHash": "fc38dacd49364a74298eb79b5ebddc25c156b1301ffd9e6aa5c06e7c26001aa7",
+      "files": [
+        ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/flow.json",
+        "CHANGELOG.md",
+        "README.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "package.json",
+        "src/agents/tools.test.ts",
+        "src/agents/tools.ts",
+        "src/commands/review.test.ts"
+      ],
+      "domain": ".metaproject, . [docs], docs [docs] +4 more",
+      "split": "domain"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 2602,
+      "contentHash": "5e2285cd45d1d99b5974bc65b304bed3b59c34e530a4cede25d285023bf51775",
+      "files": [
+        "src/commands/review.ts"
+      ],
+      "domain": "src/commands",
+      "split": "domain"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 27346,
+      "contentHash": "e802aee67d3592772c817ffd729ec8798ca422683351f423e53050ff04a1cb43",
+      "files": [
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/planning/autodoc-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": "src/gdskills [docs]",
+      "split": "hunk"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 29340,
+      "contentHash": "ef41fd247cc87838f5a4ff9ed61ceb4dcba20887a4e3494fe20c8049c69de2de",
+      "files": [
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md"
+      ],
+      "domain": "src/gdskills [docs]",
+      "split": "hunk"
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 21038,
+      "contentHash": "d52beddbdc5c078104df7c17f61c5371540539c332c1726b78c7a80445af3c68",
+      "files": [
+        "src/gdskills/catalog.ts",
+        "src/gdskills/skill-length-ceilings.ts",
+        "src/gdskills/review-orchestrator-preflight.test.ts",
+        "src/lib/agent-entrypoint-blocks.ts",
+        "src/lib/orchestrators-inline.ts",
+        "src/lib/templates.ts",
+        "src/lib/orchestrators-inline.test.ts"
+      ],
+      "domain": "src/gdskills, src/gdskills [test], src/lib +1 more",
+      "split": "domain"
+    },
+    {
+      "id": "slice-09",
+      "path": "slice-09.diff",
+      "bytes": 19826,
+      "contentHash": "2148d5f16600eca91ec7602cda3fbaf0fad55e90955866bcd8b045ba2dbec2db",
+      "files": [
+        "src/review/caps.test.ts",
+        "src/review/managed.test.ts",
+        "src/review/round-need.test.ts",
+        "src/review/caps.ts",
+        "src/review/round-need.ts"
+      ],
+      "domain": "src/review [test], src/review",
+      "split": "domain"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 9,
+    "bytes": 206552,
+    "files": 38,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  }
+}
