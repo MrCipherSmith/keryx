@@ -54,3 +54,16 @@ After the sync change of this branch, `keryx research sync` writes this file its
 - Row fields checked against the allow-list of host fa7c0ca1 plus `seqDerived`: no other keys; no `seed`; `host` and `seedHash` present on every row; `(host, seq)` unique (122 of 122).
 - Scan for the local username, home-directory path prefixes, e-mail markers, the team-repository words of flow 404 and the text-bearing keys (question, options, reason, text): 0 matches.
 - Collection agent: Keryx agent. It identifies the export agent, not the writers of the recorded decisions.
+
+## Выгрузка 2026-10-12 19:44 UTC
+
+- Машина: `1932608c`.
+- Строк: 134; предыдущая выгрузка: 122; добавлено: 12.
+- Первая `openedAt`: `2026-08-07T09:56:21.008Z`.
+- Последняя `openedAt`: `2026-10-11T15:40:12.065Z`.
+- Версия экспортера keryx: `0.3.112`; HEAD: `844afa2d101810806ed17938a79a3cc95fb64ccd`. Версия записи отдельных решений неизвестна.
+- Приватность: проверки запрещённых текстовых полей и seed, локальных идентификаторов и путей пройдены; 46 тестов пройдены.
+- Независимая проверка: объединение всех raw равно latest; 162 строк, дубли `(host, seq)` отсутствуют.
+- Исторические снимки и файлы flow совпадают с main и не изменены выгрузкой.
+- Flow вне main: отсутствуют; номера 415 и 416 уже присутствуют в main. Их ветки проверены отдельно; слияние в main в этой задаче не выполнялось.
+- Вторая машина: `fa7c0ca1`, 28 строк, последняя `openedAt` `2026-10-05T22:19:01.824Z`; требуется новая выгрузка. Итоговый PR не открыт.
