@@ -62,6 +62,18 @@ describe("checkDispatch", () => {
     const path = await checkDispatch([payload({ scope_mode: "path", target_path: "src/a.ts" })]);
     expect(path.ok).toBe(true);
   });
+
+  test("a pull-request review refuses a payload without the collected pr_context (flow 428 AC7)", async () => {
+    const prContext = { exists: (file: string) => file === "pkg/pr-context.md" };
+    const bare = await checkDispatch([payload({ diff: "x" })], { prContext });
+    expect(bare.errors.map((error) => error.code)).toEqual(["REVIEWER_INPUT_NO_PR_CONTEXT"]);
+    const missing = await checkDispatch([payload({ diff: "x", pr_context: "pkg/gone.md" })], { prContext });
+    expect(missing.errors.map((error) => error.code)).toEqual(["REVIEWER_INPUT_NO_PR_CONTEXT"]);
+    const given = await checkDispatch([payload({ diff: "x", pr_context: "pkg/pr-context.md" })], { prContext });
+    expect(given.ok).toBe(true);
+    const notAsked = await checkDispatch([payload({ diff: "x" })]);
+    expect(notAsked.ok).toBe(true);
+  });
 });
 
 describe("planRetry", () => {

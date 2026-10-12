@@ -30,6 +30,7 @@ import {
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
+import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
@@ -507,6 +508,7 @@ const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
 const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
+const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
@@ -718,7 +720,11 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runMutate(args.slice(1));
       return;
     }
-    if (command === "severity-audit") {
+    if (command === "context-collect") {
+    await runContextCollect(args.slice(1));
+    return;
+  }
+  if (command === "severity-audit") {
       await runSeverityAudit(args.slice(1));
       return;
     }
@@ -2993,6 +2999,43 @@ async function runMutate(args: string[]): Promise<void> {
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
 }
 
+/** CI checks from `--checks <file>`, else `gh pr checks`; undefined (CI status "unknown") when neither is available. */
+async function readCiChecks(args: string[], repo: string, number: number): Promise<CheckSummary[] | undefined> {
+  const file = optionValue(args, "--checks");
+  if (file !== undefined) return parseGhChecks(JSON.parse(await readFile(file, "utf8")) as unknown);
+  if (optionValue(args, "--fixtures") !== undefined) return undefined;
+  const proc = Bun.spawn(["gh", "pr", "checks", String(number), "--repo", repo, "--json", "name,bucket"], { stdout: "pipe", stderr: "pipe" });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (out.trim() === "") return code === 0 ? [] : undefined;
+  try {
+    return parseGhChecks(JSON.parse(out) as unknown);
+  } catch {
+    return undefined;
+  }
+}
+
+async function runContextCollect(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CONTEXT_COLLECT_FLAGS, "context-collect");
+  const repo = requiredOption(args, "--repo", "context-collect");
+  const number = requiredInteger(args, "--pr");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("context-collect needs --package <review-dir>");
+  const result = await collectPrContext({
+    port: await resolvePort(args),
+    repo,
+    number,
+    self: optionValue(args, "--self") ?? (await resolveSelfLogin(args)),
+    packageDir: path.resolve(packageArg),
+    checks: await readCiChecks(args, repo, number),
+  });
+  const { context } = result;
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ json: result.json, md: result.md, round: context.round, ci: context.ci.state, comments: context.comments.length, backendPins: context.backendPins.length }, null, 2));
+    return;
+  }
+  console.log(`${repo}#${number} round ${context.round}: ${context.comments.length} comment(s) in full, CI ${context.ci.state}, ${context.backendPins.length} backend pin(s)\npr_context: ${result.md}`);
+}
+
 async function runSeverityAudit(args: string[]): Promise<void> {
   rejectUnknownFlags(args, SEVERITY_AUDIT_FLAGS, "severity-audit");
   const packageArg = optionValue(args, "--package");
@@ -4051,6 +4094,13 @@ Usage:
                         baseline must pass first. A survivor means no assertion
                         pins that behaviour. Writes mutation-<n>.json and .md to
                         research-evidence/.
+  keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>
+                        [--self <login>] [--checks <gh-checks.json>] [--json]
+                        Writes pr-context.json and pr-context.md into the package:
+                        every review comment in full (no cut), the round-1 intent,
+                        the CI status and the backend pins the pull request names.
+                        A pull-request review dispatches with pr_context set to the
+                        .md; "dispatch-check --pr-context" refuses a payload without.
   keryx review severity-audit --package <review-dir> [--dry-run] [--json]
                         Raises a finding to major when the mutant it cites
                         (evidence "mutant:<id>") survived a recorded run on a

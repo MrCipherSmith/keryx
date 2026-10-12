@@ -8,7 +8,8 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_INVALID"
   | "REVIEWER_INPUT_NO_SLICE"
   | "REVIEWER_INPUT_SLICE_UNKNOWN"
-  | "REVIEWER_INPUT_TOO_LARGE";
+  | "REVIEWER_INPUT_TOO_LARGE"
+  | "REVIEWER_INPUT_NO_PR_CONTEXT";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -52,6 +53,8 @@ export type CheckDispatchOptions = {
   manifest?: SliceManifest;
   /** Bytes of a slice named by a path rather than a manifest id. Undefined when it cannot be read. */
   pathBytes?: (slicePath: string) => number | undefined;
+  /** Set for a pull-request review: every payload must name the collected `pr-context.md`, and it must be readable. */
+  prContext?: { exists: (contextPath: string) => boolean };
 };
 
 /**
@@ -73,6 +76,19 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
     const reviewer = isRecord(payload) && typeof payload.reviewer === "string" && payload.reviewer !== "" ? payload.reviewer : `payload[${index}]`;
     for (const problem of await validateJson(payload, schema)) {
       errors.push({ code: "REVIEWER_INPUT_INVALID", reviewer, path: problem.path, message: problem.message });
+    }
+    if (options.prContext !== undefined) {
+      const contextPath = isRecord(payload) && typeof payload.pr_context === "string" ? payload.pr_context : "";
+      if (contextPath === "" || !options.prContext.exists(contextPath)) {
+        errors.push({
+          code: "REVIEWER_INPUT_NO_PR_CONTEXT",
+          reviewer,
+          path: "$.pr_context",
+          message: contextPath === ""
+            ? "a pull-request review dispatches with the collected pull request context; run `keryx review context-collect` and set pr_context to its pr-context.md"
+            : `pr_context ${contextPath} is not a readable file; run \`keryx review context-collect\` to write it`,
+        });
+      }
     }
     if (!isRecord(payload) || payload.scope_mode !== "diff") {
       continue;

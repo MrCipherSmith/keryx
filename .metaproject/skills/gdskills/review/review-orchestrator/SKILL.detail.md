@@ -717,3 +717,14 @@ that survived on a file the review changed raises a minor finding to major and r
 run executed stays minor (a major is capped at minor) and gets the label `unproven`. The audit
 never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
 which can only delete. `--dry-run` prints the changes without writing `findings.json`.
+
+### Pull request context — `keryx review context-collect`
+
+A pull-request review starts with `keryx review context-collect --repo <o/r> --pr <n> --package <review-dir>`.
+It writes `pr-context.json` and `pr-context.md` into the package: every review comment in full (the
+800-character cut applies only to a finding's `problem`), the round-1 intent (kept when a later round
+collects a new head), the CI status (`--checks <file>` or `gh pr checks`; `unknown` when neither is
+available) and the backend pins the pull request names (refs on lines that talk about the backend).
+Set `pr_context` in every reviewer payload to the `.md` path; reviewers read it before the diff.
+`keryx review dispatch-check --payload <file> --pr-context` refuses a payload without it
+(`REVIEWER_INPUT_NO_PR_CONTEXT`).
