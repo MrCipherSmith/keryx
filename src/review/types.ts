@@ -136,6 +136,15 @@ export type ManagedReviewManifest = {
    * block distinguishes them. See {@link module:review/cross-family}.
    */
   cross_family_review?: CrossFamilyReviewDecision | undefined;
+  /**
+   * `true` when the operator asked for an AUTOMATIC review: the shell drove this
+   * round on its own, with the round limit raised to 200 and no round-limit
+   * question, the review's own commands run against this package without a
+   * prompt, and only the closed list of emergencies reaches the operator. Written
+   * only when set, so absent reads as "an ordinary round" and never as `false`.
+   * It changes how the shell prompts, never what the completion gate requires.
+   */
+  automatic?: true | undefined;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
 };
@@ -495,6 +504,8 @@ export type ManagedReviewInput = {
   target: ManagedReviewTarget;
   flowId?: string | undefined;
   reviewId?: string | undefined;
+  /** Mark the package as an automatic review. See {@link ManagedReviewManifest.automatic}. */
+  automatic?: boolean | undefined;
   reviewers?: string[] | undefined;
   coverage?: ReviewCoverageEntry[] | undefined;
   reportPath?: string | undefined;

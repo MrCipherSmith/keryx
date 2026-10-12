@@ -28,6 +28,21 @@ import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touche
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand, isTrustRoutineTool } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
+import { AUTOMATIC_REVIEW_NOTE, AutomaticReviewRun, describeAutomaticReviewTurn, isAutomaticReviewRequest } from "./automatic-review";
+import {
+  ENV_AGENT_MAX_ROUNDS,
+  MAX_AGENT_MAX_ROUNDS,
+  extendsWithoutAsking,
+  resolveAgentMaxRounds,
+} from "./round-limit";
+
+export {
+  DEFAULT_MAX_ROUNDS,
+  describeRoundLimit,
+  ENV_AGENT_MAX_ROUNDS,
+  MAX_AGENT_MAX_ROUNDS,
+  resolveAgentMaxRounds,
+} from "./round-limit";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
@@ -381,6 +396,12 @@ export interface AgentIO {
    * getter, never a missing `requestApproval`.
    */
   permissionMode?: () => PermissionMode;
+  /**
+   * Fires with `true` when a turn that belongs to an automatic review starts and
+   * with `false` when it ends, so a host can show the run mode beside the
+   * permission mode. Never fires for an ordinary turn.
+   */
+  onAutomaticReview?: (active: boolean) => void;
   /**
    * Explicit operator grants, isolated to this interactive shell session and
    * never persisted: exact MCP FQN -> the fingerprint of the tool's definition
@@ -835,6 +856,19 @@ export interface RunAgentTurnOptions {
    */
   origin?: "operator" | "task-notification" | "bus-message";
   /**
+   * Whether this turn belongs to an automatic review. Absent: decided from the
+   * operator's own line (`isAutomaticReviewRequest`) for an operator turn, and
+   * `false` for a notification turn. It is a run mode, not a permission mode: it
+   * only raises the round limit to 200 and drops the round-limit question.
+   */
+  automaticReview?: boolean;
+  /**
+   * The state of this automatic-review turn (bound package, input counts).
+   * Absent outside one; `runAgentTurn` creates it, a caller passes one to read
+   * the counts afterwards or to point it at a project root.
+   */
+  automaticReviewRun?: AutomaticReviewRun;
+  /**
    * SLATE-2/SLATE-5 open/close wiring (Phase 2). Absent whenever the caller
    * has no session dir to anchor a slate to (sessions disabled, or a caller
    * — e.g. existing tests — that predates this wiring): the driver then
@@ -989,30 +1023,6 @@ export function buildBudgetWarningLine(
   return wrapHarnessNudge(`Budget: ${parts.join("; ")}. Return your result now.`, nonce);
 }
 
-/**
- * Default model-round-trip budget per user turn for interactive agent
- * (`keryx shell` / TUI). A round is one `provider.stream()` request/response
- * cycle and may carry a batch of several tool calls, so this bounds runaway
- * ROUNDS rather than the number of distinct legitimate tool calls a big task
- * needs (see ADR-0010's "shape problem" — counting unique tool-call
- * signatures conflated task volume with actual repetition; this replaces
- * that axis rather than re-tuning its numbers, matching how grok-build,
- * Codex, and opencode all gate on rounds/tokens instead of call-signature
- * count). Real repetition is still caught independently by
- * {@link MAX_ATTEMPTS_PER_HASH}. Still a finite loop-safety guard — not
- * unlimited.
- */
-export const DEFAULT_MAX_ROUNDS = 40;
-
-/** Env override for {@link DEFAULT_MAX_ROUNDS} (positive integer). */
-export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";
-
-/** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
-export const MAX_AGENT_MAX_ROUNDS = 200;
-
-/** Round budget of a `trust`-mode turn: a long review orchestration must reach its end unattended. */
-export const TRUST_MODE_MAX_ROUNDS = 200;
-
 /** Turn-level cap on automatic plan follow-through continuations (a stalled one ends the turn earlier). */
 export const MAX_PLAN_FOLLOW_THROUGHS = 8;
 
@@ -1031,29 +1041,6 @@ export const MAX_PLAN_FOLLOW_THROUGHS = 8;
  * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
  */
 export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
-
-/**
- * Resolve model-round-trip budget for an interactive agent turn.
- * - unset / empty / invalid env → {@link DEFAULT_MAX_ROUNDS}
- * - valid integer ≥ 1 → clamped to {@link MAX_AGENT_MAX_ROUNDS}
- *
- * Callers pass `process.env` in production; tests inject a stub map.
- */
-export function resolveAgentMaxRounds(
-  env: Record<string, string | undefined> = process.env,
-  mode?: PermissionMode,
-): number {
-  const fallback = mode === "trust" ? TRUST_MODE_MAX_ROUNDS : DEFAULT_MAX_ROUNDS;
-  const raw = env[ENV_AGENT_MAX_ROUNDS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return fallback;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 1) {
-    return fallback;
-  }
-  return Math.min(n, MAX_AGENT_MAX_ROUNDS);
-}
 
 /**
  * Default per-request output-token budget for the main agent turn round
@@ -2227,6 +2214,14 @@ async function emitTerminalState(
   }
 }
 
+/** Only an operator turn's own line can ask for an automatic review: a child's task text is model-written. */
+function asksForAutomaticReview(deps: AgentDeps, options: RunAgentTurnOptions, userLine: string): boolean {
+  return (
+    options.automaticReview ??
+    ((options.origin ?? "operator") === "operator" && deps.subagentBudget === undefined && isAutomaticReviewRequest(userLine))
+  );
+}
+
 /**
  * Run ONE user turn to completion (possibly several model round-trips if tools are
  * called). Appends the user message plus every assistant/tool message produced to
@@ -2269,8 +2264,16 @@ export async function runAgentTurn(
   // `runConcurrentSpawnBatch`), read back here once the core settles,
   // regardless of which internal `return` fired.
   const caughtToolErrors: CaughtToolError[] = [];
+  const automaticReview = asksForAutomaticReview(deps, options, userLine);
+  const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(process.cwd())) : undefined;
+  const turnOptions: RunAgentTurnOptions =
+    reviewRun === undefined ? options : { ...options, automaticReview, automaticReviewRun: reviewRun };
+  if (reviewRun !== undefined) {
+    io.onAutomaticReview?.(true);
+    io.onSystem?.(`\n${describeAutomaticReviewTurn()}\n`);
+  }
   try {
-    const coreResult = await runAgentTurnCore(io, turnDeps, history, userLine, options, caughtToolErrors);
+    const coreResult = await runAgentTurnCore(io, turnDeps, history, userLine, turnOptions, caughtToolErrors);
     const result = caughtToolErrors.length > 0 ? { ...coreResult, caughtToolErrors } : coreResult;
     await fireStopHookBestEffort(io, deps, result);
     return result;
@@ -2281,7 +2284,25 @@ export async function runAgentTurn(
     // itself throw, so it can never supersede `runAgentTurnCore`'s real
     // outcome via JS's finally-throw-replaces-original semantics.
     await closeSlateOnFlowDone(io, deps, options);
+    if (reviewRun !== undefined) {
+      await discloseAutomaticReview(io, reviewRun);
+      io.onAutomaticReview?.(false);
+    }
   }
+}
+
+/** Writes the run's input counts into its package and says them once; never throws. */
+async function discloseAutomaticReview(io: AgentIO, run: AutomaticReviewRun): Promise<void> {
+  const { manual, automatic } = run.disclosure();
+  if (manual + automatic === 0 && run.packageDir === undefined) {
+    return;
+  }
+  try {
+    await run.writeDisclosure();
+  } catch {
+    // The count is still said below; a package that cannot be written to is the review's own problem.
+  }
+  io.onSystem?.(`\n${run.summaryLine()}\n`);
 }
 
 /**
@@ -2871,7 +2892,11 @@ async function runAgentTurnCore(
   // output) enters `history`, so echoed content can never carry the marker.
   const controlNonce = deps.controlNonce ?? generateControlNonce();
   const scrub = (text: string): string => scrubControlNonce(text, controlNonce);
-  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds(process.env, io.permissionMode?.());
+  const explicitMaxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0);
+  const currentPermissionMode = (): PermissionMode => io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+  const automaticReview = asksForAutomaticReview(deps, options, userLine);
+  const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(process.cwd())) : undefined;
+  const maxRounds = explicitMaxRounds ?? resolveAgentMaxRounds(process.env, currentPermissionMode(), automaticReview);
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   // Flow 347 T7: a subagent's advisory call target (warning threshold only).
   const subagentBudget = deps.subagentBudget;
@@ -3003,6 +3028,9 @@ async function runAgentTurnCore(
         );
         return {};
       }
+    }
+    if (automaticReview) {
+      effectivePrompt = `${effectivePrompt}\n\n${AUTOMATIC_REVIEW_NOTE}`;
     }
     history.push({ role: "user", content: effectivePrompt, provenance: "project", ts: now() });
     io.onHistoryChange?.("user");
@@ -3211,7 +3239,24 @@ async function runAgentTurnCore(
       await emitTerminalState(io, deps, options, "budget_exhausted");
       return "stop";
     }
-    const resolution = await offerRoundLimitReset(deps, roundState, system, io.permissionMode?.());
+    if (explicitMaxRounds === undefined && extendsWithoutAsking(currentPermissionMode(), automaticReview)) {
+      if (roundState.maxRounds < MAX_AGENT_MAX_ROUNDS) {
+        roundState.maxRounds = Math.min(
+          roundState.maxRounds + resolveAgentMaxRounds(process.env, currentPermissionMode(), automaticReview),
+          MAX_AGENT_MAX_ROUNDS,
+        );
+        system(`\n[budget] Round limit increased — ${roundState.maxRounds} rounds. Continuing…\n`);
+        return "reset";
+      }
+      system(
+        `\n[budget] Model-round limit reached: ${roundState.round}/${roundState.maxRounds}. ` +
+          `${automaticReview ? "An automatic review" : "Auto mode"} allows at most ${MAX_AGENT_MAX_ROUNDS} rounds per turn; ` +
+          `${ENV_AGENT_MAX_ROUNDS} sets the first limit and the size of each extension, the ceiling stays ${MAX_AGENT_MAX_ROUNDS}. ` +
+          "Stopping without another model request.\n",
+      );
+      return "stop";
+    }
+    const resolution = await offerRoundLimitReset(deps, roundState, system, currentPermissionMode());
     if (resolution === "reset") {
       return "reset";
     }
@@ -4337,6 +4382,7 @@ async function runAgentTurnCore(
             deps.unattended === true ? undefined : io.beforeMutation,
             undefined,
             untrustedContentSeen,
+            reviewRun,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -5467,6 +5513,8 @@ async function executeCallUnbounded(
   stage?: CallStage,
   // Flow 425: untrusted content was read earlier in this turn; `ask_user` carries it onto the question.
   untrustedContentSeen = false,
+  // Set only for a turn that belongs to an automatic review (./automatic-review.ts).
+  review?: AutomaticReviewRun,
 ): Promise<InteractiveToolResult> {
   const mark = (name: string): void => {
     if (stage !== undefined) stage.current = name;
@@ -5508,6 +5556,15 @@ async function executeCallUnbounded(
     const required = Array.isArray(requiredRaw) ? requiredRaw.filter((r): r is string => typeof r === "string") : [];
     const hint = required.length > 0 ? ` (required: ${required.join(", ")})` : "";
     return { output: `invalid input for ${call.name}: ${detail}${hint}`, isError: true };
+  }
+
+  // An automatic review puts only its closed list of emergencies to the operator;
+  // any other question is answered here and logged (see AutomaticReviewRun).
+  if (review !== undefined && call.name === "ask_user") {
+    const answered = review.answerAskUser(input);
+    if (answered !== undefined) {
+      return answered;
+    }
   }
 
   // Capacity is checked after lookup/schema validation so malformed or
@@ -5617,6 +5674,20 @@ async function executeCallUnbounded(
         isTrustRoutineCommand(command) &&
         ((mode === "trust" && gated.decision === "auto") || reviewAutoActive())
       );
+    // Automatic review: the review's own CLI against its own package is the one
+    // thing that stops asking. Every floor above and a hook's ask still ask.
+    const reviewScoped =
+      review !== undefined &&
+      call.name === "shell_exec" &&
+      gated.decision === "ask" &&
+      !destructive &&
+      !credentials &&
+      !sacReviewConfirmation &&
+      !publishLease &&
+      !isReadOnly &&
+      !untrustedOrigin &&
+      !gated.hookAsked &&
+      review.approvesShell(command);
     // The model supplies this name, but cannot grant it: only a validated
     // operator response from the host below can put it in the session set.
     const mcpFqn = call.name === "use_tool" && typeof input.tool_name === "string" ? input.tool_name : undefined;
@@ -5647,7 +5718,12 @@ async function executeCallUnbounded(
     }
     // A trust grant is not a way around the untrusted-content floor: with
     // external content in this turn the call asks even for a trusted tool.
-    if ((gated.decision === "auto" && !untrustedGate) || (trustedMcp && !untrustedGate && !gated.hookAsked && !isReadOnly)) {
+    if (
+      reviewScoped ||
+      (gated.decision === "auto" && !untrustedGate) ||
+      (trustedMcp && !untrustedGate && !gated.hookAsked && !isReadOnly)
+    ) {
+      review?.record("automatic", call.name, reviewScoped ? `review command: ${command}` : `approved by mode ${mode}: ${command}`);
       onAutoApproved?.(call.name, call.input, { destructive, credentials, ...(trustedMcp ? { mcpTrusted: true } : {}) });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -5682,6 +5758,7 @@ async function executeCallUnbounded(
                 : {}),
               ...(mcpGranted ? { mcpTrusted: true } : {}),
             });
+      review?.record("manual", call.name, `operator ${isApprovalFor(response, fingerprint) ? "approved" : "refused"}: ${command}`);
       if (!isApprovalFor(response, fingerprint)) {
         return { output: denialOutput(untrustedGate ? untrustedDenial : "command not approved by the user; not executed"), isError: true };
       }
@@ -5722,6 +5799,7 @@ async function executeCallUnbounded(
       };
     }
     if (gated.decision === "auto" && !untrustedOrigin) {
+      review?.record("automatic", call.name, `approved by mode ${mode}`);
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -5737,6 +5815,7 @@ async function executeCallUnbounded(
               cause: classifyApprovalCause({ hookAsk: gated.hookAsked, untrusted: untrustedOrigin }),
             });
       mark("approved");
+      review?.record("manual", call.name, `operator ${isApprovalFor(response, fingerprint) ? "approved" : "refused"}`);
       if (!isApprovalFor(response, fingerprint)) {
         return { output: denialOutput(untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed"), isError: true };
       }
@@ -5790,7 +5869,23 @@ async function executeCallUnbounded(
         isError: true,
       };
     }
-    if (gated.decision === "auto" && !untrustedOrigin) {
+    const reviewScoped =
+      review !== undefined &&
+      call.name === "apply_patch" &&
+      gated.decision === "ask" &&
+      !destructive &&
+      !credentials &&
+      card === undefined &&
+      !isReadOnly &&
+      !untrustedOrigin &&
+      !gated.hookAsked &&
+      review.approvesPatchTargets(extractFilePathsFromToolInput(input));
+    if (reviewScoped || (gated.decision === "auto" && !untrustedOrigin)) {
+      review?.record(
+        "automatic",
+        call.name,
+        reviewScoped ? `write inside the review package: ${extractFilePathsFromToolInput(input).join(", ")}` : `approved by mode ${mode}`,
+      );
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -5812,6 +5907,7 @@ async function executeCallUnbounded(
                 untrusted: untrustedOrigin,
               }),
             });
+      review?.record("manual", call.name, `operator ${isApprovalFor(response, fingerprint) ? "approved" : "refused"}`);
       if (!isApprovalFor(response, fingerprint)) {
         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
         return {
@@ -5885,6 +5981,9 @@ async function executeCallUnbounded(
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
   });
+  if (review !== undefined && call.name === "shell_exec" && typeof input.command === "string") {
+    review.observe(input.command, result);
+  }
 
   // Flow 306 (W6 T9): PostToolUse/PostToolUseFailure — observe-only, fired
   // AFTER the tool settles, never altering `result` beyond appending the

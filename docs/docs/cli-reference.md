@@ -4667,11 +4667,19 @@ Create and manage durable review packages. Managed reviews preserve target
 identity, reviewer coverage, findings, decisions, learning candidates, and an
 optional flow relationship instead of leaving review state only in chat output.
 
+`--automatic` on `start`, `attach` and `ingest` marks the package as an
+**automatic review** run (`manifest.automatic: true`; `review status` prints
+`run mode: automatic review`). The mark is a run mode, not a permission mode and
+not a way around the gate: `review complete` and every one of its refusals work
+exactly as without it. Inside `keryx shell` it is what lets a turn run the
+review's own commands without a prompt — see
+[Automatic review](guides/permission-modes.md#automatic-review).
+
 ```text
 keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
-                    [--reviewers a,b] [--report <path>]
-keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                    [--reviewers a,b] [--report <path>] [--automatic]
+keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--automatic]
+keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                     [--refuted <file|->]

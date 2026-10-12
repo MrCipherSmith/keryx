@@ -39,9 +39,11 @@ import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // optional-import guard, src/capability/no-optional-imports). `launchTuiAgentShell`
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
+import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
   describeReasoningEffortSource,
+  describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveMaxAutoWake,
@@ -3668,10 +3670,19 @@ export function pickSessionInTui(
 
 /**
  * The sidebar's Mode row (flow 270 AC9): the permission mode, plus a separate
- * read-only part while `/plan on` holds, so it can be painted in its own colour.
+ * read-only part while `/plan on` holds, so it can be painted in its own colour,
+ * and an automatic-review part while a turn belongs to one (flow 429).
  */
-export function describeModeRow(mode: PermissionMode, readOnly: boolean): { mode: string; readOnly?: string } {
-  return readOnly ? { mode, readOnly: "· read-only" } : { mode };
+export function describeModeRow(
+  mode: PermissionMode,
+  readOnly: boolean,
+  automaticReview = false,
+): { mode: string; readOnly?: string; automaticReview?: string } {
+  return {
+    mode,
+    ...(readOnly ? { readOnly: "· read-only" } : {}),
+    ...(automaticReview ? { automaticReview: "· automatic review" } : {}),
+  };
 }
 
 /** `/mode` picker copy — one line per {@link PermissionMode}, kept beside the type it describes. */
@@ -3680,6 +3691,11 @@ const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
   auto: "Skips confirmation for everything except credential-touching commands",
 };
+
+/** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
+export function describeModePickerOption(mode: PermissionMode): string {
+  return `${MODE_PICKER_DESCRIPTIONS[mode]} · ${describeRoundLimit(mode)}`;
+}
 
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
@@ -6118,21 +6134,28 @@ export async function launchTuiAgentShell(opts: {
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
     let readOnly = false;
     io.readOnly = () => readOnly;
+    // Run mode of the turn in flight (flow 429): set by `runAgentTurn`, shown beside the permission mode.
+    let automaticReview = false;
     const paintModeRow = (): void => {
-      const row = describeModeRow(permissionMode, readOnly);
+      const row = describeModeRow(permissionMode, readOnly, automaticReview);
       // Flow 396: with remote control on, the row names the mode in force and where it comes from
       // (`trust (Telegram default)`, `ask (shell /mode)`), because a Telegram turn and a typed one can differ.
       const inForce = remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined;
       // Read-only is the state an operator must not forget they are in.
       // The row is also the sidebar's way into `/settings` (flow 374): clicking
       // it opens the modal, and the hint names the command while there is room.
-      const hint = settingsSidebarHint(row.readOnly !== undefined);
+      const flag = row.readOnly ?? row.automaticReview;
+      const hint = settingsSidebarHint(flag !== undefined);
       sbModeV.content =
-        row.readOnly !== undefined
-          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
+        flag !== undefined
+          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", [row.readOnly, row.automaticReview].filter(Boolean).join(" "))}`
           : otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}${hint === undefined || inForce !== undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
+    io.onAutomaticReview = (active) => {
+      automaticReview = active;
+      paintModeRow();
+    };
     const autoApprovedFor = (telegramTurn: boolean): NonNullable<TuiAgentIo["onAutoApproved"]> => (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
@@ -7519,7 +7542,7 @@ export async function launchTuiAgentShell(opts: {
       permissionMode = next;
       modeChangedThisSession = true;
       paintModeRow();
-      chrome.showToast(`Permission mode: ${next}`);
+      chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
       const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
@@ -7539,7 +7562,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                "Only credential-touching commands still ask.",
+                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -7589,7 +7612,9 @@ export async function launchTuiAgentShell(opts: {
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: `Permission mode (current: ${permissionMode})`,
-            subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
+            subtitle:
+              (stored !== undefined ? `Project default: ${stored}` : "No project default set.") +
+              ` ${describeAutomaticReviewMode()}`,
             cancelId: permissionMode,
             enqueue: false,
             onBusy: () => {
@@ -7599,7 +7624,7 @@ export async function launchTuiAgentShell(opts: {
             options: PERMISSION_MODES.map((m) => ({
               id: m,
               label: m,
-              description: MODE_PICKER_DESCRIPTIONS[m],
+              description: describeModePickerOption(m),
               recommended: m === permissionMode,
             })),
           }),

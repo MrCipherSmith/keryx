@@ -15,6 +15,7 @@ import { resolveBusRoot } from "../bus/paths";
 import { createPauseLease } from "../bus/pause";
 import { CI_ENV_VARS } from "../capability/external-agents";
 import { loadShellPermissions } from "../lib/shell-permissions";
+import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
@@ -1100,6 +1101,78 @@ describe("/plan toggles read-only mode (flow 265, was a source-text audit)", () 
     // check it was still executed as a command.
     const output = await repl(["/plan on", "/plan", "/exit"]);
     expect(output).toContain("Read-only mode: on");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 429 — the round limit of a turn follows the permission mode.
+// ---------------------------------------------------------------------------
+
+/** Never finishes on its own: every round reads a distinct missing path, so only the round limit ends the turn. */
+function endlessReadProvider(): { provider: ProviderPort; calls: () => number } {
+  let calls = 0;
+  return {
+    calls: () => calls,
+    provider: {
+      describe: () => TOOL_CALL_DESCRIPTION,
+      stream: (_request, opts) => {
+        calls += 1;
+        const id = `r${calls}`;
+        const events: Partial<NormalizedEvent>[] =
+          calls > 260
+            ? [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]
+            : [
+                { kind: "tool_call_start", toolCallId: id, toolName: "list_dir" },
+                { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ path: `missing-${calls}` }) },
+                { kind: "model_end" },
+              ];
+        return (async function* (): AsyncGenerator<NormalizedEvent> {
+          let sequence = 0;
+          for (const partial of events) {
+            yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
+          }
+        })();
+      },
+    },
+  };
+}
+
+describe("flow 429 AC6 — /mode changes the round limit of the next turn without a restart", () => {
+  const cases: Array<{ name: string; lines: string[]; limit: number }> = [
+    { name: "ask", lines: ["go", "/exit"], limit: 40 },
+    { name: "trust", lines: ["/mode trust", "go", "/exit"], limit: 200 },
+    { name: "auto", lines: ["/mode auto", "yes", "go", "/exit"], limit: 200 },
+  ];
+  for (const { name, lines, limit } of cases) {
+    test(`${name}: a turn is cut off after ${limit} model rounds`, async () => {
+      const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+      delete process.env.KERYX_AGENT_MAX_ROUNDS;
+      try {
+        const { provider, calls } = endlessReadProvider();
+        const deps = fakeDeps({ provider, tools: builtinReadOnlyTools(cwd), idSeq: () => randomUUID() });
+        await repl(lines, { deps });
+        expect(calls()).toBe(limit);
+      } finally {
+        if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+      }
+    });
+  }
+});
+
+describe("flow 429 AC7 — the readline /mode output shows the round limit", () => {
+  test("/mode names the limit of the current mode, and a switch names the new one", async () => {
+    const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+    delete process.env.KERYX_AGENT_MAX_ROUNDS;
+    try {
+      const output = await repl(["/mode", "/mode trust", "/mode auto", "yes", "/exit"]);
+      expect(output).toContain("Round limit: 40 rounds per turn, asks before extending");
+      expect(output).toContain("Automatic review (name it in a request): 200 rounds per turn, extends without asking");
+      expect(output).toContain("it stops to ask only for:");
+      expect(output).toContain("Permission mode: trust (200 rounds per turn, asks before extending)");
+      expect(output).toContain("Permission mode: auto (200 rounds per turn, extends without asking)");
+    } finally {
+      if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+    }
   });
 });
 

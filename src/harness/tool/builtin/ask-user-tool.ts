@@ -65,12 +65,13 @@ export const ASK_USER_DESCRIPTION =
   "Use when requirements are unclear, for interview steps, or to confirm a plan. " +
   "Provide 2–6 options with short descriptions; mark at most ONE option recommended when sensible (more than one is rejected). " +
   "Whenever you mark an option recommended, ALWAYS set recommendationReason: one sentence on why it is the better choice. " +
-  "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean }. " +
+  "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean, emergency?: string }. " +
   "Returns the chosen option id (or freeform text if allow_freeform). " +
   "irreversible: true means the question decides something that cannot be undone (release, publish, deploy, delete, push, merge to a shared branch, drop, force, reset, tag a version). " +
   "action names that irreversible action (e.g. action: \"release\"). " +
   "policy: { kind, facts } optionally tags a review question with its kind (scope, budget, option_choice, partial_coverage, smaller_slice, slice_order) " +
-  "and numeric or boolean facts about the recommended option; only the automatic answerer reads it, as numbers and flags, never as text.";
+  "and numeric or boolean facts about the recommended option; only the automatic answerer reads it, as numbers and flags, never as text. " +
+  "emergency: \"gate-waiver\" (a gate refusal needs the operator's quote) or \"reduced-reviewer-set\"; the only two cases an automatic review may put to the operator.";
 
 function policyOf(raw: unknown): AskUserPolicy | undefined {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
@@ -79,6 +80,13 @@ function policyOf(raw: unknown): AskUserPolicy | undefined {
   if (facts === null || typeof facts !== "object" || Array.isArray(facts)) return undefined;
   return { kind: kind.trim(), facts: facts as Record<string, unknown> };
 }
+
+/**
+ * The only two questions an automatic review may put to the operator through
+ * `ask_user`: a gate refusal that needs an operator quote (a waiver), and a
+ * reduced-reviewer-set decision. Any other question is answered by the host.
+ */
+export const ASK_USER_EMERGENCIES = ["gate-waiver", "reduced-reviewer-set"] as const;
 
 /**
  * Build the `ask_user` tool. `ask` is injected by the host (TUI wires the
@@ -122,6 +130,7 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
             required: ["kind", "facts"],
             additionalProperties: false,
           },
+          emergency: { type: "string", enum: [...ASK_USER_EMERGENCIES] },
         },
         required: ["question", "options"],
         additionalProperties: false,

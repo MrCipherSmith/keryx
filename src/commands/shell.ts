@@ -18,6 +18,7 @@
 // / `Math.random`). Offline: the core never imports a provider SDK or touches
 // the network directly; all provider I/O flows through the injected port.
 
+import { describeAutomaticReviewMode } from "./automatic-review";
 import { randomUUID } from "node:crypto";
 import { join as joinPath } from "node:path";
 import * as readline from "node:readline";
@@ -178,6 +179,7 @@ import {
   generateControlNonce,
   DEFAULT_MAX_OUTPUT_TOKENS,
   describeReasoningEffortSource,
+  describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveAgentMaxOutputTokens,
@@ -2894,6 +2896,8 @@ export async function runAgentRepl(
           agentIo.onSystem?.(
             `Permission mode: ${permissionMode}` +
               (stored !== undefined ? ` (project default: ${stored})\n` : " (no project default set)\n") +
+              `Round limit: ${describeRoundLimit(permissionMode)}\n` +
+              `${describeAutomaticReviewMode()}\n` +
               `Usage: /mode <${PERMISSION_MODES.join("|")}> [save] · /mode clear\n`,
           );
         } else if (wanted === "clear") {
@@ -2920,7 +2924,7 @@ export async function runAgentRepl(
             agentIo.onSystem?.("Cancelled — mode unchanged.\n");
           } else {
             permissionMode = wanted;
-            agentIo.onSystem?.(`Permission mode: ${permissionMode}\n`);
+            agentIo.onSystem?.(`Permission mode: ${permissionMode} (${describeRoundLimit(permissionMode)})\n`);
             if (saveFlag) {
               const saved = setProjectPermissionMode(sessionCwd, permissionMode);
               agentIo.onSystem?.(saved ? "Saved as this project's default.\n" : "Could not save the project default.\n");
@@ -4029,9 +4033,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // configured server, which calling `getMcpRuntime()` here would
         // do for `--chat` sessions that never build a tool list.
         mcpRuntime: () => mcpRuntime,
-        // Generous default so multi-step operator prompts do not hit the
-        // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
-          // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+        // No `maxRounds` here on purpose: the turn resolves its own limit from
+        // the live permission mode (40 in ask, 200 in trust and auto), and an
+        // explicit value would pin it for the whole session.
+        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
         // per-provider override (`resolvedModelParams.maxOutputTokens`,
         // resolved above via `resolveProviderModelParamsByName` — an
         // operator-saved `ShellConfig.modelParams[provider]` override, else
@@ -4512,7 +4517,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           // review fixed. `runAgentRepl` splices `bus_list`/`bus_send` in
           // directly (`buildBusTools`) right after its own join succeeds.
         }),
-          // Same precedence as the TUI's `makeAgentDeps` above — routed through
+        // Same precedence as the TUI's `makeAgentDeps` above — routed through
         // `initialModelParams.maxOutputTokens` (resolved once above) rather
         // than a second, independent `providerByName(...).maxOutputTokens`
         // lookup, so there is exactly one computation of the provider's

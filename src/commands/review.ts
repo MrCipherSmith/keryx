@@ -66,6 +66,7 @@ import { runJevEditGuard } from "./review-jev-edit-guard";
 // registration.
 import { runJevSelect } from "./review-jev-select";
 import { runJevProfile } from "./review-jev-profile";
+import { AUTOMATIC_REVIEW_FLAG } from "./automatic-review";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -302,6 +303,7 @@ export const CREATE_FLAGS = [
   "--tokens-out",
   "--parallel",
   "--outstanding",
+  AUTOMATIC_REVIEW_FLAG,
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -774,6 +776,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
+    ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
@@ -804,6 +807,9 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  if (result.manifest.automatic === true) {
+    console.log("run mode: automatic review");
+  }
   // Printed on every run, and printed as an absence when it is one: the review
   // completion gate compares this against the pull request's head, and a round
   // that recorded none fails that comparison as `unobserved`. An operator who
@@ -3738,6 +3744,9 @@ async function runStatus(args: string[]): Promise<void> {
   // first would make this reader unreachable on exactly the old packages a
   // recall comparison most wants to group.
   console.log(renderCrossFamilyReviewLine(manifest.cross_family_review));
+  if (manifest.automatic === true) {
+    console.log("run mode: automatic review");
+  }
   reportCrossFamilyReviewProblems(manifest.cross_family_review, `${ref}/manifest.json`);
 
   const stats = manifest.filter_stats;
@@ -4065,10 +4074,11 @@ function reviewHelpText(): string {
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                      [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-                     [--research <ledger.json>] [--review-id <id>]
+                     [--research <ledger.json>] [--review-id <id>] [--automatic]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
-                      [--research <ledger.json>] [--review-id <id>]
+                      [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]

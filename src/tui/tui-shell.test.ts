@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import packageJson from "../../package.json" with { type: "json" };
 import {
   composerHeightForLines,
@@ -27,6 +28,7 @@ import {
   freshSlateSessionRef,
   attachUsageIo,
   createTuiAgentIo,
+  describeModePickerOption,
   describeModeRow,
   estimateContextTokens,
   fmtTokens,
@@ -2973,10 +2975,37 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(caseBlock).toContain("runPlanCommand(line);");
   });
 
+  test("flow 429 AC7: the /mode picker names the round limit of each mode", () => {
+    const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+    delete process.env.KERYX_AGENT_MAX_ROUNDS;
+    try {
+      expect(describeModePickerOption("ask")).toContain("40 rounds per turn, asks before extending");
+      expect(describeModePickerOption("trust")).toContain("200 rounds per turn, asks before extending");
+      expect(describeModePickerOption("auto")).toContain("200 rounds per turn, extends without asking");
+    } finally {
+      if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+    }
+  });
+
   // Flow 270 AC9: the state is on screen, not only in a toast.
-  test("describeModeRow: the mode alone, and a separate read-only part while /plan is on", () => {
+  test("describeModeRow: the mode alone, a separate read-only part while /plan is on, and an automatic-review part during such a turn", () => {
     expect(describeModeRow("ask", false)).toEqual({ mode: "ask" });
     expect(describeModeRow("auto", true)).toEqual({ mode: "auto", readOnly: "· read-only" });
+    expect(describeModeRow("ask", false, true)).toEqual({ mode: "ask", automaticReview: "· automatic review" });
+    expect(describeModeRow("trust", true, true)).toEqual({
+      mode: "trust",
+      readOnly: "· read-only",
+      automaticReview: "· automatic review",
+    });
+  });
+
+  test("flow 429 AC16: /mode names automatic review, its limit and its emergencies; the sidebar row follows the turn", () => {
+    const text = describeAutomaticReviewMode({});
+    expect(text).toContain("200 rounds per turn, extends without asking");
+    expect(text).toContain("a destructive action");
+    expect(text).toContain("a reduced reviewer set");
+    expect(fnBodyPlan).toContain("io.onAutomaticReview = (active) => {\n      automaticReview = active;\n      paintModeRow();");
+    expect(fnBodyPlan).toContain("describeAutomaticReviewMode()");
   });
 
   test("the sidebar Mode row is repainted by /plan on, /plan off and every /mode change", () => {

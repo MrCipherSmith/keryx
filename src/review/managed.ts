@@ -975,6 +975,7 @@ function buildManifest(args: {
     // Same rule: absent means nobody reported, which is not the same as zero.
     ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
+    ...(args.input.automatic === true ? { automatic: true as const } : {}),
     createdAt: args.at,
     updatedAt: args.at,
   };
