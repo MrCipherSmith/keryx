@@ -39,6 +39,8 @@ import { createBusInbox, type BusInbox } from "../bus/inbox";
 // inbox-overflow notice is the SAME fix for both).
 import { busInboxFullNotice, createBusDropNotifier } from "../tui/bus-wake";
 import { loadOAuthGrant } from "../lib/oauth/grants";
+import { mergeLiveCodexModels, startLiveCodexModels } from "./live-codex-models";
+import { loadRankHints } from "../harness/routing/model-profile";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
 import type {
@@ -53,6 +55,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
+import { approvalCauseLine, causeOfMeta } from "./approval-cause";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import {
   catalogDestructiveResolver,
@@ -115,6 +118,8 @@ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
+import { parseReviewSystem, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
@@ -178,7 +183,6 @@ import {
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveAgentMaxOutputTokens,
-  resolveAgentMaxRounds,
   resolveMaxAutoWake,
   resolveReasoningEffort,
   runAgentTurn,
@@ -1718,6 +1722,10 @@ export async function runAgentRepl(
      * bounded without reaching into this function's closure.
      */
     onCompletionWaitersSize?: (size: number) => void;
+    /** Shutdown cancels a stream or recovery timer before cleanup. */
+    signal?: AbortSignal;
+    /** Deterministic interactive recovery test seams. */
+    recovery?: import("./agent").InteractiveRecovery;
   },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
@@ -1866,9 +1874,10 @@ export async function runAgentRepl(
     for (const wake of waiters) wake();
   });
 
-  // Per-turn token usage (last `usage_update` the provider reported), printed
-  // once when the turn ends.
+  // Latest request usage describes context size; turn totals describe reported spend.
   let lastUsage: NormalizedUsage | undefined;
+  // Includes failed recovery requests; unreported usage remains unknown.
+  let turnUsage: NormalizedUsage | undefined;
   // Per-turn, for the machine-readable transcript. Reset with `lastUsage`.
   let turnToolCalls = 0;
   let turnText: string | undefined;
@@ -1911,7 +1920,9 @@ export async function runAgentRepl(
     blockActive = false;
   };
 
+  let activeTurnAbort: AbortController | undefined;
   const agentIo: AgentIO = {
+    onAttemptInterrupted: () => endBlock(),
     // Live path: append the token to the differential block (a coalescing timer
     // repaints it). Non-live path: no-op — `onAssistantText` renders once. Either
     // way the first token drops the spinner.
@@ -1966,6 +1977,12 @@ export async function runAgentRepl(
     },
     onUsage: (usage) => {
       lastUsage = usage;
+      const total = { ...turnUsage };
+      for (const key of ["inputTokens", "outputTokens", "totalTokens", "cacheReadTokens", "cacheWriteTokens"] as const) {
+        if (usage[key] !== undefined) total[key] = (total[key] ?? 0) + usage[key];
+      }
+      total.exact = (turnUsage === undefined || turnUsage.exact === true) && usage.exact === true;
+      turnUsage = total;
       events?.emit({ type: "usage", usage });
     },
     requestApproval: async (tool, input, meta) => {
@@ -2106,6 +2123,7 @@ export async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
+      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta)))}\n`);
       // Flow 275 (agent bus P4, T8; specification §4.4): a `git-publish` pause
       // lease that applies to this command must not be remembered, exactly
       // like `destructive`/`credentials`/`sacReviewConfirmation` — a saved
@@ -2171,7 +2189,7 @@ export async function runAgentRepl(
       // searched and found nothing — and a reader scores a failure as a result.
       // Observed on the first live run of this flag, against a provider with no
       // credentials configured.
-      if (text.includes("[error]")) {
+      if (/\[error\]|\[budget\]|\[stopped\]/.test(text)) {
         turnError = turnError === undefined ? text.trim() : `${turnError}\n${text.trim()}`;
       }
       stopSpinner();
@@ -2297,6 +2315,7 @@ export async function runAgentRepl(
     // Flow 271 R3-1: detach the ref itself, not only these variables. A turn or
     // a `/goal --auto` loop that is already running holds the same object, and
     // every slate write through a detached ref refuses.
+    activeTurnAbort?.abort("session lease lost");
     detachSlateSession(slateSession);
     slateSession = undefined;
     slateSessionBox.current = undefined;
@@ -2626,6 +2645,7 @@ export async function runAgentRepl(
   const runOperatorLine = async (operatorLine: string): Promise<void> => {
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
+    turnUsage = undefined;
     turnToolCalls = 0;
     turnText = "";
     turnError = undefined;
@@ -2635,13 +2655,15 @@ export async function runAgentRepl(
     deps.resetSubagentBudget?.();
     startSpinner();
     busWorking = true;
+    activeTurnAbort = new AbortController();
     try {
       if (finalizing) return;
       const abort = new AbortController();
       activeAgentAbort = abort;
       const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        recovery: rich.recovery ?? {},
+        signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
-        signal: abort.signal,
       });
       activeAgentFlight = flight;
       await flight;
@@ -2654,6 +2676,7 @@ export async function runAgentRepl(
     } finally {
       activeAgentFlight = undefined;
       activeAgentAbort = undefined;
+      activeTurnAbort = undefined;
       busWorking = false;
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
@@ -2661,14 +2684,14 @@ export async function runAgentRepl(
         type: "turn_end",
         text: turnText ?? "",
         toolCalls: turnToolCalls,
-        ...(lastUsage === undefined ? {} : { usage: lastUsage }),
+        ...(turnUsage === undefined ? {} : { usage: turnUsage }),
         ...(turnError === undefined ? {} : { errorMessage: turnError }),
       };
       events?.emit(end);
     }
     if (finalizing) return;
     flushSessionCheckpoint();
-    const usageLine = formatUsage(lastUsage);
+    const usageLine = formatUsage(turnUsage);
     if (usageLine.length > 0) {
       out(`\n${GUTTER}${usageLine}\n`);
     }
@@ -2739,20 +2762,23 @@ export async function runAgentRepl(
       out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
       startSpinner();
       busWorking = true;
+      activeTurnAbort = new AbortController();
       try {
         if (finalizing) return;
         const abort = new AbortController();
         activeAgentAbort = abort;
         const flight = runAgentTurn(agentIo, deps, history, "", {
+          recovery: rich.recovery ?? {},
           origin: "task-notification",
           ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
-          signal: abort.signal,
+          signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
         });
         activeAgentFlight = flight;
         await flight;
       } finally {
         activeAgentFlight = undefined;
         activeAgentAbort = undefined;
+        activeTurnAbort = undefined;
         busWorking = false;
         endBlock();
         stopSpinner();
@@ -2802,7 +2828,7 @@ export async function runAgentRepl(
       } else if (isReviewsCommand(command)) {
         // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
         try {
-          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd)));
+          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd), await loadReviewDepth(sessionCwd)));
         } catch {
           agentIo.onSystem?.("The managed reviews could not be read.\n");
         }
@@ -3348,6 +3374,8 @@ export interface ShellCliFlags {
    * leftover flag from a shell alias should not fail the whole launch.
    */
   permissionModeFlag?: PermissionMode;
+  /** `--review-system <inherit|review-auto>`: `review-auto` answers a review run's approval questions itself. */
+  reviewSystemFlag?: ReviewSystem;
   /**
    * `--deny-tools <a,b>` — tool names this session must not have.
    *
@@ -3460,6 +3488,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let fork: boolean | undefined;
   let takeOver: boolean | undefined;
   let permissionModeFlag: PermissionMode | undefined;
+  let reviewSystemFlag: ReviewSystem | undefined;
   let denyTools: string[] | undefined;
   let printPromptArg: string | undefined;
   let eventsFile: string | undefined;
@@ -3517,6 +3546,10 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       permissionModeFlag = next as PermissionMode;
     } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
       permissionModeFlag = arg.slice(2) as PermissionMode;
+    } else if (arg === "--review-system") {
+      const parsed = parseReviewSystem(valueAfter(i++));
+      if (parsed === undefined) invalid("--review-system must be inherit or review-auto");
+      reviewSystemFlag = parsed;
     } else if (arg === "--deny-tools") {
       // Comma-separated, like every other value-taking flag here. Repeated use
       // ACCUMULATES rather than replacing, so `--deny-tools a --deny-tools b`
@@ -3585,6 +3618,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(fork === true ? { fork: true } : {}),
     ...(takeOver === true ? { takeOver: true } : {}),
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
+    ...(reviewSystemFlag !== undefined ? { reviewSystemFlag } : {}),
     ...(denyTools !== undefined ? { denyTools } : {}),
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
     ...(eventsFile !== undefined ? { eventsFile } : {}),
@@ -3660,6 +3694,7 @@ export interface SignalShutdownParts {
   readonly jobRegistryBox: { current: Pick<JobRegistry, "sweepAll"> | undefined };
   readonly closeMcp: () => Promise<void> | undefined;
   readonly closeReadline: () => void;
+  readonly abortTurn?: () => void;
   readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
   readonly exit: (code: number) => void;
   readonly preserve?: () => Promise<void>;
@@ -3681,6 +3716,7 @@ export function makeSignalShutdown(parts: SignalShutdownParts, code: number): ()
   return (): void => {
     if (started) return;
     started = true;
+    parts.abortTurn?.();
     const release = (): void => {
       parts.busBox.current?.leave();
       parts.busBox.current = undefined;
@@ -3720,6 +3756,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     return;
   }
   const flags = parseShellCliFlags(args);
+  if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
   if (flags.help) {
     console.log(`Usage: keryx shell [options]
 
@@ -3737,6 +3774,9 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --permission-mode <mode>      Agent permissions: ask, trust or auto
   --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
+  --review-system <mode>        inherit (default: approvals follow the permission mode) or review-auto
+                                (the review's own approval questions are answered automatically;
+                                destructive, credential, publish and hook-tightened calls still ask)
   --print, -p <prompt>          Run one agent turn on this prompt and exit
   --events-file <path>          Append an NDJSON transcript (turns, tools, usage)
   --events-max-field <n>        Per-field character cap in that transcript (default 4000)
@@ -4023,8 +4063,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           for (const d of tuiDetected) {
             byName.set(d.name, { name: d.name, models: d.models ?? [] });
           }
-          return [...byName.values()];
+          return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models());
         },
+        getRankHints: (providerId) => loadRankHints(providerId),
         // Flow 358: when the size words and version cannot settle a `model_tier`
         // (ranking refused, or only an older-generation larger class above the
         // session), a one-shot call on this provider's light tier orders the
@@ -4121,8 +4162,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         mcpRuntime: () => mcpRuntime,
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
-        maxRounds: resolveAgentMaxRounds(),
-        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+          // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
         // per-provider override (`resolvedModelParams.maxOutputTokens`,
         // resolved above via `resolveProviderModelParamsByName` — an
         // operator-saved `ShellConfig.modelParams[provider]` override, else
@@ -4193,6 +4233,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     });
     const tuiInitial = startup.initial;
     const tuiDetected = startup.detected;
+    startLiveCodexModels();
     // The chat TUI's session lease (flow 271), written by `runShell` and
     // released in the `finally` below on every exit from the TUI branch.
     const chatLeaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
@@ -4362,6 +4403,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   //
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
+  const readlineAbort = new AbortController();
   const closeAndExit = (code: number): (() => void) =>
     makeSignalShutdown(
       {
@@ -4371,6 +4413,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         preserve: async () => { await finalizerBox.current?.(); },
         closeMcp: () => readlineMcp?.close(),
         closeReadline: () => rl.close(),
+        abortTurn: () => readlineAbort.abort("shell shutdown"),
         releaseLease: releaseSessionLease,
         exit: (c) => process.exit(c),
       },
@@ -4566,7 +4609,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         makeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
-        getDetectedProviders: () => [{ name: provider }],
+        getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models()),
+        getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read
         // `slateSessionBox.current` BY REFERENCE, at fold time — same
         // "live box" idiom this exact call site already uses for
@@ -4602,8 +4646,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           // review fixed. `runAgentRepl` splices `bus_list`/`bus_send` in
           // directly (`buildBusTools`) right after its own join succeeds.
         }),
-        maxRounds: resolveAgentMaxRounds(),
-        // Same precedence as the TUI's `makeAgentDeps` above — routed through
+          // Same precedence as the TUI's `makeAgentDeps` above — routed through
         // `initialModelParams.maxOutputTokens` (resolved once above) rather
         // than a second, independent `providerByName(...).maxOutputTokens`
         // lookup, so there is exactly one computation of the provider's
@@ -4698,7 +4741,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }
         let endReason = "normal";
         try {
-          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
         } catch (cause) {
           endReason = "error";
           throw cause;

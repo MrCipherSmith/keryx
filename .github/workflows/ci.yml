@@ -12,6 +12,47 @@ jobs:
   # been run independently on `main` and the two statuses classified, so a
   # pre-existing main defect is not misread as a PR regression.
 
+  # AC8 is a single full-suite run, in addition to the existing split gates.
+  # A clean checkout avoids nested foreign repositories; stdin is non-interactive.
+  ac8-full-suite:
+    name: AC8 full suite (5000 ms, preload)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
+          sudo apt-get install -y ripgrep
+
+      - name: Run complete AC8 suite with configured preload
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/ac8
+          bun --version | tee artifacts/ac8/bun-version.txt
+          bun test --timeout 5000 </dev/null 2>&1 | tee artifacts/ac8/full.log
+
+      - name: Preserve AC8 test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ac8-full-suite-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ac8/
+          if-no-files-found: warn
+          retention-days: 14
+
   typecheck-and-tests:
     name: typecheck-and-tests
     runs-on: ubuntu-latest

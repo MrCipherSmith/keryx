@@ -1,0 +1,9 @@
+{
+ "reviewer": "review-clean-code",
+ "slices": [
+  "slice-01",
+  "slice-02"
+ ],
+ "result": "raw/review-clean-code-01-02.txt",
+ "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+}

@@ -6,7 +6,7 @@
 //
 //   - the lifecycle: OFF by default, turned on only by `enable()` (the explicit
 //     `/remote-control` command), turned off by `disable()` or when the shell
-//     closes (`disable()` deregisters, which deletes the topic);
+//     closes (`disable()` deregisters, which archives the topic: a closing note, history kept);
 //   - a line from Telegram: idle, it runs as a typed line; busy, it goes through
 //     the host's ordinary user queue. It does not invent a queue of its own;
 //   - the reply: the final assistant text of a Telegram-originated turn,
@@ -19,12 +19,14 @@
 //
 // Nothing here prints the shell token or reads it: that stays in `client.ts`.
 
+import { approvalCauseLine, classifyApprovalCause, type ApprovalCause } from "../commands/approval-cause";
 import { redactSensitiveText } from "../security/service";
 import type { AskUserAnswer, AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
 import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
+import { ProgressNotes, type WaveEvent, describeStatus, isStatusQuestion } from "./progress-notes";
 import { HISTORY_DEFAULT_COUNT, HISTORY_EMPTY_MESSAGE, formatHistoryItem, parseHistoryArgs, selectHistory } from "./history";
 
 /** The label a Telegram line carries in the queue and the transcript. */
@@ -129,6 +131,8 @@ export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBus
   turnRunning?(): boolean;
   /** The live session was resumed (`-r`, `-c`, `/resume`), not started fresh. The automatic restore needs it. */
   sessionResumed?(): boolean;
+  /** What a status question from the topic is answered with besides the bridge's own counts (flow 419, AC6). */
+  sessionState?(): { queued: number; mode?: string };
 }
 
 export interface RemoteBridgeOptions {
@@ -145,6 +149,14 @@ export interface RemoteBridgeOptions {
   commandLimitMs?: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs?: number;
+  /** How often a command held for an idle main looks again (flow 419). */
+  idlePollMs?: number;
+  /** A command held for an idle main is dropped after this long (flow 419). */
+  queuedCommandLimitMs?: number;
+  /** At most one progress note per this long; 0 turns the notes off (flow 419, AC5). */
+  progressIntervalMs?: number;
+  /** Tool calls since the last note that make a stretch "tool-heavy". */
+  progressToolThreshold?: number;
   /** Pause between two restored messages, so the topic is not flooded (flow 399). */
   historyPaceMs?: number;
   /** Test seam for the pause. Default: a timer. */
@@ -210,7 +222,13 @@ export function composeApprovalPrompt(prompt: string): string {
 export function describeApprovalForTopic(
   tool: string,
   inputJson: string,
-  meta?: { destructive?: boolean; credentials?: boolean; untrustedOrigin?: boolean; card?: readonly string[] },
+  meta?: {
+    destructive?: boolean;
+    credentials?: boolean;
+    untrustedOrigin?: boolean;
+    card?: readonly string[];
+    cause?: ApprovalCause;
+  },
 ): string {
   const lines: string[] = [];
   if (meta?.card !== undefined && meta.card.length > 0) {
@@ -239,6 +257,15 @@ export function describeApprovalForTopic(
   if (meta?.destructive === true) lines.push("Warning: this can delete or overwrite files.");
   if (meta?.credentials === true) lines.push("Warning: this touches the agent's own permission or credential files.");
   if (meta?.untrustedOrigin === true) lines.push("Warning: this follows content fetched from outside.");
+  const cause =
+    meta?.cause ??
+    classifyApprovalCause({
+      destructive: meta?.destructive === true,
+      credentials: meta?.credentials === true,
+      untrusted: meta?.untrustedOrigin === true,
+      shell: tool === "shell_exec" || tool === "shell",
+    });
+  lines.push(approvalCauseLine(cause));
   return lines.join("\n");
 }
 
@@ -282,11 +309,26 @@ export class RemoteBridge {
   private postingClient: RemoteClientLike | undefined;
   /** Remote control has been turned on once in this process; only that first time can restore on its own. */
   private enabledOnce = false;
+  /** Progress notes while a turn runs and the facts for a status question (flow 419, AC5 and AC6). */
+  private readonly progress: ProgressNotes;
+  /** Approvals and questions put in the topic that nobody has answered yet. */
+  private openPrompts = 0;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
     this.now = options.now ?? Date.now;
     this.approvalOverrideMs = options.approvalTimeoutMs;
+    this.progress = new ProgressNotes({
+      ...(options.progressIntervalMs === undefined ? {} : { intervalMs: options.progressIntervalMs }),
+      ...(options.progressToolThreshold === undefined ? {} : { toolThreshold: options.progressToolThreshold }),
+      now: this.now,
+      send: (text) => {
+        const client = this.client;
+        if (client === undefined || !client.connected) return;
+        this.push("reply", "progress note");
+        void client.reply(composeReply(text)).catch(() => false);
+      },
+    });
     this.router = new RemoteCommandRouter({
       host: {
         isBusy: () => this.host.isBusy(),
@@ -301,6 +343,7 @@ export class RemoteBridge {
         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
       },
       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
+      live: () => this.client !== undefined,
       history: async (args) => await this.historyForCommand(args),
       record: (text) => this.push("command", text),
       compose: composeReply,
@@ -335,6 +378,8 @@ export class RemoteBridge {
         runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,
         commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,
         choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,
+        ...(options.idlePollMs !== undefined ? { idlePollMs: options.idlePollMs } : {}),
+        ...(options.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: options.queuedCommandLimitMs } : {}),
       },
     });
   }
@@ -484,7 +529,7 @@ export class RemoteBridge {
   }
 
   /**
-   * Turn it off: deregisters, which deletes the topic. Safe when already off. A
+   * Turn it off: deregisters, which archives the topic (closing note, history kept). Safe when already off. A
    * second call while the first is still closing waits for it (and returns false):
    * "off" is only true once the topic is actually gone.
    */
@@ -499,6 +544,7 @@ export class RemoteBridge {
     this.clientConnected = false;
     this.lastHistory = undefined;
     this.endTurnState();
+    this.progress.reset();
     this.waiting.length = 0;
     // History first, before anything awaits: a host that is about to swap its session
     // (`/new`, `/resume`) calls this and must close the interval on the session it opened.
@@ -560,6 +606,12 @@ export class RemoteBridge {
       return;
     }
     this.push("line", `Telegram: ${preview(line)}`);
+    // A question about how the run is going is answered from session state at once; behind a running
+    // turn it would wait for the very thing it asks about (flow 419, AC6).
+    if (this.host.isBusy() && isStatusQuestion(line)) {
+      this.answerStatus(meta.updateId);
+      return;
+    }
     this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });
     if (this.host.isBusy()) {
       // Queued: the message keeps its "received" reaction until its own turn starts.
@@ -568,6 +620,25 @@ export class RemoteBridge {
       this.report(meta.updateId, "reading");
       this.host.runLine(line);
     }
+  }
+
+  private answerStatus(updateId: number): void {
+    const client = this.client;
+    if (client === undefined) return;
+    this.push("command", "status question answered from session state");
+    const state = this.host.sessionState?.();
+    const text = describeStatus({
+      turnRunning: this.host.turnRunning !== undefined ? this.host.turnRunning() : true,
+      snapshot: this.progress.snapshot(),
+      topicWaiting: this.waiting.length,
+      ...(state === undefined ? {} : { queued: state.queued }),
+      openPrompts: this.openPrompts,
+      ...(state?.mode === undefined ? {} : { mode: state.mode }),
+    });
+    void client
+      .reply(composeReply(text))
+      .then((sent) => this.report(updateId, sent ? "done" : "failed"))
+      .catch(() => this.report(updateId, "failed"));
   }
 
   /** Where a message from the topic is. Best effort and never awaited: it cannot hold the line. */
@@ -710,6 +781,7 @@ export class RemoteBridge {
   /** A turn is starting. `source` is `tg` only for a line that came from Telegram. */
   turnStarted(source: RemoteLineSource | undefined): void {
     this.endTurnState();
+    if (this.client !== undefined) this.progress.begin();
     if (source !== TG_SOURCE || this.client === undefined) return;
     const next = this.waiting.shift();
     this.currentUpdate = next?.updateId;
@@ -726,7 +798,7 @@ export class RemoteBridge {
       this.runTimer = setTimeout(() => {
         this.timedOut = true;
         this.push("error", "run time limit reached; stopping the turn");
-        this.turnAbort?.abort();
+        this.turnAbort?.abort("cancelled");
         this.host.cancelTurn();
       }, limit);
     }
@@ -743,7 +815,7 @@ export class RemoteBridge {
     if (this.stoppedByUser) return "stopped";
     this.stoppedByUser = true;
     this.push("command", "/stop: stopping the turn");
-    this.turnAbort?.abort();
+    this.turnAbort?.abort("cancelled");
     this.host.cancelTurn();
     return "stopped";
   }
@@ -760,7 +832,8 @@ export class RemoteBridge {
    * not the answer: drop it. The reply is the text of a round that ended without a
    * tool call.
    */
-  toolCall(): void {
+  toolCall(name?: string): void {
+    this.progress.tool(name);
     if (!this.tgTurn) return;
     this.lastAssistantText = "";
   }
@@ -785,6 +858,7 @@ export class RemoteBridge {
 
   /** The turn finished (or was cancelled). Sends the reply for a Telegram turn. */
   async turnSettled(outcome: { failed: boolean }): Promise<void> {
+    this.progress.end();
     if (!this.tgTurn) return;
     const client = this.client;
     const text = this.lastAssistantText;
@@ -810,14 +884,21 @@ export class RemoteBridge {
     this.push(sent ? "reply" : "error", sent ? `reply sent (${body.length} chars)` : "the reply could not be sent");
   }
 
+  /** A subagent started, changed or finished. The first to start and the last to finish bound a wave (flow 419, AC5). */
+  subagentEvent(event: WaveEvent): void {
+    if (this.client === undefined) return;
+    this.progress.subagent(event);
+  }
+
   private endTurnState(): void {
+    this.progress.end();
     this.tgTurn = false;
     this.currentUpdate = undefined;
     this.currentFromId = undefined;
     this.lastAssistantText = "";
     this.timedOut = false;
     this.stoppedByUser = false;
-    this.turnAbort?.abort();
+    this.turnAbort?.abort("cancelled");
     this.turnAbort = undefined;
     if (this.runTimer !== undefined) {
       clearTimeout(this.runTimer);
@@ -839,7 +920,10 @@ export class RemoteBridge {
    * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
    * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
    */
-  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {
+  async askApproval(
+    prompt: string,
+    options: { remember?: string; signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<RemoteApprovalAnswer> {
     const client = this.client;
     if (client === undefined || !client.connected) {
       this.push("approval", "denied: not connected");
@@ -847,11 +931,13 @@ export class RemoteBridge {
     }
     this.push("approval", "asked in the topic");
     let answer: RemoteApprovalAnswer;
+    this.openPrompts += 1;
     try {
       const text = composeApprovalPrompt(prompt);
-      const timeoutMs = this.approvalTimeoutMs;
+      const timeoutMs = options.timeoutMs ?? this.approvalTimeoutMs;
       if (client.askApproval !== undefined) {
-        const signal = this.turnAbort?.signal;
+        const signals = [this.turnAbort?.signal, options.signal].filter((one): one is AbortSignal => one !== undefined);
+        const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
         const got = await client.askApproval(text, timeoutMs, {
           ...(options.remember === undefined ? {} : { remember: options.remember }),
           ...(signal === undefined ? {} : { signal }),
@@ -863,6 +949,8 @@ export class RemoteBridge {
       }
     } catch {
       answer = { decision: "deny", always: false };
+    } finally {
+      this.openPrompts -= 1;
     }
     const by = answer.fromId === undefined ? "" : ` by user ${answer.fromId}`;
     this.push(
@@ -893,6 +981,7 @@ export class RemoteBridge {
     const timeoutMs = this.options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs;
     const forUserId = this.telegramTurnUserId;
     this.push("command", "ask_user question asked in the topic");
+    this.openPrompts += 1;
     try {
       if (client.askChoice === undefined) {
         const index = await client.requestChoice(text, rows, timeoutMs, forUserId);
@@ -908,6 +997,8 @@ export class RemoteBridge {
       return undefined;
     } catch {
       return undefined;
+    } finally {
+      this.openPrompts -= 1;
     }
   }
 

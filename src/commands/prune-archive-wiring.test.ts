@@ -13,21 +13,71 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const SRC = path.resolve(import.meta.dir, "..");
 const read = (relative: string): string => readFileSync(path.join(SRC, relative), "utf8");
 
+// Select the actual call, not a character window that unrelated options can outgrow.
+function turnOptions(source: string, prompt: string): ts.ObjectLiteralExpression {
+  const file = ts.createSourceFile("prune-wiring.ts", source, ts.ScriptTarget.Latest, true);
+  const matches: ts.CallExpression[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.getText(file) === "runAgentTurn"
+      && node.arguments.slice(0, 4).map((arg) => arg.getText(file)).join(",") === `agentIo,deps,history,${prompt}`) {
+      matches.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  expect(matches).toHaveLength(1);
+  const options = matches[0]!.arguments[4];
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) throw new Error("missing turn options");
+  return options;
+}
+
+function expectArchivedPruning(options: ts.ObjectLiteralExpression): void {
+  const archive = options.properties.filter((property) => ts.isSpreadAssignment(property)
+    && ts.isParenthesizedExpression(property.expression)
+    && ts.isConditionalExpression(property.expression.expression)
+    && property.expression.expression.condition.getText().replace(/\s/g, "") === "slateSession!==undefined");
+  expect(archive).toHaveLength(1);
+  // A later property/spread must not override the archived turn's pruning flag.
+  expect(options.properties.at(-1)).toBe(archive[0]);
+  // Pin the archive and literal true together in the enabled branch. A flag in recovery,
+  // a different call, or the no-archive branch cannot satisfy this requirement.
+  expect(archive[0]!.getText()).toMatch(
+    /^\.\.\.\(slateSession\s*!==\s*undefined\s*\?\s*\{\s*slateSession,\s*pruneArchive:\s*true\s*,?\s*\}\s*:\s*\{\s*\}\s*\)$/,
+  );
+}
+
 describe("pruneArchive wiring at every host that keeps an archive", () => {
+  test("the parsed guard tolerates extra options but rejects absent, false or misplaced pruning", () => {
+    const call = (branch: string): string => `runAgentTurn(agentIo, deps, history, operatorLine, {
+      recovery: { note: "${"x".repeat(1_000)}", pruneArchive: true },
+      ...(slateSession !== undefined ? ${branch} : {})
+    });`;
+    expectArchivedPruning(turnOptions(call("{ slateSession, pruneArchive: true }"), "operatorLine"));
+    for (const branch of ["{ slateSession }", "{ slateSession, pruneArchive: false }"]) {
+      expect(() => expectArchivedPruning(turnOptions(call(branch), "operatorLine"))).toThrow();
+    }
+    const wrongBranch = call("{}").replace(": {})", ": { slateSession, pruneArchive: true })");
+    expect(() => expectArchivedPruning(turnOptions(wrongBranch, "operatorLine"))).toThrow();
+    const overridden = call("{ slateSession, pruneArchive: true }").replace(": {})", ": {}), pruneArchive: false");
+    expect(() => expectArchivedPruning(turnOptions(overridden, "operatorLine"))).toThrow();
+  });
+
   test("the readline shell's task-notification turn opts into pruning", () => {
     const source = read("commands/shell.ts");
-    expect(source).toMatch(
-      /runAgentTurn\(\s*agentIo,\s*deps,\s*history,\s*"",\s*\{\s*origin:\s*"task-notification",[\s\S]{0,200}?pruneArchive:\s*true/,
-    );
+    const options = turnOptions(source, '""');
+    expect(options.properties.some((property) => ts.isPropertyAssignment(property)
+      && property.name.getText() === "origin" && property.initializer.getText() === '"task-notification"')).toBe(true);
+    expectArchivedPruning(options);
   });
 
   test("the readline shell's operator turn opts into pruning", () => {
     const source = read("commands/shell.ts");
-    expect(source).toMatch(/runAgentTurn\(\s*agentIo,\s*deps,\s*history,\s*operatorLine,[\s\S]{0,120}?pruneArchive:\s*true/);
+    expectArchivedPruning(turnOptions(source, "operatorLine"));
   });
 
   test("the TUI foreground turn opts into pruning", () => {

@@ -1265,11 +1265,9 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
     // `runOperatorLine` helper now (parameter renamed `line` → `operatorLine`
     // so it reads the same whether called directly or drained from the held
     // queue) — the slate-session threading itself is unchanged.
-    expect(replBody).toContain(
-      "const flight = runAgentTurn(agentIo, deps, history, operatorLine, {",
-    );
+    expect(replBody).toContain("const flight = runAgentTurn(agentIo, deps, history, operatorLine, {");
     expect(replBody).toContain("...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),");
-    expect(replBody).toContain("signal: abort.signal,");
+    expect(replBody).toContain("AbortSignal.any([abort.signal, activeTurnAbort.signal");
     expect(replBody).toContain("activeAgentFlight = flight;");
     expect(replBody).toContain("await flight;");
   });

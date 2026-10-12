@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 975,
+  "headSha": "8190719d533a51be7de953f4be8942a0ee3f258d",
+  "collectedAt": "2026-10-12T20:14:23.417Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "fix(review): harden autonomous coverage, retry and safety gates",
+    "body": "## Summary\n- Bind ledger coverage to dispatch identity and invalidate stale retry coverage.\n- Preserve safety/denial gates and contextual retry requirements.\n- Harden result parsing, arbiter cache identity and recursive completion watchdog.\n- Add regression tests and deterministic lifecycle fixture; include Flow 427 implementation report.\n\n## Validation\n- Local lint and typecheck passed.\n- 1,639 focused tests passed across 76 files; zero failures.\n- Whitespace verification passed.\n- No live review runs or Vantage restart.\n\nFlow 427 remains subject to explicit outcome confirmation."
+  },
+  "ci": {
+    "state": "passing",
+    "checks": [
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

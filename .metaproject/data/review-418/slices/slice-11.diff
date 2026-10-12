@@ -1,0 +1,215 @@
+--- src/tui/busy-dispatch.ts
+@@ 182,201 @@
+   if (commandName !== undefined || line.startsWith("/")) return "deferred";
+   return "not-a-command";
+ }
++
++/**
++ * Commands that swap the session out from under the main turn and the questions queued behind it, so
++ * a deferred line of this kind is refused rather than queued: run later, it would rewrite the history
++ * those queued questions were typed against.
++ */
++export const BUSY_REFUSED_COMMANDS: ReadonlySet<string> = new Set(["/new", "/clear", "/resume"]);
++
++/** What `runLine` does with a line classified `"deferred"`: queue it for the turn's end, or refuse it. */
++export function deferredBusyAction(line: string, commandName: string | undefined): "queue" | "refuse" {
++  const name = (commandName ?? line.trim().split(/\s+/)[0] ?? "").toLowerCase();
++  return BUSY_REFUSED_COMMANDS.has(name) ? "refuse" : "queue";
++}
++
++export function queuedCommandNotice(position: number): string {
++  return `◇ main is busy — queued as q${position} (runs when the turn ends).`;
++}
+
+--- src/tui/ctrl-c-policy.ts
+@@ 1,38 @@
++// Ctrl+C in the TUI shell: cancel a running turn, and quit only on a deliberate second press at an idle
++// prompt. Closing the shell tears down the session (and the remote-control topic), so one stray press
++// must not do it. Pure: the clock is injected, no renderer dependency.
++
++export const CTRL_C_EXIT_WINDOW_MS = 2000;
++
++export const CTRL_C_EXIT_HINT = "Press Ctrl+C again to exit";
++
++export type CtrlCAction = "cancel-turn" | "arm-exit" | "exit";
++
++export interface CtrlCPolicy {
++  /** One Ctrl+C press; `turnActive` is whether a foreground turn is running right now. */
++  press(turnActive: boolean): CtrlCAction;
++}
++
++export function createCtrlCPolicy(opts: { now: () => number; windowMs?: number }): CtrlCPolicy {
++  const windowMs = opts.windowMs ?? CTRL_C_EXIT_WINDOW_MS;
++  let armedAt: number | undefined;
++  return {
++    press(turnActive) {
++      if (turnActive) {
++        armedAt = undefined;
++        return "cancel-turn";
++      }
++      const now = opts.now();
++      if (armedAt !== undefined && now - armedAt <= windowMs) {
++        armedAt = undefined;
++        return "exit";
++      }
++      armedAt = now;
++      return "arm-exit";
++    },
++  };
++}
++
++export function isCtrlC(key: { name: string; ctrl: boolean }): boolean {
++  return key.ctrl && key.name === "c";
++}
+
+--- src/tui/shell-chrome.ts
+@@ 48,54 @@
+ import { destroyModalHost } from "./modal-host";
+ import { currentDebugRun, debugEvent } from "./debug-log";
+ import { attachRendererGuards } from "./renderer-debug";
++import { isCtrlC } from "./ctrl-c-policy";
+ import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+ import { TRANSCRIPT_HISTORY_LIMIT, transcriptNodeProtected, forgetTranscriptNode } from "./transcript-history";
+ 
+
+--- src/tui/shell-chrome.ts
+@@ 578,614 @@
+  */
+ export async function createShellRenderer(
+   otui: OpenTui,
+-  opts: { onDestroy?: (() => void) | undefined } = {},
++  opts: {
++    onDestroy?: (() => void) | undefined;
++    /** Takes over Ctrl+C from OpenTUI's exit-on-Ctrl+C: the caller decides between cancel and quit. */
++    onCtrlC?: (() => void) | undefined;
++  } = {},
+ ): Promise<Renderer> {
+   // Input recovery (SIGUSR2) in every session, plus the `--debug` log when on.
+   // Assigned after creation; `onDestroy` can only fire after that.
+-  const guards: { detach?: () => void } = {};
++  const guards: { detach?: () => void; offCtrlC?: () => void } = {};
++  const onCtrlC = opts.onCtrlC;
+   const renderer = await otui.createCliRenderer({
+-    exitOnCtrlC: true,
++    exitOnCtrlC: onCtrlC === undefined,
+     screenMode: "alternate-screen",
+     clearOnShutdown: true,
+     useMouse: true,
+     backgroundColor: getTheme().bg,
+     onDestroy: () => {
+       guards.detach?.();
++      guards.offCtrlC?.();
+       opts.onDestroy?.();
+     },
+   });
+   guards.detach = attachRendererGuards(renderer);
++  if (onCtrlC !== undefined) {
++    guards.offCtrlC = onKeypress(renderer, (key) => {
++      if (!isCtrlC(key)) return;
++      key.preventDefault();
++      key.stopPropagation();
++      onCtrlC();
++    });
++  }
+   // The config field above is declarative only — see `paintRendererBackground`.
+   // THIS call is what puts the first frame, the boot animation and the startup
+   // picker on the theme's background instead of the terminal's.
+
+--- src/tui/tui-shell.ts
+@@ 117,124 @@
+ import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
+ import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
+ import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
+-import { classifyBusyDispatch } from "./busy-dispatch";
++import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
++import { classifyBusyDispatch, deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
+ import { debugEvent } from "./debug-log";
+ import {
+   createSplashLifecycle,
+
+--- src/tui/tui-shell.ts
+@@ 3800,3806 @@
+   // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
+   // it is never rebound to a placeholder no-op (flow 112, AC2).
+   let mountedChrome: ShellChrome | undefined;
+-  // Flow 173 F-002: `onDestroy` (Ctrl+C — `exitOnCtrlC: true` below) is a
++  // Flow 173 F-002: `onDestroy` (a second Ctrl+C at an idle prompt, see `ctrlCPress`) is a
+   // real, common exit path and must ALSO sweep background jobs (process-
+   // group SIGTERM→SIGKILL) and purge the sidebar/store list, same as
+   // `/exit`. It can fire before `deps`/`jobs` are ever assigned (Ctrl+C
+
+--- src/tui/tui-shell.ts
+@@ 3921,3933 @@
+   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
+   // `release()` is idempotent, so every exit path may call it.
+   const sessionLease = createTuiLeaseHolder();
++  // Set once the chrome and io exist; until then (boot animation, pickers) Ctrl+C quits at once.
++  let ctrlCPress: (() => void) | undefined;
+   try {
+     // Stable non-nullable handle for the closures below (the outer `renderer`
+     // stays `Renderer | undefined` for the `finally` teardown).
+     const r = (renderer = await createShellRenderer(otui, {
++    onCtrlC: () => (ctrlCPress ?? (() => renderer?.destroy()))(),
+     onDestroy: () => {
+         disposeExecutionPlanPanel?.();
+         liveSchedules?.dispose();
+
+--- src/tui/tui-shell.ts
+@@ 4065,4071 @@
+     // `/think`'s handler below both updates this and persists it.
+     let thinkDisplayMode: ThinkDisplayMode = resolveThinkDisplayMode(loadShellConfig().thinkDisplay);
+ 
+-    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
++    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C cancels a turn (twice to exit) · /exit";
+     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
+ 
+     // Flow 303 (AC14 follow-up, PR #669 review HIGH 2): `startupIndicator`
+
+--- src/tui/tui-shell.ts
+@@ 4733,4751 @@
+     setMainAgent("queued", "ready");
+ 
+     const io = createTuiAgentIo(otui, r, transcript);
++    const ctrlCPolicy = createCtrlCPolicy({ now: Date.now });
++    ctrlCPress = () => {
++      // A turn already told to stop but not yet unwound counts as idle, so a wedged one cannot trap the user.
++      const action = ctrlCPolicy.press(foregroundOperation.isActive && !foregroundOperation.signal.aborted);
++      if (action === "cancel-turn") {
++        foregroundOperation.cancel("interrupted by Ctrl+C");
++        io.onSystem?.("◇ main turn interrupted (Ctrl+C).\n");
++      } else if (action === "arm-exit") {
++        chrome.showToast(CTRL_C_EXIT_HINT);
++      } else {
++        r.destroy();
++      }
++    };
+     // review r1 F10: now that `io` exists, the drop notifier can actually print.
+     busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));
+     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
+
+--- src/tui/tui-shell.ts
+@@ 8367,8387 @@
+             return;
+           }
+           case "deferred": {
+-            // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
++            // Any other slash line waits for the turn's end and runs from the main queue; only the
++            // session-replacing ones (BUSY_REFUSED_COMMANDS) are refused.
++            if (deferredBusyAction(line, command?.name) === "queue") {
++              const id = `mq${mainQueueSeq++}`;
++              mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
++              paintMainQueue();
++              io.onSystem?.(`${queuedCommandNotice(mainQueue.length)}\n`);
++              return;
++            }
+             transcript.add(
+               new otui.TextRenderable(r, {
+                 id: `c${uid++}`,
+-                content: otui.t`${roleChunk(otui, "attention", 
+-                  `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
++                content: otui.t`${roleChunk(otui, "attention",
++                  `◇ main is busy — that command would replace the session under the running turn. Wait for the turn to end, or /interrupt.`,
+                 )}`,
+                 marginTop: 1,
+               }),
+

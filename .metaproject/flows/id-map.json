@@ -422,5 +422,13 @@
     "toDir": "394-2026-10-02-shell-token-economy",
     "at": "2026-10-02T15:24:32.854Z",
     "reason": "second collision: 392-2026-10-02-recommendation-journal reached main first (13:36 UTC) from a parallel clone; this flow's renumbered folder landed later (PR #857, 15:14 UTC); 393 is taken by slate-working-memory — move the later one"
+  },
+  {
+    "from": "420",
+    "to": "421",
+    "fromDir": "420-2026-10-10-review-completion-gate",
+    "toDir": "421-2026-10-10-review-completion-gate",
+    "at": "2026-10-10T07:54:40.108Z",
+    "reason": "420 is the id the 0.3.91-0.3.93 changelog entries cite for the review-start/help work, which lives in another clone"
   }
 ]

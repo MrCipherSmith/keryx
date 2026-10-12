@@ -1,0 +1,614 @@
+--- src/commands/review-slice.ts
+@@ 1,273 @@
++import { existsSync, readFileSync, statSync } from "node:fs";
++import { mkdir, readFile, readdir, rm } from "node:fs/promises";
++import path from "node:path";
++import { optionValue } from "../lib/args";
++import { writeFileAtomic } from "../lib/fs";
++import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
++import { type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
++import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes } from "../review/slice";
++
++/** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
++export type SliceDeps = {
++  gitDiff: (ref: string | undefined, contextLines: number) => Promise<string>;
++  readDiffSource: (source: string) => Promise<string>;
++  parseContextLines: (raw: string | undefined) => number;
++  rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
++};
++
++export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--out", "--json", "--help", "-h"] as const;
++export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--json", "--help", "-h"] as const;
++export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--state", "--dry-run", "--json", "--help", "-h"] as const;
++
++const DEFAULT_SLICE_DIR = ".metaproject/data/review/slices";
++const MANIFEST_NAME = "manifest.json";
++const RETRY_STATE_NAME = "retry-state.json";
++
++function wantsHelp(args: readonly string[]): boolean {
++  return args.includes("--help") || args.includes("-h");
++}
++
++export function printSliceHelp(): void {
++  console.log(`keryx review slice — usage:
++
++  keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
++                     [--max-bytes <n>] [--out <dir>] [--json]
++
++Cuts the scoped diff into reviewer-sized slices, no model call. Each slice is a
++file of at most --max-bytes (default ${DEFAULT_SLICE_MAX_BYTES}) holding whole domains where they fit; a domain over the
++limit is cut by file, a file over it by hunk. Data ledgers (csv, tsv, jsonl,
++parquet), lockfiles, snapshots, generated and oversize json are never sliced:
++they are listed under omissions with their reason and size.
++
++Accepts a git diff or the output of \`keryx review scope --scoped-diff\`.
++Writes slice-NN.diff and ${MANIFEST_NAME} into --out (default ${DEFAULT_SLICE_DIR}).
++Manifest paths are relative to the manifest. Put each slice's TEXT in the
++reviewer prompt; then \`keryx review dispatch-check\` the payload.
++`);
++}
++
++export function printDispatchCheckHelp(): void {
++  console.log(`keryx review dispatch-check — usage:
++
++  keryx review dispatch-check --payload <file|-> [--manifest <manifest.json>]
++                              [--max-bytes <n>] [--json]
++
++Validates reviewer payload(s) before dispatch: one reviewer-input object, an
++array of them, or { "dispatches": [...] }. Shape comes from
++reviewer-input.schema.json; a scope_mode "diff" payload must name its \`slices\`
++(ids from the manifest) or carry a \`diff\` that fits, and what it is assigned
++must total at most --max-bytes (default: the manifest's, else ${DEFAULT_SLICE_MAX_BYTES}).
++
++Codes: REVIEWER_INPUT_INVALID, REVIEWER_INPUT_NO_SLICE,
++REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE.
++Exit 0 ok, 1 payload refused, 2 payload or manifest unreadable.
++`);
++}
++
++export function printRetryPlanHelp(): void {
++  console.log(`keryx review retry-plan — usage:
++
++  keryx review retry-plan --manifest <manifest.json> --result <file|->
++                          [--reviewer <id>] [--slices a,b] [--state <file>]
++                          [--dry-run] [--json]
++
++Decides what follows a reviewer result. --result is the reviewer's result JSON
++({ "reviewer", "status", "slices"? , "attempt"? }). INCOMPLETE and BLOCKED get
++exactly one retry on slices half the size (r1-<reviewer>-NN.diff, appended to the
++manifest); a second failure is decision "not-run" and prints the report line
++"- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted
++as a clean pass". Any other status is "accepted".
++Attempts are remembered in ${RETRY_STATE_NAME} beside the manifest (--state to move it).
++--dry-run plans without writing. Exit 0 for every decision.
++`);
++}
++
++async function writeSliceFiles(dir: string, slices: ReadonlyArray<{ path: string; text: string }>): Promise<void> {
++  await mkdir(dir, { recursive: true });
++  for (const slice of slices) {
++    await writeFileAtomic(path.join(dir, slice.path), slice.text);
++  }
++}
++
++export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
++  if (wantsHelp(args)) {
++    printSliceHelp();
++    return;
++  }
++  deps.rejectUnknownFlags(args, SLICE_FLAGS, "slice");
++  const contextLines = deps.parseContextLines(optionValue(args, "--context"));
++  const rawMax = optionValue(args, "--max-bytes");
++  const maxBytes = validateSliceMaxBytes(rawMax === undefined ? DEFAULT_SLICE_MAX_BYTES : Number(rawMax));
++  const diffFile = optionValue(args, "--diff");
++  const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
++  const outDir = path.resolve(optionValue(args, "--out") ?? DEFAULT_SLICE_DIR);
++
++  const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
++  const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines }), { maxBytes });
++
++  await mkdir(outDir, { recursive: true });
++  for (const entry of await readdir(outDir)) {
++    if (/^slice-\d+\.diff$/.test(entry)) {
++      await rm(path.join(outDir, entry), { force: true });
++    }
++  }
++  await writeSliceFiles(outDir, slices);
++  const manifestPath = path.join(outDir, MANIFEST_NAME);
++  await writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
++
++  if (args.includes("--json")) {
++    console.log(JSON.stringify({ ...manifest, dir: outDir, manifestPath }, null, 2));
++    return;
++  }
++  console.log(renderSliceSummary(manifest));
++  console.log(`\nmanifest: ${manifestPath}`);
++}
++
++async function readJsonSource<T>(source: string, label: string): Promise<T> {
++  let raw: string;
++  try {
++    raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
++  } catch (error) {
++    throw new UnreadableInput(`${label} is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
++  }
++  try {
++    return JSON.parse(raw) as T;
++  } catch {
++    throw new UnreadableInput(`${label} is not valid JSON: ${source}`);
++  }
++}
++
++class UnreadableInput extends Error {}
++
++function failUnreadable(error: unknown): void {
++  if (error instanceof UnreadableInput) {
++    console.error(error.message);
++    process.exitCode = 2;
++    return;
++  }
++  throw error;
++}
++
++function asPayloads(value: unknown): unknown[] {
++  if (Array.isArray(value)) {
++    return value;
++  }
++  if (value !== null && typeof value === "object" && Array.isArray((value as { dispatches?: unknown }).dispatches)) {
++    return (value as { dispatches: unknown[] }).dispatches;
++  }
++  return [value];
++}
++
++export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "rejectUnknownFlags">): Promise<void> {
++  if (wantsHelp(args)) {
++    printDispatchCheckHelp();
++    return;
++  }
++  deps.rejectUnknownFlags(args, DISPATCH_CHECK_FLAGS, "dispatch-check");
++  const payloadSource = optionValue(args, "--payload");
++  if (payloadSource === undefined) {
++    throw new Error("Missing --payload <file|->. See `keryx review dispatch-check --help`.");
++  }
++  const manifestSource = optionValue(args, "--manifest");
++  const rawMax = optionValue(args, "--max-bytes");
++
++  try {
++    const payloads = asPayloads(await readJsonSource<unknown>(payloadSource, "payload"));
++    const manifest = manifestSource === undefined ? undefined : await readJsonSource<SliceManifest>(manifestSource, "manifest");
++    const base = manifestSource === undefined ? process.cwd() : path.dirname(path.resolve(manifestSource));
++    const result = await checkDispatch(payloads, {
++      ...(manifest === undefined ? {} : { manifest }),
++      ...(rawMax === undefined ? {} : { maxBytes: validateSliceMaxBytes(Number(rawMax)) }),
++      pathBytes: (slicePath) => {
++        const file = path.resolve(base, slicePath);
++        return existsSync(file) ? statSync(file).size : undefined;
++      },
++    });
++    console.log(args.includes("--json") ? JSON.stringify(result, null, 2) : renderDispatchCheck(result));
++    if (!result.ok) {
++      process.exitCode = 1;
++    }
++  } catch (error) {
++    failUnreadable(error);
++  }
++}
++
++export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "rejectUnknownFlags">): Promise<void> {
++  if (wantsHelp(args)) {
++    printRetryPlanHelp();
++    return;
++  }
++  deps.rejectUnknownFlags(args, RETRY_PLAN_FLAGS, "retry-plan");
++  const manifestSource = optionValue(args, "--manifest");
++  const resultSource = optionValue(args, "--result");
++  if (manifestSource === undefined || resultSource === undefined) {
++    throw new Error("Missing --manifest <file> or --result <file|->. See `keryx review retry-plan --help`.");
++  }
++
++  try {
++    const manifestPath = path.resolve(manifestSource);
++    const manifestDir = path.dirname(manifestPath);
++    const manifest = await readJsonSource<SliceManifest>(manifestPath, "manifest");
++    const result = await readJsonSource<ReviewerResult>(resultSource, "result");
++    const statePath = path.resolve(optionValue(args, "--state") ?? path.join(manifestDir, RETRY_STATE_NAME));
++    const state = existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState();
++    const reviewer = optionValue(args, "--reviewer") ?? result.reviewer;
++    if (reviewer === undefined || reviewer === "") {
++      throw new Error("The result names no reviewer; pass --reviewer <id>.");
++    }
++    const sliceList = optionValue(args, "--slices");
++    const plan = planRetry({
++      manifest,
++      result,
++      reviewer,
++      ...(sliceList === undefined ? {} : { sliceIds: sliceList.split(",").map((item) => item.trim()).filter(Boolean) }),
++      state,
++      readSliceText: (entry) => {
++        const file = path.resolve(manifestDir, entry.path);
++        if (!existsSync(file)) {
++          throw new UnreadableInput(`slice file is missing: ${file}`);
++        }
++        return readFileSync(file, "utf8");
++      },
++    });
++
++    if (!args.includes("--dry-run")) {
++      if (plan.newSlices.length > 0) {
++        await writeSliceFiles(manifestDir, plan.newSlices);
++        const added = plan.newSlices.map(({ text: _text, ...entry }) => entry);
++        await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, slices: [...manifest.slices, ...added] }, null, 2)}\n`);
++      }
++      await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
++    }
++
++    const dispatch = plan.newSlices.map((slice) => ({ reviewer, slice: slice.id, path: slice.path, bytes: slice.bytes }));
++    if (args.includes("--json")) {
++      console.log(
++        JSON.stringify(
++          {
++            decision: plan.decision,
++            reviewer,
++            status: plan.status,
++            priorAttempts: plan.priorAttempts,
++            reason: plan.reason,
++            reportLine: plan.reportLine ?? null,
++            dispatch,
++            dryRun: args.includes("--dry-run"),
++          },
++          null,
++          2,
++        ),
++      );
++      return;
++    }
++    console.log(`retry-plan: ${plan.decision} — ${reviewer} (${plan.status || "no status"}): ${plan.reason}`);
++    for (const item of dispatch) {
++      console.log(`- dispatch ${item.reviewer} on ${item.slice} (${item.bytes} bytes): ${item.path}`);
++    }
++    if (plan.reportLine !== undefined) {
++      console.log(plan.reportLine);
++    }
++  } catch (error) {
++    failUnreadable(error);
++  }
++}
+
+--- src/commands/review.ts
+@@ 39,45 @@
+ import { runJevRules } from "./review-jev-rules";
+ import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
+ import { runJevRisk } from "./review-jev-risk";
++import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
+ import { runJevScenarios } from "./review-jev-scenarios";
+ import { runJevDocs } from "./review-jev-docs";
+ import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
+
+--- src/commands/review.ts
+@@ 570,587 @@
+       await runFloor(args.slice(1));
+       return;
+     }
++    if (command === "slice") {
++      await runSlice(args.slice(1), SLICE_DEPS);
++      return;
++    }
++    if (command === "dispatch-check") {
++      await runDispatchCheck(args.slice(1), SLICE_DEPS);
++      return;
++    }
++    if (command === "retry-plan") {
++      await runRetryPlan(args.slice(1), SLICE_DEPS);
++      return;
++    }
+     if (command === "blast-radius") {
+       await runBlastRadius(args.slice(1));
+       return;
+
+--- src/commands/review.ts
+@@ 3434,3441 @@
+   return await Bun.file(source).text();
+ }
+ 
++const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, rejectUnknownFlags };
++
+ /**
+  * The diff the scope is built from.
+  *
+
+--- src/commands/review.ts
+@@ 3894,3902 @@
+  */
+ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+   ["scope", printScopeHelp],
++  ["slice", printSliceHelp],
++  ["dispatch-check", printDispatchCheckHelp],
++  ["retry-plan", printRetryPlanHelp],
+   ["tier", printTierHelp],
+   ["comments", printCommentsHelp],
+   ["learn", printLearnHelp],
+
+--- src/commands/review.ts
+@@ 3930,3947 @@
+                       [--parallel <n>] [--outstanding <n>]
+   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                      [--json | --scoped-diff] [--append <file>]
++  keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
++                     [--max-bytes <n>] [--out <dir>] [--json]
++                     Cuts scope A into reviewer-sized slice files plus a manifest;
++                     ledgers (csv, lockfiles, snapshots) are omitted with a reason.
++  keryx review dispatch-check --payload <file|-> [--manifest <file>]
++                              [--max-bytes <n>] [--json]
++                              Refuses a reviewer payload with no slice, an oversize
++                              slice, or a shape the reviewer-input schema rejects.
++  keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
++                          [--slices a,b] [--state <file>] [--dry-run] [--json]
++                          One smaller-slice retry for INCOMPLETE/BLOCKED, then
++                          "Not run" — never a clean pass.
+   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
+                      [--json] [--report-only]
+                      --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
+
+--- src/commands/shell.ts
+@@ 176,181 @@
+   isReasoningEffortLevel,
+   REASONING_EFFORT_LEVELS,
+   resolveAgentMaxOutputTokens,
+-  resolveAgentMaxRounds,
+   resolveMaxAutoWake,
+   resolveReasoningEffort,
+   runAgentTurn,
+
+--- src/commands/shell.ts
+@@ 4012,4018 @@
+         mcpRuntime: () => mcpRuntime,
+         // Generous default so multi-step operator prompts do not hit the
+         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
+-        maxRounds: resolveAgentMaxRounds(),
+-        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
++          // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+         // per-provider override (`resolvedModelParams.maxOutputTokens`,
+         // resolved above via `resolveProviderModelParamsByName` — an
+         // operator-saved `ShellConfig.modelParams[provider]` override, else
+
+--- src/commands/shell.ts
+@@ 4491,4497 @@
+           // review fixed. `runAgentRepl` splices `bus_list`/`bus_send` in
+           // directly (`buildBusTools`) right after its own join succeeds.
+         }),
+-        maxRounds: resolveAgentMaxRounds(),
+-        // Same precedence as the TUI's `makeAgentDeps` above — routed through
++          // Same precedence as the TUI's `makeAgentDeps` above — routed through
+         // `initialModelParams.maxOutputTokens` (resolved once above) rather
+         // than a second, independent `providerByName(...).maxOutputTokens`
+         // lookup, so there is exactly one computation of the provider's
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 657,675 @@
+ reasoning error has now happened twice in one review, say that too. A reviewer
+ that names its own recurring error is calibrating; one that quietly drops a
+ finding is hiding a result.
++
++## Job Context Awareness
++
++When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
++
++```
++JOB_NAME:     <job-name>
++CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
++```
++
++If provided and the file exists, read the context document **before** running scope detection.
++Use it to understand:
++- Intentionally chosen libraries and patterns (do not flag as issues)
++- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
++
++If absent, proceed normally — context is optional and non-blocking.
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 13,19 @@
+   - "review --legacy-profiles"
+ metadata:
+   author: "MrCipherSmith"
+-  version: "1.10.0"
++  version: "1.11.0"
+   category: "review"
+   compatible_harnesses: "cursor,codex,zed,opencode,claude"
+ license: "MIT"
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 77,93 @@
+ - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`.
+ - The model comes from `keryx review tier` (Step 6).
+ 
++## Shell host (keryx shell, or any host with no file-reading subagent) — mandatory
++
++A reviewer on this host cannot open a path: its file tool reads inside its working directory only, and a pointer it cannot follow becomes a round spent on a refusal. So the pointer rule above does not apply; the TEXT travels in the prompt, in slices small enough to finish.
++
++1. **Slice first.** `keryx review slice --ref <base> --out <dir>` after `keryx review scope`. It writes `slice-NN.diff` files of at most 150000 bytes each and a `manifest.json`; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
++2. **Slice text in the prompt.** Each reviewer's prompt holds the content of the slices assigned to it (the file bodies, not their paths), plus the `slices` ids in its reviewer-input.
++3. **Check before dispatch.** `keryx review dispatch-check --payload <file> --manifest <dir>/manifest.json` for the wave; exit 1 means a payload names no slice, is over the ceiling, or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
++4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time.
++5. **Incomplete means retry once, then Not run.** On `INCOMPLETE` or `BLOCKED`, `keryx review retry-plan --manifest <dir>/manifest.json --result <result.json>` decides: it cuts the assigned slices in half and names the one retry, and after that prints the `- **Not run:** …` line to paste into the report. An unfinished reviewer is never counted as a clean pass.
++6. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
++
+ ## Control
+ 
+ - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 1579,1585 @@
+ 
+ ## Job Context Awareness
+ 
+-When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
+-
+-```
+-JOB_NAME:     <job-name>
+-CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
+-```
+-
+-If provided and the file exists, read the context document **before** running scope detection.
+-Use it to understand:
+-- Intentionally chosen libraries and patterns (do not flag as issues)
+-- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
+-
+-If absent, proceed normally — context is optional and non-blocking.
++When a prompt carries `JOB_NAME` and `CONTEXT_PATH`, read that context document before scope detection (`SKILL.detail.md` § "Job Context Awareness"). It is optional and non-blocking.
+ 
+ ---
+ 
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json
+@@ 22,28 @@
+         "string",
+         "null"
+       ],
+-      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional, and like the rest of this schema it is read by the dispatching agent — no keryx command validates a dispatch against it."
++      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional. `keryx review dispatch-check --payload <file>` validates a payload against this schema and refuses a `diff` scope that names no slice or whose assigned bytes exceed the ceiling."
+     },
+     "scope_mode": {
+       "type": "string",
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json
+@@ 31,44 @@
+         "path"
+       ]
+     },
++    "slices": {
++      "type": "array",
++      "description": "Slice ids (or manifest-relative paths) from `keryx review slice` that this reviewer is assigned. A `diff` scope names its slices here or carries a `diff` that fits the slice ceiling; `keryx review dispatch-check` refuses a payload that does neither.",
++      "items": {
++        "type": "string",
++        "minLength": 1
++      }
++    },
+     "context_doc": {
+       "type": [
+         "string",
+
+--- src/gdskills/skill-length-ceilings.ts
+@@ 171,177 @@
+   "review/review-jev-scenarios": 187,
+   "review/review-layout": 238,
+   "review/review-logic": 377,
+-  "review/review-orchestrator": 1615,
++  "review/review-orchestrator": 1614,
+   "review/review-performance": 374,
+   "review/review-pr-feedback": 895,
+   "review/review-regression": 216,
+
+--- src/harness/tool/builtin/interactive-tools.test.ts
+@@ 78,86 @@
+   expect(result.isError).toBe(true);
+   expect(result.output).toMatch(/escapes the project root/);
+ });
++
++test("read_file outside-cwd refusal names the cause and the alternative", async () => {
++  const result = await tool("read_file").invoke({ path: "/etc/hosts" });
++  expect(result.output).toContain("working directory");
++  expect(result.output).toContain("outside it use shell_exec `cat <path>`");
++});
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 68,74 @@
+   expect(result.output).toMatch(/MAE reservation/);
+ });
+ 
+-test("default per-child round budget is 10 when max_rounds is omitted", async () => {
++test("default per-child round budget is 40 when max_rounds is omitted", async () => {
+   const tool = createSpawnSubagentTool({
+     cwd: process.cwd(),
+     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 81,90 @@
+     clock: () => "2020-01-01T00:00:00.000Z",
+   });
+   const result = await tool.invoke({ task: "investigate", mode: "read_only" });
+-  expect(result.output).toMatch(/rounds≤10\b/);
++  expect(result.output).toMatch(/rounds≤40\b/);
+ });
+ 
+-test("per-child round cap is 24 even when the model asks for more", async () => {
++test("per-child round cap is 200 even when the model asks for more", async () => {
+   const tool = createSpawnSubagentTool({
+     cwd: process.cwd(),
+     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 97,103 @@
+     clock: () => "2020-01-01T00:00:00.000Z",
+   });
+   const result = await tool.invoke({ task: "investigate", mode: "read_only", max_rounds: 999 });
+-  expect(result.output).toMatch(/rounds≤24\b/);
++  expect(result.output).toMatch(/rounds≤200\b/);
+ });
+ 
+ /**
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 379,385 @@
+   resetBudget?.();
+   const result = await tool.invoke({ task: "investigate after reset", mode: "read_only" });
+   expect(result.isError).toBe(false);
+-  expect(result.output).toMatch(/rounds≤10\b/);
++  expect(result.output).toMatch(/rounds≤40\b/);
+ });
+ 
+ test("spawn_subagent inherits network LLM parent (deepseek) under tools-readonly policy", async () => {
+
+--- src/harness/tool/builtin/interactive-tools.ts
+@@ 310,321 @@
+       const target =
+         confineToRoot(root, requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
+       if (target === null) {
+-        return { output: `path escapes the project root: ${requested}`, isError: true };
++        return {
++          output:
++            `path escapes the project root: ${requested}. read_file only reads inside the working directory (${root}); ` +
++            `for a file outside it use shell_exec \`cat <path>\`, or run keryx from a directory that contains it.`,
++          isError: true,
++        };
+       }
+       try {
+         const file = Bun.file(target);
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 209,218 @@
+  * makes at most `max_rounds + 1` requests, and never more than
+  * `MAX_SUBAGENT_MAX_ROUNDS + 1`.
+  */
+-export const DEFAULT_SUBAGENT_MAX_ROUNDS = 10;
++export const DEFAULT_SUBAGENT_MAX_ROUNDS = 40;
+ 
+ /** Per-child hard cap even when the model explicitly asks for more (the wrap-up round comes on top). */
+-export const MAX_SUBAGENT_MAX_ROUNDS = 24;
++export const MAX_SUBAGENT_MAX_ROUNDS = 200;
+ 
+ /**
+  * Flow 347 T7 (AC4): operator setting for a HARD per-child tool-call cap, in
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 736,743 @@
+         "label?: string, max_tool_calls?: integer, max_rounds?: integer }. " +
+         "max_tool_calls is ADVISORY: it never stops the child, it only sets when the child is warned " +
+         "(from 80% of it) to return its result; a hard tool-call cap exists only when the operator " +
+-        `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 10, capped ` +
+-        "at 24). A child that hits its round budget or the operator's call cap gets one final round to " +
++        `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 40, capped ` +
++        "at 200). A child that hits its round budget or the operator's call cap gets one final round to " +
+         "submit a partial result, and the output's first line is then 'status: BudgetExhausted (...)'. " +
+         "External runtimes cannot accept these limits. " +
+         "Default mode is read_only (no shell). " +
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 786,792 @@
+             minimum: 1,
+             maximum: Number.MAX_SAFE_INTEGER,
+             description:
+-              "Model-round budget (default 10, capped at 24). On reaching it the child gets one final " +
++              "Model-round budget (default 40, capped at 200). On reaching it the child gets one final " +
+               "round to submit a partial result.",
+           },
+           /**

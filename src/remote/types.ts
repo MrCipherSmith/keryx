@@ -165,6 +165,8 @@ export interface BotApi {
   sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void>;
   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }>;
   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
+  /** Close a topic without deleting it: its messages stay readable, nothing new is expected. */
+  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;
   answerCallbackQuery(params: { callbackQueryId: string; text?: string }): Promise<void>;
   /** Who the token belongs to; a bad token is a `rejected` error (401). */

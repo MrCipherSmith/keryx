@@ -1,3 +1,4 @@
+import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -174,6 +175,7 @@ export async function findRelatedFlow(input: {
  * is NOT inside the package.
  */
 export type ManagedReviewIngestInput = ManagedReviewInput & {
+  research?: unknown;
   /** The set scope B was dispatched over. See {@link screenScopeBFindings}. */
   blastRadius?: BlastRadiusScreenInput | undefined;
 };
@@ -407,6 +409,7 @@ export async function createManagedReviewPackage(
   // named class_scope in sentences passed the guard and was persisted without
   // the property the schema requires — and the round-2 input built from it was
   // rejected by the same schema. One gate, one place, both paths.
+  Object.assign(manifest.artifacts, { research: "research.json", reviewerDispatch: "research.json" });
   const contractErrors = await schemaErrors(findings);
   if (contractErrors.length > 0) {
     throw new Error(
@@ -417,7 +420,11 @@ export async function createManagedReviewPackage(
   }
 
   await mkdir(packageDir, { recursive: true });
+  await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (input.scope?.files !== undefined) {
+    await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files }, null, 2)}\n`);
+  }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
     renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
@@ -717,6 +724,19 @@ export async function getManagedReviewStatus(cwd: string, ref: string): Promise<
   return JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
 }
 
+/** What `completeManagedReview` would refuse on right now, without closing anything. */
+export async function reviewCompletionBlockers(packageDir: string): Promise<string[]> {
+  const missing = await missingArtifacts(packageDir);
+  if (missing.length > 0) return [`missing artifacts: ${missing.join(", ")}`];
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    const findings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+    return await packageResearchErrors(packageDir, manifest.artifacts, findings);
+  } catch (error) {
+    return [`package unreadable: ${error instanceof Error ? error.message : String(error)}`];
+  }
+}
+
 /**
  * One recorded outcome, naming the finding it is about.
  *
@@ -783,6 +803,9 @@ export async function completeManagedReview(
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
+  const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+  const researchProblems = await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
+  if (researchProblems.length) throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
   const dispositions = options.dispositions ?? [];
   if (dispositions.length > 0) {
     await recordDispositions(packageDir, dispositions);
@@ -984,7 +1007,13 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
     return input.reportText;
   }
   if (input.reportPath) {
-    return readFile(path.resolve(input.cwd, input.reportPath), "utf8");
+    try {
+      return await readFile(path.resolve(input.cwd, input.reportPath), "utf8");
+    } catch (error) {
+      // `start` opens a round before any report exists: a report path that is not there yet is the normal case.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (input.mode === "ingest" || (code !== "ENOENT" && code !== "EISDIR")) throw error;
+    }
   }
   if (input.mode === "ingest") {
     throw new Error("ingest requires --report or reportText");

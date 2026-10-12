@@ -69,6 +69,11 @@ export type ChoiceAnswer =
   | { kind: "own"; text: string; refusal?: undefined }
   | { kind: "none"; refusal?: string };
 
+/** Read at the call: an earlier check on the same signal must not narrow it to "not aborted". */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
 function closeByFor(signal: AbortSignal | undefined): "shell" | "cancelled" {
   return signal?.reason === "cancelled" ? "cancelled" : "shell";
 }
@@ -464,6 +469,10 @@ export class RemoteClient {
     if (!this.connected) {
       return { decision: "deny" };
     }
+    if (isAborted(options.signal)) {
+      await this.closePrompt(approvalId, closeByFor(options.signal));
+      return { decision: "deny", approvalId };
+    }
     return new Promise<ApprovalAnswer>((resolve) => {
       const signal = options.signal;
       const onAbort = (): void => {
@@ -472,6 +481,8 @@ export class RemoteClient {
         if (waiter !== undefined) clearTimeout(waiter.timer);
         this.waiters.delete(approvalId);
         resolve({ decision: "deny", approvalId });
+        // Flow 419: the buttons may still be in the topic; serve takes them down and says where it was answered.
+        void this.closePrompt(approvalId, closeByFor(signal));
       };
       const timer = setTimeout(() => {
         signal?.removeEventListener("abort", onAbort);

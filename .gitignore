@@ -7,6 +7,10 @@ coverage/
 .tmp-*/
 *.vsix
 
+# Shared Agent Context workspaces hold per-machine agent working material
+# (session transcripts, proposals, receipts, local paths). Never project content.
+.metaproject/workspaces/
+
 # Agent-harness scratch space. `.claude/worktrees/` holds git worktrees — full
 # checkouts of this repository — which must never be committed or source-indexed
 # (see IGNORE_DIRS in src/gdgraph/build.ts). Committed here rather than left in

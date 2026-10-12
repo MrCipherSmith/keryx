@@ -1,0 +1,9 @@
+{
+ "reviewer": "review-frontend-conventions",
+ "slices": [
+  "slice-01",
+  "slice-02"
+ ],
+ "result": "raw/review-frontend-conventions-01-02.txt",
+ "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-frontend-conventions/SKILL.md"
+}

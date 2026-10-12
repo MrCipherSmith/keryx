@@ -48,6 +48,7 @@ import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
+import { isCtrlC } from "./ctrl-c-policy";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
 import { TRANSCRIPT_HISTORY_LIMIT, transcriptNodeProtected, forgetTranscriptNode } from "./transcript-history";
 
@@ -577,23 +578,37 @@ export function selectThemeColors(theme: Theme): {
  */
 export async function createShellRenderer(
   otui: OpenTui,
-  opts: { onDestroy?: (() => void) | undefined } = {},
+  opts: {
+    onDestroy?: (() => void) | undefined;
+    /** Takes over Ctrl+C from OpenTUI's exit-on-Ctrl+C: the caller decides between cancel and quit. */
+    onCtrlC?: (() => void) | undefined;
+  } = {},
 ): Promise<Renderer> {
   // Input recovery (SIGUSR2) in every session, plus the `--debug` log when on.
   // Assigned after creation; `onDestroy` can only fire after that.
-  const guards: { detach?: () => void } = {};
+  const guards: { detach?: () => void; offCtrlC?: () => void } = {};
+  const onCtrlC = opts.onCtrlC;
   const renderer = await otui.createCliRenderer({
-    exitOnCtrlC: true,
+    exitOnCtrlC: onCtrlC === undefined,
     screenMode: "alternate-screen",
     clearOnShutdown: true,
     useMouse: true,
     backgroundColor: getTheme().bg,
     onDestroy: () => {
       guards.detach?.();
+      guards.offCtrlC?.();
       opts.onDestroy?.();
     },
   });
   guards.detach = attachRendererGuards(renderer);
+  if (onCtrlC !== undefined) {
+    guards.offCtrlC = onKeypress(renderer, (key) => {
+      if (!isCtrlC(key)) return;
+      key.preventDefault();
+      key.stopPropagation();
+      onCtrlC();
+    });
+  }
   // The config field above is declarative only — see `paintRendererBackground`.
   // THIS call is what puts the first frame, the boot animation and the startup
   // picker on the theme's background instead of the terminal's.

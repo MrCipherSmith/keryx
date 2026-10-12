@@ -1,0 +1,10 @@
+{
+ "reviewer": "review-logic",
+ "slices": [
+  "slice-03",
+  "slice-05",
+  "slice-08"
+ ],
+ "result": "raw/review-logic-03-05-08.txt",
+ "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-logic/SKILL.md"
+}

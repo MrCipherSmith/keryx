@@ -89,6 +89,9 @@ export type ManagedReviewManifest = {
     findings: string;
     learning: string;
     decisions: string;
+    /** Package-local evidence locators; absent only on legacy packages. */
+    research?: string | undefined;
+    reviewerDispatch?: string | undefined;
   };
   coverage: ReviewCoverageEntry[];
   /**
@@ -592,10 +595,10 @@ export type ManagedReviewInput = {
   /**
    * The parallel dispatch plan, when the caller has one.
    *
-   * `outstanding` is the subagent count the CALLER declares it already has in
-   * flight. It is the only thing that lets the cap say anything about the
-   * `job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator` nesting,
-   * and it is a declaration rather than an observation — see
+   * `outstanding` is the count of subagents the main session still has running,
+   * as the CALLER declares it. It is the only thing that lets the cap say anything
+   * beyond this dispatch plan, and it is a declaration rather than an
+   * observation — see
    * {@link module:review/caps.ConcurrencyPlan.holdsAcrossNesting}.
    */
   concurrency?:
