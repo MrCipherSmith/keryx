@@ -4,6 +4,17 @@
 
 ## [0.3.112] - 2026-10-12
 
+### Review depth
+
+- A managed review round dispatches every applicable reviewer by default (`mode all`). A diff-only dispatch needs the operator's own words recorded in the dispatch record; an unattended run always uses `all`.
+- Project reviewer path globs are derived from the project's description, and a trailing `/**` matches the files under it. `review-regression` is required exactly when a blast radius was computed for the package.
+- `keryx review mutate` runs the proposed mutants in a scratch copy and records the table. `keryx review complete` refuses an attended round that still has runnable mutants unrun, unless the dispatch record carries a waiver with the operator's quote.
+- `keryx review severity-audit` raises a finding that cites a surviving mutant on a changed file from a low severity to major; a cited mutant no run executed is labelled `unproven`. It never deletes a finding.
+- `keryx review context-collect` gathers the pull request's description, linked issues and comments for the reviewers. `keryx review compare-reference` classifies a reference report's items against a package.
+- `/reviews` has a "Review depth" tab, and the readline `/reviews` prints the same block: mode, reviewers dispatched against required, excluded reviewers with the reason, and the mutation tally.
+
+## [0.3.112] - 2026-10-12
+
 ### Agent Runtime
 
 - Native `spawn_subagent` reservations now honor `timeout_ms` or `runtime.kind: "keryx"` with `timeoutMs`, bounded by the operator timeout, instead of always reserving the default child deadline.
