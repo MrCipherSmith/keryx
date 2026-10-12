@@ -1084,7 +1084,7 @@ async function runBudget(args: string[]): Promise<void> {
   console.log(`holds_across_nesting: ${plan.holdsAcrossNesting ? "yes (against the declared count)" : "no"}`);
   if (!plan.holdsAcrossNesting) {
     console.log(
-      "  The cap bounds THIS plan only. Nothing declared what job-orchestrator or flow-orchestrator already had in flight, and keryx cannot observe it. Pass --outstanding <n> to make the cap mean something across the nesting.",
+      "  The cap bounds THIS plan only. Nothing declared how many subagents the main session still has running, and keryx cannot observe them. Pass --outstanding <n> to count them against the cap.",
     );
   }
   plan.waves.forEach((wave, index) => {
@@ -4460,11 +4460,10 @@ budget:
   non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
   orchestrator asks the operator instead of proceeding. Also prints the reviewer
   dispatch waves for the concurrency cap (default ${MAX_REVIEWERS_PER_WAVE_FULL} in flight; split by diff domain, never above ${MAX_REVIEWERS_PER_WAVE_FULL} for a full review).
-  --outstanding <n> is what an enclosing orchestrator already has in flight.
-  WITHOUT it the cap bounds this plan only: keryx cannot observe subagents in
-  another process, so it does NOT bind the total across job-orchestrator ->
-  flow-orchestrator -> review-orchestrator, and it says so rather than implying
-  otherwise.
+  --parallel <n> sets the wave size; with --full it can only lower it, because
+  --full holds the wave to ${MAX_REVIEWERS_PER_WAVE_FULL}. --outstanding <n> is how many subagents the main
+  session still has running. WITHOUT it the cap bounds this plan only: keryx
+  cannot observe those subagents, and it says so rather than implying otherwise.
 
 tier:
   The \`model\` block a dispatch document carries, COMPUTED — run this instead of

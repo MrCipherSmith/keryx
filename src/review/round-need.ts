@@ -18,30 +18,21 @@ export interface RoundNeed {
   reason: string;
 }
 
-const LOCKFILES = new Set([
-  "bun.lock",
-  "bun.lockb",
-  "package-lock.json",
-  "yarn.lock",
-  "pnpm-lock.yaml",
-  "Cargo.lock",
-  "poetry.lock",
-  "Gemfile.lock",
-  "go.sum",
-]);
-
-// Markdown that steers agents: a change to it changes behaviour, so it is code.
-const RULE_BEARING =
-  /(^|\/)(SKILL(\.detail)?\.md|CLAUDE\.md|AGENTS\.md|GEMINI\.md|copilot-instructions\.md|[^/]+\.mdc)$|(^|\/)\.(claude|cursor|github|metaproject)\/(agents|commands|skills|rules)\//i;
-const PROSE = /\.(md|mdx|rst|adoc)$/i;
-const GENERATED = /^(dist|coverage)\/|(^|\/)__generated__\//;
+// Prose is an allowlist: markdown anywhere else (agent prompts, steering files,
+// instruction files, rules) shapes agent behaviour, so it is code. Lockfiles and
+// committed dist/ output are code too: a repointed resolved URL or hash is a
+// supply-chain change. .metaproject/data stays out of the allowlist because
+// data/testing/context.md is read as instructions.
+const DOC_EXT = /\.(md|mdx|rst|adoc)$/i;
+const STEERING_TOP_LEVEL = /^(CLAUDE|AGENTS|GEMINI)\.(md|mdx|rst|adoc)$/i;
+const DOC_DIRS = /^(docs\/|\.metaproject\/(flows|wiki|reviews)\/)/;
+const GENERATED = /^coverage\/|(^|\/)__generated__\//;
 
 function isProse(file: string): boolean {
-  if (RULE_BEARING.test(file)) return false;
-  const base = file.slice(file.lastIndexOf("/") + 1);
-  if (LOCKFILES.has(base)) return true;
   if (GENERATED.test(file)) return true;
-  return PROSE.test(file);
+  if (!DOC_EXT.test(file)) return false;
+  if (!file.includes("/")) return !STEERING_TOP_LEVEL.test(file);
+  return DOC_DIRS.test(file);
 }
 
 export function classifyRoundNeed(input: RoundNeedInput): RoundNeed {
@@ -50,7 +41,7 @@ export function classifyRoundNeed(input: RoundNeedInput): RoundNeed {
   if (input.gating === true) return { needed: true, reason: "a gating round is always run" };
   if (input.files.length === 0) return { needed: false, reason: "empty diff" };
   if (input.files.every(isProse)) {
-    return { needed: false, reason: "docs, markdown, lockfiles or generated files only; no code, CI, auth, migration or rule-bearing config" };
+    return { needed: false, reason: "docs or machine-written files only; no code, lockfiles, CI, auth, migration, agent prompts or rule-bearing config" };
   }
   return { needed: true, reason: "code or rule-bearing files in the diff" };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { classifyRoundNeed } from "./round-need";
 
-const DOCS_ONLY = ["README.md", "docs/guide/setup.md", "CHANGELOG.md", "bun.lock"];
+const DOCS_ONLY = ["README.md", "docs/guide/setup.md", "CHANGELOG.md", ".metaproject/flows/1-x/journal.md"];
 const CODE = ["src/review/caps.ts", "README.md"];
 
 describe("classifyRoundNeed", () => {
@@ -27,11 +27,27 @@ describe("classifyRoundNeed", () => {
     ["GEMINI.md"],
     [".github/copilot-instructions.md"],
     ["skills/foo/skill.md"],
+    ["src/gdskills/bundled/agents/security-auditor.md"],
+    ["src/gdskills/bundled/skills/review/review-orchestrator/references/x.md"],
+    [".opencode/agent/a.md"],
+    [".kiro/steering/a.md"],
+    [".github/instructions/a.instructions.md"],
+    [".github/prompts/a.prompt.md"],
+    [".github/workflows/a.md"],
+    [".metaproject/index.md"],
+    [".metaproject/modules/tasks.md"],
+    [".metaproject/data/testing/context.md"],
+    ["rules/core/x.md"],
+    ["CLAUDE.md"],
+    ["AGENTS.md"],
+    ["bun.lock"],
+    ["package-lock.json"],
+    ["dist/app.js"],
   ])("%s fails open: it needs a round", (file) => {
     expect(classifyRoundNeed({ files: [file] }).needed).toBe(true);
   });
 
-  test.each([["dist/app.js"], ["coverage/lcov.info"], ["src/__generated__/types.ts"]])(
+  test.each([["coverage/lcov.info"], ["src/__generated__/types.ts"]])(
     "%s is machine-written and needs no round",
     (file) => {
       expect(classifyRoundNeed({ files: [file] }).needed).toBe(false);

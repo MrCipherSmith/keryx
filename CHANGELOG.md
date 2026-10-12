@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Review of PR 939 (flow 417 follow-up)
+
+- `classifyRoundNeed` treats markdown as prose only under an explicit allowlist (`docs/`, `.metaproject/{flows,wiki,reviews}`, README, CHANGELOG). Agent prompts, steering files, `*.instructions.md`, `*.prompt.md`, `.metaproject/index.md` and rules need a review round. Lockfile-only and `dist/`-only diffs no longer skip the round; only `coverage/` and `__generated__/` do.
+- The four orchestrator skills name the spawn tool as `Agent`, `spawn_subagent` or the host's equivalent, and the preflight test pins the phrase. `review-orchestrator` path mode lists files with a form that returns a complete plain path list, its "Done when" line applies to managed rounds only, and a bare `STATUS: RATE_LIMITED` follows the rate-limit rule instead of `BLOCKED`.
+- `keryx review budget` help documents `--full` and no longer describes the retired job -> flow -> review nesting. `orchestratorToolProblems` reports nothing on hosts without nested spawn. `retry-after` is capped at 300 seconds.
+
 ### Review depth (flow 430)
 
 - `keryx review retry-plan` and `ledger build` read a reviewer's `slices` as ids or as objects with an `id`. A reviewer that listed every assigned slice as objects is no longer retired as `not-run`. An object whose `status` is not done (anything but DONE, COMPLETE, COVERED, OK, or none) leaves its slice uncovered; entries with no usable id are ignored. Both are reported by count in the plan's reason and in the ledger gap, with the affected ids for a status.

@@ -122,12 +122,11 @@ describe("spawn tool in the agent vocabulary (flow 417 AC4)", () => {
     expect(problems[0]).toContain(SPAWN_TOOL);
   });
 
-  test("an agent naming spawn_subagent where the host has no nested spawn fails", () => {
+  test("hosts without nested spawn run the orchestrator inline: no problems either way", () => {
     for (const host of ["claude", "opencode", "codex", "kiro"] as const) {
       expect(HOSTS_WITH_NESTED_SPAWN.includes(host)).toBe(false);
-      const problems = orchestratorToolProblems({ name: "review-orchestrator", tools: [SPAWN_TOOL] }, host);
-      expect(problems).toHaveLength(1);
-      expect(problems[0]).toContain(host);
+      expect(orchestratorToolProblems({ name: "review-orchestrator", tools: [SPAWN_TOOL] }, host)).toEqual([]);
+      expect(orchestratorToolProblems({ name: "review-orchestrator", tools: ["read_file"] }, host)).toEqual([]);
     }
   });
 
