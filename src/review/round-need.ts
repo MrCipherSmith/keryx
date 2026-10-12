@@ -23,16 +23,39 @@ export interface RoundNeed {
 // committed dist/ output are code too: a repointed resolved URL or hash is a
 // supply-chain change. .metaproject/data stays out of the allowlist because
 // data/testing/context.md is read as instructions.
+//
+// Steering files are denied first and everywhere, including under docs/ and the
+// .metaproject doc directories: a nested CLAUDE.md or SKILL.md is loaded by the
+// agent that reads files beside it. Dotfiles (.cursorrules, .mcp.json) and agent
+// config JSON (mcp, settings, hooks, package, tsconfig) are code even where
+// machine-written data is skipped. A path that is not plainly normalised
+// (backslash, "..", "//", leading "./" or "/") fails open.
 const DOC_EXT = /\.(md|mdx|rst|adoc)$/i;
-const STEERING_TOP_LEVEL = /^(CLAUDE|AGENTS|GEMINI)\.(md|mdx|rst|adoc)$/i;
 const DOC_DIRS = /^(docs\/|\.metaproject\/(flows|wiki|reviews)\/)/;
+const TOP_LEVEL_PROSE = /^(README|CHANGELOG|CONTRIBUTING|LICENSE|SECURITY|CODE_OF_CONDUCT)(\.(md|mdx|rst|adoc|txt))?$/i;
+const NESTED_PROSE = /^(README|CHANGELOG)\.(md|mdx|rst|adoc)$/i;
+const STEERING_SEGMENT = /^(agents?|skills|commands|rules|steering|prompts|instructions|hooks?)$/i;
+const STEERING_BASENAME = /^(?:SKILL|AGENTS|CLAUDE|GEMINI|QWEN|CONVENTIONS|copilot-instructions)|\.(?:local|override|instructions|prompt)\.(?:md|mdx|rst|adoc)$/i;
+const AGENT_LOADED_JSON = /(^|[-_.])(mcp|settings|hooks?|package|tsconfig)([-_.].*)?\.json$/i;
 const GENERATED = /^coverage\/|(^|\/)__generated__\//;
+const GENERATED_DATA_EXT = /\.(lcov|info|json|map|html|txt|md)$/i;
+
+function isNormalised(file: string): boolean {
+  if (file === "" || file.includes("\\") || file.includes("//") || file.startsWith("/") || file.startsWith("./")) return false;
+  return !file.split("/").some((segment) => segment === ".." || segment === ".");
+}
 
 function isProse(file: string): boolean {
-  if (GENERATED.test(file)) return true;
-  if (!DOC_EXT.test(file)) return false;
-  if (!file.includes("/")) return !STEERING_TOP_LEVEL.test(file);
-  return DOC_DIRS.test(file);
+  if (!isNormalised(file)) return false;
+  const docRoot = DOC_DIRS.exec(file);
+  const segments = (docRoot === null ? file : file.slice(docRoot[0].length)).split("/");
+  const base = segments[segments.length - 1]!;
+  const dirs = segments.slice(0, -1);
+  if (dirs.some((dir) => dir.startsWith(".") || STEERING_SEGMENT.test(dir))) return false;
+  if (STEERING_BASENAME.test(base) || base.startsWith(".") || AGENT_LOADED_JSON.test(base)) return false;
+  if (GENERATED.test(file)) return GENERATED_DATA_EXT.test(base);
+  if (docRoot !== null) return DOC_EXT.test(base);
+  return (dirs.length === 0 ? TOP_LEVEL_PROSE : NESTED_PROSE).test(base);
 }
 
 export function classifyRoundNeed(input: RoundNeedInput): RoundNeed {

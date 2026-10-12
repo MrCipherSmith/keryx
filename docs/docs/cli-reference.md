@@ -5378,7 +5378,7 @@ refused rather than reported as an empty radius.
 Nothing in the review pipeline was capped: `budget.max_findings` was required by
 the schema with no default anywhere, there was no cost ceiling, and reviewers
 were dispatched in parallel with no wave size while `review-orchestrator` itself
-runs nested under `flow-orchestrator` and `job-orchestrator`.
+can run nested under `flow-orchestrator` and `job-orchestrator`.
 
 The defaults are in code (`src/review/caps.ts`), so a caller that says nothing
 still gets a bound.
@@ -5387,7 +5387,7 @@ still gets a bound.
 |---|---|---|---|
 | Findings | **10 per reviewer**, blockers exempt | `--max-findings <n>` | Truncates a reviewer's ordinary findings. `blocker` and `blocking_merge` findings are exempt and do not consume the budget. |
 | Spend | **3.00 USD** per round | `--spent <usd>`, `--spend-ceiling <usd>` | Stops and asks rather than proceeding. |
-| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after`; after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
+| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after` (at most 300 seconds); after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
 
 **Every cap records what it dropped**, in the package's `scope.md` under
 `## Caps` and on the terminal — a count, and for the findings cap the id of every
@@ -5411,8 +5411,8 @@ is denominated in, and token counts convert to it while the reverse does not.
 and one reviewer fan-out, the analogue of one instance.
 
 **The concurrency cap does not bind the nested total on its own, and says so.**
-keryx is a CLI invoked once per command: it cannot observe subagents running in
-another orchestrator's process, and there is no lease between the three
+keryx is a CLI invoked once per command: it cannot observe the subagents the main
+session still has running, and there is no lease between the three
 orchestration levels. `--outstanding <n>` is an enclosing orchestrator declaring
 what it already has in flight, which shrinks the effective wave; it is a
 declaration, not an observation, and nothing verifies it. The record therefore

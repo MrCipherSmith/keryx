@@ -132,7 +132,7 @@ export function mapToolsForTarget(tools: readonly string[], target: HostToolTarg
 /** The tool an orchestrating agent uses to start a sub-agent. It has no entry in any host's tool map, so it is dropped (and reported) from every exported agent file; hosts spawn through their own tool (Claude Code's `Agent`, for one) rather than through this name. */
 export const SPAWN_TOOL: AgentToolName = "spawn_subagent";
 
-/** Agents that coordinate other agents. The main agent runs them inline; an exported agent file for one must keep SPAWN_TOOL in `tools`. */
+/** Agents that coordinate other agents. The main agent runs them inline. Only the keryx-shell host enforces SPAWN_TOOL in `tools` (see `orchestratorToolProblems`); other hosts spawn through their own tool. */
 export const ORCHESTRATOR_AGENT_NAMES = ["review-orchestrator", "flow-orchestrator", "job-orchestrator"] as const;
 
 export function isOrchestratorAgent(name: string): boolean {

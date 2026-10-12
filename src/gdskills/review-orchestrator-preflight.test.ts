@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { MAX_RATE_HALVINGS, MAX_REVIEWERS_PER_WAVE_FULL } from "../review/caps";
+import { MAX_RATE_HALVINGS, MAX_RETRY_AFTER_SECONDS, MAX_REVIEWERS_PER_WAVE_FULL } from "../review/caps";
 import { REVIEW_ROUND_CAP } from "../flow/review-gate";
 import { classifyRoundNeed } from "../review/round-need";
 import { SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
@@ -166,6 +166,10 @@ describe("AC6 / AC9 (skill text): waves split by domain, bounded, and adaptive t
     expect(control).toContain("`STATUS: BLOCKED rate_limited`");
   });
 
+  test("retry-after is capped at the code constant", () => {
+    expect(control).toContain(`honour \`retry-after\`, at most ${MAX_RETRY_AFTER_SECONDS} seconds (\`MAX_RETRY_AFTER_SECONDS\`)`);
+  });
+
   test("the quality gate maps every status to an action, RATE_LIMITED included", () => {
     const gate = SKILL.slice(SKILL.indexOf("## Sub-Agent Report Quality Gate"));
     for (const status of ["DONE", "DONE_WITH_CONCERNS", "NEEDS_CONTEXT", "BLOCKED", "RATE_LIMITED"]) {
@@ -194,6 +198,55 @@ describe("AC7: a round that cannot find anything is not run", () => {
     expect(preflight).toContain("Every other file counts as code");
     expect(preflight).toContain("lockfiles");
     expect(preflight).not.toMatch(/markdown, comments, formatting, lockfiles or generated/);
+  });
+
+  test("the preflight names the rename-safe file list command", () => {
+    const preflight = section(SKILL, "## Preflight — before Step 0, in this order");
+    expect(preflight).toContain("`git diff --name-status --no-renames <base>...HEAD`");
+  });
+
+  test("every prose and steering token the preflight names agrees with classifyRoundNeed", () => {
+    const preflight = section(SKILL, "## Preflight — before Step 0, in this order");
+    const proseSamples: Record<string, string> = {
+      README: "README.md",
+      CHANGELOG: "CHANGELOG.md",
+      CONTRIBUTING: "CONTRIBUTING.md",
+      LICENSE: "LICENSE",
+      SECURITY: "SECURITY.md",
+      CODE_OF_CONDUCT: "CODE_OF_CONDUCT.md",
+      "docs/": "docs/guide.md",
+      "`coverage/`": "coverage/lcov.info",
+      "`__generated__/`": "src/__generated__/schema.json",
+    };
+    for (const [token, sample] of Object.entries(proseSamples)) {
+      expect(preflight).toContain(token);
+      expect(classifyRoundNeed({ files: [sample] }).needed).toBe(false);
+    }
+    const steeringSamples: Record<string, string> = {
+      SKILL: "docs/SKILL.md",
+      AGENTS: "docs/AGENTS.md",
+      CLAUDE: "docs/CLAUDE.md",
+      GEMINI: "docs/GEMINI.md",
+      QWEN: "docs/QWEN.md",
+      CONVENTIONS: "docs/CONVENTIONS.md",
+      "copilot-instructions": "docs/copilot-instructions.md",
+      "`*.local.md`": "docs/x.local.md",
+      "`*.override.md`": "docs/x.override.md",
+      "`*.instructions.md`": "docs/x.instructions.md",
+      "`*.prompt.md`": "docs/x.prompt.md",
+      "dot-directory": "docs/.claude/x.md",
+      agents: "docs/agents/x.md",
+      skills: "docs/skills/x.md",
+      commands: "docs/commands/x.md",
+      rules: "docs/rules/x.md",
+      steering: "docs/steering/x.md",
+      prompts: "docs/prompts/x.md",
+      instructions: "docs/instructions/x.md",
+    };
+    for (const [token, sample] of Object.entries(steeringSamples)) {
+      expect(preflight).toContain(token);
+      expect(classifyRoundNeed({ files: [sample] }).needed).toBe(true);
+    }
   });
 
   test("--all still forces a round on the docs-only fixture", () => {
