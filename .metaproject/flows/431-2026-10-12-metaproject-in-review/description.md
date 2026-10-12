@@ -1,6 +1,6 @@
 # Metaproject layers in review
 
-Status: draft (PRD and acceptance criteria go to the operator before freeze)
+Status: draft, operator decisions applied (acceptance criteria go to the operator before freeze)
 Source: user description (origin: human-request)
 
 ## Problem
@@ -28,29 +28,29 @@ The operator proposed a cheap model to refresh the graph and the wiki before eac
 
 So no cheap model is needed for the refresh the operator described: it is deterministic and fast enough to run before every review. The only step that needs a model is prose enrichment of the wiki; it stays out of the automatic path, and the refresh reports how many pages hold stale prose instead of rewriting them.
 
-One side effect to settle before freeze: `gdgraph build` rewrites three TRACKED files (`.provenance.json`, `artifacts/module-map.json`, `artifacts/summary.md`), so a refresh in a review worktree dirties it. The plan keeps the build output of a review outside the tracked files (see Open questions).
+One side effect: `gdgraph build` rewrites three TRACKED files (`.provenance.json`, `artifacts/module-map.json`, `artifacts/summary.md`), so a refresh in a review worktree would dirty it and could leak those files into the PR diff. Decision: a review's build never touches tracked files (AC2).
 
 ## Expected Outcome
 
-Before a managed review starts, the layers are rebuilt or checked at the review head, and the package records exactly which commit each layer describes. A review whose graph describes another commit is refused (or, with an operator quote, run with the mismatch recorded). Each reviewer gets the graph's answer for its own files in its payload (affected files, symbol neighbours, related tests, matching wiki pages and memory entries), is told by its skill when to call the layer tools, and the package records, per reviewer, which layers it actually used, counted from its tool calls. The files the blast radius cut get a second pass or an explicit "not reviewed" record the gate reads.
+Before every managed review the graph is rebuilt automatically at the review head (17 s, no model), in a fresh worktree too, without dirtying the worktree or the PR. The package records the graph's commit and the PR head. Wiki and memory are read from the operator's project working copy, with a recorded divergence mark against the PR head. Each reviewer gets the graph's answer for its own files in its payload, is told by its skill when to call the layer tools, and the package records, per reviewer, which layers it used, counted from its tool calls (`unknown` when the log is missing, shown in the panel, never blocking). The files the blast radius cut get a bounded tail pass on a middle model tier; whatever the cap leaves is recorded as unchecked. `wiki enrich` is never part of this path.
 
 ## Outcome criteria
 
 - Запрос (дословно): «Давай вынесем в отдельный флоу все, что касается использования метапрожекта. Допустим, операция по перестройке графа, она не такая большая, и мы вполне можем на какой-нибудь дешевой модели перед каждым ревью делать, обновлять этот граф. Если, допустим, мы в Work3 созданном или в Вики, доступ должен быть тоже. можем переиндексировать вики, тоже это не сложная операция, вынеси это в отдельный флоу» (source: helyx chat message 199906, 2026-10-12T15:38Z, voice transcript; the audit that preceded it: message 199859 «также еще проверь как используются wiki, graph и другие инструменты именно метапроджекта используются ли они как-то для review и помогают ли они»)
-- Эффект (формализация агента): `keryx review` on a pull request first refreshes the graph, the wiki's machine sections and the memory index at the review head with no model call, records a layers file (commit, time, node/edge counts, wiki pages refreshed and stale-prose count, memory entries) in the package, and refuses to dispatch when the graph's commit is not the review head. Every driver payload carries the affected files, related tests, wiki pages and memory entries for that reviewer's files; reviewer skills name the commands to call; the package records graph/wiki/memory/ctx use per reviewer from the tool-call log; the files cut by the blast-radius cap are reviewed in a tail pass or listed as not reviewed, and `review complete` reads that list.
+- Эффект (формализация агента): `keryx review` on a pull request first rebuilds the graph at the review head and refreshes the wiki's machine sections and the memory index with no model call, without changing any tracked file or the PR diff, and records a layers file (graph commit, PR head, time, node/edge counts, wiki and memory divergence against the PR head, memory entries) in the package. A mismatch between graph commit and PR head cannot occur silently: the rebuild fixes it, and a failed rebuild is recorded and shown. Every driver payload carries the affected files, related tests, wiki pages and memory entries for that reviewer's files; reviewer skills name the commands to call; the package records graph/wiki/memory/ctx use per reviewer from the tool-call log (`unknown` when there is no log); the files cut by the blast-radius cap are reviewed in a capped tail pass on a middle tier and the remainder is listed as unchecked.
 - Как наблюдать (предложение агента): `keryx review layers <package>` prints, for the review head, the commit each layer was built at (equal to the head), per-reviewer layer-use counts, and the number of blast-radius files reviewed versus cut; the `/reviews` modal's Review depth tab and the sidebar panel show the same lines; a rerun on PR 7659 shows non-zero graph and wiki use for the reviewers whose files are in the graph, and the graph commit equal to the PR head.
 
-## Open questions for the operator
+## Decisions (operator, 2026-10-12, all five recommended options)
 
-1. Refusal or warning when the graph commit differs from the review head: AC2 proposes a refusal with a quote override. Agree?
-2. Which `.metaproject` does a review of a PR read: the operator's project (wiki, memory, rules from the working copy) with the graph built at the PR head, or everything from the PR head's checkout? AC3 assumes the first for wiki and memory and the second for the graph.
-3. Tail pass (AC7): cap and tier. Proposal: one tier down from the session model, at most 150 files or 400 KB per review, the rest recorded as not reviewed and blocking `complete` without a quote.
-4. Should `wiki enrich` ever run automatically before a review (smallest tier, stale pages only, off by default), or stay manual?
-5. `layersUsed` for reviewers whose tool-call log is unavailable: record `unknown` (proposal) or refuse the package?
+1. Stale graph: rebuild automatically before every review; record the graph commit and the PR head in the package. No refusal path, no override flag.
+2. Wiki and memory are read from the project working copy; the package records a divergence mark against the PR head (commits and changed wiki/memory paths between the working copy and the PR head).
+3. Tail pass over the files the blast radius dropped: file-count cap, middle model tier; the remainder is recorded as unchecked.
+4. `wiki enrich` is never automatic; manual or on request only.
+5. A reviewer whose tool-call log is missing: record `unknown`, show it in the panel, do not block.
 
 ## Out of Scope
 
-- Rewriting wiki prose automatically (`wiki enrich` stays an explicit, credentialed command; the refresh only reports stale prose).
+- Rewriting wiki prose automatically (`wiki enrich` stays an explicit, credentialed command, never part of the review path; the refresh only reports stale prose).
 - Changing the blast-radius algorithm (depth 2, edge ranking). The flow changes what happens to the cut files, not how the set is derived.
 - The tool surface of the shell (`read_file` windows, `search_code` honesty, `glob`, `edit`): a separate flow.
 - Reviewer prompts beyond the layer instructions (depth parity is flow 428, slices and ledger parsing is flow 430).

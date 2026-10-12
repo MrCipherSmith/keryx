@@ -1,27 +1,28 @@
 # Implementation Plan
 
-Status: draft (PROPOSED; no task is created and nothing is implemented before the operator approves the PRD and acceptance criteria)
+Status: draft, operator decisions applied (PROPOSED; no task is created and nothing is implemented before the operator approves the PRD and acceptance criteria)
 
 ## Approach
 
-The layers are deterministic, so the work is plumbing and recording, not model work: refresh them before dispatch, check their commit against the review head, hand each reviewer the answer for its own files, tell the skills to use the tools, and record what was used. The tail pass reuses the slice and retry-plan machinery from flow 430. Land in order T1 to T7 so that each task is useful alone.
+The layers are deterministic, so the work is plumbing and recording, not model work: refresh them automatically before dispatch, keep the build off tracked files, hand each reviewer the answer for its own files, tell the skills to use the tools, and record what was used. The tail pass reuses the slice and retry-plan machinery from flow 430 and is the only model step added, on the middle tier. Land in order T1 to T8 so that each task is useful alone.
 
 ## Steps
 
-1. T1 Measure and decide: time `wiki refresh`, `wiki collect --force` and `memory index` on this repository and on the Vantage copy; confirm none calls a model; decide where a review's graph build is written so tracked files stay clean (a `--out`/data-dir option on `gdgraph build`, or a review-package copy).
-2. T2 `review layers refresh|status` plus `layers.json` (AC1, AC3).
-3. T3 Commit check in `blast-radius` and `dispatch`, with the operator-quote override (AC2).
-4. T4 `layers` block in driver payloads, deterministic and byte-capped (AC4).
-5. T5 Shared instruction block in the reviewer skills, bundled and project copies kept identical (AC5).
-6. T6 `layersUsed` from the tool-call log into the package and the ledger (AC6).
-7. T7 Tail pass over the dropped blast-radius files and the `complete` gate (AC7).
-8. T8 TUI surfaces, `keryx help`, README and docs (AC8, AC9).
-9. T9 Live run on PR 7659 in a fresh worktree, and the PR 7840 control (AC10, AC11); a release only on the operator's word.
+1. T1 Measure and decide: time `wiki refresh`, `wiki collect --force` and `memory index` on this repository and on the Vantage copy; confirm none calls a model; settle the mechanism for AC2 (a data-dir option on `gdgraph build` and graph readers that follow it; fallback: build in place and restore the three tracked files, with the same test). The outcome (clean tree, clean PR) is fixed by AC2; only the mechanism is open.
+2. T2 Automatic refresh in `review` start/dispatch, `review layers refresh|status`, `layers.json` (AC1, AC3).
+3. T3 Clean-tree build and graph readers (AC2).
+4. T4 Wiki/memory divergence mark against the PR head (AC4).
+5. T5 `layers` block in driver payloads, deterministic and byte-capped (AC5).
+6. T6 Shared instruction block in the reviewer skills, bundled and project copies kept identical (AC6).
+7. T7 `layersUsed` from the tool-call log with `unknown` (AC7), then the tail pass over dropped files (AC8).
+8. T8 TUI surfaces, `keryx help`, README and docs (AC9, AC10).
+9. T9 Live run on PR 7659 in a fresh worktree and the PR 7840 control (AC11, AC12); a release only on the operator's word, batched with flows 429 and 430.
 
 ## Risks
 
-- `gdgraph build` writes tracked artifacts; a review that dirties the PR worktree could leak those files into the review diff. T1 decides the output location before T2 starts.
-- Which `.metaproject` a review reads (the operator's project, or the one inside the PR head) is a policy question: for a PR into a repository that carries its own `.metaproject`, the PR head's wiki and memory describe the PR's base, not the operator's project.
-- The tool-call log may not exist for every reviewer runtime (native subagent versus shell-driven); AC6 records `unknown` rather than zero for those, which could hide the very gap this flow measures.
-- A refusal on a stale graph adds a step to every review; the 17 s build keeps it cheap, but a large repository may not (Vantage: 793 candidate files, build time not yet measured).
-- The tail pass costs reviewer runs; the cap and the tier must be set so a single review does not double in cost.
+- A build that cannot avoid tracked files (T1) would need the restore fallback; a crash between build and restore must not leave the tree dirty, so the restore runs in a `finally` and the status check is part of AC2.
+- Wiki and memory come from the working copy: for a PR into a repository whose own `.metaproject` differs, the divergence mark is the only signal that the layers describe another state, so it must be visible in the panel, not only in `layers.json`.
+- The tool-call log may not exist for every reviewer runtime (native subagent versus shell-driven); `unknown` is non-blocking by decision, which could hide the very gap this flow measures, so the panel shows how many reviewers are `unknown`.
+- The unchecked remainder of the tail pass does not block `review complete` (decision 3 says "recorded"); it is written into the report so it cannot pass unnoticed. Flag for the operator if a blocking gate is wanted later.
+- The automatic rebuild adds about 17 s to every review here; a large repository may take longer (Vantage: build time not yet measured).
+- The tail pass costs reviewer runs; the file cap and the middle tier keep a single review from doubling in cost.
