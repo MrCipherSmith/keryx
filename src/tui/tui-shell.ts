@@ -5927,12 +5927,13 @@ export async function launchTuiAgentShell(opts: {
     // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
     // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
     // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
-    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above.
+    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;
+    // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.
     const mirrorApprovalToTopic =
       (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
       async (tool, inputJson, meta) => {
         const bridge = remoteBridge;
-        if (bridge === undefined || !bridge.active || bridge.telegramTurnActive) {
+        if (bridge === undefined || !bridge.active) {
           return inner(tool, inputJson, meta);
         }
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
