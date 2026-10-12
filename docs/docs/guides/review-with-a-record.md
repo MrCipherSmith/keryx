@@ -87,12 +87,37 @@ The agent that loads the `review-orchestrator` skill is the orchestrator: it run
 the round inline, in the main session, and does not hand the round to one subagent.
 Before step 0 it checks three things:
 
-1. **It can spawn.** The `Agent` tool is present and the nesting depth is not spent
-   (Claude Code nests at most 3 deep). If not, the whole output is
+1. **It can spawn.** A subagent-spawn tool (`Agent`, `spawn_subagent` or the host's
+   equivalent) is present and the nesting depth is not spent (Claude Code nests at
+   most 3 deep). If not, the whole output is
    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`,
    and nothing else runs. It never reviews alone.
-2. **A round is needed.** A diff that only touches docs, lockfiles or generated files
-   gets `round not needed: <reason>` and launches no reviewer. `--all` forces a round.
+2. **A round is needed.** A diff where every file is prose or machine-written data
+   gets `round not needed: <reason>` and launches no reviewer. Prose is exactly:
+   README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT
+   at the top level; and, under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a
+   flow's `journal.md`, a file with extension `.md`, `.rst` or `.adoc` whose
+   name holds a lowercase letter. An all-uppercase name (`AGENT.md`, `WARP.md`,
+   `CONTEXT.md`) is steering by convention. Machine-written data is a file under
+   `coverage/` or `__generated__/` with extension `.lcov`, `.info` or `.map`; json, txt,
+   html and md there are code. Everything else counts as code: lockfiles, committed
+   `dist/` output, CI, auth, migrations, config JSON, a flow's `description.md`,
+   `acceptance-criteria.md` and `tasks/` (they are gate inputs), and steering files
+   wherever they sit, `docs/` included: a directory named, singular or plural, agent,
+   skill, command, rule, prompt, instruction, persona, steering or hook; any path
+   segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`); a name starting
+   with `SKILL`, `AGENT`, `CLAUDE`, `GEMINI`, `QWEN`, `CODEX`, `WARP`, `CRUSH`, `JULES`,
+   `KNOWLEDGE`, `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending in `.local`,
+   `.override`, `.instructions`, `.prompt`, `.agent` or `.chatmode`, or containing `prompt`, `instruction` or
+   `system`. A path with `..`, a backslash, a leading `./` or `//` also counts as
+   code. `--all`, an explicit reviewer list or a gating round forces a round. The files
+   are listed with `git diff --name-status --no-renames <base>...HEAD`, so a rename
+   shows both paths.
+
+   The rule is written twice: the skill text above is what the host executes, and
+   `classifyRoundNeed` in `src/review/round-need.ts` is its tested reference. Nothing
+   in the CLI calls that function yet; a test keeps the skill text and the function's
+   token lists in step.
 3. **A round is left.** The ceiling is `REVIEW_ROUND_CAP` rounds on one
    `merge-base..HEAD` (5 today); after the last one it stops and reports to you.
 
@@ -107,7 +132,7 @@ architecture) first, then `domain` (frontend, backend, conventions), then `suppo
 removes findings. For `--all` and a full review a wave holds at most 10 reviewers
 (`keryx review budget --full` prints the plan). A reviewer that answers
 `STATUS: RATE_LIMITED` is requeued with the wave halved and `retry-after`
-honoured; after two halvings the round stops with
+honoured, at most 300 seconds; after two halvings the round stops with
 `STATUS: BLOCKED rate_limited`, naming the reviewers still queued.
 
 What the skill does not do: it does not run as a subagent of another orchestrator
@@ -393,15 +418,16 @@ keryx review budget --spent 2.10 --reviewers review-logic,review-style,review-se
 
 Three caps, all with defaults in code so a caller that says nothing still gets a
 bound: **10 findings per reviewer** (blockers exempt), a **3.00 USD** spend
-ceiling, and **4** reviewers in flight at once. This command exits non-zero when
+ceiling, and a wave of at most **10** reviewers (`--parallel <n>` replaces the 10
+without `--full`; with `--full` it can only lower it). This command exits non-zero when
 the spend ceiling is reached, which is the point at which stopping is still
 possible — an ingest can only record that a round already went over.
 
-`--outstanding` is what an enclosing orchestrator already has in flight. It
-matters because `review-orchestrator` runs nested under `flow-orchestrator` and
-`job-orchestrator`, and keryx cannot see subagents in another process: without a
-declared count the cap bounds this dispatch alone, and the record says so rather
-than implying it covered more.
+`--outstanding` is the number of subagents the main session still has running. It
+matters because `review-orchestrator` runs inline in that session next to whatever
+else it has dispatched, and keryx cannot see those subagents: without a declared
+count the cap bounds this dispatch alone, and the record says so rather than
+implying it covered more.
 
 **Every cap records what it dropped** — the truncated finding ids, the queued
 reviewers, the stop — in the package's `scope.md` under `## Caps`. A cap that

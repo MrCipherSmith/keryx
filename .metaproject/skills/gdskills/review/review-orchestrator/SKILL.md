@@ -24,9 +24,9 @@ license: "MIT"
 
 ## Preflight — before Step 0, in this order
 
-1. **Can it spawn?** The round needs the `Agent` tool (or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. If it cannot spawn, the whole output is this line, with no tool calls and no review of your own:
+1. **Can it spawn?** The round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. If it cannot spawn, the whole output is this line, with no tool calls and no review of your own:
    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
-2. **Is a round needed?** A diff of only docs, markdown, comments, formatting, lockfiles or generated files, with no CI, auth, migration or rule-bearing config, ends here with one line, `round not needed: <reason>`, and no reviewer. `--all`, an explicit reviewer list or a gating round forces a round.
+2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
 3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same `merge-base..HEAD`. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
 
 ## Workflow
@@ -74,7 +74,7 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` once, 
 - One `Agent` call per reviewer, all calls of a wave in a single message, so the wave runs in parallel.
 - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
 - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract.
-- A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`.
+- A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`. The one exception: a reply or dispatch error of `STATUS: RATE_LIMITED` is handled by the Rate limits rule under Control, never marked `BLOCKED`.
 - The model comes from `keryx review tier` (Step 6). On `spawn_subagent` pass its tier as `model_tier` on every reviewer — `review-verifier` and simple reviewers `light`, normal `standard`, complex `deep`; an omitted tier runs the child on your own model.
 
 ## Shell host (keryx shell, or any host with no file-reading subagent) — mandatory
@@ -92,8 +92,8 @@ A reviewer on this host cannot open a path: its file tool reads inside its worki
 
 - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
 - **Waves.** Split by diff domain (`core` = logic, security, architecture; `domain` = frontend, backend, conventions; `support` = style, tests), in that order; A/B/C below keep their dependency order. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
-- **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`. After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
-- **Done when** every dispatched reviewer's result is recorded with `keryx review ingest`, the stage counts and **Not run** are in the report, and `keryx review complete` has run.
+- **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`, at most 300 seconds (`MAX_RETRY_AFTER_SECONDS`). After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and `keryx review complete` has run.
 
 ---
 
@@ -401,8 +401,8 @@ question at the end answers the wrong question late.
 human or a bot has already reviewed pull request `#A`, and someone wants those
 comments interpreted, checked against the code, fixed and answered. Under its
 `--fix` mode it dispatches `flow-orchestrator`, which opens a **second** pull
-request `#B` carrying the fix, based on `#A`'s own head branch, and dispatches
-**this** orchestrator on every round against `#B`. `review-pr-feedback` is present only when installed — it is in the `full` profile only. When it is absent no caller of this kind exists, so the default below holds and this orchestrator owns the reply; do not hand a request to it, say it is not installed and name the install command (`SKILL.detail.md`, "Skills present only when installed").
+request `#B` carrying the fix, based on `#A`'s own head branch, and runs
+**this** orchestrator inline, in the main session, on every round against `#B`. `review-pr-feedback` is present only when installed — it is in the `full` profile only. When it is absent no caller of this kind exists, so the default below holds and this orchestrator owns the reply; do not hand a request to it, say it is not installed and name the install command (`SKILL.detail.md`, "Skills present only when installed").
 
 `#B` is its own conversation. Collect and reply on it exactly as always: someone
 reviewing the fix deserves an answer from the run that made the fix, and its
@@ -824,12 +824,14 @@ When a path or target is named, collect the candidate files:
 
 ```bash
 # If a directory path is given:
-keryx ctx rg --files -g '*.{ts,tsx,js,jsx}' <path> | sort
+keryx ctx run --raw -- rg --files -g '*.{ts,tsx,js,jsx}' <path> | sort
 
 # If a module name is given (e.g. "UserStore", "pipelines module"):
-keryx ctx rg --files -g '*<name>*.{ts,tsx}'
+keryx ctx run --raw -- rg --files -g '*<name>*.{ts,tsx}' | sort
 # Also check common locations: src/stores/, src/modules/, src/components/
 ```
+
+`--raw` returns plain paths, one per line, and the whole list. The summarized form (`keryx ctx rg --files`) prints header lines among the paths and cuts the list at 120 entries, so a round built on it silently covers a part of the scope. Only path lines are file entries.
 
 Then put the list through the same exclusions before reading anything:
 

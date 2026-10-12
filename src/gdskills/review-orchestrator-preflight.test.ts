@@ -5,9 +5,19 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { MAX_RATE_HALVINGS, MAX_REVIEWERS_PER_WAVE_FULL } from "../review/caps";
+import { MAX_RATE_HALVINGS, MAX_RETRY_AFTER_SECONDS, MAX_REVIEWERS_PER_WAVE_FULL } from "../review/caps";
 import { REVIEW_ROUND_CAP } from "../flow/review-gate";
-import { classifyRoundNeed } from "../review/round-need";
+import {
+  classifyRoundNeed,
+  DOC_EXTENSIONS,
+  GENERATED_DATA_EXTENSIONS,
+  PROSE_ANY_DEPTH_NAMES,
+  PROSE_TOP_LEVEL_NAMES,
+  STEERING_SEGMENT_TOKENS,
+  STEERING_STEM_TOKENS,
+  STEERING_SUFFIX_TOKENS,
+  STEERING_WORD_TOKENS,
+} from "../review/round-need";
 import { SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 
 const SKILLS = path.join(import.meta.dir, "bundled", "skills");
@@ -19,6 +29,8 @@ const SKILL = read(ENGINE, "SKILL.md");
 const DETAIL = read(ENGINE, "SKILL.detail.md");
 const FLOW = read(SKILLS, "orchestration", "flow-orchestrator", "SKILL.md");
 const JOB = read(SKILLS, "orchestration", "job-orchestrator", "SKILL.md");
+const AUTODOC = read(SKILLS, "planning", "autodoc-orchestrator", "SKILL.md");
+const SPAWN_TOOL = "a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent)";
 
 const head = (text: string, n = 60): string => text.split("\n").slice(0, n).join("\n");
 const lineCount = (text: string): number => text.split("\n").length - 1;
@@ -96,6 +108,12 @@ describe("AC3: no orchestrator tells itself to halt when dispatched", () => {
     }
   });
 
+  test("all four orchestrators name the same spawn tools, so a non-Claude host is not blocked", () => {
+    for (const text of [SKILL, FLOW, JOB, AUTODOC]) {
+      expect(head(text)).toContain(SPAWN_TOOL);
+    }
+  });
+
   test("no orchestrating SKILL.md carries a SUBAGENT-STOP block", () => {
     const files = orchestratorFiles();
     expect(files.length).toBeGreaterThanOrEqual(5);
@@ -138,6 +156,17 @@ describe("AC6 / AC9 (skill text): waves split by domain, bounded, and adaptive t
     expect(control).toContain("`MAX_REVIEWERS_PER_WAVE_FULL`");
   });
 
+  test("a bare STATUS: RATE_LIMITED is routed to the Rate limits rule, not to BLOCKED", () => {
+    const recipe = section(SKILL, "## How to spawn (Steps 8 and 10)");
+    expect(recipe).toContain("`STATUS: RATE_LIMITED` is handled by the Rate limits rule");
+  });
+
+  test("done-when requires ingest and complete for managed rounds only", () => {
+    const done = control.split("\n").find((line) => line.startsWith("- **Done when**")) ?? "";
+    expect(done).toContain("`keryx:findings` block");
+    expect(done).toContain("managed round (not `lightweight`");
+  });
+
   test("a rate limit halves the wave, honours retry-after, and ends in BLOCKED rate_limited", () => {
     expect(control).toContain("`STATUS: RATE_LIMITED`");
     expect(control).toContain("halve the wave");
@@ -145,6 +174,10 @@ describe("AC6 / AC9 (skill text): waves split by domain, bounded, and adaptive t
     expect(control).toContain(`at most ${MAX_RATE_HALVINGS === 2 ? "two" : MAX_RATE_HALVINGS} halvings`);
     expect(control).toContain("`MAX_RATE_HALVINGS`");
     expect(control).toContain("`STATUS: BLOCKED rate_limited`");
+  });
+
+  test("retry-after is capped at the code constant", () => {
+    expect(control).toContain(`honour \`retry-after\`, at most ${MAX_RETRY_AFTER_SECONDS} seconds (\`MAX_RETRY_AFTER_SECONDS\`)`);
   });
 
   test("the quality gate maps every status to an action, RATE_LIMITED included", () => {
@@ -163,11 +196,63 @@ describe("AC7: a round that cannot find anything is not run", () => {
   });
 
   test("a docs-only fixture ends with no round and no reviewer; a code fixture runs one", () => {
-    const docs = classifyRoundNeed({ files: ["README.md", "docs/a.md", "bun.lock"] });
+    const docs = classifyRoundNeed({ files: ["README.md", "docs/a.md", "CHANGELOG.md"] });
     const code = classifyRoundNeed({ files: ["src/a.ts", "docs/a.md"] });
     expect(docs.needed).toBe(false);
     expect(docs.reason.length).toBeGreaterThan(0);
     expect(code.needed).toBe(true);
+  });
+
+  test("the preflight names what counts as code: other markdown, lockfiles and dist/", () => {
+    const preflight = section(SKILL, "## Preflight — before Step 0, in this order");
+    expect(preflight).toContain("Every other file counts as code");
+    expect(preflight).toContain("lockfiles");
+    expect(preflight).not.toMatch(/markdown, comments, formatting, lockfiles or generated/);
+  });
+
+  test("the preflight names the rename-safe file list command", () => {
+    const preflight = section(SKILL, "## Preflight — before Step 0, in this order");
+    expect(preflight).toContain("`git diff --name-status --no-renames <base>...HEAD`");
+  });
+
+  test("the preflight names every token classifyRoundNeed exports, and the code agrees with each", () => {
+    const preflight = section(SKILL, "## Preflight — before Step 0, in this order");
+    for (const name of PROSE_ANY_DEPTH_NAMES) {
+      expect(preflight).toContain(name);
+      expect(classifyRoundNeed({ files: [`packages/app/${name}.md`] }).needed).toBe(false);
+    }
+    for (const name of PROSE_TOP_LEVEL_NAMES) {
+      expect(preflight).toContain(name);
+      expect(classifyRoundNeed({ files: [`${name}.md`] }).needed).toBe(false);
+    }
+    for (const ext of DOC_EXTENSIONS) {
+      expect(preflight).toMatch(new RegExp(`\\b${ext}\\b`));
+      expect(classifyRoundNeed({ files: [`docs/guide.${ext}`] }).needed).toBe(false);
+    }
+    for (const ext of GENERATED_DATA_EXTENSIONS) {
+      expect(preflight).toMatch(new RegExp(`\\b${ext}\\b`));
+      expect(classifyRoundNeed({ files: [`coverage/x.${ext}`] }).needed).toBe(false);
+    }
+    expect(preflight).toContain("singular or plural");
+    for (const token of STEERING_SEGMENT_TOKENS) {
+      const name = token.replace("(s)", "");
+      expect(preflight).toContain(name);
+      expect(classifyRoundNeed({ files: [`docs/${name}/x.md`] }).needed).toBe(true);
+      if (token.endsWith("(s)")) expect(classifyRoundNeed({ files: [`docs/${name}s/x.md`] }).needed).toBe(true);
+    }
+    for (const stem of STEERING_STEM_TOKENS) {
+      expect(preflight).toContain(stem);
+      expect(classifyRoundNeed({ files: [`docs/${stem}.md`] }).needed).toBe(true);
+    }
+    for (const suffix of STEERING_SUFFIX_TOKENS) {
+      expect(preflight).toContain(suffix);
+      expect(classifyRoundNeed({ files: [`docs/x${suffix}.md`] }).needed).toBe(true);
+    }
+    for (const word of STEERING_WORD_TOKENS) {
+      expect(preflight).toContain(word);
+      expect(classifyRoundNeed({ files: [`docs/my-${word}-notes.md`] }).needed).toBe(true);
+    }
+    for (const marker of ["description.md", "acceptance-criteria.md", "tasks/", "journal.md"]) expect(preflight).toContain(marker);
   });
 
   test("--all still forces a round on the docs-only fixture", () => {
@@ -242,6 +327,14 @@ describe("AC11: the skill is internally consistent", () => {
     expect(SKILL).not.toMatch(/^\s*(\$ )?(find|grep) /m);
   });
 
+  test("path mode lists files with the raw form: the summarized one truncates and mixes headers in", () => {
+    const start = SKILL.indexOf("### Path Mode");
+    expect(start).toBeGreaterThan(0);
+    const pathMode = SKILL.slice(start, SKILL.indexOf("Then put the list through the same exclusions", start));
+    expect(pathMode).toContain("keryx ctx run --raw -- rg --files");
+    expect(pathMode).not.toMatch(/^keryx ctx rg --files/m);
+  });
+
   test("the model rule is stated once, as the Step 6 computation", () => {
     const strategy = section(SKILL, "## Model Strategy");
     expect(strategy).toContain("Step 6");
@@ -286,5 +379,61 @@ describe("AC11: the skill is internally consistent", () => {
     const ceiling = SKILL_LENGTH_CEILINGS.get("planning/autodoc-orchestrator") ?? Number.POSITIVE_INFINITY;
     expect(lineCount(text)).toBe(ceiling);
     expect(ceiling).toBeLessThanOrEqual(343);
+  });
+});
+
+describe("the retired nested model does not come back", () => {
+  const ROOT = path.join(import.meta.dir, "..", "..");
+  const FILES = [
+    "docs/docs/guides/review-with-a-record.md",
+    "docs/docs/cli-reference.md",
+    "src/review/caps.ts",
+    "src/review/types.ts",
+    "src/lib/orchestrators-inline.ts",
+    ...["src/gdskills/bundled/skills", ".metaproject/skills/gdskills"].flatMap((base) =>
+      [
+        "review/review-orchestrator/SKILL.md",
+        "review/review-orchestrator/SKILL.detail.md",
+        "orchestration/flow-orchestrator/SKILL.md",
+        "orchestration/job-orchestrator/SKILL.md",
+        "orchestration/job-orchestrator/orchestrator-prompt.md",
+        "planning/autodoc-orchestrator/SKILL.md",
+      ].map((rel) => `${base}/${rel}`),
+    ),
+  ];
+  const RETIRED: RegExp[] = [
+    /nested under `?flow-orchestrator/i,
+    /nests under this skill/i,
+    /orchestration nesting/i,
+    /three orchestration levels/i,
+    /nested total/i,
+    /enclosing orchestrator/i,
+    /round bound is 3/i,
+    /\*\*4\*\* reviewers in flight/i,
+    /review-orchestrator sub-agent\]/i,
+    /# dispatch review-orchestrator/i,
+    /engine running inside a subagent/i,
+    /job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator/i,
+  ];
+  test.each(FILES)("%s carries none of the retired phrases", (rel) => {
+    const text = readFileSync(path.join(ROOT, rel), "utf8");
+    for (const phrase of RETIRED) expect(text).not.toMatch(phrase);
+  });
+});
+
+describe("the hand-written docs state the same numbers as the code", () => {
+  const ROOT = path.join(import.meta.dir, "..", "..");
+  const cliReference = read(ROOT, "docs", "docs", "cli-reference.md");
+  const guide = read(ROOT, "docs", "docs", "guides", "review-with-a-record.md");
+
+  test("cli-reference.md states the retry-after, wave and rate-limit numbers", () => {
+    expect(cliReference).toContain(`at most ${MAX_RETRY_AFTER_SECONDS} seconds`);
+    expect(cliReference).toContain(`**${MAX_REVIEWERS_PER_WAVE_FULL}** reviewers`);
+  });
+
+  test("review-with-a-record.md states the wave ceiling, the retry-after cap and the round cap", () => {
+    expect(guide).toContain(`${MAX_REVIEWERS_PER_WAVE_FULL} reviewers`);
+    expect(guide).toContain(`${MAX_RETRY_AFTER_SECONDS} seconds`);
+    expect(guide).toContain(`(${REVIEW_ROUND_CAP} today)`);
   });
 });
