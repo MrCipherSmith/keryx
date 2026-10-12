@@ -536,8 +536,15 @@ would close the shell. `/mcp trust`, `/guard`,
 was refused and why.
 
 **While a turn runs.** The shell refuses `/new`, `/clear`, `/resume`, `/sessions`,
-`/compact`, `/model` and `/connect`, and the topic says
-`main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a
+`/compact` and `/connect`, and the topic says `main is busy: command deferred`;
+nothing is queued behind it. `/route`, `/external`, `/external-agents` and `/model`
+are different: when main is busy they are **queued**, the topic gets
+`<command> is queued: main is busy` at once, and the command runs when main goes
+idle (a confirmation, where one is needed, is still asked first). The queued command
+is dropped with a note if main stays busy too long, or quietly if remote control goes
+off. When main is idle they run as soon as you press Yes. `/route` is on the menu:
+bare `/route` shows the routing, `/route on` and `/route off` ask Yes / No first, and
+any other argument is refused. `/mode` takes effect at once. A command that runs is answered with a
 short notice if it takes a while. A command from the topic never cancels the turn
 you are running in the shell: one that outlasts the limit is only no longer waited
 for, the topic is told it is still running in the shell, and it is left alone; when it
@@ -550,7 +557,8 @@ earlier sessions as buttons and returns to the one you press
 (`--- resumed session ---`). Typing `/new` in the shell still ends remote control
 as before.
 
-**History in the topic.** A topic is deleted when the shell exits, so a session you resume
+**History in the topic.** A topic is archived when the shell exits (see
+[What happens when the shell closes](#what-happens-when-the-shell-closes)), so a session you resume
 with `keryx shell --continue` gets a new, empty one. `/history [N]` posts the session's last
 messages back, from the topic or from the shell (`N` is 1 to 20, and 10 when you give no
 number). Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about
@@ -583,6 +591,56 @@ stops when the turn ends. If the bot is not allowed to react in the group, the
 reactions turn off for good with one `reactions-unavailable` event in `serve`, and
 the typing indicator still works. A failed reaction call never delays or blocks a
 message.
+
+### What the topic hears
+
+While `/remote-control` is on, you can run a long job from your phone and not lose
+track of it. Nothing below needs a setting; the intervals are fixed.
+
+**Every question the shell raises is posted.** A command approval, an `ask_user`
+question and a queue dialog all appear in the topic with Allow / Deny or one button
+per option, **whether the turn started in the shell or in the topic**. The first
+answer wins and the other side is closed exactly once:
+
+- Answer in the topic first: the shell's dock closes the same question and carries on
+  with your answer; the message is edited to say who answered and when.
+- Answer in the terminal first: the Telegram message is edited to "answered in the
+  shell" and its buttons stop working, so a late press does nothing.
+
+**Reminders.** A question nobody has answered gets a reminder in the topic every
+2 minutes, at most 3 times. The reminder quotes the first line of what was asked (cut at 80 characters), says
+when the question expires and points at the buttons on the original message; it adds
+no new buttons. A question that is answered, expired or closed stops its reminders.
+
+**Progress notes.** During a turn the topic gets a short note at a wave boundary (the
+first subagent of a review fan-out starting, and the last one finishing) and after a
+tool-heavy stretch (8 tool calls since the last note). At most **one note a minute**
+goes out; if a second one is due earlier, the weightier one is held and sent when the
+minute ends, and any note still held when the turn ends is dropped. A note carries
+counts, tool names and subagent labels only, for example `Still working: 12 tool calls
+in the last 1m (read_file, shell_exec). 3m 20s into this turn.` Tool input, tool output
+and the model's text never go into a note.
+
+**Status questions are answered at once.** While a turn runs, a short plain line that
+only asks how it is going (`status`, `how is it going?`, `are you still working?`,
+`статус`, `как дела?`) is answered from the shell's own state without waiting for the
+turn: elapsed time, tool calls so far and the last tool, subagents still running, how
+many messages wait, how many questions wait for you, and the mode. It is not queued
+and does not reach the model. A longer message that merely contains the word "status"
+is work and is queued as usual, and when the shell is idle the same words go to the
+model like any other line.
+
+### What happens when the shell closes
+
+The topic is **archived, not deleted**. When the shell exits (`/exit`, `/quit`), the
+topic gets a closing note ("This topic is archived: the history stays here and nothing
+more will be posted") and is closed. It stays in the group, readable, with everything that was said in it.
+When the shell is killed (Ctrl+C twice, a closed terminal, a crash) it cannot say
+goodbye: `serve` announces the silence in the topic and, after the orphan window
+(10 minutes by default), posts the same note and archives it. A heartbeat inside the
+window cancels that. A resumed session (`keryx shell --continue`) gets a new topic;
+`/history` copies the last messages into it. Only **Disconnect** in `/channels` deletes
+topics.
 
 In the full-screen shell, the `/remote-control` modal has a **Commands** tab with
 the recent commands from the topic, including refused ones and confirmations nobody

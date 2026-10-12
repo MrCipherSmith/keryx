@@ -9,9 +9,9 @@
   "id": "419",
   "slug": "telegram-remote-control-relay",
   "title": "Keryx Telegram: remote-control relays approvals, questions and progress",
-  "status": "ready",
+  "status": "in-progress",
   "createdAt": "2026-10-09T19:42:55.347Z",
-  "updatedAt": "2026-10-09T19:45:41.801Z",
+  "updatedAt": "2026-10-12T05:57:45.315Z",
   "source": {
     "type": "description",
     "ref": null
@@ -38,7 +38,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,29 +46,43 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered; plan.md written"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
         "log": []
       },
-      "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3",
+        "AC4",
+        "AC5",
+        "AC6",
+        "AC7",
+        "AC9"
+      ],
+      "evidenceRefs": [
+        "a556a84a c9d17c57 2121fcf5 f9f0ee34"
+      ],
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -76,7 +90,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "targeted tests 1331 pass, tsc clean"
     },
     {
       "id": "T4",
@@ -103,6 +119,25 @@
       "at": "2026-10-09T19:45:41.801Z",
       "event": "frozen",
       "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-12T05:23:29.972Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-12T05:57:41.703Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-12T05:57:41.894Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-12T05:57:45.315Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ],
   "acKinds": {

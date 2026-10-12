@@ -1907,7 +1907,7 @@ raw token from older shells is still accepted by `serve`.
 | Route | Description |
 |---|---|
 | `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |
-| `POST /v1/remote/deregister` | The shell stops remote control; the topic is deleted. |
+| `POST /v1/remote/deregister` | The shell stops remote control; the topic gets a closing note and is archived (closed, still readable), not deleted. |
 | `POST /v1/remote/heartbeat` | Keeps the session alive; a heartbeat from an unregistered session is refused with a reason. |
 | `POST /v1/remote/reply` | Text for the topic. Replies over 4096 characters are split. |
 | `POST /v1/remote/approval` | Raises an approval question in the topic, with Allow and Deny buttons. |
