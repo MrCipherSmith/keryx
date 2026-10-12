@@ -1,3 +1,5 @@
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/preservation-replay";
+import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
@@ -3763,6 +3765,7 @@ export async function launchTuiAgentShell(opts: {
 
   let renderer: Renderer | undefined;
   let resolveDone: () => void = () => {};
+  let finalizeShell: (() => Promise<ShellFinalizationResult>) | undefined;
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
@@ -3931,13 +3934,7 @@ export async function launchTuiAgentShell(opts: {
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
-        // Flow 271/273 (AC7; review r1 F9): leave the bus BEFORE releasing the
-        // session lease — specification §5.4's order — synchronously, before
-        // anything that may block.
-        leaveBusThenRelease({
-          leaveBus: () => liveBus?.leave(), // idempotent, synchronous-safe
-          releaseLease: () => sessionLease.release(),
-        });
+        // Flow 415: retain ownership until final history + Slate outbox commit.
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setAskUserNotice(undefined);
@@ -3961,28 +3958,15 @@ export async function launchTuiAgentShell(opts: {
         // sweep settles, so nothing downstream of `launchTuiAgentShell()`
         // can run (and the process cannot exit) before the sweep actually
         // happened.
-        liveJobs?.removeAll(); // store-side purge; synchronous, safe here
-        // Flow 306 (W6 T14): `SessionEnd` on every exit this callback covers
-        // (Ctrl+C, an exit signal, or a normal `r.destroy()` — `onDestroy` is
-        // `keryx shell`'s one TUI-wide teardown point, "session lifetime is
-        // scoped ... full stop"). `liveDeps` is read the same TDZ-safe way
-        // `sweepBackgroundJobs` below already reads it; a reason more precise
-        // than "shell-exit" is not reliably known from this synchronous
-        // callback alone. Absent `hooks`, a no-op.
-        if (liveDeps?.hooks !== undefined) {
-          const sessionEndHooks = liveDeps.hooks;
-          void sessionEndHooks.runtime
-            .fire("SessionEnd", { sessionId: sessionEndHooks.sessionId, runId: sessionEndHooks.runId, endReason: "shell-exit" })
-            .catch(() => {
-              // Best-effort; a SessionEnd hook failure must never block teardown.
-            });
-        }
         void (async () => {
           try {
-            await liveDeps?.sweepBackgroundJobs?.();
-          } finally {
-            resolveDone();
-          }
+            if (finalizeShell !== undefined) await finalizeShell();
+            else {
+              await liveDeps?.sweepBackgroundJobs?.();
+              liveJobs?.removeAll();
+              leaveBusThenRelease({ leaveBus: () => liveBus?.leave(), releaseLease: () => sessionLease.release() });
+            }
+          } finally { resolveDone(); }
         })();
       },
     }));
@@ -6579,7 +6563,52 @@ export async function launchTuiAgentShell(opts: {
       syncArchive();
       saveSession();
     };
+
+    const preservationAbort = new AbortController();
+    finalizeShell = createShellFinalizer({
+      stop: async () => {
+        preservationAbort.abort();
+        foregroundOperation.cancel("shell exit");
+        foregroundOperation.dispose();
+        await foregroundOperation.settled();
+      },
+      checkpoint: () => {
+        if (!sessionLease.canPersist()) throw new Error("session ownership lost");
+        flushSessionCheckpoint();
+      },
+      preserve: async () => {
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
+      },
+      cleanup: async (signal) => {
+        if (sessionLease.canPersist()) {
+          await replayPreservationOutbox({ cwd: sessionCwd, dir: liveSession.dir, signal, deadline: Date.now() + 2_000 });
+        }
+        signal.throwIfAborted();
+        await liveDeps?.sweepBackgroundJobs?.();
+        signal.throwIfAborted();
+        liveJobs?.removeAll();
+        if (liveDeps?.hooks !== undefined) {
+          const hooks = liveDeps.hooks;
+          await hooks.runtime.fire("SessionEnd", { sessionId: hooks.sessionId, runId: hooks.runId, endReason: "shell-exit" });
+        }
+      },
+      release: () => {
+        detachSlateSession(slateSession);
+        if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+        leaveBusThenRelease({ leaveBus: () => liveBus?.leave(), releaseLease: () => sessionLease.release() });
+      },
+      progress: (stage) => {
+        if (stage === "failed") process.exitCode = 1;
+        process.stderr.write(`${preservationProgress(stage)}\n`);
+      },
+    });
+    if (sessionLease.canPersist()) {
+      const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: liveSession.dir, signal: preservationAbort.signal });
+      if (replay.proposed + replay.deferred + replay.unbound > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred, ${replay.unbound} unbound (not accepted memory).\n`);
+    }
+    if (foregroundOperation.isDisposed) return false;
     io.onHistoryChange = (kind) => {
+      if (foregroundOperation.isDisposed) return;
       syncArchive();
       if (kind === "assistant_delta") {
         if (sessionPersistTimer === undefined) {
@@ -8142,13 +8171,11 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.dispose();
             void (async () => {
               await performSlateExit({
-                closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
-                sweepJobs: async () => {
-                  await deps.sweepBackgroundJobs?.();
-                },
-                purgeJobList: () => jobs.removeAll(),
-                leaveBus: () => liveBus?.leave(),
-                releaseLease: () => sessionLease.release(),
+                closeSlate: async () => { await finalizeShell?.(); },
+                sweepJobs: async () => {},
+                purgeJobList: () => {},
+                leaveBus: () => {},
+                releaseLease: () => {},
                 detachRenderer: () => r.off("theme_mode", onThemeMode),
                 destroyRenderer: () => r.destroy(),
               });
@@ -8449,13 +8476,11 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
             await performSlateExit({
-              closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
-              sweepJobs: async () => {
-                await deps.sweepBackgroundJobs?.();
-              },
-              purgeJobList: () => jobs.removeAll(),
-              leaveBus: () => liveBus?.leave(),
-              releaseLease: () => sessionLease.release(),
+              closeSlate: async () => { await finalizeShell?.(); },
+              sweepJobs: async () => {},
+              purgeJobList: () => {},
+              leaveBus: () => {},
+              releaseLease: () => {},
               detachRenderer: () => r.off("theme_mode", onThemeMode),
               destroyRenderer: () => r.destroy(),
             });
@@ -10058,6 +10083,7 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
+    const preservation = await finalizeShell?.();
     // Flow 376: closing the shell deregisters from serve, which deletes the topic.
     // Idempotent: the destroy hook above usually started it already.
     await remoteBridge?.disable();
@@ -10073,6 +10099,9 @@ export async function launchTuiAgentShell(opts: {
       renderer?.destroy();
     } catch {
       // best-effort teardown
+    }
+    if (preservation !== undefined) {
+      process.stderr.write(`${preservationProgress(preservation.preserved ? "queued" : "failed")}\n`);
     }
     // Flow 300 review F4: a run-now child is never killed with the shell. Say,
     // once and after the alternate screen is gone, that it keeps running and

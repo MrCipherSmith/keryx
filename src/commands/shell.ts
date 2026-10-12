@@ -1,3 +1,5 @@
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/preservation-replay";
+import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
 // Interactive `keryx` shell REPL (flow 021, T6 / AC1-AC4).
 //
 // `runShell(io, deps)` is the injectable, deterministic REPL core: it reaches NO
@@ -203,6 +205,7 @@ import {
   gateBoxByLease,
   LOST_LEASE_COMPACT_REFUSAL,
   switchLeasedSession,
+  switchPreservedSession,
   watchLeaseLoss,
 } from "../session/lease";
 import {
@@ -702,6 +705,7 @@ export async function runWithLeaseChoice(
         cwd: current.cwd,
         ...(current.enabled !== undefined ? { enabled: current.enabled } : {}),
         ...(current.leaseBox !== undefined ? { leaseBox: current.leaseBox } : {}),
+        ...(current.finalizerBox !== undefined ? { finalizerBox: current.finalizerBox } : {}),
         ...(current.openLeased !== undefined ? { openLeased: current.openLeased } : {}),
         // Flow 273 T6: a lease-conflict retry (fork/view/take-over) re-opens
         // under a NEW `ShellSessionOpts` — without carrying these forward the
@@ -924,6 +928,33 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     }
   };
 
+  let closing = false;
+  let activeTurn: { user: string; text: string; abort: AbortController } | undefined;
+  const finalizeChat = createShellFinalizer({
+    stop: () => { closing = true; activeTurn?.abort.abort(); },
+    checkpoint: () => {
+      if (live === undefined) return;
+      if (!leaseWatch.canPersist()) throw new Error("chat session ownership lost");
+      if (activeTurn !== undefined) {
+        archive.push({ role: "user", content: activeTurn.user, provenance: "project" });
+        if (activeTurn.text.length > 0) {
+          const reply: NormalizedMessage = { role: "assistant", content: activeTurn.text, provenance: "model" };
+          history.push(reply);
+          archive.push(reply);
+        }
+        activeTurn = undefined;
+      }
+      live = persistHistory(live, history, { archive, provider: providerName, model: modelName });
+    },
+    // Chat has no Slate; do not fabricate Seeds or accepted memory.
+    preserve: async () => {},
+    cleanup: async () => {},
+    release: () => { leaveBus(); releaseLease(); },
+    progress: (stage) => { if (stage === "failed") process.exitCode = 1; if (sessionsOn) system(`${preservationProgress(stage)}\n`); },
+  });
+  const finalize = async (): Promise<void> => { await finalizeChat(); };
+  if (deps.session?.finalizerBox !== undefined) deps.session.finalizerBox.current = finalize;
+
   const makeActive = (): ProviderPort =>
     baseUrl === undefined
       ? deps.makeProvider(providerName, modelName)
@@ -965,6 +996,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   // lease and bus presence outlived the process's useful life.
   try {
   for await (const line of io.lines) {
+    if (closing) break;
     io.onSafeBoundary?.();
     // Slash commands FIRST — a slash line NEVER reaches `provider.stream`.
     if (line.startsWith("/")) {
@@ -1192,6 +1224,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
 
     let accumulated = "";
     let errored = false;
+    const turn = { user: line, text: "", abort: new AbortController() };
+    activeTurn = turn;
     // A turn is now running: the bus heartbeat reports `working` until this
     // one settles, cleared right before the loop's trailing blank line below.
     busWorking = true;
@@ -1201,13 +1235,16 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     try {
       const streamOptions = {
         attemptId: deps.idSeq(),
+        signal: turn.abort.signal,
         ...(modelParams.timeoutMs !== undefined ? { timeoutMs: modelParams.timeoutMs } : {}),
       };
       for await (const event of provider.stream(request, streamOptions)) {
+        if (closing) break;
         if (event.kind === "text_delta") {
           const text = event.text ?? "";
           io.write(text);
           accumulated += text;
+          turn.text = accumulated;
         } else if (event.kind === "provider_error") {
           const detail = event.error?.message ?? event.error?.kind ?? "provider error";
           system(`\n[error] ${detail}\n`);
@@ -1218,12 +1255,15 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         }
       }
     } catch (cause) {
+      if (closing) break;
       // A reused adapter emits `provider_error` events rather than throwing, but
       // guard against an unexpected throw so one bad turn never ends the session.
       system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
       errored = true;
     }
 
+    if (closing) break;
+    activeTurn = undefined;
     // Hand the FULL accumulated reply to a rich wrapper for a markdown re-render
     // (any turn that streamed content, errored or not). No-op when unattached.
     if (accumulated.length > 0) {
@@ -1256,11 +1296,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     io.write("\n\n");
   }
   } finally {
-    // AC7: every exit — `/exit`, end of input, a thrown turn — leaves the bus
-    // first (a peer never sees presence outlive the lease it names), then
-    // releases the lease.
-    leaveBus();
-    releaseLease();
+    await finalize();
+    if (deps.session?.finalizerBox?.current === finalize) deps.session.finalizerBox.current = undefined;
   }
 }
 
@@ -2280,10 +2317,23 @@ export async function runAgentRepl(
    * current one is touched, and release the current lease only after. On a
    * refusal, say so and return false: the current session and lease stay.
    */
-  const switchNewSession = (): SessionHandle | false => {
+  let activeSessionSwitch: Promise<SessionHandle | false> | undefined;
+  const performSessionSwitch = async (): Promise<SessionHandle | false> => {
     try {
-      const next = switchLeasedSession(lease, () =>
+      if (finalizing) return false;
+      const next = await switchPreservedSession(lease, () =>
         openLeased({ cwd: sessionCwd, provider: deps.providerId, model: deps.modelId }),
+        async () => {
+          if (finalizing) throw new Error("shell is shutting down");
+          // A taken-over generation belongs to the successor; never close or write it.
+          if (!leaseWatch.canPersist()) return;
+          if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+          sessionPersistTimer = undefined;
+          syncArchive();
+          if (live !== undefined) live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
+          await (sessionOpts?.closeSlateForSwitch ?? closeSlateSession)(slateSession, mintTimestampAttemptId);
+          if (finalizing || !leaseWatch.canPersist()) throw new Error("session ownership unavailable");
+        },
       );
       holdLease(next.lease);
       agentIo.trustedMcpTools?.clear();
@@ -2292,6 +2342,12 @@ export async function runAgentRepl(
       agentIo.onSystem?.(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
       return false;
     }
+  };
+  const switchNewSession = async (): Promise<SessionHandle | false> => {
+    const flight = Promise.resolve().then(performSessionSwitch);
+    activeSessionSwitch = flight;
+    try { return await flight; }
+    finally { if (activeSessionSwitch === flight) activeSessionSwitch = undefined; }
   };
   const releaseLease = (): void => {
     releaseSessionLease(lease);
@@ -2479,6 +2535,55 @@ export async function runAgentRepl(
     syncArchive();
     save();
   };
+  const preservationAbort = new AbortController();
+  let finalizing = false;
+  let activeAgentAbort: AbortController | undefined;
+  let activeAgentFlight: Promise<unknown> | undefined;
+
+  const finalizeShell = createShellFinalizer({
+    stop: async () => {
+      finalizing = true;
+      preservationAbort.abort();
+      activeAgentAbort?.abort();
+      await activeAgentFlight?.catch(() => {});
+      await activeSessionSwitch?.catch(() => {});
+    },
+    checkpoint: () => {
+      if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+      sessionPersistTimer = undefined;
+      syncArchive();
+      if (live !== undefined) {
+        if (!leaseWatch.canPersist()) throw new Error("session ownership lost");
+        live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
+      }
+    },
+    preserve: async () => {
+      await closeSlateSession(slateSession, mintTimestampAttemptId);
+    },
+    cleanup: async (signal) => {
+      if (live !== undefined && leaseWatch.canPersist()) {
+        await replayPreservationOutbox({ cwd: sessionCwd, dir: live.dir, signal, deadline: Date.now() + 2_000 });
+      }
+      signal.throwIfAborted();
+      await deps.sweepBackgroundJobs?.();
+    },
+    release: () => {
+      detachSlateSession(slateSession);
+      if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+      leaveBus(); releaseLease();
+    },
+    progress: (stage) => {
+      if (stage === "failed") process.exitCode = 1;
+      process.stderr.write(`${preservationProgress(stage)}\n`);
+    },
+  });
+  const finalizeForSignal = async (): Promise<void> => { await finalizeShell(); };
+  if (sessionOpts?.finalizerBox !== undefined) sessionOpts.finalizerBox.current = finalizeForSignal;
+  if (live !== undefined && leaseWatch.canPersist()) {
+    const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: live.dir, signal: preservationAbort.signal });
+    if (replay.proposed + replay.deferred + replay.unbound > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred, ${replay.unbound} unbound (not accepted memory).\n`);
+  }
+  if (finalizing) return;
   // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
   const rewindRecorder = createRewindRecorder({
     workTree: sessionCwd,
@@ -2503,6 +2608,7 @@ export async function runAgentRepl(
     },
   });
   agentIo.onHistoryChange = (kind) => {
+    if (finalizing) return;
     syncArchive();
     if (kind === "assistant_delta") {
       if (sessionPersistTimer === undefined) {
@@ -2530,7 +2636,15 @@ export async function runAgentRepl(
     startSpinner();
     busWorking = true;
     try {
-      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession, pruneArchive: true } : {});
+      if (finalizing) return;
+      const abort = new AbortController();
+      activeAgentAbort = abort;
+      const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
+        signal: abort.signal,
+      });
+      activeAgentFlight = flight;
+      await flight;
     } catch (error) {
       // Recorded before it is rethrown. A turn that threw and a turn that
       // answered nothing produce the same empty text in the transcript, and a
@@ -2538,6 +2652,8 @@ export async function runAgentRepl(
       turnError = error instanceof Error ? error.message : String(error);
       throw error;
     } finally {
+      activeAgentFlight = undefined;
+      activeAgentAbort = undefined;
       busWorking = false;
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
@@ -2550,6 +2666,7 @@ export async function runAgentRepl(
       };
       events?.emit(end);
     }
+    if (finalizing) return;
     flushSessionCheckpoint();
     const usageLine = formatUsage(lastUsage);
     if (usageLine.length > 0) {
@@ -2623,15 +2740,24 @@ export async function runAgentRepl(
       startSpinner();
       busWorking = true;
       try {
-        await runAgentTurn(agentIo, deps, history, "", {
+        if (finalizing) return;
+        const abort = new AbortController();
+        activeAgentAbort = abort;
+        const flight = runAgentTurn(agentIo, deps, history, "", {
           origin: "task-notification",
           ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
+          signal: abort.signal,
         });
+        activeAgentFlight = flight;
+        await flight;
       } finally {
+        activeAgentFlight = undefined;
+        activeAgentAbort = undefined;
         busWorking = false;
         endBlock();
         stopSpinner();
       }
+      if (finalizing) return;
       flushSessionCheckpoint();
       out(`\n${GUTTER}${turnSeparator()}\n\n`);
       printPromptWithBusNotice();
@@ -2642,10 +2768,7 @@ export async function runAgentRepl(
     consecutiveAutoWakes = 0;
     if (line === undefined) {
       // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
-      await closeSlateSession(slateSession, mintTimestampAttemptId);
-      // Flow 173 (AC7): sweep every tracked background job (process-group
-      // SIGTERM→SIGKILL) on real session exit.
-      await deps.sweepBackgroundJobs?.();
+      await finalizeShell();
       // flow 273 / AC7: `leaveBus()`/`releaseLease()` used to run here too;
       // the wrapping `finally` around this whole loop now covers every
       // `return` (this one included) exactly once — see its comment.
@@ -2659,8 +2782,7 @@ export async function runAgentRepl(
       const rest = parts.slice(1).join(" ").trim();
       if (command === "/exit" || command === "/quit") {
         // SLATE-5 close trigger: shell exit (explicit command).
-        await closeSlateSession(slateSession, mintTimestampAttemptId);
-        await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
+        await finalizeShell();
         // flow 273 T6 / flow 271 AC7: same note as the EOF path above — the
         // wrapping `finally` now leaves the bus and releases the lease.
         return;
@@ -2768,12 +2890,12 @@ export async function runAgentRepl(
         // close). Archive whatever slate the ABOUT-TO-BE-ABANDONED session
         // was building before switching away from it. Flow 271 (§6.2): lease
         // the new session first; a refusal keeps session, slate and lease.
-        const nextLive = sessionsOn ? switchNewSession() : undefined;
+        const nextLive = sessionsOn ? await switchNewSession() : undefined;
         if (nextLive === false) {
           printPromptWithBusNotice();
           continue;
         }
-        await closeSlateSession(slateSession, mintTimestampAttemptId);
+        if (!sessionsOn) await closeSlateSession(slateSession, mintTimestampAttemptId);
         // L-14 (flow 354): `/new`/`/clear` abandon this session's history —
         // the collapsed tool-output cache `/expand` reads must go with it,
         // or a `/expand` right after prints the ABANDONED session's last
@@ -3106,10 +3228,8 @@ export async function runAgentRepl(
     printPromptWithBusNotice();
   }
   } finally {
-    // AC7: the one place these two now run — see the comment above the
-    // loop for why the per-`return` duplicates were removed.
-    leaveBus();
-    releaseLease();
+    await finalizeShell();
+    if (sessionOpts?.finalizerBox?.current === finalizeForSignal) sessionOpts.finalizerBox.current = undefined;
   }
 }
 
@@ -3542,6 +3662,8 @@ export interface SignalShutdownParts {
   readonly closeReadline: () => void;
   readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
   readonly exit: (code: number) => void;
+  readonly preserve?: () => Promise<void>;
+  readonly cleanupTimeoutMs?: number;
 }
 
 /**
@@ -3555,24 +3677,37 @@ export interface SignalShutdownParts {
  * closes and the process exits.
  */
 export function makeSignalShutdown(parts: SignalShutdownParts, code: number): () => void {
+  let started = false;
   return (): void => {
-    parts.busBox.current?.leave();
-    parts.busBox.current = undefined;
-    parts.releaseLease(parts.leaseBox.current);
-    parts.leaseBox.current = undefined;
+    if (started) return;
+    started = true;
+    const release = (): void => {
+      parts.busBox.current?.leave();
+      parts.busBox.current = undefined;
+      parts.releaseLease(parts.leaseBox.current);
+      parts.leaseBox.current = undefined;
+    };
+    if (parts.preserve === undefined) release();
     void (async (): Promise<void> => {
-      try {
-        await parts.jobRegistryBox.current?.sweepAll();
-      } catch {
-        // Exiting; a failed sweep must not become the last thing printed.
+      let failed = false;
+      if (parts.preserve !== undefined) {
+        try { await parts.preserve(); } catch { failed = true; }
+        release();
       }
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
-        await parts.closeMcp();
-      } catch {
-        // Exiting; a failed close must not become the last thing printed.
+        await Promise.race([
+          Promise.allSettled([
+            Promise.resolve().then(() => parts.jobRegistryBox.current?.sweepAll()),
+            Promise.resolve().then(() => parts.closeMcp()),
+          ]),
+          new Promise<void>((resolve) => { timer = setTimeout(resolve, parts.cleanupTimeoutMs ?? 10_000); }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
       }
       parts.closeReadline();
-      parts.exit(code);
+      parts.exit(failed && code === 0 ? 1 : code);
     })();
   };
 }
@@ -4212,6 +4347,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // session exit — Ctrl-C/SIGTERM killed the readline process without ever
   // sweeping, leaving every job's process group running.
   const jobRegistryBox: { current: JobRegistry | undefined } = { current: undefined };
+  const finalizerBox: { current: (() => Promise<void>) | undefined } = { current: undefined };
 
   // SIGINT: exit, but CLOSE FIRST.
   //
@@ -4232,6 +4368,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         busBox,
         leaseBox,
         jobRegistryBox,
+        preserve: async () => { await finalizerBox.current?.(); },
         closeMcp: () => readlineMcp?.close(),
         closeReadline: () => rl.close(),
         releaseLease: releaseSessionLease,
@@ -4245,6 +4382,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // the default disposition and left one child process per connected
   // server behind.
   process.on("SIGTERM", closeAndExit(143));
+  process.on("SIGHUP", closeAndExit(129));
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();
@@ -4585,6 +4723,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
               ...(flags.name !== undefined ? { busName: flags.name } : {}),
               leaseBox,
               busBox,
+              finalizerBox,
             },
             runRepl,
             leaseChoiceRuntime,
@@ -4612,6 +4751,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             ...(flags.name !== undefined ? { busName: flags.name } : {}),
             leaseBox,
             busBox,
+            finalizerBox,
           },
           (session) => runShell(io, { ...deps, session }),
           leaseChoiceRuntime,
