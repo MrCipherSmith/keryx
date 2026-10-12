@@ -2980,7 +2980,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     delete process.env.KERYX_AGENT_MAX_ROUNDS;
     try {
       expect(describeModePickerOption("ask")).toContain("40 rounds per turn, asks before extending");
-      expect(describeModePickerOption("trust")).toContain("120 rounds per turn, asks before extending");
+      expect(describeModePickerOption("trust")).toContain("200 rounds per turn, asks before extending");
       expect(describeModePickerOption("auto")).toContain("200 rounds per turn, extends without asking");
     } finally {
       if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;

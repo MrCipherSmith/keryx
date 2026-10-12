@@ -20,8 +20,8 @@ import type { PermissionMode } from "./permission-mode";
  */
 export const DEFAULT_MAX_ROUNDS = 40;
 
-/** The limit a `trust`-mode turn gets when the env is unset. */
-export const TRUST_MAX_ROUNDS = 120;
+/** The limit a `trust`-mode turn gets when the env is unset (flow 418 T5). */
+export const TRUST_MAX_ROUNDS = 200;
 
 /** Env override for {@link DEFAULT_MAX_ROUNDS} (positive integer). */
 export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";

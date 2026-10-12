@@ -1140,7 +1140,7 @@ function endlessReadProvider(): { provider: ProviderPort; calls: () => number } 
 describe("flow 429 AC6 — /mode changes the round limit of the next turn without a restart", () => {
   const cases: Array<{ name: string; lines: string[]; limit: number }> = [
     { name: "ask", lines: ["go", "/exit"], limit: 40 },
-    { name: "trust", lines: ["/mode trust", "go", "/exit"], limit: 120 },
+    { name: "trust", lines: ["/mode trust", "go", "/exit"], limit: 200 },
     { name: "auto", lines: ["/mode auto", "yes", "go", "/exit"], limit: 200 },
   ];
   for (const { name, lines, limit } of cases) {
@@ -1168,7 +1168,7 @@ describe("flow 429 AC7 — the readline /mode output shows the round limit", () 
       expect(output).toContain("Round limit: 40 rounds per turn, asks before extending");
       expect(output).toContain("Automatic review (name it in a request): 200 rounds per turn, extends without asking");
       expect(output).toContain("it stops to ask only for:");
-      expect(output).toContain("Permission mode: trust (120 rounds per turn, asks before extending)");
+      expect(output).toContain("Permission mode: trust (200 rounds per turn, asks before extending)");
       expect(output).toContain("Permission mode: auto (200 rounds per turn, extends without asking)");
     } finally {
       if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;

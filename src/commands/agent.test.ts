@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1800,13 +1800,13 @@ async function withRoundsEnv<T>(value: string | undefined, run: () => Promise<T>
   }
 }
 
-test("flow 429 AC1: with the env unset the limit is 200 in auto, 120 in trust and 40 in ask", () => {
+test("flow 429 AC1: with the env unset the limit is 200 in auto and trust and 40 in ask", () => {
   expect(resolveAgentMaxRounds({}, "auto")).toBe(200);
-  expect(resolveAgentMaxRounds({}, "trust")).toBe(120);
+  expect(resolveAgentMaxRounds({}, "trust")).toBe(200);
   expect(resolveAgentMaxRounds({}, "ask")).toBe(40);
   expect(resolveAgentMaxRounds({})).toBe(40);
   expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "nope" }, "auto")).toBe(200);
-  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "0" }, "trust")).toBe(120);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "0" }, "trust")).toBe(200);
 });
 
 test("flow 429 AC2: the env wins in every mode and is clamped to 200", () => {
@@ -1816,9 +1816,9 @@ test("flow 429 AC2: the env wins in every mode and is clamped to 200", () => {
   }
 });
 
-test("flow 429 AC1: a turn without an explicit budget stops at 40 in ask and 120 in trust", async () => {
+test("flow 429 AC1: a turn without an explicit budget stops at 40 in ask and 200 in trust", async () => {
   await withRoundsEnv(undefined, async () => {
-    for (const [mode, limit] of [["ask", 40], ["trust", 120]] as const) {
+    for (const [mode, limit] of [["ask", 40], ["trust", 200]] as const) {
       const { provider, requests } = scriptedProvider(loopingReads(limit + 5));
       const systemMsgs: string[] = [];
       const result = await runAgentTurn(
@@ -1885,8 +1885,8 @@ test("flow 429 AC4: in auto a turn stops at the 200 ceiling with a budget messag
   });
 });
 
-test("flow 429 AC5: trust and ask still ask at the limit, and a trust reset grants 120 more rounds", async () => {
-  for (const [mode, grant] of [["trust", 120], ["ask", 40]] as const) {
+test("flow 429 AC5: trust and ask still ask at the limit, and a trust reset grants 200 more rounds", async () => {
+  for (const [mode, grant] of [["trust", 200], ["ask", 40]] as const) {
     const { provider } = scriptedProvider([
       readToolRound("c1", "a"),
       readToolRound("c2", "b"),
@@ -1972,9 +1972,9 @@ test("flow 429 AC11: only an operator-origin line (not a task notification) can 
   });
 });
 
-test("flow 429 AC1/AC5: the mode is read when the limit is reached — ask→trust asks and grants 120, ask→auto extends without asking", async () => {
+test("flow 429 AC1/AC5: the mode is read when the limit is reached — ask→trust asks and grants 200, ask→auto extends without asking", async () => {
   await withRoundsEnv(undefined, async () => {
-    for (const [target, askedExpected, total] of [["trust", 1, 160], ["auto", 0, 200]] as const) {
+    for (const [target, askedExpected, total] of [["trust", 1, 240], ["auto", 0, 200]] as const) {
       const { provider, requests } = scriptedProvider([...loopingReads(100), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
       let mode: "ask" | "trust" | "auto" = "ask";
       let asked = 0;
@@ -2050,6 +2050,11 @@ test("flow 429: an explicit deps.maxRounds in auto falls back to the question", 
   });
 });
 
+afterEach(() => {
+  setReviewSystem("inherit");
+  resetOperatorDenials();
+});
+
 const REVIEW_ID = "2026-10-12-pr-7-aaaa1111";
 const REVIEW_CREATED = `# managed review: ${REVIEW_ID}\npath: .metaproject/reviews/${REVIEW_ID}\nrun mode: automatic review\n`;
 
@@ -2102,8 +2107,8 @@ test("flow 429 AC12: an automatic review runs its own commands without a prompt;
     },
     { ...baseDeps(provider), tools: [tool] },
     [],
-    "run an automatic review of PR 7",
-    { automaticReviewRun: new AutomaticReviewRun(root) },
+    "drive the review of PR 7 on its own",
+    { automaticReview: true, automaticReviewRun: new AutomaticReviewRun(root) },
   );
   expect(ran).toHaveLength(4);
   expect(approvals).toEqual([`keryx review status ${REVIEW_ID}; echo hi`, "keryx review complete 2026-01-01-pr-1-bbbb2222"]);
@@ -2115,7 +2120,7 @@ test("flow 429 AC12: an automatic review runs its own commands without a prompt;
 });
 
 test("flow 429 AC12: without the mark the same review command asks", async () => {
-  const { tool } = reviewShellTool();
+  const { tool, ran } = reviewShellTool();
   const { provider } = scriptedProvider([
     shellRound("s1", "keryx review start --pr 7 --automatic"),
     [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
@@ -2135,6 +2140,7 @@ test("flow 429 AC12: without the mark the same review command asks", async () =>
     [],
     "review PR 7",
   );
+  expect(ran).toHaveLength(1);
   expect(approvals).toBe(1);
 });
 
@@ -2167,8 +2173,8 @@ test("flow 429 AC12: a review command still asks when the floor says so — untr
     },
     { ...baseDeps(provider), tools: [web, tool] },
     [],
-    "run an automatic review",
-    { automaticReviewRun: new AutomaticReviewRun(root) },
+    "drive the review on its own",
+    { automaticReview: true, automaticReviewRun: new AutomaticReviewRun(root) },
   );
   expect(approvals).toBe(1);
   expect(ran).toHaveLength(0);
@@ -2203,8 +2209,8 @@ test("flow 429 AC13: ask_user is answered with the default and not shown; only a
     { write: () => {}, onSystem: () => {}, permissionMode: () => "ask" },
     { ...baseDeps(provider), tools: [tool, askTool] },
     [],
-    "run an automatic review",
-    { automaticReviewRun: new AutomaticReviewRun(root) },
+    "drive the review on its own",
+    { automaticReview: true, automaticReviewRun: new AutomaticReviewRun(root) },
   );
   expect(shown).toEqual(["Waive now?"]);
   const answers = JSON.stringify(requests.at(-1)?.messages);

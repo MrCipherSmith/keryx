@@ -4074,10 +4074,11 @@ function reviewHelpText(): string {
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                      [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-                     [--research <ledger.json>] [--review-id <id>]
+                     [--research <ledger.json>] [--review-id <id>] [--automatic]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
-                      [--research <ledger.json>] [--review-id <id>]
+                      [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]

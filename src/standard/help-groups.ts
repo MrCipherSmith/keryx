@@ -219,7 +219,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/mode",
     group: "Look and feel",
-    summary: "Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: 40 rounds per turn, 120 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides.",
+    summary: "Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides.",
   },
   {
     kind: "slash",

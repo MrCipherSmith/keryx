@@ -39,7 +39,7 @@ A round is one request to the model and may carry several tool calls.
 | Mode | Rounds per turn | At the limit |
 |---|---|---|
 | `ask` | 40 | Asks "Increase limit and continue / Cancel"; a yes grants 40 more. |
-| `trust` | 120 | Asks the same question; a yes grants 120 more. |
+| `trust` | 200 | Asks the same question; a yes grants 200 more. |
 | `auto` | 200 | Never asks. Below 200 the turn extends itself and prints a `[budget]` line; at 200 it stops with a `[budget]` message. |
 | automatic review (any mode) | 200 | Same as `auto`; see [Automatic review](#automatic-review). |
 
@@ -72,15 +72,24 @@ While a turn belongs to an automatic review:
   The mark does not carry over to a turn that does not mention an automatic
   review.
 - **The review's own commands run without a prompt, for that package only.**
-  `keryx review status|ledger|retry-plan|ingest|severity-audit|mutate|complete|compare-reference <this review>`
-  and `apply_patch` inside the package directory
-  (`.metaproject/reviews/<id>/`) are approved. A command that is not exactly
-  one of these (any pipe, `;`, `&&`, redirect or substitution), names another
-  review or path, or passes `--force` is asked as usual. The hard floors
+  These `keryx review` commands, written as plain words with no pipe, `;`,
+  `&&`, redirect or substitution, are approved:
+  `start`, `attach` and `ingest` with `--automatic` (once per run);
+  `status <this review>` and `complete <this review>`;
+  `ledger build <dir> --package <this review>`, `severity-audit`,
+  `context-collect`, `compare-reference` and `mutate --test "bun test …"`, each
+  with `--package <this review>`; `retry-plan --manifest <this review>/…`;
+  and `scope` and `blast-radius`, which write only inside the package. An
+  `apply_patch` is approved when every target is inside the package directory
+  (`.metaproject/reviews/<id>/`). A command that names another review or path,
+  or any other `keryx review` subcommand, is asked as usual. The hard floors
   (destructive commands, credential files, content from an untrusted origin,
-  a hook that asked) are never lowered.
+  a hook that asked, a publish lease, read-only mode) are never lowered.
 - **Questions are answered with their default.** An `ask_user` call gets its
-  recommended option, or the first one, and the answer is counted.
+  recommended option, or the first one, and the answer is counted. A question
+  that decides an irreversible action (`irreversible`/`action`) or carries a
+  review `policy` tag is not defaulted: it goes on to the host (the review
+  arbiter or the operator), and is counted as manual.
 - **It stops to ask only in an emergency**, a closed list:
   1. a command outside the review's package or outside the review commands;
   2. a destructive action;

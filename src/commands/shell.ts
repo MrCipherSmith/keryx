@@ -4034,7 +4034,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // do for `--chat` sessions that never build a tool list.
         mcpRuntime: () => mcpRuntime,
         // No `maxRounds` here on purpose: the turn resolves its own limit from
-        // the live permission mode (40 in ask, 120 in trust, 200 in auto), and an
+        // the live permission mode (40 in ask, 200 in trust and auto), and an
         // explicit value would pin it for the whole session.
         // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
         // per-provider override (`resolvedModelParams.maxOutputTokens`,
