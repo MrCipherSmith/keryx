@@ -50,13 +50,11 @@ Before every managed review the graph is rebuilt automatically at the review hea
 
 6. (operator, message 199953, replaces the cap-and-remainder part of 3) Nothing may be skipped. If one pass cannot take all files, split them into chunks, run the passes sequentially and merge; the file-count cap is per pass (chunk size), not total coverage. This holds for the dropped blast-radius files (753 of 793 on PR 7659) and for scope A. `review complete` refuses while any in-scope file is uncovered, unless the operator records a waiver with a quote (the shape of the mutation waiver). The middle tier stays for chunk passes. An estimate is shown before a large chunk run; in the automatic mode of flow 429 it goes through without a question unless it exceeds a stated ceiling.
 
+7. (operator, answers to the last two questions, recommended options) The automatic-mode ceiling is 25 passes of 40 files (about 1,000 files); above it the operator is asked. Files the slice manifest drops (lockfile, vendored, generated, data ledgers) count as covered, are listed in the package with a reason, and generated and lock files are not read.
+
 ## Facts found while reworking decision 6
 
 - The slice manifest (`src/review/slice.ts`) has `omissions`: files the pre-filter drops before slicing (reasons `lockfile`, `vendored`, `generated`, `data-ledger`, others in `scope.ts`). So today NOT every changed file lands in a slice; AC9 makes the omissions explicit and checkable instead of assuming full coverage.
-
-## Open question for the operator
-
-1. Ceiling for the automatic mode (AC11). Proposal: a run goes through without a question up to 25 chunks of 40 files (1,000 files; PR 7659's 753 files are 19 chunks) and asks once above that; the ceiling lives in `routing.config.json`. Second part of the same question: do named omissions (lockfiles, vendored, generated, data ledgers) count as covered (proposal: yes, listed per file with the reason, so they never block `complete`), or must they be waived with a quote too?
 
 ## Out of Scope
 
