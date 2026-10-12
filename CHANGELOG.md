@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Remote control
+
+- Every approval, `ask_user` question and queue dialog the shell raises is mirrored to the Telegram topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other exactly once (`prompt-close`).
+- An unanswered question gets a reminder in the topic every 2 minutes, at most 3 times.
+- `/route` is on the topic menu (`/route on|off` ask first). `/route`, `/external`, `/external-agents` and `/model` are queued with a notice while main is busy and run when it goes idle, instead of being refused. `/mode` takes effect at once.
+- Progress notes in the topic at subagent wave boundaries and after tool-heavy stretches, at most one a minute: counts, tool names and labels only, never tool output. A short status question ("how is it going?") is answered from session state while the turn runs.
+- Closing the shell archives the topic (closing note, topic and history stay readable) instead of deleting it; a killed shell is archived after the orphan window. Only channel Disconnect deletes topics.
+
 ## [0.3.110] - 2026-10-11
 
 ### Review

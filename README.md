@@ -1060,13 +1060,25 @@ runs. At most 500 lines wait per topic, and turning it off tells the topic which
 queued lines will not run. From the topic you can also run a fixed list of slash
 commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
 in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
-after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,
-`/schedule`, `/rewind`, `/conform` and `/ci` stay local. A topic is deleted when the
-shell exits, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
+after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
+and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
+`/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
+`/external-agents` and `/model` are queued with a notice in the topic and run when
+it goes idle; `/mode` takes effect at once. A topic is archived when the shell
+exits (a closing note, the topic and its history stay readable), but a resumed
+session gets a new one, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
 back into the topic, yours and the agent's final answers, one message each; a resumed
 session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing
 while a turn runs; see
 [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
+Every approval, `ask_user` question and queue dialog the shell raises is posted to
+the topic with buttons, whoever started the turn; the first answer wins, from the
+terminal or the topic, and an unanswered one gets a reminder every 2 minutes (at most 3).
+While a turn runs, the topic gets at most one progress note a minute (at wave
+boundaries and after tool-heavy stretches: counts and tool names, never tool output),
+and a short status question such as "how is it going?" is answered from session state
+without waiting for the turn; see
+[What the topic hears](docs/docs/guides/drive-keryx-remotely.md#what-the-topic-hears).
 Without a connection `serve` starts as before, with remote control off, and only
 offers the local `/channels` routes. Replies are rendered in one of four modes,
 `remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the

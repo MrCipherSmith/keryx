@@ -2927,7 +2927,15 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
     expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
-    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
+    // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the
+    // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.
+    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));");
+    const mirrorStart = fnBodyPlan.indexOf("const mirrorApprovalToTopic =");
+    const mirrorEnd = fnBodyPlan.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic", mirrorStart);
+    expect(mirrorStart).toBeGreaterThanOrEqual(0);
+    expect(mirrorEnd).toBeGreaterThan(mirrorStart);
+    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).not.toContain("telegramTurnActive");
+    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).toContain("inner(tool, inputJson, meta, race)");
     expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
     expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
   });

@@ -110,6 +110,8 @@ export type RemoteEventType =
   | "topic-renamed"
   | "topic-deleted"
   | "topic-delete-failed"
+  | "topic-archived"
+  | "topic-close-failed"
   | "session-unavailable"
   | "session-returned"
   | "sender-refused"
@@ -468,7 +470,7 @@ export class RemoteHub {
       if (record === undefined) {
         return { ok: true as const, existed: false };
       }
-      await this.retire(record, "closed by the session");
+      await this.archive(record, "The session was closed.");
       return { ok: true as const, existed: true };
     });
   }
@@ -531,7 +533,7 @@ export class RemoteHub {
     });
   }
 
-  /** Mark stale heartbeats unavailable and delete topics whose orphan timeout has run out. */
+  /** Mark stale heartbeats unavailable and archive topics whose orphan timeout has run out. */
   sweep(): Promise<void> {
     return this.serial(async () => {
       const now = this.now();
@@ -554,12 +556,12 @@ export class RemoteHub {
           if (now - record.unavailableSince < this.config.orphanMs) {
             this.queueStatus(
               record,
-              `Session unavailable: the shell stopped responding. This topic is deleted in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
+              `Session unavailable: the shell stopped responding. This topic is archived in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
             );
           }
         }
         if (record.status === "unavailable" && record.unavailableSince !== undefined && now - record.unavailableSince >= this.config.orphanMs) {
-          await this.retire(record, "orphan timeout");
+          await this.archive(record, "The shell stopped responding and did not return.");
         }
       }
       await this.flushOutbound();
@@ -923,6 +925,7 @@ export class RemoteHub {
   private markLive(record: RemoteSessionRecord): void {
     record.status = "live";
     delete record.unavailableSince;
+    delete record.closing;
   }
 
   private queueStatus(record: RemoteSessionRecord, text: string): void {
@@ -1007,6 +1010,39 @@ export class RemoteHub {
     this.queueStatus(record, `Remote control on: ${name}. Messages here go to the session.`);
     await this.flushOutbound();
     return { ok: true, name, threadId: record.threadId, reused: false };
+  }
+
+  /**
+   * End a session's topic without deleting it (flow 419): a closing note goes in, the topic is closed,
+   * and its messages stay readable. The record is forgotten, so a later session starts a new topic.
+   * A transient failure leaves an ownerless, already-expired record behind so the next sweep retries
+   * the close; the closing note is queued once.
+   */
+  private async archive(record: RemoteSessionRecord, reason: string): Promise<void> {
+    this.stopTyping(record);
+    if (record.closing !== true) {
+      record.closing = true;
+      this.queueStatus(record, `${reason} This topic is archived: the history stays here and nothing more will be posted. A new session opens a new topic.`);
+      this.registry.save();
+    }
+    await this.flushOutbound();
+    try {
+      await this.api.closeForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
+    } catch (error) {
+      if (isBotApiError(error) && isRetryable(error)) {
+        record.sessionId = "";
+        record.status = "unavailable";
+        record.unavailableSince = this.now() - this.config.orphanMs;
+        this.registry.save();
+        this.event("topic-close-failed", `${record.name}: ${describeError(error)}`);
+        return;
+      }
+      // A refusal (the topic is gone, or already closed) leaves nothing to close.
+    }
+    this.inbound.remove(nameKey(record.name));
+    this.registry.remove(record.name);
+    this.registry.save();
+    this.event("topic-archived", `${record.name}: ${reason}`);
   }
 
   /**

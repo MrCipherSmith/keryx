@@ -1,6 +1,6 @@
 // AC6: orphaned sessions. A shell that stops heartbeating is announced as
-// unavailable in its topic; the topic is deleted after the orphan timeout; the
-// same name returning before then takes the topic back.
+// unavailable in its topic; the topic is archived (closed, history kept) after the
+// orphan timeout; the same name returning before then takes the topic back.
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
@@ -27,7 +27,7 @@ function texts(threadId: number): string[] {
 }
 
 describe("orphaned sessions", () => {
-  test("a silent session is announced, kept for the orphan timeout, then its topic is deleted", async () => {
+  test("a silent session is announced, kept for the orphan timeout, then its topic is archived, not deleted", async () => {
     h = makeHarness();
     const hub = h.makeHub();
     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
@@ -43,9 +43,11 @@ describe("orphaned sessions", () => {
     expect(h.api.topic(reg.threadId)).toBeDefined();
 
     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
-    await until(() => h.api.topic(reg.threadId) === undefined, "topic deleted");
+    await until(() => h.api.closedTopics.length === 1, "topic archived");
+    expect(h.api.topic(reg.threadId)).toBeDefined();
+    expect(h.api.deletedTopics).toEqual([]);
+    expect(texts(reg.threadId).some((t) => /history stays here/i.test(t))).toBe(true);
     expect(hub.list()).toEqual([]);
-    expect(h.api.deletedTopics).toHaveLength(1);
   });
 
   test("the notice says how long the topic is kept", async () => {
@@ -66,7 +68,7 @@ describe("orphaned sessions", () => {
     if (!reg.ok) throw new Error("register failed");
     await hub.start();
     await h.clock.advance(STALE_MS + 30_000);
-    await until(() => h.api.topic(reg.threadId) === undefined, "topic deleted after 30 s");
+    await until(() => h.api.closedTopics.length === 1, "topic archived after 30 s");
   });
 
   test("a heartbeat inside the window brings the session back and cancels deletion", async () => {
@@ -113,7 +115,7 @@ describe("orphaned sessions", () => {
     if (!first.ok) throw new Error("register failed");
     await hub.start();
     await h.clock.advance(STALE_MS + ORPHAN_MS + SESSION_LEASE_HEARTBEAT_MS);
-    await until(() => h.api.topic(first.threadId) === undefined, "topic deleted");
+    await until(() => h.api.closedTopics.length === 1, "topic archived");
 
     const again = await hub.register({ sessionId: "sess-two-0002", project: "/w/app", name: "release" });
     expect(again.ok).toBe(true);
@@ -141,21 +143,22 @@ describe("orphaned sessions", () => {
     expect(h.deliveries[0]?.line).toBe("are you there");
   });
 
-  test("a topic that cannot be deleted right now is retried by the next sweep", async () => {
+  test("a topic that cannot be closed right now is retried by the next sweep, with one closing note", async () => {
     h = makeHarness();
     const hub = h.makeHub();
     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
     if (!reg.ok) throw new Error("register failed");
     await hub.start();
-    h.api.failNext("deleteForumTopic", new BotApiError("network", "deleteForumTopic: request failed"));
+    h.api.failNext("closeForumTopic", new BotApiError("network", "closeForumTopic: request failed"));
 
     await h.clock.advance(STALE_MS + ORPHAN_MS);
-    await until(() => hub.events().some((e) => e.type === "topic-delete-failed"), "failed deletion");
-    expect(h.api.topic(reg.threadId)).toBeDefined();
+    await until(() => hub.events().some((e) => e.type === "topic-close-failed"), "failed close");
+    expect(h.api.closedTopics).toEqual([]);
 
     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
-    await until(() => h.api.topic(reg.threadId) === undefined, "retried deletion");
+    await until(() => h.api.closedTopics.length === 1, "retried close");
     expect(hub.list()).toEqual([]);
+    expect(texts(reg.threadId).filter((t) => /history stays here/i.test(t))).toHaveLength(1);
   });
 
   test("a clock that jumps back does not orphan a live session, nor keep a dead one forever", async () => {
