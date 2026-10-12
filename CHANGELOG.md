@@ -29,8 +29,6 @@
 - `keryx review context-collect` gathers the pull request's description, linked issues and comments for the reviewers. `keryx review compare-reference` classifies a reference report's items against a package.
 - `/reviews` has a "Review depth" tab, and the readline `/reviews` prints the same block: mode, reviewers dispatched against required, excluded reviewers with the reason, and the mutation tally.
 
-## [0.3.112] - 2026-10-12
-
 ### Agent Runtime
 
 - Native `spawn_subagent` reservations now honor `timeout_ms` or `runtime.kind: "keryx"` with `timeoutMs`, bounded by the operator timeout, instead of always reserving the default child deadline.
