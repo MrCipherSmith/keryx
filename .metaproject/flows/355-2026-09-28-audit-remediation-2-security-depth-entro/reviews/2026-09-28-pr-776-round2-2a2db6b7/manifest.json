@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-28-pr-776-round2-2a2db6b7",
+  "mode": "ingest",
+  "status": "closed",
+  "target": {
+    "kind": "report",
+    "ref": "b7020b9fed35889b5fa814fdea4dd31ce5a28765..2a2db6b7b05761b8f0a38bd057671cc286512c05",
+    "head": "2a2db6b7b05761b8f0a38bd057671cc286512c05"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7/scope.md",
+    "coverage": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7/coverage.md",
+    "report": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7/report.md",
+    "findings": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7/findings.json",
+    "learning": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7/learning.md",
+    "decisions": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-776-round2-2a2db6b7/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 4,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "retained": 4,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "cost": {
+    "input_tokens": 280000,
+    "output_tokens": 18000,
+    "spent_usd": 2.5
+  },
+  "createdAt": "2026-09-28T10:36:17.257Z",
+  "updatedAt": "2026-09-28T12:17:38.829Z",
+  "flow": {
+    "id": "355",
+    "path": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro"
+  }
+}

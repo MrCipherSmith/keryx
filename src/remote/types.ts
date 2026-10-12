@@ -1,7 +1,9 @@
 // Shared types for the remote-control serve side (flow 376, block 1).
 //
 // A leaf module: nothing in `src/remote` is imported from here, so every other
-// file may depend on it without creating a cycle.
+// file may depend on it without creating a cycle. (`rich-types.ts` is a leaf too: types only.)
+
+import type { InputRichMessage } from "./rich-types";
 
 /** A Telegram user as far as this package cares: only the numeric id is read. */
 export interface BotUser {
@@ -17,9 +19,19 @@ export interface BotMessage {
   /** Unix seconds. */
   date: number;
   text?: string;
+  /**
+   * The message this one answers (flow 401). In a forum topic Telegram also sets it on a plain
+   * message, to the topic's first message; only the id and the opening of the text are read, and only to
+   * match an armed own-answer prompt (the text recognises a reply box this serve no longer knows).
+   */
+  reply_to_message?: { message_id: number; text?: string };
   /** Set when the message was forwarded from somewhere else (Bot API 7+ and the older fields). */
   forward_origin?: unknown;
   forward_date?: number;
+  /** Service message on a basic group that became a supergroup (Topics turned on): the supergroup's NEW chat id. */
+  migrate_to_chat_id?: number;
+  /** The matching service message on the new supergroup: the old group's chat id. */
+  migrate_from_chat_id?: number;
 }
 
 /** The part of a Telegram `my_chat_member` update the pairing reads: who changed the bot's membership, and where. */
@@ -85,13 +97,76 @@ export interface SendMessageParams {
   text: string;
   messageThreadId?: number;
   inlineKeyboard?: InlineKeyboard;
+  /**
+   * Flow 401: ask Telegram to open the reply box on this message (`force_reply`), with `placeholder`
+   * in the input field. Mutually exclusive with `inlineKeyboard`; never sent as a rich message.
+   */
+  forceReply?: { placeholder?: string };
+  /** Left out: plain text. "HTML": `text` is Telegram HTML (see `format-html.ts`). */
+  parseMode?: "HTML";
 }
+
+/** `sendRichMessage` (Bot API 10.3): a message made of rich blocks instead of text. */
+export interface SendRichMessageParams {
+  chatId: number;
+  richMessage: InputRichMessage;
+  messageThreadId?: number;
+  inlineKeyboard?: InlineKeyboard;
+}
+
+/** `editMessageText` with `rich_message` in place of `text` (Bot API 10.3). */
+export interface EditRichMessageParams {
+  chatId: number;
+  messageId: number;
+  richMessage: InputRichMessage;
+  inlineKeyboard?: InlineKeyboard;
+}
+
+/** One entry of the bot's command menu (`setMyCommands`). Telegram: 1-32 chars of a-z, 0-9, `_`; description 1-256. */
+export interface BotCommandMenuEntry {
+  command: string;
+  description: string;
+}
+
+/** A state shown on a message as a Telegram reaction: one emoji, or none to clear it. */
+export type BotReactionEmoji = string;
+
+/** The chat actions this package sends. */
+export type BotChatAction = "typing";
 
 export interface BotApi {
   getUpdates(params: GetUpdatesParams): Promise<BotUpdate[]>;
   sendMessage(params: SendMessageParams): Promise<{ message_id: number }>;
+  /**
+   * Send a rich message (flow 395). Optional: a client that lacks it counts as "unsupported
+   * method", and the caller falls back to `sendMessage` with HTML.
+   */
+  sendRichMessage?(params: SendRichMessageParams): Promise<{ message_id: number }>;
+  /** Edit a message into a rich message (`editMessageText` with `rich_message`). Optional, like `sendRichMessage`. */
+  editRichMessage?(params: EditRichMessageParams): Promise<void>;
+  /**
+   * Replace the inline keyboard of a message the bot sent. An empty or missing `inlineKeyboard`
+   * removes the buttons. Telegram answers 400 "message is not modified" when nothing changes.
+   */
+  editMessageReplyMarkup(params: { chatId: number; messageId: number; inlineKeyboard?: InlineKeyboard }): Promise<void>;
+  /** Replace the text (and optionally the keyboard) of a message the bot sent; no keyboard removes the buttons. */
+  editMessageText(params: {
+    chatId: number;
+    messageId: number;
+    text: string;
+    parseMode?: "HTML";
+    inlineKeyboard?: InlineKeyboard;
+  }): Promise<void>;
+  /** Set the bot's command menu for the group. */
+  setMyCommands(params: { commands: BotCommandMenuEntry[]; chatId?: number }): Promise<void>;
+  /** Put one reaction on a message, or clear it when `emoji` is undefined. */
+  setMessageReaction(params: { chatId: number; messageId: number; emoji?: BotReactionEmoji }): Promise<void>;
+  /** Show a chat action (the "typing" indicator) in a chat, or in one forum topic. */
+  sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void>;
   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }>;
   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
+  /** Close a topic without deleting it: its messages stay readable, nothing new is expected. */
+  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;
   answerCallbackQuery(params: { callbackQueryId: string; text?: string }): Promise<void>;
   /** Who the token belongs to; a bad token is a `rejected` error (401). */

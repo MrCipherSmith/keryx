@@ -1,0 +1,23 @@
+[
+  {
+    "id": "r5-sec-F-003",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Performance: the fold cost grew 10 to 20 times per candidate; the worst case is about 2 s at 160k characters, and it is linear.",
+    "impact": "Not stated separately in the information the recorder was given; see `problem`.",
+    "suggested_fix": "Not carried in the information the recorder was given; the fix actually applied is named in the disposition.",
+    "evidence": "Carried forward from 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r03#r3-sec-F-003 (originally 2026-10-05-ingest-github-com-mrciphersmith-keryx-pull-909-r02#sec-F-003) so a verifier verdict on the final code can attach to it. Reported by review-security-code against 3aa5b61c. The severity of this item was not carried in the information the recorder was given; the recorder entered `minor`.",
+    "confidence": "medium",
+    "global_id": "2026-10-06-ingest-github-com-mrciphersmith-keryx-pull-909#r5-sec-F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 5d7fe70bf5589ce3fad915d733fe7ff5d00de459 (src/security/detect byte-identical to origin/main 34226226890e31a5591e17110f0b44878bcdc153, the merge of PR 913). Fix commits: b6574aa8 (PR 912, linear email and name rules) and 34226226 (PR 913, linear phone rule). Method: execution. A 40-shape probe calls detectPii on inputs of 20k, 40k, 80k and 160k characters (best of 2) and flags a shape when 160k/40k exceeds 6 and 160k takes over 50 ms. AT HEAD: 0 of 40 shapes superlinear, every 160k/40k ratio at or below 4.2, worst 160k time 72 ms (`123-45-6789-` repeated). BEFORE b6574aa8 (pii.ts at its parent): 14 of 40 shapes superlinear, 160k/40k about 16-20, worst 15867 ms (`user` plus spaces), 12548 ms (`name is` plus spaces), 9128 ms (`-1.` repeated), 7356 ms (`s.` repeated), 5811 ms (`1-` repeated), 2925 ms (`123-45-6789-` repeated). BEFORE 34226226 (pii.ts at its parent, i.e. with b6574aa8 applied): 1 of 40 shapes superlinear, `-1.` repeated at 5212 ms for 160k (ratio 16.1); the other 39 linear. So b6574aa8 removed 13 of the 14 and 34226226 removed the last one, and nothing superlinear remains. The two fix tests are not vacuous: pii-linear-time.test.ts (PR 912) run against the pre-b6574aa8 pii.ts gives 6 fail (up to about 23 s at 160k); pii-phone-linear-time.test.ts (PR 913) run against the original phone regex gives 5 fail, 4 pass (`-1.` about 12 s at 160k). At HEAD `bun test src/security/detect/pii-linear-time.test.ts src/security/detect/pii-phone-linear-time.test.ts`: 84 pass, 0 fail (the phone file includes a differential test over 18000 inputs against the original regex). The finding's own claim was about the fold at 3aa5b61c (about 2 s at 160k, linear); that figure was unverifiable in r03, but the cost class it described is now gone: the worst case across all 40 shapes at HEAD is 72 ms, and nothing is superlinear, so the problem as stated does not reproduce.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in PR 912 (b6574aa8, linear email and name rules) and PR 913 (34226226, linear phone rule), both merged to main with green CI; verified at 5d7fe70b: 0 of 40 scaling shapes superlinear, worst 160k case 72 ms; before the fixes 14 shapes were superlinear (up to 15867 ms at 160k) and the fix tests fail when reverted"
+    }
+  }
+]

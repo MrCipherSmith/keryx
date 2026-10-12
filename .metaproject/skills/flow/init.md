@@ -24,7 +24,8 @@ line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
    Add `--require-confirmation` when completion should need a terminal
    confirmation token (`flow confirm`), not only the CLI gates. The CLI
    scaffolds the package and collects deterministic context (issue body,
-   memory search, gdgraph artifacts, health).
+   memory search, gdgraph artifacts, health). The new id skips numbers used on
+   known remote branches; commit the flow folder in the same PR as the code.
 2. Enrich context - dispatch `context-collector` with `context_refs` to the
    flow package; it writes compact findings, not raw dumps. For an issue also
    dispatch `issue-analyzer`; for a described feature, `feature-analyzer`.
@@ -41,9 +42,19 @@ line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
    `keryx flow task done <id> <Tn> --disposition skipped --reason "<why>"`.
    Nothing closes them on a timer; leaving them open blocks `flow complete`.
 7. Write acceptance-criteria.md: hard, verifiable `- ACn:` criteria grounded in
-   the collected evidence.
+   the collected evidence. Every criterion ends with one marker:
+   [verify: exec `<command>`] or [verify: invariant `<command>`] (a
+   backticked command), [verify: judged] (a human checks: live run, operator
+   decision, text quality), or [verify: none — <reason>]. If a kind is
+   unclear, ask the operator ONE question listing the criteria with proposed
+   kinds, before `flow freeze`. Behaviour with an external dependency or a
+   failure path gets its own failure-scenario criterion with an observable
+   result (saved, error visible, retry creates no duplicate); a check claimed to
+   catch a regression carries `· sensitive: revert|mutation|failure-scenario`
+   and the confirm note carries `evidence: <ref>` (revert/mutation run or failure-scenario reference).
 8. Re-verify the whole package, then freeze and hand off:
-   `keryx flow freeze <id>` -> `keryx flow start <id>`.
+   `keryx flow freeze <id> --yes` -> `keryx flow start <id>` (the operator
+   already answered the kinds question, so the freeze must not prompt).
 
 Read each worker's `STATUS:` first: `NEEDS_CONTEXT`/`BLOCKED` -> enrich and
 re-dispatch (do not mark done); `DONE`/`DONE_WITH_CONCERNS` -> fold the result

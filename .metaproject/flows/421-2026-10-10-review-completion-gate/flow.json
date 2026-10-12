@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "421",
+  "slug": "review-completion-gate",
+  "title": "Shell review completion gate",
+  "status": "in-progress",
+  "createdAt": "2026-10-10T07:54:32.591Z",
+  "updatedAt": "2026-10-10T08:30:38.816Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1ea89b9053ac59d34b70ac1c753cd4b7661b5d1d71c6acc235763ae9064ec3a7",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Да: гейт, релиз 0.3.94, обновить глобально и в проекте, седьмой прогон",
+    "source": "telegram poll 127"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-10T07:54:32.591Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-10T07:54:40.108Z",
+      "event": "renumbered",
+      "detail": "420 -> 421: 420 is the id the 0.3.91-0.3.93 changelog entries cite for the review-start/help work, which lives in another clone"
+    },
+    {
+      "at": "2026-10-10T07:55:00.901Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-10T07:55:01.098Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-10T08:30:38.816Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"The gate stops, with a state report, after 20 continues or after 2 consecutive continues that add no artifact; with no open package, or a closed one, the stop is accepted (unit tests).\" -> \"The gate stops, with a state report, after 20 continues or after 3 consecutive continues that add no artifact; with no review run in the session, or a package closed since the session began, the stop is accepted; before review start has opened a package the gate still holds (unit tests).\" (live run 7: the gate must hold before a package exists)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    }
+  }
+}

@@ -13,8 +13,14 @@
 //     call is in flight gets 409 Conflict, as Telegram answers it.
 //   - forum topics: ids from a counter, sendMessage into a missing topic is a
 //     400, deleting twice is a 400.
+//   - `sendRichMessage` and `editMessageText` with `rich_message` (Bot API 10.3, flow 395): the block
+//     list is checked against the documented limits; `setRichSupport` makes the bot a one that may
+//     not use them (the call is refused), as an ordinary bot or an older server answers.
 //   - 429 with retry_after, 5xx and a whole-API outage, injected per method.
 //   - callback queries, with the message the buttons belong to.
+//   - `parse_mode: "HTML"`: the text is checked as strictly as Telegram checks it
+//     (documented tags, balanced, `&` `<` `>` escaped); a malformed text is a 400
+//     "can't parse entities", and the 4096 limit counts the text AFTER parsing.
 //
 // `connect(label)` returns another client over the SAME state: that is how a
 // test models two `keryx serve` processes on one bot token.
@@ -23,15 +29,21 @@ import {
   type BotApi,
   BotApiError,
   type BotCallbackQuery,
+  type BotChatAction,
+  type BotCommandMenuEntry,
   type BotChatInfo,
   type BotChatMemberInfo,
   type BotIdentity,
   type BotUpdate,
+  type EditRichMessageParams,
   type GetUpdatesParams,
   type InlineKeyboard,
   type SendMessageParams,
+  type SendRichMessageParams,
   TELEGRAM_MAX_TEXT,
 } from "./types";
+import { checkTelegramHtml } from "./format-html";
+import { type InputRichBlock, type InputRichMessage, RICH_LIMITS, type RichText } from "./rich-types";
 
 export interface FakeTopic {
   messageThreadId: number;
@@ -43,8 +55,42 @@ export interface FakeSentMessage {
   messageId: number;
   chatId: number;
   messageThreadId?: number;
+  /** As sent: Telegram HTML when `parseMode` is "HTML". */
   text: string;
+  parseMode?: "HTML";
+  /** Set when the message was sent (or edited into) a rich message; `text` is then empty. */
+  richMessage?: InputRichMessage;
   inlineKeyboard?: InlineKeyboard;
+  /** Set when the message was sent with `force_reply` (flow 401). */
+  forceReply?: { placeholder?: string };
+  at: number;
+}
+
+/** One edit of a message the bot sent. */
+export interface FakeEdit {
+  messageId: number;
+  kind: "text" | "markup" | "rich";
+  /** The new text, for a text edit. */
+  text?: string;
+  /** The new block list, for a rich edit. */
+  richMessage?: InputRichMessage;
+  /** The keyboard after the edit; empty when the buttons were removed. */
+  inlineKeyboard: InlineKeyboard;
+  at: number;
+}
+
+export interface FakeReaction {
+  messageId: number;
+  chatId: number;
+  /** Undefined: the reaction was cleared. */
+  emoji?: string;
+  at: number;
+}
+
+export interface FakeChatAction {
+  chatId: number;
+  action: BotChatAction;
+  messageThreadId?: number;
   at: number;
 }
 
@@ -64,11 +110,22 @@ export interface FakeBotApiOptions {
   botUsername?: string;
 }
 
-type FakeMethod =
+/** What the fake bot may do with rich messages: allowed, a server that lacks the method (404), a bot that may not (403). */
+export type FakeRichSupport = "allowed" | "unsupported" | "forbidden";
+
+export type FakeMethod =
   | "getUpdates"
   | "sendMessage"
+  | "sendRichMessage"
+  | "editRichMessage"
+  | "editMessageReplyMarkup"
+  | "editMessageText"
+  | "setMyCommands"
+  | "setMessageReaction"
+  | "sendChatAction"
   | "createForumTopic"
   | "deleteForumTopic"
+  | "closeForumTopic"
   | "editForumTopic"
   | "answerCallbackQuery"
   | "getMe"
@@ -83,13 +140,26 @@ interface Fault {
 /** A client over the shared fake state, with its own poller identity. */
 export interface FakeBotClient extends BotApi {
   readonly label: string;
+  sendRichMessage(params: SendRichMessageParams): Promise<{ message_id: number }>;
+  editRichMessage(params: EditRichMessageParams): Promise<void>;
 }
 
 export class FakeBotApi implements BotApi {
   readonly chatId: number;
   readonly sent: FakeSentMessage[] = [];
   readonly answeredCallbacks: FakeAnsweredCallback[] = [];
+  /** Every successful edit, in order. The edited message itself in `sent` shows the state after the edit. */
+  readonly edits: FakeEdit[] = [];
+  /** Every successful reaction call, in order. */
+  readonly reactions: FakeReaction[] = [];
+  /** Every successful chat action, in order. */
+  readonly chatActions: FakeChatAction[] = [];
+  /** The last command menu the bot set, and every call. */
+  myCommands: BotCommandMenuEntry[] = [];
+  readonly myCommandsCalls: BotCommandMenuEntry[][] = [];
   readonly deletedTopics: { chatId: number; messageThreadId: number }[] = [];
+  /** Topics the bot closed (archived); they stay in `liveTopics` with their messages. */
+  readonly closedTopics: { chatId: number; messageThreadId: number }[] = [];
   readonly renamedTopics: { messageThreadId: number; name: string }[] = [];
   /** Every call, in order, by client label. */
   readonly calls: { method: FakeMethod; label: string }[] = [];
@@ -107,6 +177,8 @@ export class FakeBotApi implements BotApi {
   private forum = true;
   private botCanManageTopics = true;
   private botStatus = "administrator";
+  private botCanReact = true;
+  private richSupport: FakeRichSupport = "allowed";
   private readonly botId: number;
   private readonly botUsername: string;
   private readonly inFlightPollers = new Set<string>();
@@ -131,8 +203,16 @@ export class FakeBotApi implements BotApi {
       label,
       getUpdates: (params) => this.getUpdatesFor(label, params),
       sendMessage: (params) => this.sendMessageFor(label, params),
+      sendRichMessage: (params) => this.sendRichFor(label, params),
+      editRichMessage: (params) => this.editRichFor(label, params),
+      editMessageReplyMarkup: (params) => this.editMarkupFor(label, params),
+      editMessageText: (params) => this.editTextFor(label, params),
+      setMyCommands: (params) => this.setCommandsFor(label, params),
+      setMessageReaction: (params) => this.reactFor(label, params),
+      sendChatAction: (params) => this.chatActionFor(label, params),
       createForumTopic: (params) => this.createTopicFor(label, params),
       deleteForumTopic: (params) => this.deleteTopicFor(label, params),
+      closeForumTopic: (params) => this.closeTopicFor(label, params),
       editForumTopic: (params) => this.editTopicFor(label, params),
       answerCallbackQuery: (params) => this.answerFor(label, params),
       getMe: () => this.getMeFor(label),
@@ -167,9 +247,51 @@ export class FakeBotApi implements BotApi {
     });
   }
 
+  /**
+   * A basic group became a supergroup (Topics turned on): Telegram's service message with
+   * `migrate_to_chat_id` on the old chat (`side: "to"`) or `migrate_from_chat_id` on the new one (`side: "from"`).
+   */
+  pushMigration(input: { fromId: number; oldChatId: number; newChatId: number; side?: "to" | "from" }): BotUpdate {
+    const from = input.side === "from";
+    const message = {
+      message_id: ++this.messageSeq,
+      from: { id: input.fromId },
+      chat: { id: from ? input.newChatId : input.oldChatId, type: from ? "supergroup" : "group" },
+      date: Math.floor(this.now() / 1000),
+      ...(from ? { migrate_from_chat_id: input.oldChatId } : { migrate_to_chat_id: input.newChatId }),
+    };
+    return this.enqueueUpdate({ message });
+  }
+
   /** Every call answers 401, as Telegram does for a token it does not know. */
   setTokenRejected(rejected: boolean): void {
     this.tokenRejected = rejected;
+  }
+
+  /** Whether rich messages work: allowed, unsupported (404 method not found) or forbidden (403 for this bot). */
+  setRichSupport(support: FakeRichSupport): void {
+    this.richSupport = support;
+  }
+
+  /** Whether the bot may put reactions on messages. Off: `setMessageReaction` is a 400, as in a group that forbids it. */
+  setBotCanReact(canReact: boolean): void {
+    this.botCanReact = canReact;
+  }
+
+  /** The reaction currently on a message (the last call wins), if any. */
+  reactionOn(messageId: number): string | undefined {
+    for (let index = this.reactions.length - 1; index >= 0; index -= 1) {
+      const entry = this.reactions[index];
+      if (entry !== undefined && entry.messageId === messageId) {
+        return entry.emoji;
+      }
+    }
+    return undefined;
+  }
+
+  /** The message the bot sent with this id, as it shows now (after edits). */
+  message(messageId: number): FakeSentMessage | undefined {
+    return this.sent.find((entry) => entry.messageId === messageId);
   }
 
   /** Whether the group has topics enabled. */
@@ -186,10 +308,13 @@ export class FakeBotApi implements BotApi {
   }
 
   /** Simulate an operator or an attacker writing in a topic. */
-  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number }): BotUpdate {
+  pushMessage(input: { fromId: number; text: string; threadId?: number; chatId?: number; replyToMessageId?: number; replyToText?: string }): BotUpdate {
     const message = {
       message_id: ++this.messageSeq,
       ...(input.threadId === undefined ? {} : { message_thread_id: input.threadId }),
+      ...(input.replyToMessageId === undefined
+        ? {}
+        : { reply_to_message: { message_id: input.replyToMessageId, ...(input.replyToText === undefined ? {} : { text: input.replyToText }) } }),
       from: { id: input.fromId },
       chat: { id: input.chatId ?? this.chatId },
       date: Math.floor(this.now() / 1000),
@@ -278,12 +403,50 @@ export class FakeBotApi implements BotApi {
     return this.defaultClient.sendMessage(params);
   }
 
+  sendRichMessage(params: SendRichMessageParams): Promise<{ message_id: number }> {
+    return this.defaultClient.sendRichMessage(params);
+  }
+
+  editRichMessage(params: EditRichMessageParams): Promise<void> {
+    return this.defaultClient.editRichMessage(params);
+  }
+
+  editMessageReplyMarkup(params: { chatId: number; messageId: number; inlineKeyboard?: InlineKeyboard }): Promise<void> {
+    return this.defaultClient.editMessageReplyMarkup(params);
+  }
+
+  editMessageText(params: {
+    chatId: number;
+    messageId: number;
+    text: string;
+    parseMode?: "HTML";
+    inlineKeyboard?: InlineKeyboard;
+  }): Promise<void> {
+    return this.defaultClient.editMessageText(params);
+  }
+
+  setMyCommands(params: { commands: BotCommandMenuEntry[]; chatId?: number }): Promise<void> {
+    return this.defaultClient.setMyCommands(params);
+  }
+
+  setMessageReaction(params: { chatId: number; messageId: number; emoji?: string }): Promise<void> {
+    return this.defaultClient.setMessageReaction(params);
+  }
+
+  sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void> {
+    return this.defaultClient.sendChatAction(params);
+  }
+
   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }> {
     return this.defaultClient.createForumTopic(params);
   }
 
   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {
     return this.defaultClient.deleteForumTopic(params);
+  }
+
+  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {
+    return this.defaultClient.closeForumTopic(params);
   }
 
   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
@@ -402,7 +565,18 @@ export class FakeBotApi implements BotApi {
     if (params.text.length === 0) {
       throw rejected("sendMessage", 400, "Bad Request: message text is empty");
     }
-    if (params.text.length > TELEGRAM_MAX_TEXT) {
+    let shown = params.text;
+    if (params.parseMode === "HTML") {
+      const checked = checkTelegramHtml(params.text);
+      if (!checked.ok) {
+        throw rejected("sendMessage", 400, `Bad Request: ${checked.reason}`);
+      }
+      shown = checked.text;
+      if (shown.length === 0) {
+        throw rejected("sendMessage", 400, "Bad Request: message text is empty");
+      }
+    }
+    if (shown.length > TELEGRAM_MAX_TEXT) {
       throw rejected("sendMessage", 400, "Bad Request: message is too long");
     }
     if (params.messageThreadId !== undefined && !this.liveTopics.has(params.messageThreadId)) {
@@ -414,10 +588,210 @@ export class FakeBotApi implements BotApi {
       chatId: params.chatId,
       ...(params.messageThreadId === undefined ? {} : { messageThreadId: params.messageThreadId }),
       text: params.text,
+      ...(params.parseMode === undefined ? {} : { parseMode: params.parseMode }),
+      ...(params.inlineKeyboard === undefined ? {} : { inlineKeyboard: params.inlineKeyboard }),
+      ...(params.forceReply === undefined ? {} : { forceReply: params.forceReply }),
+      at: this.now(),
+    });
+    return { message_id: messageId };
+  }
+
+  private richRefusal(method: FakeMethod): BotApiError | undefined {
+    if (this.richSupport === "unsupported") {
+      return rejected(method, 404, "Not Found");
+    }
+    if (this.richSupport === "forbidden") {
+      return rejected(method, 403, "Forbidden: bots are not allowed to send rich messages");
+    }
+    return undefined;
+  }
+
+  private async sendRichFor(label: string, params: SendRichMessageParams): Promise<{ message_id: number }> {
+    this.begin("sendRichMessage", label);
+    const refusal = this.richRefusal("sendRichMessage");
+    if (refusal !== undefined) {
+      throw refusal;
+    }
+    if (params.chatId !== this.chatId && params.chatId <= 0) {
+      throw rejected("sendRichMessage", 400, "Bad Request: chat not found");
+    }
+    const invalid = checkRichMessage(params.richMessage);
+    if (invalid !== undefined) {
+      throw rejected("sendRichMessage", 400, `Bad Request: ${invalid}`);
+    }
+    if (params.messageThreadId !== undefined && !this.liveTopics.has(params.messageThreadId)) {
+      throw rejected("sendRichMessage", 400, "Bad Request: message thread not found");
+    }
+    const messageId = ++this.messageSeq;
+    this.sent.push({
+      messageId,
+      chatId: params.chatId,
+      ...(params.messageThreadId === undefined ? {} : { messageThreadId: params.messageThreadId }),
+      text: "",
+      richMessage: params.richMessage,
       ...(params.inlineKeyboard === undefined ? {} : { inlineKeyboard: params.inlineKeyboard }),
       at: this.now(),
     });
     return { message_id: messageId };
+  }
+
+  private async editRichFor(label: string, params: EditRichMessageParams): Promise<void> {
+    this.begin("editRichMessage", label);
+    const refusal = this.richRefusal("editRichMessage");
+    if (refusal !== undefined) {
+      throw refusal;
+    }
+    const message = this.editable("editMessageText", params.chatId, params.messageId);
+    const invalid = checkRichMessage(params.richMessage);
+    if (invalid !== undefined) {
+      throw rejected("editMessageText", 400, `Bad Request: ${invalid}`);
+    }
+    const next = params.inlineKeyboard ?? [];
+    if (
+      message.richMessage !== undefined &&
+      JSON.stringify(message.richMessage) === JSON.stringify(params.richMessage) &&
+      sameKeyboard(message.inlineKeyboard ?? [], next)
+    ) {
+      throw rejected("editMessageText", 400, "Bad Request: message is not modified");
+    }
+    message.text = "";
+    delete message.parseMode;
+    message.richMessage = params.richMessage;
+    if (next.length === 0) {
+      delete message.inlineKeyboard;
+    } else {
+      message.inlineKeyboard = next;
+    }
+    this.edits.push({
+      messageId: message.messageId,
+      kind: "rich",
+      richMessage: params.richMessage,
+      inlineKeyboard: next,
+      at: this.now(),
+    });
+  }
+
+  private async editMarkupFor(
+    label: string,
+    params: { chatId: number; messageId: number; inlineKeyboard?: InlineKeyboard },
+  ): Promise<void> {
+    this.begin("editMessageReplyMarkup", label);
+    const message = this.editable("editMessageReplyMarkup", params.chatId, params.messageId);
+    const next = params.inlineKeyboard ?? [];
+    if (sameKeyboard(message.inlineKeyboard ?? [], next)) {
+      throw rejected("editMessageReplyMarkup", 400, "Bad Request: message is not modified");
+    }
+    if (next.length === 0) {
+      delete message.inlineKeyboard;
+    } else {
+      message.inlineKeyboard = next;
+    }
+    this.edits.push({ messageId: message.messageId, kind: "markup", inlineKeyboard: next, at: this.now() });
+  }
+
+  private async editTextFor(
+    label: string,
+    params: { chatId: number; messageId: number; text: string; parseMode?: "HTML"; inlineKeyboard?: InlineKeyboard },
+  ): Promise<void> {
+    this.begin("editMessageText", label);
+    const message = this.editable("editMessageText", params.chatId, params.messageId);
+    if (params.text.length === 0) {
+      throw rejected("editMessageText", 400, "Bad Request: message text is empty");
+    }
+    let shown = params.text;
+    if (params.parseMode === "HTML") {
+      const checked = checkTelegramHtml(params.text);
+      if (!checked.ok) {
+        throw rejected("editMessageText", 400, `Bad Request: ${checked.reason}`);
+      }
+      shown = checked.text;
+    }
+    if (shown.length > TELEGRAM_MAX_TEXT) {
+      throw rejected("editMessageText", 400, "Bad Request: message is too long");
+    }
+    const next = params.inlineKeyboard ?? [];
+    if (message.text === params.text && sameKeyboard(message.inlineKeyboard ?? [], next)) {
+      throw rejected("editMessageText", 400, "Bad Request: message is not modified");
+    }
+    message.text = params.text;
+    delete message.richMessage;
+    if (params.parseMode === undefined) {
+      delete message.parseMode;
+    } else {
+      message.parseMode = params.parseMode;
+    }
+    if (next.length === 0) {
+      delete message.inlineKeyboard;
+    } else {
+      message.inlineKeyboard = next;
+    }
+    this.edits.push({ messageId: message.messageId, kind: "text", text: params.text, inlineKeyboard: next, at: this.now() });
+  }
+
+  private editable(method: FakeMethod, chatId: number, messageId: number): FakeSentMessage {
+    if (chatId !== this.chatId) {
+      throw rejected(method, 400, "Bad Request: chat not found");
+    }
+    const message = this.sent.find((entry) => entry.messageId === messageId && entry.chatId === chatId);
+    if (message === undefined) {
+      throw rejected(method, 400, "Bad Request: message to edit not found");
+    }
+    return message;
+  }
+
+  private async setCommandsFor(label: string, params: { commands: BotCommandMenuEntry[]; chatId?: number }): Promise<void> {
+    this.begin("setMyCommands", label);
+    if (params.commands.length > 100) {
+      throw rejected("setMyCommands", 400, "Bad Request: BOT_COMMANDS_TOO_MUCH");
+    }
+    for (const entry of params.commands) {
+      if (!/^[a-z0-9_]{1,32}$/.test(entry.command)) {
+        throw rejected("setMyCommands", 400, "Bad Request: BOT_COMMAND_INVALID");
+      }
+      if (entry.description.length < 1 || entry.description.length > 256) {
+        throw rejected("setMyCommands", 400, "Bad Request: BOT_COMMAND_DESCRIPTION_INVALID");
+      }
+    }
+    this.myCommands = params.commands.map((entry) => ({ ...entry }));
+    this.myCommandsCalls.push(this.myCommands);
+  }
+
+  private async reactFor(label: string, params: { chatId: number; messageId: number; emoji?: string }): Promise<void> {
+    this.begin("setMessageReaction", label);
+    if (params.chatId !== this.chatId) {
+      throw rejected("setMessageReaction", 400, "Bad Request: chat not found");
+    }
+    if (!this.botCanReact) {
+      throw rejected("setMessageReaction", 400, "Bad Request: REACTION_INVALID");
+    }
+    if (params.messageId > this.messageSeq || params.messageId <= 0) {
+      throw rejected("setMessageReaction", 400, "Bad Request: message to react not found");
+    }
+    this.reactions.push({
+      messageId: params.messageId,
+      chatId: params.chatId,
+      ...(params.emoji === undefined ? {} : { emoji: params.emoji }),
+      at: this.now(),
+    });
+  }
+
+  private async chatActionFor(
+    label: string,
+    params: { chatId: number; action: BotChatAction; messageThreadId?: number },
+  ): Promise<void> {
+    this.begin("sendChatAction", label);
+    if (params.chatId !== this.chatId) {
+      throw rejected("sendChatAction", 400, "Bad Request: chat not found");
+    }
+    if (params.messageThreadId !== undefined && !this.liveTopics.has(params.messageThreadId)) {
+      throw rejected("sendChatAction", 400, "Bad Request: message thread not found");
+    }
+    this.chatActions.push({
+      chatId: params.chatId,
+      action: params.action,
+      ...(params.messageThreadId === undefined ? {} : { messageThreadId: params.messageThreadId }),
+      at: this.now(),
+    });
   }
 
   private async createTopicFor(label: string, params: { chatId: number; name: string }): Promise<{ message_thread_id: number }> {
@@ -439,6 +813,14 @@ export class FakeBotApi implements BotApi {
       throw rejected("deleteForumTopic", 400, "Bad Request: message thread not found");
     }
     this.deletedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
+  }
+
+  private async closeTopicFor(label: string, params: { chatId: number; messageThreadId: number }): Promise<void> {
+    this.begin("closeForumTopic", label);
+    if (!this.liveTopics.has(params.messageThreadId)) {
+      throw rejected("closeForumTopic", 400, "Bad Request: message thread not found");
+    }
+    this.closedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
   }
 
   private async editTopicFor(label: string, params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
@@ -482,6 +864,96 @@ export class FakeBotApi implements BotApi {
       ...(params.text === undefined ? {} : { text: params.text }),
     });
   }
+}
+
+/**
+ * The documented limits of a rich message (anchor `rich-message-limits`), checked from the block
+ * list alone: this is the fake's own reading, independent of the renderer that produced it.
+ * Returns the reason Telegram would refuse it with, or undefined.
+ */
+export function checkRichMessage(message: InputRichMessage): string | undefined {
+  const keys = Object.keys(message as unknown as Record<string, unknown>);
+  if (keys.length !== 1 || keys[0] !== "blocks") {
+    return "rich_message must have exactly one of html, markdown or blocks";
+  }
+  if (!Array.isArray(message.blocks) || message.blocks.length === 0) {
+    return "rich message is empty";
+  }
+  let blocks = 0;
+  let characters = 0;
+  let tooDeep = false;
+  let tooWide = false;
+  const text = (value: RichText | undefined): void => {
+    if (value === undefined) {
+      return;
+    }
+    if (typeof value === "string") {
+      characters += value.length;
+    } else if (Array.isArray(value)) {
+      for (const part of value) {
+        text(part);
+      }
+    } else {
+      text(value.text);
+    }
+  };
+  const walk = (list: InputRichBlock[], depth: number): void => {
+    if (depth > RICH_LIMITS.nesting) {
+      tooDeep = true;
+      return;
+    }
+    for (const block of list) {
+      blocks += 1;
+      switch (block.type) {
+        case "paragraph":
+        case "heading":
+        case "pre":
+        case "expandable_blockquote":
+          text(block.text);
+          break;
+        case "divider":
+          break;
+        case "blockquote":
+          walk(block.blocks, depth + 1);
+          break;
+        case "list":
+          for (const item of block.items) {
+            blocks += 1;
+            walk(item.blocks, depth + 1);
+          }
+          break;
+        case "table":
+          for (const row of block.cells) {
+            blocks += 1;
+            if (row.length > RICH_LIMITS.tableColumns) {
+              tooWide = true;
+            }
+            for (const cell of row) {
+              text(cell.text);
+            }
+          }
+          break;
+      }
+    }
+  };
+  walk(message.blocks, 1);
+  if (tooDeep) {
+    return "rich message is nested too deeply";
+  }
+  if (tooWide) {
+    return "table has too many columns";
+  }
+  if (blocks > RICH_LIMITS.blocks) {
+    return "rich message has too many blocks";
+  }
+  if (characters > RICH_LIMITS.characters) {
+    return "rich message is too long";
+  }
+  return undefined;
+}
+
+function sameKeyboard(a: InlineKeyboard, b: InlineKeyboard): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function rejected(method: string, status: number, description: string): BotApiError {

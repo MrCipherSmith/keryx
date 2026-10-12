@@ -17,7 +17,6 @@ triggers:
   - "make a reviewer from this profile"
   - "создай ревьюера"
   - "создай нового ревьюера на основании"
-  - "import vantage reviewers"
   - "import overlay reviewers"
 metadata:
   author: "MrCipherSmith"

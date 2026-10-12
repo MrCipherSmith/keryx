@@ -17,20 +17,34 @@
 
 import { redactSensitiveText } from "../security/service";
 import { SESSION_LEASE_HEARTBEAT_MS, SESSION_LEASE_STALE_MS } from "../session/lease";
-import type { RemoteConfig } from "./config";
+import { loadRemoteConfig, type RemoteConfig } from "./config";
+import { isNotModified } from "./format-html";
 import { InboundQueues, type InboundEntry, inboundEntryId, MAX_INBOUND_PER_TOPIC, PollerState } from "./inbound";
 import { RejectedJournal } from "./journal";
 import { checkName, defaultNameCandidates, nameKey } from "./naming";
-import { OutboundQueue } from "./outbound-queue";
+import { OutboundQueue, type SentMessageInfo } from "./outbound-queue";
+import { editRendered, type RenderFallback, RenderingState, type RenderingSnapshot, sendRendered } from "./rendering";
+import { DEFAULT_RENDER_MODE, type RenderMode } from "./rendering-mode";
+import { isAddressedToOtherBot, remoteMenu } from "./command-gateway";
+import { isReactionForbidden, MAX_TRACKED_MESSAGES, REACTION_FOR_STATE, type ReactionState, STATE_CALL_TIMEOUT_MS, TYPING_REFRESH_MS } from "./message-state";
+import { INTAKE_SERVICE_TOPIC, isIntakeCallbackData, type MessageState } from "./protocol";
 import { type PollerStatus, UpdatePoller } from "./poller";
+import { ServiceTopics } from "./service-topics";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
 import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
+
+/** How much of a replied-to message's text is kept: enough to recognise a reply box by its opening. */
+const MAX_REPLY_TO_TEXT_CHARS = 120;
 
 export interface DeliverMeta {
   updateId: number;
   threadId: number;
   fromId: number;
   receivedAt: number;
+  /** The message the line replied to (flow 401), when it was a reply. */
+  replyToMessageId?: number;
+  /** The opening of the text of the message the line replied to (flow 401), when Telegram carried it. */
+  replyToText?: string;
 }
 
 export interface CallbackDelivery {
@@ -41,6 +55,33 @@ export interface CallbackDelivery {
   threadId: number;
   fromId: number;
 }
+
+/** A button press on a card in the service topic "Intake" (flow 403), already checked by the hub. */
+export interface IntakeCallbackPress {
+  updateId: number;
+  callbackQueryId: string;
+  chatId: number;
+  threadId: number;
+  messageId: number;
+  fromId: number;
+  /** Starts with `in:` and is at most 64 bytes. */
+  data: string;
+}
+
+/** What the handler says back: `text` is shown to the operator as the button's toast. */
+export interface IntakeCallbackReply {
+  text?: string;
+  /**
+   * The handler already put the outcome on the card itself. When the button had to be answered early (the handler
+   * was slow), a reply that is not `edited` is posted to the topic so the result is never lost.
+   */
+  edited?: boolean;
+}
+
+export type IntakeCallbackHandler = (press: IntakeCallbackPress) => Promise<IntakeCallbackReply | undefined>;
+
+/** Telegram's limit on the text of a callback answer. */
+const MAX_CALLBACK_ANSWER_CHARS = 200;
 
 /** What the hub needs from the shell side. Both must reject when the line was not taken. */
 export interface RemoteConsumer {
@@ -69,12 +110,17 @@ export type RemoteEventType =
   | "topic-renamed"
   | "topic-deleted"
   | "topic-delete-failed"
+  | "topic-archived"
+  | "topic-close-failed"
   | "session-unavailable"
   | "session-returned"
   | "sender-refused"
   | "update-unrouted"
   | "delivery-failed"
   | "outbound-dropped"
+  | "format-fallback"
+  | "menu-failed"
+  | "reactions-unavailable"
   | "poller-status";
 
 export interface RemoteEvent {
@@ -95,6 +141,12 @@ export interface RemoteHubOptions extends RemoteConsumer {
   timers?: HubTimers;
   /** How often `start` sweeps for stale heartbeats. Default: the lease heartbeat period. */
   sweepIntervalMs?: number;
+  /**
+   * The rendering mode in effect (flow 395), read before each message part is sent. Default: the
+   * `rendering` key of the remote config file in `dir`, read fresh so `/rendering` and the
+   * `/settings` row apply without a restart, then the `config` given here, then `auto`.
+   */
+  renderingMode?: () => RenderMode;
   /** Wait before redelivering to a consumer that rejected. Default 2 s. */
   deliverRetryMs?: number;
   pollTimeoutSec?: number;
@@ -114,6 +166,9 @@ export type HeartbeatResult =
   | { ok: true; name: string; threadId: number }
   | { ok: false; code: "unknown-session"; message: string };
 
+/** What happened to one message written to a service topic (flow 389). */
+export type ServiceSendResult = { ok: true; state: "sent" | "queued"; threadId: number } | { ok: false; reason: string };
+
 export interface RemoteSessionInfo {
   name: string;
   sessionId: string;
@@ -123,9 +178,25 @@ export interface RemoteSessionInfo {
   lastHeartbeat: number;
 }
 
+/** A message from a topic whose state is shown as a reaction (flow 387). */
+interface TrackedMessage {
+  chatId: number;
+  threadId: number;
+  messageId: number;
+  state: ReactionState;
+  /** Reaction calls for this message run one after another, so each replaces the one before it. */
+  chain: Promise<void>;
+}
+
 const MAX_EVENTS = 50;
 /** How long a callback acknowledgement may take before it is abandoned. It is never worth holding anything for. */
 const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
+/** Flow 403: a press whose handler is still running after this long is answered with an "accepted" toast. */
+export const INTAKE_EARLY_ACK_MS = 2_500;
+export const INTAKE_EARLY_ACK_TEXT = "Принято, выполняю…";
+/** A hung handler (a port that never returns) must not wedge the press forever: longer than every port timeout. */
+export const INTAKE_HANDLER_TIMEOUT_MS = 180_000;
+const HANDLER_TIMED_OUT = Symbol("handler-timed-out");
 
 function describeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
@@ -158,6 +229,16 @@ export class RemoteHub {
   private readonly registry: SessionRegistry;
   private readonly inbound: InboundQueues;
   private readonly outbound: OutboundQueue;
+  /** Flow 395: the rendering mode in effect and the last fallback, shown by `/channels`. */
+  private readonly rendering: RenderingState;
+  /** Flow 389: topics that belong to keryx itself (the digest), kept apart from the session registry. */
+  private readonly serviceTopics: ServiceTopics;
+  /** Flow 403: where presses on intake cards go; none registered means they are acknowledged and dropped. */
+  private intakeHandler: IntakeCallbackHandler | undefined;
+  /** Presses `route` took for intake during one `receive`; run after the batch is on disk. */
+  private intakePresses: IntakeCallbackPress[] = [];
+  /** Flow 389: why an outbound entry was dropped, by id, so a caller that queued it can report it. */
+  private readonly droppedReasons = new Map<string, string>();
   private readonly journal: RejectedJournal;
   private readonly offset: PollerState;
   private readonly poller: UpdatePoller;
@@ -169,6 +250,13 @@ export class RemoteHub {
   private flushTimer: unknown;
   private sweepTimer: unknown;
   private stopped = false;
+  private readonly tracked = new Map<string, TrackedMessage>();
+  /** Per topic: the interval that keeps the typing indicator alive while a turn runs. */
+  private readonly typing = new Map<string, unknown>();
+  /** The bot may not react in this group: reactions are off for good and only typing is left. */
+  private reactionsOff = false;
+  /** This bot's own username (getMe), learned at start; unknown means no command is dropped for its @suffix. */
+  private botUsername: string | undefined;
 
   constructor(options: RemoteHubOptions) {
     this.api = options.api;
@@ -190,17 +278,34 @@ export class RemoteHub {
     };
     this.registry = new SessionRegistry({ ...(options.dir === undefined ? {} : { dir: options.dir }), now: this.now });
     this.inbound = new InboundQueues(options.dir === undefined ? {} : { dir: options.dir });
+    this.rendering = new RenderingState({
+      now: this.now,
+      mode:
+        options.renderingMode ??
+        ((): RenderMode => {
+          const fresh = loadRemoteConfig(options.dir);
+          return (fresh.ok ? fresh.value.rendering : undefined) ?? options.config.rendering ?? DEFAULT_RENDER_MODE;
+        }),
+    });
     this.outbound = new OutboundQueue({
       api: this.api,
+      rendering: this.rendering,
       ...(options.dir === undefined ? {} : { dir: options.dir }),
       now: this.now,
-      onDrop: (entry, reason) => this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`),
+      onDrop: (entry, reason) => {
+        this.droppedReasons.set(entry.id, reason);
+        this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`);
+      },
+      onFallback: (entry, fallback) => this.fallbackEvent(fallback, entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`, "sent"),
     });
     this.journal = new RejectedJournal({ ...(options.dir === undefined ? {} : { dir: options.dir }), now: this.now });
     this.offset = new PollerState(options.dir === undefined ? {} : { dir: options.dir });
     this.registry.load();
     this.outbound.load();
+    this.serviceTopics = new ServiceTopics(options.dir === undefined ? {} : { dir: options.dir });
+    this.serviceTopics.load();
     this.offset.load();
+    this.forgetOtherGroups();
     const onPollerStatus = options.onPollerStatus ?? (() => undefined);
     this.poller = new UpdatePoller({
       api: this.api,
@@ -215,11 +320,27 @@ export class RemoteHub {
     });
   }
 
+  /** Records left by a channel connected to another group are not ours: reusing one would answer into the old group. */
+  private forgetOtherGroups(): void {
+    const foreign = this.registry.records().filter((record) => record.chatId !== this.config.chatId);
+    if (foreign.length === 0) {
+      return;
+    }
+    for (const record of foreign) {
+      this.outbound.discardForThread(record.chatId, record.threadId);
+      this.inbound.remove(nameKey(record.name));
+      this.registry.remove(record.name);
+      this.event("topic-deleted", `${record.name}: forgotten, it belonged to another group`);
+    }
+    this.registry.save();
+  }
+
   // ---- lifecycle of the hub ------------------------------------------------
 
   /** Begin polling, sweeping and flushing; redeliver whatever a previous run left behind. */
   async start(): Promise<void> {
     this.stopped = false;
+    await this.learnBotUsername();
     this.poller.start();
     this.sweepTimer = this.timers.setInterval(() => {
       void this.sweep();
@@ -227,6 +348,36 @@ export class RemoteHub {
     await this.flushOutbound();
     for (const record of this.registry.records()) {
       void this.dispatch(nameKey(record.name));
+    }
+    await this.publishCommandMenu();
+  }
+
+  /** Ask the Bot API who this bot is, once and briefly. A failure leaves the name unknown; nothing else depends on it. */
+  private async learnBotUsername(): Promise<void> {
+    if (this.botUsername !== undefined) {
+      return;
+    }
+    let timer: unknown;
+    const timeout = new Promise<undefined>((resolve) => {
+      timer = this.timers.setTimeout(() => resolve(undefined), STATE_CALL_TIMEOUT_MS);
+    });
+    const call = this.api.getMe().then(
+      (identity) => identity.username,
+      () => undefined,
+    );
+    this.botUsername = await Promise.race([call, timeout]);
+    this.timers.clearTimeout(timer);
+  }
+
+  /**
+   * The command menu in the group is exactly the commands the gateway lets a topic run (flow 387,
+   * AC12). A failure is one event: the menu is a convenience, typing the command still works.
+   */
+  private async publishCommandMenu(): Promise<void> {
+    try {
+      await this.api.setMyCommands({ commands: remoteMenu(), chatId: this.config.chatId });
+    } catch (error) {
+      this.event("menu-failed", describeError(error));
     }
   }
 
@@ -245,6 +396,10 @@ export class RemoteHub {
       this.timers.clearTimeout(handle);
     }
     this.retryTimers.clear();
+    for (const handle of this.typing.values()) {
+      this.timers.clearInterval(handle);
+    }
+    this.typing.clear();
     await this.poller.stop();
   }
 
@@ -275,8 +430,13 @@ export class RemoteHub {
   }
 
   /** What a shell needs to know about this hub's limits (the run guard reads `runTimeoutMs`). */
-  limits(): { runTimeoutMs: number; orphanMs: number } {
-    return { runTimeoutMs: this.config.runTimeoutMs, orphanMs: this.config.orphanMs };
+  limits(): { runTimeoutMs: number; orphanMs: number; permissionMode: RemoteConfig["permissionMode"]; approvalTimeoutMs: number } {
+    return {
+      runTimeoutMs: this.config.runTimeoutMs,
+      orphanMs: this.config.orphanMs,
+      permissionMode: this.config.permissionMode,
+      approvalTimeoutMs: this.config.approvalTimeoutMs,
+    };
   }
 
   hasSession(sessionId: string): boolean {
@@ -310,7 +470,7 @@ export class RemoteHub {
       if (record === undefined) {
         return { ok: true as const, existed: false };
       }
-      await this.retire(record, "closed by the session");
+      await this.archive(record, "The session was closed.");
       return { ok: true as const, existed: true };
     });
   }
@@ -333,7 +493,25 @@ export class RemoteHub {
 
   /** One message to the General topic of the group, sent now (not queued): the caller reports the outcome. */
   async sendGeneral(text: string): Promise<void> {
-    await this.api.sendMessage({ chatId: this.config.chatId, text });
+    await sendRendered(
+      this.api,
+      { chatId: this.config.chatId, text },
+      { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, " (General)", "sent") },
+    );
+  }
+
+  /** Flow 395: the rendering mode in effect and the last fallback (step, reason, time). */
+  renderingStatus(): RenderingSnapshot {
+    return this.rendering.snapshot();
+  }
+
+  private fallbackEvent(fallback: RenderFallback, where: string, verb: "sent" | "edited"): void {
+    this.event(
+      "format-fallback",
+      fallback.step === "html-to-plain"
+        ? `Telegram refused the formatting; ${verb} as plain text${where}`
+        : `Telegram refused the rich message (${fallback.reason}); ${verb} as HTML${where}`,
+    );
   }
 
   heartbeat(sessionId: string): Promise<HeartbeatResult> {
@@ -355,7 +533,7 @@ export class RemoteHub {
     });
   }
 
-  /** Mark stale heartbeats unavailable and delete topics whose orphan timeout has run out. */
+  /** Mark stale heartbeats unavailable and archive topics whose orphan timeout has run out. */
   sweep(): Promise<void> {
     return this.serial(async () => {
       const now = this.now();
@@ -373,15 +551,17 @@ export class RemoteHub {
           record.unavailableSince = Math.min(now, record.lastHeartbeat + SESSION_LEASE_STALE_MS);
           this.registry.save();
           this.event("session-unavailable", record.name);
+          // The shell is not coming back on its own: stop typing and fail what it was working on.
+          this.endActivity(record.sessionId);
           if (now - record.unavailableSince < this.config.orphanMs) {
             this.queueStatus(
               record,
-              `Session unavailable: the shell stopped responding. This topic is deleted in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
+              `Session unavailable: the shell stopped responding. This topic is archived in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
             );
           }
         }
         if (record.status === "unavailable" && record.unavailableSince !== undefined && now - record.unavailableSince >= this.config.orphanMs) {
-          await this.retire(record, "orphan timeout");
+          await this.archive(record, "The shell stopped responding and did not return.");
         }
       }
       await this.flushOutbound();
@@ -390,8 +570,16 @@ export class RemoteHub {
 
   // ---- messages to Telegram ------------------------------------------------
 
-  /** Queue text for a session's topic and try to send it. False when the session is unknown. */
-  async send(sessionId: string, text: string, options: { keyboard?: InlineKeyboard } = {}): Promise<boolean> {
+  /**
+   * Queue text for a session's topic and try to send it. False when the session is unknown.
+   * `onSent` learns the id of the message once it is in the topic (in memory only), so the
+   * caller can edit it later.
+   */
+  async send(
+    sessionId: string,
+    text: string,
+    options: { keyboard?: InlineKeyboard; forceReply?: { placeholder?: string }; onSent?: (info: SentMessageInfo) => void } = {},
+  ): Promise<boolean> {
     const record = this.registry.bySession(sessionId);
     if (record === undefined) {
       return false;
@@ -401,9 +589,161 @@ export class RemoteHub {
       threadId: record.threadId,
       text,
       ...(options.keyboard === undefined ? {} : { keyboard: options.keyboard }),
+      ...(options.forceReply === undefined ? {} : { forceReply: options.forceReply }),
+      ...(options.onSent === undefined ? {} : { onSent: options.onSent }),
     });
     await this.flushOutbound();
     return true;
+  }
+
+  /**
+   * Flow 389: write text into a SERVICE topic (a topic of keryx's own, such as "Digest"), creating
+   * it on first use and remembering it across restarts. The result says what happened to THIS
+   * message: `sent`, `queued` (Telegram or the network refused for now; the durable queue
+   * retries it), or a failure (the topic could not be created, or Telegram refused the text for
+   * good). A topic Telegram no longer has is forgotten, so the next send creates it again.
+   */
+  async sendToServiceTopic(
+    name: string,
+    text: string,
+    options: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void } = {},
+  ): Promise<ServiceSendResult> {
+    const checked = checkName(name);
+    if (!checked.ok) {
+      return { ok: false, reason: `invalid topic name: ${checked.reason}` };
+    }
+    const topic = await this.serial(async () => {
+      const known = this.serviceTopics.get(checked.name, this.config.chatId);
+      if (known !== undefined) {
+        return { ok: true as const, threadId: known.threadId };
+      }
+      try {
+        const created = await this.api.createForumTopic({ chatId: this.config.chatId, name: checked.name });
+        this.serviceTopics.put({ name: checked.name, chatId: this.config.chatId, threadId: created.message_thread_id });
+        this.event("topic-created", `${checked.name} (service topic)`);
+        return { ok: true as const, threadId: created.message_thread_id };
+      } catch (error) {
+        return { ok: false as const, reason: `could not create the topic "${checked.name}": ${describeError(error)}` };
+      }
+    });
+    if (!topic.ok) {
+      return { ok: false, reason: topic.reason };
+    }
+    return this.sendTracked(this.config.chatId, topic.threadId, text, checked.name, options);
+  }
+
+  /** Flow 403: where presses on intake cards go. A later call replaces the handler; `undefined` removes it. */
+  registerIntakeCallbackHandler(handler: IntakeCallbackHandler | undefined): void {
+    this.intakeHandler = handler;
+  }
+
+  /**
+   * Flow 389: like `send`, but the result says what happened to THIS message (`sent`, `queued` for
+   * the durable retry, or a refusal). The scheduled digest records it.
+   */
+  async sendToSessionTracked(sessionId: string, text: string): Promise<ServiceSendResult> {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return { ok: false, reason: "the session is not registered" };
+    }
+    return this.sendTracked(record.chatId, record.threadId, text);
+  }
+
+  private async sendTracked(
+    chatId: number,
+    threadId: number,
+    text: string,
+    serviceTopic?: string,
+    options: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void } = {},
+  ): Promise<ServiceSendResult> {
+    const entries = this.outbound.enqueue({
+      chatId,
+      threadId,
+      text,
+      ...(options.keyboard === undefined ? {} : { keyboard: options.keyboard }),
+      ...(options.onSent === undefined ? {} : { onSent: options.onSent }),
+    });
+    if (entries.length === 0) {
+      return { ok: false, reason: "the message was empty" };
+    }
+    await this.flushOutbound();
+    const pending = new Set(this.outbound.pending().map((entry) => entry.id));
+    for (const entry of entries) {
+      const dropped = this.droppedReasons.get(entry.id);
+      if (dropped !== undefined) {
+        this.droppedReasons.delete(entry.id);
+        // A refusal because the topic is gone: forget it so the retry creates it again.
+        if (serviceTopic !== undefined && /thread not found|topic_id_invalid|topic.*not found/i.test(dropped)) {
+          this.serviceTopics.remove(serviceTopic);
+        }
+        // Parts already queued behind a dropped one are not worth sending out of order.
+        return { ok: false, reason: dropped };
+      }
+    }
+    return { ok: true, state: entries.some((entry) => pending.has(entry.id)) ? "queued" : "sent", threadId };
+  }
+
+  /**
+   * Put a message the bot sent into its final state: the text is replaced and the buttons are
+   * gone (flow 387, AC21). If the edit fails, the buttons are removed on their own and ONE short
+   * reply carries the result, so a prompt never keeps live buttons and never answers twice.
+   * An edit that changes nothing (a replayed press on a settled message) counts as done.
+   */
+  async settleMessage(
+    sessionId: string,
+    messageId: number,
+    text: string,
+    shortReply: string = text,
+  ): Promise<"edited" | "replied" | "gone"> {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return "gone";
+    }
+    try {
+      await editRendered(
+        this.api,
+        { chatId: record.chatId, messageId, text },
+        { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, ` (topic ${record.threadId})`, "edited") },
+      );
+      return "edited";
+    } catch (error) {
+      if (isNotModified(error)) {
+        return "edited";
+      }
+      try {
+        await this.api.editMessageReplyMarkup({ chatId: record.chatId, messageId });
+      } catch {
+        // Already gone or unchanged: the short reply below still carries the result.
+      }
+      await this.send(sessionId, shortReply);
+      return "replied";
+    }
+  }
+
+  /**
+   * Flow 403: edit a message the bot sent into a SERVICE topic (an intake card after a decision). The text is
+   * redacted like every outbound text; with no `keyboard` the buttons are gone. A press replayed on a settled
+   * card ("message is not modified") counts as done. Returns false when Telegram refused the edit.
+   */
+  async editServiceMessage(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard): Promise<boolean> {
+    try {
+      await editRendered(
+        this.api,
+        { chatId, messageId, text: redactSensitiveText(text), ...(keyboard === undefined ? {} : { inlineKeyboard: keyboard }) },
+        { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, " (service topic)", "edited") },
+      );
+      return true;
+    } catch (error) {
+      if (isNotModified(error)) {
+        return true;
+      }
+      try {
+        await this.api.editMessageReplyMarkup({ chatId, messageId });
+      } catch {
+        // Already gone or unchanged: the decision is in the ledger either way.
+      }
+      return false;
+    }
   }
 
   /** Try to send everything queued. Safe to call at any time. */
@@ -437,6 +777,7 @@ export class RemoteHub {
     return this.serial(async () => {
       const touched = new Set<string>();
       const callbacks: string[] = [];
+      this.intakePresses = [];
       const dropped = new Map<string, number>();
       const ordered = [...updates].sort((a, b) => a.update_id - b.update_id);
       const top = this.offset.highest;
@@ -480,6 +821,9 @@ export class RemoteHub {
       for (const id of callbacks) {
         this.answerCallback(id);
       }
+      for (const press of this.intakePresses.splice(0)) {
+        this.runIntakePress(press);
+      }
       for (const key of touched) {
         void this.dispatch(key);
       }
@@ -491,18 +835,79 @@ export class RemoteHub {
    * this runs inside the serial lock's turn and a slow Bot API must never hold up
    * the poller or the lifecycle, so nothing waits for it.
    */
-  private answerCallback(callbackQueryId: string): void {
+  private answerCallback(callbackQueryId: string, text?: string): void {
     let timer: unknown;
     const timeout = new Promise<void>((resolve) => {
       timer = this.timers.setTimeout(resolve, ANSWER_CALLBACK_TIMEOUT_MS);
     });
-    const answered = this.api.answerCallbackQuery({ callbackQueryId }).then(
+    const shown = text === undefined || text.length === 0 ? undefined : redactSensitiveText(text).slice(0, MAX_CALLBACK_ANSWER_CHARS);
+    const answered = this.api.answerCallbackQuery({ callbackQueryId, ...(shown === undefined ? {} : { text: shown }) }).then(
       () => undefined,
       () => undefined,
     );
     void Promise.race([answered, timeout]).finally(() => {
       this.timers.clearTimeout(timer);
     });
+  }
+
+  /** Run the intake handler outside the serial lock and answer the press with what it says. A throw answers with no text. */
+  private runIntakePress(press: IntakeCallbackPress): void {
+    const handler = this.intakeHandler;
+    if (handler === undefined) {
+      this.event("update-unrouted", `update ${press.updateId}: intake press with no handler registered`);
+      this.answerCallback(press.callbackQueryId);
+      return;
+    }
+    void (async () => {
+      // Telegram stops waiting for a callback answer after a few seconds, and a take can run for minutes: once the
+      // handler is slow, the button is answered with a short "accepted" and the result goes into the topic instead.
+      let answered = false;
+      const answer = (text?: string): void => {
+        if (answered) {
+          return;
+        }
+        answered = true;
+        this.answerCallback(press.callbackQueryId, text);
+      };
+      const early = this.timers.setTimeout(() => answer(INTAKE_EARLY_ACK_TEXT), INTAKE_EARLY_ACK_MS);
+      let hardTimer: unknown;
+      const hard = new Promise<typeof HANDLER_TIMED_OUT>((resolve) => {
+        hardTimer = this.timers.setTimeout(() => resolve(HANDLER_TIMED_OUT), INTAKE_HANDLER_TIMEOUT_MS);
+      });
+      let reply: IntakeCallbackReply | undefined;
+      try {
+        const running = Promise.resolve().then(() => handler(press));
+        // If the timeout wins, the handler's own late failure must not become an unhandled rejection.
+        running.catch(() => undefined);
+        const outcome = await Promise.race([running, hard]);
+        if (outcome === HANDLER_TIMED_OUT) {
+          this.event("delivery-failed", `intake press ${press.updateId}: the handler did not finish within ${INTAKE_HANDLER_TIMEOUT_MS / 1000} s`);
+          // The press itself keeps running (a queued `flow init` can outlast this timeout): when it finishes, its result
+          // still goes to the topic, so the operator is never left without an answer.
+          void running
+            .then(async (late) => {
+              if (late?.text !== undefined && late.text.length > 0 && late.edited !== true) await this.sendToServiceTopic(INTAKE_SERVICE_TOPIC, late.text).catch(() => undefined);
+            })
+            .catch(() => undefined);
+        } else {
+          reply = outcome;
+        }
+      } catch (error) {
+        this.event("delivery-failed", `intake press ${press.updateId}: ${describeError(error)}`);
+      } finally {
+        this.timers.clearTimeout(early);
+        this.timers.clearTimeout(hardTimer);
+      }
+      if (!answered) {
+        answer(reply?.text);
+        return;
+      }
+      // The button was answered early. The result still has to reach the operator, unless the handler already put it
+      // on the card itself.
+      if (reply?.text !== undefined && reply.text.length > 0 && reply.edited !== true) {
+        await this.sendToServiceTopic(INTAKE_SERVICE_TOPIC, reply.text).catch(() => undefined);
+      }
+    })();
   }
 
   // ---- internals -----------------------------------------------------------
@@ -520,6 +925,7 @@ export class RemoteHub {
   private markLive(record: RemoteSessionRecord): void {
     record.status = "live";
     delete record.unavailableSince;
+    delete record.closing;
   }
 
   private queueStatus(record: RemoteSessionRecord, text: string): void {
@@ -607,12 +1013,46 @@ export class RemoteHub {
   }
 
   /**
+   * End a session's topic without deleting it (flow 419): a closing note goes in, the topic is closed,
+   * and its messages stay readable. The record is forgotten, so a later session starts a new topic.
+   * A transient failure leaves an ownerless, already-expired record behind so the next sweep retries
+   * the close; the closing note is queued once.
+   */
+  private async archive(record: RemoteSessionRecord, reason: string): Promise<void> {
+    this.stopTyping(record);
+    if (record.closing !== true) {
+      record.closing = true;
+      this.queueStatus(record, `${reason} This topic is archived: the history stays here and nothing more will be posted. A new session opens a new topic.`);
+      this.registry.save();
+    }
+    await this.flushOutbound();
+    try {
+      await this.api.closeForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
+    } catch (error) {
+      if (isBotApiError(error) && isRetryable(error)) {
+        record.sessionId = "";
+        record.status = "unavailable";
+        record.unavailableSince = this.now() - this.config.orphanMs;
+        this.registry.save();
+        this.event("topic-close-failed", `${record.name}: ${describeError(error)}`);
+        return;
+      }
+      // A refusal (the topic is gone, or already closed) leaves nothing to close.
+    }
+    this.inbound.remove(nameKey(record.name));
+    this.registry.remove(record.name);
+    this.registry.save();
+    this.event("topic-archived", `${record.name}: ${reason}`);
+  }
+
+  /**
    * Delete a record's topic and forget it. A topic that is already gone counts
    * as deleted; a transient failure leaves an ownerless, already-expired record
    * behind so the next sweep retries the deletion instead of leaking the topic.
    */
   private async retire(record: RemoteSessionRecord, why: string, strict = false): Promise<void> {
     this.outbound.discardForThread(record.chatId, record.threadId);
+    this.stopTyping(record);
     try {
       await this.api.deleteForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
     } catch (error) {
@@ -656,7 +1096,14 @@ export class RemoteHub {
     }
     const record = this.registry.byThread(origin.chat.id, threadId);
     if (record === undefined) {
+      const service = this.serviceTopics.byThread(origin.chat.id, threadId);
+      if (query !== undefined && service !== undefined && nameKey(service.name) === nameKey(INTAKE_SERVICE_TOPIC)) {
+        this.routeIntakePress(update.update_id, query, fromId, threadId);
+        return undefined;
+      }
       this.event("update-unrouted", `update ${update.update_id}: no session in topic ${threadId}`);
+      // A press on a button of another service topic reaches no handler, but the button must stop spinning.
+      if (query !== undefined && service !== undefined) this.answerCallback(query.id);
       return undefined;
     }
     const key = nameKey(record.name);
@@ -665,7 +1112,26 @@ export class RemoteHub {
       if (typeof message.text !== "string" || message.text.length === 0) {
         return undefined;
       }
-      const appended = this.inbound.append(key, { ...base, kind: "text", text: message.text });
+      if (isAddressedToOtherBot(message.text, this.botUsername)) {
+        // In a group with several bots, /model@otherbot is that bot's command, not this session's.
+        this.event("update-unrouted", `update ${update.update_id}: command addressed to another bot`);
+        return undefined;
+      }
+      const replyTo = message.reply_to_message?.message_id;
+      const replyToText = message.reply_to_message?.text;
+      const appended = this.inbound.append(key, {
+        ...base,
+        kind: "text",
+        text: message.text,
+        messageId: message.message_id,
+        ...(typeof replyTo === "number" ? { replyToMessageId: replyTo } : {}),
+        ...(typeof replyTo === "number" && typeof replyToText === "string" ? { replyToText: replyToText.slice(0, MAX_REPLY_TO_TEXT_CHARS) } : {}),
+      });
+      if (appended.added) {
+        // The first thing the sender sees: the message was received. Fire and forget.
+        const tracked = this.track(record, update.update_id, message.message_id);
+        this.react(tracked, "received");
+      }
       return { key, dropped: appended.dropped };
     }
     if (query?.data === undefined) {
@@ -677,6 +1143,155 @@ export class RemoteHub {
       callback: { id: query.id, data: query.data, ...(query.message === undefined ? {} : { messageId: query.message.message_id }) },
     });
     return { key, dropped: appended.dropped, callbackQueryId: query.id };
+  }
+
+  /**
+   * Flow 403: a press in the "Intake" topic. The sender (allowlist) and the chat were checked by
+   * `route`; here the press must also be on a message of this topic and carry intake data. Anything
+   * else is logged by update id, with no text, and acknowledged so the button stops spinning.
+   */
+  private routeIntakePress(updateId: number, query: NonNullable<BotUpdate["callback_query"]>, fromId: number, threadId: number): void {
+    const messageId = query.message?.message_id;
+    if (typeof messageId !== "number" || !isIntakeCallbackData(query.data)) {
+      this.event("update-unrouted", `update ${updateId}: not an intake press in topic ${threadId}`);
+      this.answerCallback(query.id);
+      return;
+    }
+    this.intakePresses.push({ updateId, callbackQueryId: query.id, chatId: this.config.chatId, threadId, messageId, fromId, data: query.data });
+  }
+
+  // ---- message state: reactions and typing (flow 387, AC18 to AC20) ------------
+
+  private trackKey(threadId: number, updateId: number): string {
+    return `${threadId}:${updateId}`;
+  }
+
+  private track(record: RemoteSessionRecord, updateId: number, messageId: number): TrackedMessage {
+    const key = this.trackKey(record.threadId, updateId);
+    const existing = this.tracked.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const entry: TrackedMessage = { chatId: record.chatId, threadId: record.threadId, messageId, state: "received", chain: Promise.resolve() };
+    this.tracked.set(key, entry);
+    while (this.tracked.size > MAX_TRACKED_MESSAGES) {
+      const oldest = this.tracked.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.tracked.delete(oldest);
+    }
+    return entry;
+  }
+
+  /**
+   * Put a state on a message as its one reaction. Never awaited by the caller and never throws: a
+   * failed reaction must not block or delay the message. A refusal that says the bot may not react
+   * in this group turns reactions off and is recorded once.
+   */
+  private react(message: TrackedMessage, state: ReactionState): void {
+    message.state = state;
+    if (this.reactionsOff || this.stopped) {
+      return;
+    }
+    message.chain = message.chain.then(async () => {
+      if (this.reactionsOff) {
+        return;
+      }
+      let timer: unknown;
+      const timeout = new Promise<void>((resolve) => {
+        timer = this.timers.setTimeout(resolve, STATE_CALL_TIMEOUT_MS);
+      });
+      const call = this.api.setMessageReaction({ chatId: message.chatId, messageId: message.messageId, emoji: REACTION_FOR_STATE[state] }).then(
+        () => undefined,
+        (error: unknown) => this.reactionFailed(error),
+      );
+      await Promise.race([call, timeout]);
+      this.timers.clearTimeout(timer);
+    });
+  }
+
+  private reactionFailed(error: unknown): void {
+    if (!isBotApiError(error) || error.kind !== "rejected" || !isReactionForbidden(error.status, error.message)) {
+      return;
+    }
+    if (!this.reactionsOff) {
+      this.reactionsOff = true;
+      this.event("reactions-unavailable", `this bot may not react in the group; the topic shows typing only (${describeError(error)})`);
+    }
+  }
+
+  /**
+   * The shell reports where one of its messages is. The state replaces the reaction; "working" also
+   * starts the typing indicator and "done"/"failed" stop it. False for an unknown session or a message
+   * this hub does not track (a restart forgets them).
+   */
+  messageState(sessionId: string, updateId: number, state: MessageState): boolean {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return false;
+    }
+    const message = this.tracked.get(this.trackKey(record.threadId, updateId));
+    if (message === undefined) {
+      return false;
+    }
+    this.react(message, state);
+    if (state === "working") {
+      this.startTyping(record);
+    } else if ((state === "done" || state === "failed") && !this.anotherWorking(record, message)) {
+      // A slash command that settles must not end the typing of a turn that is still running.
+      this.stopTyping(record);
+    }
+    return true;
+  }
+
+  /** True when a different message of the record's topic is still being worked on. */
+  private anotherWorking(record: RemoteSessionRecord, except: TrackedMessage): boolean {
+    for (const other of this.tracked.values()) {
+      if (other !== except && other.threadId === record.threadId && other.chatId === record.chatId && other.state === "working") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The shell is gone: stop typing, and a message it was still working on is marked failed. */
+  endActivity(sessionId: string): void {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return;
+    }
+    this.stopTyping(record);
+    for (const message of this.tracked.values()) {
+      if (message.threadId === record.threadId && (message.state === "reading" || message.state === "working")) {
+        this.react(message, "failed");
+      }
+    }
+  }
+
+  private typingKey(record: RemoteSessionRecord): string {
+    return `${record.chatId}:${record.threadId}`;
+  }
+
+  private startTyping(record: RemoteSessionRecord): void {
+    const key = this.typingKey(record);
+    if (this.typing.has(key) || this.stopped) {
+      return;
+    }
+    const send = (): void => {
+      void this.api.sendChatAction({ chatId: record.chatId, action: "typing", messageThreadId: record.threadId }).catch(() => undefined);
+    };
+    send();
+    this.typing.set(key, this.timers.setInterval(send, TYPING_REFRESH_MS));
+  }
+
+  private stopTyping(record: RemoteSessionRecord): void {
+    const key = this.typingKey(record);
+    const handle = this.typing.get(key);
+    if (handle !== undefined) {
+      this.timers.clearInterval(handle);
+      this.typing.delete(key);
+    }
   }
 
   private dispatch(key: string): Promise<void> {
@@ -703,11 +1318,17 @@ export class RemoteHub {
         }
         try {
           if (entry.kind === "text") {
+            if (entry.messageId !== undefined) {
+              // An entry replayed after a restart: its state can still be shown.
+              this.track(record, entry.updateId, entry.messageId);
+            }
             await this.consumer.deliver(record.sessionId, entry.text ?? "", {
               updateId: entry.updateId,
               threadId: record.threadId,
               fromId: entry.fromId,
               receivedAt: entry.receivedAt,
+              ...(typeof entry.replyToMessageId === "number" ? { replyToMessageId: entry.replyToMessageId } : {}),
+              ...(typeof entry.replyToText === "string" ? { replyToText: entry.replyToText } : {}),
             });
           } else if (entry.callback !== undefined && this.consumer.deliverCallback !== undefined) {
             await this.consumer.deliverCallback(record.sessionId, {

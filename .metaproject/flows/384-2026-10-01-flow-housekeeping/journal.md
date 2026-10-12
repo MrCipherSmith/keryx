@@ -1,0 +1,21 @@
+# Flow Journal
+
+- 2026-10-01T12:24:44.273Z - flow created
+- 2026-10-01T12:25:04.287Z - frozen: 7 criteria; checksum recorded
+- 2026-10-01T12:25:04.477Z - started
+- 2026-10-01T12:29:41.013Z - ac-updated: AC3: "`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not tracked in git or has uncommitted changes; the green path still completes. Covered by tests for both." -> "`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not committed in HEAD (flows created from 0.3.53 on carry the opt-in flag, like the owner and tasks gates; a flow without it reports the gate as skipped); the committed path still completes. Covered by tests for pass, fail and skipped." (wording made exact before any implementation: committed in HEAD, opt-in per package so no pre-existing flow is blocked retroactively)
+- 2026-10-01T14:14:00.320Z - ac-confirmed: AC1: second clone at 07fe9a43 with npm 0.3.54: flow check 'All flows are consistent' (28 branch warnings), flow folders in git 370 = product index 370 flows; real duplicate 366 renumbered to 385 in PR #838, stale-branch noise fixed in PR #837 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:00.506Z - ac-confirmed: AC2: src/flow/folder-hygiene.test.ts: remote 005 gives next >= 6, plus stale-branch number skipped; smoke from npm 0.3.53 init skipped 007 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:00.691Z - ac-confirmed: AC3: src/flow/check-complete.test.ts and folder-hygiene.test.ts cover pass, fail, skipped; smoke from npm 0.3.53 showed fail then pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:00.870Z - ac-confirmed: AC4: folder-hygiene.test.ts: default-branch clash fails duplicate-id naming flow renumber, same name not reported, non-default branch warns (PR #837) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:01.048Z - ac-confirmed: AC5: PR #834 committed the untracked flow folders and id-map.json records 360-365 renumbering; flow 384 own folder committed at closing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:01.231Z - ac-confirmed: AC6: CHANGELOG 0.3.53 and 0.3.54, cli-reference.md, modules.md, templates.ts and both flow-orchestrator SKILL.md copies (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:01.412Z - ac-confirmed: AC7: src/tui/flow-hygiene.test.ts and src/commands/flow-check-hygiene.test.ts render [dup id] and [not committed]; smoke showed the tags (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T14:14:07.971Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/835 (warning: PR is not a draft) (base: main)
+- 2026-10-01T14:14:33.673Z - task-done: T1: Collect remaining context
+- 2026-10-01T14:14:33.989Z - task-done: T2: Implement per plan
+- 2026-10-01T14:14:34.336Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-01T14:14:34.664Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-01T14:14:50.224Z - completing
+- 2026-10-01T14:14:55.222Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-01T14:14:55.224Z - done: all gates passed

@@ -71,7 +71,7 @@ const CLIENT_ZONES = ["src/harness/", "src/tui/", "src/mcp-client/", "src/comman
 
 /**
  * `src/session/` is classified as a client zone by the phase-7 inventory's zone
- * table, but these five modules are deterministic session-state storage — JSON
+ * table, but these six modules are deterministic session-state storage — JSON
  * and file locks over `.metaproject`/the session dir — and contain no provider
  * registry, no model selection, no credential read and no LLM call. Three of
  * them (`store.ts`'s `findSession`, `external-slate.ts`, `slate.ts`'s Seed
@@ -79,14 +79,17 @@ const CLIENT_ZONES = ["src/harness/", "src/tui/", "src/mcp-client/", "src/comman
  * reaches SAC through one facade instead of into `src/session/` internals
  * (`src/mcp/boundary.test.ts`'s M-3 rule); the other two arrive underneath them.
  *
- * They are allowlisted BY NAME rather than by prefix: a sixth session module
- * appearing in the facade graph fails this test. Whether these five belong in
+ * Flow 415 adds preservation.ts: immutable JSON checkpoint/outbox storage,
+ * reached by preserved-wrap-up evidence readers, with no shell/provider wiring.
+ * They are allowlisted BY NAME rather than by prefix: any other session module
+ * appearing in the facade graph fails this test. Whether these six belong in
  * `src/session/` at all is a relocation question this task is explicitly not
  * allowed to answer by moving files, and it is handed to the packaging lane.
  */
 const SESSION_STATE_ALLOWLIST = [
   "src/session/external-slate.ts",
   "src/session/paths.ts",
+  "src/session/preservation.ts",
   "src/session/slate-course.ts",
   "src/session/slate.ts",
   "src/session/store.ts",
@@ -191,7 +194,7 @@ test("the SAC facade ships no provider registry, model selection, credential rea
   expect(clientModulesIn(facadeGraph)).toEqual([]);
 });
 
-test("no session module beyond the five allowlisted state stores reaches the facade", () => {
+test("no session module beyond the explicit allowlisted state stores reaches the facade", () => {
   const session = facadeGraph.filter((module) => module.startsWith("src/session/"));
   expect(session.filter((module) => !SESSION_STATE_ALLOWLIST.includes(module))).toEqual([]);
 });

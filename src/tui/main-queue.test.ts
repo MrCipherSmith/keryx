@@ -1,10 +1,15 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
+  describePendingCall,
   drainIdleMainQueue,
   dropQueuedBySource,
   editMainQueueItem,
   formatMainQueueMarker,
+  formatQueueListing,
+  formatQueueRow,
+  QUEUE_FORCE_HELP,
+  queueWaitReason,
   parseQueueCommand,
   pendingQueueEditFor,
   QueuedMainQuestion,
@@ -203,4 +208,38 @@ test("dropQueuedBySource splits the Telegram lines out in queue order and keeps 
   // Non-destructive: the input is untouched.
   expect(items).toHaveLength(3);
   expect(dropQueuedBySource([q("x", "typed")], "tg").dropped).toEqual([]);
+});
+
+// Flow 426 AC6: a queued message says what it waits for.
+
+test("AC6: the wait reason names the turn, or the call whose approval is pending", () => {
+  expect(queueWaitReason({ kind: "turn" })).toBe("waits for the current turn");
+  expect(queueWaitReason({ kind: "approval", call: "keryx harness wave --spec tier.json" })).toBe(
+    "waits for approval of: keryx harness wave --spec tier.json",
+  );
+});
+
+test("AC6: describePendingCall shows the shell command, else the tool name, on one capped line", () => {
+  expect(describePendingCall("shell_exec", JSON.stringify({ command: "keryx   harness\nwave" }))).toBe("keryx harness wave");
+  expect(describePendingCall("apply_patch", JSON.stringify({ patch: "x" }))).toBe("apply_patch");
+  expect(describePendingCall("shell_exec", "not json")).toBe("shell_exec");
+  const long = describePendingCall("shell_exec", JSON.stringify({ command: `echo ${"a".repeat(200)}` }));
+  expect(long.length).toBeLessThanOrEqual(60);
+  expect(long.endsWith("…")).toBe(true);
+});
+
+test("AC6: a row carries its marker, its state and its reason", () => {
+  expect(formatQueueRow(0, "next question", { kind: "turn" })).toBe("> q1 (1) next question — queued · waits for the current turn");
+  expect(formatQueueRow(1, "again", { kind: "approval", call: "rm -rf ~" })).toBe(
+    "> q2 (2) again — queued · waits for approval of: rm -rf ~",
+  );
+});
+
+test("AC6: the listing is the row text plus one line that explains Force", () => {
+  const wait = { kind: "approval", call: "keryx harness wave" } as const;
+  const lines = formatQueueListing(["one", "two"], wait);
+  expect(lines).toEqual([formatQueueRow(0, "one", wait), formatQueueRow(1, "two", wait), QUEUE_FORCE_HELP]);
+  expect(QUEUE_FORCE_HELP).toContain("[Force]");
+  expect(QUEUE_FORCE_HELP.includes("\n")).toBe(false);
+  expect(formatQueueListing([], { kind: "turn" })).toEqual(["main queue is empty."]);
 });

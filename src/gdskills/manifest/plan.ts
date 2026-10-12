@@ -38,7 +38,7 @@ import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
 import { resolveGlobs } from "./glob";
-import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ModuleKind } from "./manifest";
+import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
 export interface StackDetectionInput {
   tags: Record<string, boolean>;
@@ -290,79 +290,26 @@ function dependencyClosure(
   return result;
 }
 
-export async function planInstall(input: PlanInstallInput): Promise<InstallPlan> {
-  const { manifest, repoRoot } = input;
-  const target = input.target ?? DEFAULT_TARGET;
-  const withList = input.with ?? [];
-  const withoutList = input.without ?? [];
-  const matrix = input.matrix ?? generateCapabilityMatrix();
-  const errors: string[] = [];
+type ModuleSelection = {
+  componentEntries: PlanComponentEntry[];
+  closure: Set<string>;
+  selectedModuleIds: string[];
+};
 
-  const profile = manifest.profiles[input.profileId];
-  const stackInput: PlanStackInput =
-    input.stack === undefined
-      ? { source: "none", uncertain: true }
-      : { source: "provided", uncertain: input.stack.uncertain, inputsSha256: stackInputsSha256(input.stack) };
-
-  // F3: reject an unrecognised or unsupported `target` before it can either
-  // silently plan zero modules (every module's `targets` legitimately never
-  // names a bogus harness, so the per-module skip below would just produce
-  // an empty `ok: true` plan) or reach `skillsInstallStatePath` as a raw,
-  // unvalidated filename component.
-  if (!HARNESS_IDS.includes(target)) {
-    return {
-      schemaVersion: "1.0.0",
-      profile: input.profileId,
-      target,
-      stackInput,
-      components: [],
-      modules: [],
-      errors: [`unknown target "${target}" (not a recognised harness id)`],
-      ok: false,
-    };
-  }
-  if (!SUPPORTED_TARGETS.includes(target)) {
-    return {
-      schemaVersion: "1.0.0",
-      profile: input.profileId,
-      target,
-      stackInput,
-      components: [],
-      modules: [],
-      errors: [
-        `target "${target}" has no destination table in the v1 install-manifest yet ` +
-          `(supported targets: ${SUPPORTED_TARGETS.join(", ")})`,
-      ],
-      ok: false,
-    };
-  }
-
-  // F15: an unknown `--with`/`--without` id was previously silently ignored
-  // (it simply never matched anything in the module/component lookups
-  // below) — name it instead of pretending the flag had no effect.
-  for (const id of withList) {
-    if (manifest.modules[id] === undefined && manifest.components[id] === undefined) {
-      errors.push(`unknown id "${id}" passed to --with (not a module or component id in this manifest)`);
-    }
-  }
-  for (const id of withoutList) {
-    if (manifest.modules[id] === undefined && manifest.components[id] === undefined) {
-      errors.push(`unknown id "${id}" passed to --without (not a module or component id in this manifest)`);
-    }
-  }
-
-  if (profile === undefined) {
-    return {
-      schemaVersion: "1.0.0",
-      profile: input.profileId,
-      target,
-      stackInput,
-      components: [],
-      modules: [],
-      errors: [...errors, `unknown profile "${input.profileId}"`],
-      ok: false,
-    };
-  }
+/**
+ * The module-selection half of `planInstall`: which modules a profile selects for a
+ * given `--with`/`--without` pair. It pushes only selection errors (unknown
+ * component/module, dependency cycle, a `--without` that drops a dependency), so
+ * `planInstall` can run it again with other lists to ask whether an id changes the plan.
+ */
+function selectModules(
+  input: PlanInstallInput,
+  profile: ManifestProfile,
+  withList: readonly string[],
+  withoutList: readonly string[],
+  errors: string[],
+): ModuleSelection {
+  const { manifest } = input;
 
   // --- components ----------------------------------------------------------
   const declaredComponents = new Set(profile.components ?? []);
@@ -410,6 +357,7 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
   const candidateModuleIds = new Set<string>([...unconditionalModuleIds, ...includedComponentModuleIds]);
 
   const closure = dependencyClosure([...candidateModuleIds], manifest.modules, errors);
+
   // Dependencies must always be present once something that needs them is
   // included, regardless of defaultInstall.
   for (const id of closure) {
@@ -457,6 +405,113 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
   }
 
   selectedModuleIds = [...new Set(selectedModuleIds)].sort();
+  return { componentEntries, closure, selectedModuleIds };
+}
+
+export async function planInstall(input: PlanInstallInput): Promise<InstallPlan> {
+  const { manifest, repoRoot } = input;
+  const target = input.target ?? DEFAULT_TARGET;
+  const withList = input.with ?? [];
+  const withoutList = input.without ?? [];
+  const matrix = input.matrix ?? generateCapabilityMatrix();
+  const errors: string[] = [];
+
+  const profile = manifest.profiles[input.profileId];
+  const stackInput: PlanStackInput =
+    input.stack === undefined
+      ? { source: "none", uncertain: true }
+      : { source: "provided", uncertain: input.stack.uncertain, inputsSha256: stackInputsSha256(input.stack) };
+
+  // F3: reject an unrecognised or unsupported `target` before it can either
+  // silently plan zero modules (every module's `targets` legitimately never
+  // names a bogus harness, so the per-module skip below would just produce
+  // an empty `ok: true` plan) or reach `skillsInstallStatePath` as a raw,
+  // unvalidated filename component.
+  if (!HARNESS_IDS.includes(target)) {
+    return {
+      schemaVersion: "1.0.0",
+      profile: input.profileId,
+      target,
+      stackInput,
+      components: [],
+      modules: [],
+      errors: [`unknown target "${target}" (not a recognised harness id)`],
+      ok: false,
+    };
+  }
+  if (!SUPPORTED_TARGETS.includes(target)) {
+    return {
+      schemaVersion: "1.0.0",
+      profile: input.profileId,
+      target,
+      stackInput,
+      components: [],
+      modules: [],
+      errors: [
+        `target "${target}" has no destination table in the v1 install-manifest yet ` +
+          `(supported targets: ${SUPPORTED_TARGETS.join(", ")})`,
+      ],
+      ok: false,
+    };
+  }
+
+  if (profile === undefined) {
+    return {
+      schemaVersion: "1.0.0",
+      profile: input.profileId,
+      target,
+      stackInput,
+      components: [],
+      modules: [],
+      errors: [...errors, `unknown profile "${input.profileId}"`],
+      ok: false,
+    };
+  }
+
+  // --- selection -----------------------------------------------------------
+  const { componentEntries, selectedModuleIds } = selectModules(input, profile, withList, withoutList, errors);
+
+  // F15 + flow 365 AC2: an id that is unknown, or that cannot change THIS
+  // profile's plan, fails the plan and names what the planner accepts. "Cannot
+  // change the plan" is decided by effect, not by a static id list: the
+  // selection is run again with the id alone and compared with the run without
+  // it. A `--without` is judged against the selection for `withList`, a `--with`
+  // against the selection with no flags at all, so a variant that itself fails
+  // (the dependency refusal) counts as a change — the real plan reports that
+  // error anyway. Each id is judged alone, so `--without lang:x --without <its
+  // module>` is not flagged as mutually redundant: a module of a component that
+  // is itself an effective `--without` is accepted as its companion.
+  const selectionKey = (withIds: readonly string[], withoutIds: readonly string[]): string => {
+    const variantErrors: string[] = [];
+    const variant = selectModules(input, profile, withIds, withoutIds, variantErrors);
+    return `${variantErrors.join("\n")}\u0000${variant.selectedModuleIds.join(",")}`;
+  };
+  const baseWithout = selectionKey(withList, []);
+  const baseWith = selectionKey([], []);
+  const changesWithout = (id: string): boolean => selectionKey(withList, [id]) !== baseWithout;
+  const changesWith = (id: string): boolean => selectionKey([id], []) !== baseWith;
+  const knownIds = [...new Set([...Object.keys(manifest.components), ...Object.keys(manifest.modules)])].sort();
+  const isCompanionModule = (id: string): boolean =>
+    withoutList.some(
+      (componentId) => manifest.components[componentId]?.modules.includes(id) === true && changesWithout(componentId),
+    );
+  const checkIds = (flag: "--with" | "--without", ids: readonly string[]): void => {
+    const effective = flag === "--with" ? changesWith : (id: string) => changesWithout(id) || isCompanionModule(id);
+    let valid: string[] | undefined;
+    for (const id of ids) {
+      const known = manifest.modules[id] !== undefined || manifest.components[id] !== undefined;
+      if (known && effective(id)) continue;
+      valid ??= knownIds.filter(effective);
+      errors.push(
+        known
+          ? `id "${id}" passed to ${flag} cannot change the plan for profile "${input.profileId}" ` +
+              `(valid ${flag} ids for this profile: ${valid.join(", ")})`
+          : `unknown id "${id}" passed to ${flag} (valid ${flag} ids for profile "${input.profileId}": ${valid.join(", ")})`,
+      );
+    }
+  };
+  checkIds("--with", withList);
+  checkIds("--without", withoutList);
 
   const modules: PlanModuleEntry[] = [];
   for (const moduleId of selectedModuleIds) {

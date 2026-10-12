@@ -47,7 +47,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/settings` | Every setting in one place, each with its On/Off or value buttons. |
 | `/model` | Switch the model. |
 | `/models` | Pick a model for the current provider (numbered menu). |
-| `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. |
+| `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides. |
 | `/think` | Expand the last reasoning block — /think [auto\|expand\|hide\|collapse]. |
 | `/reasoning` | Show or set reasoning effort — /reasoning [off\|minimal\|low\|medium\|high\|xhigh\|max]. |
 
@@ -64,11 +64,14 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/new` | Start a new session (old kept on disk). |
 | `/clear` | New session (alias of /new). |
 | `/compact` | Compact model context — /compact [focus] (archive kept). |
+| `/trail` | The tool calls this session recorded (what stays when older rounds leave the request) — /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP]. |
+| `/notes` | The notes the model keeps for itself (the facts that survive older rounds) — /notes [key]. |
 | `/rewind` | Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files\|history\|both]]; snapshots cover the work tree only. |
 | `/copy` | Copy the newest transcript block to the clipboard. |
 | `/expand` | Expand the last tool output block. |
 | `/status` | Show session identity, context window, limits, workspaces, and flows. |
 | `/queue` | Manage the main queue — /queue <remove\|edit\|force> [N] (N = qN position, default 1). |
+| `/tasks` | List supervised shell tasks — /tasks [output <task_id> [cursor] \| kill <task_id>]. |
 | `/interrupt` | Interrupt the running main agent turn. |
 | `/exit` | Leave the shell (/quit works too). |
 | `/game` | Games against the model — /game [seconds] raises the model-turn deadline. |
@@ -92,7 +95,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `keryx flow` | Agent-first flow lifecycle (Task Manager). |
 | `keryx job` | Agent-first job packages (job-orchestrator state, steps, documents). |
-| `keryx review` | Managed review packages and lightweight report-only review mode. |
+| `keryx review` | Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands. |
 
 | Shell command | Summary |
 |---|---|
@@ -105,6 +108,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/scenarios` | Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked. |
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
 | `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
+| `/flow` | Show a flow's origin, or set it with a reason — /flow origin [<id>] \| /flow origin <id> <kind> --reason "...". |
 | `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
 | `/contract` | Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev. |
 | `/triage` | Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev. |
@@ -120,25 +124,37 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | CLI command | Summary |
 |---|---|
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
-| `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
+| `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove; `add --digest` makes a GitHub and board digest that `keryx serve` sends to Telegram. |
 | `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
+| `keryx permissions` | The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
+| `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). A question also takes your own text: the last row "Свой ответ…" in the shell, the "✍ Свой ответ" button in Telegram, and Tab after an option adds a typed reason. |
+| `keryx intake` | GitHub work intake: tickets, review requests, failed CI, PR comments and board movement as cards in Telegram; status, pause, poll by hand, and a usefulness report. |
+| `keryx research` | Part 1 materials: sync refreshes the -latest counts, the text-free decisions export and the status page next to the catalog; no commit, only when the content changed. |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
+| `keryx remote` | Preview how Telegram replies are rendered (tables, lists, rules) in every mode, with no network: format-sample. |
 
 | Shell command | Summary |
 |---|---|
 | `/triggers` | Declared triggers: last outcome, spend, reservations — run one now. |
 | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
+| `/autoreview` | Autonomous PR review with nobody at the keyboard: start, list, stop, arbiter — phase, rounds and tokens in the sidebar; arbiter lists what the question arbiter decided. |
 | `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
+| `/permissions` | The saved shell rules (what Always remembered): honoured or not, session grants — remove one. |
 | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
-| `/governance` | Show the last governance report, or run one in the background. |
+| `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
+| `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row). |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
-| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
+| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. |
+| `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
+| `/intake` | GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status\|list\|pause\|resume\|poll]. |
+| `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |
+| `/remote-policy` | Telegram defaults for a turn started there: mode ask\|trust, run limit, approval wait. Never changes the shell's /mode. |
 
 ## External agents, ACP and MCP
 

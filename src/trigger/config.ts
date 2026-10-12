@@ -48,6 +48,8 @@ import path from "node:path";
 import { readConfigFile } from "../lib/config-dir";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import type { BinaryPin } from "./granted-binary";
+import { type DigestConfig, digestConfigProblems, normalizeDigestConfig } from "./digest-config";
+import { type ReviewConfig, normalizeReviewConfig, reviewConfigProblems } from "./review-config";
 import { grantedToolProblems } from "./granted-tools";
 
 // ---------------------------------------------------------------------------
@@ -123,6 +125,17 @@ export interface AgentTaskAction {
   readonly dispatch: TriggerDispatch;
   readonly grants: AgentTaskGrants;
   readonly report: { readonly keep: number };
+  /**
+   * Flow 389: present only on the scheduled digest — an `agent-task` that runs the
+   * built-in read-only digest (`src/scheduler/`) instead of a free-form model turn.
+   * Covered by `confirmedHash` like every other field.
+   */
+  readonly digest?: DigestConfig;
+  /**
+   * Flow 424: present only on a scheduled autonomous review — an `agent-task` that runs
+   * `keryx review run --autonomous` on one pull request. Covered by `confirmedHash`.
+   */
+  readonly review?: ReviewConfig;
 }
 
 /**
@@ -469,6 +482,9 @@ function agentTaskProblems(raw: Record<string, unknown>): string[] {
       problems.push("action.report.keep: must be an integer from 1 to 1000 when present");
     }
   }
+  // Flow 389: the optional digest block, validated against this action's own grants.
+  problems.push(...digestConfigProblems(raw.digest, grants !== null && typeof grants === "object" && !Array.isArray(grants) ? (grants as Record<string, unknown>) : undefined));
+  problems.push(...reviewConfigProblems(raw.review, raw as { digest?: unknown }));
   return problems;
 }
 
@@ -698,6 +714,8 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
       ...(grants.account !== undefined ? { account: grants.account } : {}),
     },
     report: { keep: action.report?.keep ?? DEFAULT_AGENT_TASK_REPORT_KEEP },
+    ...(action.digest !== undefined ? { digest: normalizeDigestConfig(action.digest) as DigestConfig } : {}),
+    ...(action.review !== undefined ? { review: normalizeReviewConfig(action.review) as ReviewConfig } : {}),
   };
 }
 

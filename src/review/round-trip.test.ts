@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { completeManagedReview, createManagedReviewPackage, findingDispositionState } from "./managed";
+import { readyResearchFixture } from "./research.test-helpers";
 import type { ManagedReviewInput, StructuredReviewFinding } from "./types";
 
 const REPO_ROOT = process.cwd();
@@ -123,6 +124,7 @@ async function round1Findings(
     reviewId: "2026-08-29-round-1",
     target: { kind: "report", ref: "review.md" },
     reportText: ROUND_1_REPORT,
+    research: readyResearchFixture(["review-security-code", "review-testing-practices"], ["F-001", "F-002"]),
     now: new Date("2026-08-29T10:00:00Z"),
     ...over,
   });

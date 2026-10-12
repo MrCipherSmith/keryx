@@ -4,7 +4,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { OUTCOME_AUTHOR_READINGS } from "../flow/service";
+import { ORIGIN_KINDS, OUTCOME_AUTHOR_READINGS } from "../flow/service";
 import { writeFileAtomic } from "../lib/fs";
 import { corpusFingerprint, listFlowPackages } from "./corpus";
 import { OUTCOME_VERDICTS } from "./types";
@@ -59,6 +59,12 @@ function indexProblem(value: unknown): string | null {
     if (outcome.observed === true && outcome.verdict === null) return "index.json holds an observed intent without a verdict";
     // Optional, so an index written before the field existed stays valid; present, it must be one of the three readings.
     if (intent.outcomeAuthor !== undefined && !(OUTCOME_AUTHOR_READINGS as readonly string[]).includes(intent.outcomeAuthor as string)) return "index.json holds an intent with an unknown outcome author";
+    // Optional too: an origin an index holds has one of the three kinds and string quote and source.
+    if (intent.origin !== undefined) {
+      const origin = intent.origin;
+      if (!isRecord(origin) || !(ORIGIN_KINDS as readonly string[]).includes(origin.kind as string)) return "index.json holds an intent with an unknown origin";
+      if ((origin.quote !== undefined && typeof origin.quote !== "string") || (origin.source !== undefined && typeof origin.source !== "string")) return "index.json holds an intent with an unusable origin";
+    }
   }
   return null;
 }

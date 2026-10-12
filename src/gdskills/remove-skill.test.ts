@@ -494,6 +494,39 @@ describe("flow 360 review F-002 / F-007: a registry entry is trusted only for it
     expect(await pathExists(path.join(root, ".metaproject", "project-skills", "review", "house-api", "SKILL.md"))).toBe(true);
   });
 
+  test("F-010: a registry entry whose name is `..` or `.` is refused, not acted on", async () => {
+    // Identity of an unregistered skill is read from exact `readdir` names, so only a
+    // registered entry can carry a dot name into the package path: `<module>/..` would
+    // be the project-skills root. The name half of the segment check is what stops it.
+    for (const dotName of ["..", "."]) {
+      const root = await makeProject([{ module: "review", name: "house-api" }]);
+      await editRegistry(root, (registry) =>
+        registry.map((entry) => ({ ...entry, name: dotName, path: `.metaproject/project-skills/review/${dotName}` })),
+      );
+
+      await expectRefusedUntouched(root, `review/${dotName}`, /registry entry "review\/\.+" is not a <module>\/<name> pair of plain path segments/);
+
+      expect(await pathExists(path.join(root, ".metaproject", "project-skills", "review", "house-api", "SKILL.md"))).toBe(true);
+    }
+  });
+
+  test("a registry path with a trailing slash is still the entry's own package directory", async () => {
+    const root = await makeProject([
+      { module: "review", name: "alpha" },
+      { module: "review", name: "beta" },
+    ]);
+    await editRegistry(root, (registry) =>
+      registry.map((entry) => (entry.name === "alpha" ? { ...entry, path: ".metaproject/project-skills/review/alpha/" } : entry)),
+    );
+
+    const result = await removeProjectSkill(root, { skill: "review/alpha" });
+
+    expect(statuses(result)).toMatchObject({ registry: "removed", catalog: "removed", package: "removed" });
+    expect(await pathExists(path.join(root, ".metaproject", "project-skills", "review", "alpha"))).toBe(false);
+    expect(await pathExists(path.join(root, ".metaproject", "project-skills", "review", "beta", "SKILL.md"))).toBe(true);
+    expect(await registryKeys(root)).toEqual(["review/beta"]);
+  });
+
   test("F-010: an unregistered name is addressable only as two plain segments", async () => {
     const root = await makeProject([{ module: "review", name: "house-api" }]);
     await editRegistry(root, () => []);

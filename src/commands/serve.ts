@@ -32,6 +32,8 @@
 // damaged file quotes a field name that came off disk.
 
 import { randomUUID } from "node:crypto";
+import { loadRemoteConfig } from "../remote/config";
+import { formatPolicyDuration, loadPosture } from "./remote-policy-command";
 import { sanitizeForDisplay } from "../lib/project-registry";
 import {
   DEFAULT_SERVE_BIND_ADDRESS,
@@ -59,6 +61,9 @@ import { countPending } from "../lib/serve-approvals-store";
 import { assembleSubmitTurn } from "../lib/serve-runner";
 import { localMachineName } from "../remote/naming";
 import { openRemoteService } from "../remote/service";
+import { createServeDigestTicker } from "./serve-digest";
+import { createServeResearchSync } from "./serve-research-sync";
+import { createServeIntake } from "./serve-intake";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 // ---------------------------------------------------------------------------
@@ -282,6 +287,28 @@ async function runServe(args: string[]): Promise<void> {
     console.log(`    ${style.dim("channels ready: connect Telegram from the shell with /channels")}`);
   }
 
+  // Flow 389: scheduled digests fire from here, not from an OS timer. The first tick is
+  // immediate, so a slot missed while serve was down is caught up once.
+  const digestTicker = createServeDigestTicker({
+    hub: () => remoteService.hub(),
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+  digestTicker.start();
+
+  // Flow 403: GitHub work reaches Telegram as cards from here. Off for a project until it has an enabled intake config.
+  const intake = createServeIntake({
+    hub: () => remoteService.hub(),
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+  intake.start();
+
+  // Flow 404: the Part 1 materials sync runs once a day from here, for a project that opted in with
+  // `keryx research sync --schedule daily`. A failed run is a notice line, never a stop of serve.
+  const researchSync = createServeResearchSync({
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+  researchSync.start();
+
   await new Promise<void>((resolve) => {
     let draining = false;
     const finish = (): void => {
@@ -290,8 +317,8 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void listener
-        .drain()
+      void Promise.all([digestTicker.stop(), intake.stop(), researchSync.stop()])
+        .then(() => listener.drain())
         .then(() => remoteService.stop())
         .then(() => {
         console.log(`  ${style.green(symbols.ok)} stopped`);
@@ -402,6 +429,12 @@ function runStatus(args: string[]): void {
 
   const credentialState = credential.status === "ok" ? "present" : credential.status;
   const fingerprint = credential.status === "ok" ? credentialFingerprint(credential.record) : undefined;
+  // Flow 396: the saved defaults for a turn that came from Telegram. Present only when Telegram is set
+  // up. A running shell's own `/mode` overrides the mode default, and serve cannot see that shell.
+  const telegram = loadPosture();
+  // How many people may use the topic: a count, never the ids themselves.
+  const remoteConfig = telegram === undefined ? undefined : loadRemoteConfig();
+  const allowedUsers = remoteConfig?.ok === true ? remoteConfig.value.allowedUserIds.length : undefined;
 
   if (asJson) {
     // No token, no credential id, no salt, no hash: a fingerprint is the most a
@@ -412,6 +445,18 @@ function runStatus(args: string[]): void {
           ...report,
           credential: credentialState,
           ...(fingerprint === undefined ? {} : { credentialFingerprint: fingerprint }),
+          ...(telegram === undefined
+            ? {}
+            : {
+                telegramPermissions: {
+                  defaultMode: telegram.defaultMode,
+                  runTimeoutMs: telegram.runTimeoutMs,
+                  approvalTimeoutMs: telegram.approvalTimeoutMs,
+                  savedRules: telegram.savedRules,
+                  ...(allowedUsers !== undefined ? { allowedUsers } : {}),
+                  shellModeOverridesDefault: true,
+                },
+              }),
           // NOT stripped, deliberately, and for the reason recorded on the R4a
           // JSON projection: JSON escapes a control character rather than
           // emitting it, so the consumer receives valid JSON and decides for
@@ -440,6 +485,12 @@ function runStatus(args: string[]): void {
   }
   console.log(`  credential: ${credentialState}${fingerprint === undefined ? "" : ` (fingerprint ${fingerprint})`}`);
   console.log(`  pending approvals: ${report.pendingApprovals}`);
+  if (telegram !== undefined) {
+    console.log(
+      `  telegram:   default mode ${telegram.defaultMode}, run limit ${formatPolicyDuration(telegram.runTimeoutMs)}, approval wait ${formatPolicyDuration(telegram.approvalTimeoutMs)}, ${telegram.savedRules} saved shell rule${telegram.savedRules === 1 ? "" : "s"}${allowedUsers !== undefined ? `, ${allowedUsers} allowed user${allowedUsers === 1 ? "" : "s"}` : ""}`,
+    );
+    console.log("              a running shell's /mode overrides the default mode; /remote-policy changes the defaults");
+  }
   if (report.message !== undefined) {
     console.log("");
     console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(report.message)}`);

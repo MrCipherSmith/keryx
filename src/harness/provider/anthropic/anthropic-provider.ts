@@ -8,14 +8,13 @@
 // this module's boundary.
 //
 // Determinism / offline: `fetch` is always injected via `deps.fetch` (the global
-// is never touched); no `Date.now`/`Math.random` (a clock is injectable via
-// `deps.clock` but unused on the offline paths). Every yielded event/error is
+// is never touched); retry dates use `deps.clock` (or Date.now); no `Math.random`. Every yielded event/error is
 // scrubbed of the credential before it leaves this module, and nothing is ever
 // persisted (storage-off).
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 // A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
-import { retryableFor } from "../provider-port";
+import { isTransportFailure, retryableFor, withRetryAfter } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
   NormalizedError,
@@ -341,9 +340,95 @@ function parseToolInput(rawArguments: string): Record<string, unknown> {
   }
 }
 
-/** Merge Anthropic's split token counts into a single exact {@link NormalizedUsage}. */
-function mergeUsage(inputTokens: number | undefined, outputTokens: number | undefined): NormalizedUsage {
+/** Anthropic allows at most 4 `cache_control` breakpoints per request. */
+const MAX_CACHE_BREAKPOINTS = 4;
+const CACHE_CONTROL = { type: "ephemeral" } as const;
+
+/** Block types Anthropic refuses `cache_control` on (or ignores as empty). */
+function isCacheableBlock(block: Record<string, unknown>): boolean {
+  const type = block.type;
+  if (type === "thinking" || type === "redacted_thinking") {
+    return false;
+  }
+  return !(type === "text" && (typeof block.text !== "string" || block.text.length === 0));
+}
+
+/**
+ * Place ephemeral `cache_control` breakpoints (flow 387 T15): the system
+ * prompt, the last tool definition, and the last two messages' final block —
+ * 4 breakpoints at most, so each round reads the previous round's prefix from
+ * cache. Placement is a pure function of the inputs (no counters, no clocks), so
+ * the prefix stays byte-stable across rounds. Returns new objects; the inputs
+ * are never mutated.
+ */
+export function withCacheBreakpoints(
+  system: string,
+  messages: readonly Record<string, unknown>[],
+  tools: readonly Record<string, unknown>[] | undefined,
+): {
+  system: string | Record<string, unknown>[];
+  messages: Record<string, unknown>[];
+  tools: Record<string, unknown>[] | undefined;
+} {
+  let budget = MAX_CACHE_BREAKPOINTS;
+  const cachedTools = tools === undefined ? undefined : [...tools];
+  if (cachedTools !== undefined && cachedTools.length > 0 && budget > 0) {
+    const lastIndex = cachedTools.length - 1;
+    cachedTools[lastIndex] = { ...cachedTools[lastIndex], cache_control: CACHE_CONTROL };
+    budget -= 1;
+  }
+  let cachedSystem: string | Record<string, unknown>[] = system;
+  if (system.length > 0 && budget > 0) {
+    cachedSystem = [{ type: "text", text: system, cache_control: CACHE_CONTROL }];
+    budget -= 1;
+  }
+  const out = [...messages];
+  let placed = 0;
+  for (let i = out.length - 1; i >= 0 && placed < 2 && budget > 0; i -= 1) {
+    const message = out[i] as Record<string, unknown>;
+    const content = message.content;
+    const blocks: Record<string, unknown>[] =
+      typeof content === "string"
+        ? [{ type: "text", text: content }]
+        : Array.isArray(content)
+          ? (content as Record<string, unknown>[]).map((block) => ({ ...block }))
+          : [];
+    const last = blocks[blocks.length - 1];
+    if (last === undefined || !isCacheableBlock(last)) {
+      continue;
+    }
+    last.cache_control = CACHE_CONTROL;
+    out[i] = { ...message, content: blocks };
+    placed += 1;
+    budget -= 1;
+  }
+  return { system: cachedSystem, messages: out, tools: cachedTools };
+}
+
+/**
+ * Merge Anthropic's split token counts into a single exact {@link NormalizedUsage}.
+ * Anthropic's `input_tokens` EXCLUDES cache reads/writes, so `inputTokens` here is
+ * the full context size (`input + cache_read + cache_creation`, flow 387 T15) and
+ * `cacheReadTokens` / `cacheWriteTokens` are SUBSETS of it — the same shape the
+ * OpenAI adapter reports, so cost/usage consumers never double-count.
+ */
+function mergeUsage(
+  rawInputTokens: number | undefined,
+  outputTokens: number | undefined,
+  cacheReadTokens?: number,
+  cacheWriteTokens?: number,
+): NormalizedUsage {
   const usage: NormalizedUsage = { exact: true };
+  const inputTokens =
+    rawInputTokens === undefined && cacheReadTokens === undefined && cacheWriteTokens === undefined
+      ? undefined
+      : (rawInputTokens ?? 0) + (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
+  if (cacheReadTokens !== undefined) {
+    usage.cacheReadTokens = cacheReadTokens;
+  }
+  if (cacheWriteTokens !== undefined) {
+    usage.cacheWriteTokens = cacheWriteTokens;
+  }
   if (inputTokens !== undefined) {
     usage.inputTokens = inputTokens;
   }
@@ -357,17 +442,12 @@ function mergeUsage(inputTokens: number | undefined, outputTokens: number | unde
 }
 
 /** Classify a non-2xx HTTP response into the neutral error taxonomy. */
-function classifyHttpError(status: number, headers: Headers): NormalizedError {
+function classifyHttpError(status: number, _headers: Headers): NormalizedError {
   if (status === 401) {
     return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
   }
   if (status === 429) {
     const error: NormalizedError = { kind: "rate_limit", retryable: retryableFor("rate_limit", true), message: "" };
-    const retryAfter = headers.get("retry-after");
-    const seconds = retryAfter === null ? undefined : Number.parseInt(retryAfter, 10);
-    if (seconds !== undefined && Number.isFinite(seconds)) {
-      error.retryAfterMs = seconds * 1000;
-    }
     return error;
   }
   if (status === 529) {
@@ -573,23 +653,25 @@ export class AnthropicProvider implements ProviderPort {
       request.options?.reasoning,
       request.budget.maxOutputTokens,
     );
+    // Prompt caching (flow 387 T15): breakpoints on tools / system / last messages.
+    const cached = withCacheBreakpoints(
+      request.systemInstruction,
+      toAnthropicMessages(request.messages),
+      request.tools?.map((tool) => ({
+        name: tool.name,
+        ...(tool.description !== undefined ? { description: tool.description } : {}),
+        input_schema: tool.inputSchema,
+      })),
+    );
     const payload: Record<string, unknown> = {
       model: request.modelId,
       max_tokens: thinkingParams.maxTokens,
-      system: request.systemInstruction,
-      messages: toAnthropicMessages(request.messages),
+      system: cached.system,
+      messages: cached.messages,
       stream: true,
       ...(thinkingParams.thinking !== undefined ? { thinking: thinkingParams.thinking } : {}),
       ...(thinkingParams.outputConfig !== undefined ? { output_config: thinkingParams.outputConfig } : {}),
-      ...(request.tools !== undefined
-        ? {
-            tools: request.tools.map((tool) => ({
-              name: tool.name,
-              ...(tool.description !== undefined ? { description: tool.description } : {}),
-              input_schema: tool.inputSchema,
-            })),
-          }
-        : {}),
+      ...(cached.tools !== undefined ? { tools: cached.tools } : {}),
     };
     const init: RequestInit = {
       method: "POST",
@@ -616,7 +698,7 @@ export class AnthropicProvider implements ProviderPort {
 
     // AC4 provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
-      const error = classifyHttpError(response.status, response.headers);
+      const error = withRetryAfter(classifyHttpError(response.status, response.headers), response.headers, this.deps.clock);
       let providerMessage = `Anthropic API returned HTTP ${response.status}`;
       try {
         const parsed = asRecord(JSON.parse(await response.text()));
@@ -655,6 +737,7 @@ export class AnthropicProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       });
       return;
     }
@@ -673,6 +756,8 @@ export class AnthropicProvider implements ProviderPort {
     const bodies: EventBody[] = [];
     const blocks = new Map<number, BlockState>();
     let inputTokens: number | undefined;
+    let cacheReadTokens: number | undefined;
+    let cacheWriteTokens: number | undefined;
     let sawStart = false;
     let sawStop = false;
     let receivedAnyChunk = false;
@@ -694,9 +779,10 @@ export class AnthropicProvider implements ProviderPort {
           return;
         }
         yield errorEvent({
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
+          kind: isTransportFailure(cause) ? "unavailable" : "malformed",
+          retryable: isTransportFailure(cause),
           message: redact(`Anthropic SSE body read failed: ${String(cause)}`),
+          ...(isTransportFailure(cause) ? { detail: { incompleteStream: true } } : {}),
         });
         return;
       }
@@ -742,7 +828,10 @@ export class AnthropicProvider implements ProviderPort {
         switch (asString(data.type)) {
           case "message_start": {
             sawStart = true;
-            inputTokens = asNumber(asRecord(asRecord(data.message).usage).input_tokens);
+            const startUsage = asRecord(asRecord(data.message).usage);
+            inputTokens = asNumber(startUsage.input_tokens);
+            cacheReadTokens = asNumber(startUsage.cache_read_input_tokens);
+            cacheWriteTokens = asNumber(startUsage.cache_creation_input_tokens);
             bodies.push({ kind: "model_start" });
             break;
           }
@@ -856,8 +945,16 @@ export class AnthropicProvider implements ProviderPort {
             break;
           }
           case "message_delta": {
-            const outputTokens = asNumber(asRecord(data.usage).output_tokens);
-            bodies.push({ kind: "usage_update", usage: mergeUsage(inputTokens, outputTokens) });
+            const deltaUsage = asRecord(data.usage);
+            const outputTokens = asNumber(deltaUsage.output_tokens);
+            // message_delta may restate the cumulative input/cache counts; prefer them when present.
+            inputTokens = asNumber(deltaUsage.input_tokens) ?? inputTokens;
+            cacheReadTokens = asNumber(deltaUsage.cache_read_input_tokens) ?? cacheReadTokens;
+            cacheWriteTokens = asNumber(deltaUsage.cache_creation_input_tokens) ?? cacheWriteTokens;
+            bodies.push({
+              kind: "usage_update",
+              usage: mergeUsage(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens),
+            });
             break;
           }
           case "message_stop": {
@@ -938,6 +1035,7 @@ export class AnthropicProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("Anthropic SSE stream ended mid-record (torn stream)"),
+        detail: { incompleteStream: true },
       };
     } else if (!receivedAnyChunk) {
       // A 200 with literally zero bytes never sets `sawStart` and would
@@ -947,12 +1045,14 @@ export class AnthropicProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       };
     } else if (sawStart && !sawStop) {
       malformed = {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("Anthropic SSE stream ended before message_stop (truncated stream)"),
+        detail: { incompleteStream: true },
       };
     }
 

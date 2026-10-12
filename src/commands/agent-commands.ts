@@ -14,6 +14,7 @@
 // (see {@link describeCommand} / {@link commandsForMode}).
 
 import { EXTERNAL_AGENTS, canonicalExternalAgentId, getExternalAgent } from "../harness/external/registry";
+import { describeRoundLimitSplit } from "./round-limit";
 
 /** The two shell modes. `agent` has tools; `chat` is a plain conversation. */
 export type ShellMode = "chat" | "agent";
@@ -187,10 +188,50 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 399: post the session's last messages to the remote-control topic. Needs remote control
+    // on; the readline agent REPL has no topic and says so.
+    name: "/history",
+    description: "Post the last messages of this session to the Telegram topic: /history [N], 1 to 20",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 377: the machine's Telegram connection. Connect needs the hidden token entry of the
     // full-screen shell; the readline agent REPL prints the state and says where to connect.
     name: "/channels",
     description: "Connect, test or disconnect Telegram for this machine: /channels [status]",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 403: the GitHub work intake. The full-screen shell opens a modal; the readline REPL prints
+    // the same status as text.
+    name: "/intake",
+    description: "GitHub work intake: cards waiting for a decision, pause, poll by hand: /intake [status|list|pause|resume|poll]",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 395: how replies are written for Telegram (tables, lists, the fallback chain). Also a
+    // row of /settings and a line of /channels; works in the readline REPL as text.
+    name: "/rendering",
+    description: "How Telegram replies are written: /rendering [auto|rich|html|plain]",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 396: the saved defaults for a turn that came from Telegram (mode, run limit, approval wait).
+    // It never changes the shell's own mode; the full-screen shell also updates its running copy.
+    name: "/remote-policy",
+    description: "Telegram defaults: /remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]. Never changes the shell's /mode",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 393: the operator's view of the working memory. Both are plain text, so they run in the
+    // readline REPL and the full-screen shell alike.
+    name: "/trail",
+    description: "The tool calls this session recorded: /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP]",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/notes",
+    description: "The notes the model keeps for itself: /notes [key]",
     modes: AGENT_ONLY,
   },
   {
@@ -204,7 +245,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
     // background run and the report modal all need the OpenTUI surface.
     name: "/governance",
-    description: "Show the last governance report, or run one in the background",
+    description: "Flows with summary and effect — check and complete them; the governance report",
     modes: AGENT_ONLY,
   },
   {
@@ -237,10 +278,30 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 424 (AC10): the unattended pull request review. Starts `keryx review run --autonomous` as
+    // a separate process; the sidebar shows its phase, rounds, tokens and last automatic answer.
+    name: "/autoreview",
+    description: "Autonomous PR review: /autoreview start <URL> [--budget-minutes N] [--budget-tokens N], list, stop, arbiter",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 369 (R4d): calls a remote `keryx serve` turn is waiting on. Allow or deny
     // is one call, once; the local answer path of the serve approval broker.
     name: "/approvals",
     description: "Pending remote approvals: summary, scope, consequence, expiry — allow or deny one call, once",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 396: the saved shell rules an Always answer leaves behind (also from Telegram). Listed and
+    // removed here; never from a chat.
+    name: "/permissions",
+    description: "The saved shell rules (what Always remembered): honoured or not, session grants; remove one",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
+    name: "/decisions",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer",
     modes: AGENT_ONLY,
   },
   {
@@ -296,6 +357,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // now inaccurate. TUI-only, same reasoning as `/conform`.
     name: "/staledocs",
     description: "List doc sections that likely went stale because of the working diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 390 (AC8): shows where a flow came from and sets it with a reason.
+    // TUI-only, a one-shot text surface like `/staledocs`; never a gate.
+    name: "/flow",
+    description: "Show a flow's origin, or set it — /flow origin [<id>] | /flow origin <id> <kind> --reason \"...\"",
     modes: AGENT_ONLY,
   },
   {
@@ -444,7 +512,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/mode",
-    description: "Show or switch the permission mode — /mode [ask|trust|auto]",
+    description: `Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: ${describeRoundLimitSplit()}`,
     // Chat mode has no tools, so there is nothing for a permission mode to gate.
     modes: AGENT_ONLY,
   },
@@ -479,6 +547,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // would produce output with nowhere to appear. The capability is also off by
     // default (flow 176) — a session without it gets a named refusal at run time,
     // never a missing command.
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/tasks",
+    description: "Shell tasks — /tasks, /tasks output <task_id> [cursor], /tasks kill <task_id>",
     modes: AGENT_ONLY,
   },
   {

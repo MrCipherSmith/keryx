@@ -579,7 +579,7 @@ describe("package names that are not already slugs", () => {
         ["review-house-api", "skipped", ".metaproject/project-skills/review/review-house-api"],
         ["review-logic", "skipped", ".metaproject/project-skills/review/review-logic"],
       ]);
-      expect(result.imported[0]?.reason).toBe("already exists; pass --force to overwrite");
+      expect(result.imported[0]?.reason).toBe("already exists; pass --force to overwrite, or run `keryx skills update` to refresh it from its origin");
       expect(result.imported[1]?.reason).toMatch(/bundled keryx skill/);
     }
     expect(await readFile(installed("review-house-api"), "utf8")).toBe(before);
@@ -1009,8 +1009,8 @@ describe("portableOriginRef", () => {
 const PROJECT_SLOT_PARAGRAPH = [
   "A reviewer that cites `<dir>/<name>.mdc` reads `.metaproject/rules/project/<dir>/<name>.mdc` when that file exists,",
   "and `.metaproject/rules/<dir>/<name>.mdc` otherwise. `keryx init`, `keryx update` and `keryx skills install` overwrite",
-  "rules/core with keryx's own rules and leave rules/project alone. `keryx review reviewers` lists each such reference",
-  "under `shadowedRules`.",
+  "rules/core with keryx's own rules (the manifest form of `skills install` skips files it has no record of) and leave",
+  "rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.",
 ].join("\n");
 
 describe("rules the imported skills cite", () => {

@@ -8,7 +8,7 @@ export {
   sessionDir,
 } from "./paths";
 
-export { compactMessages, indexOfKeepFrom, type CompactOptions, type CompactResult } from "./compact";
+export { compactMessages, compactSession, indexOfKeepFrom, type CompactOptions, type CompactResult } from "./compact";
 
 export {
   MAX_REMOTE_INTERVALS,
@@ -16,7 +16,6 @@ export {
   SESSION_SCHEMA_VERSION,
   TranscriptUnreadableError,
   UnknownSessionError,
-  compactSession,
   createSession,
   describeRemote,
   exportSessionMarkdown,

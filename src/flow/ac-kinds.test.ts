@@ -105,6 +105,8 @@ describe("rendering", () => {
 
   test("describeAcKind gives one line per record", () => {
     expect(describeAcKind({ kind: "exec", check: "bun test x" })).toBe("exec `bun test x`");
+    expect(describeAcKind({ kind: "exec", check: "c", sensitivity: "revert" })).toBe("exec `c` · sensitive: revert");
+    expect(describeAcKind({ kind: "invariant", check: "c", sensitivity: "mutation" })).toBe("invariant `c` · sensitive: mutation");
     expect(describeAcKind({ kind: "none", reason: "why" })).toBe("none — why");
     expect(describeAcKind({ kind: "judged" })).toBe("judged");
     expect(describeAcKind({ kind: "unclassified" })).toBe("unclassified");
@@ -204,5 +206,51 @@ describe("keryx flow ac kinds", () => {
     const flow = await createFlowService(deps()).get({ cwd: ROOT, id });
     expect(flow.acKinds?.["AC1"]).toEqual({ kind: "exec", check: "bun test src/a.test.ts" });
     expect(flow.acKinds?.["AC5"]).toEqual({ kind: "unclassified" });
+  });
+});
+
+// Flow 423: the optional sensitivity note on exec/invariant.
+describe("sensitivity note", () => {
+  const sens = (text: string) => parseAcKindText(text);
+  test("accepted on exec and invariant, every value, both separators", () => {
+    for (const kind of ["exec", "invariant"] as const) {
+      for (const value of ["revert", "mutation", "failure-scenario"] as const) {
+        for (const sep of ["·", ";", " · ", " ; "]) {
+          const parsed = sens(`x [verify: ${kind} \`bun test a\`${sep}sensitive: ${value}]`);
+          expect(parsed.error).toBeUndefined();
+          expect(parsed.record).toEqual({ kind, check: "bun test a", sensitivity: value });
+        }
+      }
+    }
+  });
+  test("the note is optional and old forms are unchanged", () => {
+    expect(sens("x [verify: exec `bun test a`]").record).toEqual({ kind: "exec", check: "bun test a" });
+    expect(sens("x [verify: judged]").record).toEqual({ kind: "judged" });
+  });
+  test("a note on judged or none is a parser error read as unclassified", () => {
+    for (const text of ["x [verify: judged · sensitive: revert]", "x [verify: none — why · sensitive: revert]", "x [verify: judged; sensitive: mutation]"]) {
+      const parsed = sens(text);
+      expect(parsed.error).toBeDefined();
+      expect(parsed.record).toEqual({ kind: "unclassified" });
+    }
+  });
+  test("unknown value, bad key and an empty note are parser errors", () => {
+    for (const text of [
+      "x [verify: exec `c` · sensitive: bogus]",
+      "x [verify: exec `c` · sensible: revert]",
+      "x [verify: exec `c` ·]",
+      "x [verify: exec `c` · sensitive: revert mutation]",
+    ]) {
+      const parsed = sens(text);
+      expect(parsed.error).toBeDefined();
+      expect(parsed.record).toEqual({ kind: "unclassified" });
+    }
+  });
+  test("the marker is stripped from the criterion text and the report counts proven and unproven", () => {
+    const body = "- AC1: a [verify: exec `c` · sensitive: revert]\n- AC2: b [verify: invariant `d`]\n";
+    expect(parseAcKinds(body).criteria[0]?.text).toBe("a");
+    const { report } = buildAcKindReport("1", body);
+    expect(report.sensitivity).toEqual({ proven: 1, unproven: 1, byValue: { revert: 1, mutation: 0, "failure-scenario": 0 } });
+    expect(readAcKindRecords(JSON.parse(JSON.stringify(report.criteria)))).toEqual(report.criteria);
   });
 });

@@ -76,10 +76,25 @@ export type BusyDispatchTarget =
    */
   | "remote-control"
   /**
+   * `/history` (flow 399): posts the session's last messages to the remote-control topic. It only
+   * reads the session and writes to the topic, so it works while a turn runs, like its sibling.
+   */
+  | "history"
+  /**
    * `/channels` (flow 377): connect, test or disconnect Telegram for this machine. It talks to
    * `keryx serve` and the user-global config, never to the main turn, so it works while one runs.
    */
   | "channels"
+  /**
+   * `/intake` (flow 403): the GitHub work intake. It reads the intake store and decides a card through
+   * the same door as a Telegram button, never touching the main turn, so it works while one runs.
+   */
+  | "intake"
+  /**
+   * `/remote-policy` (flow 396): the saved Telegram defaults. It edits a file and the bridge's own copy;
+   * it never touches the main turn or the shell's mode, so it works while a turn runs.
+   */
+  | "remote-policy"
   /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
@@ -87,10 +102,25 @@ export type BusyDispatchTarget =
    */
   | "schedules"
   /**
+   * `/autoreview` (flow 424): start, list and stop an autonomous pull request review. It starts and
+   * signals a separate process and reads its run files; it never touches the main turn.
+   */
+  | "autoreview"
+  /**
    * `/approvals` (flow 369): the pending remote approvals. Listing is read-only and an
    * answer is one call, once, in the store; neither touches the main turn.
    */
   | "approvals"
+  /**
+   * `/permissions` (flow 396): the saved shell rules. Listing and removing one edit a file on disk and
+   * the shell's own rule set; neither touches the main turn.
+   */
+  | "permissions"
+  /**
+   * `/decisions` (flow 392): the recommendation journal's report. A read-only look at
+   * a file on disk; it never touches the main turn.
+   */
+  | "decisions"
   /**
    * `/external-diff` (flow 370): claude write runs awaiting review. Landing cuts a new local
    * branch in a throwaway worktree, so it never touches the main turn's checkout.
@@ -135,9 +165,15 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/product") return "product";
   if (commandName === "/reviews") return "reviews";
   if (commandName === "/remote-control") return "remote-control";
+  if (commandName === "/history") return "history";
   if (commandName === "/channels") return "channels";
+  if (commandName === "/intake") return "intake";
+  if (commandName === "/remote-policy") return "remote-policy";
   if (commandName === "/schedules") return "schedules";
+  if (commandName === "/autoreview") return "autoreview";
   if (commandName === "/approvals") return "approvals";
+  if (commandName === "/permissions") return "permissions";
+  if (commandName === "/decisions") return "decisions";
   if (commandName === "/external-diff") return "external-diff";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
@@ -151,4 +187,21 @@ export function classifyBusyDispatch(params: {
   if (isBusyReadonlyCommand && isMcp) return "mcp";
   if (commandName !== undefined || line.startsWith("/")) return "deferred";
   return "not-a-command";
+}
+
+/**
+ * Commands that swap the session out from under the main turn and the questions queued behind it, so
+ * a deferred line of this kind is refused rather than queued: run later, it would rewrite the history
+ * those queued questions were typed against.
+ */
+export const BUSY_REFUSED_COMMANDS: ReadonlySet<string> = new Set(["/new", "/clear", "/resume"]);
+
+/** What `runLine` does with a line classified `"deferred"`: queue it for the turn's end, or refuse it. */
+export function deferredBusyAction(line: string, commandName: string | undefined): "queue" | "refuse" {
+  const name = (commandName ?? line.trim().split(/\s+/)[0] ?? "").toLowerCase();
+  return BUSY_REFUSED_COMMANDS.has(name) ? "refuse" : "queue";
+}
+
+export function queuedCommandNotice(position: number): string {
+  return `◇ main is busy — queued as q${position} (runs when the turn ends).`;
 }

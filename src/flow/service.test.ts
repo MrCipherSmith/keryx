@@ -423,6 +423,7 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "base-branch",
     "tasks",
     "owner",
+    "folder-committed",
     "review",
     "health",
     // Flow 299: evaluated when the attempt starts, reported last.
@@ -436,6 +437,8 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
     "skipped",
     "pass",
     "pass",
+    // folder-committed: this fixture is not a git repository (flow 384).
+    "skipped",
     "pass",
     "pass",
     // confirmation: this flow did not opt in (flow 299).
@@ -512,6 +515,7 @@ test("merged completion closes a flow without a PR when main contains the commit
     "base-branch",
     "tasks",
     "owner",
+    "folder-committed",
     "review",
     "health",
     // Flow 299: evaluated when the attempt starts, reported last.
@@ -526,6 +530,8 @@ test("merged completion closes a flow without a PR when main contains the commit
     "skipped",
     "pass",
     "pass",
+    // folder-committed: this fixture is not a git repository (flow 384).
+    "skipped",
     "pass",
     "pass",
     // confirmation: this flow did not opt in (flow 299).

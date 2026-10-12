@@ -1,0 +1,184 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow374-pr814-review",
+    "severity": "major",
+    "problem": "The modal's inputBlocked guard covered keys only. The row and button mouse handlers ignored it, and the sidebar mode-row click opened the modal without checking for an active overlay.",
+    "impact": "With a shell_exec approval dock pending, two clicks on [auto] (arm, commit) would switch the permission mode to auto without any dialog.",
+    "suggested_fix": "Refuse the sidebar click while an overlay is active or a turn is running, and return early from every mouse callback and from press() when inputBlocked is true.",
+    "evidence": "Read src/tui/settings-modal.ts and the sidebar handler in src/tui/tui-shell.ts at c926382d: only the key handler read options.inputBlocked. Fixed in f240da30 with a test that clicks and Enters change nothing while blocked.",
+    "confidence": "high",
+    "file": "src/tui/settings-modal.ts",
+    "line": null,
+    "quote": "        onMouseDown: (event: { stopPropagation: () => void }) => {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/settings-modal.ts",
+      "reported_line": 132
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/settings-modal.ts row onMouseDown (select)",
+        "src/tui/settings-modal.ts button callback passed to smallActionButton (press)",
+        "src/tui/tui-shell.ts sb-mode-v onMouseDown (showSettings)"
+      ],
+      "enumeration_method": "keryx ctx rg for onMouseDown and showSettings( across src/tui/settings-modal.ts and src/tui/tui-shell.ts at c926382d; the modal has one row handler and one button handler, the shell opens the modal from the sidebar click only"
+    },
+    "global_id": "2026-09-30-ingest-814#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at f240da30 (worktree keryx-w374): ran `bun test` on settings-actions, settings-modal, settings-model, settings-state, busy-dispatch and shell-agent-repl tests: 127 pass, 0 fail. settings-modal.ts gates the row mouse handler (line 146), the button callback (line 171) and press() (line 196) on blocked(), and the key handler too (line 239). The otui test '/settings: while inputBlocked, keys and clicks change nothing and auto is never reached' (targeted run, 3 pass) clicks st-mode-2 twice, then st-guard-0, then presses Enter twice: fake.ran stays [] and no 'Enter again to confirm' is drawn. Once unblocked, one click only arms. The tui-shell.ts sidebar onMouseDown (line 4067) calls settingsOpenDecision({overlayActive: chrome.overlayActive(), busy: chrome.isBusy()}) and returns unless open. Both chrome methods exist in shell-chrome.ts.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f240da30 (PR #814); independent verifier refuted the defect at that commit by execution"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow374-pr814-review",
+    "severity": "minor",
+    "problem": "A held Enter auto-repeats, so arming and confirming `auto` could both happen within one physical key press.",
+    "impact": "The two-step confirmation for the mode that skips confirmation could be bypassed by holding Enter.",
+    "suggested_fix": "Ignore a confirming Enter that arrives within about 400 ms of the arming one, with an injectable clock for tests.",
+    "evidence": "Read src/tui/settings-modal.ts press(): the armed check has no time component. Fixed in f240da30 (CONFIRM_MIN_GAP_MS) with fast and slow second-Enter tests.",
+    "confidence": "high",
+    "file": "src/tui/settings-modal.ts",
+    "line": null,
+    "quote": "    if (action.confirm && (armed?.id !== row.id || armed.action !== selectedAction)) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/settings-modal.ts",
+      "reported_line": 181
+    },
+    "global_id": "2026-09-30-ingest-814#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at f240da30: press(viaKey) in settings-modal.ts stores armed.at = now() and returns when a keyed confirm arrives within CONFIRM_MIN_GAP_MS (400). The otui test 'a held Enter cannot arm and commit auto in one press' (targeted run, pass) fires Enters at +5, +30, +120 and +399 ms from arming, and fake.ran stays [] with the armed note still shown. After clock += CONFIRM_MIN_GAP_MS, one more Enter gives ran == ['/mode auto']. The 'single Enter never reaches auto' test also passes, with an injected clock.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f240da30 (PR #814); independent verifier refuted the defect at that commit by execution"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow374-pr814-review",
+    "severity": "minor",
+    "problem": "The reasoning row was labelled saved, but after a press its source became session and, with KERYX_REASONING_EFFORT set, the environment value wins again after a restart.",
+    "impact": "The row could promise a persistence the precedence (session, then env, then saved) does not deliver.",
+    "suggested_fix": "Make the scope and detail follow the real precedence and say when the environment variable wins on restart.",
+    "evidence": "Read src/tui/settings-model.ts and resolveReasoningEffort in src/commands/agent.ts. Fixed in f240da30 with one model test per source.",
+    "confidence": "medium",
+    "file": "src/tui/settings-model.ts",
+    "line": null,
+    "quote": "  session: \"set this session\",",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/settings-model.ts",
+      "reported_line": 83
+    },
+    "global_id": "2026-09-30-ingest-814#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at f240da30: reasoningScope() in settings-model.ts maps session to saved ('set this session and saved'), session with envWinsOnRestart to scope session plus 'set this session; KERYX_REASONING_EFFORT wins again after a restart', env to session plus the env detail, global to saved, and default to saved ('default'). settings-state.ts line 36 sets envWinsOnRestart when the resolved source is session and the post-restart source is env. The settings-model test 'scope and detail follow the real precedence, one case per source' passes. settings-state.test.ts (passing) sets KERYX_REASONING_EFFORT=medium and expects {effort:'low', source:'session', envWinsOnRestart:true}.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f240da30 (PR #814); independent verifier refuted the defect at that commit by execution"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow374-pr814-review",
+    "severity": "minor",
+    "problem": "A typed /settings during a turn is deferred, while the sidebar click opened the modal mid-turn and its buttons ran commands that are deferred when typed.",
+    "impact": "Two entry points to the same screen followed different busy rules.",
+    "suggested_fix": "Keep /settings deferred while busy and refuse the sidebar click with a short message.",
+    "evidence": "Read src/tui/busy-dispatch.ts (no settings target) and the sidebar click in src/tui/tui-shell.ts. Fixed in f240da30 (settingsOpenDecision) with a test pinning the deferral.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "      onMouseDown: () => {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 4064, 4132, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 4063
+    },
+    "global_id": "2026-09-30-ingest-814#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at f240da30: settingsOpenDecision in settings-actions.ts returns {open:false} for an overlay, {open:false, message:'/settings opens once the current turn is done.'} when busy, and open otherwise. The tui-shell.ts sidebar click prints the message through io.onSystem and does not open. Test 'settingsOpenDecision: ...' in settings-actions.test.ts passes. busy-dispatch.test.ts passes, including 'classifyBusyDispatch: /settings and the commands its buttons run, other than /mode /plan /think, are deferred', which asserts 'deferred' for /settings, /guard, /editguard, /route, /reasoning, /external, /external-agents and /theme.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f240da30 (PR #814); independent verifier refuted the defect at that commit by execution"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow374-pr814-review",
+    "severity": "minor",
+    "problem": "A rejection from runExternalAgentsCommand, or a synchronous throw from a settings handler, was dropped silently.",
+    "impact": "A failed button press showed no message and the rows did not rebuild.",
+    "suggested_fix": "Catch in the action runner and report through the same system-message path; report run and load failures from the modal.",
+    "evidence": "Read src/tui/settings-modal.ts (await options.run, options.load) and runSettingsAction in src/tui/tui-shell.ts. Fixed in f240da30 (onError, runSettingsCommand) with tests at both layers.",
+    "confidence": "high",
+    "file": "src/tui/settings-modal.ts",
+    "line": null,
+    "quote": "      await options.run(action.command);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/settings-modal.ts",
+      "reported_line": 189
+    },
+    "global_id": "2026-09-30-ingest-814#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at f240da30: runSettingsCommand in settings-actions.ts wraps the switch in try/catch and reports through handlers.onSystem. Test 'a rejecting handler is reported through onSystem and never escapes' passes. In settings-modal.ts, press() catches a failing run and a failing load separately, reports each through onError, and always rebuilds and repaints (finally resets busy). The otui test '/settings: a failing run is reported through onError and the rows are still rebuilt' passes: the error contains '/mode trust' and 'disk full', load is called once, and the frame still shows 'Permission mode'. showSettings in tui-shell.ts also has .catch and onError wired to io.onSystem.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f240da30 (PR #814); independent verifier refuted the defect at that commit by execution"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow374-pr814-review",
+    "severity": "minor",
+    "problem": "runSettingsAction was private to the shell and the modal tests used a fake run, so the /mode auto bypass of the composer dialog, the /external project-override path, the no-disk-write claim for mode and plan, and the readline /settings branch had no tests.",
+    "impact": "The riskiest behaviours of the modal were asserted only by reading the code.",
+    "suggested_fix": "Extract the action runner into a testable module and add tests for each path plus the readline table.",
+    "evidence": "Read src/tui/settings-modal.test.ts and src/commands/shell-agent-repl.test.ts at c926382d. Fixed in f240da30: src/tui/settings-actions.ts with settings-actions.test.ts and readline cases.",
+    "confidence": "high",
+    "file": "src/tui/settings-modal.test.ts",
+    "line": null,
+    "quote": "settings",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/settings-modal.test.ts",
+      "reported_line": 1
+    },
+    "global_id": "2026-09-30-ingest-814#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at f240da30: src/tui/settings-actions.ts and settings-actions.test.ts exist, with 9 passing tests covering: every row line reaching exactly one handler; /mode auto going to commitMode without the dialog; no save or clear in mode and plan lines; an on-disk test that the project permission-mode default is untouched; /external for both values; /external-agents text; a rejecting handler; an unknown line; and settingsOpenDecision. shell-agent-repl.test.ts has describe '/settings prints the settings table (flow 374)' with several passing cases (lines 1103 onward). Full run: 127 pass, 0 fail, 402 expects, and the otui tests are not skipped (targeted run executed them).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f240da30 (PR #814); independent verifier refuted the defect at that commit by execution"
+    }
+  }
+]

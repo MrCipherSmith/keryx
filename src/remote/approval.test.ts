@@ -10,6 +10,9 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { FakeSentMessage } from "./fake-bot-api";
+import { formatReply } from "./format";
+import { checkTelegramHtml, renderTelegramHtml } from "./format-html";
+import { asCodeBlock } from "./http-surface";
 import { approvalCallbackData, parseApprovalCallback } from "./protocol";
 import { call, makeRig, type Rig } from "./remote.http.test-helpers";
 import { OWNER_ID, settle, STRANGER_ID, until } from "./remote.test-helpers";
@@ -59,14 +62,78 @@ describe("approval through the topic", () => {
     const decision = client.requestApproval("Run `bun test`?", 10_000);
     const buttons = await untilButtons(threadId);
     expect(buttons.message.text).toContain("Run `bun test`?");
+    // The prompt goes out as a code block, so what the operator approves is shown verbatim.
+    expect(buttons.message.parseMode).toBe("HTML");
+    expect(buttons.message.text).toContain("<pre>");
     expect(parseApprovalCallback(buttons.allow)).toMatchObject({ decision: "allow" });
     expect(parseApprovalCallback(buttons.deny)).toMatchObject({ decision: "deny" });
 
     press(threadId, buttons.allow, OWNER_ID, buttons.message.messageId);
     expect(await decision).toBe("allow");
-    await until(() => textsIn(threadId).includes("Approval granted."), "the follow-up in the topic");
+    // The question itself is edited into its result; there is no separate follow-up message.
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Allowed by user"), "the question edited");
+    expect(rig.api.message(buttons.message.messageId)?.inlineKeyboard).toBeUndefined();
+    expect(textsIn(threadId)).not.toContain("Approval granted.");
     // The press was answered to Telegram, so the button stops spinning.
     await until(() => rig.api.answeredCallbacks.length >= 1, "answerCallbackQuery");
+  });
+
+  // Whatever the approval text holds, the operator sees it as ONE literal pre block: no link, no bold, no closing fence.
+  const HOSTILE: Array<[string, string]> = [
+    ["16 backticks", "`".repeat(16) + "\n[x](https://evil.example) **b**\n" + "`".repeat(16)],
+    ["40 backticks", "x" + "`".repeat(40) + "\n[x](https://evil.example)\n**b**"],
+    ["a fence closer and a tilde fence", "```\n[x](https://evil.example)\n~~~~~~~~~~~~~~~~~~~~\n**b**\n````````````````````"],
+    ["CRLF line endings", "rm -rf /\r\n```\r\n[x](https://evil.example)\r\n**b**"],
+    ["a quote and a heading", "> [x](https://evil.example)\n# **b**\n- `a`"],
+  ];
+
+  for (const [name, prompt] of HOSTILE) {
+    test(`a hostile approval prompt (${name}) stays a single literal pre`, async () => {
+      rig = makeRig();
+      await rig.startServe();
+      const { client, threadId } = await session("sess-ap-9001", "release");
+      const decision = client.requestApproval(prompt, 10_000);
+      const buttons = await untilButtons(threadId);
+      const html = buttons.message.text;
+      expect(buttons.message.parseMode).toBe("HTML");
+      expect(html.match(/<pre>/g)).toHaveLength(1);
+      expect(html.match(/<\/pre>/g)).toHaveLength(1);
+      expect(html.startsWith("Approval needed:\n<pre>")).toBe(true);
+      expect(html.endsWith("</pre>")).toBe(true);
+      expect(html).not.toContain("<a ");
+      expect(html).not.toContain("<b>");
+      expect(html).not.toContain("<i>");
+      const checked = checkTelegramHtml(html);
+      expect(checked.ok).toBe(true);
+      if (checked.ok) {
+        expect(checked.text).toContain("[x](https://evil.example)");
+        expect(checked.text).toContain("**b**");
+      }
+      press(threadId, buttons.deny, OWNER_ID, buttons.message.messageId);
+      expect(await decision).toBe("deny");
+    });
+  }
+
+  test("asCodeBlock gives one pre for any prompt, also when it is long enough to split", () => {
+    const prompts = [
+      "`".repeat(16),
+      "`".repeat(40) + " [x](https://evil.example)",
+      "~".repeat(40) + "\n" + "`".repeat(9) + "\n**b**",
+      "".padEnd(10, " "),
+      "line [x](https://evil.example) **b** `c`\n".repeat(400),
+    ];
+    for (const prompt of prompts) {
+      const parts = formatReply(`Approval needed:\n${asCodeBlock(prompt)}`);
+      expect(parts.length).toBeGreaterThan(0);
+      for (const part of parts) {
+        const html = renderTelegramHtml(part);
+        expect(checkTelegramHtml(html).ok).toBe(true);
+        expect(html.match(/<pre>/g)).toHaveLength(1);
+        expect(html).not.toContain("<a ");
+        expect(html).not.toContain("<b>");
+        expect(html.endsWith("</pre>") || /<\/pre>$/.test(html.trimEnd())).toBe(true);
+      }
+    }
   });
 
   test("Deny denies", async () => {
@@ -77,24 +144,32 @@ describe("approval through the topic", () => {
     const buttons = await untilButtons(threadId);
     press(threadId, buttons.deny);
     expect(await decision).toBe("deny");
-    await until(() => textsIn(threadId).includes("Approval denied."), "the follow-up in the topic");
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Denied by user"), "the question edited");
+    expect(rig.api.message(buttons.message.messageId)?.inlineKeyboard).toBeUndefined();
+    expect(textsIn(threadId)).not.toContain("Approval denied.");
   });
 
   test("no press: deny at the timeout, and the topic is told", async () => {
     rig = makeRig();
     await rig.startServe();
     const { client, threadId } = await session("sess-ap-0003", "release");
-    const started = Date.now();
-    const decision = await client.requestApproval("Push to origin?", 400);
-    expect(decision).toBe("deny");
-    expect(Date.now() - started).toBeGreaterThanOrEqual(350);
-    await until(() => textsIn(threadId).some((text) => text.startsWith("Approval request expired")), "the expiry notice");
-    // A late press after the expiry grants nothing.
+    const pending = client.requestApproval("Push to origin?", 400);
     const buttons = await untilButtons(threadId);
-    press(threadId, buttons.allow);
+    const started = Date.now();
+    const decision = await pending;
+    expect(decision).toBe("deny");
+    expect(Date.now() - started).toBeLessThan(2_000);
+    // The question is edited into the expiry notice and loses its buttons.
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Expired at"), "the expiry notice");
+    expect(rig.api.message(buttons.message.messageId)?.inlineKeyboard).toBeUndefined();
+    const before = textsIn(threadId).length;
+    // A late press after the expiry grants nothing and adds no message.
+    press(threadId, buttons.allow, OWNER_ID, buttons.message.messageId);
     await settle();
     await settle();
     expect(textsIn(threadId)).not.toContain("Approval granted.");
+    expect(textsIn(threadId)).toHaveLength(before);
+    expect(rig.api.message(buttons.message.messageId)?.text).toContain("Expired at");
   });
 
   test("a press by a sender who is not allowed changes nothing", async () => {
@@ -138,13 +213,16 @@ describe("approval through the topic", () => {
     const buttons = await untilButtons(threadId);
     press(threadId, buttons.allow);
     expect(await decision).toBe("allow");
-    await until(() => textsIn(threadId).includes("Approval granted."), "first follow-up");
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Allowed by user"), "first edit");
+    const after = textsIn(threadId).length;
     press(threadId, buttons.allow);
     press(threadId, buttons.deny);
     await settle();
     await settle();
-    expect(textsIn(threadId).filter((text) => text === "Approval granted.")).toHaveLength(1);
-    expect(textsIn(threadId)).not.toContain("Approval denied.");
+    // Nothing new is sent, and the message still shows the first answer.
+    expect(textsIn(threadId)).toHaveLength(after);
+    expect(rig.api.message(buttons.message.messageId)?.text).toContain("Allowed by user");
+    expect(rig.api.message(buttons.message.messageId)?.text).not.toContain("Denied by user");
   });
 
   test("a button for an id the server never issued is dropped", async () => {

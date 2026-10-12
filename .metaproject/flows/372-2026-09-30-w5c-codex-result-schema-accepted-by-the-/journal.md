@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-09-30T18:47:28.466Z - flow created
+- 2026-09-30T18:47:53.159Z - frozen: 7 criteria; checksum recorded
+- 2026-09-30T18:47:53.510Z - started
+- 2026-09-30T18:57:47.691Z - ac-updated: AC3: "The codex codec is handed the strict document (its own staged file, refs bundled, no sibling `$ref`), claude still gets the inline bundled document and the unchanged full schema is what every result is validated against; a codex run whose final message carries nulls for the optional fields is Completed and its returned output has those nulls removed. [verify: exec `bun test src/harness/external/runtime.test.ts src/harness/external/codec/codex-cli.test.ts`]" -> "The codex codec is handed the strict document (its own staged file, refs bundled, no sibling `$ref`), claude still gets the inline bundled document and the unchanged full schema is what every result is validated against; a codex run whose final message carries nulls for the optional fields is Completed and its returned output has those nulls removed; a codex run that narrates in earlier agent messages returns only the final message as its result; a run ended by our own kill after its terminal event keeps the exit code from its events, not the signal exit code, and codex gets a terminal settle window long enough for its teardown. [verify: exec `bun test src/harness/external`]" (live write probe found two more defects on the same path: codex was killed mid-teardown and its SIGTERM exit code was reported as a failure; narration messages were joined in front of the JSON)
+- 2026-09-30T19:37:28.430Z - ac-confirmed: AC1: strict-schema.test.ts: closure/required/nullable/removed keywords/no mutation; bun test src/harness/external 657 pass; CI 18/18 on 9993308f (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:28.593Z - ac-confirmed: AC2: dropOptionalNulls tests incl. required-null kept, undeclared-null kept, populated findings through the full schema (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:28.756Z - ac-confirmed: AC3: runtime.test.ts + supervise.test.ts: strict staged file for codex, nulls removed, final message only, exit code from events after own kill, non-zero code before the kill kept; codex-only 10 s settle (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:28.922Z - ac-confirmed: AC4: live codex 0.159.2: strict file accepted in read-only and write runs (no invalid_json_schema), Completed with valid JSON; journal of probes in this session (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:29.095Z - ac-confirmed: AC5: installed 0.3.43, codex 0.159.2: read-only Completed; --write Completed with patch; review shows diff; apply via pty with typed 05e249da024d landed external/bde06625-...; main tree untouched; a second run discarded, patch deleted; older pending runs discarded (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:29.261Z - ac-confirmed: AC6: CHANGELOG 0.3.43 and external-agent-write.md state the strict copy and full validation; check:doc-links 0 broken (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:29.430Z - ac-confirmed: AC7: operator report carries the live results; open: F-003 class_scope limitation question, agy refused, read exposure, version window (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:37:33.341Z - task-done: T1: Collect remaining context
+- 2026-09-30T19:37:37.796Z - task-done: T2: Implement per plan
+- 2026-09-30T19:37:37.974Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-30T19:37:38.153Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-30T19:37:40.721Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/809 (warning: PR is not a draft) (base: main)
+- 2026-09-30T19:37:40.890Z - completing
+- 2026-09-30T19:37:44.925Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-30T19:37:44.926Z - completion-failed: review: 1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#809 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__809.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 809 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own.
+- 2026-09-30T19:37:50.631Z - completing: merged commit: 0e8877023c79522b6c58a8dfeaa37ee41f45e2d2
+- 2026-09-30T19:37:55.033Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-30T19:37:55.035Z - done: all gates passed

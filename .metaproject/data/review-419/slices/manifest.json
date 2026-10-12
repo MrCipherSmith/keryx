@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 30000,
+  "waveBytes": 90000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 24054,
+      "contentHash": "d008e47941d5985b1a0aa6eca8530b91a933b71d3b676dbbd8de8e3c3c503518",
+      "files": [
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md",
+        ".metaproject/wiki/architecture/remote-control.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+        "CHANGELOG.md",
+        "README.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/drive-keryx-remotely.md"
+      ],
+      "domain": ".metaproject [docs], .metaproject, . [docs] +1 more",
+      "split": "domain"
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 21730,
+      "contentHash": "d56744bb2ce450ff1ffaa55f972e4466c5766f09a0e180cf5411e6350f356ab9",
+      "files": [
+        "src/remote/approval-mirror.test.ts",
+        "src/remote/command-busy.test.ts",
+        "src/remote/command-gateway.test.ts",
+        "src/remote/command-model.test.ts",
+        "src/remote/command-queued.test.ts",
+        "src/remote/lifecycle.test.ts",
+        "src/remote/orphan.test.ts"
+      ],
+      "domain": "src/remote [test]",
+      "split": "file"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 16650,
+      "contentHash": "d6bc055ee6be45e3468bc0439c863c4e7c269c425de41d8c0ef566b5532df2c9",
+      "files": [
+        "src/remote/progress-notes.test.ts",
+        "src/remote/prompt-reminder.test.ts"
+      ],
+      "domain": "src/remote [test]",
+      "split": "file"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 28780,
+      "contentHash": "edd36c985cf950e41c96f859b5616a20b7e91a31d35bf52a83204ae99d0c0128",
+      "files": [
+        "src/remote/bot-api-http.ts",
+        "src/remote/client.ts",
+        "src/remote/command-gateway.ts",
+        "src/remote/command-router.ts",
+        "src/remote/command.test-helpers.ts",
+        "src/remote/fake-bot-api.ts",
+        "src/remote/http-surface.ts",
+        "src/remote/hub.ts"
+      ],
+      "domain": "src/remote",
+      "split": "file"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 26476,
+      "contentHash": "d6fef8b288a3f85dc0f2d7cd79f0ca621da12f8aea24e9226e2e0d16454f4c1b",
+      "files": [
+        "src/remote/progress-notes.ts",
+        "src/remote/protocol.ts",
+        "src/remote/registry.ts",
+        "src/remote/service.ts",
+        "src/remote/shell-bridge.ts",
+        "src/remote/types.ts"
+      ],
+      "domain": "src/remote",
+      "split": "file"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 28319,
+      "contentHash": "77de6eb8854e16d4aef592033f5065977594b8a8f77ce5152763243f4290ef15",
+      "files": [
+        "src/tui/approval-mirror.test.ts",
+        "src/tui/remote-queue-wiring.test.ts",
+        "src/tui/tui-shell.test.ts",
+        "src/tui/approval-mirror.ts",
+        "src/tui/remote-queue-wiring.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": "src/tui [test], src/tui",
+      "split": "domain"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 6,
+    "bytes": 146009,
+    "files": 38,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 5
+  }
+}

@@ -22,13 +22,11 @@ metadata:
 license: "MIT"
 ---
 
-<SUBAGENT-STOP>
-If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
-This skill is for orchestrators and interactive session-level routing only.
-Proceed directly with your assigned task.
-</SUBAGENT-STOP>
-
 # Job Orchestrator
+
+## Preflight
+
+Run in the main session: this skill dispatches sub-agents. Without a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent), or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose
 
@@ -1059,16 +1057,14 @@ carried in the dispatch prompt and reported in 2.9.
 **Step 1 — check the budget before dispatching, while stopping is still possible.**
 
 ```bash
-keryx review budget --spent <usd-so-far> --outstanding <subagents this orchestrator has in flight>
+keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
 ```
 
-`--outstanding` is not optional here. `src/review/caps.ts` names `job-orchestrator`
-as the outermost of the three nesting levels — `job-orchestrator` →
-`flow-orchestrator` → `review-orchestrator` — that its cap of 4 in-flight reviewers
-was chosen to survive. keryx is a CLI invoked once per command; it cannot observe
-subagents running inside another orchestrator's process. **The cap binds the nested
-total only when the parent declares its own in-flight count.** Omit `--outstanding`
-and the cap bounds the reviewer fan-out alone, which the record then states plainly.
+`--outstanding` is the number of subagents this session still has running while the
+round starts (0 when none). All three orchestrators run inline in the main session, so the
+reviewers are the only fan-out; keryx cannot observe other subagents, so **the wave size
+(at most 10 for `--all` or a full review; add `--full`) binds the total only when you
+declare that count.** Omit it and the record states that the cap bounds the reviewers alone.
 
 A non-zero exit means the spend ceiling (3 USD by default) is reached: stop and ask
 the user rather than dispatching another fan-out.
@@ -1122,29 +1118,25 @@ replaced. The command names no model — it ranks what the provider reports at r
 and, when it cannot rank anything, prints `inherit: true`, which means the dispatch
 runs on the session model. That is a correct answer, not a failure.
 
-**Step 6 — dispatch `review-orchestrator`.**
+**Step 6 — run `review-orchestrator` inline, in this main session.** Load
+`skills/gdskills/review/review-orchestrator/SKILL.md` yourself; do **not** wrap it in a
+`Task` — a subagent cannot spawn the reviewers and the skill answers
+`STATUS: BLOCKED nested_dispatch_unavailable`. Give it these inputs:
 
 ```
-Task({
-  description: "Review round <n>: <job-name>",
-  subagent_type: "general-purpose",
-  prompt: |
-    Load skill: skills/gdskills/review/review-orchestrator/SKILL.md
-
-    flags:            <selected flags, e.g. --backend --security --testing-practices>
-    commit_range:     <BASE_SHA>..HEAD
-    issue_url:        <issue URL, when the job has one — enables the Stage 1 spec gate>
-    context_doc:      <JOBS_ROOT>/<job-name>/ai/context.md
-    verification_mode: annotate
-    managed_review:   { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
-    is_fix_round:     <true on any round after the first>
-    pr_comments:      { enabled: <true when a PR exists> }
-
-    Emit the unified report AND the fenced ```json keryx:findings``` block.
-    Dispatch review-verifier (Wave C) over the consolidated findings and return
-    its verification claims as a file path.
-})
+flags:             <selected flags, e.g. --backend --security --testing-practices>
+commit_range:      <BASE_SHA>..HEAD
+issue_url:         <issue URL, when the job has one — enables the Stage 1 spec gate>
+context_doc:       <JOBS_ROOT>/<job-name>/ai/context.md
+verification_mode: annotate
+managed_review:    { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
+is_fix_round:      <true on any round after the first>
+pr_comments:       { enabled: <true when a PR exists> }
 ```
+
+It emits the unified report AND the fenced ```json keryx:findings``` block, and runs
+`review-verifier` (Wave C) over the consolidated findings, returning its verification
+claims as a file path.
 
 **Step 7 — verification is part of the round, not an extra.** `review-orchestrator`
 dispatches `review-verifier` in Wave C over the consolidated findings. The verifier
@@ -1203,25 +1195,25 @@ Ask unless automation settings explicitly set `publish_pr_review_report`:
 ```text
 Publish the review report to the PR?
 
-  A) Concise PR comment only
-  B) Concise PR comment + detailed AI markdown artifact (recommended for follow-up fixes)
+  A) Concise PR review only
+  B) Concise PR review + detailed AI markdown artifact (recommended for follow-up fixes)
   C) Do not publish
 
 > pick a letter (default: C)
 ```
 
 **Rules:**
-- The PR comment and AI artifact must be written in English only, regardless of the chat language or reviewer output language.
+- The PR review and AI artifact must be written in English only, regardless of the chat language or reviewer output language.
 - Default is C. Never publish to a PR without explicit user confirmation or `publish_pr_review_report: comment`, `publish_pr_review_report: comment-and-ai-artifact`.
-- If the user chooses A, delegate concise comment formatting to `review-orchestrator`'s PR Review Report Publication contract.
+- If the user chooses A, delegate concise review formatting to `review-orchestrator`'s PR Review Report Publication contract.
 - If the user chooses B, also generate `.metaproject/jobs/<job-name>/review-ai-report.md` using `review-orchestrator`'s Detailed AI Markdown Artifact contract, and include in the comment's `Meta` section both an `AI artifact` path and an `AI artifact description` row explaining that the file carries detailed findings, fix guidance, patch guidance, regression coverage, validation plan, and follow-up agent context.
 - **If no PR exists yet**, do not ask now and do not stash a pending decision — nothing persists one. Ask this question again after the PR step (2.10) creates the PR, when the answer can actually be acted on.
 - The decision is acted on immediately or not at all. There is no `publication_plan` field in `state.json`; what was published is stated in the 2.9 report.
 
 **Automation values:**
 - `publish_pr_review_report: ask` -> ask the question above.
-- `publish_pr_review_report: comment` -> publish the concise PR comment only.
-- `publish_pr_review_report: comment-and-ai-artifact` -> publish the concise PR comment and create the detailed AI markdown artifact.
+- `publish_pr_review_report: comment` -> publish the concise PR review only.
+- `publish_pr_review_report: comment-and-ai-artifact` -> publish the concise PR review and create the detailed AI markdown artifact.
 - `publish_pr_review_report: none` -> do not publish.
 
 #### 2.6.3 Post-Review Checkpoint
@@ -1265,8 +1257,8 @@ with evidence, not silence.
 
 Only runs if NEEDS_FIX is true. Default max: **3 iterations** (`max_review_iterations`).
 
-Three is the shared round bound: `task-implementer`, `flow-orchestrator` and
-this skill all use it. *"The first three to four repair iterations account for
+Three is the self-fix bound `task-implementer` and this skill share
+(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to four repair iterations account for
 most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
 correctness falls **0.820 -> 0.673** across two forced revisions while
 cumulative ever-correct is **0.847**
@@ -1310,7 +1302,7 @@ FOR iteration in [1, 2, 3]:
        keryx review comments collect --repo <r> --pr <n> --sha <new-head> --round <N+1> --out <file>
        keryx review scope        --ref "$BASE_SHA" --json > scope.json
        keryx review blast-radius --ref "$BASE_SHA" --previous blast-radius.json --json > blast-radius.json
-       <dispatch review-orchestrator with is_fix_round: true>
+       <run review-orchestrator inline, in this session, with is_fix_round: true>
        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
                             --scope scope.json --blast-radius blast-radius.json \
                             --verifications <file> --refuted <file> --outstanding <n>
@@ -1985,7 +1977,7 @@ What actually bounds this orchestrator:
 | review → fix rounds | 3 | 2.7, and `max_review_iterations` (`maximum: 3`) in the input contract |
 | repetition, whatever the count says | first repeat | the STUCK CHECK in 2.7, and `keryx review loop` against the durable record |
 | retries per step | recorded, not guessed | `metrics.steps[].retries`, incremented by `keryx job step --status in-progress` and read back with `keryx job status --json` |
-| reviewer fan-out | 4 in flight | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
+| reviewer fan-out | ≤10 per wave | `keryx review budget --outstanding <n>` before every dispatch (2.6.1) |
 | spend | 3 USD by default | `keryx review budget --spent <usd>` — a non-zero exit means stop and ask |
 
 Each of these is a number some command reads or writes. A guard no command can

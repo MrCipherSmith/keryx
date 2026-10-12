@@ -25,7 +25,15 @@ tracker reporting.
   true`)
 - `keryx flow recover <id> --reason "<why>"` (moves a flow stuck in
   `completing` back to `in-progress`)
-- `keryx flow block|unblock <id>` / `flow check`
+- `keryx flow block|unblock <id>` / `flow check` (duplicate ids, including a
+  number a known remote branch holds; warns about a flow folder that is not
+  committed) / `flow renumber <dir> --to <id> --reason "<why>"` (refuses an id a
+  known remote branch uses)
+
+The flow folder is committed in the same PR as the code; the commit at closing is
+a rule to follow, not one the gate checks. `flow complete` fails the
+`folder-committed` gate only when the folder's `flow.json` is not in `HEAD`
+(flows created from 0.3.53 on).
 
 Spend, confirmations, signatures and gate outcomes across flows:
 `keryx governance report`. Recurring or one-off unattended agent turns:

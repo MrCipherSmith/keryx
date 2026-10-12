@@ -1,0 +1,36 @@
+# Flow Journal
+
+- 2026-09-28T21:13:50.245Z - flow created
+- 2026-09-28T21:14:25.365Z - frozen: 10 criteria; checksum recorded
+- 2026-09-28T21:14:25.686Z - task-added: T5: context
+- 2026-09-28T21:14:26.004Z - task-added: T6: generation rank and step-down light
+- 2026-09-28T21:14:26.327Z - task-added: T7: agent fallback port, cache, agent-ranked schema
+- 2026-09-28T21:14:26.649Z - task-added: T8: wire into spawn_subagent, review tier, TUI row
+- 2026-09-28T21:14:26.968Z - task-added: T9: curated lineup and compile.ts regression test
+- 2026-09-28T21:14:27.330Z - task-added: T10: docs, CHANGELOG, bump 0.3.27
+- 2026-09-28T21:14:27.656Z - task-added: T11: verify and review
+- 2026-09-28T21:14:27.988Z - started
+- 2026-09-28T22:28:45.851Z - ac-confirmed: AC1: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:46.148Z - ac-confirmed: AC2: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:46.436Z - ac-confirmed: AC4: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:46.731Z - ac-confirmed: AC5: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:47.020Z - ac-confirmed: AC6: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:47.309Z - ac-confirmed: AC7: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:47.605Z - ac-confirmed: AC8: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:47.904Z - ac-confirmed: AC9: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:48.221Z - ac-confirmed: AC10: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:28:48.527Z - ac-confirmed: AC3: Step-down light implemented and tested in PR #790 (24c230b7). One clause, smallest class on signal, has no tier to map to and is not implemented; accepted by the implementer as a deviation. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:29:04.805Z - task-done: T1: Collect remaining context
+- 2026-09-28T22:29:05.124Z - task-done: T2: Implement per plan
+- 2026-09-28T22:29:05.438Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-28T22:29:05.731Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-28T22:29:06.040Z - task-done: T5: context
+- 2026-09-28T22:29:06.370Z - task-done: T6: generation rank and step-down light
+- 2026-09-28T22:29:06.702Z - task-done: T7: agent fallback port, cache, agent-ranked schema
+- 2026-09-28T22:29:07.008Z - task-done: T8: wire into spawn_subagent, review tier, TUI row
+- 2026-09-28T22:29:07.347Z - task-done: T9: curated lineup and compile.ts regression test
+- 2026-09-28T22:29:07.672Z - task-done: T10: docs, CHANGELOG, bump 0.3.27
+- 2026-09-28T22:29:08.003Z - task-done: T11: verify and review
+- 2026-09-28T22:29:12.169Z - completing: merged commit: 24c230b7219025259b9010346ab63f38a3bf8f29
+- 2026-09-28T22:29:12.220Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-28T22:29:12.222Z - done: all gates passed

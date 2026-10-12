@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "target": "claude",
+  "installedModules": [
+    {
+      "moduleId": "security-check-input",
+      "surface": "prompt-gate",
+      "writtenPaths": [
+        ".claude/settings.json"
+      ],
+      "sha256": {},
+      "managedSentinel": true,
+      "keryxVersion": "0.3.43",
+      "installedAt": "2026-09-26T22:55:46.934Z"
+    },
+    {
+      "moduleId": "security-check-output",
+      "surface": "block",
+      "writtenPaths": [
+        ".claude/settings.json"
+      ],
+      "sha256": {},
+      "managedSentinel": true,
+      "keryxVersion": "0.3.43",
+      "installedAt": "2026-09-26T22:55:46.936Z"
+    }
+  ],
+  "recordedAt": "2026-09-30T20:48:25.862Z"
+}

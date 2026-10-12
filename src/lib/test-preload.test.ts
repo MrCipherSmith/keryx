@@ -18,7 +18,8 @@
 // before this file loaded.
 
 import { describe, expect, test } from "bun:test";
-import { homedir } from "node:os";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { keryxConfigDir } from "./config-dir";
 import { projectRegistryPath } from "./project-registry";
@@ -58,6 +59,40 @@ describe("the test preload isolates the user-global config directory", () => {
     const home = homedir();
     expect(projectRegistryPath().startsWith(home)).toBe(false);
     expect(shellConfigPath().startsWith(home)).toBe(false);
+  });
+
+  test("the temp directory is canonical, so tmpdir()-built paths equal what the product resolves", () => {
+    // macOS `$TMPDIR` is a symlink (/var → /private/var); without the preload's
+    // realpath, this differs there.
+    expect(tmpdir()).toBe(realpathSync(tmpdir()));
+    expect(process.env.TMPDIR).toBe(realpathSync(process.env.TMPDIR ?? tmpdir()));
+  });
+
+  test("a symlinked TMPDIR is canonicalised by the preload (portable: builds its own symlink)", () => {
+    // The assertion above only bites where the host's temp dir is already a
+    // symlink (macOS). Here the symlink is created, so Linux CI exercises it too.
+    const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-preload-symlink-")));
+    try {
+      const realDir = path.join(base, "real");
+      const linkDir = path.join(base, "link");
+      mkdirSync(realDir);
+      symlinkSync(realDir, linkDir, "dir");
+      const preload = path.join(import.meta.dir, "test-preload.ts");
+      const script = `await import(${JSON.stringify(preload)}); console.log(JSON.stringify({ tmpdir: require("node:os").tmpdir(), env: process.env.TMPDIR }));`;
+      const proc = Bun.spawnSync([process.execPath, "-e", script], {
+        cwd: base,
+        env: { ...process.env, TMPDIR: linkDir },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(proc.stderr.toString()).toBe("");
+      expect(proc.exitCode).toBe(0);
+      const out = JSON.parse(proc.stdout.toString().trim()) as { tmpdir: string; env: string };
+      expect(out.env).toBe(realDir);
+      expect(out.tmpdir).toBe(realDir);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   test("both platform variables are set, not just the one this host reads", () => {

@@ -4,14 +4,16 @@ import path from "node:path";
 import { DEFAULT_AUTO_GOAL_ROUNDS } from "../commands/goal-command";
 
 /**
- * One round bound, in every place that carries one (flow 203, AC8).
+ * The round bounds, in every place that carries one (flow 203, AC8; flow 391).
  *
- * Four bounds disagreed because nobody compared them: `task-implementer` 3,
- * `job-orchestrator` 3, `flow-orchestrator` 6, `/goal --auto` 8. Three of them
- * bound the SAME thing — a repair loop, the same artifact revised again against
- * the same failing signal — and are now the same number. The fourth bounds a
- * continuation loop and is deliberately different, which this file also pins, so
- * that "deliberate" stays a claim someone wrote down rather than a number
+ * Flow 203 unified three repair-loop bounds at 3: `task-implementer`,
+ * `job-orchestrator` and `flow-orchestrator` (which said 6). Flow 391 raises the
+ * REVIEW bound in `flow-orchestrator` to 5 by operator decision (message 178020):
+ * in a flow, review findings surface across rounds rather than all at once, so
+ * a third round can still find new things. The self-fix bounds in
+ * `job-orchestrator` and `task-implementer` stay at 3, and `/goal --auto` (a
+ * continuation loop, not a repair loop) stays at 8 — which this file also pins,
+ * so that "deliberate" stays a claim someone wrote down rather than a number
  * someone forgot.
  */
 
@@ -39,14 +41,23 @@ function read(file: string): string {
   return readFileSync(file, "utf8");
 }
 
-test("AC8: flow-orchestrator's review/fix bound is three, not six", () => {
+test("AC2: flow-orchestrator's review/fix bound is five, by operator decision, not six or three", () => {
   const files = skillFiles("flow-orchestrator");
   expect(files.length).toBeGreaterThan(0);
 
   for (const file of files) {
     const text = read(file);
-    expect(text).toContain("Allow at most **three** review/fix attempts");
-    // The old bound, in every spelling it appeared in.
+    // Five, unlike the two self-fix bounds below which stay at three: review
+    // findings surface across rounds in a flow (operator decision, 178020).
+    expect(text).toContain("Allow at most **five** review/fix attempts");
+    expect(text).toContain("attempts < 5");
+    expect(text).toContain("has already reached **five**");
+    // The old bounds, in every spelling they appeared in.
+    expect(text).not.toContain("at most three");
+    expect(text).not.toContain("attempts < 3");
+    expect(text).not.toContain("attempts = 3");
+    expect(text).not.toContain("has already reached **three**");
+    expect(text).not.toContain("The three-attempt bound");
     expect(text).not.toContain("at most six");
     expect(text).not.toContain("attempts < 6");
     expect(text).not.toContain("attempts = 6");
@@ -54,6 +65,15 @@ test("AC8: flow-orchestrator's review/fix bound is three, not six", () => {
   }
 });
 
+test("AC4: the review guide states the round bound as five", () => {
+  const guide = read(path.join(REPO_ROOT, "docs", "docs", "guides", "review-with-a-record.md"));
+  expect(guide).toContain("The round bound is five attempts.");
+  expect(guide).not.toContain("The round bound is three attempts.");
+});
+
+// AC3: these two stay at three. Self-fix loops repair the same artifact against
+// the same failing signal, where the evidence says rounds past three regress;
+// the review bound above differs because a flow's findings surface across rounds.
 test("AC8: job-orchestrator's fix bound is three", () => {
   for (const file of skillFiles("job-orchestrator")) {
     expect(read(file)).toContain("Default max: **3 iterations** (`max_review_iterations`)");

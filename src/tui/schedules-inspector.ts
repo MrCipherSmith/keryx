@@ -36,6 +36,7 @@ import {
   scheduleVerification,
 } from "../trigger/schedules";
 import { readScheduleReport } from "../trigger/store";
+import { digestStatusLines, digestStatusOf, type DigestStatus } from "../scheduler/digest-status";
 import { clampScroll, scrollToReveal, windowLines, wrapLines } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -87,6 +88,19 @@ function isLocal(item: TriggerEntryView): boolean {
   return item.entry.source === "store" && agentTask(item) !== undefined;
 }
 
+/** Flow 389: the facts `digestStatusOf` needs, from a row the modal already loaded. */
+function digestInput(item: TriggerEntryView, now: Date): Parameters<typeof digestStatusOf>[1] {
+  const { entry } = item;
+  const latest = latestOutcome(item);
+  return {
+    name: entry.name,
+    action: entry.action as AgentTaskAction,
+    enabled: entry.enabled,
+    nextRun: entry.fire.kind === "schedule" && entry.enabled ? nextCronRuns(entry.fire.cron, now, 1)[0] : undefined,
+    last: latest === undefined ? undefined : { at: latest.at, outcome: latest.outcome, detail: cardSafe(latest.detail) },
+  };
+}
+
 function recordLine(record: TriggerRunRecord): string {
   const refusal = record.agentTask?.refusal ?? record.dispatch?.refusal;
   // M2: `detail` comes from runs.jsonl, which a commit can plant — no control characters reach the terminal.
@@ -105,7 +119,7 @@ export interface InstallDescription {
 }
 
 /** Overview tab (unwrapped lines). */
-export function overviewLines(item: TriggerEntryView, now: Date, install: InstallDescription | undefined): string[] {
+export function overviewLines(item: TriggerEntryView, now: Date, install: InstallDescription | undefined, digest?: DigestStatus): string[] {
   const { entry } = item;
   const cron = entry.fire.kind === "schedule" ? entry.fire.cron : "";
   // L4: local time, as the sidebar row shows it.
@@ -123,7 +137,10 @@ export function overviewLines(item: TriggerEntryView, now: Date, install: Instal
     `linger     ${install?.linger ?? "…"}${install?.linger === "no" ? " (the timer runs only while you are logged in)" : ""}`,
     `verified   ${install?.verified ?? "…"}`,
   ];
-  if (task !== undefined) {
+  if (digest !== undefined) {
+    // Flow 389 (AC8): a digest shows what it is, its limits, the last run and the last delivery instead of a free-form prompt.
+    lines.push("", "digest", ...digestStatusLines(digest).map((l) => `  ${l}`), "  read-only: the digest only reads GitHub (gh) and the flow board; it changes nothing");
+  } else if (task !== undefined) {
     lines.push(
       `runner     ${task.dispatch.provider}/${task.dispatch.model}, mode ${task.dispatch.permissionMode}`,
       `budget     ceiling $${task.dispatch.ceilingUsd}, max ${task.dispatch.maxSeconds}s per run`,
@@ -261,6 +278,16 @@ export function defaultDescribeInstall(host: ScheduleHost = {}): (cwd: string, i
       return { installed: "n/a (declared in triggers.json — see `keryx trigger schedule`)", unit: "—", linger: "n/a", verified: "n/a (not a local schedule)" };
     }
     const { entry } = item;
+    if (agentTask(item)?.digest !== undefined) {
+      // Flow 389: a digest has no OS timer; `keryx serve` runs it. The signature and pins are still verified.
+      const verification = await scheduleVerification(cwd, entry.name);
+      return {
+        installed: "n/a — runs inside `keryx serve` (no OS timer); keep serve running",
+        unit: "keryx serve",
+        linger: "n/a",
+        verified: verification.ok ? "yes — signature and binary pins match what you confirmed" : `NO — ${verification.reason}`,
+      };
+    }
     const cron = entry.fire.kind === "schedule" ? entry.fire.cron : "";
     const plan = await planInstall(cwd, entry.name, cron, host, entry.install);
     const installed = await isScheduleInstalled(cwd, entry.name, cron, host, entry.install).catch(() => false);
@@ -287,6 +314,7 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
 
   let item: TriggerEntryView | undefined;
   let install: InstallDescription | undefined;
+  let digest: DigestStatus | undefined;
   let report = "";
   let scroll = 0;
   let width: number | undefined;
@@ -311,7 +339,7 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
             ? report.length > 0
               ? report.split("\n")
               : ["No report yet — the first run writes one."]
-            : overviewLines(item, now(), install);
+            : overviewLines(item, now(), install, digest);
     return [DETAIL_KEYS, "", ...wrapLines(body.join("\n"), width).split("\n")];
   };
   const visible = (): string[] => windowLines(tabLines(), scroll, bodyRows);
@@ -345,6 +373,7 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
       verified: "unknown",
     }));
     report = await reportText(options.cwd, item);
+    digest = await digestStatusOf(options.cwd, digestInput(item, now())).catch(() => undefined);
     paint();
   };
 
@@ -459,10 +488,12 @@ export function openScheduleDetail(otui: unknown, chrome: unknown, name: string,
         act(async () => {
           if (current.entry.enabled) {
             await actions.pause(options.cwd, name);
-            return `paused ${name} — timer disabled; a fire while paused records no-op`;
+            return agentTask(current)?.digest !== undefined
+              ? `paused ${name} — serve will not run it; a message already queued is still delivered`
+              : `paused ${name} — timer disabled; a fire while paused records no-op`;
           }
           await actions.resume(options.cwd, name);
-          return `resumed ${name} — timer enabled`;
+          return agentTask(current)?.digest !== undefined ? `resumed ${name} — serve runs it from the next cron time` : `resumed ${name} — timer enabled`;
         });
         return;
       } else if (token === "r") {
@@ -523,7 +554,7 @@ export function openSchedulesList(
     entries.forEach((item, i) => {
       const cron = item.entry.fire.kind === "schedule" ? item.entry.fire.cron : "";
       out.push(
-        `${i === selected ? ">" : " "} ${item.entry.name}  [${item.entry.enabled ? "active" : "paused"}]  next ${item.entry.enabled ? formatNextRun(cron, now()) : "—"}  last ${formatLastOutcome(latestOutcome(item), now())}`,
+        `${i === selected ? ">" : " "} ${item.entry.name}${agentTask(item)?.digest !== undefined ? " (digest)" : ""}  [${item.entry.enabled ? "active" : "paused"}]  next ${item.entry.enabled ? formatNextRun(cron, now()) : "—"}  last ${formatLastOutcome(latestOutcome(item), now())}`,
       );
     });
     return out;

@@ -1,0 +1,33 @@
+# Flow Journal
+
+- 2026-09-28T19:13:50.648Z - flow created
+- 2026-09-28T19:14:27.729Z - frozen: 8 criteria; checksum recorded
+- 2026-09-28T19:14:27.881Z - started
+- 2026-09-28T19:14:28.025Z - task-added: T5: Registry, codec, event parsing, outcome classification (AC1-AC4)
+- 2026-09-28T19:14:28.172Z - task-added: T6: Environment, privacy block-list, consent, sandbox scope, TUI (AC5-AC7)
+- 2026-09-28T19:14:28.322Z - task-added: T7: Live run through keryx, docs, package status, changelog, bump (AC8)
+- 2026-09-28T19:14:28.470Z - task-done: T1: Collect remaining context
+- 2026-09-28T19:14:28.617Z - task-done: T2: Implement per plan
+- 2026-09-28T19:14:28.768Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-28T19:14:28.918Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-28T19:14:29.066Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in ~/keryx-agy
+- 2026-09-28T21:05:00.679Z - completing: merged commit: eaac45b189648a9c679d0cfe364e9c1e82744239
+- 2026-09-28T21:05:00.733Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-28T21:05:00.733Z - completion-failed: acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8 | tasks: not done: T5, T6, T7
+- 2026-09-28T21:06:16.157Z - task-done: T5: Registry, codec, event parsing, outcome classification (AC1-AC4)
+- 2026-09-28T21:06:16.496Z - task-done: T6: Environment, privacy block-list, consent, sandbox scope, TUI (AC5-AC7)
+- 2026-09-28T21:06:16.854Z - task-done: T7: Live run through keryx, docs, package status, changelog, bump (AC8)
+- 2026-09-28T21:06:31.606Z - ac-confirmed: AC1: registry row + list output verified live on the installed 0.3.26: antigravity-cli shows installed, 1.2.12, within the recorded range; registry.test.ts covers binary-missing/available (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T21:06:31.923Z - ac-confirmed: AC2: codec/antigravity-cli.test.ts pins argv for fresh, read-only (--sandbox) and resume (--conversation); --dangerously-skip-permissions never emitted (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T21:06:32.286Z - ac-confirmed: AC3: codec replays the real read-only-ok.stream.jsonl; unknown events counted as skipped, 0 skipped on both live fixtures (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T21:06:32.654Z - ac-confirmed: AC4: one test per outcome row. DEVIATION from the frozen wording: SUCCESS with agy's denied_actions is reported as Denied (blocked on approval), not completed-with-denials - measured live, stricter, and never plain success (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T21:06:33.004Z - ac-confirmed: AC5: EXTERNAL_RUNTIME_CREDENTIAL_ALLOW is empty, env test with Google/OpenAI/Anthropic/GitHub keys, source assertions on ~/.gemini/antigravity-cli (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T21:06:33.367Z - ac-confirmed: AC6: block-list default + ExternalBlockedError, one-time TTY consent, consent-required off a TTY; enforced on both the command and the model-initiated dispatch path (shared checkExternalAgentVendorGates), tests for each (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T21:06:33.714Z - ac-confirmed: AC8: live keryx-mediated run committed as keryx-run-ok.*, docs + requirements status + CHANGELOG + bump 0.3.26 released; CI 18/18 on aa3973c3, npm 0.3.26 published, smoke test clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:41:42.205Z - ac-confirmed: AC7: Sandbox scope tests from PR #788; TUI clause proven by PR #791 (f94862b8): /delegate parse, roster text and JSON, sidebar events, inspector rows for antigravity-cli (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:41:42.359Z - completing: merged commit: f94862b8e9b459a5f5de9cc9d77c724f8503c7b9
+- 2026-09-28T22:41:42.387Z - completion-attempt-recorded: attempt 2: failed
+- 2026-09-28T22:41:42.387Z - completion-failed: main-merge: f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 is not contained in origin/main | base-branch: violated: this flow recorded base main, but f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 is not contained in origin/main. The merge landed somewhere else. | review: 1 of 5 conditions failed — head-commit (unobserved): round `2026-09-28-ingest-c623d5c8b6a6e39439fc1f64c887f7c9ae591d29-r02` ran against aa3973c3ed1da505ced9a99c100190b72820a89e and the completion names merged commit f94862b8e9b459a5f5de9cc9d77c724f8503c7b9. aa3973c3ed1da505ced9a99c100190b72820a89e is not contained in it, and the trees could not be compared: the merged commit f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 — `git rev-parse f94862b8e9b459a5f5de9cc9d77c724f8503c7b9^{tree}` exited 128: fatal: ambiguous argument 'f94862b8e9b459a5f5de9cc9d77c724f8503c7b9^{tree}': unknown revision or path not in the working tree.. So nothing here shows either that the reviewed content is what merged or that it is not — the check could not run, which is not the same as running and failing. Fetch the missing object (`git fetch --unshallow`, or fetch the branch the round ran against), or ingest a round against the merged commit (`keryx review ingest … --head f94862b8e9b459a5f5de9cc9d77c724f8503c7b9`).
+- 2026-09-28T22:41:50.239Z - completing: merged commit: eaac45b189648a9c679d0cfe364e9c1e82744239
+- 2026-09-28T22:41:50.271Z - completion-attempt-recorded: attempt 3: passed
+- 2026-09-28T22:41:50.271Z - done: all gates passed

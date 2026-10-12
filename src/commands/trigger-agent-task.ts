@@ -39,6 +39,7 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { ensureScratchParent } from "./unattended-scratch";
 import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
@@ -54,6 +55,7 @@ import { createAllowlistProxy } from "../harness/process/sandbox/proxy";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
 import { redactSensitiveText } from "../security/service";
+import { protectJsonIds } from "./granted-json-ids";
 import type { AgentTaskAction, TriggerDispatch, TriggerEntry } from "../trigger/config";
 import { identityOf, sameIdentity, type VerifiedFile } from "../trigger/granted-binary";
 import { confirmedContentProblem, verifyGrantedBinaries } from "../trigger/schedule-verify";
@@ -118,6 +120,7 @@ export interface AgentTaskDeps {
 
 const GRANTED_TIMEOUT_MS = 30_000;
 const GRANTED_MAX_BYTES = 64 * 1024;
+const STDERR_MARK = "\n[stderr]\n";
 
 /** Names of environment variables whose VALUES are scrubbed from every granted-tool output. */
 const SECRET_ENV_NAME = /(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIAL|AUTH)/i;
@@ -142,7 +145,13 @@ const TOKEN_SHAPES: readonly [RegExp, string][] = [
  *   3. GitHub token shapes;
  *   4. the deterministic secret detector every tool output goes through.
  */
-export function scrubGrantedOutput(text: string, env: Record<string, string | undefined>, secrets: readonly string[] = []): string {
+export function scrubGrantedOutput(
+  text: string,
+  env: Record<string, string | undefined>,
+  secrets: readonly string[] = [],
+  /** A tool's stdout that keryx parses as JSON: ids stay numbers, every string value is still scanned. */
+  json = false,
+): string {
   let out = text;
   for (const value of secrets) {
     if (value.length >= 8) out = out.split(value).join("[redacted:gh-auth-token]");
@@ -152,6 +161,14 @@ export function scrubGrantedOutput(text: string, env: Record<string, string | un
     out = out.split(value).join(`[redacted:${name}]`);
   }
   for (const [shape, mask] of TOKEN_SHAPES) out = out.replace(shape, mask);
+  if (json) {
+    const at = out.indexOf(STDERR_MARK);
+    const protectedJson = protectJsonIds(at === -1 ? out : out.slice(0, at));
+    if (protectedJson !== undefined) {
+      const tail = at === -1 ? "" : redactSensitiveText(out.slice(at));
+      return protectedJson.restore(redactSensitiveText(protectedJson.text)) + tail;
+    }
+  }
   return redactSensitiveText(out);
 }
 
@@ -160,8 +177,8 @@ export function scrubGrantedOutput(text: string, env: Record<string, string | un
  * token matches neither an exact value nor a shape. After capping, the trailing
  * partial line is dropped as well.
  */
-export function scrubThenCap(raw: string, env: Record<string, string | undefined>, secrets: readonly string[], max: number = GRANTED_MAX_BYTES): string {
-  const scrubbed = scrubGrantedOutput(raw, env, secrets);
+export function scrubThenCap(raw: string, env: Record<string, string | undefined>, secrets: readonly string[], max: number = GRANTED_MAX_BYTES, json = false): string {
+  const scrubbed = scrubGrantedOutput(raw, env, secrets, json);
   if (scrubbed.length <= max) return scrubbed;
   const head = scrubbed.slice(0, max);
   const lastBreak = head.lastIndexOf("\n");
@@ -169,7 +186,7 @@ export function scrubThenCap(raw: string, env: Record<string, string | undefined
 }
 
 /** Run one granted command with `execFile` — no shell — and return scrubbed, capped output. */
-async function runGrantedCommand(
+export async function runGrantedCommand(
   bin: string,
   argv: readonly string[],
   cwd: string,
@@ -186,7 +203,7 @@ async function runGrantedCommand(
         const raw = `${stdout ?? ""}${stderr ? `\n[stderr]\n${stderr}` : ""}`;
         const code = error === null ? 0 : typeof (error as { code?: unknown }).code === "number" ? ((error as { code: number }).code) : null;
         const reason = error === null ? "" : `\n[exit: ${code ?? (error as Error).message}]`;
-        resolve({ output: `${scrubThenCap(raw, env, secrets)}${scrubGrantedOutput(reason, env, secrets)}`, exitCode: code, ok: error === null });
+        resolve({ output: `${scrubThenCap(raw, env, secrets, GRANTED_MAX_BYTES, true)}${scrubGrantedOutput(reason, env, secrets)}`, exitCode: code, ok: error === null });
       },
     );
   });
@@ -239,7 +256,7 @@ export function grantedTool(
 }
 
 /** `gh auth token`, run by the dispatcher, for scrubbing only. Never logged; empty on any failure. */
-function ghAuthToken(bin: string | undefined, cwd: string, env: Record<string, string | undefined>): Promise<string[]> {
+export function ghAuthToken(bin: string | undefined, cwd: string, env: Record<string, string | undefined>): Promise<string[]> {
   if (bin === undefined) return Promise.resolve([]);
   return new Promise((resolve) => {
     execFile(bin, ["auth", "token"], { cwd, env: env as NodeJS.ProcessEnv, timeout: 10_000 }, (error, stdout) => {
@@ -276,7 +293,7 @@ export function buildAgentTaskPrompt(entry: TriggerEntry, action: AgentTaskActio
   ].join("\n");
 }
 
-function refusal(runId: string, code: DispatchRefusalCode, detail: string, action: AgentTaskAction): AgentTaskResult {
+export function refusal(runId: string, code: DispatchRefusalCode, detail: string, action: AgentTaskAction): AgentTaskResult {
   return {
     outcome: "dispatch-refused",
     detail,
@@ -317,7 +334,7 @@ function lastAssistantText(history: readonly NormalizedMessage[]): string {
 }
 
 /** Keep the newest `keep` reports of one schedule. Report names start with an ISO-ish stamp, so name order is time order. */
-async function pruneReports(dir: string, keep: number): Promise<void> {
+export async function pruneReports(dir: string, keep: number): Promise<void> {
   const names = (await readdir(dir).catch(() => [] as string[])).filter((n) => n.endsWith(".md")).sort();
   for (const old of names.slice(0, Math.max(0, names.length - keep))) {
     await rm(path.join(dir, old), { force: true }).catch(() => {});
@@ -556,6 +573,8 @@ async function runLocked(
         }),
         idSeq: () => randomUUID(),
         unattended: true,
+        // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
+        maxRounds: resolveAgentMaxRounds(process.env, "ask"),
         hardDeny: unattendedRefusal,
         ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
@@ -577,7 +596,7 @@ async function runLocked(
           terminal = state.reason;
         },
       };
-      const result = await runAgentTurn(io, agentDeps, history, buildAgentTaskPrompt(entry, action), { signal: controller.signal });
+      const result = await runAgentTurn(io, agentDeps, history, buildAgentTaskPrompt(entry, action), { signal: controller.signal, automaticReview: false });
       finishReason = result.finishReason;
       if (result.caughtToolErrors !== undefined && result.caughtToolErrors.length > 0) {
         // Review r1 (item 1, MAJOR regression): before AC4 (flow 354, L-12)
@@ -722,7 +741,7 @@ function renderReport(input: {
   return lines.join("\n");
 }
 
-function defaultArmTimeout(ms: number, fire: () => void): () => void {
+export function defaultArmTimeout(ms: number, fire: () => void): () => void {
   const timer = setTimeout(fire, ms);
   timer.unref?.();
   return () => clearTimeout(timer);

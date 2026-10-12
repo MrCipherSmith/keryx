@@ -1,0 +1,147 @@
+[
+  {
+    "id": "R-1",
+    "reviewer": "flow395-pr863-review-logic",
+    "severity": "minor",
+    "problem": "[reported severity: medium] `visualWidth` omits U+1F680-1F6FF, U+1FA00+, U+2705 and U+274C, so these count as width 1; skin-tone sequences are over-counted instead (visualWidth of a thumbs-up with skin tone is 4).",
+    "impact": "Input `| s | n |\\n|---|---|\\n| rocket | a |\\n| ok | b |` with the rocket emoji: the row in the `<pre>` is padded as if the glyph were one cell wide, so its separator sits one column off from the `ok` row. Breaks the AC2 claim that emoji do not break alignment; status tables full of check and cross marks are common.",
+    "suggested_fix": "Widen the wide-range table to the emoji-presentation ranges and treat skin-tone modifiers and joiner sequences as one glyph.",
+    "evidence": "Confirmed by running visualWidth: rocket=1, check mark=1, thumbs-up with skin tone=4. 20,000-input fuzz over formatReply, renderTelegramHtml, checkTelegramHtml, renderPlainText and renderRichMessage found no unbalanced HTML, no part over its limit, no lost or duplicated row.",
+    "confidence": "medium",
+    "file": "src/lib/md-blocks.ts",
+    "line": 714,
+    "quote": "[0x1f300, 0x1f64f], // emoji",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863#R-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 2848458d: src/lib/md-blocks.ts WIDE_RANGES gains the emoji-presentation ranges including [0x2705,0x2705], [0x274c,0x274c], [0x1f680,0x1f6ff] and [0x1fa00,0x1faff]; visualWidth skips Fitzpatrick modifiers (isEmojiModifier) and the glyph after a zero-width joiner, so a skin-tone sequence counts as one glyph. Read from git show 2848458d -- src/lib/md-blocks.ts.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "2848458d"
+    }
+  },
+  {
+    "id": "R-2",
+    "reviewer": "flow395-pr863-review-logic",
+    "severity": "minor",
+    "problem": "[reported severity: medium] `tableAt` rejects any table where `renderedRowCost` > 1500 (rows are padded to the sum of the column widths), used from src/remote/format-table.ts.",
+    "impact": "Input: a 3-column findings table whose two long columns hold 800-character cells, or one column with a 1600-character cell. `containsTable` is false, so `auto` mode sends HTML with raw pipes where rich could have drawn it natively. Violates AC2 (never raw pipes). The cap exists only for the padded `<pre>` layout.",
+    "suggested_fix": "Apply the cost cap only to the aligned layout; keep such a table a table (rich draws it natively, text modes stack it).",
+    "evidence": "Reproduced with the input described; containsTable returned false.",
+    "confidence": "medium",
+    "file": "src/remote/format-table.ts",
+    "line": 136,
+    "quote": "if ([header, ...rows].some((cells) => renderedRowCost(cells, widths) > MAX_TABLE_ROW_COST)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863#R-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 2848458d: src/remote/format-table.ts tableAt no longer returns undefined on renderedRowCost > MAX_TABLE_ROW_COST; it returns the table. The cap now only selects the layout (tableLayout: aligned or stacked), renderTableLines stacks wide tables and renderTableLines/format-html.ts emits a <pre> only for the aligned layout; format.ts charges rows through tableCosts. Read from git show 2848458d -- src/remote/format-table.ts src/remote/format-html.ts src/remote/format.ts.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "2848458d"
+    }
+  },
+  {
+    "id": "R-3",
+    "reviewer": "flow395-pr863-review-logic",
+    "severity": "minor",
+    "problem": "[reported severity: low] The HTML and plain paths turn `<br>` in a table cell into a space (src/remote/format-table.ts), but the rich path (src/remote/format-rich.ts tableBlock) does not.",
+    "impact": "Input `| a |\\n|---|\\n| x<br>y |`: HTML shows `x y`, the rich cell text is the literal `x<br>y`. LLMs often write `<br>` in table cells.",
+    "suggested_fix": "Replace `<br>` with a space in the rich cell text too.",
+    "evidence": "Reproduced with the input described.",
+    "confidence": "medium",
+    "file": "src/remote/format-rich.ts",
+    "line": 235,
+    "quote": "const cell = (text: string, column: number, header: boolean): RichBlockTableCell => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863#R-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 2848458d: src/remote/format-rich.ts tableBlock now builds the cell from inline(text.replace(/<br\\s*\\/?>/gi, \" \").trim()), a space as in the HTML and plain layouts. Read from git show 2848458d -- src/remote/format-rich.ts.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "2848458d"
+    }
+  },
+  {
+    "id": "R-4",
+    "reviewer": "flow395-pr863-review-logic",
+    "severity": "minor",
+    "problem": "[reported severity: low] A 403 or 404 on one rich call calls `pauseRich` for 10 minutes for every chat and topic, and records the fall as a rich refusal (src/remote/rendering.ts isStanding and handleRichFailure).",
+    "impact": "sendRichMessage returns 403 'bot was kicked from the group chat' for topic A: all table replies to healthy topic B go to HTML for 10 minutes and `/channels` shows a rich fallback caused by an unrelated chat error. A 400 'message thread not found' is likewise logged as a rich refusal.",
+    "suggested_fix": "Pause rich only for a refusal of the method itself; treat chat or topic scoped errors as not a refusal of rich.",
+    "evidence": "Traced through isStanding and handleRichFailure with the status codes described.",
+    "confidence": "medium",
+    "file": "src/remote/rendering.ts",
+    "line": 130,
+    "quote": "return isBotApiError(error) && error.kind === \"rejected\" && (error.status === 403 || error.status === 404 || error.status === 405);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863#R-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 60778987: src/remote/rendering.ts isStanding now pauses only for 404/405 that mention the rich method or no chat, or a 403 that names the rich method; the new isChatScoped (403, or 400/404 mentioning chat/thread/topic) returns from handleRichFailure without pauseRich and without recording a rich refusal. Read from git show 60778987 -- src/remote/rendering.ts.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "60778987"
+    }
+  },
+  {
+    "id": "R-5",
+    "reviewer": "flow395-pr863-review-logic",
+    "severity": "minor",
+    "problem": "[reported severity: low] A persistent 5xx on `sendRichMessage` is rethrown and `isRetryable` (src/remote/types.ts) returns true, so the queue retries rich forever and never falls back to HTML. Only 4xx counts as a refusal in `isRefusal`.",
+    "impact": "A gateway that returns 502 for the new method: the head entry of the outbound queue is never acked and every message behind it stalls.",
+    "suggested_fix": "Bound the retries of rich for one message, then send it once as HTML.",
+    "evidence": "Traced through handleRichFailure, isRefusal and isRetryable.",
+    "confidence": "medium",
+    "file": "src/remote/rendering.ts",
+    "line": 228,
+    "quote": "  if (!isRefusal(error)) {\n    throw error;\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863#R-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 60778987: src/remote/rendering.ts handleRichFailure counts 5xx per message (RenderingState.richServerFailure, RICH_SERVER_ATTEMPTS = 3), rethrows for the queue to retry until the third failure, then resets and falls to HTML with fallTo(rich-to-html); the counter resets on a successful rich send or edit. Read from git show 60778987 -- src/remote/rendering.ts.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "60778987"
+    }
+  }
+]

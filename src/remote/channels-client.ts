@@ -11,8 +11,11 @@
 // built from fixed words and serve's own messages, never from the token.
 //
 // Like the remote client, it finds serve by `endpoint.json`, authenticates with the local
-// shell token (both re-read on every call), and sends them only to a loopback address of
-// a serve process that runs as this user.
+// shell token (both re-read on every call), and talks only to a loopback address of a
+// serve process that runs as this user. A pid check cannot tell serve from another
+// program that took the port after serve died, so the raw token is never sent (the
+// bearer is derived per request from a fresh nonce) and every answer must carry serve's
+// proof for that nonce and that exact body before anything in it is used (F-002).
 
 import { isLoopbackAddress } from "../lib/serve-config";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
@@ -38,7 +41,7 @@ import {
   CHANNELS_ROUTE_METHODS,
   type PairingResponse,
 } from "./protocol";
-import { readShellToken } from "./shell-token";
+import { readShellToken, SERVE_PROOF_HEADER, shellRequestCredential, verifyServeResponseProof } from "./shell-token";
 
 export interface ChannelsClientOptions {
   /** User-global directory override (the test seam). */
@@ -83,6 +86,10 @@ export interface ChannelsDisconnectResult {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+/** Failures of `channels-pair` after which serve may have taken the token or another start owns the file. */
+const PAIRING_OUTCOME_UNKNOWN: ReadonlySet<string> = new Set(["no-answer", "superseded", "unexpected-response"]);
+export const UNVERIFIED_SERVE_REASON =
+  "The program answering on keryx serve's port did not prove it is the keryx serve this shell trusts, so its answer was ignored and nothing was written. Restart `keryx serve` (an older serve cannot prove itself; update keryx on both sides).";
 /** Deleting many topics is one call per topic. */
 const DISCONNECT_TIMEOUT_FACTOR = 8;
 
@@ -137,7 +144,9 @@ export class ChannelsClient {
   /**
    * Step 1 of Connect. Validates the token's shape, writes it to the token file (owner-only,
    * atomically) and asks serve to open a pairing. If serve refuses, or is down, the file is put
-   * back as it was: a refused token leaves nothing on disk.
+   * back as it was: a refused token leaves nothing on disk. When the outcome is unknown (no answer,
+   * superseded, an answer that does not parse) the file stays, and so does a file another shell has
+   * replaced since.
    */
   async startPairing(token: string): Promise<ChannelsResult<PairingResponse>> {
     // Reach serve first: a token is not written for a serve that is not there.
@@ -151,9 +160,14 @@ export class ChannelsClient {
     if (!saved.ok) {
       return { ok: false, code: "invalid", reason: saved.reason };
     }
+    const written = readConfigFile(file);
     const result = await this.call<PairingResponse>("channels-pair", isPairing);
-    if (!result.ok) {
-      this.restore(file, before);
+    if (!result.ok && !PAIRING_OUTCOME_UNKNOWN.has(result.code)) {
+      const now = readConfigFile(file);
+      // Only a file still holding exactly what this call wrote is this call's to put back.
+      if (written.ok && now.ok && now.text === written.text) {
+        this.restore(file, before);
+      }
     }
     return result;
   }
@@ -208,6 +222,11 @@ export class ChannelsClient {
       }
     }
     return result;
+  }
+
+  /** Ask serve to start the hub again from the files already on disk (the channel is configured but not running). */
+  reload(): Promise<ChannelsResult<ChannelsReloadResponse>> {
+    return this.call<ChannelsReloadResponse>("channels-reload", (body) => typeof body.state === "string");
   }
 
   /** The token written for a pairing that did not become a connection: nothing is kept, so it goes. */
@@ -265,6 +284,9 @@ export class ChannelsClient {
 
   /** The one place a URL is built, and the one place the loopback rule is enforced. */
   private target(route: ChannelsRoute): { url: string; token: string } {
+    // Token first, endpoint second: serve removes the old endpoint before it mints a token, so a new token
+    // is never paired with an endpoint left over from an earlier serve.
+    const token = readShellToken(this.options.dir);
     const endpoint = readEndpoint(this.options.dir);
     if (!endpoint.ok) {
       throw new ServeDown("serve-down", `keryx serve is not running (${endpoint.reason})`);
@@ -275,30 +297,28 @@ export class ChannelsClient {
     if (!this.isAlive(endpoint.value.pid)) {
       throw new ServeDown("serve-down", `keryx serve is not running (pid ${endpoint.value.pid} is gone); start it with \`keryx serve\``);
     }
-    const token = readShellToken(this.options.dir);
     if (!token.ok) {
       throw new ServeDown("serve-down", `keryx serve is not accepting the shell yet (${token.reason})`);
     }
     return { url: `http://${authority(endpoint.value.address, endpoint.value.port)}${channelsRoutePath(route)}`, token: token.value };
   }
 
-  private async post(route: ChannelsRoute): Promise<Response> {
+  /**
+   * One request. The bearer is derived from the token and a fresh nonce, never the token
+   * itself; the answer is trusted only once its proof for that nonce checks out (F-002).
+   */
+  private async send(route: ChannelsRoute): Promise<{ response: Response; token: string; nonce: string }> {
     const { url, token } = this.target(route);
-    return this.fetchImpl(url, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: "{}",
+    const { nonce, bearer } = shellRequestCredential(token);
+    const post = CHANNELS_ROUTE_METHODS[route] === "POST";
+    const response = await this.fetchImpl(url, {
+      method: post ? "POST" : "GET",
+      redirect: "manual",
+      headers: post ? { authorization: `Bearer ${bearer}`, "content-type": "application/json" } : { authorization: `Bearer ${bearer}` },
+      ...(post ? { body: "{}" } : {}),
       signal: AbortSignal.timeout(route === "channels-disconnect" ? this.requestTimeoutMs * DISCONNECT_TIMEOUT_FACTOR : this.requestTimeoutMs),
     });
-  }
-
-  private async get(route: ChannelsRoute): Promise<Response> {
-    const { url, token } = this.target(route);
-    return this.fetchImpl(url, {
-      method: "GET",
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(this.requestTimeoutMs),
-    });
+    return { response, token, nonce };
   }
 
   private reachable(): { ok: true } | { ok: false; code: ChannelsFailureCode; reason: string } {
@@ -314,9 +334,11 @@ export class ChannelsClient {
   }
 
   private async call<T>(route: ChannelsRoute, guard: (body: Record<string, unknown>) => boolean): Promise<ChannelsResult<T>> {
-    let response: Response;
+    let sent: { response: Response; token: string; nonce: string };
+    let text: string;
     try {
-      response = CHANNELS_ROUTE_METHODS[route] === "GET" ? await this.get(route) : await this.post(route);
+      sent = await this.send(route);
+      text = await sent.response.text();
     } catch (error) {
       if (error instanceof ServeDown) {
         return { ok: false, code: error.code, reason: error.message };
@@ -331,9 +353,14 @@ export class ChannelsClient {
         reason: "keryx serve did not answer in time or dropped the connection, so the outcome is unknown. Check /channels, then retry if needed.",
       };
     }
+    const { response, token, nonce } = sent;
+    if (!verifyServeResponseProof(token, nonce, route, response.status, text, response.headers.get(SERVE_PROOF_HEADER))) {
+      // Whatever answered is not the serve that minted this token (another program on a freed port), or a serve too old to prove itself. Nothing from it is used.
+      return { ok: false, code: "unverified-serve", reason: UNVERIFIED_SERVE_REASON };
+    }
     let parsed: unknown;
     try {
-      parsed = JSON.parse(await response.text());
+      parsed = JSON.parse(text);
     } catch {
       parsed = undefined;
     }

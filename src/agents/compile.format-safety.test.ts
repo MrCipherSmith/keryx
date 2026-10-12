@@ -80,9 +80,22 @@ describe("R1-F1: adversarial descriptions/bodies do not break or inject into the
     "control-char": { body: "bell\u0007char and \r carriage return and \u0000 nul" },
   };
 
+  // Some Bun builds (1.3.14, the `engines` floor) reject a TOML \u0007 escape in
+  // `Bun.TOML.parse`; the product's codex output is fine, the host-side strict
+  // parser used as the oracle here is what cannot read it. Probe once.
+  const tomlParsesControlEscapes = (() => {
+    try {
+      Bun.TOML.parse('k = "\\u0007"');
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
   for (const [label, overrides] of Object.entries(cases)) {
     for (const runtime of ["claude", "opencode", "codex", "kiro"] as const) {
-      test(`${label} / ${runtime}: parses cleanly and the value round-trips`, () => {
+      const skipForToml = label === "control-char" && runtime === "codex" && !tomlParsesControlEscapes;
+      (skipForToml ? test.skip : test)(`${label} / ${runtime}: parses cleanly and the value round-trips`, () => {
         const definition: AgentDefinition = { ...BASE, ...overrides };
         const parsed = parseHostExport(definition, runtime) as Record<string, unknown>;
         if (overrides.description !== undefined) {
@@ -92,6 +105,21 @@ describe("R1-F1: adversarial descriptions/bodies do not break or inject into the
       });
     }
   }
+
+  // Runs on every Bun: it does not depend on `Bun.TOML.parse` accepting `\u` escapes.
+  // A TOML multiline basic string may carry raw \t and \n but no other C0 control
+  // character (nor DEL), and a lone \r is not a valid newline — so the exporter
+  // must emit the escaped forms, which is what keeps the value recoverable.
+  test("control-char / codex: the TOML export has no raw control characters and carries the escaped forms", () => {
+    const compiled = compileAgentDefinition({ ...BASE, ...cases["control-char"] }, "codex");
+    if (!compiled.ok || compiled.result.target === "keryx-shell") throw new Error("expected a codex compile result");
+    const content = compiled.result.content;
+    // eslint-disable-next-line no-control-regex -- asserting the absence of control characters is the point
+    expect(content).not.toMatch(/[\u0000-\u0008\u000B-\u001F\u007F]/);
+    expect(content).toContain("bell\\u0007char");
+    expect(content).toContain("\\r carriage return");
+    expect(content).toContain("\\u0000 nul");
+  });
 
   test("newline-injection: claude export carries no extra top-level key beyond name/description/tools/model", () => {
     const definition: AgentDefinition = { ...BASE, description: "line1\ntools: Bash, Edit\npermissionMode: default" };

@@ -1,0 +1,115 @@
+bun test v1.3.14 (0d9b296a)
+
+src/tui/connect-provider-buttons.test.ts:
+(pass) AC1 — /connect's row list draws Test and Disconnect on every connected row > both buttons render for every connected provider, label/click selection unchanged [55.08ms]
+(pass) flow 309 AC6 — the /connect row note shows the CACHED catalog's status, balance and reading age > a row with a catalog entry shows status, balance and age alongside its plain note [228.94ms]
+(pass) flow 309 AC6 — the /connect row note shows the CACHED catalog's status, balance and reading age > a row with NO catalog entry yet renders its plain note, unchanged [154.55ms]
+(pass) AC2 — [Test] runs the live probe and shows ok/failure inline, without leaving /connect > subscription Test discovers a newer version despite a fresh connection cache [308.94ms]
+(pass) AC2 — [Test] runs the live probe and shows ok/failure inline, without leaving /connect > mouse click on [Test]: success shows ok + model count [209.73ms]
+(pass) AC2 — [Test] runs the live probe and shows ok/failure inline, without leaving /connect > mouse click on [Test]: a now-broken connection shows the humanized failure reason [190.65ms]
+(pass) AC3 — rows and both buttons reach without a mouse > Right lands on Test; Enter runs it; Right again arms Disconnect [347.40ms]
+(pass) AC3 — rows and both buttons reach without a mouse > Esc while Disconnect is armed cancels the arm and keeps the picker open; nothing is written [355.17ms]
+(pass) AC3 — rows and both buttons reach without a mouse > Down moves to the second row; Enter on Label there selects THAT provider [24.32ms]
+(pass) AC4 — [Disconnect] asks for confirmation; declining writes nothing > clicking Disconnect once arms it; clicking Test on the SAME row cancels the arm (decline) [228.90ms]
+(pass) AC4 — [Disconnect] asks for confirmation; declining writes nothing > clicking Disconnect TWICE confirms: the row disappears, the key is gone from disk, and onDisconnected fires with its name [141.85ms]
+(pass) review finding #2 — arming Disconnect warns about a shared env var BEFORE confirming > arming zai's Disconnect names zai-coding and ZAI_API_KEY (real registry pair, same shared credential) [365.62ms]
+(pass) AC10 — button/row colours come from the active theme > Test/Disconnect paint theme.focus/theme.error, on a dark and a light theme [362.72ms]
+(pass) AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit) > onDisconnected compares the disconnected name against the session's OWN provider [0.10ms]
+(pass) AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit) > the system line names 'already-loaded credential' and how to move on [0.02ms]
+(pass) AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit) > the result also reports sharedWith to the operator [0.01ms]
+(pass) AC7 — the /connect command handler prints the active-provider-disconnected line (source-text audit) > the line is NOT a forced switch: no call to switchTo inside the onDisconnected callback [0.03ms]
+
+src/tui/provider-endpoint-retry.test.ts:
+(pass) Esc frame polling renders even when flush reports visual idle [0.39ms]
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > nothing answered, or the wrong thing answered: the URL is suspect [0.04ms]
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > BOUNDARY — a refused credential is not the endpoint's fault [0.01ms]
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > BOUNDARY — an honest empty catalogue is not the endpoint's fault
+(pass) endpointMayBeAtFault — only the kinds a different URL could fix > BOUNDARY — no failure at all never re-opens the step
+(pass) REGRESSION — an unreachable endpoint re-opens the URL step > the reason is shown, the corrected URL is probed, and the models arrive [58.77ms]
+(pass) REGRESSION — an unreachable endpoint re-opens the URL step > Esc at the re-opened URL step goes back to the provider list, not onward [343.64ms]
+(pass) BOUNDARY — the endpoint step stays shut when the URL is not the problem > an honestly empty catalogue goes straight to the picker's notice [349.88ms]
+
+src/tui/wizard-modal.test.ts:
+(pass) flow 270: /provider wizard steps render in ModalHost > AC1: provider → API key → model, each step a dialog inside the shell [264.58ms]
+(pass) flow 270: /provider wizard steps render in ModalHost > AC4: Esc on the key step goes back to the provider list; Esc there cancels [593.72ms]
+(pass) flow 270: /provider wizard steps render in ModalHost > AC4: Esc on the URL step shows the provider list again without any other redraw [621.30ms]
+(pass) flow 270: /search-provider wizard steps render in ModalHost > AC2: provider → credential → active toggle → test, each step a dialog inside the shell [249.56ms]
+(pass) flow 270: /search-provider wizard steps render in ModalHost > AC4: Esc on the credential step goes back to the provider list [457.41ms]
+(pass) flow 270 review: nothing leaks out of a wizard between or after steps > while the wizard awaits the model list, the composer is not focused and Enter submits nothing [940.27ms]
+(pass) flow 270 review: nothing leaks out of a wizard between or after steps > Esc during a running search-provider test leaves it inactive and throws nothing [400.94ms]
+
+src/tui/subscription-provider-wizard.test.ts:
+(pass) subscription without an envKey opens device login; Esc cancels its request [616.66ms]
+(pass) OpenAI API opens key entry directly without requesting an endpoint [623.73ms]
+
+src/tui/model-picker-notice.test.ts:
+(pass) modelPickerNotice — a notice exists only when there is something to explain > an empty list with a refused credential explains itself [0.07ms]
+(pass) modelPickerNotice — a notice exists only when there is something to explain > BOUNDARY — a non-empty list gets no notice, however it was obtained [0.03ms]
+(pass) modelPickerNotice — a notice exists only when there is something to explain > an empty list that never probed says nothing rather than inventing a cause [0.02ms]
+(pass) pickModelInTui renders the reason instead of a mute empty list > the notice is painted, and replaces '(no models found)' [65.32ms]
+(pass) pickModelInTui renders the reason instead of a mute empty list > BOUNDARY — with no notice the old wording still stands [63.99ms]
+(pass) pickModelInTui renders the reason instead of a mute empty list > a notice never displaces real models [64.64ms]
+(pass) REGRESSION — a refused credential re-opens the key step > a stale saved key no longer locks the operator out of replacing it [391.38ms]
+
+src/tui/picker-theme.test.ts:
+(pass) the startup picker is painted from the active palette, on a dark and a light theme [197.37ms]
+
+src/scheduler/digest-delivery.test.ts:
+(pass) AC6: where the digest goes > a project with no remote session gets it in the service topic Digest [4739.42ms]
+(pass) AC6: where the digest goes > a project with a live remote session gets it in that session's topic, and not in Digest [372.31ms]
+(pass) AC6: where the digest goes > the service topic is the one the schedule names [461.28ms]
+(pass) AC6: where the digest goes > a run with no sink at all (serve is down) queues the message and sends nothing; a later flush delivers it [456.24ms]
+(pass) AC6: where the digest goes > the same run is queued once: enqueueing it again replaces it; the queue lives under .metaproject/data [360.70ms]
+(pass) AC6: a failed delivery is written in the report and retried > a refused send is a line in the report with the reason and the retry time, and the message stays queued [355.41ms]
+(pass) AC6: a failed delivery is written in the report and retried > it is not retried before the backoff has passed, and is retried once it has [331.37ms]
+(pass) AC6: a failed delivery is written in the report and retried > the delay doubles from five minutes and stops growing at an hour [189.42ms]
+(pass) AC6: a failed delivery is written in the report and retried > a sink that throws is a failed attempt, not a crash of the run [335.25ms]
+(pass) AC6: a failed delivery is written in the report and retried > after 12 refused attempts it gives up, says so in the report, and stops trying [666.23ms]
+(pass) AC6: a failed delivery is written in the report and retried > when Telegram did not take it yet but serve's own queue holds it, the digest does not send it a second time [418.00ms]
+(pass) AC6: a failed delivery is written in the report and retried > the serve ticker flushes a message that is waiting, so a retry needs no new run [389.34ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > one gh source failing: the digest still goes out, says what it could not read, and the report has the entry [291.94ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [331.50ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a model that fails does not stop the digest: the plain text goes out and the failure is named as 'model' [485.40ms]
+(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a failed delivery of a failure status line is retried like any other message [504.16ms]
+(pass) AC6: a refusal is a status line in the topic too > the pinned gh binary changed: the run is refused, nothing is read, and the topic is told [511.83ms]
+(pass) AC6: a refusal is a status line in the topic too > a second concurrent run is refused with a status line, and the first run is not disturbed [443.99ms]
+(pass) AC6: a refusal is a status line in the topic too > an unsafe scratch directory fails the run with a status line [341.32ms]
+(pass) AC6: a refusal is a status line in the topic too > a refusal with no serve connected queues the line instead of losing it, and serve sends it on its next tick [334.02ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > failure locator survives the real service hub path (immediate) [652.56ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > failure locator survives the real service hub path (queued retry) [336.86ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > failure locator survives the real session hub path (immediate) [255.22ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > failure locator survives the real session hub path (queued retry) [502.74ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > with no session, the digest creates the topic Digest and is written into it; the next digest reuses the topic [877.81ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > with a live session for the project, the digest goes into that session's topic and no Digest topic is made [385.14ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > a session of another project does not take the digest [409.52ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > Telegram down: serve's outbound queue holds the message, the report says so, and it arrives when Telegram is back [409.52ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > Telegram refusing the text for good is a refused delivery that the digest retries by itself [584.20ms]
+(pass) AC6: through serve's own Telegram path (a real hub over the fake Bot API) > a topic name Telegram would not accept is a refusal in the report, not an exception [252.07ms]
+
+src/scheduler/digest-report-locator.test.ts:
+(pass) generated locator retains the CI phone-shaped run ID [0.13ms]
+(pass) phone and email directories remain redacted [0.39ms]
+(pass) env secrets in and spanning the basename are not restored [0.31ms]
+(pass) arbitrary filenames have no exception [0.04ms]
+
+src/lib/import-policy.live.test.ts:
+(pass) the live scan reads the whole tree, not a subset [884.41ms]
+(pass) a live scan pointed at an empty directory fails instead of passing [3.68ms]
+(pass) every top-level segment under src/ is classified, and nothing classified is gone [0.79ms]
+(pass) no live file or import target lands in an unclassified zone [0.12ms]
+(pass) every relative specifier in the tree resolves [0.07ms]
+(pass) core owners import client/adapter modules in exactly the allowlisted places [0.15ms]
+(pass) the sac group reaches only the five documented session-state modules [0.26ms]
+(pass) the wiki group is the only core->client debt outside the session-state exception [0.12ms]
+(pass) typeOnlySpecifiers reads every type-only shape and no value import [0.24ms]
+(pass) no production module imports against a forbidden core-to-core direction [685.65ms]
+(pass) facade bypasses that COULD be fixed today are ratcheted, not allowed to grow [1.41ms]
+(pass) exactly the known zones bypass a facade — a new one joining is a real change [0.40ms]
+(pass) some core zones have no service.ts, so the facade rule is unsatisfiable for them [0.90ms]
+(pass) the ten owners src/core.ts publishes really do each have a facade [0.06ms]
+(pass) the bundler reaches no module under src/ that the direct scan failed to name [113.87ms]
+
+ 91 pass
+ 0 fail
+ 365 expect() calls
+Ran 91 tests across 9 files. [29.57s]

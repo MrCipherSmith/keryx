@@ -62,6 +62,7 @@ import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
 import { approvalsCommand } from "./commands/approvals";
+import { permissionsCommand } from "./commands/permissions-command";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
@@ -73,11 +74,16 @@ import { routingCommand } from "./commands/routing";
 import { externalCommand } from "./commands/external";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
+import { remoteCommand } from "./commands/remote";
 import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
+import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
+import { intakeCommand, printIntakeHelp } from "./commands/intake";
+import { researchCommand, printResearchHelp } from "./commands/research-sync";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
-import { productCommand } from "./commands/product";
+import { productCommand, readDigestBoard } from "./commands/product";
+import { registerBoardReader } from "./scheduler/digest-board";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
@@ -87,6 +93,9 @@ import { setupCommand } from "./commands/setup";
 import { GROUP_SUBCOMMANDS } from "./lib/group-subcommands";
 import { MCP_CONSUMER_SUBCOMMANDS } from "./commands/mcp-servers";
 import packageJson from "../package.json" with { type: "json" };
+
+// Flow 389: the scheduled digest reads the flow board through the product command, the only reader of the product index.
+registerBoardReader(readDigestBoard);
 
 export const VERSION = packageJson.version;
 
@@ -129,6 +138,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   auth: authCommand,
   serve: serveCommand,
   approvals: approvalsCommand,
+  permissions: permissionsCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
@@ -167,10 +177,14 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   version: versionCommand,
   workspace: workspaceCommand,
   retention: retentionCommand,
+  remote: remoteCommand,
   forgetting: forgettingCommand,
   trigger: triggerCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
+  decisions: decisionsCommand,
+  intake: intakeCommand,
+  research: researchCommand,
   product: productCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
@@ -267,6 +281,8 @@ export const USAGE_BODY = `Usage:
   keryx serve config init|set|show
   keryx approvals list [--all] [--json] | allow <id> | deny <id>
                                                Answer, from this machine, a call a remote turn is waiting on (once, that call only)
+  keryx permissions list [--json] | remove <number|pattern>
+                                               The saved shell rules an Always answer left behind; take one back
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open
@@ -378,6 +394,9 @@ export const USAGE_BODY = `Usage:
   keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
                                                Bound gdctx raw/artifacts logs and owner write-conflict
                                                sidecars; dry run by default, --apply removes
+  keryx remote format-sample [--mode auto|rich|html|plain] [--full] [--json]
+                                               Print the sample reply in each Telegram rendering mode
+                                               (tables, lists, rules); no network
   keryx forgetting trail [--limit <n>] [--json]
   keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
                                                Read the deletion trail: what was removed, when, at
@@ -391,6 +410,17 @@ export const USAGE_BODY = `Usage:
                                                Spend, confirmations, signatures and gate outcomes,
                                                unified across flows; writes latest.md/latest.json
   keryx governance show [--json]                Reprint the most recently written governance report
+  keryx decisions open|answer|reason|report [--json|--line]|import <file.jsonl> [--dry-run] [--json]
+                                               Recommendation journal: record a question with options and its
+                                               recommendation before showing it, the human's choice after;
+                                               report = match share by mode and stage, deviations (no model);
+                                               import = earlier decisions from a JSON-lines file, kept apart
+  keryx intake status|list|pause|resume|poll|report [--json]
+                                               GitHub work intake: tickets, reviews, failed CI, PR comments and board
+                                               movement as Telegram cards; report = decisions, answer times, card -> flow -> PR
+  keryx research sync                          Refresh the Part 1 materials: counts at HEAD, text-free decisions export, sync-status.md (no commit)
+  keryx research sync --schedule daily | --unschedule
+                                               Run that sync once a day inside keryx serve (the daily entry), or take the entry away
   keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
   keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
@@ -439,6 +469,7 @@ Commands:
   projects  Inspect the user-global registry of initialized projects
   serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
   approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)
+  permissions The saved shell rules (what Always remembered): list them, remove one
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html
@@ -472,10 +503,14 @@ Commands:
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
+  remote    Telegram remote control: preview how replies are rendered, with no network
   forgetting Read the deletion trail — was this removed, or did it never exist?
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
+  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose
+  intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report
+  research  Part 1 materials: sync the -latest counts, the decisions export and the status page
   product   The product's intent as a derived index, and the intents closed in code that nobody looked back at
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
@@ -598,6 +633,9 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],
   ["governance", () => printGovernanceHelp()],
+  ["decisions", () => printDecisionsHelp()],
+  ["intake", () => printIntakeHelp()],
+  ["research", () => printResearchHelp()],
   ["hooks", () => printHooksHelp()],
   ["bundle", () => printBundleHelp()],
   ["learn", () => printLearnHelp()],

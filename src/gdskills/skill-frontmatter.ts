@@ -3,10 +3,10 @@
  *
  * The catalog, the bundled-tree validator, the importer, the review inventory,
  * `review jev-rules` and the stack gate read their frontmatter fields through
- * this module. Two readers still parse for themselves and are not covered by
- * what follows: `parseSkillModelTier` (`model-tier.ts`) and `frontmatterKeys`
- * (`bundled-eval.ts`). When each consumer owned its own parse they drifted, and
- * every fix to one parse left the others on the old behaviour:
+ * this module, as do `parseSkillModelTier` (`model-tier.ts`) and the bundled
+ * evaluator's presence checks (`bundled-eval.ts`). When each consumer owned its
+ * own parse they drifted, and every fix to one parse left the others on the old
+ * behaviour:
  *
  * - the validator checked that a `description:` line existed while the runtime
  *   read only that line's text, and 15 bundled skills whose description was a

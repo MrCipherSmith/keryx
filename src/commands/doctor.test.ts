@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import {
   buildDoctorReport,
   doctorCommand,
@@ -212,6 +212,32 @@ describe("buildDoctorReport — shape (AC1: {checks:[{id,status,detail,fix?}]})"
         // Both see the ONE registered worktree, not "no .claude/worktrees directory".
         expect(worktreesFromMain?.detail).toContain("1 worktree(s)");
       } finally {
+        await rm(mainRoot, { recursive: true, force: true });
+      }
+    });
+
+    test("a main checkout reached through a symlinked path does not report its registered worktree stale", async () => {
+      const mainRoot = await mkdtemp(path.join(tmpdir(), "keryx-doctor-worktree-link-main-"));
+      const linkDir = await mkdtemp(path.join(tmpdir(), "keryx-doctor-worktree-link-"));
+      try {
+        await git(mainRoot, ["init", "-q", "-b", "main"]);
+        await git(mainRoot, ["config", "user.email", "test@example.com"]);
+        await git(mainRoot, ["config", "user.name", "Test"]);
+        await writeFile(path.join(mainRoot, "README.md"), "root\n", "utf8");
+        await git(mainRoot, ["add", "."]);
+        await git(mainRoot, ["commit", "-q", "-m", "initial"]);
+        await mkdir(path.join(mainRoot, ".metaproject"), { recursive: true });
+        const worktreesDir = path.join(mainRoot, ".claude", "worktrees");
+        await mkdir(worktreesDir, { recursive: true });
+        await git(mainRoot, ["worktree", "add", "-q", "-b", "agent/agent-1", path.join(worktreesDir, "agent-1"), "main"]);
+
+        const link = path.join(linkDir, "main-link");
+        await symlink(mainRoot, link, "dir");
+        const check = (await buildDoctorReport(link, {})).checks.find((c) => c.id === "worktrees");
+        expect(check?.status).toBe("ok");
+        expect(check?.detail).toContain("all registered");
+      } finally {
+        await rm(linkDir, { recursive: true, force: true });
         await rm(mainRoot, { recursive: true, force: true });
       }
     });

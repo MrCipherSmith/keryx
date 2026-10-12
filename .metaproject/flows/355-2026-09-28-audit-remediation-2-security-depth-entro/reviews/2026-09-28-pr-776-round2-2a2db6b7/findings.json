@@ -1,0 +1,158 @@
+[
+  {
+    "id": "SEC-F1",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "isWordSlug exempts a hyphen/underscore-segmented run from the entropy/hex-blob gate whenever every segment is pure-alpha, pure-digit, or a single-transition tag, with no check on the RECONSTITUTED value's own entropy. Re-segmenting any real secret into single-character-class chunks joined by '-' defeats looksSecretShaped/secretShapedCandidatesIn entirely.",
+    "impact": "Complete bypass of S-6 (redactSensitiveText) and S-8 (containsOutboundSecret) for a re-segmented secret, and of S-9 (displayUrl masking). Reproduced: a real 32-char alphanumeric secret, re-segmented into letter-run/digit-run chunks ('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8'), passes looksSecretShaped as false, containsOutboundSecret as false when placed in a URL path, and redactSensitiveText leaves it byte-for-byte unredacted even when explicitly labelled 'leaked api_key:'. A simpler variant using real dictionary words on either side of the secret ('log-<secret>-id') reproduces the same bypass.",
+    "suggested_fix": "Do not let isWordSlug's exemption apply to the reconstituted (hyphen-stripped) value's own entropy; require the check to fail when the joined alnum content is itself high-entropy, or cap the exemption to segments short enough that a real version/platform tag would still qualify (a handful of characters) while a secret forced into many short single-class chunks would not.",
+    "evidence": "bun run against ~/keryx-ar2 HEAD 2a2db6b7: looksSecretShaped('aK9dQ2rN7zVbT4pXeYfWmC1oLaHsJtU8') -> true; looksSecretShaped('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8') -> false; containsOutboundSecret('https://exfil.example/aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8') -> false; redactSensitiveText('leaked api_key: aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8') -> unchanged. Minimal-wrap variant: containsOutboundSecret('https://x.example/log-abcdefghijklmnopqrstuvwxyzAB1234-id') -> false; detectEntropy of the same URL -> [].",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 235,
+    "quote": "function isWordSlug(value: string): boolean {\n  const segments = value.split(/[-_]/);\n  if (segments.length < 3) {\n    return false;\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 235
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:235 isWordSlug",
+        "src/security/detect/entropy.ts:274 bareShapeQualifies",
+        "src/security/detect/entropy.ts:319 looksSecretShaped",
+        "src/security/detect/entropy.ts:464 secretShapedCandidatesIn",
+        "src/security/redact.ts:153 redactSensitiveText (S-6)",
+        "src/harness/web/outbound-secret.ts:108,122 containsOutboundSecret (S-8)",
+        "src/mcp-servers/http-headers.ts:351 displayUrl (S-9)",
+        "src/security/detect/index.ts:37 runDetectors (keryx security scan/report/gate)"
+      ],
+      "enumeration_method": "keryx ctx rg \"looksSecretShaped\\(|looksSecretShapedIn\\(|secretShapedCandidatesIn\\(|detectEntropy\\(\" src --glob '!*.test.ts' -> 13 matches, 5 files; every non-test call site read directly."
+    },
+    "global_id": "2026-09-28-pr-776-round2-2a2db6b7#SEC-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Independently re-ran the exact reproduction against ~/keryx-ar2 HEAD 2a2db6b7: looksSecretShaped('aK9dQ2rN7zVbT4pXeYfWmC1oLaHsJtU8') -> true; the same value re-segmented as 'aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8' -> looksSecretShaped false, containsOutboundSecret false when placed in a URL path, redactSensitiveText leaves it unredacted even when labelled 'leaked api_key:'. Reproducible and deterministic (pure functions, no randomness in the segmentation).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 9b0b3f58b18caf90b2e811744133ef2364dc7e4b (merged as ed1c3ba6); pinned by entropy.test.ts describe(\"SEC-F1 (flow 355 review round 2): isWordSlug no longer exempts a re-segmented secret\")"
+    }
+  },
+  {
+    "id": "LOG-F1",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The generic (non-URL) per-line scan's TOKEN character class still includes '/' and '=', so a relative path, a code assignment, or a '/'-joined list is swept as one compound run; SENSITIVE_LABEL's 40-char lookback is same-line PROXIMITY, not true adjacency, so any ordinary occurrence of a label word earlier in the line/comment triggers a match on unrelated text.",
+    "impact": "Silent corruption of tool-output/transcript content, the same impact class F-LOG-F1 was blocker for. Real-file sweep of this repository: git log -p -30 --stat (30 commits) produced 5 false positives (a relative markdown link path near the words 'Credential Masking'; a GitHub noreply-email local part near the word 'key'; a Python 'from_attributes=True' assignment near the word 'API'; a 'passlib/bcrypt/argon2' library-name comment near the word 'password'), against 0 in bun.lock and 0 in CHANGELOG.md.",
+    "suggested_fix": "Decompose '/'-bearing runs the same way URLs are now decomposed (split on '/' before the shape gate); require the label to be genuinely ADJACENT (as ADJACENT_LABEL already does for the allow-shape override) for any match to fire, not only to override an allow-shape.",
+    "evidence": "bun run against ~/keryx-ar2 HEAD 2a2db6b7, detectEntropy() over `git -C ~/keryx log -p -30 --stat` (6,058,824 chars): 10 matches, 5 classified false positive (ADR relative link, noreply-email local part x2, from_attributes=True, passlib/bcrypt/argon2); over docs/**/*.md (518 files, 6,148,276 chars): 1 match (filed separately as REG-F1); over bun.lock (57,262 chars) and CHANGELOG.md (404,366 chars) full-file: 0 matches each.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 173,
+    "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 173
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts detectEntropy generic per-line pass (root)",
+        "src/security/redact.ts:153 redactSensitiveText (S-6)",
+        "src/harness/web/outbound-secret.ts:122 containsOutboundSecret (S-8)",
+        "src/security/detect/index.ts:37 runDetectors (keryx security scan/report/gate)"
+      ],
+      "enumeration_method": "keryx ctx rg \"detectEntropy\\(\" src --glob '!*.test.ts' -> every non-test call site read directly."
+    },
+    "global_id": "2026-09-28-pr-776-round2-2a2db6b7#LOG-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Independently re-ran detectEntropy() over a fresh `git -C ~/keryx log -p -30 --stat` capture and over docs/**/*.md: reproduced the same 5 false positives in the git-log slice (ADR relative link, noreply-email local part x2, from_attributes=True, passlib/bcrypt/argon2) and 0 hits in bun.lock/CHANGELOG.md. Each hit's context matches the finding's description exactly.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 9b0b3f58b18caf90b2e811744133ef2364dc7e4b (merged as ed1c3ba6); pinned by redact.test.ts describe(\"F-LOG-F1 (flow 355 review, PR #776): URLs are decomposed, not joined into one run\")"
+    }
+  },
+  {
+    "id": "REG-F1",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "isSingleTransitionTag only forgives a segment that changes character class at most once. Medium's and GitHub Gist's common '<slug>-<hex id>' URL convention interleaves letters and digits many times in the trailing id, which fails isWordSlug entirely (one bad segment poisons the whole slug check) and falls through to the entropy gate, qualifying as secret-shaped.",
+    "impact": "web_fetch refuses an entirely ordinary, public, non-credential URL, contradicting AC4's guarantee. Reproduced against a URL already present in this repository's own docs: docs/requirements/keryx-wiki-graph-next/README.md links a Medium article whose trailing hex id triggers the refusal; a GitHub Gist URL reproduces the same failure.",
+    "suggested_fix": "Extend the single-transition carve-out (or add a sibling rule) to accept a segment shaped as a leading alpha run followed by a trailing pure-hex run with no further alternation ('slug + trailing hex id'), the same class of 'structured, not random' evidence the existing pip/npm version-tag carve-out already grants.",
+    "evidence": "bun run against ~/keryx-ar2 HEAD 2a2db6b7: containsOutboundSecret('https://medium.com/real-time-data-evolution/rag-architecture-in-2026-how-to-keep-retrieval-actually-fresh-3a9bae9ec8f9') -> true (refused); containsOutboundSecret('https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890') -> true (refused). detectEntropy over docs/requirements/keryx-wiki-graph-next/README.md's own current content reproduces the same match on the live file.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 231,
+    "quote": "function isSingleTransitionTag(segment: string): boolean {\n  return /^[A-Za-z]+[0-9]+$/.test(segment) || /^[0-9]+[A-Za-z]+$/.test(segment);\n}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 231
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:231 isSingleTransitionTag",
+        "src/security/detect/entropy.ts:235 isWordSlug",
+        "src/harness/web/outbound-secret.ts:108 anyComponentLooksSecret (S-8)",
+        "src/security/detect/entropy.ts detectEntropy URL-component pass (S-6/redaction of tool output containing this URL shape)"
+      ],
+      "enumeration_method": "keryx ctx rg \"looksSecretShapedIn\\(|secretShapedCandidatesIn\\(\" src --glob '!*.test.ts'; both call sites read directly and reproduced against the live docs file."
+    },
+    "global_id": "2026-09-28-pr-776-round2-2a2db6b7#REG-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Independently re-ran containsOutboundSecret against the exact Medium URL taken from docs/requirements/keryx-wiki-graph-next/README.md's live content, and against the constructed Gist URL: both true (refused). Root cause traced to isSingleTransitionTag/isWordSlug by direct inspection of src/security/detect/entropy.ts:231-252 — the trailing hex-id segment has 6+ letter/digit transitions, exceeding the single-transition carve-out by construction, not by chance.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: the Gist-URL half of REG-F1's own reproduction (containsOutboundSecret on https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890) now returns false (was true), closed by round 3's REG-F2 fix; pinned by outbound-secret.test.ts describe 'REG-F2 (flow 355 review round 3): a known public paste/commit identifier fetches', all 7 tests green at 22478bc0a9970324373cbe38fb5fd7e34568f64c. Both halves of REG-F1's original claim (Medium URL, Gist URL) now pass."
+    }
+  },
+  {
+    "id": "SEC-F2",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "Continuation of round-1 F-SEC-F2. The fixed label-overrides-allow-shape logic is correct, but bareShapeQualifies's own entropy floor (3.6 bits, no hex-blob match possible for a hyphenated UUID) runs BEFORE the label is ever consulted, so whether a labelled UUID is redacted depends entirely on that UUID's own digit repetition, independent of the label.",
+    "impact": "Non-deterministic protection for UUID-shaped credentials even when explicitly labelled as leaked. Sample: 6 of 8 UUIDs redacted when labelled 'leaked credential:'; 2 were not, including the canonical RFC 4122 example UUID (550e8400-e29b-41d4-a716-446655440000, entropy 3.39) that appears throughout real documentation and example code. The existing regression test for this exact case uses a UUID (entropy 4.06) that happens to clear the floor, so it passes without exercising the boundary.",
+    "suggested_fix": "Lower (or bypass) the entropy floor specifically on the labelled path — a label is already a strong independent signal, and the floor's purpose is to avoid false positives on UNLABELLED text — or special-case UUID_RE-shaped values in the labelled scan the same way the allow-shape override already does for the unlabelled path. Test with a representative sample of UUIDs, not one fixed value.",
+    "evidence": "bun run against ~/keryx-ar2 HEAD 2a2db6b7: shannonEntropy('550e8400-e29b-41d4-a716-446655440000') = 3.39 (< 3.6 floor); redactSensitiveText('leaked credential: ' + that UUID) leaves it unchanged. 8-UUID sample (2 canonical + 6 crypto.randomUUID()): 6/8 redacted when labelled, 2/8 not (entropies 3.39 and 3.56). src/security/redact.test.ts:164-168 'a LABELLED UUID is redacted' passes only because its fixed example UUID has entropy 4.06.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 274,
+    "quote": "function bareShapeQualifies(head: string): { qualifies: boolean; entropy: number } {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 274
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:182 HEX_BLOB/isHexBlob",
+        "src/security/detect/entropy.ts:196-202 UUID_RE/isAllowShapedValue",
+        "src/security/detect/entropy.ts:274 bareShapeQualifies (entropy-gate ordering)",
+        "src/security/redact.ts:153 redactSensitiveText (where the gap manifests, S-6)"
+      ],
+      "enumeration_method": "keryx ctx rg \"isAllowShapedValue|UUID_RE|bareShapeQualifies\" src/security/detect/entropy.ts; single definition site, single call path into the labelled scan."
+    },
+    "global_id": "2026-09-28-pr-776-round2-2a2db6b7#SEC-F2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Independently recomputed Shannon entropy for the 8-UUID sample and re-ran redactSensitiveText against each labelled: 550e8400-e29b-41d4-a716-446655440000 (entropy 3.39) and one random sample (entropy 3.56) both left unredacted; 6/8 redacted. src/security/redact.test.ts:164-168's own fixed UUID independently confirmed to carry entropy 4.06, above the 3.6 floor, explaining why the existing test does not catch this.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 9b0b3f58b18caf90b2e811744133ef2364dc7e4b (merged as ed1c3ba6); pinned by redact.test.ts describe(\"F-SEC-F2 (flow 355 review, PR #776): a label overrides an allow-shape\") and entropy.test.ts describe(\"SEC-F2 (flow 355 review round 2, residual): a labelled UUID is redacted regardless of its own entropy\")"
+    }
+  }
+]

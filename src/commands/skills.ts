@@ -516,6 +516,29 @@ function printInstallPlanHuman(plan: InstallPlan): void {
   }
 }
 
+function shellWord(value: string): string {
+  return /^[\w:./@=+-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The command a dry-run tells the user to run to apply the plan it just
+ * printed. Every plan-shaping flag that was passed is reproduced — leaving one
+ * out would apply a different plan than the one previewed.
+ */
+export function installApplyCommand(opts: {
+  profile: string;
+  target: string;
+  withValues: readonly string[];
+  withoutValues: readonly string[];
+  includeDeprecated: boolean;
+}): string {
+  const parts = ["keryx skills install", `--profile ${shellWord(opts.profile)}`, `--target ${shellWord(opts.target)}`];
+  for (const id of opts.withValues) parts.push(`--with ${shellWord(id)}`);
+  for (const id of opts.withoutValues) parts.push(`--without ${shellWord(id)}`);
+  if (opts.includeDeprecated) parts.push("--include-deprecated");
+  return parts.join(" ");
+}
+
 async function installFromManifest(opts: {
   profileId: string;
   withValues: string[];
@@ -549,7 +572,15 @@ async function installFromManifest(opts: {
       printInstallPlanHuman(plan);
       if (plan.ok) {
         nextSteps([
-          `Apply this plan: ${style.cyan(`keryx skills install --profile ${plan.profile} --target ${plan.target}`)}`,
+          `Apply this plan: ${style.cyan(
+            installApplyCommand({
+              profile: plan.profile,
+              target: plan.target,
+              withValues: opts.withValues,
+              withoutValues: opts.withoutValues,
+              includeDeprecated: opts.includeDeprecated,
+            }),
+          )}`,
         ]);
       }
     }

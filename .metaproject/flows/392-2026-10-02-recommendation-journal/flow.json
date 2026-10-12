@@ -1,0 +1,403 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "392",
+  "slug": "recommendation-journal",
+  "title": "Recommendation journal: что рекомендовал агент и что выбрал человек",
+  "status": "implemented",
+  "createdAt": "2026-10-02T11:54:20.132Z",
+  "updatedAt": "2026-10-02T15:53:32.718Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-02T15:53:23.232Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks); smoke of 0.3.62 live: open/answer/report wrote and read a record with all fields"
+    },
+    "AC2": {
+      "at": "2026-10-02T15:53:29.465Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC3": {
+      "at": "2026-10-02T15:53:29.838Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC4": {
+      "at": "2026-10-02T15:53:30.188Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC5": {
+      "at": "2026-10-02T15:53:30.620Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC6": {
+      "at": "2026-10-02T15:53:31.033Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC7": {
+      "at": "2026-10-02T15:53:31.413Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC9": {
+      "at": "2026-10-02T15:53:31.867Z",
+      "note": "bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on"
+    },
+    "AC8": {
+      "at": "2026-10-02T15:53:32.317Z",
+      "note": "bun test src/tui passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; /decisions modal and sb-decisions sidebar row shipped in 0.3.62"
+    },
+    "AC10": {
+      "at": "2026-10-02T15:53:32.718Z",
+      "note": "bun test src/flow passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; the two flow-390 tails fixed inside this flow (originSet carry-over, bounded /flow origin summary)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/856"
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Мне нравится про потерю замысла и пункт про то что суждение превращается в выбор рекомендации. Тут можно глубже, поскольку рекомендация это как раз то что предлагает агент. И это сильнее размывает роль человека.",
+    "source": "operator 2026-10-02 07:24 UTC, confirmed 07:26 UTC"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context was collected in the flow PRD and plan before implementation (description.md, context.md)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #856 (src/decisions, ask_user wrapper, CLI, TUI modal and sidebar); merged as c5e365ca"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tests added with the implementation under src/decisions and src/tui; CI on PR #856 was green at c95f530a"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "five independent review rounds on PR #856, all findings acted on, draft PR opened and merged"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T11:54:20.132Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T11:58:15.644Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T11:58:15.818Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T12:16:48.491Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/856 (base: main)"
+    },
+    {
+      "at": "2026-10-02T14:20:15.955Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"After a deviation from the recommendation the human is asked once for a reason; the field is optional and an empty answer is recorded as absent. [verify: exec `bun test src/decisions`]\" -> \"After a deviation from the recommendation the human is asked once for a reason and the tool result waits for the answer; the field is optional, an empty answer is recorded as absent and releases the wait. [verify: exec `bun test src/decisions`]\" (Operator decision, poll 42, 2026-10-02 14:11 UTC: ask for the reason blocking, once)"
+    },
+    {
+      "at": "2026-10-02T14:20:18.759Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"The journal never blocks and never delays a question; a question outside a flow goes to the project-wide journal; a decision inside a flow also appears as a line in the flow's journal.md. [verify: exec `bun test src/decisions`]\" -> \"Journaling itself never blocks or delays a question and a journaling failure never throws into the question path; the single deliberate wait is the optional reason prompt after a deviation (AC6), by operator decision. A question outside a flow goes to the project-wide journal; a decision inside a flow also appears as a line in the flow's journal.md. [verify: exec `bun test src/decisions`]\" (Operator decision, poll 42, 2026-10-02 14:11 UTC: the reason prompt is the one allowed wait)"
+    },
+    {
+      "at": "2026-10-02T15:53:04.996Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T15:53:05.256Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T15:53:05.609Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T15:53:05.892Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T15:53:23.233Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks); smoke of 0.3.62 live: open/answer/report wrote and read a record with all fields (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:29.465Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:29.838Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:30.189Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:30.620Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:31.034Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:31.414Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:31.867Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:32.317Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun test src/tui passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; /decisions modal and sb-decisions sidebar row shipped in 0.3.62 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:53:32.718Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: bun test src/flow passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; the two flow-390 tails fixed inside this flow (originSet carry-over, bounded /flow origin summary) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/tui"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/flow"
+    },
+    "AC11": {
+      "kind": "judged"
+    }
+  },
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-02T15:53:23.232Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:29.465Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:29.838Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:30.188Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:30.620Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:31.033Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:31.413Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:31.867Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:32.317Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-02T15:53:32.718Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    }
+  ]
+}

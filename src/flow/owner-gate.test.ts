@@ -171,7 +171,7 @@ test("AC5: the REAL flow-201/204 legacy shape — `gates: { tasks: true, review:
   // gate must read this as "not opted in" via `!flow.gates?.owner`, not via
   // `!flow.gates`.
   const raw = await readRawFlow(dir);
-  expect(raw.gates).toEqual({ tasks: true, review: true, owner: true });
+  expect(raw.gates).toEqual({ tasks: true, review: true, owner: true, folderCommitted: true });
   raw.gates = { tasks: true, review: true };
   expect(raw.gates).not.toHaveProperty("owner");
   delete raw.owner;

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow358-pr790-review",
+    "severity": "minor",
+    "problem": "Dated model ids get no version: in claude-sonnet-4-20250514 the tokens 4 and 20250514 merge into one group that the all-short-digits check rejects.",
+    "impact": "Generation ordering silently does not apply to dated Anthropic ids, the main real-world case.",
+    "suggested_fix": "Drop a trailing date-like token (6 or 8 digits) before grouping.",
+    "evidence": "Probe on the PR branch: parseModelVersion returned undefined for claude-sonnet-4-20250514, claude-sonnet-4-5-20250929, claude-opus-4-1-20250805 and claude-3-5-haiku-20241022.",
+    "confidence": "medium",
+    "file": "src/gdskills/model-version.ts",
+    "line": 175,
+    "quote": "if (!tokens.every((t) => SHORT_DIGITS_TOKEN.test(t))) return undefined;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 175
+    },
+    "class_scope": {
+      "sites": [
+        "src/gdskills/model-version.ts:parseModelVersion",
+        "src/harness/routing/derive-default-table.ts:compareStrengthById"
+      ],
+      "enumeration_method": "read the module and its consumers in full"
+    },
+    "global_id": "2026-09-28-ingest-790#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 0841fe8b parseModelVersion returns 4, 4.5, 4.1 and 3.5 for the four dated ids; covered by new tests in derive-default-table.test.ts and model-tier.test.ts (265 pass)",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 0841fe8b: trailing date token dropped before version grouping"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow358-pr790-review",
+    "severity": "minor",
+    "problem": "The 20 s timeout only stops waiting: no AbortSignal reaches runModelTurn, and no baseUrl is passed.",
+    "impact": "A slow provider finishes a billed call whose answer is discarded; a provider baseUrl override is ignored.",
+    "suggested_fix": "Create an AbortController per call, pass signal and baseUrl into run(), abort on timeout.",
+    "evidence": "tier-rank-agent.ts run() call passed neither signal nor baseUrl; withTimeout in model-tier.ts only cleared its timer.",
+    "confidence": "medium",
+    "file": "src/harness/routing/tier-rank-agent.ts",
+    "line": 165,
+    "quote": "const result = await run({",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 165
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/tier-rank-agent.ts:createTierRankAgent",
+        "src/gdskills/model-tier.ts:withTimeout"
+      ],
+      "enumeration_method": "read the module and its consumers in full"
+    },
+    "global_id": "2026-09-28-ingest-790#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 0841fe8b model-tier.ts:1123 passes controller.signal and tier-rank-agent.ts forwards signal and baseUrl to run(); a test asserts the abort after timeout",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 0841fe8b: AbortController signal and baseUrl reach run()"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow358-pr790-review",
+    "severity": "major",
+    "problem": "The failure memo covers only a thrown error: rejected answers are never memoised, there is no in-flight dedupe, and the candidate list is uncapped against a 512-token output cap.",
+    "impact": "Every refused or ambiguous spawn pays another call; concurrent spawns all pay; a large catalogue truncates the answer.",
+    "suggested_fix": "Share the in-flight promise per catalogue key, memoise unusable outcomes, cap candidates.",
+    "evidence": "failures.set was reachable only from the catch block; buildRankPrompt listed every candidate.",
+    "confidence": "medium",
+    "file": "src/harness/routing/tier-rank-agent.ts",
+    "line": null,
+    "quote": "failures.set(key, { at: now(), message",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 188
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/routing/tier-rank-agent.ts:createTierRankAgent",
+        "src/gdskills/model-tier.ts:buildRankPrompt"
+      ],
+      "enumeration_method": "read the module and its consumers in full"
+    },
+    "global_id": "2026-09-28-ingest-790#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 0841fe8b in-flight calls share one promise, unusable answers are memoised, RANK_MAX_CANDIDATES=24 (model-tier.ts:894); tests cover concurrent, malformed and 60-model cases",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 0841fe8b: in-flight dedupe, unusable answers memoised, candidates capped at 24"
+    }
+  }
+]

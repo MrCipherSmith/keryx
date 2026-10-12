@@ -41,6 +41,13 @@ const ALLOWED_CONFUSABLE: ReadonlyArray<{ pair: readonly [string, string]; becau
       "usage); /schedules (meant /schedule) only opens the read-only list, whose actions each need their own key.",
   },
   {
+    pair: ["/flow", "/flows"],
+    because:
+      "Same subject, and neither direction acts on a mistype: /flows only opens the read-only flow browser, " +
+      "and /flow (meant /flows) prints its usage, or the origin of a flow it is asked about; it writes only " +
+      "when given `origin <id> <kind> --reason ...`, which /flows never accepts.",
+  },
+  {
     pair: ["/review", "/reviews"],
     because:
       "Same subject, and both only open a modal: /review lists items needing review and /reviews lists " +

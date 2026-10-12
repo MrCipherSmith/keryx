@@ -1,0 +1,59 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow388-docs-consistency",
+    "severity": "minor",
+    "problem": "Section 6 'Smallest first step' still specifies a Groq cloud transcription flow, while the Recommendation and the operator decision say speech recognition is local from the first version. Only the intro marks sections 3 to 6 as background.",
+    "impact": "A reader who opens section 6 directly plans the wrong first follow-up flow (cloud, Groq key) against the operator decision.",
+    "suggested_fix": "Mark the headings of sections 3 to 6 as superseded cloud background, or point section 6 at the local first step in the Recommendation.",
+    "evidence": "Read docs/requirements/keryx-voice/report.md lines 5-11 (Recommendation) and 72-76 (section 6) at b856f1d8.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-voice/report.md",
+    "line": 72,
+    "quote": "## 6. Smallest first step: expected outcome of follow-up flow 1",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 72
+    },
+    "global_id": "2026-10-02-ingest-846#F-001"
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow388-docs-consistency",
+    "severity": "minor",
+    "problem": "The install-weight table covers Linux x64, Linux arm64, macOS arm64 and macOS x64 only. Windows is neither covered nor declared out of scope.",
+    "impact": "The follow-up flow could assume Windows support that nobody investigated.",
+    "suggested_fix": "State in the Not done section whether Windows is out of scope or unverified.",
+    "evidence": "Read report.md lines 131-144 at b856f1d8; the word Windows does not appear in the file.",
+    "confidence": "medium",
+    "file": "docs/requirements/keryx-voice/report.md",
+    "line": 133,
+    "quote": "| Stack | Linux x64 | Linux arm64 | macOS arm64 | macOS x64 |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 133
+    },
+    "global_id": "2026-10-02-ingest-846#F-002"
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow388-docs-consistency",
+    "severity": "info",
+    "problem": "Piper voice size is about 60 MB per voice in section 4 and about 21 MB per voice in section 8, without saying the first is helyx's own Piper build and the second is the int8 sherpa export.",
+    "impact": "Two figures for the same product in one report can read as an error; no decision depends on it because section 4 is background.",
+    "suggested_fix": "Name the stack next to each figure.",
+    "evidence": "Read report.md lines 27, 57 and 120 at b856f1d8.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-voice/report.md",
+    "line": 57,
+    "quote": "| Piper | local | 52 MB + about 60 MB per voice | spawn a binary | $0 | both | $0 | WAV, needs an encoder |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 57
+    },
+    "global_id": "2026-10-02-ingest-846#F-003"
+  }
+]

@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true,
+    "confirmation": true
+  },
+  "id": "427",
+  "slug": "review-autonomy-hardening",
+  "title": "Надёжность и безопасность автономного review",
+  "status": "implemented",
+  "createdAt": "2026-10-11T15:21:56.625Z",
+  "updatedAt": "2026-10-12T20:11:50.456Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/975"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Baseline 00879558 isolated; original audit and regression scenarios recorded"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Eight hardening findings implemented; see implementation-report.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Typecheck and 1639 regression tests pass; CI pending"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "PR 975 is already merged; the self-review and draft-PR step is replaced by a managed review round of the merged PR"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-11T15:21:56.625Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-11T17:20:33.264Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-11T17:20:33.709Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-11T17:20:34.163Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-11T17:20:34.606Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-11T17:20:35.043Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-12T20:11:47.917Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-12T20:11:50.456Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/975 (warning: PR is not a draft)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/ledger.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/tui/ask-user-bridge-arbiter.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/ledger.test.ts src/commands/review-slice.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/slice-dispatch.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-arbiter.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/review/completion-gate.test.ts"
+    },
+    "AC9": {
+      "kind": "judged"
+    }
+  }
+}

@@ -43,6 +43,13 @@ export type OpenModalInput = {
   /** Claim left/right arrows before modal-host's tab switch. */
   onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
   /**
+   * Claim any key but Escape before the host's own handling (`x` close, tab
+   * switches, digit jumps). Return true when the body consumed it; the host
+   * then stops it there. For typed input the host would otherwise read as
+   * navigation.
+   */
+  claimKey?: (key: { name: string; sequence: string }) => boolean | undefined;
+  /**
    * True while the tab body takes every key itself (a hand-built secret field): the host then
    * neither closes on `x`/Esc nor switches tabs, whatever the focus and whichever handler is
    * registered first.
@@ -188,6 +195,21 @@ export function formatModalFooter(actions: readonly ModalFooterAction[]): string
   return actions.map((action) => `${action.key} ${action.label}`).join(" · ");
 }
 
+// Closed modal nodes remain in choice hand-back chains, but must never take focus.
+const modalHandBack = new WeakMap<object, Renderer["currentFocusedRenderable"]>();
+export function modalFocusFallback(node: object): Renderer["currentFocusedRenderable"] {
+  return modalHandBack.get(node) ?? null;
+}
+function focusIsLive(node: NonNullable<Renderer["currentFocusedRenderable"]>, root: unknown): boolean {
+  let current: typeof node | null = node;
+  while (current !== null) {
+    if (current.isDestroyed || !current.visible) return false;
+    if (current === root) return true;
+    current = current.parent as typeof node | null;
+  }
+  return false;
+}
+
 type HostState = {
   otui: OpenTui;
   chrome: ModalChrome;
@@ -211,6 +233,7 @@ type HostState = {
   releaseOverlay: (() => void) | undefined;
   unsubKeys: (() => void) | undefined;
   savedScrollTop: number | undefined;
+  savedFocus: Renderer["currentFocusedRenderable"];
   unsubTheme: () => void;
 };
 
@@ -243,6 +266,16 @@ export function containsNode(root: { getChildren: () => unknown[] }, node: unkno
     }
   }
   return false;
+}
+
+/**
+ * True while the modal on `renderer` is open and `node` is outside it: focusing `node` then would put the
+ * keyboard on something the opaque backdrop hides. A composer-dock choice asks this before it hands the
+ * keyboard back on close (`composer-choice.ts`), so a modal that opened meanwhile keeps it.
+ */
+export function modalHides(renderer: Renderer, node: unknown): boolean {
+  const state = hosts.get(renderer);
+  return state !== undefined && state.open && !containsNode(state.backdrop, node);
 }
 
 function resolveInitialTab(tabs: readonly ModalTab[], initialTab: string | undefined): string {
@@ -353,7 +386,14 @@ function closeHost(state: HostState, opts: { restoreFocus: boolean; runOnClose: 
     if (state.savedScrollTop !== undefined && scroll !== undefined) {
       scroll.scrollTop = state.savedScrollTop;
     }
-    state.chrome.focusComposer();
+    const r = state.chrome.renderer;
+    const current = r.currentFocusedRenderable;
+    // A newer surface owns its focus; otherwise return to the still-live holder.
+    if (current === null || containsNode(state.backdrop, current)) {
+      const previous = state.savedFocus;
+      if (previous !== null && focusIsLive(previous, r.root)) previous.focus();
+      else state.chrome.focusComposer();
+    }
   }
   if (opts.runOnClose && onClose !== undefined) {
     onClose();
@@ -503,6 +543,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     releaseOverlay: undefined,
     unsubKeys: undefined,
     savedScrollTop: undefined,
+    savedFocus: null,
     unsubTheme: () => {},
   };
 
@@ -518,6 +559,14 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     const inBody = focused !== null && containsNode(state.scroll, focused);
     if (key.name === "escape") {
       closeHost(state, { restoreFocus: true, runOnClose: true });
+      key.preventDefault();
+      key.stopPropagation();
+      return;
+    }
+    // Flow 364: a tab body in the middle of typed input (the governance
+    // modal's flow-id confirmation) takes every key but Escape, so `x`, the
+    // arrows, Tab and the digit tab-jumps below never reach the host.
+    if (state.input.claimKey?.(key) === true) {
       key.preventDefault();
       key.stopPropagation();
       return;
@@ -662,6 +711,8 @@ export function openModal(
     state.onClose = undefined;
     previousClose?.();
   } else {
+    state.savedFocus = chrome.renderer.currentFocusedRenderable;
+    modalHandBack.set(state.tabStrip, state.savedFocus);
     state.savedScrollTop = chrome.scroll.scrollTop;
     chrome.hideMenu();
     chrome.blurComposer();

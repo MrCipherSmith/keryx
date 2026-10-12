@@ -2,7 +2,8 @@
 // Reads the index only. A count and a list — nothing here refuses, blocks or
 // actions anything, and an entry leaves the list only by being observed.
 
-import { readOutcomeAuthor } from "../flow/service";
+import { effectiveOutcomeAuthor, originDetailLines, readOriginKind, readOrigin } from "../flow/service";
+import { g1aByOrigin, g1aLines } from "./by-origin";
 import { NO_INSTRUMENT, hasInstrument } from "./extract";
 import { checkStaleness, readIntentIndex } from "./store";
 import type { IntentIndex, OpenEntry, OpenReport } from "./types";
@@ -17,7 +18,9 @@ export function buildOpenReport(index: IntentIndex): OpenReport {
       closedAt: intent.closedAt,
       outcome: hasInstrument(intent.outcome.criterion) ? intent.outcome.criterion : (intent.outcome.criterion ?? NO_INSTRUMENT),
       hasCriterion: hasInstrument(intent.outcome.criterion),
-      outcomeAuthor: readOutcomeAuthor(intent.outcomeAuthor),
+      outcomeAuthor: effectiveOutcomeAuthor({ outcomeAuthor: intent.outcomeAuthor, origin: intent.origin }),
+      origin: readOriginKind(intent.origin),
+      ...originFields(intent.origin),
     }))
     .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "") || Number.parseInt(b.id, 10) - Number.parseInt(a.id, 10) || (a.path < b.path ? -1 : 1));
   const { counts } = index;
@@ -33,6 +36,15 @@ export function buildOpenReport(index: IntentIndex): OpenReport {
     inconclusive: counts.inconclusive,
     failures: index.failures.length,
     entries,
+    g1a: g1aByOrigin(index),
+  };
+}
+
+function originFields(raw: unknown): { originQuote?: string; originSource?: string } {
+  const origin = readOrigin(raw);
+  return {
+    ...(origin?.quote === undefined ? {} : { originQuote: origin.quote }),
+    ...(origin?.source === undefined ? {} : { originSource: origin.source }),
   };
 }
 
@@ -58,13 +70,15 @@ export function openEntryLines(entry: OpenEntry): string[] {
     `${label}  ${entry.title}`,
     `${pad}outcome: ${entry.outcome}`,
     `${pad}outcome author: ${entry.outcomeAuthor}`,
+    ...originDetailLines(entry.origin === undefined || entry.origin === "unknown" ? undefined : { kind: entry.origin, quote: entry.originQuote, source: entry.originSource }, pad),
     `${pad}closed ${entry.closedAt === null ? "at an unrecorded time" : entry.closedAt.slice(0, 10)}`,
   ];
 }
 
 export function renderOpen(report: OpenReport): string {
   const rows = report.entries.flatMap((entry) => ["", ...openEntryLines(entry).map((line) => `  ${line}`)]);
-  return [...openHeaderLines(report), ...rows].join("\n");
+  const g1a = g1aLines(report.g1a);
+  return [...openHeaderLines(report), ...rows, ...(g1a.length > 0 ? ["", ...g1a] : [])].join("\n");
 }
 
 export type OpenLoad =

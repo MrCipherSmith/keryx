@@ -1,0 +1,357 @@
+[
+  {
+    "id": "R3-01",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "A legacy baseline's sources are resolved from the current run's measured set, so a source it measured but that is missing now is absent; the lost-source guard cannot fire, the run adopts, and when the source returns it counts as new and its regression is excluded and absorbed.",
+    "impact": "Upgrading users: a transient missing eslint/typescript on the run oxlint first appears lets a later real regression pass the gate (50-point drop reported PASS).",
+    "suggested_fix": "Resolve a legacy baseline to the frozen pre-352 source set, not the current run's set; never adopt on a degraded run.",
+    "evidence": "probe.test.ts S5a: legacy {project:100}, eslint removed + oxlint named -> adopted with [oxlint]; eslint back with 5 errors -> health 50, reg 0, PASS. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 58,
+    "quote": "  return new Set(measuredNow.filter((source) => !SOURCES_ADDED_AFTER_LEGACY_BASELINES.includes(source)));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/baseline.ts loadBaselineSources legacy branch",
+        "src/health/run.ts shouldAdoptWidenedBaseline lost-source guard"
+      ],
+      "enumeration_method": "keryx ctx rg 'loadBaselineSources|shouldAdoptWidenedBaseline|SOURCES_ADDED_AFTER_LEGACY_BASELINES' over src/health: one caller, one adoption site."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-01",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "probe.test.ts -t S5a retargeted to the copy: legacy {project:100}, eslint bin removed + oxlint named -> baseline sources [oxlint] (adopted, gate incomplete); eslint restored with 5 errors -> gate pass, health 50, reg 0, baseline health 50.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: frozen LEGACY_BASELINE_SOURCES; round 4 S5a FAIL reg 50"
+    }
+  },
+  {
+    "id": "R3-02",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "A new source's findings are excluded from trend/regression until an adoption succeeds, and nothing bounds that window.",
+    "impact": "A new linter's P1 errors can multiply under PASS and the grown score becomes the baseline (oxlint 1 -> 8 errors, health 80 -> 20, PASS).",
+    "suggested_fix": "Record the new source's first-seen effect immediately, independent of adoption; compare its growth from the next run.",
+    "evidence": "probe.test.ts S8. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/scopes.ts",
+    "line": 97,
+    "quote": "                scopeFindings.filter((f) => !newSources.has(f.source)),",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/scopes.ts comparableHealth",
+        "src/health/run.ts newSources + shouldAdoptWidenedBaseline (the only exit)"
+      ],
+      "enumeration_method": "keryx ctx rg 'newSources' over src/health: produced once in run.ts, consumed only in scopes.ts, cleared only by adoption."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-02",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "probe.test.ts -t S8: r2 gate fail (health 80, reg 10, sources stay [eslint]); r3 eslint 0, oxlint 8 -> gate pass, health 20, reg 0, baseline rewritten to 20 with [eslint,oxlint].",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: fold on first sighting; round 4 S8 FAIL reg 70"
+    }
+  },
+  {
+    "id": "R3-03",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "Widened-baseline adoption rewrites every scope with the current run, checking only the project's regression against warn, so already-regressed module/file scopes and sub-warn project drift are absorbed by an ordinary health run. Also raised by review-logic (F-L3-03).",
+    "impact": "health status regressed counts, health explain trend and the gate lose regressions with no code change and no operator action.",
+    "suggested_fix": "Never rewrite scopes wholesale on a normal run; add only the new source's own effect per scope.",
+    "evidence": "probe-adopt-module.ts: module:src/alpha reg5/regressed -> after oxlint (0 diagnostics) adoption -> reg0/stable on the same tree. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": null,
+    "quote": "    await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 235, 244, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/service.ts status regressed/declining counts",
+        "src/commands/health.ts explain trend",
+        "src/health/gate.ts regression escalation"
+      ],
+      "enumeration_method": "keryx ctx rg 'regression_score|\\.trend\\b' over src excluding tests; kept every reader comparing against the stored baseline over time."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-03",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "probe-adopt-module.ts on the copy: run2 module:src/alpha 95/reg5/regressed; run3 oxlint named (0 diagnostics) rewrote all scopes; run4 same tree module:src/alpha 95/reg0/stable.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: per-source fold; round 4 probe-adopt-module keeps reg5/regressed"
+    }
+  },
+  {
+    "id": "R3-04",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The lost-source adoption clause is untested.",
+    "impact": "Removing it keeps CI green while reintroducing R3-01's failure for new-format baselines.",
+    "suggested_fix": "Test: baseline with eslint, eslint broken while oxlint appears -> baseline unchanged; eslint regresses later -> regression > 0.",
+    "evidence": "Mutant P13: bun test src/health 175 pass. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 268,
+    "quote": "  if ([...baselineSources].some((source) => !now.has(source))) return false;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/run.ts shouldAdoptWidenedBaseline lost-source clause"
+      ],
+      "enumeration_method": "Every adoption clause was mutated individually; this is one of the survivors."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-04",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutant removing the lost-source clause in the copy's run.ts: bun test --timeout 30000 src/health 175 pass, 0 fail (twice). Restored identical.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 removed shouldAdoptWidenedBaseline; replacement covered (round 4 Q07c/Q08 red)"
+    }
+  },
+  {
+    "id": "R3-05",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The newSources guard on adoption is untested.",
+    "impact": "Removing it would re-baseline every sub-warn run, ratcheting the baseline down unseen, with CI green.",
+    "suggested_fix": "Test: one small drop leaves the baseline unchanged; a second makes regression >= warn.",
+    "evidence": "Mutant P18: bun test src/health 175 pass. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 238,
+    "quote": "    newSources.size > 0 &&",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/run.ts adoption guard"
+      ],
+      "enumeration_method": "Every adoption clause was mutated individually; this is one of the survivors."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-05",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutant removing 'newSources.size > 0 &&': bun test src/health 175 pass, 0 fail. Restored identical.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 removed the guard; round 4 Q17 equivalent"
+    }
+  },
+  {
+    "id": "R3-06",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The list is only a one-time migration fact if legacy baselines get upgraded; a project not using oxlint never upgrades, so every future source needs an unenforced edit here.",
+    "impact": "A forgotten entry brings R2-01 back for the next source.",
+    "suggested_fix": "Write the resolved set into a legacy baseline on its first unfiltered whole-project run, then freeze the constant.",
+    "evidence": "run.ts writes a baseline only when absent or on adoption; loadBaselineSources never writes back.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 26,
+    "quote": "export const SOURCES_ADDED_AFTER_LEGACY_BASELINES: readonly string[] = [\"oxlint\"];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: frozen set written into legacy files; d3d9e7c9 pins it literally"
+    }
+  },
+  {
+    "id": "R3-07",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A `changed`-scope updateBaseline rewrites every scope but keeps the old source set.",
+    "impact": "The next run treats the latest run's sources as new and masks an equal regression.",
+    "suggested_fix": "Record the measured set for `changed` too.",
+    "evidence": "S9: after updateBaseline({scope: changed}) every scope was rewritten and `sources` stayed absent.",
+    "confidence": "medium",
+    "file": "src/health/service.ts",
+    "line": 335,
+    "quote": "        input.scope === undefined || input.scope.kind === \"project\" ? measuredSources(latest.sources) : undefined,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: changed scope records sources"
+    }
+  },
+  {
+    "id": "R3-08",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A whole-project updateBaseline from a --sources-filtered report records only the filtered set.",
+    "impact": "The next full run treats every other source as new and absorbs a real regression.",
+    "suggested_fix": "Refuse a filtered report.",
+    "evidence": "S10: eslint 0 -> 3 errors hidden after a filtered re-baseline.",
+    "confidence": "high",
+    "file": "src/health/service.ts",
+    "line": 330,
+    "quote": "      const updated = await writeBaseline(",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: filtered report refused"
+    }
+  },
+  {
+    "id": "R3-09",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Other adoption clauses untested: legacy set degrading to empty (P04), selector clause (P11), threshold boundary/warn band (P15, P16).",
+    "impact": "Regressions in those clauses ship unnoticed.",
+    "suggested_fix": "Tests per clause (legacy eslint regression still fails; scoped run leaves sources; warn-band drop not adopted).",
+    "evidence": "Mutants P04, P11, P15, P16 green.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 269,
+    "quote": "  return (projectMetrics?.regression_score ?? 0) < config.gate.warnOnRegressionDrop;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 removed the clauses; round 4 Q03/Q04/Q08 red"
+    }
+  },
+  {
+    "id": "R3-10",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The PR body predates bb8ae20f: no mention of the baseline `sources` field, runs rewriting scores.json, trend/health disagreement, SourceRunInfo.filtered or OXLINT_NO_FILES; stale test counts.",
+    "impact": "Readers are not told health run can now rewrite the committed baseline.",
+    "suggested_fix": "Add a baseline section and update counts.",
+    "evidence": "keryx ctx rg 'baseline' over the PR body: no match.",
+    "confidence": "high",
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-10",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #803 body edit 2026-09-30 (baseline section)"
+    }
+  },
+  {
+    "id": "R3-11",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A first-seen coverage report still reads as a regression: comparableHealth drops a new source's findings but keeps the coverage penalty.",
+    "impact": "FAIL/WARN when a coverage report first appears on a low-coverage project (pre-existing class).",
+    "suggested_fix": "Zero the coverage penalty in the comparison when coverage is a new source.",
+    "evidence": "Code reading.",
+    "confidence": "medium",
+    "file": "src/health/scopes.ts",
+    "line": 103,
+    "quote": "            ...penalties,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-11",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 coverage zeroing; its double-count (R4-01) fixed in d3d9e7c9"
+    }
+  },
+  {
+    "id": "R3-12",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The persistence module depends on the gate-policy module for a predicate over SourceRunInfo; acyclic today.",
+    "impact": "None at runtime; future gate -> baseline import would close a cycle.",
+    "suggested_fix": "Optionally move the predicate next to the type.",
+    "evidence": "gate.ts imports only ./types.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 4,
+    "quote": "import { didNotProduceResult } from \"./gate\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-12",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "round 4 review-architecture: acyclic, accepted as is"
+    }
+  },
+  {
+    "id": "R3-13",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "updateBaseline dereferences every latest.sources element, contradicting the hasGateShape per-element-narrowing invariant.",
+    "impact": "A hand-edited latest.json with a null element throws.",
+    "suggested_fix": "Filter to objects before measuredSources.",
+    "evidence": "hasGateShape checks only Array.isArray(report.sources).",
+    "confidence": "medium",
+    "file": "src/health/service.ts",
+    "line": 335,
+    "quote": "input.scope === undefined || input.scope.kind === \"project\" ? measuredSources(latest.sources) : undefined,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-13",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 guard; tested in d3d9e7c9"
+    }
+  }
+]

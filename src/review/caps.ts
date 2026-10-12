@@ -6,8 +6,8 @@
  * Nothing in the review pipeline was capped. `budget.max_findings` was
  * schema-required with no default anywhere, so every caller had to invent one;
  * there was no token or currency ceiling at all; and `review-orchestrator`
- * dispatched reviewers in parallel with no wave size, while itself running
- * nested under `flow-orchestrator` and `job-orchestrator`.
+ * dispatched reviewers in parallel with no wave size, while running inline in a
+ * main session that may already have other subagents going.
  *
  * # The rule every cap here obeys
  *
@@ -232,7 +232,7 @@ function isExemptFromFindingsCap(finding: CappableFinding): boolean {
  * - Currency is the unit the operator's budget is actually denominated in, and
  *   the unit a harness reports back. It is also the unit the decision is made
  *   in: nobody stops a review because it used tokens.
- * - Steps and rounds are already bounded (AC8, and the round bound is 3). A
+ * - Steps and rounds are already bounded (AC8; the review round cap is 5, `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`, and the self-fix bound is 3). A
  *   token cap would be a third bound in the same shape as the first two —
  *   "how much work" — while leaving "how much money" unbounded, which is the
  *   only one of the three that can surprise anybody.
@@ -338,34 +338,63 @@ export function spendFromTokens(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * How many reviewer subagents one dispatch plan may have in flight.
- *
- * **4.** Chosen with the nesting in mind and with the honest limit of that
- * choice stated below.
- *
- * The numbers it is chosen against: the harness allows on the order of 20
- * concurrent subagents; `review-orchestrator` has fourteen reviewers to
- * dispatch; and it runs nested under `flow-orchestrator`, which runs nested
- * under `job-orchestrator`. Three levels each opening an unbounded fan-out is
- * how a fourteen-way dispatch becomes a rate-limit incident. 4 gives four
- * waves for a full reviewer set and leaves room for two enclosing levels to
- * hold work of their own without the total approaching the harness limit.
- *
- * It is not tuned to a measured throughput number, and claiming otherwise would
- * be the kind of unbacked precision this programme exists to remove. It is a
- * conservative bound picked so that the *nested worst case* stays inside a limit
- * that is known.
+ * The wave size when nothing else is set, and the hard ceiling for a full review
+ * (`--full` / `--all`). Without `--full`, `--parallel <n>` replaces it and may
+ * raise it; with `--full`, `--parallel <n>` can only lower it.
  */
-export const DEFAULT_MAX_PARALLEL_REVIEWERS = 4;
+export const MAX_REVIEWERS_PER_WAVE_FULL = 10;
+
+/** Halvings of the wave size a run of `STATUS: RATE_LIMITED` answers may cause before the round stops. */
+export const MAX_RATE_HALVINGS = 2;
+
+export type ReviewerDomain = "core" | "domain" | "support";
+
+const CORE_REVIEWERS = new Set([
+  "review-logic",
+  "review-security-code",
+  "review-architecture",
+  "review-highload",
+  "review-regression",
+  "review-core-boundaries",
+  "code-boss-reviewer",
+  "code-ai-review",
+]);
+
+const SUPPORT_REVIEWERS = new Set([
+  "review-style",
+  "review-clean-code",
+  "review-testing-practices",
+  "review-vantage-testing",
+  "review-vantage-styling",
+  "review-layout",
+  "code-style-review",
+]);
+
+/**
+ * The diff domain a reviewer belongs to: `core` (logic and security), `domain`
+ * (frontend, backend and anything not named elsewhere), `support` (style and
+ * tests). Wave order follows that order.
+ */
+export function reviewerDomain(reviewer: string): ReviewerDomain {
+  if (CORE_REVIEWERS.has(reviewer)) {
+    return "core";
+  }
+  if (SUPPORT_REVIEWERS.has(reviewer)) {
+    return "support";
+  }
+  return "domain";
+}
 
 export type ConcurrencyPlan = {
   cap: number;
   /**
-   * Subagents the CALLER declared it already has in flight, `undefined` when it
-   * declared nothing.
+   * Subagents the CALLER declared the main session still has running, `undefined`
+   * when it declared nothing.
    *
-   * This is the whole nesting story, and it is a declaration rather than an
-   * observation. See {@link ConcurrencyPlan.holdsAcrossNesting}.
+   * The review-orchestrator runs inline in the main session, so the only
+   * subagents that can sit beside its reviewers are ones the main session itself
+   * started. This is a declaration, not an observation. See
+   * {@link ConcurrencyPlan.holdsAcrossNesting}.
    */
   outstanding: number | undefined;
   /** Wave size after subtracting `outstanding`. Never below 1. */
@@ -375,34 +404,44 @@ export type ConcurrencyPlan = {
   /** Reviewers not in wave 1 — deferred, not dropped, and counted. */
   queued: number;
   /**
-   * Whether the cap binds the total number of live reviewer subagents across the
-   * `job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator` nesting.
+   * Whether the cap was reduced by a declared count of subagents the main session
+   * still has running (`outstanding`).
    *
-   * **It does not, unless every enclosing orchestrator declares its in-flight
-   * count.** Said plainly rather than implied: keryx is a CLI invoked once per
-   * command. It has no view of subagents running inside another orchestrator's
-   * process, the harness reports no live subagent count to it, and there is no
-   * lease or lock between the three levels. What this plan bounds with certainty
-   * is one dispatch plan. It bounds the nested total only when a parent passes
-   * its own in-flight count as `outstanding` — and even then it is bounded by a
-   * number the parent asserted, which nothing here verifies.
+   * **Without that declaration the cap bounds this one dispatch plan only.** Said
+   * plainly rather than implied: keryx is a CLI invoked once per command. It has
+   * no view of subagents the main session started elsewhere, the harness reports
+   * no live subagent count to it, and there is no lease or lock. With a declared
+   * `outstanding` the plan is bounded by a number the caller asserted, which
+   * nothing here verifies.
    *
    * `false` with `outstanding: undefined` therefore means "the cap held for this
    * plan and nobody told us what else was running", which is exactly what the
    * record says.
+   *
+   * The key name is historical (from the retired nested model); it now means
+   * "the cap held against the declared `outstanding` count".
    */
   holdsAcrossNesting: boolean;
 };
 
 export type ConcurrencyPlanOptions = {
-  /** Defaults to {@link DEFAULT_MAX_PARALLEL_REVIEWERS}. */
+  /** Wave size setting (`--parallel`). Defaults to {@link MAX_REVIEWERS_PER_WAVE_FULL}. */
   cap?: number | undefined;
   /** Subagents the caller already has in flight, if it knows. */
   outstanding?: number | undefined;
+  /** A full review or `--all`: the wave size is held to {@link MAX_REVIEWERS_PER_WAVE_FULL} whatever `cap` says. */
+  full?: boolean | undefined;
 };
 
+const DOMAIN_ORDER: readonly ReviewerDomain[] = ["core", "domain", "support"];
+
 /**
- * Partition reviewers into dispatch waves of at most the effective cap.
+ * Partition reviewers into dispatch waves.
+ *
+ * The set is split by diff domain, logic and security first, frontend and
+ * backend next, style and tests last, and a domain bigger than the wave size is
+ * split again. Waves never mix domains,
+ * so the order of the waves is the order of the dependency between them.
  *
  * Nothing is dropped: a reviewer past the first wave is *queued*, and `queued`
  * is on the record so a plan that deferred ten reviewers cannot read as a plan
@@ -418,28 +457,88 @@ export function planReviewerWaves(
   reviewers: readonly string[],
   options: ConcurrencyPlanOptions = {},
 ): ConcurrencyPlan {
-  const cap = options.cap ?? DEFAULT_MAX_PARALLEL_REVIEWERS;
+  const cap = options.cap ?? MAX_REVIEWERS_PER_WAVE_FULL;
   if (!Number.isInteger(cap) || cap < 1) {
     throw new Error(
-      `Invalid concurrency cap: ${cap}. Expected a positive integer; the default is ${DEFAULT_MAX_PARALLEL_REVIEWERS}.`,
+      `Invalid concurrency cap: ${cap}. Expected a positive integer; the default is ${MAX_REVIEWERS_PER_WAVE_FULL}.`,
     );
   }
   const outstanding = options.outstanding;
   if (outstanding !== undefined && (!Number.isInteger(outstanding) || outstanding < 0)) {
     throw new Error(`Invalid outstanding subagent count: ${outstanding}. Expected a non-negative integer.`);
   }
-  const effective = Math.max(1, cap - (outstanding ?? 0));
+  const ceiling = options.full === true ? Math.min(cap, MAX_REVIEWERS_PER_WAVE_FULL) : cap;
+  const effective = Math.max(1, ceiling - (outstanding ?? 0));
   const waves: string[][] = [];
-  for (let index = 0; index < reviewers.length; index += effective) {
-    waves.push([...reviewers.slice(index, index + effective)]);
+  for (const domain of DOMAIN_ORDER) {
+    const group = reviewers.filter((name) => reviewerDomain(name) === domain);
+    for (let index = 0; index < group.length; index += effective) {
+      waves.push(group.slice(index, index + effective));
+    }
   }
   return {
-    cap,
+    cap: ceiling,
     outstanding,
     effective,
     waves,
     queued: Math.max(0, reviewers.length - (waves[0]?.length ?? 0)),
     holdsAcrossNesting: outstanding !== undefined,
+  };
+}
+
+export type RateLimitState = { waveSize: number; halvings: number };
+
+export type RateLimitDecision =
+  | {
+      action: "requeue";
+      state: RateLimitState;
+      /** Limited reviewers first, then the rest of the queue. */
+      queue: string[];
+      waitSeconds: number | undefined;
+    }
+  | { action: "blocked"; status: "BLOCKED rate_limited"; queue: string[]; line: string };
+
+export function rateLimitState(waveSize: number): RateLimitState {
+  if (!Number.isInteger(waveSize) || waveSize < 1) {
+    throw new Error(`Invalid wave size: ${waveSize}. Expected a positive integer.`);
+  }
+  return { waveSize, halvings: 0 };
+}
+
+/** The longest a rate-limit wait may be; a larger `retry-after` is clamped to it. */
+export const MAX_RETRY_AFTER_SECONDS = 300;
+
+/**
+ * What the orchestrator does after reviewers answered `STATUS: RATE_LIMITED`:
+ * halve the wave (never below 1), put the limited reviewers back at the front of
+ * the queue and wait `retry-after` when one was given, at most
+ * {@link MAX_RETRY_AFTER_SECONDS}. After
+ * {@link MAX_RATE_HALVINGS} halvings a further rate limit stops the round with
+ * `BLOCKED rate_limited` and the queue that was left.
+ */
+export function nextAfterRateLimit(
+  state: RateLimitState,
+  limited: readonly string[],
+  remaining: readonly string[],
+  retryAfterSeconds?: number,
+): RateLimitDecision {
+  if (retryAfterSeconds !== undefined && (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds < 0)) {
+    throw new Error(`Invalid retry-after: ${retryAfterSeconds}. Expected a non-negative number of seconds.`);
+  }
+  const queue = [...limited, ...remaining];
+  if (state.halvings >= MAX_RATE_HALVINGS) {
+    return {
+      action: "blocked",
+      status: "BLOCKED rate_limited",
+      queue,
+      line: `STATUS: BLOCKED rate_limited — queue left: ${queue.join(", ")}`,
+    };
+  }
+  return {
+    action: "requeue",
+    state: { waveSize: Math.max(1, Math.floor(state.waveSize / 2)), halvings: state.halvings + 1 },
+    queue,
+    waitSeconds: retryAfterSeconds === undefined ? undefined : Math.min(retryAfterSeconds, MAX_RETRY_AFTER_SECONDS),
   };
 }
 
@@ -546,10 +645,9 @@ export function renderCapsMarkdown(record: ReviewCapsRecord): string {
     lines.push(`holds_across_nesting: ${plan.holdsAcrossNesting ? "yes (against the declared count)" : "no"}`);
     if (!plan.holdsAcrossNesting) {
       lines.push("");
-      lines.push("The cap bound THIS dispatch plan. It does not bind the total across");
-      lines.push("`job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator`: no");
-      lines.push("enclosing orchestrator declared its in-flight count, and keryx has no");
-      lines.push("way to observe one. Said plainly rather than implied.");
+      lines.push("The cap bound THIS dispatch plan only. Nothing declared how many");
+      lines.push("subagents the main session still had running, and keryx has no way to");
+      lines.push("observe them. Said plainly rather than implied.");
     }
     if (plan.waves.length > 1) {
       lines.push("");

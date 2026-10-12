@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "scopeFingerprint": "bacebdb38331b8bfc37b7af5a5e8be52463c1db5e63815fa1243557633e32305",
+  "reviewers": {
+    "review-logic": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-testing-practices": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-frontend-conventions": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    }
+  }
+}

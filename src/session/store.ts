@@ -1,3 +1,4 @@
+import { commitHistoryCheckpoint, readPendingHistory } from "./preservation";
 // Per-project interactive session store (production).
 //
 // Isolation: sessions never cross project roots (git toplevel or abs cwd).
@@ -28,7 +29,6 @@ import {
   resolveProjectRoot,
   sessionDir as sessionDirPath,
 } from "./paths";
-import { compactMessages, type CompactOptions } from "./compact";
 import { readSlate, type Slate } from "./slate";
 import { redactSensitiveText } from "../security/redact";
 
@@ -95,12 +95,24 @@ interface TranscriptLine {
   role: NormalizedMessage["role"];
   content: string;
   provenance?: NormalizedMessage["provenance"];
+  /** Flow 387 T8: harness-injected `role: "user"` message (not operator input). */
+  injected?: true;
   ts: string;
   kind?: "message" | "compaction";
   /** Assistant tool calls, so a resumed session keeps the tool-call loop. */
   toolCalls?: NormalizedToolCall[];
   /** The assistant call a tool result answers. */
   toolCallId?: string;
+  /** Flow 387 T18: the tool reported failure (see `NormalizedMessage.isError`). */
+  isError?: true;
+  /** Flow 387 review r1 F-002: the file holding a tool result's full text (see `NormalizedMessage.spillPath`). */
+  spillPath?: string;
+  /** Flow 387 review r2 F-025: a prune-made collapsed record (see `NormalizedMessage.collapsed`). */
+  collapsed?: true;
+  /** Flow 393: Trail step, observation-pack and working-memory-frame markers (see `NormalizedMessage`). */
+  trailStep?: number;
+  packed?: true;
+  slateFrame?: true;
   /**
    * Assistant reasoning for the round (flow 268 T11, AC6): visible text,
    * redacted flag, and opaque provider replay items. Round-tripped so a
@@ -322,12 +334,23 @@ function parseRemote(value: unknown): SessionRemote | undefined {
   return { name: raw.name, intervals: intervals.slice(-MAX_REMOTE_INTERVALS) };
 }
 
+function writeSessionSummary(dir: string, summary: SessionSummary): void {
+  const pending = readPendingHistory(dir);
+  if (pending === undefined) {
+    atomicWriteJson(path.join(dir, "summary.json"), summary);
+    return;
+  }
+  commitHistoryCheckpoint(dir, { ...pending.files, "summary.json": `${JSON.stringify(summary, null, 2)}\n` });
+}
+
 function readSummaryFile(file: string): SessionSummary | undefined {
   // `readConfigFile`, not `readFileSync`: a summary is config-sized, and an
   // oversized one aborts the process outright (SIGABRT, no output, uncatchable
   // — the `try/catch` below does not run). A non-regular file in its place
   // hangs the read forever. See MAX_CONFIG_FILE_BYTES.
-  const read = readConfigFile(file);
+  let pending: ReturnType<typeof readPendingHistory>;
+  try { pending = readPendingHistory(path.dirname(file)); } catch { pending = undefined; } // one damaged session must not hide the others
+  const read = pending !== undefined ? { ok: true as const, text: pending.files["summary.json"]! } : readConfigFile(file);
   if (!read.ok) {
     return undefined;
   }
@@ -387,7 +410,7 @@ export function shortSessionId(id: string): string {
  * `checkpointTs`, exactly as every row did before — so old and untouched
  * producers are unaffected.
  */
-function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpointTs: string): void {
+function serializeJsonl(history: readonly NormalizedMessage[], checkpointTs: string): string {
   const lines: string[] = [];
   for (const m of history) {
     const row: TranscriptLine = {
@@ -396,13 +419,20 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpo
       ts: m.ts ?? checkpointTs,
       kind: "message",
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
+      ...(m.injected === true ? { injected: true as const } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
       ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
+      ...(m.isError === true ? { isError: true as const } : {}),
+      ...(m.spillPath !== undefined ? { spillPath: m.spillPath } : {}),
+      ...(m.collapsed === true ? { collapsed: true as const } : {}),
+      ...(m.trailStep !== undefined ? { trailStep: m.trailStep } : {}),
+      ...(m.packed === true ? { packed: true as const } : {}),
+      ...(m.slateFrame === true ? { slateFrame: true as const } : {}),
       ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
     };
     lines.push(JSON.stringify(row));
   }
-  atomicWriteText(file, lines.length > 0 ? `${lines.join("\n")}\n` : "");
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
 /**
@@ -481,14 +511,17 @@ export class TranscriptUnreadableError extends Error {
 }
 
 function readJsonl(file: string): NormalizedMessage[] {
-  if (!existsSync(file)) {
+  const pending = readPendingHistory(path.dirname(file));
+  if (pending === undefined && !existsSync(file)) {
     return [];
   }
   // `readTranscriptFile`, not `readFileSync`: an oversized file aborts the
   // process (SIGABRT, uncatchable) and a non-regular one blocks forever. The
   // bound is the transcript bound, not the config bound — a real conversation
   // legitimately exceeds the latter.
-  const read = readTranscriptFile(file);
+  const read = pending !== undefined
+    ? { ok: true as const, text: pending.files[path.basename(file)]! }
+    : readTranscriptFile(file);
   if (!read.ok) {
     throw new TranscriptUnreadableError(file, read.reason);
   }
@@ -527,10 +560,19 @@ function readJsonl(file: string): NormalizedMessage[] {
         o.provenance === "harness"
           ? { provenance: o.provenance }
           : {}),
+        ...(o.injected === true ? { injected: true as const } : {}),
         ...(toolCalls !== undefined ? { toolCalls } : {}),
         ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
           ? { toolCallId: o.toolCallId }
           : {}),
+        ...(o.isError === true ? { isError: true as const } : {}),
+        ...(typeof o.spillPath === "string" && o.spillPath.length > 0 ? { spillPath: o.spillPath } : {}),
+        ...(o.collapsed === true ? { collapsed: true as const } : {}),
+        ...(typeof o.trailStep === "number" && Number.isInteger(o.trailStep) && o.trailStep > 0
+          ? { trailStep: o.trailStep }
+          : {}),
+        ...(o.packed === true ? { packed: true as const } : {}),
+        ...(o.slateFrame === true ? { slateFrame: true as const } : {}),
         // Carried forward so a resumed session's next flush reuses the
         // message's ORIGINAL append time instead of re-stamping it with the
         // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`
@@ -681,7 +723,7 @@ export async function readSessionSlate(cwd: string, sessionId: string, dataDir?:
 export function loadContext(cwd: string, sessionId: string, dataDir?: string): NormalizedMessage[] {
   const dir = sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir);
   const contextPath = path.join(dir, "context.jsonl");
-  if (existsSync(contextPath)) {
+  if (readPendingHistory(dir) !== undefined || existsSync(contextPath)) {
     return readJsonl(contextPath);
   }
   // Legacy single-file sessions.
@@ -715,7 +757,7 @@ export function loadArchive(
 ): NormalizedMessage[] {
   const dir = sessionDirPath(resolveProjectRoot(cwd), sessionId, dataDir);
   const archivePath = path.join(dir, "archive.jsonl");
-  if (existsSync(archivePath)) {
+  if (readPendingHistory(dir) !== undefined || existsSync(archivePath)) {
     try {
       const archive = readJsonl(archivePath);
       if (archive.length > 0) {
@@ -760,12 +802,9 @@ export function persistHistory(
   const safeContext = redactHistory(context);
   const safeArchive = redactHistory(meta?.archive ?? context);
 
-  writeJsonl(path.join(handle.dir, "context.jsonl"), safeContext, ts);
-  writeJsonl(path.join(handle.dir, "archive.jsonl"), safeArchive, ts);
-  // Legacy mirror: tools/docs that still look for transcript.jsonl.
-  writeJsonl(path.join(handle.dir, "transcript.jsonl"), safeContext, ts);
 
-  let title = meta?.title ?? handle.summary.title;
+  const currentSummary = readSummaryFile(path.join(handle.dir, "summary.json")) ?? handle.summary;
+  let title = meta?.title ?? currentSummary.title;
   if (title === "New session" || title === "Untitled session") {
     const firstUser =
       safeArchive.find((m) => m.role === "user" && !m.content.startsWith("[Compacted")) ??
@@ -776,7 +815,7 @@ export function persistHistory(
   }
 
   const summary: SessionSummary = {
-    ...handle.summary,
+    ...currentSummary,
     schemaVersion: SESSION_SCHEMA_VERSION,
     title,
     updatedAt: ts,
@@ -785,7 +824,13 @@ export function persistHistory(
     ...(meta?.provider !== undefined ? { provider: meta.provider } : {}),
     ...(meta?.model !== undefined ? { model: meta.model } : {}),
   };
-  atomicWriteJson(path.join(handle.dir, "summary.json"), summary);
+  const contextBody = serializeJsonl(safeContext, ts);
+  commitHistoryCheckpoint(handle.dir, {
+    "context.jsonl": contextBody,
+    "archive.jsonl": serializeJsonl(safeArchive, ts),
+    "transcript.jsonl": contextBody,
+    "summary.json": `${JSON.stringify(summary, null, 2)}\n`,
+  });
   return { summary, dir: handle.dir };
 }
 
@@ -820,7 +865,7 @@ export function persistCompacted(
       compactCount: next.summary.compactCount + 1,
     },
   };
-  atomicWriteJson(path.join(withCount.dir, "summary.json"), withCount.summary);
+  writeSessionSummary(withCount.dir, withCount.summary);
   return { handle: withCount, context };
 }
 
@@ -833,6 +878,7 @@ export function persistCompacted(
  * conversation turn.
  */
 export function recordRemoteOn(handle: SessionHandle, name: string, now: string = nowIso()): SessionHandle {
+  handle = { ...handle, summary: readSummaryFile(path.join(handle.dir, "summary.json")) ?? handle.summary };
   const intervals = [...(handle.summary.remote?.intervals ?? [])];
   intervals.push({ on: now });
   return writeRemote(handle, { name, intervals: intervals.slice(-MAX_REMOTE_INTERVALS) });
@@ -840,6 +886,7 @@ export function recordRemoteOn(handle: SessionHandle, name: string, now: string 
 
 /** Remote control was turned OFF (or the shell closed): closes the open interval. No-op without one. */
 export function recordRemoteOff(handle: SessionHandle, now: string = nowIso()): SessionHandle {
+  handle = { ...handle, summary: readSummaryFile(path.join(handle.dir, "summary.json")) ?? handle.summary };
   const remote = handle.summary.remote;
   if (remote === undefined) return handle;
   const last = remote.intervals[remote.intervals.length - 1];
@@ -850,7 +897,7 @@ export function recordRemoteOff(handle: SessionHandle, now: string = nowIso()): 
 
 function writeRemote(handle: SessionHandle, remote: SessionRemote): SessionHandle {
   const summary: SessionSummary = { ...handle.summary, remote };
-  atomicWriteJson(path.join(handle.dir, "summary.json"), summary);
+  writeSessionSummary(handle.dir, summary);
   return { summary, dir: handle.dir };
 }
 
@@ -864,27 +911,6 @@ export function describeRemote(remote: SessionRemote | undefined): string {
 
 /** The one-word list-row mark. */
 export const REMOTE_MARK = "remote";
-
-/**
- * Compact the live model context. Archive is preserved (and grown if needed).
- * Returns the new context array for the caller to swap into memory.
- */
-export function compactSession(
-  handle: SessionHandle,
-  context: readonly NormalizedMessage[],
-  archive: readonly NormalizedMessage[],
-  opts?: CompactOptions & { provider?: string; model?: string },
-): { handle: SessionHandle; context: NormalizedMessage[]; result: ReturnType<typeof compactMessages> } {
-  const result = compactMessages(context, opts);
-  if (result.noop) {
-    return { handle, context: [...context], result };
-  }
-  // Archive keeps everything we had before compact + a marker line is not needed
-  // as messages — full prior context already lives in archive.
-  const nextArchive = archive.length >= context.length ? archive : context;
-  const persisted = persistCompacted(handle, result.context, nextArchive, opts);
-  return { handle: persisted.handle, context: result.context, result };
-}
 
 /** Typed rejection for a fork whose source session is not in this project. */
 export class UnknownSessionError extends Error {
@@ -969,12 +995,13 @@ export function forkSession(opts: {
 }
 
 export function renameSession(handle: SessionHandle, title: string): SessionHandle {
+  handle = { ...handle, summary: readSummaryFile(path.join(handle.dir, "summary.json")) ?? handle.summary };
   const summary: SessionSummary = {
     ...handle.summary,
     title: title.trim().length > 0 ? title.trim() : handle.summary.title,
     updatedAt: nowIso(),
   };
-  atomicWriteJson(path.join(handle.dir, "summary.json"), summary);
+  writeSessionSummary(handle.dir, summary);
   return { summary, dir: handle.dir };
 }
 

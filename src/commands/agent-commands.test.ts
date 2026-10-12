@@ -45,14 +45,23 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/review",
     "/reviews",
     "/remote-control",
+    "/history",
     "/channels",
+    "/intake",
+    "/rendering",
+    "/remote-policy",
+    "/trail",
+    "/notes",
     "/product",
     "/governance",
     "/triggers",
     "/routing",
     "/schedule",
     "/schedules",
+    "/autoreview",
     "/approvals",
+    "/permissions",
+    "/decisions",
     "/integrate",
     "/ci",
     "/conform",
@@ -60,6 +69,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/scenarios",
     "/jevrules",
     "/staledocs",
+    "/flow",
     "/opencomments",
     "/contract",
     "/triage",
@@ -83,6 +93,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/interrupt",
     "/queue",
     "/delegate",
+    "/tasks",
     "/demote",
     "/bus",
     "/exit",
@@ -175,14 +186,23 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/review",
     "/reviews",
     "/remote-control",
+    "/history",
     "/channels",
+    "/intake",
+    "/rendering",
+    "/remote-policy",
+    "/trail",
+    "/notes",
     "/product",
     "/governance",
     "/triggers",
     "/routing",
     "/schedule",
     "/schedules",
+    "/autoreview",
     "/approvals",
+    "/permissions",
+    "/decisions",
     "/integrate",
     "/ci",
     "/conform",
@@ -190,6 +210,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/scenarios",
     "/jevrules",
     "/staledocs",
+    "/flow",
     "/opencomments",
     "/contract",
     "/triage",
@@ -213,6 +234,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/interrupt",
     "/queue",
     "/delegate",
+    "/tasks",
     "/demote",
     "/bus",
     "/exit",
@@ -328,14 +350,23 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/review",
     "/reviews",
     "/remote-control",
+    "/history",
     "/channels",
+    "/intake",
+    "/rendering",
+    "/remote-policy",
+    "/trail",
+    "/notes",
     "/product",
     "/governance",
     "/triggers",
     "/routing",
     "/schedule",
     "/schedules",
+    "/autoreview",
     "/approvals",
+    "/permissions",
+    "/decisions",
     "/integrate",
     "/ci",
     "/conform",
@@ -343,6 +374,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/scenarios",
     "/jevrules",
     "/staledocs",
+    "/flow",
     "/opencomments",
     "/contract",
     "/triage",
@@ -366,6 +398,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/interrupt",
     "/queue",
     "/delegate",
+    "/tasks",
     "/demote",
     "/bus",
     "/exit",
@@ -390,7 +423,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
 });
 
 test("filterCommands: prefix narrows the set (agent)", () => {
-  expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help"]);
+  expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help", "/history"]);
   expect(filterCommands("/c", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",
@@ -410,13 +443,14 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
-  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/remote-control", "/rewind", "/reasoning"]);
+  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/remote-control", "/rendering", "/remote-policy", "/rewind", "/reasoning"]);
   // `/integrate` shares this prefix with `/interrupt` — a cost of the name
   // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
   // plainly different words and the completion menu shows both, so the prefix
   // is ambiguous rather than dangerous. Pinned so the pair is a decision on
   // record, not a surprise the next person rediscovers at the prompt.
   expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual([
+    "/intake",
     "/integrate",
     "/interrupt",
   ]);
@@ -433,18 +467,19 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/settings",
   ]);
   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
+    "/intake",
     "/integrate",
     "/interrupt",
   ]);
-  expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows"]);
-  expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
+  expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows", "/flow"]);
+  expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new", "/notes"]);
   expect(filterCommands("/comp", "agent").map((c) => c.name)).toEqual(["/compact"]);
 });
 
 test("filterCommands: prefix narrows the set (chat)", () => {
   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
   expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
-  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/plan"]);
+  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/permissions", "/plan"]);
   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
     "/connect",

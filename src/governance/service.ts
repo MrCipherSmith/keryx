@@ -27,6 +27,9 @@ export {
   type BuildGovernanceReportOptions,
 } from "./report";
 
+// Flow 364: the TUI's Flows tab renders the same effect and summary lines the report prints.
+export { renderEffectLine, renderSummaryLine } from "./flow-narrative";
+
 // Flow 300: the TUI's Triggers section shows project trigger spend exactly as
 // the governance report computes it — one reader, not a second sum.
 export { readProjectTriggerSpend } from "./spend";
@@ -37,10 +40,12 @@ export type {
   FlowDispatch,
   FlowDispatchRun,
   FlowDispatchSpend,
+  FlowEffect,
   FlowGateOutcomes,
   FlowGovernance,
   FlowOpenReservation,
   FlowReviewSpend,
+  FlowWorkSummary,
   GovernanceFilters,
   GovernanceReport,
   GovernanceReportRead,

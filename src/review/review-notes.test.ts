@@ -12,6 +12,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { readyResearchFixture } from "./research.test-helpers";
 import { findingVerdict } from "../flow/review-gate";
 import { collectEntries } from "../memory/store";
 import { completeManagedReview, createManagedReviewPackage, type ManagedReviewIngestInput } from "./managed";
@@ -85,6 +86,7 @@ async function ingest(reviewId: string, over: Partial<ManagedReviewIngestInput> 
     target: { kind: "report", ref: "review.md" },
     reportText: "# Round\n\nno machine-readable block here\n",
     findings: [FINDING],
+    research: readyResearchFixture([FINDING.reviewer], [FINDING.id]),
     now: new Date("2026-08-30T11:00:00Z"),
     ...over,
   });

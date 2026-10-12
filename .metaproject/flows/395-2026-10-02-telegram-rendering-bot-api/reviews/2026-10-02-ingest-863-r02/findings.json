@@ -1,0 +1,60 @@
+[
+  {
+    "id": "S-001",
+    "reviewer": "flow395-pr863-review-security",
+    "severity": "minor",
+    "problem": "[reported severity: info/minor] Telegram's error text can carry message content and is stored with only secret-redaction: `reason` is the Bot API `description` after `redactSensitiveText`, not length-capped or sanitised (src/remote/rendering.ts describe, record and pauseRich; surfaced by src/remote/hub.ts fallbackEvent and /channels).",
+    "impact": "A model or tool output containing PII or a long URL is refused by Telegram with a message that echoes the fragment (an unsupported tag name, an invalid URL). The echo lands in the `format-fallback` event, `lastFallback.reason` and the `/channels` response: local operator surfaces only, but the code comment says 'never message text', which is not strictly guaranteed.",
+    "suggested_fix": "Truncate `reason` to about 200 characters, or keep only the status plus the part before the first quote.",
+    "evidence": "Read of describe, record and pauseRich at 25e6fb45.",
+    "confidence": "medium",
+    "file": "src/remote/rendering.ts",
+    "line": 120,
+    "quote": "return redactSensitiveText(error instanceof Error ? error.message : String(error));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863-r02#S-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 60778987: src/remote/rendering.ts adds MAX_REASON_LENGTH = 200 and capReason, applied in record and pauseRich; describe for a BotApiError keeps the status plus the description only up to the first quotation mark (Telegram echoes message fragments after a quote), redacted and capped. Read from git show 60778987 -- src/remote/rendering.ts.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "60778987"
+    }
+  },
+  {
+    "id": "S-002",
+    "reviewer": "flow395-pr863-review-security",
+    "severity": "info",
+    "problem": "Link label can differ from the real target: `[https://bank.example](https://evil.example)` renders as a clickable link whose visible text differs from its target (src/remote/format-html.ts, reused by format-rich.ts via htmlToRichText).",
+    "impact": "A prompt-injected tool result makes the agent emit a deceptive link that the operator then taps. The scheme is already restricted to https and http (no tg://, javascript: or data:) and the URL regex rejects whitespace, quotes and angle brackets. Existed before this PR (flow 376 HTML mode); the rich path adds no new reach.",
+    "suggested_fix": "Optional hardening: show the target host next to a label that looks like a URL.",
+    "evidence": "Read of the link() function in format-html.ts at 25e6fb45.",
+    "confidence": "medium",
+    "file": "src/remote/format-html.ts",
+    "line": 208,
+    "quote": "if (!HTTP_URL.test(url)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863-r02#S-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 42dc5731: src/remote/format-html.ts link() appends escapeHtml(hostMarker(label, url)) after the anchor; src/remote/format-link.ts hostMarker shows the target host as ` (→ host)` when the label reads as an address for another host (scheme, www. or dotted host; userinfo in label or target always shows the host; IDN shown as punycode). Checked by running it: [https://good.example](https://evil.example/x) renders <a href=\"https://evil.example/x\">https://good.example</a> (→ evil.example), and [docs](https://evil.example/x) is unchanged. src/remote/format-link.test.ts (19 tests) passes at 42dc5731; with the marker removed from link() 13 of those 19 fail. Read from git show 42dc5731 and a bun run of the renderer.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "42dc5731"
+    }
+  }
+]

@@ -1,0 +1,190 @@
+Two independent reviews of flow 377 (/channels) at head 85ed3ce8 (PR #823): security (Opus) and correctness (Sonnet). No blocker; three majors (F-101, F-104, F-105), nine minors. Findings F-001, F-101, F-103, F-104, F-105, F-106, F-108 and F-110 were fixed in PR #826 (0.3.51); F-002, F-102, F-107 and F-109 are deferred.
+
+```json keryx:findings
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow377-pr823-security",
+    "severity": "minor",
+    "problem": "Pairing.inspectGroup checks FINAL only before its two awaited Bot API calls (getChat, getChatMember, each up to the 30 s request timeout). Afterwards it unconditionally sets chatId and calls settle(\"ready\"), and settle() overwrites this.state without refusing to leave a final state. If the pairing was cancelled (channels-cancel, channels-pair, channels-disconnect), hit its 10-minute expiry timer, or failed on a 409 conflict while getChat/getChatMember were in flight, its state goes from cancelled/expired/failed back to ready.",
+    "impact": "The 10-minute limit and Cancel are not final. With one shell, the expiry timer fires during the group check, the controller still holds the pairing, and the next channels-pairing poll returns ready, so the shell connects after the code expired. With two shells: shell A's in-flight channels-pairing GET (recheck) has captured `current`; shell B cancels; A gets ready and runs connectFinish, which writes config.json. If B's cancelPairing then sees config.json, it does not erase the token. A's channels-reload then starts the hub, and Telegram ends up connected although the operator cancelled. A pairing that failed on a conflict can likewise be reported as ready.",
+    "suggested_fix": "In inspectGroup, re-check `FINAL.has(this.state)` (and expiry) after the awaits, before assigning chatId or settling. Also make settle() refuse to move from a final state to another state (return early when FINAL.has(this.state)). Consider running channels-pairing through the controller's `exclusive` chain, or check `this.pairing === current` before returning the snapshot.",
+    "evidence": "Read src/remote/pairing.ts: settle() lines 194-209 assign this.state unconditionally; inspectGroup lines 278-305 check FINAL only at entry; expireIfDue lines 187-192 run from the timer independently of the update queue; recheck lines 161-166 run inspectGroup from the channels-pairing route. Read src/remote/channels.ts: pairingStatus lines 152-159 run outside exclusive() and hold `current` across `await current.recheck()`; cancel lines 161-166 drop the pairing concurrently. Read src/remote/channels-client.ts cancelPairing lines 166-172 (keeps the token when config.json exists) and connectFinish lines 180-211.",
+    "confidence": "medium",
+    "file": "src/remote/pairing.ts",
+    "line": 303,
+    "quote": "      this.settle(\"ready\");"
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow377-pr823-security",
+    "severity": "minor",
+    "problem": "The shell writes the allowlist and the group id into config.json straight from the PairingResponse that the process listening on endpoint.json's port returns. The client authenticates itself to that listener with the shell token, but nothing authenticates the listener to the shell. The only check that it is serve is ownProcessIsAlive(pid), which is process.kill(pid, 0) on the pid recorded in endpoint.json, not on the process that owns the socket. If serve dies without cleanup (SIGKILL, crash), endpoint.json and the shell token stay on disk. If that pid is then reused by any other process of the same user, and another local OS user binds the freed 127.0.0.1 port, that user's listener receives the shell token and can answer channels-pair / channels-pairing with state \"ready\", userId = attacker, chatId = attacker's forum, and answer channels-reload with ok.",
+    "impact": "Flow 377 makes this pre-existing weak spot in the client's trust much worse. Before, a fake listener could only see the shell token. Now its answer becomes a persistent allowedUserIds entry plus the real bot token on disk (the operator pasted it into the hidden entry). The next real `keryx serve` starts the hub from that config, and the other OS user drives keryx sessions on this machine from Telegram. The preconditions (crash, pid reuse by the same user, port squatting) make this unlikely, which is why it is minor.",
+    "suggested_fix": "Make serve prove its identity before the shell writes anything from its answer. For example, the client sends a random nonce and serve returns HMAC(shellToken, nonce || body); since the shell token was minted after the poller lock was taken, only the real serve has it. Alternatively, check that the socket belongs to serve: on Linux, compare the uid of the listening socket in /proc/net/tcp{,6} with the current uid. As a cheaper partial step, have serve remove endpoint.json and rotate or remove the shell token on any start, and have the client refuse to act on a ready response whose expiresAt and code history it did not observe.",
+    "evidence": "Read src/remote/channels-client.ts: target() lines 267-283 (loopback check plus isAlive(pid) only), connectFinish lines 180-211 (allowedUserIds: [ids.userId] taken from the response), startPairing lines 142-159 (writes the real token before calling the listener). Read src/remote/client.ts ownProcessIsAlive lines 115-125 (kill(pid,0), the pid comes from the file). Read src/tui/channels-surface.ts finishConnect lines 655-678 (pairing.userId/chatId passed through unchanged). Read src/remote/service.ts lines 249-262 (endpoint and shell token are written on start; they are removed only by a clean shutdown).",
+    "confidence": "low",
+    "file": "src/remote/channels-client.ts",
+    "line": 192,
+    "quote": "        allowedUserIds: [ids.userId],"
+  },
+  {
+    "id": "F-101",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "major",
+    "problem": "Pairing only learns the group from a my_chat_member update delivered while the state is waiting-for-group. Updates that arrive while the state is waiting-for-user are discarded (and confirmed), and Telegram fires my_chat_member only when the bot's membership status changes. If the operator already added the bot to the group (as admin with Manage Topics) before sending the code, or re-runs Connect after a pairing that had already reached ready, no event ever comes again.",
+    "impact": "Pairing sits in waiting-for-group ('Waiting for the group...') with no problem named until the 10-minute expiry, then the token is erased and the operator is told to start over. The only workaround is to remove and re-add the bot, which the modal never says. The test 'before anybody is paired, adding the bot to a group is ignored' in pairing-group.test.ts asserts exactly this discarding, so the gap is locked in rather than caught.",
+    "suggested_fix": "When the code is accepted, do not rely on a future event: either buffer my_chat_member updates seen in waiting-for-user and replay those from the paired user into takeGroup, or on entering waiting-for-group list the bot's known groups (getUpdates backlog) and also re-check on each pairing status poll; at minimum say in the step-3 text that the bot must be added or promoted AFTER the code was accepted. Add a test where the group event precedes the code.",
+    "evidence": "Read src/remote/pairing.ts (accept(), takeCode(), takeGroup()), src/remote/pairing-group.test.ts (the 'before anybody is paired' test), src/remote/poller.ts (batch is confirmed on next getUpdates, so the early event is not redelivered to the new state).",
+    "confidence": "medium",
+    "file": "src/remote/pairing.ts",
+    "line": 227,
+    "quote": "        if (this.state === \"waiting-for-user\") {",
+    "class_scope": {
+      "sites": [
+        "src/remote/pairing.ts accept(): the waiting-for-user branch (only takeCode ran, group events were dropped)",
+        "src/remote/pairing.ts takeCode()",
+        "src/remote/pairing.ts takeGroup(): the only consumer of my_chat_member",
+        "src/remote/pairing-group.test.ts: 'before anybody is paired, adding the bot to a group is ignored'"
+      ],
+      "enumeration_method": "Read Pairing.accept(): updates are dispatched by state to takeCode (waiting-for-user) or takeGroup (waiting-for-group), no other state handles updates; keryx ctx rg for my_chat_member over src/remote shows takeGroup as the single reader."
+    }
+  },
+  {
+    "id": "F-102",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "The candidate group is pinned to the chat id of the first accepted my_chat_member and every later check goes to that id. A basic group that the operator converts by turning Topics on becomes a supergroup with a new chat id; nothing handles migrate_to_chat_id or a my_chat_member for the new chat, so recheck() keeps inspecting the old id.",
+    "impact": "After the operator does exactly what the modal asked ('Topics are off: turn Topics on'), the check keeps reporting 'could not inspect the group' or 'Topics are off' for the old id, and the pairing can only end by expiry. Depends on Telegram not emitting a my_chat_member for the new supergroup, which I could not confirm without live Telegram.",
+    "suggested_fix": "Handle message.migrate_to_chat_id (and migrate_from_chat_id) while waiting-for-group by moving candidate to the new id and re-inspecting; add a fake-Bot-API test for it.",
+    "evidence": "Read src/remote/pairing.ts takeGroup()/inspectGroup()/recheck(); no reference to migrate_to_chat_id anywhere in src/remote (keryx ctx rg).",
+    "confidence": "low",
+    "file": "src/remote/pairing.ts",
+    "line": 271,
+    "quote": "    this.candidate = change.chat.id;"
+  },
+  {
+    "id": "F-103",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "The 10-minute TTL is a single deadline for the whole pairing, not for the code. Once the code is used it is gone, yet waiting-for-group still ends at the original expiresAt (expireIfDue and the accept() guard both use it). The modal shows no time left in step 3.",
+    "impact": "An operator who sends the code at minute 9 has about a minute to create or fix the group, turn Topics on and grant Manage Topics. The pairing then flips to expired, the shell erases the token (cancelPairing) and the operator must paste the token and pair again. The docs say the code lives 10 minutes, not the whole setup.",
+    "suggested_fix": "Restart a fresh deadline (for example another 10 minutes) when takeCode accepts the code, and show the remaining time in the step-3 view.",
+    "evidence": "Read src/remote/pairing.ts constructor (expiresAt readonly), expireIfDue(), accept(), takeCode(); src/tui/channels-surface.ts channelsViewLines step 3 has no lifetime text.",
+    "confidence": "high",
+    "file": "src/remote/pairing.ts",
+    "line": 188,
+    "quote": "    if (!FINAL.has(this.state) && this.now() > this.expiresAt) {"
+  },
+  {
+    "id": "F-104",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "major",
+    "problem": "disconnect() decides 'no hub' from host.hub(), but service.ts assigns hub only after `await mine.start()` finishes, and startHub/stopHub run on a different promise chain (hubChain) than the controller's own exclusive chain. A Disconnect that arrives while the hub is still starting (serve just started with a config, or a reload in flight) sees hub === undefined, returns hubWasRunning:false and does not wait.",
+    "impact": "The shell then erases the token and config and tells the operator 'Telegram was not running in serve ... the topics remain', while the in-flight startHub completes, sets hub = mine and keeps polling with the in-memory token. Status then reads 'connected' with nothing on disk, Test still posts to the group, and the next serve restart silently drops the channel. Reachable by reopening /channels right after serve starts or after Esc during the Connecting step.",
+    "suggested_fix": "Make disconnect (and test) wait for any in-flight start: expose a host method that resolves after the pending startHub/stopHub on hubChain (for example host.settle = () => exclusive(async () => {})), await it before reading host.hub(), and re-check afterwards. Add a test with a slow fake getMe/createForumTopic and a Disconnect issued mid-start.",
+    "evidence": "Read src/remote/channels.ts disconnect(), src/remote/service.ts startHubNow() (hub = mine after await mine.start()) and the separate hubChain/exclusive; src/remote/channels-disconnect.test.ts has no mid-start case.",
+    "confidence": "medium",
+    "file": "src/remote/channels.ts",
+    "line": 208,
+    "quote": "      const hub = this.host.hub();",
+    "class_scope": {
+      "sites": [
+        "src/remote/channels.ts disconnect(): reads host.hub() without waiting for an in-flight start",
+        "src/remote/channels.ts test(): reads host.hub() the same way",
+        "src/remote/channels.ts state()/status(): read host.hub() for display only",
+        "src/remote/channels.ts pair() and reload(): read host.hub() inside the exclusive chain",
+        "src/remote/service.ts startHubNow(): assigns hub only after await mine.start()"
+      ],
+      "enumeration_method": "Read src/remote/channels.ts end to end and listed every this.host.hub() read, then read the hubChain/exclusive wiring in src/remote/service.ts that runs start/stop on a different chain from the controller's."
+    }
+  },
+  {
+    "id": "F-105",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "major",
+    "problem": "Disconnect erases only bot-token and config.json. The hub's own state (remote/sessions.json, outbound.jsonl, inbound queues) is left behind, and it still holds records whenever Disconnect could not delete topics: serve down, hub off (for example after a poller conflict), or a topic Telegram refused to delete. doRegister then reuses any record with the same name without comparing record.chatId to the new config.chatId, and the registry gives live records a fresh lease on load.",
+    "impact": "The modal tells the operator to Disconnect to 'connect a different bot'. After a hub-less or partial Disconnect and a Connect to a different group, a returning session (same session id or same default name) is answered ok/reused with the OLD chat id and thread id: its status and replies go to the old group, and messages typed in the new group's topics never route (route() requires the new chat id). Nothing reports an error. Also the hub comment that 'a second disconnect retries' leftover topics cannot hold, because the token is already erased.",
+    "suggested_fix": "On Disconnect (serve side and the serve-down client path) also drop or archive sessions.json, outbound.jsonl and the inbound queues, or on hub start discard registry records whose chatId differs from config.chatId, and in doRegister treat a holder with a different chatId as stale (retire it and create a new topic). Add a test: Disconnect with a failing topic delete, then Connect to a different chat id and register the same session.",
+    "evidence": "Read src/remote/hub.ts doRegister() (holder reuse at the cited line, no chatId check), retire(), registry load in the constructor; src/remote/registry.ts load() (lastHeartbeat reset to now for live records); src/remote/paths.ts file names; src/remote/channels-client.ts disconnect() removes only the token and config; src/remote/channels-disconnect.test.ts covers neither reconnect-to-another-group nor leftover state.",
+    "confidence": "medium",
+    "file": "src/remote/hub.ts",
+    "line": 566,
+    "quote": "    if (holder !== undefined) {",
+    "class_scope": {
+      "sites": [
+        "src/remote/hub.ts doRegister(): reuses a registry holder without comparing chatId",
+        "src/remote/hub.ts constructor: registry load keeps records of another group",
+        "src/remote/channels-client.ts disconnect(): erases only bot-token and config.json",
+        "remote/sessions.json, outbound.jsonl and the inbound queues under the remote dir: left behind on a hub-less Disconnect"
+      ],
+      "enumeration_method": "Read doRegister(), the registry load and retire() in hub.ts, and the Disconnect path in channels-client.ts; the files kept under the remote dir were listed from src/remote/paths.ts."
+    }
+  },
+  {
+    "id": "F-106",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "In the 'off' state (config on disk, hub not running: a conflict with another machine, Telegram unreachable at serve start, a start failure) the modal offers only Disconnect. The channels-reload route and controller.reload() exist, but ChannelsClient has no plain reload method and nothing in the modal calls it; reload is reachable only through connectFinish, which rewrites the config. The 'off' text says Test 'works once Telegram is running again' but gives no way to make it run again.",
+    "impact": "A machine whose serve booted before the network came up, or whose other poller has since stopped, stays off until the operator restarts serve; the only button destroys the config and forces a full re-pairing. This also diverges from AC1 (a configured channel shows Test and Disconnect).",
+    "suggested_fix": "Add a Retry/Reconnect action in the off state that calls channels-reload (a ChannelsClient.reload()), and show the serve-restart hint in the off text. Test it with a hub that failed to start and then can.",
+    "evidence": "Read src/tui/channels-surface.ts actions() default branch and channelsStatusLines 'off'; src/remote/channels-client.ts (the only caller of channels-reload is connectFinish); src/remote/channels.ts reload().",
+    "confidence": "medium",
+    "file": "src/tui/channels-surface.ts",
+    "line": 395,
+    "quote": "            return snapshot.configured ? [disconnectButton] : [];"
+  },
+  {
+    "id": "F-107",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "A pairing that reached 'ready' is final, so ChannelsController.state() reports it as not-connected (no config yet) and the modal offers Connect, not Resume. Pairing is only advanced by the open modal (it polls pairingStatus and calls connectFinish); if the operator finished the Telegram steps while the modal was closed or on the list view, nobody connects.",
+    "impact": "The operator did every step, then sees 'A bot token is left on this machine from an unfinished connection. Connect starts over'. Connect asks for the token again, pair() drops the ready pairing and opens a new one, and because the bot is already in the group no new my_chat_member arrives (see F-101), so the second attempt stalls.",
+    "suggested_fix": "Treat a ready, unconsumed pairing as state 'pairing' (or a distinct 'ready') so the modal offers Resume, which already finishes via connectFinish; or let serve finish the connection itself when the pairing becomes ready.",
+    "evidence": "Read src/remote/channels.ts state() and pairingStatus(); src/tui/channels-surface.ts actions() 'not-connected' branch and settlePairing()/finishConnect(); pollPairing only runs while the pairing view is open.",
+    "confidence": "medium",
+    "file": "src/remote/channels.ts",
+    "line": 96,
+    "quote": "    if (this.pairing !== undefined && !this.pairing.isFinal()) {"
+  },
+  {
+    "id": "F-108",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "Esc is ignored (returned without swallow) in the 'working' view, so the modal host closes the modal while Disconnect, Test, Connect or the token check are still running. The in-flight handlers then see closed === true and return without showing or recording the outcome.",
+    "impact": "A Disconnect cancelled by Esc still runs; its result ('3 topics could not be deleted and remain in the group', 'token and config could not be erased') is never shown, which AC8 relies on the operator seeing. A closed Connecting step finishes silently with no Test result. The footer advertises 'esc back'.",
+    "suggested_fix": "Swallow Esc while view.kind === 'working' (the work cannot be cancelled), or when closing mid-flight hand the outcome to a shell notice via onChanged/a callback.",
+    "evidence": "Read src/tui/channels-surface.ts Esc branch of onKeypress and the `if (closed || epoch !== mine) return;` guards in disconnect(), runTest(), finishConnect(); channels-surface.test.ts has no test for Esc during a working view.",
+    "confidence": "high",
+    "file": "src/tui/channels-surface.ts",
+    "line": 782,
+    "quote": "      if (view.kind === \"list\" || view.kind === \"working\") return;"
+  },
+  {
+    "id": "F-109",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "pair() cancels any existing pairing before it has validated the new token with getMe. A second shell that starts Connect (or a retry with a mistyped token) kills a pairing another shell is partway through; that shell's token file was already overwritten and is then restored on failure, but the dropped pairing is not restored. A first shell that keeps polling after a successful second pair() sees the second shell's code and state, with no ownership check.",
+    "impact": "Two shells at once (the task's 'second shell connecting' case) corrupt each other: the first operator's code stops working, or both modals show one pairing. Narrow, and recoverable by starting again.",
+    "suggested_fix": "Open the new pairing first (getMe) and only then replace the old one, and refuse or take over explicitly when a non-final pairing exists, returning its owner/state.",
+    "evidence": "Read src/remote/channels.ts pair() (dropPairing before openApi/Pairing.open) and src/remote/channels-client.ts startPairing() (token written before the call, restored on failure).",
+    "confidence": "medium",
+    "file": "src/remote/channels.ts",
+    "line": 130,
+    "quote": "      await this.dropPairing();"
+  },
+  {
+    "id": "F-110",
+    "reviewer": "flow377-pr823-correctness",
+    "severity": "minor",
+    "problem": "The docs say that without the files serve prints `remote control is off: <reason>`, and in the same sentence that it offers the local /channels routes. The code prints no such notice for an unconfigured machine: startHubNow returns notConnected, serve prints 'channels ready: connect Telegram from the shell with /channels', and `remote control is off:` appears only for real refusals (bad config, conflict, non-loopback). The same sentence appears in cli-reference.md.",
+    "impact": "An operator searching serve output for the documented line will not find it on a fresh machine and may think serve is broken; the claim is contradicted by the tests (the unconfigured start asserts rig.notices is empty).",
+    "suggested_fix": "Reword both docs: without the files serve prints 'channels ready: connect Telegram from the shell with /channels'; 'remote control is off: <reason>' is for an invalid config or a refused start.",
+    "evidence": "Read docs/docs/guides/drive-keryx-remotely.md lines 138-142, docs/docs/cli-reference.md line 1867, src/commands/serve.ts lines 280-282, src/remote/service.ts startHubNow(), src/remote/channels-connect.test.ts first test (notices empty).",
+    "confidence": "high",
+    "file": "docs/docs/guides/drive-keryx-remotely.md",
+    "line": 140,
+    "quote": "`remote control is off: <reason>` and serves exactly as before, offering only the"
+  }
+]
+```

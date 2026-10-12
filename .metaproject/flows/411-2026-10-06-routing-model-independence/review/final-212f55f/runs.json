@@ -1,0 +1,34 @@
+[
+  {
+    "conclusion": "success",
+    "databaseId": 37657825045,
+    "headSha": "212f55f14707bf30498939d47084ebcd6c72d126",
+    "status": "completed",
+    "url": "https://github.com/MrCipherSmith/keryx/actions/runs/37657825045",
+    "workflowName": "Wiki freshness"
+  },
+  {
+    "conclusion": "success",
+    "databaseId": 37657825069,
+    "headSha": "212f55f14707bf30498939d47084ebcd6c72d126",
+    "status": "completed",
+    "url": "https://github.com/MrCipherSmith/keryx/actions/runs/37657825069",
+    "workflowName": "Docs"
+  },
+  {
+    "conclusion": "success",
+    "databaseId": 37657825047,
+    "headSha": "212f55f14707bf30498939d47084ebcd6c72d126",
+    "status": "completed",
+    "url": "https://github.com/MrCipherSmith/keryx/actions/runs/37657825047",
+    "workflowName": "CI"
+  },
+  {
+    "conclusion": "success",
+    "databaseId": 37657819397,
+    "headSha": "212f55f14707bf30498939d47084ebcd6c72d126",
+    "status": "completed",
+    "url": "https://github.com/MrCipherSmith/keryx/actions/runs/37657819397",
+    "workflowName": "Full check diagnostic (no publish)"
+  }
+]

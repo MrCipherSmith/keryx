@@ -1,0 +1,330 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "major",
+    "problem": "The duplicate-id check skips a local flow folder whenever ANY remote ref holds a folder with the same name, and never asks whether a different ref holds that number under another name.",
+    "impact": "A flow whose own branch was pushed (origin/feat holds the same folder) while another clone merged a different flow with the same number to origin/main is not reported by flow check, flow list or the TUI tag, so the PR merges with colliding ids.",
+    "suggested_fix": "Drop the same-name guard; pick the clash with flowNumberOfDir(entry.dir) === n && entry.dir !== dir.",
+    "evidence": "Read src/flow/service.ts check() remote clash loop and folder-hygiene.test.ts: the tests only covered the same name on ONE ref.",
+    "confidence": "high",
+    "file": "src/flow/service.ts",
+    "line": null,
+    "quote": "          if (remoteDirs.some((entry) => entry.dir === dir)) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1707
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/service.ts check(): the remote clash loop with the same-name guard (the defect)",
+        "src/flow/service.ts renumber(): refuses a target number any known remote folder uses (number-only, no name guard)",
+        "src/flow/remote-flows.ts remoteFlowNumbers(): reserves numbers for flow init (number-only, no name guard)",
+        "src/tui/flow-hygiene.ts and flow list tags: take the duplicate-id verdict from check(), no second comparison"
+      ],
+      "enumeration_method": "keryx ctx rg for flowNumberOfDir and knownRemoteFlowDirs over src: every comparison of a local flow number against remote folders; only check() compares by folder name as well."
+    },
+    "global_id": "2026-10-01-ingest-835#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): service.ts check() no longer skips a folder another ref holds under the same name; the clash is `entry.dir !== dir && flowNumberOfDir(entry.dir) === Number(flowIdOf(dir))`. folder-hygiene.test.ts has a new test: the same name on origin/feat plus a different name with the same number on origin/main is reported, and a same-name-only case is not. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): service.ts check() clash loop, test in src/flow/folder-hygiene.test.ts"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "minor",
+    "problem": "Remote folder names are untrusted input and the filter /^\\d+-/ is looser than the local one (/^\\d{3}-/): a date-named or four-digit folder on a remote branch counts as a flow number.",
+    "impact": "Anyone who can push a branch adds .metaproject/flows/9999-x or 2026-notes; after fetch flow init mints 10000-... or 2027-..., which listFlowDirs never lists, so the new flow is invisible to list, resolve and check.",
+    "suggested_fix": "Accept only exactly three digits and a dash for remote names; ignore everything else.",
+    "evidence": "Read src/flow/remote-flows.ts flowDirsOnRef and src/flow/store.ts listFlowDirs; remote-flows.test.ts blessed four-digit numbers.",
+    "confidence": "high",
+    "file": "src/flow/remote-flows.ts",
+    "line": null,
+    "quote": "    .filter((name) => /^\\d+-/.test(name));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/flow/remote-flows.ts",
+      "reported_line": 95
+    },
+    "global_id": "2026-10-01-ingest-835#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): remote-flows.ts accepts only /^\\d{3}-/ for remote folder names; remote-flows.test.ts rewrote the four-digit test (ignored now) and added a date-named dir test (ignored, nextFlowId unaffected). CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): src/flow/remote-flows.ts three-digit filter, tests in remote-flows.test.ts"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow384-pr835-docs-tui-security",
+    "severity": "minor",
+    "problem": "MAX_REFS = 200 is applied in alphabetical refname order after tip de-duplication and drops the rest silently, while the docs promise every number held by a known remote branch.",
+    "impact": "A clone with more than 200 distinct remote-tracking tips can lose origin/main (or any flow branch) from the scan: flow init can reuse a number it holds and check reports nothing; this repo has 244 remote-tracking refs.",
+    "suggested_fix": "Order refs main/master/HEAD target first, raise the cap, document the cap and that a never-fetched ref is invisible.",
+    "evidence": "Read src/flow/remote-flows.ts remoteRefs; counted the remote refs of this clone.",
+    "confidence": "high",
+    "file": "src/flow/remote-flows.ts",
+    "line": null,
+    "quote": "const MAX_REFS = 200;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/flow/remote-flows.ts",
+      "reported_line": 19
+    },
+    "global_id": "2026-10-01-ingest-835#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): orderRemoteRefs puts main/master and the HEAD target first and MAX_REFS is 500; a test covers the order and the cap; cli-reference, modules and CHANGELOG state the cap and that a never-fetched ref is invisible. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): orderRemoteRefs and MAX_REFS 500, documented in CHANGELOG 0.3.53 and cli-reference.md"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "minor",
+    "problem": "git ls-tree --name-only is read without -z, so git C-quotes non-ASCII and special characters in the repo-relative prefix; the exact-name comparison never matches and basename leaves a stray quote on remote folder names.",
+    "impact": "A flow project in a monorepo subdirectory with a non-ASCII name reads every committed flow as not committed: the folder-committed gate fails permanently and flow check reports a false duplicate-id against the flow's own merged branch.",
+    "suggested_fix": "Use -z and split on NUL in both modules; strip control characters from names that reach messages.",
+    "evidence": "Reproduced by the second reviewer in a scratch repo with a non-ASCII project subdirectory: flowFoldersInHead returned an empty set although flow.json was in HEAD.",
+    "confidence": "high",
+    "file": "src/flow/folder-committed.ts",
+    "line": null,
+    "quote": "    const result = await runGit(cwd, [\"ls-tree\", \"--name-only\", \"--full-tree\", \"HEAD\", \"--\", ...paths]);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/flow/folder-committed.ts",
+      "reported_line": 29
+    },
+    "global_id": "2026-10-01-ingest-835#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): both ls-tree calls use -z and split on NUL; safeDirName strips control characters from names in messages; a test with a non-ASCII project subdirectory (a Cyrillic folder name) proves a committed flow reads as committed and a remote dir name has no stray quote. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): -z in remote-flows.ts and folder-committed.ts, non-ASCII prefix tests"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "minor",
+    "problem": "Any non-zero ls-tree exit, not only an unborn HEAD, is treated as nothing committed.",
+    "impact": "A corrupt object or a failing partial clone turns into a failed gate that tells the operator to git add something already committed.",
+    "suggested_fix": "Distinguish the unborn HEAD (rev-parse --verify -q HEAD) and throw for other failures so the gate becomes unevaluable.",
+    "evidence": "Read src/flow/folder-committed.ts lines 33-36.",
+    "confidence": "medium",
+    "file": "src/flow/folder-committed.ts",
+    "line": null,
+    "quote": "    if (result.code !== 0) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/flow/folder-committed.ts",
+      "reported_line": 33
+    },
+    "global_id": "2026-10-01-ingest-835#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): folder-committed.ts answers an empty set only for an unborn HEAD (rev-parse --verify -q HEAD fails) and throws for any other ls-tree failure; the gate wrapper turns it into an unevaluable gate and check() catches it; tests cover a corrupted tree, HEAD without flow.json, a detached HEAD. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): folder-committed.ts throws on unreadable HEAD, unborn HEAD is empty, tests in folder-hygiene.test.ts"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "minor",
+    "problem": "The Dir label padding in the flow detail view was changed from six spaces to five, so its value column is one off from every other row.",
+    "impact": "Cosmetic misalignment in /flows detail and any assertion on the old spacing.",
+    "suggested_fix": "Restore the original spacing.",
+    "evidence": "Read src/tui/flow-inspector.ts near line 142.",
+    "confidence": "high",
+    "file": "src/tui/flow-inspector.ts",
+    "line": null,
+    "quote": "Dir     ",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 142
+    },
+    "global_id": "2026-10-01-ingest-835#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "at 046d7b83 (PR #835): flow-inspector.ts Dir row has the original padding again (git diff against origin/main shows no change on that line); the 9-character label field matches the other rows. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): Dir label padding restored in src/tui/flow-inspector.ts"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "minor",
+    "problem": "The ref.startsWith(\"-\") guard in remoteRefs is dead code (the ref is the full refs/remotes/... name) and the test that claims to cover it cannot fail.",
+    "impact": "False assurance about option injection.",
+    "suggested_fix": "Remove the guard and the test.",
+    "evidence": "Read src/flow/remote-flows.ts remoteRefs and remote-flows.test.ts.",
+    "confidence": "high",
+    "file": "src/flow/remote-flows.ts",
+    "line": null,
+    "quote": "    if (ref.startsWith(\"-\") || !ref.startsWith(\"refs/remotes/\") || ref.endsWith(\"/HEAD\")) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/flow/remote-flows.ts",
+      "reported_line": 72
+    },
+    "global_id": "2026-10-01-ingest-835#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "at 046d7b83 (PR #835): the dead startsWith(\"-\") guard in remoteRefs and the test that claimed to cover it are removed (refs are always full refs/remotes/ names); no reference remains. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): dead dash guard and its test removed from remote-flows.ts"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "flow384-pr835-correctness",
+    "severity": "minor",
+    "problem": "The gate and warning tests run only on a repository with no commits; HEAD present but flow.json absent, a project root in a git subdirectory and a detached HEAD are never exercised.",
+    "impact": "A regression in the prefix or path building, or in handling of exit 0 with empty output, would pass the whole suite.",
+    "suggested_fix": "Add tests for those cases.",
+    "evidence": "Read src/flow/folder-hygiene.test.ts: gitRepo never commits before init.",
+    "confidence": "high",
+    "file": "src/flow/folder-hygiene.test.ts",
+    "line": null,
+    "quote": "  test(",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/flow/folder-hygiene.test.ts",
+      "reported_line": 202
+    },
+    "global_id": "2026-10-01-ingest-835#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): folder-hygiene.test.ts now covers HEAD present without flow.json (exit 0, empty output), a project root in a git subdirectory (also a non-ASCII one), a detached HEAD and a corrupted tree; they pass. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): new cases in src/flow/folder-hygiene.test.ts"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "flow384-pr835-docs-tui-security",
+    "severity": "minor",
+    "problem": "completionFixHint has no case for the folder-committed gate, although the docs say each failing gate names the command that fixes it.",
+    "impact": "flow check-complete and the /governance check show no fix line for an uncommitted flow.",
+    "suggested_fix": "Add a folder-committed case with the git add and git commit hint.",
+    "evidence": "Read src/flow/service.ts completionFixHint.",
+    "confidence": "high",
+    "file": "src/flow/service.ts",
+    "line": null,
+    "quote": "function completionFixHint(",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 253
+    },
+    "global_id": "2026-10-01-ingest-835#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): completionFixHint has a folder-committed case naming git add .metaproject/flows/<dir> && git commit; check-complete.test.ts asserts it next to the owner hint. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): completionFixHint case in service.ts, test in check-complete.test.ts"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "flow384-pr835-docs-tui-security",
+    "severity": "minor",
+    "problem": "The docs and skills say the flow folder is committed and again at closing and flow complete enforces it, but the gate only checks that flow.json is in HEAD before closing.",
+    "impact": "A promise the code does not keep: untracked or edited acceptance-criteria.md passes the gate, and the closing commit is never required.",
+    "suggested_fix": "Narrow the wording everywhere to flow.json in HEAD before closing; the closing commit stays a rule.",
+    "evidence": "Read src/flow/folder-committed.ts and the wording in cli-reference.md, modules.md, CHANGELOG, templates.ts and both flow-orchestrator SKILL.md copies.",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "line": null,
+    "quote": "committed",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 3829
+    },
+    "global_id": "2026-10-01-ingest-835#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "at 046d7b83 (PR #835): the wording in CHANGELOG [0.3.53], cli-reference.md, modules.md, tasks.md, flow/complete.md, templates.ts and both flow-orchestrator SKILL.md copies now says the gate requires flow.json in HEAD before closing and that the closing commit is the rule, not enforced; the two SKILL.md copies are identical and the bundled-skill verify tests pass (81 pass). CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in a3b0e6b0 (PR #835): wording narrowed in CHANGELOG 0.3.53, cli-reference.md, modules.md, templates.ts and the flow skills"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "flow384-pr835-docs-tui-security",
+    "severity": "minor",
+    "problem": "The governance modal's reload awaits the informational hygiene pass (a full flow check, including git calls) in the same Promise.all as the report read, so the first paint waits for it.",
+    "impact": "On a slow disk, a partial clone or hundreds of refs, opening /governance shows nothing until the advisory check finishes; the same check also runs on every flow list.",
+    "suggested_fix": "Load the hygiene tags after the first paint or without gating ready.",
+    "evidence": "Read src/tui/governance-inspector.ts reload.",
+    "confidence": "medium",
+    "file": "src/tui/governance-inspector.ts",
+    "line": null,
+    "quote": "Promise.all",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 268
+    },
+    "global_id": "2026-10-01-ingest-835#F-011",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 046d7b83 (PR #835): governance-inspector.ts reload() starts the hygiene pass with the report read but paints the first frame before awaiting it and paints again when the tags arrive; governance-inspector.test.ts and flow-hygiene.test.ts pass (18 pass 0 fail) and eslint is clean. CI run 36866083889 green on this head (typecheck-and-tests and all 18 checks passed); narrow slice 102 pass 0 fail at a3b0e6b0 before the F-011 commit, governance-inspector + flow-hygiene tests 18 pass at 046d7b83.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 046d7b83 (PR #835): src/tui/governance-inspector.ts reload paints before the hygiene pass"
+    }
+  }
+]

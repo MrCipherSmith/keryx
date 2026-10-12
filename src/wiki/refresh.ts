@@ -14,11 +14,13 @@
 // existing read was the right call, after `validModuleNames`,
 // `wikiPruneOrphans` and `computePageNodeHash`.
 
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadGraph } from "../gdgraph/query";
 import { collectPages, computeModuleKeyFiles } from "./collect";
 import { resolveDescribeSet } from "./describes";
+import { openWikiWriteContext, type WikiWriteContext, writeWikiPage } from "./history";
+import { bumpPatch, nextPageVersion } from "./page-invariants";
 import {
   findManagedBlock,
   replaceManagedBlock,
@@ -114,8 +116,9 @@ function referenceSectionOf(generated: string): string | null {
  */
 export async function migrateMarkers(
   cwd: string,
-  options: { dryRun?: boolean } = {},
+  options: { dryRun?: boolean; history?: WikiWriteContext } = {},
 ): Promise<MigrateResult> {
+  let history = options.history;
   const result: MigrateResult = {
     migrated: [],
     skippedNoSection: [],
@@ -146,7 +149,8 @@ export async function migrateMarkers(
       continue;
     }
     if (!options.dryRun) {
-      await writeFile(page.absolutePath, wrapped, "utf8");
+      history ??= await openWikiWriteContext(cwd, "wiki migrate-markers");
+      await writeWikiPage(history, page.absolutePath, wrapped);
     }
     result.migrated.push(page.relativePath);
   }
@@ -155,13 +159,7 @@ export async function migrateMarkers(
 }
 
 /** patch-only bump; a mechanical Reference refresh is never minor or major. */
-export function bumpPatch(version: string | null): string {
-  const match = (version ?? "").match(/^(\d+)\.(\d+)\.(\d+)$/);
-  if (!match) {
-    return "0.1.1";
-  }
-  return `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
-}
+export { bumpPatch };
 
 export function appendChangelogLine(content: string, line: string): string {
   const lines = content.split("\n");
@@ -195,6 +193,8 @@ export interface RefreshInput {
   now?: () => Date;
   /** Injection seam for tests; defaults to the real `checkGraphStaleness`. */
   checkStaleness?: StalenessProbe | undefined;
+  /** History run page writes are recorded under (flow 367); defaults to `wiki refresh`. */
+  history?: WikiWriteContext | undefined;
 }
 
 export async function refreshPages(input: RefreshInput): Promise<RefreshResult> {
@@ -230,6 +230,7 @@ export async function refreshPages(input: RefreshInput): Promise<RefreshResult> 
     source: { status: gate.status, reasons: gate.reasons, stampedAt: gate.stampableHead },
   };
 
+  const history = input.history ?? (await openWikiWriteContext(cwd, input.force ? "wiki refresh --force" : "wiki refresh"));
   for (const page of pages) {
     const outcome = await refreshOne({
       page,
@@ -244,6 +245,7 @@ export async function refreshPages(input: RefreshInput): Promise<RefreshResult> 
       head: gate.stampableHead ?? undefined,
       gate,
       generatedAt,
+      history,
     });
     result.pages.push(outcome);
     if (outcome.action === "refreshed") result.refreshed += 1;
@@ -267,6 +269,7 @@ async function refreshOne(input: {
   head: string | undefined;
   gate: WikiSourceGate;
   generatedAt: string;
+  history: WikiWriteContext;
 }): Promise<RefreshPageResult> {
   const { page } = input;
   const content = await readFile(page.absolutePath, "utf8");
@@ -321,7 +324,9 @@ async function refreshOne(input: {
     return { path: page.relativePath, action: "conflict", reason: "block replacement failed" };
   }
 
-  const version = bumpPatch(page.version);
+  // One patch above both Version and the newest changelog entry (flow 367), so
+  // a page whose Version had fallen behind its changelog is not left behind.
+  const version = nextPageVersion(content);
   next = next.replace(/^Version:\s*.+$/m, `Version: ${version}`);
 
   const describeSet = resolveDescribeSet({
@@ -349,7 +354,7 @@ async function refreshOne(input: {
   );
 
   if (!input.dryRun) {
-    await writeFile(page.absolutePath, next, "utf8");
+    await writeWikiPage(input.history, page.absolutePath, next);
   }
   return { path: page.relativePath, action: "refreshed", version };
 }
@@ -388,6 +393,8 @@ export async function verifyPages(input: {
    * say that is what they meant.
    */
   baseline?: boolean | undefined;
+  /** History run page writes are recorded under (flow 367); defaults to `wiki verify`. */
+  history?: WikiWriteContext | undefined;
 }): Promise<Array<{ path: string; verifiedAt: string | null; verifiedScope: string }>> {
   if (input.page === undefined && input.baseline !== true) {
     throw new Error(
@@ -435,6 +442,7 @@ export async function verifyPages(input: {
 
   const stampableHead = input.head.kind === "resolved" ? input.head.commit : null;
   const stamped: Array<{ path: string; verifiedAt: string | null; verifiedScope: string }> = [];
+  let history = input.history;
   for (const page of await collectPages(input.cwd)) {
     if (input.page !== undefined && page.relativePath !== input.page) {
       continue;
@@ -456,7 +464,8 @@ export async function verifyPages(input: {
       verifiedScope: scope,
     });
     if (next !== content) {
-      await writeFile(page.absolutePath, next, "utf8");
+      history ??= await openWikiWriteContext(input.cwd, input.baseline === true ? "wiki verify --baseline" : "wiki verify");
+      await writeWikiPage(history, page.absolutePath, next);
     }
     stamped.push({ path: page.relativePath, verifiedAt: stampableHead, verifiedScope: scope });
   }

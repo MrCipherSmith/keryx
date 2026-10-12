@@ -1,0 +1,40 @@
+{
+  "base": "9127d78b8f098be928d66fe928cde9999ba67d7c",
+  "bun": "1.3.14",
+  "old": [
+    "(pass) AC6: a failed delivery is written in the report and retried > a refused send is a line in the report with the reason and the retry time, and the message stays queued [513.62ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > it is not retried before the backoff has passed, and is retried once it has [607.07ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > the delay doubles from five minutes and stops growing at an hour [1568.14ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > a sink that throws is a failed attempt, not a crash of the run [5779.94ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > after 12 refused attempts it gives up, says so in the report, and stops trying [5062.02ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > when Telegram did not take it yet but serve's own queue holds it, the digest does not send it a second time [286.18ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > the serve ticker flushes a message that is waiting, so a retry needs no new run [509.98ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > one gh source failing: the digest still goes out, says what it could not read, and the report has the entry [297.89ms]",
+    "251 |     expect(sink.sent[0]?.text).toContain(\"gh_pr_list failed: gh: not logged in\");",
+    "Received: \"Digest morning stopped \u2014 no source could be read\\n- pr:MrCipherSmith/keryx: gh_pr_list failed: gh: not logged in\\n- issue:MrCipherSmith/keryx: gh_issue_list failed: gh: not logged in\\n- review:MrCipherSmith/keryx: gh_pr_review_requested failed: gh: not logged in\\n- ci:MrCipherSmith/keryx: gh_run_failed failed: gh: not logged in\\n- board: no product index \u2014 run `keryx product index` to build it\\nReport: .metaproject/data/trigger/reports/morning/dig-20261002T[REDACTED:phone]d42d.md\"",
+    "(fail) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [387.08ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a model that fails does not stop the digest: the plain text goes out and the failure is named as 'model' [1742.91ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a failed delivery of a failure status line is retried like any other message [1905.23ms]",
+    "(pass) AC6: a refusal is a status line in the topic too > an unsafe scratch directory fails the run with a status line [3037.80ms]",
+    "1 tests failed:",
+    "(fail) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [387.08ms]",
+    " 25 pass",
+    " 1 fail"
+  ],
+  "new": [
+    "(pass) AC6: a failed delivery is written in the report and retried > a refused send is a line in the report with the reason and the retry time, and the message stays queued [199.23ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > it is not retried before the backoff has passed, and is retried once it has [225.61ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > the delay doubles from five minutes and stops growing at an hour [161.44ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > a sink that throws is a failed attempt, not a crash of the run [213.68ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > after 12 refused attempts it gives up, says so in the report, and stops trying [352.69ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > when Telegram did not take it yet but serve's own queue holds it, the digest does not send it a second time [168.40ms]",
+    "(pass) AC6: a failed delivery is written in the report and retried > the serve ticker flushes a message that is waiting, so a retry needs no new run [443.47ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > one gh source failing: the digest still goes out, says what it could not read, and the report has the entry [495.04ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > gh failing for every source stops the run: a status line goes to the topic and the report says why [178.65ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a model that fails does not stop the digest: the plain text goes out and the failure is named as 'model' [1387.70ms]",
+    "(pass) AC6: a gh or model failure is a report entry and a status line in the topic > a failed delivery of a failure status line is retried like any other message [1428.37ms]",
+    "(pass) AC6: a refusal is a status line in the topic too > an unsafe scratch directory fails the run with a status line [197.46ms]",
+    " 30 pass",
+    " 0 fail"
+  ]
+}

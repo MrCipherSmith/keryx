@@ -2,10 +2,12 @@
 
 import { describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveGitHead } from "../sync/provenance";
+import { pageHistoryDir, readPageHistory } from "./history";
 import { appendChangelogLine, bumpPatch, migrateMarkers, refreshPages, verifyPages } from "./refresh";
 
 const SHA = "c".repeat(40);
@@ -160,6 +162,48 @@ describe("refreshPages", () => {
       .filter((line) => line.trim().startsWith("- ")) ?? [];
     expect(changelogLines).toHaveLength(2);
     expect(changelogLines[0]).toContain("1.0.1 - Reference refreshed");
+  });
+
+  test("T-009 flow 367: a page whose Version is behind its newest changelog entry is refreshed to a Version above that entry", async () => {
+    const { cwd, pagePath } = await project(
+      [
+        "# src/mod",
+        "Version: 1.0.0",
+        "Type: component",
+        "Status: accepted",
+        "",
+        "## Overview",
+        "",
+        "Prose the machine must never touch.",
+        "",
+        "## Reference (from code graph)",
+        "",
+        "### Public API",
+        "",
+        "- stale",
+        "",
+        "## Related Wiki",
+        "",
+        "- [Index](../index.md)",
+        "",
+        "## Changelog",
+        "",
+        "- 1.3.0 - Edited by a tool that did not bump Version.",
+        "- 1.0.0 - Written by hand.",
+        "",
+      ].join("\n"),
+    );
+    await migrateMarkers(cwd);
+
+    const result = await refreshPages({ cwd, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+
+    expect(result.refreshed).toBe(1);
+    const after = await readFile(pagePath, "utf8");
+    // One patch above the changelog's 1.3.0, not above the stale Version 1.0.0.
+    expect(after).toContain("Version: 1.3.1");
+    expect(after).not.toContain("Version: 1.0.1");
+    expect(after).toContain("- 1.3.1 - Reference refreshed");
+    expect(after).toContain("- 1.3.0 - Edited by a tool that did not bump Version.");
   });
 
   test("AC9: an already-current page is not rewritten at all", async () => {
@@ -400,5 +444,94 @@ describe("helpers", () => {
     expect(appendChangelogLine("# P\n\nProse.\n", "- 0.1.1 - x")).toBe(
       "# P\n\nProse.\n\n## Changelog\n\n- 0.1.1 - x\n",
     );
+  });
+});
+
+// Flow 367: refresh, migrate and verify write through the page history. Each
+// test runs the real command over a page that already existed and checks the
+// history folder holds a version byte-identical to the page's pre-run content.
+describe("wiki page history (flow 367)", () => {
+  const PAGE = "components/src-mod.md";
+
+  /** The history holds a non-current version whose stored file equals `prior`; the newest row is the live page. */
+  async function expectPriorStored(cwd: string, pagePath: string, prior: Buffer) {
+    const history = await readPageHistory(cwd, PAGE);
+    expect(history).not.toBeNull();
+    const rows = history!.rows;
+    let found = false;
+    for (const row of rows.slice(1)) {
+      if (!row.file.endsWith(".md")) continue;
+      if ((await readFile(path.join(pageHistoryDir(cwd, PAGE), row.file))).equals(prior)) found = true;
+    }
+    expect(found).toBe(true);
+    const live = await readFile(pagePath);
+    expect(live.equals(prior)).toBe(false);
+    expect(rows[0]!.sha).toBe(createHash("sha256").update(live).digest("hex"));
+    return rows;
+  }
+
+  test("W6 flow 367: wiki migrate-markers stores the pre-run bytes of the page it wraps", async () => {
+    const { cwd, pagePath } = await project();
+    const prior = await readFile(pagePath);
+
+    const result = await migrateMarkers(cwd);
+
+    expect(result.migrated).toEqual([PAGE]);
+    const rows = await expectPriorStored(cwd, pagePath, prior);
+    expect(rows[0]!.by).toBe("wiki migrate-markers");
+    expect(rows[1]!.by).toBe("baseline (before history)");
+    // A --dry-run records nothing.
+    const dry = await project();
+    await migrateMarkers(dry.cwd, { dryRun: true });
+    expect(await readPageHistory(dry.cwd, PAGE)).toBeNull();
+  });
+
+  test("W7 flow 367: wiki refresh stores the pre-run bytes of the page it refreshes", async () => {
+    const { cwd, pagePath } = await project();
+    await migrateMarkers(cwd);
+    const prior = await readFile(pagePath);
+
+    const result = await refreshPages({ cwd, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+
+    expect(result.refreshed).toBe(1);
+    const rows = await expectPriorStored(cwd, pagePath, prior);
+    expect(rows[0]!.by).toBe("wiki refresh");
+    expect(rows[1]!.by).toBe("wiki migrate-markers");
+    expect(rows[0]!.run).not.toBe(rows[1]!.run);
+  });
+
+  test("W7 flow 367: a refresh that changes nothing records no version", async () => {
+    const { cwd } = await project();
+    await migrateMarkers(cwd);
+    await refreshPages({ cwd, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+    const before = (await readPageHistory(cwd, PAGE))!.rows.length;
+
+    const second = await refreshPages({ cwd, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+
+    expect(second.unchanged).toBe(1);
+    expect((await readPageHistory(cwd, PAGE))!.rows.length).toBe(before);
+  });
+
+  test("W8 flow 367: wiki verify stores the pre-run bytes of the page it stamps", async () => {
+    const { cwd, pagePath } = await project();
+    const prior = await readFile(pagePath);
+
+    const stamped = await verifyPages({ cwd, page: PAGE, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+
+    expect(stamped).toHaveLength(1);
+    expect((await readFile(pagePath, "utf8"))).toContain(`VerifiedAt: ${SHA}`);
+    const rows = await expectPriorStored(cwd, pagePath, prior);
+    expect(rows[0]!.by).toBe("wiki verify");
+    expect(rows[1]!.by).toBe("baseline (before history)");
+  });
+
+  test("W8 flow 367: wiki verify --baseline is labelled as such", async () => {
+    const { cwd, pagePath } = await project();
+    const prior = await readFile(pagePath);
+
+    await verifyPages({ cwd, baseline: true, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+
+    const rows = await expectPriorStored(cwd, pagePath, prior);
+    expect(rows[0]!.by).toBe("wiki verify --baseline");
   });
 });

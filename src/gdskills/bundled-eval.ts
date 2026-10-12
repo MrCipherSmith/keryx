@@ -85,7 +85,7 @@ import { normalizeRouteText, routeTokens } from "../lib/route-tokens";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
-import { parseSkillFrontmatter } from "./skill-frontmatter";
+import { frontmatterScalar, parseSkillFrontmatter, readFrontmatter } from "./skill-frontmatter";
 import { DEFAULT_SKILL_LENGTH_CEILING, SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 
 // ---------------------------------------------------------------------------
@@ -326,23 +326,6 @@ export function frontmatterBlock(markdown: string): string | undefined {
   const end = markdown.indexOf("\n---", 3);
   if (end === -1) return undefined;
   return markdown.slice(3, end);
-}
-
-/**
- * Top-level frontmatter keys and their scalar values.
- *
- * Deliberately shallow: `metadata:` opens a nested block and its value here is
- * the empty string, which is enough to answer "is the key present". Parsing YAML
- * properly would add a dependency to answer a question nothing asks.
- */
-function frontmatterKeys(block: string): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const line of block.split("\n")) {
-    const match = /^([A-Za-z_][\w-]*)\s*:(.*)$/.exec(line);
-    if (match === null) continue;
-    out.set(match[1] as string, (match[2] ?? "").trim());
-  }
-  return out;
 }
 
 /**
@@ -1857,32 +1840,27 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     };
 
     // --- frontmatter -------------------------------------------------------
-    const block = frontmatterBlock(text);
-    if (block === undefined) {
+    const keys = readFrontmatter(text);
+    if (keys === undefined) {
       add(
         "frontmatter:block",
         1,
         "no YAML frontmatter block: the file must open with `---` and close the block with a `---` line.",
       );
     } else {
-      const keys = frontmatterKeys(block);
-      // The one parse every field below that must match what the RUNTIME sees
-      // reads through — `description` already did (see its comment below);
-      // `metadata.category` and `compatible_harnesses` join it here rather
-      // than staying on `frontmatterKeys`' single-line regexes, which read a
-      // YAML block list or flow list as absent rather than as a value to
-      // check (see `parseSkillFrontmatter`'s own comment on the field).
+      // `keys` and `parsed` both come from the shared frontmatter reader, so
+      // every field below reads what the RUNTIME sees (see
+      // `parseSkillFrontmatter`'s own comment on `compatible_harnesses`).
       const parsed = parseSkillFrontmatter(text);
       for (const [field, check] of Object.entries(REQUIRED_FRONTMATTER_CHECKS)) {
         if (!keys.has(field)) {
           add(check, 1, `frontmatter is missing the required \`${field}\` field.`);
         }
       }
-      const name = keys.get("name");
-      if (name !== undefined && name.replace(/^["']|["']$/g, "").length === 0) {
+      const declaredName = frontmatterScalar(text, "name");
+      if (declaredName !== undefined && declaredName.length === 0) {
         add("frontmatter:name", 1, "frontmatter `name` is present but empty.");
       }
-      const declaredName = name === undefined ? undefined : name.replace(/^["']|["']$/g, "");
       if (declaredName !== undefined && declaredName.length > 0) {
         const previous = declaredNames.get(declaredName);
         if (previous === undefined) {
@@ -1896,8 +1874,8 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         }
       }
       // Assert the description the RUNTIME will serve, not merely that the line
-      // exists. `keys` is a shallow read: for a block scalar it holds the bare
-      // indicator ("|"), which is non-empty and so passed this check while
+      // exists. `keys` only records that the field is present: for a block scalar
+      // the old line-regex read held the bare indicator ("|"), which passed this check while
       // `skills_catalog` handed that indicator to an agent as the skill's whole
       // description. Both sides now read through `parseSkillFrontmatter`.
       if (keys.has("description")) {
@@ -1947,8 +1925,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         }
       }
       if (keys.has("metadata")) {
-        const metadataVersion = /^\s{2,}version\s*:\s*(.+)$/m.exec(block);
-        if (metadataVersion === null) {
+        if (parsed.metadataVersion === undefined) {
           add(
             "frontmatter:metadata",
             1,

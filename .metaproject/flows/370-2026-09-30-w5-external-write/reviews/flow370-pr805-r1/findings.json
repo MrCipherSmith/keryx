@@ -1,0 +1,250 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow370-pr805-review",
+    "severity": "major",
+    "problem": "`keryx agents external review` and `apply` print the stored patch, file paths and flagged paths to the terminal without stripping control characters. redactSensitiveText passes ESC sequences through unchanged (checked with bun: an input holding CSI 2J / CSI H / CSI 8m came back identical). The TUI modal sanitizes these (external-diff-modal.ts `clean`), the CLI path does not.",
+    "impact": "A write agent can put `\\x1b[2J\\x1b[H` plus a forged review header (for example 'files (1): modified README.md', no flagged paths, a different hash) into a file body or a file name. When the operator runs `apply`, the screen is cleared and redrawn after the real header, so the human types the 12-character hash after reading a falsified diff. The mandatory human review is the only landing gate, so this defeats it. It also can hide the flagged-path warning.",
+    "suggested_fix": "Run every agent-derived string in renderWriteReview and renderWriteRun (patch lines, file paths, flagged and refused paths) through the same control-character filter the TUI uses (replace C0/C1 controls, ESC and CR, expand tabs), and put the hash and the file list after the patch or re-print them just before the prompt.",
+    "evidence": "static review, not run for the CLI path; bun one-liner confirmed redactSensitiveText leaves ESC sequences untouched",
+    "confidence": "high",
+    "file": "src/commands/agents-external.ts",
+    "line": null,
+    "quote": "  else lines.push(\"patch:\", view.patch.replace(/\\n$/, \"\"));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 669
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/agents-external.ts"
+      ],
+      "enumeration_method": "read the changed files; static review; searched agents-external.ts and the TUI modal for sanitize, strip and escape handling"
+    },
+    "global_id": "flow370-pr805-r1#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) agents-external-write.test.ts 'agent-controlled text is printed with control characters escaped, and the stored patch and hash stay byte-exact' passes",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the agents-external-write.test.ts escaped-output test passes"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow370-pr805-review",
+    "severity": "minor",
+    "problem": "The SIGINT handler only calls `handle?.kill()`. `handle` is set by onSpawned, which fires after base-commit resolution, schema staging, the version probe and `git worktree add`. A Ctrl-C in that window is consumed by `process.once` and does nothing, and the run then spawns the paid claude child anyway.",
+    "impact": "The operator presses Ctrl-C, sees no effect, and a write-capable agent run starts and finishes; only a second Ctrl-C (default handler) stops the process, and that one skips the capture and cleanup so the throwaway worktree and its .git/worktrees entry are left behind.",
+    "suggested_fix": "Record that SIGINT arrived when handle is undefined and abort before spawn (or pass an AbortSignal into runExternalWriteChild); re-arm the handler with `process.on` until the run ends.",
+    "evidence": "static review, not run",
+    "confidence": "high",
+    "file": "src/commands/agents-external.ts",
+    "line": null,
+    "quote": "    process.once(\"SIGINT\", onSigint);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 556
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/agents-external.ts"
+      ],
+      "enumeration_method": "read the changed files; static review"
+    },
+    "global_id": "flow370-pr805-r1#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) agents-external-run.test.ts 'a SIGINT before the child spawns aborts the run' passes",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the agents-external-run.test.ts SIGINT-before-spawn test passes"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow370-pr805-review",
+    "severity": "minor",
+    "problem": "validateRuntimeBlock now accepts `worktree-write` for claude-cli for every caller, but only the CLI `run --write` path goes through runExternalWriteChild (capture, redaction, record). The model-initiated path (run-external-factory.ts -> runExternalChild with the plain worktree port) reads the runtime block with readRuntimeBlock and no enum check; the `sandbox: enum [read-only]` in the spawn_subagent tool schema is only advisory to the model. A dispatch with runtime {kind:external, agent:claude-cli, sandbox:worktree-write} is therefore no longer refused.",
+    "impact": "The child runs with Edit/Write and acceptEdits, its edits are never captured, and the worktree is removed, so the work is lost while the run reports Completed and the text output describes changes that do not exist. Even a read_only-mode subagent can get a writable child. The operator's tree is not touched, but the review pipeline is bypassed and the spend is wasted.",
+    "suggested_fix": "Make the factory refuse `worktree-write` (or route it through runExternalWriteChild); keep implementedSandboxModesFor's write allowance out of validateRuntimeBlock unless the caller passes a flag that says it owns the capture.",
+    "evidence": "static review, not run",
+    "confidence": "medium",
+    "file": "src/harness/external/dispatch.ts",
+    "line": null,
+    "quote": "  return entry.id === CODEC_WRITE_AGENT_ID ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 96
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/dispatch.ts",
+        "src/harness/run-external-factory.ts"
+      ],
+      "enumeration_method": "read the changed files; searched src for runExternalChild and validateRuntimeBlock callers"
+    },
+    "global_id": "flow370-pr805-r1#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) dispatch.test.ts and runtime.test.ts ownsWriteCapture tests pass",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the dispatch.test.ts and runtime.test.ts ownsWriteCapture tests pass"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow370-pr805-review",
+    "severity": "minor",
+    "problem": "flaggedPathsOf matches case-sensitively and only a fixed list. On a case-insensitive checkout (macOS, Windows) an agent path such as `.Claude/settings.json` or `.GitHub/workflows/x.yml` is the same directory as the flagged one but is not flagged. Agent config that runs code on the operator's machine, such as `.mcp.json`, `.envrc`, `.vscode/tasks.json`, `.gitattributes` and `.gitmodules`, is not in the list either.",
+    "impact": "A run that plants hook-like config lands on `external/<id>` with no `--allow-flagged` refusal, no FLAGGED PATHS block in the review, and the sidebar and modal show nothing to look at first. The operator then checks the branch out and the config takes effect.",
+    "suggested_fix": "Compare lower-cased normalized paths against lower-cased prefixes and basenames, and add `.mcp.json`, `.envrc`, `.vscode/`, `.idea/`, `.gitattributes`, `.gitmodules`, `.cursor/`, `.codex/`, `.gemini/`, `AGENTS.md`, `CLAUDE.md` to the flagged set.",
+    "evidence": "static review, not run",
+    "confidence": "medium",
+    "file": "src/harness/external/write-run.ts",
+    "line": null,
+    "quote": "    if (FLAGGED_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return true;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/harness/external/write-run.ts",
+      "reported_line": 119
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/write-run.ts"
+      ],
+      "enumeration_method": "read the changed files; static review"
+    },
+    "global_id": "flow370-pr805-r1#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) write-run.test.ts 'flaggedPathsOf, case and agent-config files' passes",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the write-run.test.ts flaggedPathsOf tests pass"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow370-pr805-review",
+    "severity": "major",
+    "problem": "listPendingWriteRuns calls locate() for every session of the project inside a loop over listSessions; locate() runs findSession (full session scan) and then loadExternalWriteRun (which runs findSession again), so the synchronous cost is O(sessions x sessions). The sidebar polls it every 5s and modal.reload() calls it a second time per refresh.",
+    "impact": "Measured with a scratch test (300 sessions, 100 of them external write runs): one listPendingWriteRuns call took 562 ms. In the TUI that is a synchronous event-loop stall of about half a second every 5 seconds (plus again on reload), visible as input and render lag for users with a long session history.",
+    "suggested_fix": "Scan the session directories once and read each session's external-write-run record directly (skip sessions without the file), or have the sidebar poll a cheap count and only list on modal open; avoid the double findSession in locate().",
+    "evidence": "scratch bun test building 300 sessions/100 external runs, printed 'runs 100 ms 562'; otherwise static review",
+    "confidence": "high",
+    "file": "src/harness/external/write-land.ts",
+    "line": null,
+    "quote": "const located = locate(cwd, summary.id, deps.dataDir);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/harness/external/write-land.ts",
+      "reported_line": 112
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/write-land.ts",
+        "src/tui/external-diff-sidebar.ts"
+      ],
+      "enumeration_method": "read the changed files; static review"
+    },
+    "global_id": "flow370-pr805-r1#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) write-land.test.ts 'listing is linear' passes",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the write-land.test.ts linear listing test passes"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow370-pr805-review",
+    "severity": "minor",
+    "problem": "The modal tracks the selected run by index (selectedIndex). After a refresh, mode apply/discard is kept as long as runs[selectedIndex] exists, even if that index now points at a different run; scroll is not reset either.",
+    "impact": "Operator presses d on run A (discard prompt armed), the 5s poll or another terminal lands/discards A so the list shifts, the same index now points at unreviewed run B, and pressing y irreversibly discards B (deletes its stored patch). The same drift applies to an armed apply prompt: the typed prefix is checked against B's hash, but the operator never reviewed B.",
+    "suggested_fix": "Track the selected runId, and on refresh disarm apply/discard (return to browse) whenever the armed run id is no longer the selected run, as approvals-inspector does for its armed state; reset scroll when the selection changes.",
+    "evidence": "static review, not run",
+    "confidence": "medium",
+    "file": "src/tui/external-diff-modal.ts",
+    "line": null,
+    "quote": "if ((mode.kind === \"apply\" || mode.kind === \"discard\") && runs[selectedIndex] === undefined) mode = { kind: \"browse\" };",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/external-diff-modal.ts",
+      "reported_line": 178
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/external-diff-modal.ts"
+      ],
+      "enumeration_method": "read the changed files; static review"
+    },
+    "global_id": "flow370-pr805-r1#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) external-diff-modal.test.ts 'a discard armed on run-2 stays on run-2' passes",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the external-diff-modal.test.ts discard-on-run-2 test passes"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "flow370-pr805-review",
+    "severity": "minor",
+    "problem": "The CLI review prints the hash as 'sha256:<hex>' while the apply prompt and the docs ask for 'the first 12 characters of the patch hash'. The 12 characters that follow the visible 'sha256:' label are the hash prefix, but nothing says the label is excluded, and the TUI shows the bare hex.",
+    "impact": "An operator who copies the first 12 characters of the displayed 'patch hash: sha256:0123456789ab...' types 'sha256:01234', which does not match; apply cancels with only 'cancelled: nothing was applied' and exit code 1, with no hint about why.",
+    "suggested_fix": "Print the hash without the 'sha256:' prefix or word the prompt as 'the first 12 hex characters after sha256:' (and show the expected length/prefix source in the cancel message).",
+    "evidence": "static review, not run",
+    "confidence": "medium",
+    "file": "src/commands/agents-external.ts",
+    "line": null,
+    "quote": "`patch hash: ${record.patchHash === undefined ? \"none (no patch was kept)\" : `sha256:${record.patchHash}`}`,",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 652
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/agents-external.ts",
+        "docs/docs/guides/external-agent-write.md"
+      ],
+      "enumeration_method": "read the changed files; static review"
+    },
+    "global_id": "flow370-pr805-r1#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 9d284869 (contains fix 551e3cdd) the hash wording tests in external-diff-modal.test.ts and agents-external-write.test.ts pass",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 551e3cdd, verified at 9d284869: the hash wording tests pass"
+    }
+  }
+]

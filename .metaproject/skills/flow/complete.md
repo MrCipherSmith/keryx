@@ -17,7 +17,12 @@ whose status is `implemented`.
    confirmed + checksum intact; merged PR exists with green checks; code-health
    gate passes; and, for a flow that opted in (`flow init --owner` set the
    flag), an owner recorded - fails naming
-   `keryx flow owner set <id> --owner "<name>" --reason "<why>"` if not. A
+   `keryx flow owner set <id> --owner "<name>" --reason "<why>"` if not; and,
+   for a flow created from 0.3.53 on, the flow folder committed (the
+   `folder-committed` gate fails until `git add .metaproject/flows/<dir> &&
+   git commit` has run; the gate checks only that `flow.json` is in `HEAD`). The
+   flow folder is committed in the same PR as the code; the commit at closing
+   is a rule to follow, not one the gate checks. A
    flow created with `--require-confirmation` needs one more gate: run
    `keryx flow confirm <id>` in your own terminal first (a typed challenge
    mints a short-lived, single-use token - it proves an interactive step ran

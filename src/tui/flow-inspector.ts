@@ -1,8 +1,10 @@
 // /flows inspector: list tab + adjacent detail tab.
 // Newest flow first. `[`/`]` switch flows; ↑/↓ scroll the active tab body.
 
+import { originDetailLines } from "../flow/service";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import { formatAcKindLines } from "./ac-kinds-surface";
+import { formatHygieneTags } from "./flow-hygiene";
 import { sortFlowsNewestFirst, type AcMarker, type FlowInspectorItem } from "./inspector-sources";
 
 export const FLOWS_COMMAND = "/flows";
@@ -122,7 +124,7 @@ export function formatFlowListLines(items: readonly FlowInspectorItem[], selecte
   }
   return items.map((item, index) => {
     const mark = index === selected ? ">" : " ";
-    return `${mark} ${item.id}  ${statusCell(item)}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}`;
+    return `${mark} ${item.id}  ${statusCell(item)}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}${formatHygieneTags(item.hygiene)}`;
   });
 }
 
@@ -135,8 +137,10 @@ export function formatFlowDetailLines(item: FlowInspectorItem): string[] {
     `${item.id}  ${item.title}`,
     `Status   ${item.status}`,
     `Outcome author  ${item.outcomeAuthor ?? "unknown"}`,
+    ...originDetailLines(item.origin),
     ...(item.interrupted ? [`         ${item.interrupted}`] : []),
     ...(item.uncommitted ? [`         note: ${item.uncommitted}`] : []),
+    ...(item.hygiene?.notes ?? []).map((note) => `         ${note}`),
     `Dir      ${item.dir}`,
     `Tasks    ${item.tasksDone}/${item.tasksTotal}`,
     `PR       ${item.prUrl ?? "—"}`,
@@ -156,7 +160,9 @@ export function formatFlowListText(items: readonly FlowInspectorItem[]): string 
   }
   return [
     "Flows",
-    ...ordered.map((item) => `  ${item.id}  ${statusCell(item)}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}`),
+    ...ordered.map(
+      (item) => `  ${item.id}  ${statusCell(item)}  ${item.tasksDone}/${item.tasksTotal}  ${item.title}${formatHygieneTags(item.hygiene)}`,
+    ),
     "",
   ].join("\n");
 }

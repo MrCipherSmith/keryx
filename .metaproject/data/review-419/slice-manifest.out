@@ -1,0 +1,11 @@
+slices: 6 (<= 30000 bytes each, 146009 bytes total, 38 files)
+waves: 2 for one reviewer owning every slice (<= 90000 bytes per dispatch)
+- slice-01  24054 bytes  9 files  [domain]  .metaproject [docs], .metaproject, . [docs] +1 more
+- slice-02  21730 bytes  7 files  [file]  src/remote [test]
+- slice-03  16650 bytes  2 files  [file]  src/remote [test]
+- slice-04  28780 bytes  8 files  [file]  src/remote
+- slice-05  26476 bytes  6 files  [file]  src/remote
+- slice-06  28319 bytes  6 files  [domain]  src/tui [test], src/tui
+omitted: 0 files (0 bytes of diff)
+
+manifest: ~/keryx-fcomplete/.metaproject/data/review-419/slices/manifest.json

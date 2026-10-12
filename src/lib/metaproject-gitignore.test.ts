@@ -54,6 +54,10 @@ test("the managed block ignores the self-learning loop's per-machine paths", () 
   expect(block).toContain(".metaproject/data/learning/candidates/\n");
 });
 
+test("the managed block ignores the recommendation journal", () => {
+  expect(renderMetaprojectGitignoreBlock()).toContain(".metaproject/data/decisions/\n");
+});
+
 // R700-06/R700-10: skills stocktake writes dated reports plus a cache file
 // under .metaproject/data/skills/stocktake/ — per-machine runtime output,
 // not something a project commits.

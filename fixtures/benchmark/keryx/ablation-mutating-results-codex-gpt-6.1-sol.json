@@ -1,0 +1,319 @@
+{
+  "note": "RAW per-seed MUTATING-ablation results, codex CLI leg: codex exec (its own built-in agent loop, --approve-for-me for headless file-write approval) makes a real code edit to make a seeded failing test pass, twice per seed — context-on (unmodified worktree, AGENTS.md + .metaproject/ present) vs context-off (those stripped before codex ever sees the worktree, leaving a real but keryx-blind shell) — each seed in its own fresh git worktree. Success is decided by an independent `bun test` run after codex's turn, never by trusting its own claim. Captured live, no fabricated samples.",
+  "metricsNote": "per sample: metrics from codex's turn.completed usage (input_tokens includes the cached portion; uncached = input - cached_input_tokens); requests is null (not exposed); repeatedReads is null (the JSON stream carries no read_file/search_code arguments). model was pinned with codex -m.",
+  "model": "gpt-6.1-sol",
+  "provider": "codex-cli",
+  "generated_by": "bun scripts/benchmark/run-ablation-mutating-codex.ts",
+  "captured": "2026-10-02",
+  "tasks": [
+    {
+      "taskId": "harness:ablation-mutating:atomic-json-write",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 185769,
+            "toolCalls": 4,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 47578,
+              "cachedInputTokens": 137600,
+              "cacheWriteTokens": 0,
+              "outputTokens": 591,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 230781,
+            "toolCalls": 5,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 54351,
+              "cachedInputTokens": 175744,
+              "cacheWriteTokens": 0,
+              "outputTokens": 686,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 182104,
+            "toolCalls": 4,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 28097,
+              "cachedInputTokens": 153344,
+              "cacheWriteTokens": 0,
+              "outputTokens": 663,
+              "requests": null
+            },
+            "repeatedReads": null
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 122280,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 18980,
+              "cachedInputTokens": 102784,
+              "cacheWriteTokens": 0,
+              "outputTokens": 516,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 122223,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 19137,
+              "cachedInputTokens": 102400,
+              "cacheWriteTokens": 0,
+              "outputTokens": 686,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 122178,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 22194,
+              "cachedInputTokens": 99328,
+              "cacheWriteTokens": 0,
+              "outputTokens": 656,
+              "requests": null
+            },
+            "repeatedReads": null
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:flag-present",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 214746,
+            "toolCalls": 6,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 26538,
+              "cachedInputTokens": 187648,
+              "cacheWriteTokens": 0,
+              "outputTokens": 560,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 140128,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 26665,
+              "cachedInputTokens": 113152,
+              "cacheWriteTokens": 0,
+              "outputTokens": 311,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 138673,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 43641,
+              "cachedInputTokens": 94720,
+              "cacheWriteTokens": 0,
+              "outputTokens": 312,
+              "requests": null
+            },
+            "repeatedReads": null
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 120783,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 18408,
+              "cachedInputTokens": 102016,
+              "cacheWriteTokens": 0,
+              "outputTokens": 359,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 121157,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 18399,
+              "cachedInputTokens": 102400,
+              "cacheWriteTokens": 0,
+              "outputTokens": 358,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 120836,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 18440,
+              "cachedInputTokens": 102016,
+              "cacheWriteTokens": 0,
+              "outputTokens": 380,
+              "requests": null
+            },
+            "repeatedReads": null
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:read-text-file-or",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 189483,
+            "toolCalls": 4,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 30958,
+              "cachedInputTokens": 158080,
+              "cacheWriteTokens": 0,
+              "outputTokens": 445,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 145609,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 29477,
+              "cachedInputTokens": 115712,
+              "cacheWriteTokens": 0,
+              "outputTokens": 420,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 145621,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 29485,
+              "cachedInputTokens": 115712,
+              "cacheWriteTokens": 0,
+              "outputTokens": 424,
+              "requests": null
+            },
+            "repeatedReads": null
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 132349,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 47288,
+              "cachedInputTokens": 84608,
+              "cacheWriteTokens": 0,
+              "outputTokens": 453,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 133491,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 24750,
+              "cachedInputTokens": 108288,
+              "cacheWriteTokens": 0,
+              "outputTokens": 453,
+              "requests": null
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 134985,
+            "toolCalls": 3,
+            "model": "gpt-6.1-sol",
+            "metrics": {
+              "uncachedInputTokens": 25320,
+              "cachedInputTokens": 109184,
+              "cacheWriteTokens": 0,
+              "outputTokens": 481,
+              "requests": null
+            },
+            "repeatedReads": null
+          }
+        ]
+      }
+    }
+  ]
+}

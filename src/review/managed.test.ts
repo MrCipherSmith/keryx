@@ -1,3 +1,4 @@
+import { READY_DISPATCH } from "./dispatch.test-helpers";
 import { afterEach, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
@@ -9,7 +10,7 @@ import { createFlowService } from "../flow/service";
 import type { FlowServiceDeps, TrackerAdapter } from "../flow/types";
 import {
   completeManagedReview,
-  createManagedReviewPackage,
+  createManagedReviewPackage as createPendingManagedReviewPackage,
   findingDispositionState,
   findRelatedFlow,
   validateManagedReviewManifest,
@@ -240,6 +241,29 @@ test("ingest writes classified findings and skill learning decision", async () =
   expect(decisions).toContain("F-001: create follow-up task or learning proposal (valid_followup, standalone_review).");
   const learning = await readFile(path.join(ROOT, result.path, "learning.md"), "utf8");
   expect(learning).toContain("## Skill Learning");
+});
+
+test("start with a report path that does not exist yet opens the round; ingest still refuses it", async () => {
+  await fresh();
+  const started = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "review-flow",
+    reviewId: "2026-10-10-start-no-report",
+    target: { kind: "report", ref: "later/review.md" },
+    reportPath: "later/review.md",
+    now: new Date("2026-10-10T00:00:00Z"),
+  });
+  expect(started.path).toContain("2026-10-10-start-no-report");
+  await expect(
+    createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-10-10-ingest-no-report",
+      target: { kind: "report", ref: "later/review.md" },
+      reportPath: "later/review.md",
+      now: new Date("2026-10-10T00:00:00Z"),
+    }),
+  ).rejects.toThrow();
 });
 
 test("ingest refuses a blocker or major that does not enumerate its class", async () => {
@@ -1267,7 +1291,7 @@ test("AC6/AC10: a spend over the ceiling is recorded as a stop, and the package 
 test("AC7/AC10: a dispatch plan records its waves, its queue and whether it holds across nesting", async () => {
   await fresh();
   const { path: pkg } = await ingestFindings("2026-08-30-cap-concurrency", {
-    concurrency: { reviewers: ["a", "b", "c", "d", "e", "f"] },
+    concurrency: { cap: 4, reviewers: ["a", "b", "c", "d", "e", "f"] },
   });
   const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
 
@@ -1662,3 +1686,12 @@ test("AC3: rule 3 still holds a major to naming the change, and says so out loud
   expect(scope).toContain("no-link-to-change");
   expect(scope).toContain("scope_b_findings: 1");
 });
+
+// These synthetic fixtures exercise disposition/ingest, not outstanding research.
+// The pending default is exercised without this helper in research.test.ts.
+function createManagedReviewPackage(input: ManagedReviewIngestInput) {
+  return createPendingManagedReviewPackage({
+    research: { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH },
+    ...input,
+  });
+}

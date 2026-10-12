@@ -1265,7 +1265,7 @@ test("AC7 — reaching the round cap with the gate unsatisfied never completes",
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  for (const round of [1, 2, 3]) {
+  for (const round of Array.from({ length: REVIEW_ROUND_CAP }, (_, i) => i + 1)) {
     await writeReviewPackage({
       cwd: ROOT,
       flowDir: dir,
@@ -1284,6 +1284,35 @@ test("AC7 — reaching the round cap with the gate unsatisfied never completes",
   expect(gate.status).toBe("fail");
   expect(gate.detail).toContain(`round cap (${REVIEW_ROUND_CAP}) is reached with the gate unsatisfied`);
   expect(gate.detail).toContain("the decision is the operator's");
+});
+
+async function completeWithRounds(rounds: number) {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  for (const round of Array.from({ length: rounds }, (_, i) => i + 1)) {
+    await writeReviewPackage({
+      cwd: ROOT,
+      flowDir: dir,
+      reviewId: `round-${round}`,
+      createdAt: `2026-08-29T1${round}:00:00.000Z`,
+      head: HEAD,
+      findings: [{ id: "F-001", severity: "blocker", problem: "still open", dedupe_key: "still-open" }],
+    });
+  }
+  return reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+}
+
+test("AC1 — one round short of the cap, the cap is not reached", async () => {
+  const gate = await completeWithRounds(REVIEW_ROUND_CAP - 1);
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).not.toContain("round cap");
+});
+
+test("AC1 — at exactly the cap, the cap is reached and named by the constant", async () => {
+  const gate = await completeWithRounds(REVIEW_ROUND_CAP);
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain(`round cap (${REVIEW_ROUND_CAP}) is reached`);
 });
 
 test("AC7 — below the cap the failure is reported without the cap note", async () => {
@@ -1328,7 +1357,7 @@ test("`flow init` opts every new package into both the task and the review gate"
   await fresh();
   const service = createFlowService(makeDeps());
   const { flow } = await service.init({ cwd: ROOT, title: "Opt-in check" });
-  expect(flow.gates).toEqual({ tasks: true, review: true, owner: true });
+  expect(flow.gates).toEqual({ tasks: true, review: true, owner: true, folderCommitted: true });
 });
 
 test("the gate runs where the specification puts it: seventh, after owner", async () => {
@@ -1350,6 +1379,7 @@ test("the gate runs where the specification puts it: seventh, after owner", asyn
     "base-branch",
     "tasks",
     "owner",
+    "folder-committed",
     "review",
     "health",
     // Flow 299: evaluated when the attempt starts, reported last.
@@ -1544,4 +1574,27 @@ test("only `no-tracker` may differ between the two callers of the remedy helper"
   expect(forHead).not.toBe(forComments);
   expect(forHead).toContain("--merged");
   expect(forComments).toContain("externalCommentsGate");
+});
+
+// A clean findings list must not mask outstanding research or lost raw observations.
+test("research ledger blocks a clean round and rechecks tampering after closure", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { dir } = await driveToGates(service);
+  const packageDir = await writeCleanReviewPackage({ cwd: ROOT, flowDir: dir, head: HEAD, prUrl: PR_URL });
+  const manifestPath = path.join(packageDir, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.artifacts = { ...manifest.artifacts, research: "research.json" };
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const researchPath = path.join(packageDir, "research.json");
+  const ready = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] };
+  await writeFile(researchPath, JSON.stringify(ready));
+  const clean = await readReviewRounds(ROOT, dir);
+  expect(clean.some(round => round.problems.some(p => p.includes("research")))).toBe(false);
+  await writeFile(researchPath, JSON.stringify({ ...ready, rawReconciled: false }));
+  const dirty = await readReviewRounds(ROOT, dir);
+  expect(dirty.some(round => !round.ingested && round.problems.some(p => p.includes("raw observations")))).toBe(true);
+  await rm(researchPath);
+  const missing = await readReviewRounds(ROOT, dir);
+  expect(missing.some(round => !round.ingested && round.problems.some(p => p.includes("unreadable")))).toBe(true);
 });

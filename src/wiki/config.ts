@@ -33,6 +33,10 @@ export interface WikiConfig {
       maxPagesPerBatch: number;
     };
   };
+  /** Per-page version history (flow 367): stored versions kept per page. */
+  history: {
+    keep: number;
+  };
 }
 
 export const DEFAULT_WIKI_CONFIG: WikiConfig = {
@@ -52,6 +56,9 @@ export const DEFAULT_WIKI_CONFIG: WikiConfig = {
       maxPagesPerBatch: 5,
     },
   },
+  history: {
+    keep: 20,
+  },
 };
 
 export function wikiConfigPath(cwd: string): string {
@@ -66,6 +73,7 @@ export function mergeWikiConfig(parsed: DeepPartial<WikiConfig>): WikiConfig {
   const classify = rlm.classify ?? {};
   const deep = rlm.deep ?? {};
   const batch = rlm.batch ?? {};
+  const history = parsed.history ?? {};
   return {
     rlm: {
       enabled: booleanOr(rlm.enabled, base.rlm.enabled),
@@ -92,6 +100,10 @@ export function mergeWikiConfig(parsed: DeepPartial<WikiConfig>): WikiConfig {
         enabled: booleanOr(batch.enabled, base.rlm.batch.enabled),
         maxPagesPerBatch: numberOr(batch.maxPagesPerBatch, base.rlm.batch.maxPagesPerBatch),
       },
+    },
+    history: {
+      // At least one stored version: `keep: 0` would delete the copy a restore needs.
+      keep: Math.max(1, Math.floor(positiveNumberOr(history.keep, base.history.keep))),
     },
   };
 }

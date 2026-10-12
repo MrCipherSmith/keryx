@@ -1,0 +1,67 @@
+[
+  {
+    "id": "L3",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "The round-1 fix for L1 adds a central pre-dispatch 'unknown subcommand' guard in src/cli.ts (main()), driven by src/lib/group-subcommands.ts's GROUP_SUBCOMMANDS map. That map included the 'integrate' group with the closed enum [cursor, claude, opencode, vscode, generic, all] -- the individual editor names commands/integrate.ts's EDITOR_USAGE documents. But commands/integrate.ts's own parseEditors() (lines 51-58) explicitly treats the first positional as a comma-splittable LIST, not a single closed-vocabulary token: 'keryx integrate cursor,claude' is a documented, pre-existing, working invocation that addresses two editors in one call. The guard checked the raw token 'cursor,claude' against the per-editor enum, found no exact match, and refused the command with 'Unknown command: cursor,claude...' before integrateCommand ever ran -- breaking a real, currently-working invocation.",
+    "impact": "`keryx integrate cursor,claude`, `keryx integrate cursor,claude,vscode`, and any other comma-joined multi-editor invocation of `keryx integrate` exited 1 with 'Unknown command: <the whole comma list>. Run `keryx integrate --help` for the list.' and wrote NO client config, instead of installing the MCP client config for every named editor.",
+    "suggested_fix": "Remove `integrate` from GROUP_SUBCOMMANDS in src/lib/group-subcommands.ts, OR make the cli.ts guard comma-aware for this one group before checking membership.",
+    "evidence": "Original finding, round 2 (2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42).",
+    "confidence": "high",
+    "file": "src/lib/group-subcommands.ts",
+    "line": null,
+    "quote": "[\"integrate\", [\"cursor\", \"claude\", \"opencode\", \"vscode\", \"generic\", \"all\"]],",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/integrate.ts:51-58 (parseEditors, the caller whose comma-list contract breaks)",
+        "src/cli.ts:314-320 (the guard that wrongly refused it)"
+      ],
+      "enumeration_method": "Round-2 enumeration, carried forward unchanged; round 6 re-verified by direct execution at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (see verifications)."
+    },
+    "global_id": "2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#L3",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): `bun run src/cli.ts integrate cursor,claude --dry-run` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> exit 0, writes both `.cursor/mcp.json` and `.mcp.json` dry-run previews, no 'Unknown command' message. `keryx ctx rg \"integrate\" src/lib/group-subcommands.ts` shows no `integrate` row in GROUP_SUBCOMMANDS, only a comment (lines 181-182) explaining the deliberate exclusion. Fixed by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e, which removed the `integrate` row from GROUP_SUBCOMMANDS. No longer reproduces at this head."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "`bun run src/cli.ts integrate cursor,claude --dry-run` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> exit 0, writes both `.cursor/mcp.json` and `.mcp.json` dry-run previews, no 'Unknown command' message. `keryx ctx rg \"integrate\" src/lib/group-subcommands.ts` shows no `integrate` row in GROUP_SUBCOMMANDS, only a comment (lines 181-182) explaining the deliberate exclusion. Fixed by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e, which removed the `integrate` row from GROUP_SUBCOMMANDS. No longer reproduces at this head.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T3",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "cli.test.ts's coverage for the central 'unknown subcommand' guard (describe block for review round 1 L1) proved the negative case (a nonsense token is refused) for all 40 groups, but only two positive real-subcommand invocations were exercised ('keryx health status', 'keryx wiki ask --help'), and neither used a value shaped any differently from a single bare word.",
+    "impact": "A group whose real first-positional shape is not 'one bare word from the enum' -- as `integrate`'s comma-joined editor list turned out to be -- had no test proving the guard did not wrongly refuse it. This was the exact gap L3 fell through.",
+    "suggested_fix": "Add, per group in GROUP_SUBCOMMANDS, at least one assertion that a REAL subcommand/positional is not rejected as 'Unknown command' -- specifically a case for `integrate` exercising its comma-joined form once the L3 fix lands.",
+    "evidence": "Original finding, round 2 (2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42).",
+    "confidence": "high",
+    "file": "src/cli.test.ts",
+    "line": null,
+    "class_scope": {
+      "sites": [
+        "src/cli.test.ts:286-330"
+      ],
+      "enumeration_method": "Round-2 enumeration, carried forward unchanged; round 6 re-verified by execution at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (see verifications)."
+    },
+    "global_id": "2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#T3",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): `bun test src/cli.test.ts` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> 68 pass, 0 fail. `keryx ctx rg \"comma-joined\" src/cli.test.ts` confirms the positive guard test named by T3's suggested_fix exists at src/cli.test.ts:337 -- \"a group whose first positional is a comma-joined list is not in the map and is never refused\" -- exercising integrate's comma-joined form. Added by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e. No longer reproduces at this head."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "`bun test src/cli.test.ts` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> 68 pass, 0 fail. `keryx ctx rg \"comma-joined\" src/cli.test.ts` confirms the positive guard test named by T3's suggested_fix exists at src/cli.test.ts:337 -- \"a group whose first positional is a comma-joined list is not in the map and is never refused\" -- exercising integrate's comma-joined form. Added by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e. No longer reproduces at this head.",
+      "verifier": "review-verifier"
+    }
+  }
+]

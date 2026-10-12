@@ -1,7 +1,7 @@
 // The two credentials of a serve that has remote control, and what each reaches.
 //
 //   serve bearer  -> every existing route, and NOT `/v1/remote/*` (404)
-//   shell token   -> the seven exact `/v1/remote/*` paths, and NOTHING else (404)
+//   shell token   -> the eight exact `/v1/remote/*` paths, and NOTHING else (404)
 //   neither       -> one fixed 401 on every path, behind the existing throttle
 //
 // Run over real sockets on loopback, plus the one property a loopback socket

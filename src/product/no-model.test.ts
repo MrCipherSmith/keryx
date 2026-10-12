@@ -47,7 +47,7 @@ function codeLines(text: string): string[] {
 describe("the product module calls no model", () => {
   test("the audit sees the module's source files", async () => {
     const files = (await sourceFiles(PRODUCT_DIR)).map((file) => path.basename(file)).sort();
-    expect(files).toEqual(["corpus.ts", "extract.ts", "open.ts", "service.ts", "store.ts", "types.ts"]);
+    expect(files).toEqual(["by-origin.ts", "corpus.ts", "extract.ts", "open.ts", "service.ts", "store.ts", "types.ts"]);
   });
 
   test("every import is standard library, a reviewed helper, or a sibling", async () => {

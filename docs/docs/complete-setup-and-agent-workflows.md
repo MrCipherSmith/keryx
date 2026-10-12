@@ -646,8 +646,10 @@ entries.
 |---|---|
 | `keryx flow init --issue <url>` | Create a managed flow from an issue. |
 | `keryx flow init --title "<title>"` | Create a local managed flow. |
+| `keryx flow init --title "<title>" --origin human-request --quote "<verbatim>" --source "<ref>"` | Create a flow and record where it came from (see Origin below). |
+| `keryx flow origin set <id> <kind> --reason "<reason>"` | Set or change where the flow came from; journaled. |
 | `keryx flow list` | List flows and status. |
-| `keryx flow status <id>` | Show one flow. |
+| `keryx flow status <id>` | Show one flow, including its origin. |
 | `keryx flow freeze <id>` | Freeze acceptance criteria and mark ready. |
 | `keryx flow start <id>` | Start implementation. |
 | `keryx flow task add <id> --title "<title>" --kind <kind>` | Add an atomic flow task. |
@@ -667,6 +669,20 @@ entries.
 | `keryx governance report [--flow <id>] [--owner <name>]` | Read-only report of spend, confirmations, signatures and gate outcomes across flows. |
 
 Task kinds: `context`, `implement`, `test`, `review`, and `docs`.
+
+#### Origin
+
+Every new flow should say where it came from. `flow init --origin <kind>` takes one
+of three kinds: `human-request` (a human gave the idea, the agent discussed it, the
+human confirmed the creation), `agent-finding` (the agent found it in a check,
+review or test) and `agent-proposal` (the agent proposed a new idea). The origin is
+evidence, not assertion: `human-request` is recorded only with a verbatim `--quote`
+of the human's first message with the idea and a `--source` (channel, message id or
+time), and the agent kinds need a `--source`. Without the evidence the origin stays
+`unknown`, the command still succeeds and says why. The flow's Outcome criteria then
+keep the human's request word for word, next to the agent's formalization and its
+proposal for how to observe the effect. The origin never blocks anything; a flow
+without one shows `origin: unknown`. See the CLI reference for `flow origin set`.
 
 ### Managed review
 

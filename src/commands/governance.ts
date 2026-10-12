@@ -125,6 +125,11 @@ Each flow also shows its acceptance coverage: how many criteria are runnable
 (exec or invariant) of all of them. A flow frozen before verification kinds
 existed reads as fully unclassified, not as zero criteria.
 
+Each flow also shows a summary (its expected outcome, tasks done, tasks still
+open) and its stated effect (the Outcome criteria in description.md), or says
+the effect is not stated. In keryx shell, /governance lists the flows and can
+check and complete an open one.
+
 \`report\` writes .metaproject/data/governance/artifacts/latest.md and
 latest.json (schema-versioned), then prints the report. \`show\` reprints the
 most recently written report without regenerating it.

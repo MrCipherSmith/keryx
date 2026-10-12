@@ -1,0 +1,60 @@
+[
+  {
+    "id": "T4",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The test's own name and preceding comment claim to cover 'first positionals that are not one bare subcommand word ... a comma-joined editor list, a file path, a search pattern' -- but the guard under test (src/cli.ts, knownSubcommandsFor + `!known.includes(sub)`) only ever inspects args[1], the single token immediately after the group name. Of the 4 cases, only case 1 (`integrate cursor,claude`) puts a genuinely non-bare-word value there (and it passes only because `integrate` was removed from GROUP_SUBCOMMANDS entirely, so the guard never fires for it, not because the guard tolerates a differently-shaped args[1]). In cases 2-4, args[1] is `\"affected\"`, `\"rg\"`, and `\"sync\"` respectively -- each a plain bare word already present in that group's known-subcommand list in src/lib/group-subcommands.ts (gdgraph, ctx, rules). The 'path' (src/cli.ts) and 'pattern' (knownSubcommandsFor) strings the test's comment refers to sit at args[2]/args[3], positions the guard never reads.",
+    "impact": "A future reader (or a later review round) will treat this test as proof that path- and pattern-shaped first positionals are safe across the guard, when only the comma-joined/list-vocabulary shape (the actual L3 regression) is protected. If a group is later added to GROUP_SUBCOMMANDS whose real first positional is a path or a free-text pattern -- the same class of mistake `integrate` made -- this test will not catch it, but its title reads as if it would. Independently found by review-logic (as L4) and review-testing-practices (as T4); review-verifier confirmed by execution in both directions: reverting only the `integrate` row removal and keeping only cases 2-4 still passes 1/1 (no coverage for the bug), while the same revert with all 4 cases fails on case 1 with the exact stale 'Unknown command: cursor,claude...' message (case 1 is the only real regression guard).",
+    "suggested_fix": "Either (a) rename/rescope the test to state what it actually protects (the comma-joined-list class via integrate's removal from the map), or (b) make cases 2-4 genuinely path/pattern-shaped at args[1] if a currently-mapped group exists with that real shape (none was found on inspection), or (c) drop cases 2-4 and note the path/pattern-shaped-args[1] gap explicitly instead of simulating it with unrelated bare-word subcommands.",
+    "evidence": "src/cli.ts (knownSubcommandsFor / the guard) inspects only args[1], never args[2+]. src/lib/group-subcommands.ts confirms gdgraph includes \"affected\", ctx includes \"rg\", rules includes \"sync\" as ordinary pre-existing bare-word entries. Mutation-in (review-testing-practices, independently reproduced by review-verifier in a separate scratch copy): reverted only the integrate row in src/lib/group-subcommands.ts, kept only cases 2-4 in the new test (dropped case 1), ran `bun test src/cli.test.ts -t \"comma-joined\"` -> 1 pass, 0 fail, 3 expect() calls -- the bug was live and cases 2-4 alone did not detect it. Mutation-out cross-check (review-verifier): same revert, all 4 original cases intact -> test FAILS on case 1 with `Received: \"Unknown command: cursor,claude. Run \\`keryx integrate --help\\` for the list.\\n\"`, confirming case 1 is the only case exercising the L3 regression class. Original worktree ~/keryx-w5 was never modified (git status --porcelain clean before and after, verified independently by both reviewers and the verifier).",
+    "confidence": "high",
+    "file": "src/cli.test.ts",
+    "line": null,
+    "quote": "test(\"a comma-joined, path or pattern first positional is never refused as unknown\", async () => {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-27-ingest-861be8c20e366df1c1a6eea22728ab2e0d2a886e#T4",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "src/cli.ts (knownSubcommandsFor + the guard) inspects only args[1], never args[2+]. src/lib/group-subcommands.ts confirms gdgraph includes \"affected\", ctx includes \"rg\", rules includes \"sync\" as ordinary pre-existing bare-word entries -- so in the new test's cases 2-4 args[1] is already a known word and the guard would pass them even if the L3 bug were still present. Reproduced directly in a scratch copy: reverted only the integrate row removal (restored [\"integrate\", [\"cursor\",\"claude\",\"opencode\",\"vscode\",\"generic\",\"all\"]]), dropped case 1 from the test, ran `bun test src/cli.test.ts -t \"comma-joined\"` -> 1 pass, 0 fail, 3 expect() calls -- the bug was live and cases 2-4 alone did not detect it. Cross-checked in a second scratch copy: same revert, all 4 original cases intact -> test FAILS on case 1 with `Received: \"Unknown command: cursor,claude. Run \\`keryx integrate --help\\` for the list.\\n\"`, confirming case 1 is the only case that actually exercises the L3 regression class. Original worktree ~/keryx-w5 verified untouched (git status --porcelain empty) before and after both mutation passes.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "70538bea, cli.test.ts 'a group whose first positional is a comma-joined list is not in the map and is never refused'"
+    }
+  },
+  {
+    "id": "T5",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The name `runBunExpectingFailure` reads as if it asserts or requires a non-zero exit, but it does not -- it simply resolves with whatever exit code occurred (0 or otherwise), unlike `runBun` which rejects on non-zero. The new T3/T4 test uses it for two cases that plausibly exit 0 (`integrate ... --dry-run`, `rules sync --help`), which is correct usage, but relies on the reader noticing the JSDoc above it rather than the name.",
+    "impact": "Low -- the JSDoc immediately above the function already documents this precisely, and no test currently misuses it. Purely a naming-vs-behavior mismatch with no observed effect on determinism or signal. Confirmed by review-verifier: independently ran the two plausible-exit-0 cases directly (`integrate cursor,claude --dry-run` -> exit 0, `rules sync --help` -> exit 0).",
+    "suggested_fix": "Optional: rename to something exit-code-agnostic (e.g. `runBunCapturingResult`) if this helper gets reused outside guard-rejection tests, where the current name would be actively misleading.",
+    "evidence": "src/cli.test.ts: runBunExpectingFailure's JSDoc reads verbatim 'this resolves with stdout/stderr/code regardless of what the code was', and its body (`child.on(\"close\", (code) => resolve({ stdout, stderr, code }))`) never rejects or asserts on a non-zero code.",
+    "confidence": "high",
+    "file": "src/cli.test.ts",
+    "line": null,
+    "quote": "function runBunExpectingFailure(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-27-ingest-861be8c20e366df1c1a6eea22728ab2e0d2a886e#T5",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/cli.test.ts -- runBunExpectingFailure's JSDoc reads verbatim: 'this resolves with stdout/stderr/code regardless of what the code was', and its body (`child.on(\"close\", (code) => resolve({ stdout, stderr, code }))`) never rejects or asserts on a non-zero code. Independently ran the two plausible-exit-0 cases from the new test directly: `integrate cursor,claude --dry-run` -> exit code 0, `rules sync --help` -> exit code 0, confirming the helper's name is misleading for at least these two of the new test's four cases.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "70538bea, helper renamed runBunCapture"
+    }
+  }
+]

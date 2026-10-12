@@ -145,7 +145,11 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     promptTemplate: "wiki/enrich.prompt.md",
     json: true,
     read: false,
-    sideEffects: ["writes wiki/** page bodies", "calls a model provider"],
+    sideEffects: [
+      "writes wiki/** page bodies",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
+      "calls a model provider",
+    ],
   },
   {
     module: "gdwiki",
@@ -221,6 +225,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "rewrites the managed Reference block of affected pages (preserved, not rewritten, when the source graph is in error)",
       "bumps page Version and appends one Changelog line for each page actually rewritten",
       "stamps VerifiedAt and VerifiedScope on refreshed pages ONLY when the code graph is demonstrably current (resolveWikiSourceGate); otherwise the stamp is left exactly as it was",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
     ],
   },
   {
@@ -235,7 +240,10 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
-    sideEffects: ["writes VerifiedAt and VerifiedScope into page frontmatter"],
+    sideEffects: [
+      "writes VerifiedAt and VerifiedScope into page frontmatter",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
+    ],
   },
   {
     module: "gdwiki",
@@ -248,7 +256,43 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
-    sideEffects: ["inserts marker comments around the Reference section of pages that have one"],
+    sideEffects: [
+      "inserts marker comments around the Reference section of pages that have one",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
+    ],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki history",
+    summary: "Show every recorded version of a wiki page, or list the runs that changed pages (flow 367).",
+    intent: ["история страницы вики", "wiki history", "версии страницы вики", "какие прогоны меняли вики"],
+    args: [
+      { name: "page", type: "string", required: false, desc: "wiki-relative page path; prints that page's history index" },
+      { name: "runs", type: "bool", required: false, desc: "list runs that changed pages, newest first" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: true,
+    sideEffects: [],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki restore",
+    summary: "Put a wiki page back to an earlier version, or undo every page one run changed (flow 367).",
+    intent: ["откати вики", "wiki restore", "верни страницу вики", "отмени enrich", "undo wiki run"],
+    args: [
+      { name: "page", type: "string", required: false, desc: "wiki-relative page path to restore" },
+      { name: "version", type: "string", required: false, desc: "vNNNN to restore the page to; default is the version before the current one" },
+      { name: "run", type: "string", required: false, desc: "run id whose changes to undo (see `wiki history --runs`)" },
+      { name: "force", type: "bool", required: false, desc: "with --run: also restore pages changed again after that run" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "rewrites, deletes or recreates wiki pages; the restore is itself recorded in each page's history, so it can be undone",
+      "writes .metaproject/data/gdwiki/history/**",
+    ],
   },
   // ---- memory -----------------------------------------------------------
   {
@@ -407,7 +451,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "tasks",
     command: "flow status",
-    summary: "One flow's full status: lifecycle state, outcome author (agent, human or unknown), AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
+    summary: "One flow's full status: lifecycle state, outcome author (agent, human or unknown), origin (kind, quote, source), AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
     intent: ["статус флоу", "flow status", "flow details", "show one flow"],
     args: [{ name: "<id>", type: "string", required: true, desc: "flow id" }],
     json: false,
@@ -420,7 +464,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "Create a new flow (managed work item): allocates an id, scaffolds its directory, and collects initial " +
       "context from the source issue if one is given. `--owner` is NEVER inferred — only an explicit value " +
       "on this command populates it. `--outcome-author` records who wrote the outcome criterion (default " +
-      "`agent`; `human` only when the flag says so).",
+      "`agent`; `human` only when the flag says so). `--origin` records where the flow came from, with the " +
+      "evidence its kind needs (`human-request`: a verbatim `--quote` and a `--source`; `agent-finding` and " +
+      "`agent-proposal`: a `--source`); without it the origin stays `unknown`.",
     intent: ["создай флоу", "flow init", "start a new flow", "new managed work item", "заведи флоу"],
     args: [
       { name: "title", type: "string", required: false, desc: "work title; required unless --issue is given" },
@@ -440,6 +486,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
         required: false,
         desc: "who wrote the outcome criterion: agent (the default when omitted) or human; never inferred, any other value is refused before the flow is created; gates nothing",
       },
+      {
+        name: "origin",
+        type: "string",
+        required: false,
+        desc: "where the flow came from: human-request, agent-finding or agent-proposal; recorded only with its evidence, otherwise it stays unknown and the command still succeeds; an invalid kind is reported and ignored; gates nothing",
+      },
+      { name: "quote", type: "string", required: false, desc: "the human's request, verbatim and byte for byte (required with --origin human-request)" },
+      { name: "source", type: "string", required: false, desc: "where the request or finding came from: channel, message id, time or check (required with every --origin kind)" },
     ],
     json: false,
     read: false,
@@ -477,6 +531,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: false,
     read: false,
     sideEffects: ["writes flow.json's outcomeAuthor field and appends one journal.md line and a history entry"],
+  },
+  {
+    module: "tasks",
+    command: "flow origin set",
+    summary:
+      "Change where a flow came from (human-request, agent-finding, agent-proposal, or unknown to clear it). Requires a reason; " +
+      "the evidence rule applies (a verbatim quote and a source for human-request, a source for the agent kinds), and without it " +
+      "nothing is written and the reason is printed. Appends one journal line naming the old origin, the new one and the reason. " +
+      "Works on any flow, never changes the outcome author, gates nothing.",
+    intent: ["откуда пришёл флоу", "flow origin set", "set flow origin", "mark flow as human request", "происхождение флоу"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "<kind>", type: "string", required: true, desc: "human-request, agent-finding, agent-proposal or unknown" },
+      { name: "reason", type: "string", required: true, desc: "why the origin is being set or changed; one line" },
+      { name: "quote", type: "string", required: false, desc: "the human's request, verbatim; kept from the flow when omitted" },
+      { name: "source", type: "string", required: false, desc: "channel, message id, time or check; kept from the flow when omitted" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's origin field and appends one journal.md line and a history entry"],
   },
   {
     module: "tasks",
@@ -563,7 +637,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "flow complete",
     summary:
       "Run the completion gates (acceptance criteria, pull-request or main-merge, base branch, tasks, owner, " +
-      'review) and close the flow when every gate passes; otherwise returns it to in-progress. Records a ' +
+      'folder committed, review) and close the flow when every gate passes; otherwise returns it to in-progress. Records a ' +
       'signature; `--signed-by` (falling back to KERYX_ACTOR, then the local git identity, then "unknown") is ' +
       "never proof a human signed.",
     intent: ["заверши флоу", "flow complete", "close flow", "complete flow"],
@@ -586,6 +660,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "with a valid --confirm-token on a passing completion: marks the flow's confirm-token.json spent",
       "with --comment, on a github-issue-sourced flow that passes: posts a comment on the source issue",
     ],
+  },
+  {
+    module: "tasks",
+    command: "flow check-complete",
+    summary:
+      "Evaluate every gate `flow complete` would, through the same code, and report the PR's merge state " +
+      "(merged, open, closed, not-found, no-pr, unknown) and, per failing gate, the command that would fix it. " +
+      "Writes nothing: no status change, no completion attempt, no signature, no spent token. Exits 0 when " +
+      "`flow complete` would pass, 1 when it would not, 2 when the check could not run (with --json: an " +
+      "`{\"error\":{\"message\"}}` object).",
+    intent: ["можно ли закрыть флоу", "проверь закрытие флоу", "flow check-complete", "can this flow be completed", "check flow completion"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "merged", type: "string", required: false, desc: "commit sha for a direct-merge handoff, as `flow complete --merged` takes it" },
+      { name: "confirm-token", type: "string", required: false, desc: "a token minted by `flow confirm`; checked, never spent" },
+      { name: "json", type: "bool", required: false, desc: "print the check as JSON" },
+    ],
+    json: true,
+    read: true,
+    sideEffects: [],
   },
   {
     module: "tasks",
@@ -975,6 +1069,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     // freshness` and `wiki refresh` above.
     sideEffects: [
       "writes .metaproject/wiki/**",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
       "writes .metaproject/data/gdwiki/.provenance.json, but only when the code graph is demonstrably current (resolveWikiSourceGate)",
     ],
   },
@@ -1168,6 +1263,148 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     args: [{ name: "json", type: "bool", required: false, desc: "print the stored report as JSON instead of markdown" }],
     json: true,
     read: true,
+  },
+  {
+    module: "intake",
+    command: "intake status",
+    summary: "What the GitHub work intake holds: cards waiting for a decision, cards queued, the next poll, the gh account the project's path selects. The one status object the sidebar line and the /intake modal read.",
+    intent: ["intake status", "статус приёма работы", "what is waiting in intake", "что ждёт в intake"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the status object as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "intake",
+    command: "intake list",
+    summary: "The intake cards, newest first, with their state and the choice made.",
+    intent: ["intake list", "список карточек intake", "list intake cards"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the cards as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "intake",
+    command: "intake pause",
+    summary: "Stop the automatic intake poll. Cards already queued still go out; `intake poll` still runs by hand.",
+    intent: ["intake pause", "поставить intake на паузу", "pause intake"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["sets paused in .metaproject/data/intake/state.json"],
+  },
+  {
+    module: "intake",
+    command: "intake resume",
+    summary: "Start the automatic intake poll again.",
+    intent: ["intake resume", "снять intake с паузы", "resume intake"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["clears paused in .metaproject/data/intake/state.json"],
+  },
+  {
+    module: "intake",
+    command: "intake poll",
+    summary: "Run one intake poll now, even while paused: read tickets assigned to you, review requests, failed CI, PR comments and the board through read-only gh tools, and queue a card for each new event. The first poll only takes a baseline.",
+    intent: ["intake poll", "опросить GitHub сейчас", "poll github now"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the poll result as JSON" }],
+    json: true,
+    read: false,
+    sideEffects: ["writes cards, the ledger, the state and a run report under .metaproject/data/intake/", "runs read-only gh commands (no write to GitHub)"],
+  },
+  {
+    module: "intake",
+    command: "intake report",
+    summary: "What the intake cards were worth, per kind: cards, decisions by action, median answer time, share of choices matching the suggestion, and the card -> flow -> PR chain. Built from the ledger; carries no titles, bodies or assessments.",
+    intent: ["intake report", "отчёт по intake", "intake usefulness report"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "decisions",
+    command: "decisions open",
+    summary:
+      "Record an agent question with options and its recommendation BEFORE showing it. Decides blind (a third of the questions: " +
+      "no recommended mark, random order) or ordinary, and says the order to show; a release, delete, push, or a merge or drop of something shared (pass --action) is never blind.",
+    intent: ["decisions open", "record a question with options", "журнал рекомендаций", "recommendation journal", "blind question"],
+    args: [
+      { name: "question", type: "string", required: true, desc: "the question as the human will read it" },
+      { name: "option", type: "string", required: true, desc: "an option as <id>=<label>, repeated (or --options-json)" },
+      { name: "recommend", type: "string", required: false, desc: "the id of the option the agent recommends" },
+      { name: "reason", type: "string", required: false, desc: "why the agent recommends it" },
+      { name: "stage", type: "string", required: false, desc: "the stage of the work, e.g. design (the report groups by it)" },
+      { name: "flow", type: "string", required: false, desc: "the flow id when asked inside a flow (or KERYX_FLOW)" },
+      { name: "action", type: "string", required: false, desc: "a tag for the action, matched against the irreversible list" },
+      { name: "json", type: "bool", required: false, desc: "print the decision as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends an open record to .metaproject/data/decisions/journal.jsonl"],
+  },
+  {
+    module: "decisions",
+    command: "decisions answer",
+    summary:
+      "Record the human's choice (one of the options) for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether " +
+      "the human should be asked for an optional reason (once; this command does not wait for it). A second answer for the same id is kept as a changed answer. " +
+      "With --other the choice is the human's own typed text (kept up to 2000 characters, redacted); in the keryx shell that is the last row \"Свой ответ…\" of the question, and in Telegram the \"✍ Свой ответ\" button and a reply to the box it posts.",
+    intent: ["decisions answer", "record the human's choice", "записать выбор человека"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the decision id printed by `decisions open`" },
+      { name: "choice", type: "string", required: true, desc: "the option id the human chose" },
+      { name: "other", type: "bool", required: false, desc: "the choice is the human's own words, not an option (a free-form answer)" },
+      { name: "reason", type: "string", required: false, desc: "the human's reason for the choice, if given with the answer (a deviation, or a picked option with a typed reason)" },
+      { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends an answer record to .metaproject/data/decisions/journal.jsonl", "adds a line to the flow's journal.md when the decision belongs to a flow"],
+  },
+  {
+    module: "decisions",
+    command: "decisions reason",
+    summary: "Record the one optional reason for a deviation, whenever the human gives it; an empty text is recorded as no reason. Nothing is written when a reason is already on record.",
+    intent: ["decisions reason", "why did the human deviate", "причина отклонения"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the decision id" },
+      { name: "text", type: "string", required: false, desc: "the reason; empty or absent records no reason" },
+      { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends a reason record to .metaproject/data/decisions/journal.jsonl"],
+  },
+  {
+    module: "decisions",
+    command: "decisions report",
+    summary:
+      "Match share between the human's choice and the agent's recommendation, by mode (ordinary, blind) and by stage, " +
+      "with every deviation and its reason, and the human's own answers and typed reasons in full (also in --json, under `annotated`). Backfilled (imported, historical) decisions are reported in a block of their own and never counted in the live shares or the time to answer. Deterministic, no model.",
+    intent: ["decisions report", "отчёт по рекомендациям", "how often does the human follow the recommendation", "blind mode results"],
+    args: [
+      { name: "json", type: "bool", required: false, desc: "print the report as JSON (with a `backfilled` section)" },
+      { name: "line", type: "bool", required: false, desc: "print ONE line in Russian for the daily topic message: the total and the match share of the visible, hidden and historical decisions" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "decisions",
+    command: "decisions import",
+    summary:
+      "Import historical decisions from a JSON-lines file as backfilled records: the \"before\" arm of a comparison with the live journal. " +
+      "Each is marked backfilled, is never blind, keeps the time it was asked, and is reported apart from the live ones. " +
+      "A line that is not a decision is skipped, named with its line number and counted as malformed, and the rest is imported; an id already in the journal is skipped, so a second import changes nothing (except that a backfilled decision missing its answer gets just that answer).",
+    intent: ["decisions import", "import historical decisions", "backfill the recommendation journal", "импорт исторических решений", "дозаполнить журнал решений"],
+    args: [
+      { name: "<file>", type: "string", required: true, desc: "a JSON-lines file, one decision per line: id, at, flow, stage, question, options, recommendation, source, answer, reason" },
+      { name: "dry-run", type: "bool", required: false, desc: "check and count without writing" },
+      { name: "json", type: "bool", required: false, desc: "print the counts as JSON (a failure is {\"error\": \"...\"})" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends open, answer and reason records to .metaproject/data/decisions/journal.jsonl (nothing with --dry-run)"],
   },
   {
     module: "product",
@@ -1693,6 +1930,28 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "--apply PERMANENTLY REMOVES eligible files/directories under those same paths",
       "does not touch content already relayed to an agent, exported copies, or git history",
     ],
+  },
+  // ---- remote ---------------------------------------------------------------
+  // Telegram remote control (flows 376, 395). Only the offline preview is a CLI verb; the mode
+  // itself is `/rendering` in the shell.
+  {
+    module: "remote",
+    command: "remote format-sample",
+    summary: "Print the fixed sample reply (a table, lists, a rule) the way each Telegram rendering mode sends it. No network, no token.",
+    intent: [
+      "как выглядит ответ в телеграме",
+      "remote format-sample",
+      "preview telegram rendering",
+      "how are tables rendered in telegram",
+      "show the telegram sample reply",
+    ],
+    args: [
+      { name: "mode", type: "string", required: false, desc: "only this mode: auto, rich, html or plain" },
+      { name: "full", type: "bool", required: false, desc: "print the whole rich message instead of a count of its blocks" },
+      { name: "json", type: "bool", required: false, desc: "structured sample source and per-mode parts" },
+    ],
+    json: true,
+    read: true,
   },
   // ---- bus ------------------------------------------------------------------
   // The agent bus (flow 272; docs/requirements/keryx-agent-bus). It lives in the

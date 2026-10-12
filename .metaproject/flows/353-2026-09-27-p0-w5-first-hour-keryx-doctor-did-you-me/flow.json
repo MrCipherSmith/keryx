@@ -1,0 +1,646 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "353",
+  "slug": "p0-w5-first-hour-keryx-doctor-did-you-me",
+  "title": "P0 W5 first hour: keryx doctor, did-you-mean, mcp list exit codes, memory search hint, health tests detection, bare providers",
+  "status": "done",
+  "createdAt": "2026-09-27T18:31:16.163Z",
+  "updatedAt": "2026-09-27T23:03:15.647Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-27T22:47:07.322Z",
+      "note": "keryx doctor [--json]: 11 checks, exit codes, <3 s (0.36 s); doctor.test.ts incl. real exit-1 path. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC2": {
+      "at": "2026-09-27T22:47:07.479Z",
+      "note": "/doctor in readline chat/agent and TUI; help-groups + command registry; smoke-checked in chat mode. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC3": {
+      "at": "2026-09-27T22:47:07.633Z",
+      "note": "cli.ts central guard + lib/suggest.ts, 40 groups (group-subcommands.ts), integrate excluded; cli.test.ts table test; flat usage unchanged. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC4": {
+      "at": "2026-09-27T22:47:07.788Z",
+      "note": "mcp list: foreign problems under warnings:, exit 0; own config exit 1; mcp-servers.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC5": {
+      "at": "2026-09-27T22:47:07.941Z",
+      "note": "memory/text.ts stem(), search.ts; zero-hit hint both variants; memory.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC6": {
+      "at": "2026-09-27T22:47:08.093Z",
+      "note": "root cause: health/run.ts runAdapter auto-mode fallback forced tests=missing; fixed; health run on keryx tree shows tests available; CHANGELOG names it. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC7": {
+      "at": "2026-09-27T22:47:08.244Z",
+      "note": "bare keryx providers = status; --help still usage; providers.status.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    },
+    "AC8": {
+      "at": "2026-09-27T22:47:08.399Z",
+      "note": "typecheck, lint, touched tests green; CI green on cbbbe29f; cli-reference + commands-by-task updated; CHANGELOG 0.3.17, package.json bumped. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/773"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T5",
+      "title": "keryx doctor + /doctor (AC1, AC2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T18:31:52.063Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in ~/keryx-w5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #773; smoke-checked by the orchestrator"
+    },
+    {
+      "id": "T6",
+      "title": "did-you-mean and mcp list exit codes (AC3, AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #773; smoke-checked by the orchestrator"
+    },
+    {
+      "id": "T7",
+      "title": "memory search stemming/hint, health tests detection, bare providers (AC5, AC6, AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #773; smoke-checked by the orchestrator"
+    },
+    {
+      "id": "T8",
+      "title": "verify, docs, changelog, bump (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T19:59:56.608Z",
+            "outcome": "started",
+            "detail": "verify/docs/changelog done; PR #773 open, review round dispatched"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released 0.3.17"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-27T18:31:16.163Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-27T18:31:48.642Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-27T18:31:49.009Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-27T18:31:49.329Z",
+      "event": "task-added",
+      "detail": "T5: keryx doctor + /doctor (AC1, AC2)"
+    },
+    {
+      "at": "2026-09-27T18:31:49.667Z",
+      "event": "task-added",
+      "detail": "T6: did-you-mean and mcp list exit codes (AC3, AC4)"
+    },
+    {
+      "at": "2026-09-27T18:31:50.022Z",
+      "event": "task-added",
+      "detail": "T7: memory search stemming/hint, health tests detection, bare providers (AC5, AC6, AC7)"
+    },
+    {
+      "at": "2026-09-27T18:31:50.347Z",
+      "event": "task-added",
+      "detail": "T8: verify, docs, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-27T18:31:50.664Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-27T18:31:51.014Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-27T18:31:51.339Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-27T18:31:51.731Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-27T18:31:52.063Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Sonnet implementer in ~/keryx-w5"
+    },
+    {
+      "at": "2026-09-27T19:59:56.148Z",
+      "event": "task-done",
+      "detail": "T5: keryx doctor + /doctor (AC1, AC2)"
+    },
+    {
+      "at": "2026-09-27T19:59:56.303Z",
+      "event": "task-done",
+      "detail": "T6: did-you-mean and mcp list exit codes (AC3, AC4)"
+    },
+    {
+      "at": "2026-09-27T19:59:56.455Z",
+      "event": "task-done",
+      "detail": "T7: memory search stemming/hint, health tests detection, bare providers (AC5, AC6, AC7)"
+    },
+    {
+      "at": "2026-09-27T19:59:56.608Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — verify/docs/changelog done; PR #773 open, review round dispatched"
+    },
+    {
+      "at": "2026-09-27T22:47:07.166Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/773 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-27T22:47:07.322Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: keryx doctor [--json]: 11 checks, exit codes, <3 s (0.36 s); doctor.test.ts incl. real exit-1 path. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:07.479Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: /doctor in readline chat/agent and TUI; help-groups + command registry; smoke-checked in chat mode. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:07.633Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: cli.ts central guard + lib/suggest.ts, 40 groups (group-subcommands.ts), integrate excluded; cli.test.ts table test; flat usage unchanged. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:07.788Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: mcp list: foreign problems under warnings:, exit 0; own config exit 1; mcp-servers.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:07.941Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: memory/text.ts stem(), search.ts; zero-hit hint both variants; memory.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:08.093Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: root cause: health/run.ts runAdapter auto-mode fallback forced tests=missing; fixed; health run on keryx tree shows tests available; CHANGELOG names it. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:08.244Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bare keryx providers = status; --help still usage; providers.status.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:08.399Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: typecheck, lint, touched tests green; CI green on cbbbe29f; cli-reference + commands-by-task updated; CHANGELOG 0.3.17, package.json bumped. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T22:47:08.548Z",
+      "event": "task-done",
+      "detail": "T8: verify, docs, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-27T22:47:08.697Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-27T22:47:14.193Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-27T22:47:14.194Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#L3 (blocker, round 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#T3 (minor, round 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#773 was last collected against 9a2bbf622058f83a34345c5ff5726c3fa7ba42fd (round 1), but the PR head is cbbbe29f36fac4a3305ce1b5548bfa8ce3063079. Everything anyone said after 9a2bbf622058f83a34345c5ff5726c3fa7ba42fd is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 773 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-27T23:02:01.851Z",
+      "event": "completing",
+      "detail": "merged commit: 503c20c60ceb7755c389a6ce0ed7756b0537037a"
+    },
+    {
+      "at": "2026-09-27T23:02:05.593Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-27T23:02:05.594Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 503c20c60ceb7755c389a6ce0ed7756b0537037a, but the PR head is cbbbe29f36fac4a3305ce1b5548bfa8ce3063079. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-27T23:03:11.904Z",
+      "event": "completing",
+      "detail": "merged commit: 503c20c60ceb7755c389a6ce0ed7756b0537037a"
+    },
+    {
+      "at": "2026-09-27T23:03:15.646Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-09-27T23:03:15.647Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-27T22:47:07.322Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:07.479Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:07.633Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:07.788Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:07.941Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:08.093Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:08.244Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T22:47:08.399Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T23:03:15.647Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f",
+      "headCommit": "503c20c60ceb7755c389a6ce0ed7756b0537037a"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-27T22:47:14.193Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#L3 (blocker, round 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#T3 (minor, round 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#773 was last collected against 9a2bbf622058f83a34345c5ff5726c3fa7ba42fd (round 1), but the PR head is cbbbe29f36fac4a3305ce1b5548bfa8ce3063079. Everything anyone said after 9a2bbf622058f83a34345c5ff5726c3fa7ba42fd is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 773 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T23:02:05.593Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "503c20c60ceb7755c389a6ce0ed7756b0537037a is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "503c20c60ceb7755c389a6ce0ed7756b0537037a is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against 503c20c60ceb7755c389a6ce0ed7756b0537037a, but the PR head is cbbbe29f36fac4a3305ce1b5548bfa8ce3063079. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    },
+    {
+      "at": "2026-09-27T23:03:15.646Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "503c20c60ceb7755c389a6ce0ed7756b0537037a is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "503c20c60ceb7755c389a6ce0ed7756b0537037a is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 7 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:7497a3e243b0fe0faab955a88bd90fa5ff19d8fe3a31172e9b49afa26609bf4f"
+    }
+  ],
+  "merged": {
+    "commit": "503c20c60ceb7755c389a6ce0ed7756b0537037a",
+    "ref": "origin/main",
+    "at": "2026-09-27T23:03:15.647Z"
+  }
+}

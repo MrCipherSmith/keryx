@@ -8,6 +8,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { listProjects } from "../lib/project-registry";
 import { collectProjectGovernance } from "./aggregate";
+import { renderEffectLine, renderSummaryLine } from "./flow-narrative";
 import type { FlowAcceptance, FlowDispatch, GovernanceFilters, GovernanceReport, GovernanceReportRead, ProjectGovernance } from "./types";
 
 export const GOVERNANCE_SCHEMA_VERSION = 1 as const;
@@ -175,6 +176,8 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
       lines.push(`### ${flow.id} — ${flow.title}`);
       lines.push("");
       lines.push(`status: ${flow.status}`);
+      lines.push(renderSummaryLine(flow.summary));
+      lines.push(renderEffectLine(flow.effect));
       lines.push(`owner: ${identityLine(flow.owner)}`);
       lines.push(
         `review spend: spent=${usd(flow.spend.spentUsd)} (rounds_with_spent=${flow.spend.roundsWithSpentUsd}), ` +

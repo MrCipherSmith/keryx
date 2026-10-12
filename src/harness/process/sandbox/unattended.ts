@@ -94,6 +94,19 @@ function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * `DetectOptions` plus the two host-filesystem reads the plan makes for the
+ * `/run` and `/var/run` hide list. A test that injects `platform: "linux"` on a
+ * non-Linux host supplies a fake filesystem here; production leaves both unset
+ * and reads the real one.
+ */
+export interface UnattendedDetectOptions extends DetectOptions {
+  /** Is `p` a directory on the (possibly fake) host? Default: real `statSync`. */
+  isDir?: (p: string) => boolean;
+  /** Canonical path of `p` on the (possibly fake) host. Default: real `realpathSync`, falling back to `path.resolve`. */
+  realpath?: (p: string) => string;
+}
+
 export interface UnattendedSandboxInput {
   /** The run's worktree — the command's cwd, read-write. */
   readonly worktree: string;
@@ -116,7 +129,7 @@ export interface UnattendedSandboxInput {
   readonly uid?: number;
   readonly platform?: string;
   /** Test seams. */
-  readonly detect?: DetectOptions;
+  readonly detect?: UnattendedDetectOptions;
   readonly probe?: (launcher: string) => boolean;
 }
 
@@ -241,8 +254,11 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   //   resolv.conf note below for the one file a network-on run needs.
   //   $HOME, and $XDG_RUNTIME_DIR in case it lives outside /run.
   const hidden = new Set<string>();
+  const hostIsDir = input.detect?.isDir ?? isDir;
+  const hostReal = input.detect?.realpath ?? real;
+  const hostExists = input.detect?.existsSync ?? exists;
   for (const runDir of ["/run", "/var/run"]) {
-    if (isDir(runDir) && real(runDir) === path.resolve(runDir)) hidden.add(runDir);
+    if (hostIsDir(runDir) && hostReal(runDir) === path.resolve(runDir)) hidden.add(runDir);
   }
   if (isDir(home)) hidden.add(home);
   const runtimeDir = input.env["XDG_RUNTIME_DIR"];
@@ -266,8 +282,8 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   // directory holding the resolver's sockets. `allowlist` binds NO resolv.conf —
   // the sandbox does its own DNS never; the proxy outside it resolves every name.
   if (fullNetwork) {
-    const resolv = real("/etc/resolv.conf");
-    if (resolv !== "/etc/resolv.conf" && exists(resolv) && !isDir(resolv)) args.push("--ro-bind", resolv, resolv);
+    const resolv = hostReal("/etc/resolv.conf");
+    if (resolv !== "/etc/resolv.conf" && hostExists(resolv) && !hostIsDir(resolv)) args.push("--ro-bind", resolv, resolv);
   }
 
   // Bind back read-only what the run needs, then read-write the worktree and

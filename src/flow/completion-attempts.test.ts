@@ -110,7 +110,7 @@ test("AC4: a failing attempt then a passing one both land on `completionAttempts
   // Every evaluated gate is on the record, including the PASSING ones — not
   // only what failed.
   expect((attempt2?.gates ?? []).map((gate): string => gate.name).sort()).toEqual(
-    ["acceptance-criteria", "base-branch", "confirmation", "health", "owner", "pull-request", "review", "tasks"].sort(),
+    ["acceptance-criteria", "base-branch", "confirmation", "folder-committed", "health", "owner", "pull-request", "review", "tasks"].sort(),
   );
 });
 

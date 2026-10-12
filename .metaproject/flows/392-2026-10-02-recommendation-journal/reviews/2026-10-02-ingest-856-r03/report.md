@@ -1,0 +1,90 @@
+Third-round independent review of PR #856 at b68fff5f: the round 1 F-005 remainder and round 2 F-001, F-002, F-003 and F-005 are fixed, with tests that pass (136 pass, 2 skip, 0 fail across src/decisions and the two TUI test files). The two-tier matcher fixes the cited ordinary questions but leaves real release phrasings, a lone "merge", and strong-term words in ordinary questions on the wrong side, and the follow-up targeting still leaks through the inferred flow. No blockers; one major (AC4) and three minor.
+
+```json keryx:findings
+[
+  {
+    "id": "F-001",
+    "severity": "major",
+    "problem": "Release and push phrasings that use none of the strong terms are asked blind, and the ask_user path cannot pass the `--action` tag the guide calls the reliable path. After the two-tier split, a release written as 'Выпустить версию 0.3.62?' or 'Ship 0.3.62 to npm?' matches neither tier: no strong term (release, publish, deploy, delete, push, релиз, опублик, выкат, ...) and no weak term with a risk target. ask_user has no `action` field, so the tag is unreachable on the path that produces most records.",
+    "impact": "AC4: the agent asks 'Выпустить версию 0.3.62?' with options 'Да' (recommended) and 'Нет'. The operator writes to the agent in Russian, so this is a likely phrasing. One time in three the question is drawn blind: no recommended mark, shuffled options, and the question is counted in the blind column of the report. 'Отправить в прод?' and 'Залить в мастер?' behave the same ('отправ' is only weak and 'прод' and 'мастер' are not risk targets). The guide tells agents to pass --action for anything irreversible, which an ask_user caller cannot do.",
+    "suggested_fix": "Add the release verbs to the strong tier (выпуст, ship, roll out, залить/залей, to prod) or add the missing risk targets (прод, мастер, npm, registry), and give ask_user an optional `action` argument that journalAsk forwards to openDecision; or say in the guide that the tag is CLI-only.",
+    "evidence": "Ran isIrreversible(DEFAULT_IRREVERSIBLE, q, undefined, [{id:'a',label:'Да'},{id:'b',label:'Нет'}]) from src/decisions/blind.ts at b68fff5f: blind for 'Выпустить версию 0.3.62?', 'Ship 0.3.62 to npm?', 'Отправить в прод?', 'Залить в мастер?'; irreversible for 'Release 0.3.62 now?', 'Force-push to main?', 'Удалить ветку?', 'Merge PR 856 into main?'. keryx ctx rg 'action' src/harness/tool/builtin/ask-user-tool.ts src/tui/ask-user-bridge.ts src/decisions/ask.ts returns nothing: no action reaches openDecision on the ask_user path.",
+    "confidence": "medium",
+    "file": "src/decisions/blind.ts",
+    "line": 23,
+    "quote": "export const DEFAULT_IRREVERSIBLE: readonly string[] = [",
+    "class_scope": {
+      "sites": [
+        "src/decisions/blind.ts DEFAULT_IRREVERSIBLE and WEAK_IRREVERSIBLE vocabulary",
+        "src/decisions/blind.ts RISK_TARGETS lacks prod (Russian), мастер, npm",
+        "src/decisions/ask.ts openDecision call passes no action",
+        "docs/docs/guides/recommendation-journal.md 'Agents should pass --action'"
+      ],
+      "enumeration_method": "keryx ctx rg 'isIrreversible|action' src/decisions src/tui/ask-user-bridge.ts src/harness/tool/builtin/ask-user-tool.ts --glob '!*.test.ts' lists the matcher, its single caller and the absence of an action on the ask_user side."
+    },
+    "reviewer": "flow392-pr856-review-r3"
+  },
+  {
+    "id": "F-002",
+    "severity": "minor",
+    "problem": "A weak term with no risk target is asked normally even when it is the whole question. 'Merge it now?' with options 'Merge now' and 'Wait', or 'Reset the working tree hard?' with option 'git reset --hard', matches no strong term and no risk target in the same unit, so it can be blind. At 15c52808 'merge' was a strong term and the first of these was irreversible.",
+    "impact": "The agent finishes a PR and asks 'Merge it now?'. With no branch or PR word in the question or an option, the question is drawn blind one time in three. A merge of a reviewed PR is the action the earlier round-1 F-004 asked to protect. A bare 'git reset --hard' option is likewise asked blind.",
+    "suggested_fix": "Treat the bare word as strong when it is the question's own verb with no object ('Merge?', 'Merge it now?'), or keep a short list of strong shapes (merge it/this/now, reset --hard, force-push) next to the weak words.",
+    "evidence": "Ran isIrreversible at b68fff5f: false for ('Merge it now?', options 'Merge now' / 'Wait'), ('Squash and merge?'), ('Reset the working tree hard?', option 'git reset --hard'), ('git reset --hard HEAD~3?'); true for 'Merge PR 856 into main?'. The risk-target test at blind.ts line 170 requires a target in the same unit.",
+    "confidence": "medium",
+    "file": "src/decisions/blind.ts",
+    "line": 170,
+    "quote": "  return units.some((text) => WEAK_IRREVERSIBLE.some((needle) => matchesTerm(needle, text)) && RISK_TARGETS.some((target) => matchesTarget(target, text)));",
+    "class_scope": {
+      "sites": [
+        "src/decisions/blind.ts isIrreversible weak-tier return",
+        "src/decisions/round2.test.ts 'a weak term and a risk target in one option count' asserts the split but not a bare merge"
+      ],
+      "enumeration_method": "keryx ctx rg 'WEAK_IRREVERSIBLE' src --glob '!*.test.ts' lists the one tier check."
+    },
+    "reviewer": "flow392-pr856-review-r3"
+  },
+  {
+    "id": "F-003",
+    "severity": "minor",
+    "problem": "The strong terms still match anywhere in the question and in every option's id, label and description, and the suppression stays invisible. Ordinary coding questions that merely contain 'push', 'release', 'deploy' or 'delete' are never blind, and nothing counts or shows how many questions were refused blind (blindRefused is produced in openDecision and read by no consumer).",
+    "impact": "AC3 and AC11: 'Which language for the deploy script?', 'Where do the release notes live?', 'Delete button style?', 'Array helper?' with option 'push', or a cache question whose option says 'entries are deleted on restart' are each classed irreversible. A coding agent asks such questions routinely, so the blind share drifts below one third and the operator cannot see it: the report prints a blind share with no count of refusals next to it.",
+    "suggested_fix": "Record and print the number of questions refused blind (the open record already carries `irreversible: true`), so the bias is visible in the report; and match strong terms in the question and the --action tag, with an option only when it is the recommended one.",
+    "evidence": "Ran isIrreversible at b68fff5f: true for 'Which language for the deploy script?' (bash / python), 'Where do the release notes live?', 'Delete button style?', 'Array helper?' with option 'push', and a 'Which cache should we use?' option described 'entries are deleted when the process restarts'. keryx ctx rg 'blindRefused|\\.irreversible' src --glob '!*.test.ts' finds the producer (journal.ts line 83) and no reader in the report or the ask_user path; src/decisions/report.ts has no refused count.",
+    "confidence": "medium",
+    "file": "src/decisions/journal.ts",
+    "line": 83,
+    "quote": "    blindRefused: wantsBlind && irreversible,",
+    "class_scope": {
+      "sites": [
+        "src/decisions/blind.ts isIrreversible strong tier scans every option's description",
+        "src/decisions/journal.ts blindRefused produced, never shown",
+        "src/decisions/report.ts buildReport has no irreversible or refused count"
+      ],
+      "enumeration_method": "keryx ctx rg 'blindRefused|irreversible' src/decisions --glob '!*.test.ts' lists the producer, the matcher and the report that ignores the field."
+    },
+    "reviewer": "flow392-pr856-review-r3"
+  },
+  {
+    "id": "F-004",
+    "severity": "minor",
+    "problem": "`/decisions change` and `/decisions reason` without an id fall back to the latest decision of the flow that resolveFlowContext returns, and that flow can be the inferred one (the only flow in progress). A session that answered nothing, working on main, therefore acts on a decision from another session of that flow, which is the round 2 F-005 scenario through a different door. The inferred flow also still receives a line in its tracked journal.md for every answer (round 2 F-006 impact).",
+    "impact": "One long-lived flow is in progress; session A works on it from its worktree and answers a question. The operator opens session B on main (no flow on the branch), has not answered anything there, and types `/decisions change X`. resolveFlowContext infers the one in-progress flow, the command appends a changed answer to session A's decision, and the confirmation names the decision but not that it belongs to another session. Nothing is rewritten, but session A's record is altered by a command meant for none.",
+    "suggested_fix": "Take the flow fallback only from KERYX_FLOW or the branch (flowSource env or branch), never from `inferred`; and do not append to a flow's journal.md for an inferred attribution, or ask for an explicit id.",
+    "evidence": "Probe at b68fff5f in a temp repo on branch main with one in-progress flow: an ask_user answer through journalAsk was recorded with flow 001 flowSource inferred and added a line to that flow's journal.md; runDecisionsFollowup({kind:'change', choice:'a'}) with no lastDecisionId then changed that decision ('answer changed from b to a'). src/tui/decisions-surface.ts line 74 uses `(await resolveFlowContext(deps.cwd)).flow` without looking at flowSource.",
+    "confidence": "high",
+    "file": "src/tui/decisions-surface.ts",
+    "line": 74,
+    "quote": "    const flow = lastId === undefined ? (await resolveFlowContext(deps.cwd)).flow : undefined;",
+    "class_scope": {
+      "sites": [
+        "src/tui/decisions-surface.ts runDecisionsFollowup flow fallback ignores flowSource",
+        "src/decisions/context.ts onlyInProgress produces the inferred flow",
+        "src/decisions/journal.ts journalToFlow appends for any non-null flow"
+      ],
+      "enumeration_method": "keryx ctx rg 'resolveFlowContext|flowSource' src --glob '!*.test.ts' lists the resolver, the follow-up caller that ignores the source and the open record that stores it."
+    },
+    "reviewer": "flow392-pr856-review-r3"
+  }
+]
+```

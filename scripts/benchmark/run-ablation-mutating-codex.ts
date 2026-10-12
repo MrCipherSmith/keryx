@@ -20,10 +20,11 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
-import { buildAblationManifest, computeAblationDelta, type AblationSeedSample, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
+import { buildAblationManifest, computeAblationDelta, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
 import { MUTATING_GOLD_ARTIFACT_PATH, MUTATING_TASKS, cliPrompt, type MutatingTask } from "./mutating-tasks";
+import { codexMetrics, fixtureFilename, type InstrumentedSeedSample } from "./token-metrics";
 
 const SEEDS = [1, 2, 3] as const;
 
@@ -47,7 +48,7 @@ export async function finalizeMutatingCodexRun(
   validation: { readonly valid: boolean; readonly errors: readonly string[] },
   io: AblationEmissionIO,
 ): Promise<number> {
-  const resultsFilename = "ablation-mutating-results-codex.json";
+  const resultsFilename = RESULTS_FILENAME;
   if (validation.valid) {
     await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
     io.printManifest(JSON.stringify(manifest, null, 2));
@@ -66,7 +67,13 @@ export async function finalizeMutatingCodexRun(
   );
   return 1;
 }
-const MODEL = "gpt-5.6-sol"; // codex resolves its own default under ChatGPT auth; recorded, not pinned — see run-ablation-codex.ts
+const DEFAULT_MODEL = "gpt-5.6-sol"; // codex resolves its own default under ChatGPT auth; recorded, not pinned — see run-ablation-codex.ts
+// `--model <id>` PINS the model via `codex exec -m <id>` (the only way to hold the model constant across
+// legs, spec 1.3); without it the model id above is a recorded assumption, not verified from codex's output.
+const MODEL_FLAG = process.argv.indexOf("--model");
+const PINNED_MODEL = MODEL_FLAG >= 0 ? process.argv[MODEL_FLAG + 1] : undefined;
+const MODEL = PINNED_MODEL ?? DEFAULT_MODEL;
+const RESULTS_FILENAME = fixtureFilename("ablation-mutating-results-codex.json", DEFAULT_MODEL, MODEL);
 const CONTEXT_STRIP_PATHS = [".metaproject", "AGENTS.md", "CLAUDE.md"];
 // This repo's own root now carries a real opencode.json + .mcp.json (keryx mcp install).
 // Stripped from every worktree regardless of harness, so no leg's tool choices are ever
@@ -95,10 +102,11 @@ async function runTestInWorktree(root: string, seedTestFile: string): Promise<bo
   return exitCode === 0;
 }
 
-async function runSeed(task: MutatingTask, variant: AblationVariant, seed: number, root: string): Promise<AblationSeedSample> {
+async function runSeed(task: MutatingTask, variant: AblationVariant, seed: number, root: string): Promise<InstrumentedSeedSample> {
   await writeFile(join(root, task.seedTestFile), task.seedTestContent, "utf8");
 
-  const proc = Bun.spawn(["codex", "exec", "--approve-for-me", "--json", "-C", root, cliPrompt(task)], { stdout: "pipe", stderr: "pipe" });
+  const modelArgs = PINNED_MODEL !== undefined ? ["-m", PINNED_MODEL] : [];
+  const proc = Bun.spawn(["codex", "exec", "--approve-for-me", "--json", ...modelArgs, "-C", root, cliPrompt(task)], { stdout: "pipe", stderr: "pipe" });
   const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   await proc.exited;
 
@@ -110,7 +118,9 @@ async function runSeed(task: MutatingTask, variant: AblationVariant, seed: numbe
   // Independent verification: a real `bun test` run in the worktree codex edited —
   // never codex's own claim.
   const success = await runTestInWorktree(root, task.seedTestFile);
-  return { seed, success, tokens, toolCalls };
+  // cached_input_tokens is a subset of input_tokens (codex TokenUsage::non_cached_input); codex's JSON
+  // stream has no per-request count and no tool-call arguments, so requests/repeatedReads stay null.
+  return { seed, success, tokens, toolCalls, model: MODEL, metrics: codexMetrics(events), repeatedReads: null };
 }
 
 async function main(): Promise<void> {
@@ -122,8 +132,8 @@ async function main(): Promise<void> {
     const taskInputs: AblationTaskInput[] = [];
     for (const task of MUTATING_TASKS) {
       console.error(`\n# task: ${task.name}`);
-      const contextOnSamples: AblationSeedSample[] = [];
-      const contextOffSamples: AblationSeedSample[] = [];
+      const contextOnSamples: InstrumentedSeedSample[] = [];
+      const contextOffSamples: InstrumentedSeedSample[] = [];
       for (const variant of ["context-on", "context-off"] as const) {
         const samples = variant === "context-on" ? contextOnSamples : contextOffSamples;
         for (const seed of SEEDS) {
@@ -148,7 +158,10 @@ async function main(): Promise<void> {
             }
             const sample = await runSeed(task, variant, seed, root);
             samples.push(sample);
-            console.error(`  ${variant} seed=${seed}: success=${sample.success} tokens=${sample.tokens ?? "n/a"} toolCalls=${sample.toolCalls}`);
+            console.error(
+              `  ${variant} seed=${seed}: success=${sample.success} tokens=${sample.tokens ?? "n/a"} toolCalls=${sample.toolCalls} ` +
+                `uncachedIn=${sample.metrics.uncachedInputTokens ?? "n/a"} cachedIn=${sample.metrics.cachedInputTokens ?? "n/a"} out=${sample.metrics.outputTokens ?? "n/a"}`,
+            );
           } finally {
             await port.remove(worktreeId).catch((cause) => {
               console.error(`worktree[${worktreeId}] cleanup failed: ${(cause as Error).message}`);
@@ -173,13 +186,18 @@ async function main(): Promise<void> {
         "shell) — each seed in its own fresh git worktree. Success is decided by an " +
         "independent `bun test` run after codex's turn, never by trusting its own claim. " +
         "Captured live, no fabricated samples.",
+      metricsNote:
+        "per sample: metrics from codex's turn.completed usage (input_tokens includes the cached portion; " +
+        "uncached = input - cached_input_tokens); requests is null (not exposed); repeatedReads is null " +
+        "(the JSON stream carries no read_file/search_code arguments). model " +
+        (PINNED_MODEL !== undefined ? "was pinned with codex -m." : "is a recorded assumption, not pinned or verified from codex's output."),
       model: MODEL,
       provider: "codex-cli",
       generated_by: "bun scripts/benchmark/run-ablation-mutating-codex.ts",
       captured: new Date().toISOString().slice(0, 10),
       tasks: taskInputs,
     };
-    const resultsUrl = new URL("../../fixtures/benchmark/keryx/ablation-mutating-results-codex.json", import.meta.url);
+    const resultsUrl = new URL(`../../fixtures/benchmark/keryx/${RESULTS_FILENAME}`, import.meta.url);
 
     console.error("\n# deltas (context-on vs context-off, informational — not a speed claim)");
     for (const input of taskInputs) {

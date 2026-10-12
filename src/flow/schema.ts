@@ -93,6 +93,11 @@ export function flowStateSchema(): Record<string, unknown> {
             description:
               "Written by `flow init`. When true, `flow complete` fails the owner gate with a named reason while no owner is set, and passes it once one is. Absent on packages created before the gate existed, which report the gate `skipped` rather than `fail`.",
           },
+          folderCommitted: {
+            type: "boolean",
+            description:
+              "flow 384: written by `flow init`. When true, `flow complete` fails the folder-committed gate while the flow folder's flow.json is not in HEAD, and passes it once it is. Absent on packages created before the gate existed, which report the gate `skipped` rather than `fail`.",
+          },
           confirmation: {
             type: "boolean",
             description:
@@ -110,6 +115,24 @@ export function flowStateSchema(): Record<string, unknown> {
         enum: ["agent", "human"],
         description:
           "Who wrote the outcome criterion. Written by `flow init --outcome-author` (default `agent`; `human` only when the flag says so, never inferred) and changed only by `flow outcome author`, which journals the change. Absent on flows created before the field existed, and read as `unknown` (neither agent nor human). Gates nothing.",
+      },
+      origin: {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind"],
+        description:
+          "Where the flow came from. Written by `flow init --origin <kind> [--quote] [--source]` and changed only by `flow origin set`, which journals the change. `human-request` is recorded only with a verbatim quote and a source; `agent-finding` and `agent-proposal` only with a source. Absent on flows created before the field existed and on flows whose evidence was not enough, and read as `unknown`. Gates nothing.",
+        properties: {
+          kind: { type: "string", enum: ["human-request", "agent-finding", "agent-proposal"] },
+          quote: {
+            type: "string",
+            description: "The human's request, verbatim and byte for byte: no translation, no paraphrase.",
+          },
+          source: {
+            type: "string",
+            description: "Where the request or finding came from: channel, message id, time, or the check that produced it.",
+          },
+        },
       },
       signatures: {
         type: "array",
@@ -346,6 +369,7 @@ export function flowStateSchema(): Record<string, unknown> {
               "review",
               "base-branch",
               "owner",
+              "folder-committed",
               "confirmation",
             ],
           },

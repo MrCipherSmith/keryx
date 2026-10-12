@@ -1,0 +1,38 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow357-pr788-review",
+    "severity": "minor",
+    "problem": "DENIED_CAUSE_MARKERS was one flat, agent-unscoped regex list; the PR added two loose markers written for antigravity-cli's wording that also applied to codex-cli and claude-cli failures.",
+    "impact": "A codex-cli or claude-cli failure whose vendor text contained 'waiting for approval' style wording would have been labelled Denied instead of Error.",
+    "suggested_fix": "Match only antigravity's own exact tag and add a cross-agent regression test.",
+    "evidence": "Original finding, round 1 (2026-09-28-ingest-c623d5c8b6a6e39439fc1f64c887f7c9ae591d29). Re-verified against PR head aa3973c3: the two loose regexes are gone, replaced by the single exact tag /\\(blocked on approval\\)/ that only the antigravity codec emits (codec/antigravity-cli.ts lines 254 and 303); a codex turn.failed mentioning 'waiting for approval' stays Error (antigravity-cli.runtime.test.ts).",
+    "confidence": "high",
+    "file": "src/harness/external/runtime.ts",
+    "line": null,
+    "quote": "/waiting (for|on) .*(approval|permission)/i,\n/blocked (on|waiting) .*(approval|permission)/i,",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 188
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/runtime.ts DENIED_CAUSE_MARKERS",
+        "src/harness/external/codec/antigravity-cli.ts classifyAntigravityFailure / parseResultEvent (the only emitters of the tag)"
+      ],
+      "enumeration_method": "keryx ctx rg for 'blocked on approval' across src/harness/external/: the tag appears only in the antigravity codec and the one marker in runtime.ts."
+    },
+    "global_id": "2026-09-28-ingest-c623d5c8b6a6e39439fc1f64c887f7c9ae591d29#F-001",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by flow357-pr788-verify (execution): At PR head aa3973c3: keryx ctx rg over src/harness/external/ shows the two loose regexes are gone; runtime.ts holds the single exact tag /\\(blocked on approval\\)/, which only codec/antigravity-cli.ts emits (lines 254 and 303). bun test src/harness/external/antigravity-cli.runtime.test.ts -t 'waiting for approval' -> 1 pass, 0 fail: a codex-cli turn.failed reading 'stream ended while waiting for approval of a patch' stays Error, not Denied. The finding's concern (agent-unscoped wording relabelling another agent's failure) no longer holds."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At PR head aa3973c3: keryx ctx rg over src/harness/external/ shows the two loose regexes are gone; runtime.ts holds the single exact tag /\\(blocked on approval\\)/, which only codec/antigravity-cli.ts emits (lines 254 and 303). bun test src/harness/external/antigravity-cli.runtime.test.ts -t 'waiting for approval' -> 1 pass, 0 fail: a codex-cli turn.failed reading 'stream ended while waiting for approval of a patch' stays Error, not Denied. The finding's concern (agent-unscoped wording relabelling another agent's failure) no longer holds.",
+      "verifier": "flow357-pr788-verify"
+    }
+  }
+]

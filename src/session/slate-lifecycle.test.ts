@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -14,12 +14,15 @@ import {
   openSlate,
   readSlateSession,
   recordSlateSessionTouch,
+  recordSlateSessionTrail,
   recordSlateTouch,
   slateSessionDir,
   writeSlateSession,
   type SlateSessionRef,
 } from "./slate-lifecycle";
-import { readSlate, writeSlate, type Slate } from "./slate";
+import { appendTrailEntry, readSlate, writeSlate, type Slate } from "./slate";
+import { withFileLock } from "../lib/fs";
+import { slateLockPath } from "./slate";
 import type { CourseProjection } from "./slate-course";
 
 async function tempCwd(): Promise<string> {
@@ -442,3 +445,118 @@ test("flow 271 R3-1: a ref detached while the open resolves its anchors does not
   expect(ref.opened).toBe(false);
   expect(await snapshotSessionDir(dir)).toEqual(before);
 });
+
+// ---- flow 393: Trail and Notes survive a resume ----------------------------------------------
+
+const memoryTs = "2026-10-02T00:00:00.000Z";
+
+async function sessionWithMemory(): Promise<{ dir: string; cwd: string }> {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  const ref: SlateSessionRef = { dir, cwd, opened: false };
+  await ensureSlateOpened(ref, fixedMinter());
+  await appendTrailEntry(dir, { tool: "read_file", digest: "src/a.ts", outcome: "ok", ts: memoryTs });
+  await appendTrailEntry(dir, { tool: "read_file", digest: "src/b.ts", outcome: "ok", ts: memoryTs });
+  await writeSlate(dir, (prev) => ({ ...(prev as Slate), notes: { plan: { text: "keep the naming stable", ts: memoryTs } } }));
+  return { dir, cwd };
+}
+
+test("--continue after a crash: re-opening the live slate keeps the Trail and Notes and numbers the next step 3", async () => {
+  const { dir, cwd } = await sessionWithMemory();
+  // A new process: its ref has opened:false, the previous slate.json is still live.
+  await ensureSlateOpened({ dir, cwd, opened: false }, fixedMinter());
+  const slate = await readSlate(dir);
+  expect(slate?.trail?.map((e) => e.digest)).toEqual(["src/a.ts", "src/b.ts"]);
+  expect(slate?.notes?.plan?.text).toBe("keep the naming stable");
+  const next = await appendTrailEntry(dir, { tool: "read_file", digest: "src/c.ts", outcome: "ok", ts: memoryTs });
+  expect(next?.step).toBe(3);
+});
+
+test("--continue after a clean /exit: the archived slate hands its Trail and Notes to the new one", async () => {
+  const { dir, cwd } = await sessionWithMemory();
+  const first: SlateSessionRef = { dir, cwd, opened: true };
+  await closeSlateSession(first, fixedMinter());
+  expect(await readSlate(dir)).toBeUndefined();
+  await ensureSlateOpened({ dir, cwd, opened: false }, fixedMinter());
+  const slate = await readSlate(dir);
+  expect(slate?.trail).toHaveLength(2);
+  expect(slate?.notes?.plan?.text).toBe("keep the naming stable");
+  expect((await appendTrailEntry(dir, { tool: "read_file", digest: "src/c.ts", outcome: "ok", ts: memoryTs }))?.step).toBe(3);
+});
+
+test("a re-opened slate still starts with fresh Anchors, an empty Course and no Seeds", async () => {
+  const { dir, cwd } = await sessionWithMemory();
+  await writeSlate(dir, (prev) => ({
+    ...(prev as Slate),
+    anchors: { root: "/stale/root", touched: ["stale.ts"] },
+    course: { flowRef: "999" },
+    seeds: [{ id: "s", text: "old seed", ts: memoryTs }],
+  }));
+  await ensureSlateOpened({ dir, cwd, opened: false }, fixedMinter());
+  const slate = await readSlate(dir);
+  expect(slate?.anchors.root).not.toBe("/stale/root");
+  expect(slate?.anchors.touched).toEqual([]);
+  expect(slate?.course).toEqual({});
+  expect(slate?.seeds).toEqual([]);
+});
+
+test("the newest archived slate that has working memory wins, and a corrupt archive is ignored", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  const archive = path.join(dir, "slate-archive");
+  await mkdir(archive, { recursive: true });
+  const old = path.join(archive, "old.json");
+  const recent = path.join(archive, "recent.json");
+  const broken = path.join(archive, "broken.json");
+  const shell = { anchors: { root: cwd, touched: [] }, course: {}, seeds: [] };
+  await writeFile(old, JSON.stringify({ ...shell, notes: { plan: { text: "OLD", ts: memoryTs } } }));
+  await writeFile(recent, JSON.stringify({ ...shell, notes: { plan: { text: "RECENT", ts: memoryTs } } }));
+  await writeFile(broken, "{ not json");
+  await utimes(old, 1_000, 1_000);
+  await utimes(recent, 2_000, 2_000);
+  await utimes(broken, 3_000, 3_000);
+  await ensureSlateOpened({ dir, cwd, opened: false }, fixedMinter());
+  expect((await readSlate(dir))?.notes?.plan?.text).toBe("RECENT");
+});
+
+test("a session with no working memory anywhere opens a slate without trail or notes", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await ensureSlateOpened({ dir, cwd, opened: false }, fixedMinter());
+  const slate = await readSlate(dir);
+  expect(slate?.trail).toBeUndefined();
+  expect(slate?.notes).toBeUndefined();
+});
+
+for (const operation of ["write", "touch", "trail", "close", "open"] as const) {
+  test(`Flow415: ${operation} queued behind Slate lock cannot mutate after detach`, async () => {
+    const dir = await tempSessionDir();
+    const cwd = await tempCwd();
+    await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+    const before = await snapshotSessionDir(dir);
+    const ref: SlateSessionRef = { dir, cwd, opened: operation !== "open" };
+    let release!: () => void;
+    let acquired!: () => void;
+    const held = new Promise<void>((resolve) => { acquired = resolve; });
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    const holding = withFileLock(slateLockPath(dir), async () => { acquired(); await barrier; });
+    await held;
+    let updateCalled = false;
+    const pending = operation === "write"
+      ? writeSlateSession(ref, (prev) => { updateCalled = true; return { ...(prev as Slate), workspaceId: "stolen" }; })
+      : operation === "touch"
+        ? recordSlateSessionTouch(ref, ["stolen.ts"])
+        : operation === "trail"
+          ? recordSlateSessionTrail(ref, { tool: "read_file", digest: "stolen.ts", outcome: "ok", ts: memoryTs })
+          : operation === "open"
+            ? ensureSlateOpened(ref, () => "stolen")
+            : closeSlateSession(ref, () => "stolen");
+    detachSlateSession(ref);
+    release();
+    await holding;
+    await pending;
+    expect(updateCalled).toBe(false);
+    expect(ref.opened).toBe(operation !== "open");
+    expect(await snapshotSessionDir(dir)).toEqual(before);
+  });
+}

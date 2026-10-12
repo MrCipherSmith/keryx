@@ -1,0 +1,9 @@
+{
+ "reviewer": "review-security-code",
+ "slices": [
+  "slice-10",
+  "slice-11"
+ ],
+ "result": "raw/review-security-code-10-11.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+}

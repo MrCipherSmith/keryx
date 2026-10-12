@@ -142,6 +142,67 @@ describe("what is missing is named", () => {
   });
 });
 
+describe("a basic group that Topics turn into a supergroup (F-102)", () => {
+  // The bot was added to a basic group (old id); turning Topics on gives it a new supergroup id (GROUP).
+  const OLD_GROUP = -4_455_667_788;
+
+  test("migrate_to_chat_id on the old chat moves the candidate to the new id", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await pairedOperator(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group", title: "Basic" });
+    await until(() => pairing.snapshot().problems.length > 0, "the old id to be reported as not inspectable");
+    expect(pairing.snapshot().state).toBe("waiting-for-group");
+
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+    expect(pairing.snapshot().problems).toEqual([]);
+  });
+
+  test("migrate_from_chat_id on the new chat does the same", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await pairedOperator(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group" });
+    await until(() => pairing.snapshot().problems.length > 0, "the old id to be reported as not inspectable");
+
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP, side: "from" });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+  });
+
+  test("the group event and the migration both arrive before the code: the candidate ends on the new id", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await openPairing(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group", title: "Basic" });
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP });
+    await settle();
+    await settle();
+    expect(pairing.snapshot().state).toBe("waiting-for-user");
+    expect(api.callCount("getChat")).toBe(0);
+
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted after the replay");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+    expect(pairing.snapshot().problems).toEqual([]);
+  });
+
+  test("a migration of some other chat does not move the candidate", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await pairedOperator(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group" });
+    await until(() => pairing.snapshot().problems.length > 0, "the old id to be reported as not inspectable");
+    const inspected = api.callCount("getChat");
+
+    api.pushMigration({ fromId: STRANGER_ID, oldChatId: -999_000_111, newChatId: GROUP });
+    api.pushMigration({ fromId: STRANGER_ID, oldChatId: -999_000_111, newChatId: GROUP, side: "from" });
+    await settle();
+    await settle();
+    expect(api.callCount("getChat")).toBe(inspected);
+    expect(pairing.snapshot().state).toBe("waiting-for-group");
+    expect(pairing.snapshot().chatId).toBeUndefined();
+  });
+});
+
 describe("only the paired operator can nominate a group", () => {
   test("a stranger adding the bot to a group is ignored", async () => {
     const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
@@ -155,17 +216,13 @@ describe("only the paired operator can nominate a group", () => {
     expect(api.callCount("getChat")).toBe(0);
   });
 
-  test("before anybody is paired, adding the bot to a group is ignored", async () => {
+  test("before anybody is paired, a group event nominates nothing yet", async () => {
     const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
-    const result = await Pairing.open({ api, code: CODE, pollTimeoutSec: 1 });
-    if (!result.ok) {
-      throw new Error(result.reason);
-    }
-    open.push(result.pairing);
+    const pairing = await openPairing(api);
     api.pushMyChatMember({ fromId: OPERATOR });
     await settle();
     await settle();
-    expect(result.pairing.snapshot().state).toBe("waiting-for-user");
+    expect(pairing.snapshot().state).toBe("waiting-for-user");
     expect(api.callCount("getChat")).toBe(0);
   });
 
@@ -178,6 +235,125 @@ describe("only the paired operator can nominate a group", () => {
     await settle();
     expect(pairing.snapshot().state).toBe("waiting-for-group");
     expect(api.callCount("getChat")).toBe(0);
+  });
+});
+
+async function openPairing(api: FakeBotApi, extra: { clock?: ManualClock; ttlMs?: number } = {}): Promise<Pairing> {
+  const clock = extra.clock ?? new ManualClock();
+  const result = await Pairing.open({
+    api,
+    timers: clock,
+    now: clock.now,
+    code: CODE,
+    ...(extra.ttlMs === undefined ? {} : { ttlMs: extra.ttlMs }),
+    pollTimeoutSec: 1,
+    pollSleep: () => new Promise<void>((resolve) => setTimeout(resolve, 1)),
+  });
+  if (!result.ok) {
+    throw new Error(result.reason);
+  }
+  open.push(result.pairing);
+  return result.pairing;
+}
+
+/** The same fake, except that getChat waits until `release` is called. */
+function slowGetChat(api: FakeBotApi): { wrapped: FakeBotApi; release: () => void; entered: () => boolean } {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  const wrapped = new Proxy(api, {
+    get(target, prop) {
+      if (prop === "getChat") {
+        return async (params: { chatId: number }) => {
+          entered = true;
+          await gate;
+          return target.getChat(params);
+        };
+      }
+      const value = Reflect.get(target, prop, target) as unknown;
+      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+  return { wrapped, release, entered: () => entered };
+}
+
+describe("a bot that was added to the group before the code was sent", () => {
+  test("the paired operator's earlier event is used: no second event is needed", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await openPairing(api);
+    api.pushMyChatMember({ fromId: OPERATOR, title: "Early group" });
+    await settle();
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "ready", "the early group event to be replayed");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+    expect(pairing.snapshot().userId).toBe(OPERATOR);
+  });
+
+  test("an earlier event from somebody else is still ignored", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await openPairing(api);
+    api.pushMyChatMember({ fromId: STRANGER_ID });
+    await settle();
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "waiting-for-group", "the operator to be paired");
+    await settle();
+    expect(pairing.snapshot().state).toBe("waiting-for-group");
+    expect(api.callCount("getChat")).toBe(0);
+  });
+});
+
+describe("a pairing that has ended does not come back", () => {
+  test("cancelled while Telegram is still answering about the group: it stays cancelled", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const slow = slowGetChat(api);
+    const pairing = await openPairing(slow.wrapped);
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "waiting-for-group", "the operator to be paired");
+    api.pushMyChatMember({ fromId: OPERATOR });
+    await until(() => slow.entered(), "the group check to start");
+    const cancelling = pairing.cancel();
+    await settle();
+    expect(pairing.snapshot().state).toBe("cancelled");
+    slow.release();
+    await cancelling;
+    await settle();
+    expect(pairing.snapshot().state).toBe("cancelled");
+    expect(pairing.snapshot().chatId).toBeUndefined();
+  });
+
+  test("expired while Telegram is still answering about the group: it stays expired", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const slow = slowGetChat(api);
+    const clock = new ManualClock();
+    const pairing = await openPairing(slow.wrapped, { clock, ttlMs: 60_000 });
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "waiting-for-group", "the operator to be paired");
+    api.pushMyChatMember({ fromId: OPERATOR });
+    await until(() => slow.entered(), "the group check to start");
+    await clock.advance(61_000);
+    expect(pairing.snapshot().state).toBe("expired");
+    slow.release();
+    await settle();
+    await settle();
+    expect(pairing.snapshot().state).toBe("expired");
+    expect(pairing.snapshot().chatId).toBeUndefined();
+  });
+});
+
+describe("the group step has its own time", () => {
+  test("a code sent late in its life still leaves the whole group step", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const clock = new ManualClock();
+    const pairing = await openPairing(api, { clock, ttlMs: 60_000 });
+    await clock.advance(50_000);
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "waiting-for-group", "the operator to be paired");
+    await clock.advance(50_000);
+    expect(pairing.snapshot().state).toBe("waiting-for-group");
+    await clock.advance(20_000);
+    expect(pairing.snapshot().state).toBe("expired");
   });
 });
 

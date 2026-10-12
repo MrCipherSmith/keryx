@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-28-pr-781-round5-verdicts",
+  "mode": "ingest",
+  "status": "closed",
+  "target": {
+    "kind": "pr",
+    "ref": "ed1c3ba6cb224bac4bed982a56b5da73585913d5..22478bc0a9970324373cbe38fb5fd7e34568f64c",
+    "head": "22478bc0a9970324373cbe38fb5fd7e34568f64c"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-781-round5-verdicts/scope.md",
+    "coverage": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-781-round5-verdicts/coverage.md",
+    "report": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-781-round5-verdicts/report.md",
+    "findings": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-781-round5-verdicts/findings.json",
+    "learning": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-781-round5-verdicts/learning.md",
+    "decisions": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro/reviews/2026-09-28-pr-781-round5-verdicts/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 9,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 9,
+    "dropped_scope_b": null,
+    "dropped_findings_cap": 0,
+    "retained": 0,
+    "dismissed_by_round": null,
+    "by_reason": {
+      "refuted:verifier-refuted": 9
+    },
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      },
+      {
+        "stage": "scope_b",
+        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
+      }
+    ]
+  },
+  "cost": {
+    "input_tokens": 60000,
+    "output_tokens": 6000,
+    "spent_usd": 0.6
+  },
+  "createdAt": "2026-09-28T12:33:45.567Z",
+  "updatedAt": "2026-09-28T12:33:55.506Z",
+  "flow": {
+    "id": "355",
+    "path": ".metaproject/flows/355-2026-09-28-audit-remediation-2-security-depth-entro"
+  }
+}

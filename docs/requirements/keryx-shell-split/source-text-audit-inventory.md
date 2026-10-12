@@ -36,6 +36,15 @@ have dropped to zero read sites because their structural audits now scan
 `src/tui/**` instead of one file, which is what lets them survive P3 rather
 than be broken by it.
 
+Flow 418 (long review runs in the shell) added four more sites, all with no
+exported seam yet: `tui/busy-dispatch.test.ts` gained three (the busy `deferred`
+case pushes a slash line onto `mainQueue`, repaints and tells the user; the queue
+is drained through `runLine` as a command once the turn settles), and `tui/ctrl-c-policy.test.ts` has one (the
+renderer hands Ctrl+C to `createCtrlCPolicy`, a running turn is cancelled, the hint
+is shown). The decision logic itself is covered behaviourally in
+`ctrl-c-policy.ts` and `busy-dispatch.ts`; only the wiring inside
+`launchTuiAgentShell` is read as text.
+
 Flow 304 (`/connect`'s Test/Disconnect row buttons) added one more site:
 `tui/connect-provider-buttons.test.ts` pins that the `/connect` command
 handler's `onDisconnected` callback compares the disconnected provider's name
@@ -357,6 +366,75 @@ each call (parse, list, revoke, withheld reason, marker) is tested directly in
 `mcp-servers/approval-render.trust.test.ts` and
 `commands/agent-permission-mode.test.ts`.
 
+### Added by flow 387 (shell token economy), review r3 F-032
+
+`commands/prune-archive-wiring.test.ts` reads both god-files, three sites in all:
+the readline shell's task-notification turn and operator turn in `shell.ts`, and
+the TUI foreground turn in `tui-shell.ts`. Each pins that the `runAgentTurn` call
+passes `pruneArchive: true`. The behaviour it protects is that pruning and
+collapsing of old tool output stays on in the two hosts that keep an archive:
+dropping the flag at one site silently turns pruning off there, and the session
+grows back to the pre-flow-387 size with no failing test.
+
+The behaviour is not observable today. All three calls sit inside the REPL
+closures (`runAgentRepl`'s turn handler, `launchTuiAgentShell`'s foreground
+dispatch), and the turn options are an inline object literal, so there is no
+function to call or spy on. The conversion is a seam: extract the turn options
+the two shells pass into one exported builder (`buildShellTurnOptions`), test
+that it sets `pruneArchive`, and reduce each site to a call of the builder. The
+`/goal` and ACP pins in the same test file read neither god-file and are not
+counted.
+
+### Added by flow 397 (remote control review residuals), review of PR 867
+
+`tui/remote-queue-wiring.test.ts` reads `tui/tui-shell.ts` at one site. It counts
+how many times the shell calls each member of `createRemoteQueueWiring`'s result
+(`assistantText`, `wrapOnToolCall`, `turnStarted`, `turnSettled`, `runQueued` five
+times, the queue edit and removal members, the three Telegram host members). The
+behaviour it protects is that the shell still tells the wiring when a turn starts,
+streams text and settles: the behavioural tests in the same file drive the wiring
+directly, so deleting `remoteQueue.turnSettled(...)`, `remoteQueue.turnStarted(source)`
+or `remoteQueue.assistantText(text)` from the shell leaves all of them green while a
+Telegram-started turn is never answered or its queued lines never drain.
+
+The behaviour is not observable today: the calls sit inside `launchTuiAgentShell`'s
+foreground dispatch, which cannot be mounted in a test. The conversion is the same
+seam as the one above: when the foreground dispatch is extracted into a function the
+wiring can be mounted under, replace the counts with a test that runs a turn through
+it and observes the bridge. The guard counts call sites and pins no line number, so
+moving code does not fail it.
+
+### Added by flow 399 (topic history restore), review T-2
+
+The same file holds a second reader of `tui/tui-shell.ts`, inside the same site
+count: `flow 399 T-2` counts eight lines that join the history restore to the shell.
+They are `sessionEntryOf(opened.resumed)`, the assignment of `sessionResumed` and the
+`sessionEntered(...)` call for a resumed session, the same pair for `/new`
+(`NEW_SESSION_ENTRY`), `bridge.historyForCommand(historyArgsOf(line))` for the
+`/history` command, and the two bridge host members `history` and `sessionResumed`.
+The logic behind them is pure and tested (`remote/history-host.ts`, `remote/history.ts`,
+`remote/shell-bridge.ts`); what only the closure holds is the wiring, and deleting one
+line leaves every behavioural test green while the restore stops. The same conversion
+applies: when the session-entry and command paths of `launchTuiAgentShell` can be
+mounted, replace the counts with a test that enters a session and observes the topic.
+It pins no line number.
+
+### Added by flow 414 (interactive recovery)
+
+`tui/tui-shell.test.ts` adds one source reader for session replacement safety.
+It requires `/new` and `/resume` to invalidate foreground callbacks before
+replacing `liveSession`, clear Force handoff and pending persistence, and reject
+stale settlement before remote-queue or checkpoint effects. Behavioural recovery
+tests cover the owner and IO helpers; this audit protects their wiring inside
+the shell closure. When that closure becomes mountable, replace it with a
+session-switch test that observes those effects.
+
+The readline pruning audits in `commands/prune-archive-wiring.test.ts` now
+select the exact `runAgentTurn` calls with the TypeScript parser and check their
+archive-enabled options branch. They still require `slateSession` and literal
+`pruneArchive: true` together, without fixed character windows that unrelated
+recovery options can outgrow. The three source-reader sites are unchanged.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -368,29 +446,41 @@ Line numbers are deliberately absent. Pinning them here would reproduce, in
 the guard against fragile text assertions, the exact fragility it guards
 against. They live in the detail files, which assert nothing.
 
+`decisions/coverage.test.ts` (flow 400) is listed because it parses both god-files
+with the TypeScript compiler API to check that every picker that chooses how work
+proceeds goes through `journaledPick` with a known decision source and passes the
+dismiss id as the cancel id. It reads syntax, not offsets or counts, so a mechanical
+split that moves a picker together with its call still passes; P2 should point it at
+the new files rather than convert it.
+
 ```text
+commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-starting-line.test.ts | commands/shell.ts | 1
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
 commands/shell.test.ts | commands/shell.ts | 5
+decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2
-tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
+tui/busy-dispatch.test.ts | tui/tui-shell.ts | 4
 tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
+tui/ctrl-c-policy.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
+tui/external-operator.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
+tui/remote-queue-wiring.test.ts | tui/tui-shell.ts | 1
 tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/task-cost-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
-tui/tui-shell.test.ts | tui/tui-shell.ts | 12
+tui/tui-shell.test.ts | tui/tui-shell.ts | 13
 tui/turn-guard-shell-wiring.test.ts | tui/tui-shell.ts | 1
 ```

@@ -1,7 +1,735 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+- **The round limit of a turn follows the permission mode.** A turn was capped at 40 model rounds in every mode, and the question "Increase limit and continue / Cancel" was the one prompt `auto` still left: a review shell sat on it for about 50 minutes. The default is now 40 in `ask` (unchanged), 200 in `trust` and 200 in `auto`; `KERYX_AGENT_MAX_ROUNDS` still wins in every mode and 200 stays the ceiling. In `auto` reaching the limit never asks: below 200 the turn extends itself and prints the `[budget]` line, and at 200 it stops with a `[budget]` message that names the ceiling. In `trust` and `ask` the question stays, and a yes grants one more allotment of the mode (200 or 40). The mode is read at the start of each turn, so `/mode` takes effect on the next turn; `/mode` (readline and TUI picker) and `/help` show the limit. Subagents, which is how review waves run, follow the same rule in `auto`: default 40 rounds, a `max_rounds` request honored up to 200; in `ask` and `trust` they keep 10 and 24.
+- **Automatic review is a run mode, not a permission mode.** Naming an automatic review in a request ("run an automatic review of PR 12", "автоматическое ревью") marks that one turn: it gets the 200-round limit with no question and the same `[budget]` stop as `auto`, whatever the permission mode. `keryx review start|attach|ingest --automatic` records `manifest.automatic: true`; `review status` prints the run mode. For the package the run created, the shell approves without asking the review's own commands: `start|attach|ingest --automatic`, `status` and `complete <review>`, `ledger build`, `severity-audit`, `context-collect`, `compare-reference` and `mutate` with `--package <review>`, `retry-plan --manifest`, `scope` and `blast-radius`, and `apply_patch` inside the package directory. Pipes, `;`, redirects, another review's id or path, every other subcommand and every hard floor (destructive, credentials, untrusted content, a hook's ask, publish lease, read-only) still ask. `ask_user` is answered with its recommended option and logged, except the two emergencies (`gate-waiver` and `reduced-reviewer-set`, accepted only after `review complete` has refused) and questions tagged irreversible or with a review `policy`, which go to the host (arbiter or operator). A count of manual and automatic inputs is written to `automatic-run-inputs.json` in the package. There is no way around the completion gate.
+
+### Review of PR 939 (flow 417 follow-up)
+
+- `classifyRoundNeed` is one rule, not a list of names. Prose is README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY and CODE_OF_CONDUCT at the top level; and a `.md`, `.rst` or `.adoc` file (`.mdx` is code: MDX executes JavaScript at site build) under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow `journal.md` whose name holds a lowercase letter (all-uppercase names such as `AGENT.md`, `WARP.md`, `CONTEXT.md` are steering by convention). Everything else needs a round: a directory named, singular or plural, agent, skill, command, rule, prompt, instruction, persona, steering or hook; any dot-segment; names starting `SKILL`, `AGENT`, `CLAUDE`, `GEMINI`, `QWEN`, `CODEX`, `WARP`, `CRUSH`, `JULES`, `KNOWLEDGE`, `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending `.local`, `.override`, `.instructions`, `.prompt`, `.agent` or `.chatmode`, or containing `prompt`, `instruction` or `system`; and a flow's `description.md`, `acceptance-criteria.md` and `tasks/` (gate inputs). `coverage/` and `__generated__/` skip only for lcov, info and map; json, txt, html and md there are code, which retires the agent-loaded-JSON special case. A path with `..`, a backslash, a leading `./` or `//` always needs a round. A generated path table and a table derived from the exported token lists pin this.
+- The review-orchestrator preflight lists changed files with `git diff --name-status --no-renames <base>...HEAD`, so a rename into `docs/` shows both paths. The preflight prose and `docs/docs/guides/review-with-a-record.md` state the round-skip rule and `cli-reference.md` states the caps; the module exports its token lists (steering directories, steering stems, suffixes and words, prose names, doc and generated extensions) and a test requires the preflight prose to contain each one and the function to agree with it. A docs test interpolates `MAX_RETRY_AFTER_SECONDS`, `MAX_REVIEWERS_PER_WAVE_FULL` and `REVIEW_ROUND_CAP` into the phrases in `cli-reference.md` and the guide. The flow, job and autodoc orchestrator skills are parity-tested between `src/gdskills/bundled` and `.metaproject`.
+- `classifyRoundNeed` is the tested reference of the round-skip rule; the skill prose is what the host executes, and no CLI command calls the function yet. The module header and the guide say so. The `holdsAcrossNesting` / `holds_across_nesting` key name is historical: it reports whether the cap held against the declared `--outstanding` count. The review-orchestrator skill keeps its 1616-line ceiling.
+- The four orchestrator skills name the spawn tool as `Agent`, `spawn_subagent` or the host's equivalent, and the preflight test pins the phrase. `review-orchestrator` path mode lists files with a form that returns a complete plain path list, its "Done when" line applies to managed rounds only, and a bare `STATUS: RATE_LIMITED` follows the rate-limit rule instead of `BLOCKED`.
+- `keryx review budget` help documents `--full` and no longer describes the retired job -> flow -> review nesting. `orchestratorToolProblems` reports nothing on hosts without nested spawn. `retry-after` is capped at 300 seconds.
+- Wording that still described the retired nested model is gone from the docs, `caps.ts`, `types.ts`, the flow, job and review orchestrator skills (both copies) and the job prompt: `review-orchestrator` runs inline in the main session, `--outstanding` is the number of subagents that session still has running, and the wave ceiling is 10 (`--parallel` replaces it without `--full`; with `--full` it can only lower it). The `review budget` flag table lists `--full`, and a drift test keeps the retired phrases out.
+- `autodoc-orchestrator` joins the orchestrators the inline note and `ORCHESTRATOR_AGENT_NAMES` list, so the generated managed block, routing and catalog text name four.
+
+### Review depth (flow 430)
+
+- `keryx review retry-plan` and `ledger build` read a reviewer's `slices` as ids or as objects with an `id`. A reviewer that listed every assigned slice as objects is no longer retired as `not-run`. An object whose `status` is not done (anything but DONE, COMPLETE, COVERED, OK, or none) leaves its slice uncovered; entries with no usable id are ignored. Both are reported by count in the plan's reason and in the ledger gap, with the affected ids for a status.
+- The reviewer output schema defines `slices`, and the review-orchestrator skill asks reviewers for it and documents `drivers/<reviewer>.json` (`reviewer`, `slices`, `result`, `definition`). `ledger build` also resolves the rule file from `skill_path`, top level or inside `payload`.
+- `ledger build` names a file in `raw/` that is not a reviewer reply (no `REVIEW_RESULT` block, not named by a driver, not named after a dispatched or required reviewer) as `set aside` instead of demanding a result from it. The file is left in place and listed in `research.json` under `setAside`. A driver whose `slices` holds an entry with no usable id is reported as a gap.
+
+## [0.3.112] - 2026-10-12
+
+### Review depth
+
+- A managed review round dispatches every applicable reviewer by default (`mode all`). A diff-only dispatch needs the operator's own words recorded in the dispatch record; an unattended run always uses `all`.
+- Project reviewer path globs are derived from the project's description, and a trailing `/**` matches the files under it. `review-regression` is required exactly when a blast radius was computed for the package.
+- `keryx review mutate` runs the proposed mutants in a scratch copy and records the table. `keryx review complete` refuses an attended round that still has runnable mutants unrun, unless the dispatch record carries a waiver with the operator's quote.
+- `keryx review severity-audit` raises a finding that cites a surviving mutant on a changed file from a low severity to major; a cited mutant no run executed is labelled `unproven`. It never deletes a finding.
+- `keryx review context-collect` gathers the pull request's description, linked issues and comments for the reviewers. `keryx review compare-reference` classifies a reference report's items against a package.
+- `/reviews` has a "Review depth" tab, and the readline `/reviews` prints the same block: mode, reviewers dispatched against required, excluded reviewers with the reason, and the mutation tally.
+
+### Agent Runtime
+
+- Native `spawn_subagent` reservations now honor `timeout_ms` or `runtime.kind: "keryx"` with `timeoutMs`, bounded by the operator timeout, instead of always reserving the default child deadline.
+- A non-mutating preflight reports budget availability and child capabilities without reserving budget or starting a child. It is a snapshot, not a guarantee that a later spawn will succeed; shell and nested dispatch remain unavailable to native children.
+- One integrated end-to-end regression exercises refusal, a smaller reservation, preflight immutability, operator limits, reservation release and a native child tool call. Its model transport is scripted, not a live-provider review.
+- AC9 remains open: these runtime checks do not establish complete or higher-quality live review coverage.
+
+## [0.3.111] - 2026-10-12
+
+### Remote control
+
+- Every approval, `ask_user` question and queue dialog the shell raises is mirrored to the Telegram topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other exactly once (`prompt-close`).
+- An unanswered question gets a reminder in the topic every 2 minutes, at most 3 times.
+- `/route` is on the topic menu (`/route on|off` ask first). `/route`, `/external`, `/external-agents` and `/model` are queued with a notice while main is busy and run when it goes idle, instead of being refused. `/mode` takes effect at once.
+- Progress notes in the topic at subagent wave boundaries and after tool-heavy stretches, at most one a minute: counts, tool names and labels only, never tool output. A short status question ("how is it going?") is answered from session state while the turn runs.
+- Closing the shell archives the topic (closing note, topic and history stay readable) instead of deleting it; a killed shell is archived after the orphan window. Only channel Disconnect deletes topics.
+
+## [0.3.110] - 2026-10-11
+
+### Review
+
+- Bind ledger coverage to the assigned dispatch slices instead of combining unrelated reviewer payloads. Ambiguous results cannot close unreviewed slices.
+- Bind retry state to the current slice manifest and payload identity; changed inputs cannot inherit stale coverage. A `DONE` result with open `needs_context` remains incomplete.
+- Share tolerant result parsing between ledger and retry handling, including bare JSON and prose containing JSON.
+- Include current option IDs in the arbiter cache identity and track nested artifact content changes in the completion watchdog.
+- Add regression and deterministic lifecycle tests without model calls. These checks do not claim a successful live autonomous review.
+
+### Shell
+
+- Check remembered refusals before automatic write/delegate approval. Review-auto questions involving safety floors or untrusted content return to the operator instead of selecting an automatic answer.
+
+## [0.3.109] - 2026-10-11
+
+### Review
+
+- An autonomous review no longer hands its orchestration to a subagent: the prompt now keeps the ledger, ingest and complete in the main session and says a subagent has no shell (`nested_dispatch_unavailable`). A live run on a large pull request had delegated the whole review to a subagent, spent 200 rounds, and ended with no reviewer started.
+
+## [0.3.108] - 2026-10-11
+
+### Review
+
+- A review arbiter answers policy questions in `review-auto` and in autonomous runs, in place of the word heuristic. It is a sub-agent with no shell, write or network access, it judges numeric and boolean facts about the recommended option (six closed question kinds: `scope`, `budget`, `option_choice`, `partial_coverage`, `smaller_slice`, `slice_order`) against numbered rules in a versioned file (`src/review/arbiter-rules.json`, verdicts `allow`, `deny`, `escalate`), and keryx re-checks the rule it cites. The prompt is built from validated fields only. Invalid output, a timeout, a model error, a cap hit or an unknown kind is an `escalate`: a person in `review-auto`, a refusal plus a journal line in an autonomous run. Floor-class calls are never sent to it. In `ask` mode the person is asked.
+- `.metaproject/review/arbiter-rules.json` replaces the bundled rules for a project; an invalid file makes every question escalate. `review.arbiter` in `tasks.config.json` sets `enabled`, `tier` (`light` or `standard`, a step below the flagship), an optional `provider/model` pin, `callCap` (default 20) and `timeoutMs` (default 20000). GPT-6 Astra is refused by name.
+- Every question writes a line to `arbiter.log` (kind, facts, verdict, rule, model, cost, rules version and hash); an identical question in a run is answered from a cache. An autonomous run copies the log into its review package. `/autoreview arbiter` lists the log in `keryx shell`, the run's sidebar section shows the counts, and a run stopped by an escalate sends one more Telegram line. An eval set (26 fixtures, at least 95% agreement) and an adversarial set (28 cases, all `deny` or `escalate`) run in CI. Guide: "Let the review arbiter answer policy questions".
+
+## [0.3.107] - 2026-10-11
+
+### Review
+
+- `keryx review run --autonomous --target pr --ref <pull request URL>` reviews a pull request with nobody at the keyboard, in the new `review-autonomous` profile (`trust` mode under `review-auto`, source only, no terminal needed). Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused. `--budget-minutes`, `--budget-tokens` and `--stall-minutes` (default 10) bound the run; a model question is answered by the recorded safe default (the recommended option, else the first; an irreversible one is refused).
+- A run leaves `summary.json` and `report.md` in `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. A lock stops two runs on one pull request; a re-run on a head already reviewed to the end reuses the result, and one on a head left open resumes its package.
+- `keryx schedule add --review-pr <URL>` schedules the same review on the OS timer (systemd, launchd or cron); `keryx trigger schedule <name>` prints the cron line and unit pair. The run's report is copied to `.metaproject/data/trigger/reports/<name>/`.
+- In `keryx shell`, `/autoreview start|list|stop` runs and watches reviews, a sidebar section shows the phase, rounds and tokens of each, and `keryx serve` sends one Telegram line at the start and one at the end. Guide: "Review a pull request with nobody at the keyboard".
+
+## [0.3.106] - 2026-10-11
+
+### Flow Governance
+- Acceptance criteria are written with a verification kind. The scaffold from `flow init` shows `[verify: <exec|invariant|judged|none>]` on each criterion and states the marker rule, the flow-init and flow-orchestrator skills require a marker on every criterion (one operator question before the freeze when a kind is unclear), and flows that `/goal --auto` provisions carry `[verify: judged]`.
+- `keryx flow freeze` warns `no verification kind on AC1, AC2` for unclassified criteria. On a terminal it asks `freeze without a verification kind on …? [Y/n]`: an empty answer or yes freezes, and only an explicit no cancels and leaves the flow unchanged. `--yes` or `KERYX_NONINTERACTIVE=1` skips the prompt; non-interactive runs always freeze. Nothing is asked when the freeze cannot happen. Both freeze cases append a journal line. A kind still gates nothing.
+- `keryx research sync` and `sync-status.md` report the unclassified share of criteria among flows frozen in the last 7 days, with a warning above 20%.
+- `exec` and `invariant` verification markers take an optional sensitivity note, `[verify: exec \`<command>\` · sensitive: revert]` (an ASCII `;` also separates), with the values `revert`, `mutation` and `failure-scenario`; `judged` and `none` reject it. `keryx flow ac kinds` shows how many criteria carry it, `keryx flow ac confirm` warns (and still confirms) when a criterion carries the note and `--note` has no `evidence: <ref>` label (a non-empty reference up to the next `;`, not `n/a`, `na`, `none`, `-`, `tbd`, `todo`, `ref` or the `<ref>` template; surrounding punctuation is ignored), and `sync-status.md` gains a sensitivity share line with no threshold. The flow-init and flow-orchestrator skills ask for a failure-scenario criterion on behaviour with an external dependency or a failure path.
+
+### Shell
+
+- Fewer approval prompts in `trust` and `review-auto`. One table (`TRUST_ROUTINE_KEYRYX`) lists the read-only keryx commands (`help`, `<command> --help`, `harness list|status`, `agents external list --no-probe`, `review …`, `flow status|list|check|next`, `gdgraph …`, `ctx rg|read|diff`) and the `slate_note` and `slate_trail` tools that run with no prompt even after untrusted content. A command outside the table, or one that chains with `;`, pipes to an unlisted command, redirects outside the working tree or uses a subshell, still asks. Destructive, credential, publish-lease, hook-ask and human-confirmation calls are unchanged.
+- In `review-auto`, a refused call is remembered by its normalized fingerprint: the same call in any spelling is answered "refused earlier: choose another path" with no modal, until the shell restarts.
+- Every approval modal, the readline prompt and the Telegram relay carry one `why:` line from a closed set (`destructive`, `credentials`, `publish`, `hook-ask`, `untrusted-content`, `not-in-routine-list`, `mode-ask`).
+- A message queued while a turn runs shows its state and why it waits ("waits for the current turn", "waits for approval of: <call>"); `/queue` lists the same text, and one line explains `[Force]`.
+
+## [0.3.105] - 2026-10-11
+
+### Review
+
+- `keryx review retry-plan` counts a retry by progress, not by attempts: a result that covers a new slice does not spend the reviewer's attempt, two results in a row that cover nothing new (or six failed rounds) make it `not-run`. `--next-wave` hands out the next wave of only the uncovered slices; a stalled result halves the wave and re-cuts the open slices.
+- `keryx review slice --wave-bytes` (default 60000, never below `--max-bytes`) sets the size of a dispatch wave; `dispatch-check` enforces it instead of the slice ceiling. `ledger build` reports the waves left and the exact `retry-plan --next-wave` command.
+- The operator's own-quote override for a smaller reviewer set is unchanged.
+
+### Shell
+
+- In `--review-system review-auto`, an action the operator refused stays refused: the same call is declined without a new question, and an `ask_user` menu about permission is sent to the operator instead of taking its recommended option.
+
+## [0.3.104] - 2026-10-10
+
+### Review
+
+- `keryx review ledger build <input-dir> --package <review-dir>` writes the `research.json` that `review ingest --research` and `review complete` demand, from the saved reviewer results, `scope-files.json`, the slice manifest and the retry state. A reviewer is complete only when its result is finished and its payloads cover the slices its path gate requires; `NEEDS_CONTEXT`, `BLOCKED`, `INCOMPLETE`, missing slices and no result stay incomplete or `not-run`, each with the exact `retry-plan` command. Raw findings become obligations closed only by a matching canonical finding or a `--dispositions` entry with evidence and a reason. It prints READY or NOT READY with every gap, using the gate's own validators, and exits 1 when not ready.
+- `NEEDS_CONTEXT` (or an open `needs_context` list) is no longer treated as a finished scope: `review retry-plan` answers `context` once with the questions, then `not-run`.
+- The review-orchestrator skill and the completion gate's next step point at `ledger build` instead of a hand-written ledger.
+
+## [0.3.103] - 2026-10-10
+
+### Review
+
+- `keryx shell --review-system review-auto` (or a line such as "сделай автоматическое ревью" / "run an automatic review", or `KERYX_REVIEW_SYSTEM=review-auto`) makes a review run answer its own approval questions: reviewer spawns, including those that follow untrusted external content, and `ask_user` menus. The default `inherit` keeps today's behaviour, where the permission mode decides and `--trust` asks only occasionally. Destructive commands, credential access, publish leases, hook-tightened calls and every non-spawn call that follows untrusted content still ask the human. Only the operator's own top-level line can switch it on; a subagent's task text and non-operator turns cannot. Each automatic answer is recorded as an auto-approval.
+
+## [0.3.102] - 2026-10-10
+
+### Agent Runtime
+
+- `KERYX_PHASE_TRACE=<file>` appends one timestamped line per turn phase (model request start, tool dispatch, tool returned, result shown, output spilled, `spawn_subagent` backstop and watchdog stage changes). A live review hung with no archive trace and neither the 8 minute backstop nor the 12 minute watchdog answering; the trace says which phase a stuck turn was in. Unset, it costs nothing.
+- The call watchdog now answers the call before it aborts the inner signal, and a throwing abort listener can no longer keep it from answering.
+
+## [0.3.101] - 2026-10-10
+
+### Agent Runtime
+
+- A `spawn_subagent` call is bounded as a whole by a harness watchdog (12 minutes, `KERYX_SPAWN_CALL_WATCHDOG_MS`, 0 disables). The 0.3.100 backstop only covered the tool's own `invoke()`; a live review hung 90 minutes outside it, in the pre/post-tool hooks, the approval step or the rewind snapshot, and a parent turn archives nothing until every call of the batch answers. A stalled call now returns an error that names the stage it was stuck in, and the clock stands still while a human is deciding on an approval.
+- Esc on a `spawn_subagent` call that ignores the abort signal answers the call after a 10 second grace instead of leaving the session unrecoverable.
+
+## [0.3.100] - 2026-10-10
+
+### Review Process
+
+- `keryx review dispatch-check` works from an npm install. It looked for `reviewer-input.schema.json` (and the `$ref` targets of the review contracts) next to `dist/`, while the package carries them under `src/gdskills/`; a live review had to build its own copy of the CLI to get past "reviewer-input.schema.json is not in this install".
+- `KERYX_REVIEW_AUTO_ANSWER=1` now also answers the plan-confirmation menus that come before `keryx review start` opens a package; before, the run waited for a key press there.
+
+### Agent Runtime
+
+- `spawn_subagent` has a harness backstop on the whole call: the child deadline plus three minutes for setup, hooks and cleanup. A call that does not return by then is answered with a Timeout result and its child is aborted, so the parent turn goes on. A live review run had a retry batch hang for 85 minutes after its children had finished and saved their results.
+
+## [0.3.99] - 2026-10-10
+
+### Review Process
+
+- The shell's completion gate now also holds a package that `keryx review ingest --review-id` flipped to `mode: ingest` while it is still a draft from this session. Before, the flip made the gate see no open package and accept a stop with `review complete` still refusing.
+- `dispatch` errors for an incomplete reviewer and for required execution without evidence now say what to do (`keryx review retry-plan`; `executionRequired: false` with an `executionReason` for a source-only run) instead of only naming the failure.
+- `KERYX_REVIEW_AUTO_ANSWER=1` answers the shell's own `ask_user` menus with the recommended option while a managed review package is open, so an unattended live review cannot park on a menu before `review complete`. An irreversible question is never auto-answered.
+
+## [0.3.98] - 2026-10-10
+
+### Providers
+
+- The OpenAI Responses provider (and openai-codex on top of it) now has a deadline while waiting for response headers. The first-byte and idle deadlines covered only the body, so a server that accepted the connection and never answered held the request open indefinitely, and a subagent or the shell sat in "waiting" with no error. The wait ends with one retryable `unavailable` error after the first-byte limit; an operator abort still ends as `cancelled`.
+
+### Review Process
+
+- `keryx review tier` now merges the live Codex model list like the shell does. Without it the CLI saw only the stale curated stub, so tier resolution fell back to the session model for most reviewers.
+
+## [0.3.97] - 2026-10-10
+
+### Models
+
+- `spawn_subagent` and routing now see the live Codex model list (gpt-6.1-sol, gpt-6-luna) instead of the stale curated stub. The shell fetches `/models` once at start and merges it over the `openai-codex` entry; a failed fetch keeps the curated list.
+- Tier ranking knows the Codex codenames: built-in pins rank `gpt-6*-sol` deep and `gpt-6*-luna` light (other vendors' codenames stay unrankable). Models pinned with `keryx routing profile set <provider>/<model> --tier ...` override the built-ins, and a session-fallback tier now says why in the fleet log.
+- GPT-6 Astra is on a hard denylist: it is never a tier candidate and a routing assignment naming it counts as not connected.
+
+### Review Process
+
+- The `review-orchestrator` skill passes `model_tier` on every reviewer `spawn_subagent` call (verifier and simple reviewers `light`, normal `standard`, complex `deep`); an omitted tier ran the child on the session model.
+
+## [0.3.96] - 2026-10-10
+
+### Shell
+
+- The managed-review completion gate also holds the turn when the repeated-call guard ends it. Live run 10 stopped through the no-progress branch, which skipped the text-only gate, so a review with an open package ended with "resend the request". Both stop points now share one check (`holdReviewGate`), and the continuation says that a tool loop guard or an empty child result is not a reason to ask the operator to resend or continue: change the arguments, retry the failed pass on a smaller slice, keep going. Unattended runs and subagents are not held.
+
+## [0.3.94] - 2026-10-10
+
+### Shell
+
+- A managed review run in the shell is no longer finished by the model stopping. Once the session has loaded `review-orchestrator` (or run a `keryx review` command), a text-only finish is not accepted until `keryx review complete` has closed a package: with no package yet the harness says `review start` has not opened one, with an open package it injects the refusal reasons (missing artifacts, research ledger and dispatch errors). The continuation names the next required step, says Step 1 of review-orchestrator is a prose step with no command and that a refused `keryx review` command is not a blocker, prints a `[review-gate]` line in the pane and continues. It stops after 20 continues or three in a row that added no artifact, and reports the state. A blocked plan item no longer ends the gate (flow 421).
+- `plan_get`, `slate_trail` and `recall_step` are exempt from the repeated-call guard: three identical `plan_get` calls ended a live review run.
+
+### Review Process
+
+- The `review-orchestrator` skill says Step 1 (Build Review Context Pack) has no CLI command. The read-only check of what `review complete` would refuse on is now a function the shell calls (`reviewCompletionBlockers`).
+
+## [0.3.93] - 2026-10-10
+
+### Review Process
+
+- `keryx review --help` lists every flag `attach`, `start` and `ingest` accept, including `--research <ledger.json>`, `--review-id` and `--tokens-in/--tokens-out`. The usage block omitted `--research`, and a shell model that read it concluded the flag did not exist, never supplied the research ledger and was refused by `review complete` (flow 420). A test pins the help to the parser's flag list.
+
+## [0.3.92] - 2026-10-10
+
+### Shell
+
+- The shell's system instruction tells the model that a skill the user names ("use review-orchestrator") is loaded with `skill_load` as the first tool call, before any `keryx` command, and that a subcommand which only opens a draft (`keryx review start`) is one step of that workflow, not the workflow. A live review run had listed the skills, run `review start`, and reported the task finished without ever reading the skill (flow 420).
+
+## [0.3.91] - 2026-10-10
+
+### Review Process
+
+- `keryx review start --report <path>` opens the round when the report file or its directory does not exist yet (it used to fail with `ENOENT`, and a shell model that read that as a blocker stopped the review after 24 seconds). `ingest` still requires an existing report (flow 420).
+
+## [0.3.90] - 2026-10-09
+
+### Shell
+
+- `spawn_subagent` takes `save_result_to`: a project-relative path where the host writes the child's full final text. The text no longer exists only in a transcript that gets cut, so a review can hand the raw reviewer output to `keryx review complete`. Native children only; the path is confined to the project, symlink escapes, `.env*`, key files and `.git` are refused before the child starts, and an existing target must be a regular file.
+
+### Review Process
+
+- `review-orchestrator` on a shell host saves every reviewer result with `save_result_to`, builds `research.json` (ledger plus `dispatch` evidence) from those files, ingests it once with `--research`, and treats a refused `review complete` as a command to fix rather than a reason to stop (flow 420).
+
+## [0.3.89] - 2026-10-09
+
+### Review Process
+
+- On a shell host `review-orchestrator` publishes its checklist as the first action, so the shell keeps the turn going instead of ending it on a text reply; it also writes `keryx review scope` output to a file instead of printing hundreds of KB, takes the base from `origin/HEAD`, and treats a missing `.metaproject/data/review/` as a command to run (flow 420).
+
+## [0.3.88] - 2026-10-09
+
+### Shell
+
+- A turn can start up to 16 subagents at once and 32 in total (it was 6 at once: the 30-minute runtime pool divided by the 5-minute reservation, so reviewers 7 to 12 were refused with `budget inheritance denied`). The runtime pool is now 80 minutes, so a turn's worst-case spend is larger than before.
+- `spawn_subagent` takes `context_files`: project-relative files (review slices) the host copies into the child's task. A read-only child can no longer be left without the text it must review, and the dispatcher no longer retypes a 150 KB slice for every reviewer. Native children only; `.env*`, key files and `.git` are refused; the file text goes to the child's prompt, not to fleet events, hooks or the artifact hash.
+
+### Review Process
+
+- `review-orchestrator` passes slices through `context_files`, treats an `auto` or `trust` shell session as unattended for the start questions, and tells a reviewer to keep at least 40 rounds (flow 420).
+
+## [0.3.87] - 2026-10-09
+
+### Shell
+
+- In `trust` mode a turn may use 200 tool rounds (40 in `ask` and `auto`); the limit follows the mode at the start of the turn and `KERYX_AGENT_MAX_ROUNDS` still overrides it. Subagents get 40 rounds by default and up to 200, and a wave runs up to 10 of them at once instead of 3 (flow 418).
+- In `trust`, routine commands (`keryx review`, `keryx ctx rg|read|diff|run --`, read-only `flow`/`gdgraph`/`git`, `bun test`, chained with `cd`) no longer ask for approval after the turn read untrusted content; destructive, credential, SAC and publish commands still ask.
+- A turn with open plan items continues on its own in `trust` (at most 8 times in a row), and answers to questions the agent asks are kept in the session slate instead of being asked again.
+- A slash command typed while a turn runs is queued (`queued as qN`) and runs when the turn ends, instead of being dropped; `/new`, `/clear` and `/resume` are refused while busy.
+- Ctrl+C cancels the running turn; at an idle prompt a second Ctrl+C within 2 seconds exits, and `/exit` always does.
+
+### Review Process
+
+- `keryx review slice` cuts a large diff by domain into slices of at most 150 KB with a manifest, and leaves data ledgers, lockfiles, snapshots and generated files out, listing them as omissions. `keryx review dispatch-check` refuses a reviewer payload without a slice assignment before it is sent, and `keryx review retry-plan` retries an INCOMPLETE or BLOCKED reviewer once on a smaller slice, then reports it as not run. `review-orchestrator` has a shell-host section that uses them.
+- `keryx ctx run --raw -- <cmd>` passes the command output through unchanged, for machine artifacts; the read tool's error for a path outside the working directory names the cause and the alternative.
+
+## [0.3.86] - 2026-10-09
+
+### Review Process
+
+- `review-orchestrator`, `flow-orchestrator` and `job-orchestrator` open with a preflight: the agent that loads the skill is the orchestrator and runs inline in the main session; without the `Agent` tool or with the nesting depth spent, the output is the single line `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`. The `SUBAGENT-STOP` block is gone (flow 417).
+- A diff that only touches docs, lockfiles or generated files ends in `round not needed: <reason>` and launches no reviewer; `--all` forces a round. The default profile is read-only; `--fix` hands findings to `flow-orchestrator` or `task-implementer` and each re-review counts toward `REVIEW_ROUND_CAP`.
+- Reviewer waves are split by diff domain, at most 10 reviewers per wave for `--all`; `DEFAULT_MAX_PARALLEL_REVIEWERS` (4) is replaced by that rule. `STATUS: RATE_LIMITED` halves the wave at most twice, then `BLOCKED rate_limited`. `keryx review budget` gains `--full`.
+- The exported agent vocabulary can express the spawn tool, and an orchestrating agent keeps it. The managed block, `catalog.md` and `routing.md` say the orchestrators run in the main session.
+- Skill hygiene: dead schema reference, double step numbering and a raw `find` fixed; the `review-orchestrator` ceiling drops from 1712 to 1615 lines.
+
+## [0.3.85] - 2026-10-09
+
+Range: `v0.3.84..3c4d68f6` plus the release version and notes.
+
+### Review Process
+
+- Managed review completion and flow gates validate research and dispatch evidence, including scope census, unresolved research obligations and raw-to-canonical reconciliation. A closed round is revalidated rather than trusted solely by its closed status (PR #915, flow 405).
+- Review CLI, schemas and orchestrator instructions carry the research/dispatch contract; successful test fixtures provide explicitly synthetic evidence, while missing-ledger and post-close tampering remain negative cases.
+
+### Tests and Reliability
+
+- Add contract regressions and stabilize asynchronous fixture cleanup, injected clocks, review artifact paths, skill projections and bus heartbeat fixtures without weakening production review gates.
+- The final PR HEAD passed GitHub CI: AC8 full suite at 5000 ms with preload, 30,263 passed, 47 skipped, zero failed; core gate, 21,062 passed, 13 skipped, zero failed.
+
+### Known Limitation
+
+- **AC9 remains open.** These changes improve enforcement and evidence accounting; they do not establish improved first-round defect detection. Blind-review evaluations still missed substantial reference findings, and a live evaluation after updating is pending. This release does not claim review-completeness acceptance.
+
+## [0.3.84] - 2026-10-09
+
+Range: `v0.3.83..87dd2c8d` plus the release version and notes.
+
+### Features
+
+- `keryx skills import` and `keryx skills update` copy a package's `templates/` files next to its `SKILL.md`, under the same security gate and symlink containment as the rest of the import; `keryx skills remove` deletes them with the package. A package that ships a report overlay now carries it into the project, so a skill no longer reads the overlay from the source repository. The JSON result gains a `templates` field (PR #935, flow 416).
+
+## [0.3.83] - 2026-10-09
+
+Range: `v0.3.82..d31ee742` plus the release version and notes.
+
+### Documentation
+
+- The review-orchestrator report is posted as the body of one formal PR review (Request changes, Approve or Comment by the verdict) instead of a comment; a merged or closed PR still gets a plain comment. On the reviewer's own PR, where GitHub rejects Request changes and Approve, the review falls back to Comment (PR #933).
+- The report template gains overlay slots (`pre-verdict`, `after-verdict`, `verified-clean`, `how-run`) so a project overlay can extend the report without reordering base sections; finding links point at the reviewed head SHA and finding ids stay stable across rounds.
+- job-orchestrator wording follows: the published report is a PR review.
+
+## [0.3.82] - 2026-10-08
+
+Range: `v0.3.81..3743ee29` plus the release version and notes.
+
+### Bug Fixes
+
+- `keryx init` and `keryx update` create the core and data directories that `modules.sac` declares, so a fresh install no longer lists directories that do not exist (PR #931).
+- A wiki page's Version and changelog stay monotonic across `wiki restore --run` followed by `collect`, and a duplicated Reference heading is no longer produced.
+- Module wiki pages link only to modules that have a page: neighbours past the page limit are named as code paths, and relative links in README excerpts resolve against the README directory instead of the wiki folder.
+
+### Tests
+
+- Add regressions for the sac directories, page version/changelog order after restore and collect, and module and README links.
+
+## [0.3.81] - 2026-10-08
+
+Range: `v0.3.80..c87d3e58` plus the release version and notes.
+
+### Bug Fixes
+
+- `keryx sync --apply` no longer prunes wiki pages of modules that still exist: orphan pruning now checks every module in the graph instead of the top 500 by file count, and prunes nothing when the graph is unavailable or empty; the page of a module that shrank below the two-file page minimum is still pruned, since collect no longer refreshes it (PR #930).
+
+### Tests
+
+- Add regressions for a graph with more modules than the collect limit and for pruning without a graph.
+
+## [0.3.80] - 2026-10-08
+
+Range: `v0.3.79..3701acf515bce0f6ab27e9cd4962e4e41d61c35d` plus the release version and notes.
+
+### Bug Fixes
+
+- Recover the same interactive shell turn automatically after transient provider failures and broken streams, in readline and TUI (flow 414, PR #926).
+- Preserve completed tool results, approvals and budgets across bounded retries; display cancellable backoff instead of requiring a new user message.
+- Retry interrupted transport reads across provider adapters; keep permanent authentication and access failures, including generic HTTP 403, non-retryable.
+
+### Tests
+
+- Add recovery, stream-interruption, cancellation and session-lifecycle regressions; align source audits with recovery exception boundaries.
+
+
+## [0.3.79] - 2026-10-08
+
+### Routing and Test Reliability
+
+- Include the routing catalog and classifier source fixes from PR923, with Unicode scalar boundary handling for email PII detection and runtime-compatible regression expectations.
+- Bound asynchronous digest fixture repository setup and restore the test environment on setup failure (PR924), reducing intermittent beforeEach timeouts.
+- Combined release includes PR922, PR923 and PR924. Shell provider auto-recovery from flow 414 is not included.
+
+### Bug Fixes
+
+- Bound mounted completed TUI history to 256 unprotected top-level elements, destroying evicted views while preserving active streaming, focused elements and the on-disk session archive. Evicted history is no longer available by scrolling in the current TUI; a notice marks the trimmed history.
+- Restore composer focus after busy-agent Main/Side choices without stealing focus from newer menus or modals; preserve user scrolling during history eviction and destroy detached streaming containers.
+
+### Verification
+
+- Flow 413: 150 focused tests, TypeScript checks and an independent static review. Streaming PTY checks delivered all 120 input probes and verified Main/Side delivery and subsequent typing.
+- At 4,000 synthetic history messages, mounted UI nodes decreased from 22,093 to 795 and median input latency from 145.4 ms to 25.5 ms. Rare long stalls remain (730.7 ms maximum in the verification run); this is not a guarantee of stall-free input.
+
+## [0.3.78] - 2026-10-08
+
+Range: `v0.3.77..99385ae9f0c96c9fd875a8324fad97d174b3a6e8` (all changes since the last published release).
+
+### Summary
+
+- Routing assignments remain effective across `/model` changes; classifier selection enforces external policy and supports JEV/fallback with shared cancellation and deadline handling.
+- PII detection fixes separator, glue, Unicode, IBAN, phone and SSN misses, reduces false positives, and makes long-input scanning linear.
+- Generated digest report locators remain usable without relaxing redaction of surrounding status text.
+- Dependency security updates, deterministic regression fixtures, full-check diagnostics and bounded APT waits improve release reliability.
+
+### Bug Fixes
+
+- fix(ci): bound APT transport and installation waits (`ea7a480f4f1d`).
+- fix: route digest security imports through facade and render Esc test frames (`3481ea659899`).
+- fix(scheduler): preserve generated digest report locators (`c59edc7da9d3`).
+- fix(routing): enforce external policy before classifier selection (`e7e8586f74fe`).
+- fix(ci): stabilize routing flow regression gates (`290591c7b553`).
+- fix(security): close PII detector separator and glue misses (flow 412) (`09674039104d`).
+- fix(pii): satisfy noUncheckedIndexedAccess in the phone scanner (`a751b1de8ad8`).
+- fix(pii): remove unused countDigits left by the guard removal (`826bc71a3a64`).
+- fix(pii): report a phone before a list marker, stop the rescan inventing phones (`0996c33f3509`).
+- fix(routing): preserve assignments across model changes (flow 411) (`054fcd63d0b9`).
+- fix(pii): report an SSN joined to a hash, keep only UUID-internal suppression (`dd1258bba269`).
+- fix(pii): close the residual detector findings (iban, phone, ssn, unicode) (`78a69c94d365`).
+- fix(pii): close six round-4 findings in the ssn identifier guard (`6ab3b73b6b5a`).
+- fix(pii): avoid a control character in the ascii-only regex (`f6068a19dd36`).
+- fix(pii): fold the label window per code point and widen the invisible set (`37d19f1caafb`).
+- fix(pii): normalise the label window and close the remaining label gaps (`3aa5b61cde2e`).
+- fix(pii): suppress ssn only next to 32/40/64-char hashes, widen the label veto (`bf0ce9dce65a`).
+- fix(security): veto pii.ssn suppression on a trailing label, drop dead branches (`1280d3b29d19`).
+- fix(security): drop unused ALNUM_CHAR constant in pii.ssn guard (`9cb8ddc365bd`).
+- fix(security): tighten pii.ssn identifier-fragment guard (`7078e6c9d991`).
+- fix(security): give pii.ssn the phone rule's identifier-fragment guard (flow 261) (`07b86da14c2c`).
+
+### Documentation
+
+- docs(flow411): publish final 212f55f gates and review evidence (`00ab6425f3bb`).
+- docs(flow411): record draft PR and full CI blockers (`3e722231bc65`).
+- docs(flow): record poll 99 scope decisions for flows 409 and 410 (`3af9948daa9a`).
+
+### Tests
+
+- test(core): pin added security facade exports (`212f55f14707`).
+- test(pii): cover list-marker phones, rescan false positives and span coalescing (`ad89dcb671c3`).
+- test(intake): pin the clock in setupIntakeEnv so cards do not expire with the date (`0fd5e4e52183`).
+- test(pii): cover the residual findings and make the linear-time gate robust (`d6305b706ed7`).
+- test(pii): make the ssn truncation guard test able to fail (`fefa7eae76ed`).
+- test(security): pin SSN label window bounds (flow 261) (`19321fa3b6e0`).
+
+### Maintenance
+
+- chore(flow): close tasks of flow 412 (`632126cb1cfa`).
+- chore(flow): confirm AC1-AC5 of flow 412 (`568824dc89d9`).
+- chore(flow): record PR 921 on flow 412 (`9fa6807f5e7b`).
+- chore(flow): reword AC6 of flow 412 for the UUID exception, confirm it (`cc7a24441e01`).
+- chore(flow): rewrite AC2-AC4 of flow 410 and confirm all eight (`82bcc4dc9be5`).
+- chore(flow): carry round 6 deferred findings forward with decided-by (`a84cd891e386`).
+- chore(flow): open flow 412, PII detector separator and glue misses (`bba463a498be`).
+- chore(flow): record review round 6 for flow 410 (`2b51a6c4ce4f`).
+- chore(deps): bump @modelcontextprotocol/sdk and sharp to clear audit advisories (`8d60227e0a2d`).
+- chore(flow-410): round 5 review of the PII detection code at 5d7fe70b, verifier verdict for sec-F-003 (`69a2b1a4f9da`).
+- chore(flow): record r3-sec-F-003 as fixed by the linear-time detectPii PRs (`5d7fe70bf558`).
+- chore(deps): bump proxy-addr to 2.0.8 for GHSA-jqcg-44mw-7w3h (`cf2ff22cbb75`).
+- chore(flow): rewrite AC5 of flow 410 to cover a linear phone rule (operator, poll 101) (`dd4c5f6f72b1`).
+- chore(flow): record poll 99 accepted residuals for flow 410 findings (`c9de1f8a8dee`).
+- chore(flow): record round 4 and the post-fix verifier pass for flow 410 (`72fc801ec703`).
+- chore(flow): record the three real review rounds for flow 410 (`3ca24287aead`).
+- chore(flow): fix the verifier label in the flow 261 journal note (`de4600416f30`).
+- chore(flow): mark flow 261 review rounds as reconstructed, point to flow 410 (`93fc0d383b60`).
+- chore(flow): open flow 410 (second review of the ssn guard), add reviewer findings to flow 409 (`e80b6e597751`).
+- chore(flow): close flow 261 (pii.ssn identifier-fragment guard) (`77e369d7a394`).
+- chore(flow): open flows 408 and 409, keep blocked test flow 407 (`1441b9e0c177`).
+- chore(flow): record flow 261 tasks done (`9bb2e504b85b`).
+
+### Refactoring
+
+- refactor(pii): drop the unreachable SSN identifier guard and its label machinery (`dcfba9f98b39`).
+
+### CI and Release
+
+- ci: run full gate diagnostic on isolated routing fix branch (`071702e416a7`).
+- ci: add no-publish full gate diagnostic and cwd regression tests (`35bdaa37690f`).
+
+### Performance
+
+- perf(pii): make the phone rule linear on very long inputs (`595fd9a508cb`).
+- perf(pii): make detectPii linear on very long inputs (`4e78bd9bb727`).
+
+Coverage: 79 commits reviewed; 57 individual changes listed; 22 merge commits deliberately omitted to avoid double-counting.
+
+### Release preparation
+
+- Bump package version to 0.3.78 and bound APT waits in the release workflow; existing publication gates remain mandatory.
+
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
+
+## [Unreleased]
+
+## [0.3.77] — 2026-10-05
+
+### Fixed
+- **Granted `gh` JSON keeps its ids through the PII scrub (#903).** An 11-digit run or comment id matched the phone detector and was written as `[REDACTED:phone]`, so the JSON no longer parsed and `keryx intake poll` reported `gh did not answer with JSON` for the CI source. When a granted command's stdout is one JSON document, bare numbers and the digits of github.com URL ids are held aside for the detector pass and restored after it; every string value, including titles and comment bodies, is still scanned and masked, and numbers under secret-looking keys stay visible to the detector. The digest reader gets the same fix.
+
+## [0.3.76] — 2026-10-05
+
+### Added
+- **Shell task controls (flow 406).** `/tasks` exposes supervised shell tasks and their controls, with matching help and command documentation.
+- **Visible subagent preparation.** The shell displays preparation progress before a subagent starts; external dispatch hooks are used only for external runtimes.
+
+### Fixed
+- **Shell smoke diagnostics and presentation (flow 406, #901).** Routing reports why a route is skipped, unknown slash-command help is collapsible, and usage displays distinguish cached input from uncached input. Queue and transcript behavior is covered by additional regression tests.
+- **Command catalog parity.** `/tasks` is included in the shared help catalog, command-order tests and documentation.
+
+These changes passed PR CI. Repeat manual shell acceptance and measurements of subagent startup and input load remain pending; this release does not claim measured performance improvements.
+
+## [0.3.75] — 2026-10-05
+This release also carries 0.3.74, which was bumped on main and tagged but never published: the `v0.3.74` release run failed in the test gate, where the whole suite shares one process. Two intake tests leaked state into later suites (an environment restore in the wrong order, and a board reader registered by another suite); both are fixed here. The last version on npm before this one is 0.3.73.
+
+### Added
+- **Work intake from GitHub (flow 403).** `keryx serve` polls the repositories listed in `.metaproject/data/intake/config.json` for tickets assigned to you, review requests, failed CI on your own pull requests, comments on them and board movement, and sends each new event as a card with buttons in the Telegram topic "Intake". Take opens a flow from the ticket, review opens a review flow, CI cards run a read-only triage, and Later reminds once. The first poll is a baseline, events are deduplicated, nothing goes out in quiet hours, at most six cards an hour are sent with an overflow card for the rest, and a work repository never offers Take. A model assessment is bounded by a per-run dollar budget, and the whole feature is read-only toward GitHub. `keryx intake status|list|pause|resume|poll|report`, an `/intake` modal and a sidebar line in `keryx shell`. Intake is off by default: a project takes part only when its intake config exists, is enabled and names repositories (a manual poll refuses otherwise, and the sidebar line and `/intake` menu entry are hidden). The cards always go to the topic "Intake" (the `topic` setting is gone), the model budget ends the assessments but not the poll, a decision in the TUI or a refused press edits the Telegram card, a slow action is acknowledged at once and finished by an edit, and a press is re-checked against the work-repository rule at press time. Guide: `docs/docs/guides/work-intake.md`.
+- **A daily sync of the part 1 materials (flow 404).** `keryx research sync` recounts the flow records, exports the decisions journal and writes `part1-counts-latest.json`, `decisions-export-latest.jsonl` and `sync-status.md` under `docs/research/role-blurring-part1`; the `serve` scheduler runs it once a day, a failed run leaves the previous `-latest` files untouched and writes the reason into `sync-status.md`, and nothing is committed automatically. The sidebar shows the last sync. The snapshot files of flow 402 stay as they were.
+
+### Fixed
+- **`keryx decisions export --since` reads numeric UTC offsets (flow 404).** A record stamped with an offset such as `+03:00` was dropped by the date filter; it is now compared as the instant it names.
+- **The decisions journal's `open` is atomic and its twin is bounded (flow 400).** The twin lookup, the sequence number and the append run under the journal lock, and an unanswered twin counts only inside its own session and within one hour, so a stale question can no longer swallow a new one.
+- **The research sync's off-limits check matches whole words (flow 404).** A word such as "dashboard" no longer trips the check for "board", and a rename that fails halfway restores the files already renamed.
+- **Work intake fails closed on a failed project lookup (flow 403).** Take and review are refused and the card stays open; restart recovery carries on per card instead of stopping at the first failure.
+- **Work intake, second review pass (flow 403).** A press that waits in the queue behind other `flow init` runs is no longer marked failed by a restart-recovery pass: the claim of a live press is skipped in its own process and refreshed every 30 seconds for other processes. When the card was moved out of `taking` while the flow was being made, the press now says that the flow exists and that pressing again adopts it, instead of announcing a success, and a reply that arrives after the hard timeout is still posted to the topic. `Разобрать` (CI triage) works with `OPENROUTER_API_KEY`: that one credential, and no other secret, is passed to the triage child. A pending Telegram edit that is refused five times, or is older than a day, is dropped and said once in the run report. A ledger line with no card content no longer takes a slot of the hourly cap and is retired as expired after a button's lifetime. A `flow init` or triage child is killed together with its process group when serve or the TUI exits or is stopped with Ctrl-C.
+
+[Changes since 0.3.73](https://github.com/MrCipherSmith/keryx/compare/v0.3.73...v0.3.75)
+
+## [0.3.73] — 2026-10-04
+This release also carries 0.3.69 to 0.3.72, which were bumped on main but never published: the `v0.3.69` release run failed in the test gate and 0.3.70 to 0.3.72 were never tagged. The last version on npm before this one is 0.3.68, and their entries are below.
+
+### Added
+- **Your own answer to an `ask_user` question (flow 401).** The question dock has an own-answer row and a reason key, and the transcript shows the typed text and the reason after the question. A question of a Telegram turn now shows in the TUI dock and in the topic at once, and the first answer wins; the topic gets an own-answer button, a ForceReply box bound to the question and a close of the prompt when the question is answered elsewhere. Own text and reasons are stored in full, redacted, with a visible cut marker where they are shortened; the `/decisions` sidebar row marks them. Replies to an unknown reply box are answered, a late own answer is dropped and the message corrected, and the round budget survives a typed reason.
+- **A reason is asked for a third of the questions (flow 400).** A deterministic third of the eligible questions asks for a reason after the answer, whether or not the answer matched the recommendation, through the same own-answer prompt. The report splits named reasons by agreement and deviation, counts the questions that could not be asked (a picker menu has no reason prompt), shows progress toward the sample threshold per arm, and names an unusable `decisions.config.json`. Settings say per key whether the weights and the threshold come from the config file, and `KERYX_DECISIONS_REASON_SUBSAMPLE` switches the subsample. The export carries `eligible`, `reasonRequested` and `reasonNamed`, never text.
+
+### Fixed
+- **The scheduled digest keeps its slot (flow 389).** A digest confirmed while `serve` was down now starts its schedule at the moment of confirmation, and a digest paused and resumed while `serve` was down re-arms instead of catching up on the next tick. A board that throws no longer takes the GitHub half with it; the snapshot is written only after the message is queued, so a change that could not be queued is in the next digest. The message is scrubbed for secrets before it is cut, the run report names the `gh` account the digest asked for, and `gh` runs with an allowlisted environment, so a token variable cannot override the account chosen by the project path. The guide states the local-time cadence, the wrapper requirement and the delivery give-up rule.
+- **Telegram remote control (flow 397).** A question that `serve` refuses (too many open, no stream) is now said in the topic and recorded as that cause instead of looking like a timeout. A `/delegate` sent from the topic waits on the delegated run within the command limit and reports how it ended; a command that outlasts its limit keeps running and the topic is told the result. The model switch runs on the same chain as other commands, a command addressed to another bot is ignored, the typing indicator stays while another turn of the topic still works, and the open `/remote-control` modal repaints when the bridge changes, so the unconfirmed-approvals line is no longer stale.
+- **The recommendation journal.** Reasons are counted only where a surface can ask for one, so a deviation on a picker menu no longer dilutes the reasons share.
+
+### Documentation
+- Part 1 materials of the role-blurring article: the counts over the flow records, the part 2 protocol (version 2), the log of the operator's decisions with verbatim quotes and a text-free export of the pilot recommendation records (flow 402, `docs/research/role-blurring-part1`).
+
+[Changes since 0.3.68](https://github.com/MrCipherSmith/keryx/compare/v0.3.68...v0.3.73)
+
+## [0.3.72] — 2026-10-03
+### Changed
+- **The recommendation journal has four arms, not two (flow 400).** A question with a recommendation is now put to the human in one of four ways, drawn from a seeded generator on the repository's salt and the position in the journal, so an assignment can be replayed: A (the agent's order, the mark shown, the recommended option preselected), B (the mark shown, nothing preselected), C (shuffled, mark shown, nothing preselected) and D (shuffled, mark hidden, nothing preselected: the old blind question). The salt is created once outside the repository, under `$XDG_CONFIG_HOME/keryx/decisions` (`~/.config/keryx/decisions` by default, mode 0600); a record keeps only the 32-bit `seed`, never the salt. The weights are 0.4, 0.2, 0.2, 0.2 and can be set under `arms` in `.metaproject/decisions.config.json`. A release, a delete, a push, an `action` tag, an `irreversible: true` flag and a match on the built-in list are always arm A and carry `forced: true`; every other A carries `forced: false`. A question with no recommendation is arm A and not forced. The old `mode` is derived from the arm (A ordinary, D blind, B and C `partial`), so older readers still work.
+- **The agent can no longer steer or predict its own arm (flow 400, review S-1).** `open` is idempotent per question: asking a question that matches a still-unanswered one of the same repository (normalised text and option ids) returns that record's arm, seed and order and writes nothing, so repeating it cannot re-roll the arm; once the decision is answered, the same text is a new decision. The salt moved out of the repository to `<XDG_CONFIG_HOME or ~/.config>/keryx/decisions/<repository hash>.seed` (mode 0600, directory 0700, shared by every worktree of one repository); an earlier in-repo `.metaproject/data/decisions/seed` is copied there once and deleted, so earlier assignments stay reproducible. The `ask_user` description no longer says what `irreversible` or `action` do to how the question is shown; it only says what the fields mean (the host still moves an irreversible question to arm A).
+- **The "(Recommended)" mark and preselection are separate in the choice menu.** In arms B and C the menu still shows the mark but opens with no row highlighted; Enter answers nothing until a row is chosen. A menu that never sets `preselected` behaves as before.
+- **Arm D removes the mark from the words, not only the flag.** The label, the description and the recommendation reason lose every form of the words recommend, рекоменд, preferred and suggested. After a deviation, in any arm, the transcript names the recommended option and its reason; in arm D it does so after any answer.
+- **`ask_user` takes a reason and one recommendation.** A top-level `recommendationReason` says why the option is recommended (the system prompt asks for it every time); a question that marks more than one option recommended is refused.
+- **The open record is wider, and old records still read.** It gains `arm`, `seed`, `preselected`, `order`, `channel` (`tui` when absent), `forced` and the recommendation's reason; a journal written before this is read as before.
+- **Work decisions are journaled with a `source`, and the interviewer knows whether anyone can answer (flow 400).** The round-limit picker and the TUI pickers that choose how work proceeds (wiki enrich mode, routing a message while the agent is busy, a session another shell holds) now go through the journal; each open record carries `source` (`ask_user`, `round-limit`, `tui-wiki-enrich`, `tui-queue-route`, `tui-session-lease`). Allow/deny permissions stay out. With a host the interviewer asks through `ask_user`; without one it asks nothing and returns `NEEDS_CONTEXT` with its assumptions.
+- **The arm summary is in the TUI.** `/decisions arms` opens how often the recommendation was followed in each arm (and in arm A drawn vs forced, when the report has the split); the sidebar shows one row of shares under the decisions row once an arm has answered decisions. A report without the arm fields falls back to the older modes.
+- **The report cuts by arm and by channel.** `keryx decisions open --channel <name>` records where a question was shown (`tui` when absent). `keryx decisions report` has a match share per arm, with arm A split into "A free" (drawn) and "A forced" (irreversible, not randomized), and per channel; on `telegram`, where a poll cannot preselect, arms A and B are one "A+B" row. `--exclude-legacy` leaves the legacy and imported records out of every number.
+- **The records from before the arms are `legacy`.** `keryx decisions import` stamps `legacy: true` and an arm (ordinary to A, `"mode":"blind"` to D), and a journal record with no `arm` is read the same way (the file is append-only and is not rewritten). The report shows them in a block of their own, split by that arm, and never in the arm tables; importing twice changes nothing.
+- **`keryx decisions rate` records the quality of a recommendation.** `rate <id> good|bad|unclear` is the human's rating; `rate --blind-model --model <label> --model-cmd <command>` has a model pick in a clean context (question and options only, no mark, reason, choice or history; `cleanContext` is true only when the call carried no history) and compares its pick with the recommendation. Ratings go to `.metaproject/data/decisions/quality.jsonl`; the report shows the human-by-model matrix and labels every model rating "model self-assessment".
+- **`keryx decisions export` writes structure, not words.** One row per decision: arm, seed, preselected, forced, legacy, channel, display order as option positions, recommended and chosen position, deviation, ratings and times; no question, option, reason or note, and a hashed decision reference. A test plants text in every field and fails on a leak.
+- **The guide says what the journal does not measure.** Arms A and B are indistinguishable in Telegram, model ratings are a self-assessment by the same model, and the roughly 87 legacy records are not randomized.
+
+[Changes since 0.3.71](https://github.com/MrCipherSmith/keryx/compare/v0.3.71...v0.3.72)
+
+## [0.3.71] — 2026-10-03
+### Fixed
+- **A tall table, or a table with text around it, no longer loses its native layout in Telegram (flow 399).** A table of more than about 500 rows, narrow enough to fit one 4096-character part, went out as a single part that a rich message refuses (500 blocks, a table row is one block), so it fell back to HTML. The splitter now counts the blocks of the whole part, not only table rows: a table row, a paragraph or heading, a quote line, a list item (two blocks, three when it opens a list) and a fenced block each count, and a part that holds a table stays within the limit, with room for the `(i/n)` label. The table is split at a row boundary with its header repeated, as before, and every part stays a native table. In `html` and `plain` mode a reply that holds a table is also sent in more, shorter parts when it has that many blocks.
+- **A row larger than a message is no longer cut in half.** When one row, with the header, did not fit a message, the table was cut mid-cell: a header-only part, then the row cut at the first space. Such a row is now written as stacked `Header: value` lines (the form the text modes already use for a row over 1500 characters); the header is not repeated for it, and the next row that fits starts a table again. Only a single cell larger than a whole message is cut, at a space in the second half of the part when there is one.
+
+### Changed
+- **Wide tables are pinned, not reshaped.** The operator chose the native table block as it is: as wide as its content, scrolling sideways, no cell shortened. Tests now pin that output for a corpus, the 20-column limit (a wider table stays ordinary text and goes out as HTML), the aligned and stacked fallbacks in HTML and plain text, the split at row boundaries with the header repeated, the 1500-character stacking threshold at 1499, 1500 and 1501, a body row with more cells than the header (the extra cells are dropped, as in GitHub Markdown), and the 4096 and rich limits (32768 characters, 500 blocks) on every part. The docs and README describe how a table reaches Telegram.
+
+[Changes since 0.3.70](https://github.com/MrCipherSmith/keryx/compare/v0.3.70...v0.3.71)
+
+## [0.3.70] — 2026-10-03
+### Added
+- **The topic gets the session's history back (flow 399).** A topic is deleted when the shell exits, so a session resumed with `keryx shell --continue` got a new, empty one. `/history [N]` now posts the session's last messages into the topic: `N` is 1 to 20 (10 without a number), anything else answers the usage line. It works typed in the shell, sent from the topic (it is a built-in command there, like `/help`), and with key `h` in the `/remote-control` modal, and it runs while a turn is running because it only reads the session. The messages are what the operator typed and the agent's final answer of each turn: no tool calls, no tool output, no reasoning and no narration written before a tool call. Each goes out as its own message, oldest first, with a `You:` or `Agent:` label and no timestamp, two seconds apart so Telegram does not throttle the run. A message over 1,500 characters is cut with `…`; text that looks like a secret is redacted before the cut, so a secret is never half-shown. A turn that contains a Telegram bot token shape or a bare 32-character key-like run is not posted: it is replaced by `[сообщение скрыто: похоже на секрет]`, a guard on top of the shared redactor, which can miss a pasted token. While a turn is running its half-written answer is not posted.
+- **Automatic restore, only for a resumed session with a new topic.** When a resumed session turns remote control on and `serve` creates a new topic (not one that already existed), the last 10 messages are posted by themselves, once, and the shell prints a notice. A topic that already existed is never refilled; turning remote control off and on again in the same shell (a new, empty topic on purpose; `/history` fills it), a reconnect and a restart of `serve` post nothing, because only the first enable of the process and the first registration of the topic are looked at. `keryx serve` answers `reused` for that; the shell client now passes it on. If the restore cannot run, the shell prints the reason.
+- **Where it shows.** The `/remote-control` modal's Status tab has a `History:` line (how many messages, when, restored automatically or by `/history`) and the footer has `h`; the sidebar's Remote row gets a `history 10 · 06:52` line once something was posted; `/history` is in the slash menu, `/help` (group Automation), the topic's command menu and `/help` there. The readline shell answers that it works only in the full-screen shell.
+- If Telegram refuses a message part-way, the run stops there, the shell says how far it got, and the messages already sent are not sent again; `/history` again posts the whole set again on purpose.
+
+[Changes since 0.3.69](https://github.com/MrCipherSmith/keryx/compare/v0.3.69...v0.3.70)
+
+## [0.3.69] — 2026-10-03
+### Added
+- **Slate as working memory (flow 393).** On a host that keeps the originals (`pruneArchive`) with a live session directory, the model no longer re-reads its own history: each request is a bounded one. The slate gains two shelves, both task-local and never promoted to workspace knowledge. The **Trail** is written by the harness, never by the model: one entry per executed tool call (step, tool, argument digest, outcome, path of the saved full output). **Notes** are the model's own working notes, set, replaced or deleted by key with the new `slate_note` tool, redacted, at most 2000 characters each and 8000 tokens for the shelf; a note never becomes a Seed. Older rounds leave the request in batches and `archive.jsonl` keeps them; one rebuilt slate frame (Anchors, the latest Trail entries, every Note) stands in for them, with the tool-call and result pairing kept valid. The system instruction states the contract (older rounds leave the request, facts belong in Notes), and while a rewrite is due a notice naming the steps about to be dropped ends every request until a Note written after those steps covers them (decided by the operator, poll 55). The Trail has no entry cap: `slate.json` keeps every step and only the frame's token budget bounds what the model is sent (also decided by the operator, poll 55).
+- **Point recall.** `slate_trail` (filter by file, tool or step range), `recall_step` (the full saved output of a step, paged) and `history_search` (search this session's archive) are read-only and confined to the live session.
+- **Notes and Trail digests are data, not instructions.** The frame puts them in a delimited untrusted-data section, and secrets are redacted before they are stored.
+- **ObservationPack.** A tool result over 10 KiB stays verbatim for two requests, then becomes a fixed pack (size, head, tail, the reference to read it back), applied in the same batch as the other rewrites.
+- **Cache-cost-aware rewrites.** A rewrite of the sent history applies only when its saving exceeds the cost of re-billing the invalidated prefix; plan-step boundaries are preferred, and each decision is logged.
+- **`shell_exec` no longer cuts the tail.** Output past the inline cap is saved in full through the spill path (stdout and stderr both). The model sees the head, the tail, the line and byte counts of each stream, the last part of stderr whatever else is dropped, and the path to read the rest with `read_file` or `search_code`. It used to keep the first 20 KB, which dropped stderr first.
+- Replay of the flow 394 long-session shape on a bounded request: peak request 40,428 tokens (limit 64,000) and 2,969,506 tokens in total (limit 5,531,077), against 96,783 and 7,374,769 before; the numbers are in the flow journal.
+
+### Changed
+- Prune thresholds scale with the window: protect = min(40K, 30% of the window), batch saving = min(20K, 15%), so pruning fires before compaction on 32K to 272K windows.
+- Hosts without `pruneArchive` behave exactly as after 0.3.64 and never write a Trail into a slate another holder owns. `slate_read` only gains fields; Seeds are still never injected and `renderAnchorsBlock` is unchanged.
+
+[Changes since 0.3.68](https://github.com/MrCipherSmith/keryx/compare/v0.3.68...v0.3.69)
+
+## [0.3.68] — 2026-10-03
+### Changed
+- **A Telegram turn now runs like a shell `trust` turn (flow 396).** Before, every tool call from a topic asked, the run was stopped after 30 minutes and an unanswered question lapsed after 5 minutes. Now the default is `permissionMode: trust`: ordinary commands in the project run without a question, and each one is recorded as an `approval` event with the Telegram user id. The floors still ask exactly as in a local trust turn: destructive commands, privilege escalation, downloaders, agent credential files, flow and acceptance confirmations, a git publish lease, a hook that asks, untrusted content, a destructive `apply_patch` and MCP `use_tool`. `/plan` still refuses mutations, and `apply_patch` outside the project root is refused in every mode. There is no Telegram-only floor for network or outside-project commands.
+- **No run limit by default, and `/stop`.** `runTimeoutMs` is now optional with no default; `0` or absent means no timer, a positive value still stops the run. `/stop` in the topic ends the run, and the topic is told `Stopped by you.` when the turn has ended.
+- **A 15-minute approval wait.** The question in the topic waits 15 minutes by default (`approvalTimeoutMs`, 30000 to 3600000); when it lapses the command is refused and the message says so. This is the Telegram path only: the HTTP serve approval expiry (`approval.expirySeconds` in `serve.json`) is unchanged.
+- **One permission mode.** The config's `permissionMode` (`ask` or `trust`, default `trust`) applies until `/mode` changes the shell's mode in that session; after that the shell's mode wins. `/mode ask` from the topic runs directly, `/mode trust` and `/mode auto` keep the Yes / No button (one tap commits them; the shell's own `auto` confirmation is asked only when it is typed in the shell), and `auto` is never taken from the config. The shell shows `trust (Telegram default)` or `ask (shell /mode)`.
+
+### Added
+- **An `Always` button on a Telegram approval** (`Allow | Always: <pattern> | Deny`), with the same pattern validators as the shell dock; the topic says `Remembered: <pattern>`. A press from someone who is not allowed, a press after expiry and a replayed press save nothing and approve nothing. Saved and session patterns approve a matching command without a question, with the same exclusions as the dock.
+- **`keryx permissions list|remove` and `/permissions`** list and take back the saved rules. `/remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]` changes the saved defaults and the running shell's copy. The full-screen shell has a Telegram group in `/settings`, a posture line in the sidebar (a click opens `/permissions`) and a `/permissions` modal; the readline shell prints a table. `keryx serve status` and `--json` print the posture with the number of allowed users and no ids or secrets, and say when the shell's `/mode` overrides the default.
+- Audit lines for auto-approved calls, Always saves and refused presses carry no secrets. A saved-rule auto-approval names the Telegram user too.
+- A Telegram turn's trust follows that turn: the approval channel, mode, auto-approval record and MCP grant rule are handed to the foreground facade of the turn the bridge took as a Telegram turn, not read from a bridge-wide flag, so other work running in the shell at the same time is judged by the shell's mode and asked in the shell. `spawn_subagent` is auto-approved under `trust` in a Telegram turn, as in a shell `trust` turn, and there is no run limit by default (`/stop` ends a run; `runTimeoutMs` brings a limit back); the operator accepted both.
+- Review hardening: an MCP `use_tool` always asks in a Telegram turn even with a local trusted-tool grant; Always is never offered for a command over the pattern limit (no fallback to `git *`), a cut prompt, or a pattern redaction would change; a cut prompt says how much was shown; an unknown or malformed approval answer is a deny.
+
+### Rollback
+To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"permissionMode": "ask"`, `"runTimeoutMs": 1800000` and `"approvalTimeoutMs": 300000`. A config without the new keys now means `trust`, no run limit and a 15-minute wait; a config that already holds `runTimeoutMs` or the other keys is read as it was.
+
+[Changes since 0.3.67](https://github.com/MrCipherSmith/keryx/compare/v0.3.67...v0.3.68)
+
+## [0.3.67] — 2026-10-02
+### Fixed
+- **Approval answers from Telegram are confirmed by the shell (flow 397).** A press on Allow or Deny used to end the message "Allowed by user N at ..." (or "Denied by ...") as soon as `serve` had written the answer to the shell's stream, whether or not the shell ever got it. The shell now acks each approval frame over the new `POST /v1/remote/approval-ack`, and the ack says whether the decision was applied to a live question in the shell (`applied: true` or `false`), not only that the frame arrived; `serve` waits 5 seconds (`approvalAckMs`) and then ends the message "Allowed by user N at ..." or "Denied by ..." with an applied ack, "Not applied at <time>: the shell was no longer waiting for this question, so the Allow from user N changed nothing." with `applied: false`, or "Sent to the shell at <time>, not confirmed; the shell denies by itself if it did not receive it." without it, with a matching short reply. Not confirmed means serve did not hear back in time, not that the answer was lost: a shell that never received an Allow lets its own question time out as a denial, while one that received it after the 5 seconds still applies it and the topic keeps saying not confirmed. A repeated press during the wait does nothing, a closed stream stops the wait at once, a late ack changes nothing, and an id that is unknown or belongs to another session is a 404. A frame with no question waiting (a stale id, a question the shell already gave up on, a reconnect) is not applied: it is parked for at most 2 seconds, because a frame can beat the response that names its id, and is acked applied only if a question claims it in that time, otherwise as not applied; the transcript says "arrived but nothing here was waiting for it; not applied" and never "allowed from Telegram". An ack without `applied`, from a shell older than this field, is read as received-only and ends the message as before. The shell acks a repeated frame again with the same outcome but applies it once, shows a notice in the transcript when an approval frame is settled, and counts answers whose ack has not gone through as "Approvals not confirmed: N" in `/remote-control` and "<topic> · N unconfirmed" in the sidebar row.
+- The shell's wiring between its message queue, session switches, turn stream and the remote-control bridge moved from `tui-shell.ts` into `src/tui/remote-queue-wiring.ts` and is tested against a real bridge: a Telegram line that is edited keeps its source, a removed one is reported to its topic, a session switch leaves no Telegram line in the queue, and narration said before a tool call is never sent as the answer.
+
+[Changes since 0.3.66](https://github.com/MrCipherSmith/keryx/compare/v0.3.66...v0.3.67)
+
+## [0.3.66] — 2026-10-02
+### Added
+- **Backfilled decisions in the recommendation journal.** `keryx decisions import <file.jsonl> [--dry-run] [--json]` loads historical decisions (one JSON object per line: `id`, `at`, `flow`, `stage`, `question`, `options`, `recommendation`, `source`, `answer`, `reason`) as the "before" arm of a comparison with the live records. Each is written as an open record marked `backfilled` with its `source`, never blind (ordinary mode, the recommendation marked when there is one, options in the given order), then an answer record (first answer, not changed, time to answer 0, stamped with the time the question was asked) and a reason record when one is given. A line that cannot be read (not JSON, a duplicate option id, a recommendation or an answer that is not an option unless `answer.other` is set) is skipped, named with its line number and why, and counted (`, malformed: M` is appended to the summary only when there are any); the rest is imported. An id already in the journal is skipped and reported, so a second import changes nothing, except that a backfilled decision whose answer is missing from the journal (an interrupted write) gets just that answer (`, repaired: R`). A journal whose last line was cut short is ended with a newline before the batch is appended. With `--json` a failure is `{"error": "..."}`. It prints `Imported: N, skipped: S, with recommendation: R, answered: A, deviations: D`.
+- **The report keeps them apart.** `keryx decisions report` has a block "до (историческое, дозаполнено задним числом)" with the total, the decisions that had a recommendation, the matches and their share, and every deviation with its reason; the ordinary and blind shares, the stages, the irreversible counts and the new median time to answer count only live decisions, because a backfilled time is unknown. `--json` has a `backfilled` section, and `report --line` prints one line in Russian for the daily message (`Журнал решений: всего N (до: B, после: L). Совпадение с рекомендацией: видимая X% (a/b), скрытая Y% (c/d); до: Z% (e/f).`, `нет данных` for an empty share).
+- **Backfilled decisions are not editable through the journal API.** `decisions answer` and `decisions reason` by id refuse a backfilled decision, as `/decisions change` does.
+- **Two imports at once cannot duplicate a decision.** `keryx decisions import` reads the known ids and appends under a lock file next to the journal (`journal.jsonl.lock`: pid, time, token). A second run waits; a lock whose process is gone, or that is older than a minute, is broken; it is released when the run ends. A dry run takes no lock.
+- **The shell knows the difference.** A bare `/decisions change` or `/decisions reason` never picks a backfilled decision, the `/decisions` modal shows the block, and the sidebar row counts them apart (`10 decisions + 60 before`).
+
+### Fixed
+- The CHANGELOG-entry test of the Telegram rendering docs pinned `package.json` to 0.3.64, so it failed on the next release; it now checks the entry itself and that the package is at or past that version.
+
+[Changes since 0.3.64](https://github.com/MrCipherSmith/keryx/compare/v0.3.64...v0.3.66)
+
+## [0.3.64] — 2026-10-02
+### Added
+- **Telegram rendering through the current Bot API (flow 395).** Replies to a Telegram topic are rendered in one of four modes, the new optional `rendering` key of `remote/config.json`: `auto` (the default), `rich`, `html` and `plain`; any other value is refused with a message naming the valid ones. In `auto` a reply that holds a table is sent as a native rich message (`sendRichMessage`, and `editMessageText` with `rich_message` for an edit; Bot API 10.1 to 10.3, `blocks` input); every other reply stays on the HTML path of 0.3.63. A table is never sent as raw pipes: HTML gets an aligned `<pre>` block with the separator row dropped, rich gets a native table block. Ordered lists keep their numbers, nested bullets keep their indentation, task items show a box or a ticked box, and a rule shows as a line, in HTML and in rich. Text with none of these renders byte for byte as in 0.3.63, with one exception: a link whose visible text reads as a web address for a different host than its target (`[https://mybank.example](https://evil.example)`) shows the target host after it, ` (→ evil.example)`, in HTML and in rich; every other link is unchanged.
+- **Fallback chain.** A rich message refused with a 4xx is sent once as HTML, and HTML refused with "can't parse entities" is sent once as plain text; a reply is never dropped for its format. A 403, 404 or 405 pauses rich messages for ten minutes. Network errors, 5xx and 429 are retried by the durable queue as before. Each fallback is recorded with its step, a redacted reason and the time.
+- **Splitting** still gives numbered `(i/n)` parts within the limit of the mode in use (32768 characters and 500 blocks for rich); a table is never cut inside a row and its header is repeated at the top of the next part.
+- **Surfaces.** `/settings` has a **Telegram rendering** row (with `/rendering [mode]` in the shell), the `/channels` modal shows the mode in effect and the last fallback, and `keryx remote format-sample` prints the fixed sample reply in every mode with no network (`--mode`, `--full`, `--json`).
+- The Bot API facts the rich path was built against, each with its source anchor, are in `docs/requirements/keryx-telegram-rendering/spike.md`. The live probe against a real bot is still pending operator acceptance.
+
+[Changes since 0.3.63](https://github.com/MrCipherSmith/keryx/compare/v0.3.63...v0.3.64)
+
+## [0.3.63] — 2026-10-02
+### Fixed
+- The managed ignore block that `keryx init` and `keryx update` write now covers `.metaproject/data/decisions/`, so the recommendation journal no longer shows up in `git status` of a project that uses keryx (this repository already ignored it by hand).
+
+[Changes since 0.3.62](https://github.com/MrCipherSmith/keryx/compare/v0.3.62...v0.3.63)
+
+## [0.3.62] — 2026-10-02
+### Added
+- **Recommendation journal.** Every agent question with options now writes one record to `.metaproject/data/decisions/journal.jsonl`: the flow and stage, the question, the options, the recommendation and its reason, the display mode, the option order, the human's choice, the time to answer and an optional reason for deviating. The recommendation is written before the question is shown. One question in three is asked blind (no "recommended" mark, random order) and the recommendation is revealed right after the answer; a blind question is never used for anything on the irreversible list, which has two tiers: strong terms (release, publish, unpublish, deploy, delete, push and their Russian equivalents) always count, weak terms (merge, drop, remove, force and the like) count only next to a risk target such as main, production, a branch or a table in the same question or option, or in the `--action` tag, which agents should pass for anything irreversible; the list is extendable in `.metaproject/decisions.config.json`. A changed answer after the reveal keeps both entries (`/decisions change <option>`); after a deviation the TUI asks the human once for an optional reason and the `ask_user` tool result waits for the answer (no timeout; an empty or skipped answer is recorded as absent and releases the wait), and the reason can be added or changed later with `/decisions reason <why>` or `keryx decisions reason`; `/decisions reason|change` act on the latest decision of this session (or flow), name it, and say that a changed answer may not reach the agent. Free text is collapsed to one capped line. A flow inferred from the single in-progress flow is recorded as `inferred` and marked in the report. `keryx decisions report` prints the match share by mode and stage and the deviations with their reasons, with no model call. Any agent can drive the journal with `keryx decisions open|answer|reason`. The shell has a `/decisions` report modal and a sidebar row. Journaling itself never blocks or delays a question, and a journaling failure never throws into it; the one deliberate wait is the optional reason prompt after a deviation. The flow and stage come from `KERYX_FLOW`, the branch or the only flow in progress, and inside a flow it also adds a line to that flow's `journal.md`. One journal serves every worktree of the repository. An answer must be one of the options; unreadable journal lines are skipped and counted in the report; a blind question hides a `(Recommended)` mark written into a label. The irreversible list also catches the synonyms of releasing (ship, rollout, promote, go live, tag a version, publish to npm, выпустить, залить, отправить в прод, накатить) and destructive commands (`git reset --hard`, `clean -f`, `checkout --`, `rm -rf`); an ambiguous weak verb with no real object ("Merge it now?") counts as irreversible, an identifier in a question about code (rename `deleteUser`) does not. The `ask_user` tool takes an optional `action` tag and `irreversible: true`, which force a non-blind question, and its description tells the agent to set them. `keryx decisions report` counts, per stage, the questions where blind was refused. `/decisions change` and `/decisions reason` with no id only act on a decision of the current session and otherwise name the decision they would have touched. Cutting, bumping or tagging a version ("Cut 0.3.62?", "Bump the version and tag it?", "версию поднять и затегать", зарелизить, релизнуть) counts as a release. A decision whose flow was only inferred is kept in the project-wide journal with the `inferred` flag and is not written into that flow's own `journal.md`; only a flow named by `KERYX_FLOW`, the branch or `--flow` gets the line.
+
+### Fixed
+- `keryx flow origin set` no longer carries the old quote and source over when the kind changes, and `/flow origin` with no id prints a bounded summary instead of every flow.
+
+[Changes since 0.3.61](https://github.com/MrCipherSmith/keryx/compare/v0.3.61...v0.3.62)
+
+## [0.3.61] — 2026-10-02
+### Fixed
+- The orchestrator skills, their input-contract schemas and the `/goal --auto` comment no longer say the three orchestrators share one round bound of three: the review/fix bound of `flow-orchestrator` is five, the self-fix bounds of `job-orchestrator` and `task-implementer` stay at three.
+
+[Changes since 0.3.60](https://github.com/MrCipherSmith/keryx/compare/v0.3.60...v0.3.61)
+
+## [0.3.60] — 2026-10-02
+### Changed
+- **Review round bound: five.** A review/fix loop may now run five rounds before the orchestrator re-plans (`REVIEW_ROUND_CAP` and the `flow-orchestrator` skill, were three). The bounds of `job-orchestrator` and `task-implementer` self-fix stay at three, the review-gate behaviour is unchanged: the cap only adds a note and only a human can dismiss a finding.
+
+[Changes since 0.3.59](https://github.com/MrCipherSmith/keryx/compare/v0.3.59...v0.3.60)
+
+## [0.3.59] — 2026-10-02
+### Added
+- **Flow origin.** Every flow can record where it came from: `human-request`, `agent-finding` or `agent-proposal`, set with `keryx flow init --origin <kind> --quote "<verbatim>" --source "<ref>"`. A `human-request` is accepted only with the person's own words and a source; otherwise the origin stays `unknown` and a note says why. The Outcome criteria template carries three lines (the request verbatim, the agent's formalization, how to observe it), `outcomeAuthor` is derived from the origin unless set, `keryx flow origin set <id> <kind> --reason` changes it with a journal line, and `flow status`, `product open`, the flow inspector and the new `/flow` shell command show it. The product's G1a is counted by origin. Nothing is gated on the origin: flows without one still init, freeze and complete.
+
+[Changes since 0.3.58](https://github.com/MrCipherSmith/keryx/compare/v0.3.58...v0.3.59)
+
+## [0.3.58] — 2026-10-02
+### Added
+- **Scheduled digest.** `keryx serve` can send a periodic digest to a service topic in Telegram: what changed in your pull requests, issues, reviews and CI since the previous digest, plus the product board. The schedule is stored like any other (`keryx schedule`), a slot fires at most once, GitHub is read only through a read-only `gh` allowlist, and the delivery result (sent, queued for retry, or refused) is recorded and shown in `keryx schedule list` and the schedule modal. If the summarizing sub-agent is unavailable the digest goes out as plain facts. See the scheduled-digest guide.
+
+[Changes since 0.3.57](https://github.com/MrCipherSmith/keryx/compare/v0.3.57...v0.3.58)
+
+## [0.3.57] — 2026-10-02
+### Added
+- **Slash commands and button pickers from the Telegram topic.** A line that starts with `/` in a paired topic now runs through a command gateway with an explicit allowlist instead of being refused. Text commands (`/help`, `/status`, `/doctor`, `/compact`, `/think`, `/goal`, `/queue`, `/plan`, ...) answer in the topic, redacted. `/model` and `/connect` arrive as inline-keyboard pickers (provider, then model); picker buttons are single-use, expire, and are bound to the session and message. `/mode trust|auto`, `/plan off`, `/delegate` and `/external*` run only after a Yes/No button press. `/new` and `/clear` start a fresh conversation in the same topic with a separator line. Commands that handle credentials or end the shell (`/exit`, `/channels`, `/provider`, `/setup`, `/mcp trust`, `/guard`, `/route`, `/editguard`, ...) stay local and the topic says so. The bot's command menu lists exactly the allowed commands. The `/remote-control` modal lists recent remote commands.
+- **Message state in the topic.** Each operator message shows its state through a Telegram reaction (received, accepted, working, done, failed) and the topic shows the "typing" action while a turn runs.
+### Changed
+- **Approval and picker prompts are edited in place.** After a press the buttons are removed and the message shows the result instead of a separate "Approval granted." message.
+
+[Changes since 0.3.56](https://github.com/MrCipherSmith/keryx/compare/v0.3.56...v0.3.57)
+
+## [0.3.56] — 2026-10-01
+### Changed
+- **Telegram replies are rendered as HTML.** Replies and status texts that `keryx serve` sends to Telegram were plain text, with literal `**` and backticks. They now go out with `parse_mode` `HTML`: bold, italic, strike, inline code, fenced code blocks (with their language), headings, quotes, bullets and `http(s)` links are rendered; text outside those constructs is escaped (`&`, `<`, `>`), unclosed or ambiguous markup (`snake_case_name`, `a*b*c`, a lone `**`) stays literal, and a fenced block that crosses a split is two valid `<pre>` blocks. Telegram counts the 4096-character limit after parsing, so a rendered part is never longer than the plain one. If Telegram answers 400 "can't parse entities", that one message is sent again as plain text and a `format-fallback` event is recorded. Approval prompts are sent as a code block so the operator sees exactly what they approve.
+
+[Changes since 0.3.55](https://github.com/MrCipherSmith/keryx/compare/v0.3.55...v0.3.56)
+
+## [0.3.55] — 2026-10-01
+### Fixed
+- **A timeout while starting a pairing no longer erases the bot token.** The shell wrote the new token, asked `serve` to open the pairing, and on any failure put the old file back, even when `serve` had simply not answered in time and may have taken the token, or had answered `superseded` because a newer start owns the file. It now puts the previous token back only when `serve` definitely refused (a rejected token, `already-connected`, `serve` not running and the like), and only when the file still holds exactly the token this start wrote: a token another shell wrote in between is left alone.
+- **A rejected token no longer cancels a valid start in progress.** A second `/channels` start with a token Telegram refuses used to answer `superseded` to a valid start that was still waiting for Telegram. Only a token Telegram accepted supersedes an earlier start now; of two valid starts the later one still wins.
+- **Stopping `serve` while a pairing is starting no longer leaves a poller behind.** A start waiting for Telegram when `serve` stopped could still begin polling afterwards and park a pairing in the stopped controller. It now answers `superseded` and starts nothing.
+- **`wiki collect --force` and `keryx sync --apply` no longer replace enriched pages with the generated stub (flow 386, #831).** An enriched page keeps `Status: draft` and the collect marker, so it passed the "unmodified draft" check and was overwritten whole; on a real 504-page wiki that cut a 181-line page to 90. Collect now regenerates only the generator's sections of an existing page (`## Reference`, `## Related Wiki` — keeping lines an enricher added there — and a map page's data sections only while that page was never enriched); front matter, prose and changelog stay, with one changelog entry and a Version bump.
+- **`wiki enrich` no longer drops a changelog, rewords its entries or lowers Version (flow 386, #831).** The model changes prose only: front matter, the changelog (attestation entries included) and a managed Reference block come back from the original, one entry and a Version bump are added, and a reply the model wrapped in a ```` ```markdown ```` fence is unwrapped. A page that would still break one of these is not written.
+### Added
+- **Per-page wiki history and undo (flow 386, #831).** Every command that writes or deletes a wiki page or `index.md` first keeps the page's exact bytes as a plain `.md` file in `.metaproject/data/gdwiki/history/<page>/`, with an `index.md` listing every version (when, which command and run, sha256, current first), and prints the run id to undo it with. `keryx wiki history <page>` / `--runs`, `keryx wiki restore <page> [--version vNNNN]`, `keryx wiki restore --run <id>` (changed pages go back, created ones are deleted, deleted ones return; a page changed again since is a conflict unless `--force`). Retention `history.keep` (default 20 per page) in `.metaproject/wiki.config.json`; the folder ignores itself for git. An edit made outside keryx is recorded when keryx next writes that page.
+- **`wiki validate` reports wiki drift (flow 386, #831):** `Version` lower than the newest changelog entry on every page, and, for a change keryx recorded, a dropped `## Changelog`, a removed or reworded entry, a dropped front-matter key or managed block, or a duplicated section, compared with the page's previous version.
+
+[Changes since 0.3.54](https://github.com/MrCipherSmith/keryx/compare/v0.3.54...v0.3.55)
+
+## [0.3.54] — 2026-10-01
+### Fixed
+- **`flow check` no longer fails a clone over stale remote branches.** 0.3.53 judged every remote-tracking ref alike, so a fresh clone of this repository reported about thirty `duplicate-id` failures against old branches cut before earlier renumberings (and `flow list` tagged those flows `dup id`). Only a clash with the default branch (`<remote>/main`, `<remote>/master`, the `<remote>/HEAD` target) fails the check now; a clash with any other remote branch is a warning (`flow id <n> is also used on <ref> by a different flow (...); ignore it if that branch is stale, otherwise renumber one of them before it merges`) and does not change the exit code or the `dup id` tag. `flow init` and `flow renumber --to` still reserve numbers held by every known remote branch.
+
+[Changes since 0.3.53](https://github.com/MrCipherSmith/keryx/compare/v0.3.53...v0.3.54)
+
+## [0.3.53] — 2026-10-01
+### Added
+- **Flow ids no longer clash with other branches.** Flow ids come from a clone-local ledger, so a second clone or an unfetched branch could hand out a number another branch already used (on 2026-10-01 `origin/main` held 360-365 that differed from the local 360-365). `flow init` now reserves every number held by a known remote branch (the remote-tracking refs this clone has, read without a network, up to 500 refs, `<remote>/main` first; a branch that was never fetched is invisible, and `flow renumber` is the repair), `flow renumber --to` refuses such an id, and `flow check` fails a local folder whose number a remote branch holds under a different folder name as `duplicate-id`, naming the ref and ending with `keryx flow renumber <dir> --to <free id> --reason "<why>"`. No remotes, no refs or no git means nothing is known and nothing changes.
+- **`flow check` warns about a flow folder that is not committed.** After the normal output it prints `flow folder <dir> is not committed: commit it in the same PR as the code`. It is a warning: the exit code does not change. `flow list` and the TUI (the `/governance` flow list and the flow detail) tag the same flows `not committed`, and a clash with a remote branch `dup id`.
+- **A `folder-committed` completion gate.** `flow complete` and `flow check-complete` fail while the flow folder is not in `HEAD`, with `flow folder <dir> is not committed. Commit it (git add .metaproject/flows/<dir> && git commit) in the PR that carries the code, then run flow complete again`. Opt-in per package (`gates.folderCommitted`, written by `flow init`): flows created from 0.3.53 on carry it, older packages report the gate `skipped`, as does a directory that is not a git repository.
+### Changed
+- The rule is stated in the docs and the flow skills: the flow folder is committed in the same PR as the code, and the commit at closing is a rule to follow. The `folder-committed` gate does not enforce it; it requires only that the flow's `flow.json` is in `HEAD` before closing.
+
+[Changes since 0.3.52](https://github.com/MrCipherSmith/keryx/compare/v0.3.52...v0.3.53)
+
+## [0.3.52] — 2026-10-01
+### Security
+- **The shell now checks that the process it talks to is `serve`.** Before, nothing authenticated the listener to the shell: if `serve` died without cleanup and another local user bound its loopback port, the shell sent that listener its token and then wrote whatever "ready" pairing answer came back (an attacker's Telegram id as the operator, an attacker's group) into `config.json`. The shell now sends a nonce-bound HMAC of the shell token instead of the token, and `serve` signs every shell-route answer in `x-keryx-serve-proof`. A missing or wrong proof (another process, a tampered body, a replayed answer, a `serve` from before this version) is refused with "restart `keryx serve`" and nothing is written. This covers the seven `/channels` routes and every remote-control call (register, approval, reply, heartbeat, ack, deregister and the stream, whose fake lines and approval decisions a squatter could otherwise feed to the shell). `serve` still accepts the raw token from an older shell. A restarting `serve` now removes the previous endpoint file before it mints its token, and the shell reads the token before the endpoint, so a new token is never sent to a port left over from an earlier `serve`; the shell no longer follows redirects, so a redirect cannot replay a request at the real `serve`.
+### Fixed
+- **A pairing that finished while the modal was closed is resumable.** `/channels` offers Resume instead of starting over, and Resume connects it.
+- **A mistyped token on a second Connect no longer kills an open pairing.** The new token is checked first; the existing pairing is replaced only once the new one is valid.
+- **Turning Topics on no longer strands the pairing.** The group becomes a supergroup with a new id; the pairing follows `migrate_to_chat_id` / `migrate_from_chat_id` and keeps checking the right chat.
+
+[Changes since 0.3.51](https://github.com/MrCipherSmith/keryx/compare/v0.3.51...v0.3.52)
+
+## [0.3.51] — 2026-10-01
+### Fixed
+- **`/channels` pairing, review fixes.** A pairing that was cancelled or had expired while Telegram was still answering about the group can no longer come back to ready, and its status answers `no-pairing` once it was closed during the check. The bot being added to the group before the code was sent now works: the group event of the paired operator is kept and used when the code is accepted (events from anybody else are still ignored). The group step has its own 10 minutes from the moment the code is accepted, and the modal shows the time left.
+- **Disconnect and Test wait for a Telegram start that is still in flight**, so a Disconnect pressed mid-start can no longer leave a running hub with nothing on disk.
+- **A reconnect to another group no longer reuses topics recorded for the old one.** Records whose group differs from the configured one are forgotten when the hub starts.
+- **`/channels` in the "configured, but not running" state has a Retry button** next to Disconnect, which starts Telegram again from the saved token and config and shows the result. Esc is ignored while the modal is working, so its outcome is seen.
+### Notes
+- Docs: `remote control is off: <reason>` is printed only for an invalid config or a refused start; with no files `serve` prints `channels ready: connect Telegram from the shell with /channels`.
+
+[Changes since 0.3.50](https://github.com/MrCipherSmith/keryx/compare/v0.3.50...v0.3.51)
+
+## [0.3.50] — 2026-10-01
+### Added
+- **`/governance` opens on a list of flows you can act on.** The modal has a Flows tab before the report: the current project's flows, open ones first, each with a summary (its expected outcome, tasks done, the tasks still open) and its stated effect — the bullets of `## Outcome criteria` in `description.md`, or `effect: not stated` with the reason. On an open flow, `c` checks whether it can be completed; once a check passed and the PR is merged, `d` asks for the flow id typed back (Escape or any other key cancels), checks again against the live flow, and only if nothing changed runs the real `flow complete`, then re-runs the report so the list shows the result. A flow created with `--require-confirmation` is pointed at `keryx flow confirm` in a terminal instead; the modal never mints a token. The report itself is the second tab, unchanged.
+- **`keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]`** — every gate `flow complete` would evaluate, through the same code, plus the PR's merge state (`merged`, `open`, `closed`, `not-found`, `no-pr`, `unknown`) and, under each failing gate, the command that fixes it where one is known. It writes nothing: no status change, no completion attempt, no signature, no lock, no spent token. Exits 0 when `flow complete` would pass, 1 when it would not, 2 when the check could not run (with `--json`, an `{"error":{"message"}}` object).
+- **`keryx governance report` prints `summary:` and `effect:` under every flow**, and `latest.json` carries them as `summary` and `effect`. A report stored before this version still loads and reads `not recorded` for both.
+### Changed
+- The GitHub tracker returns the PR's `state` (`OPEN`, `MERGED`, `CLOSED`), which it already fetched. The pull-request gate is unchanged: it still asks for green checks, not a merge.
+- The product index and the governance report read `## Outcome criteria` bullets through one parser; the governance report also reads a section written as prose or a numbered list, which the product index still does not count as a criterion.
+
+[Changes since 0.3.49](https://github.com/MrCipherSmith/keryx/compare/v0.3.49...v0.3.50)
 
 ## [0.3.49] — 2026-10-01
 ### Added

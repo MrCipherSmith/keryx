@@ -1,0 +1,20 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+## Criteria
+
+- AC1: A new shared contract test (`src/harness/provider/stream-contract.test.ts`) runs the same three rows against each of the four full adapters (anthropic, openai, gemini, openai-compat): (a) stream EOF while a tool call is still accumulating → exactly one `provider_error` of kind `malformed` naming the pending tool-call id in `detail.pendingToolCallId`, and no `tool_call_end` for that call; (b) an in-stream error envelope/event → one `provider_error` whose `kind`/`retryable` come from that adapter's existing pre-2xx classifier (a Gemini 503 envelope is `retryable: true`); (c) a tool call the provider sends without an id gets a synthetic id unique within the response (two same-named calls → two distinct `toolCallId`s, results linked to the right call). The compat adapter (`flushPendingToolEnds`) and the Gemini streaming loop and `callId` fallback are changed so all four pass; the anthropic and openai adapters keep their current behaviour (the table documents it).
+- AC2: L-10 is decided by a real probe against the ChatGPT-subscription Responses endpoint (one minimal request with `max_output_tokens`, via the saved `openai-codex` grant; recorded in the flow journal with the response status): if accepted, `openai-provider.ts` sends `max_output_tokens` on the Codex branch too and a test pins it; if rejected, the comment at the Codex branch says the endpoint rejects it and a test pins the omission. L-9 (Gemini thought signatures) is recorded in `docs/requirements/keryx-audit-remediation/findings.md` as open with the reason `no Gemini credential on the build machine; needs an endpoint probe`.
+- AC3: An OpenAI Responses usage payload with `input_tokens_details.cached_tokens` populates the normalized usage `cacheReadTokens` (the field the Anthropic adapter fills) and the cost accounting applies the cached-input rate; a test asserts both.
+- AC4: The sequential tool loop in `src/commands/agent.ts` has the same error boundary as the concurrent spawn path: a tool `invoke` or `requestApproval` callback that throws yields an error tool result (`isError: true`, message in `output`), the turn continues or ends normally, and the `Stop` hook fires; a test drives a throwing tool through `runAgentTurn` and asserts the tool result, the finish reason and the hook.
+- AC5: In `keryx shell`, `/new` and `/clear` reset `lastToolOutput`/`lastToolName` so `/expand` afterwards reports nothing to expand (test); `completionWaiters` is bounded — after 100 operator lines with no background completions the waiter count is at most the number of live background jobs plus one (test).
+- AC6: `provisionWorktrees` (`src/harness/child/worktree.ts`) removes the worktrees it created in the same call when a later `create()` throws, then rethrows (test), or is deleted together with its test if it still has no production caller — either outcome recorded in the ledger. `src/mcp-client/credential-boundary.test.ts`'s header states that the guarded functions have no production caller today and what the test pins for a future one. The duplicate source-text AC7 audit in `src/commands/shell-bus.test.ts` (flow 352 review R-I3) is deleted and the source-text-audit manifest updated.
+- AC7: `docs/requirements/keryx-audit-remediation/findings.md` rows L-1, L-2, L-3, L-10, L-11, L-12, L-13, L-14, L-15, R-M3, R-I3 carry `fixed` (PR, test name) or `accepted`/`open` (reason); L-9 stays open with its reason. Version bumped.
+- AC8: typecheck, lint and every touched test file pass; every provider adapter's own test file still passes; docs (`docs/docs/harness.md` provider section or the relevant page) mention the shared stream contract; CHANGELOG entry and package.json bump.

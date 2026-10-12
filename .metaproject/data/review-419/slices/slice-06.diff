@@ -1,0 +1,678 @@
+--- src/tui/approval-mirror.test.ts
+@@ 1,157 @@
++// AC2 (flow 419): an approval raised in the shell is answered once, from whichever place answers first,
++// and the other place is taken down. Both orders, plus silence in the topic and a stopped turn.
++
++import { describe, expect, test } from "bun:test";
++import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
++import { type DockRace, isTopicPress, raceApproval } from "./approval-mirror";
++
++const press = (decision: "allow" | "deny", fromId = 7): RemoteApprovalAnswer => ({ decision, always: false, fromId });
++const silence: RemoteApprovalAnswer = { decision: "deny", always: false };
++
++function abortedWith(signal: AbortSignal): Promise<unknown> {
++  return new Promise((resolve) => {
++    if (signal.aborted) return resolve(signal.reason);
++    signal.addEventListener("abort", () => resolve(signal.reason), { once: true });
++  });
++}
++
++describe("isTopicPress", () => {
++  test("an allow, or a deny from a named user, is a press; a timeout deny is not", () => {
++    expect(isTopicPress(press("allow"))).toBe(true);
++    expect(isTopicPress(press("deny"))).toBe(true);
++    expect(isTopicPress(silence)).toBe(false);
++  });
++});
++
++describe("raceApproval", () => {
++  test("the dock answers first: the topic leg is aborted with the reason shell", async () => {
++    let topicSignal: AbortSignal | undefined;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race: DockRace) => {
++        race.opened();
++        return "allowed-in-dock";
++      },
++      topic: (signal) => {
++        topicSignal = signal;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "allowed-in-dock" });
++    expect(topicSignal?.aborted).toBe(true);
++    expect(topicSignal?.reason).toBe("shell");
++  });
++
++  test("a press in the topic ends the dock and wins", async () => {
++    const answer = press("allow");
++    let dockReason: unknown;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        dockReason = await abortedWith(race.signal);
++        expect(race.topicWon()).toBe(true);
++        return "ignored";
++      },
++      topic: async () => answer,
++    });
++    expect(outcome).toEqual({ from: "topic", answer });
++    expect(dockReason).toBe("topic");
++  });
++
++  test("a denial pressed in the topic wins too", async () => {
++    const answer = press("deny");
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        await abortedWith(race.signal);
++        return "ignored";
++      },
++      topic: async () => answer,
++    });
++    expect(outcome).toEqual({ from: "topic", answer });
++  });
++
++  test("silence in the topic never ends the dock", async () => {
++    let dockAbortedEarly = true;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        await new Promise((resolve) => setTimeout(resolve, 15));
++        dockAbortedEarly = race.signal.aborted;
++        return "dock";
++      },
++      topic: async () => silence,
++    });
++    expect(dockAbortedEarly).toBe(false);
++    expect(outcome).toEqual({ from: "dock", result: "dock" });
++  });
++
++  test("a topic that fails never ends the dock", async () => {
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        await new Promise((resolve) => setTimeout(resolve, 5));
++        return "dock";
++      },
++      topic: async () => {
++        throw new Error("serve is gone");
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "dock" });
++  });
++
++  test("the turn stops: the dock closes and the topic leg is told it was cancelled", async () => {
++    const turn = new AbortController();
++    let topicSignal: AbortSignal | undefined;
++    const outcome = await raceApproval({
++      turnSignal: turn.signal,
++      dock: async (race) => {
++        race.opened();
++        queueMicrotask(() => turn.abort("cancelled"));
++        await abortedWith(race.signal);
++        return "stopped";
++      },
++      topic: (signal) => {
++        topicSignal = signal;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "stopped" });
++    expect(topicSignal?.reason).toBe("cancelled");
++  });
++
++  test("a dock that never opens never starts the topic leg", async () => {
++    let started = false;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async () => "auto-approved",
++      topic: () => {
++        started = true;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "auto-approved" });
++    expect(started).toBe(false);
++  });
++
++  test("opened() starts the topic leg once", async () => {
++    let starts = 0;
++    await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        race.opened();
++        return "x";
++      },
++      topic: () => {
++        starts += 1;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(starts).toBe(1);
++  });
++});
+
+--- src/tui/remote-queue-wiring.test.ts
+@@ 211,217 @@
+   // The closing line comes once the topic is really gone.
+   await Promise.resolve();
+   await new Promise((resolve) => setTimeout(resolve, 0));
+-  expect(r.said.join("")).toContain("remote control off: the topic is deleted.");
++  expect(r.said.join("")).toContain("remote control off: the topic is archived.");
+ });
+ 
+ test("AC4 F-014: with remote control off a session switch says nothing", async () => {
+
+--- src/tui/remote-queue-wiring.test.ts
+@@ 259,294 @@
+   expect(said).toEqual([]);
+ });
+ 
++test("flow 419 AC5: the tool's name reaches the bridge, its input does not", () => {
++  const seen: unknown[][] = [];
++  const bridge = {
++    active: true,
++    keepingTopic: false,
++    disable: async () => true,
++    sessionLeaving: () => {},
++    queuedLineRemoved: () => {},
++    turnStarted: () => {},
++    assistantText: () => {},
++    toolCall: (...args: unknown[]) => seen.push(args),
++    turnSettled: async () => {},
++  } satisfies RemoteQueueBridge;
++  const wiring = createRemoteQueueWiring({
++    getBridge: () => bridge,
++    getQueue: () => [],
++    setQueue: () => {},
++    nextId: () => "q",
++    summarize: (text) => text,
++    paint: () => {},
++    composer: { setText: () => {}, focus: () => {} },
++    say: () => {},
++    runLine: () => {},
++  });
++  const base: string[] = [];
++  wiring.wrapOnToolCall((name: string, input: string) => base.push(`${name}:${input}`))("shell_exec", '{"command":"ls"}');
++  expect(seen).toEqual([["shell_exec"]]);
++  expect(base).toEqual(['shell_exec:{"command":"ls"}']);
++});
++
+ // ---- F-015: narration before a tool call is not the answer ---------------------------
+ 
+ test("AC4 F-015: text said before a tool call is dropped; a settled turn with no later text says so", async () => {
+
+--- src/tui/tui-shell.test.ts
+@@ 2927,2941 @@
+     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
+     expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
+     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
+-    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
++    // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the
++    // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.
++    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));");
++    const mirrorStart = fnBodyPlan.indexOf("const mirrorApprovalToTopic =");
++    const mirrorEnd = fnBodyPlan.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic", mirrorStart);
++    expect(mirrorStart).toBeGreaterThanOrEqual(0);
++    expect(mirrorEnd).toBeGreaterThan(mirrorStart);
++    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).not.toContain("telegramTurnActive");
++    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).toContain("inner(tool, inputJson, meta, race)");
+     expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
+     expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
+   });
+
+--- src/tui/approval-mirror.ts
+@@ 1,67 @@
++// Where an approval of a turn typed in the shell is answered (flow 419, AC1 and AC2).
++//
++// The dock opens in the terminal; when remote control is on, the same question is posted to the topic at
++// the moment the dock opens (a call that is auto-approved never reaches the topic). The first answer wins and
++// the other place is taken down: a press in the topic aborts the dock, an answer in the dock aborts the topic
++// leg, which tells serve to remove the buttons. Silence in the topic (a timeout, no connection) never ends
++// the question; the dock stays. Kept apart from the TUI so the race can be tested without a renderer.
++
++import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
++
++/** What the dock-opening code in the shell sees of the race. */
++export interface DockRace {
++  /** Aborted when the turn stops or the topic answered first: the dock closes. */
++  readonly signal: AbortSignal;
++  /** The dock just opened: the topic leg starts (once). */
++  opened(): void;
++  /** The topic answered first. The dock's own result is then to be thrown away. */
++  topicWon(): boolean;
++}
++
++export type ApprovalRaceOutcome<V> = { from: "dock"; result: V } | { from: "topic"; answer: RemoteApprovalAnswer };
++
++/** An explicit press in the topic: an allow, or a deny that names who pressed. A timeout or an abort is neither. */
++export function isTopicPress(answer: RemoteApprovalAnswer): boolean {
++  return answer.decision === "allow" || answer.fromId !== undefined;
++}
++
++export async function raceApproval<V>(options: {
++  /** Runs the dock; resolves with its verdict, or early when `race.signal` aborted it. */
++  dock: (race: DockRace) => Promise<V>;
++  /** Asks in the topic; the answer is judged by {@link isTopicPress}. `signal` aborts it, with the reason "shell" or "cancelled". */
++  topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
++  /** The turn stopped: both places are closed, the topic one as cancelled. */
++  turnSignal: AbortSignal;
++}): Promise<ApprovalRaceOutcome<V>> {
++  const dockAbort = new AbortController();
++  const topicAbort = new AbortController();
++  let topicAnswer: RemoteApprovalAnswer | undefined;
++  let settled = false;
++  let started = false;
++  const race: DockRace = {
++    signal: AbortSignal.any([options.turnSignal, dockAbort.signal]),
++    opened: () => {
++      if (started || settled) return;
++      started = true;
++      void options
++        .topic(topicAbort.signal)
++        .then((answer) => {
++          if (settled || !isTopicPress(answer)) return;
++          topicAnswer = answer;
++          dockAbort.abort("topic");
++        })
++        .catch(() => undefined);
++    },
++    topicWon: () => topicAnswer !== undefined,
++  };
++  try {
++    const result = await options.dock(race);
++    if (topicAnswer !== undefined) return { from: "topic", answer: topicAnswer };
++    return { from: "dock", result };
++  } finally {
++    settled = true;
++    // answered in the dock: serve says "answered in the shell"; the turn stopped: "cancelled". A leg that
++    // already ended ignores the abort, so a press that won keeps its own final state.
++    if (topicAnswer === undefined) topicAbort.abort(options.turnSignal.aborted ? "cancelled" : "shell");
++  }
++}
+
+--- src/tui/remote-queue-wiring.ts
+@@ 128,139 @@
+         return;
+       }
+       if (bridge?.active !== true) return;
+-      // The close is asynchronous (it deregisters, which deletes the topic): say it is
++      // The close is asynchronous (it deregisters, which archives the topic): say it is
+       // being turned off now, and that the topic is gone only once it really is. `disable`
+       // takes the queued Telegram lines out before its first await, so none is left behind.
+       const closing = bridge.disable();
+-      deps.say("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
+-      void closing.then(() => deps.say("◇ remote control off: the topic is deleted.\n"));
++      deps.say("◇ remote control is turning off: the session changed, and its Telegram topic is being archived. Turn it on again with /remote-control <name>.\n");
++      void closing.then(() => deps.say("◇ remote control off: the topic is archived.\n"));
+     },
+ 
+     dropQueuedTelegramLines() {
+
+--- src/tui/remote-queue-wiring.ts
+@@ 169,175 @@
+ 
+     wrapOnToolCall(base) {
+       return (...args) => {
+-        deps.getBridge()?.toolCall();
++        deps.getBridge()?.toolCall(typeof args[0] === "string" ? args[0] : undefined);
+         base?.(...args);
+       };
+     },
+
+--- src/tui/tui-shell.ts
+@@ 82,89 @@
+ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+ import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
+ import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
++import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
++import { type DockRace, raceApproval } from "./approval-mirror";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+ import type { CommandOutcome } from "../remote/command-router";
+
+--- src/tui/tui-shell.ts
+@@ 1985,1998 @@
+  * renderer before it does (the startup picker) and in the chat shell, which
+  * keep the full-screen overlay.
+  */
++/** The dock side of an approval: `race` is set when the question is also in the Telegram topic. */
++type LocalApproval = (
++  tool: string,
++  inputJson: string,
++  meta: Parameters<NonNullable<TuiAgentIo["requestApproval"]>>[2],
++  race?: DockRace,
++) => ReturnType<NonNullable<TuiAgentIo["requestApproval"]>>;
++
+ type StepTarget = Renderer | ModalChrome;
+ 
+ /** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
+
+--- src/tui/tui-shell.ts
+@@ 3952,3958 @@
+         liveReviewsPanel?.dispose();
+         liveRemotePanel?.dispose();
+         liveChannelsPanel?.dispose();
+-        // Closing the shell deregisters: the topic goes with it. Best effort here
++        // Closing the shell deregisters: the topic is archived (closing note, history kept). Best effort here
+         // (this callback is synchronous); the `finally` below awaits the same call.
+         void remoteBridge?.disable();
+         liveApprovals?.dispose();
+
+--- src/tui/tui-shell.ts
+@@ 4623,4630 @@
+     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
+     setSubagentFleetListener((ev) => {
+       sessions.apply(ev);
++      // Flow 419 (AC5): the first subagent to start and the last to finish are a wave boundary for the topic.
++      remoteBridge?.subagentEvent(ev);
+     });
+     // Flow 173 (AC8): shell_exec(background:true)'s JobRegistry → sidebar/inspector.
+     setBackgroundJobListener((ev) => {
+
+--- src/tui/tui-shell.ts
+@@ 5262,5269 @@
+     // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
+     // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
+     // offers exactly two choices; Esc/cancel is "no".
+-    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {
++    const confirmScheduleCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
++      const dockSignal = race?.signal ?? foregroundOperation.signal;
+       for (const line of card) {
+         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+       }
+
+--- src/tui/tui-shell.ts
+@@ 5274,5284 @@
+           title: "Create this schedule and install its background timer?",
+           subtitle: card[0] ?? "",
+           cancelId: "cancel",
+-          onOpen: () => chrome.blurComposer(),
+-          signal: foregroundOperation.signal,
++          onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++          signal: dockSignal,
+           options: [
+             { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
+             { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
+
+--- src/tui/tui-shell.ts
+@@ 5286,5292 @@
+         }),
+       );
+       input.focus();
++      if (race?.topicWon() === true) return false;
+       setMainAgent("running", id === "create" ? "schedule" : "denied");
+       transcript.add(
+         new otui.TextRenderable(r, {
+
+--- src/tui/tui-shell.ts
+@@ 5308,5315 @@
+     // chat message may reach the model. Same card-then-choice shape, accurate
+     // wording, never remembered — like `confirmScheduleCard`, this answers a
+     // gate a hook raised, not a grant a saved pattern could stand in for.
+-    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {
++    const confirmUserPromptCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
++      const dockSignal = race?.signal ?? foregroundOperation.signal;
+       for (const line of card) {
+         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+       }
+
+--- src/tui/tui-shell.ts
+@@ 5320,5330 @@
+           title: "Send this message to the model?",
+           subtitle: card[0] ?? "",
+           cancelId: "cancel",
+-          onOpen: () => chrome.blurComposer(),
+-          signal: foregroundOperation.signal,
++          onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++          signal: dockSignal,
+           options: [
+             { id: "send", label: "Send", description: "Let the message reach the model as written" },
+             { id: "cancel", label: "Cancel", description: "The message is not sent" },
+
+--- src/tui/tui-shell.ts
+@@ 5332,5338 @@
+         }),
+       );
+       input.focus();
++      if (race?.topicWon() === true) return false;
+       setMainAgent("running", id === "send" ? "prompt" : "denied");
+       transcript.add(
+         new otui.TextRenderable(r, {
+
+--- src/tui/tui-shell.ts
+@@ 5378,5385 @@
+         }),
+       );
+     };
+-    const requestApprovalLocally: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
++    const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
++      const dockSignal = race?.signal ?? foregroundOperation.signal;
+       if (meta?.untrustedOrigin === true) {
+         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
+         // the call outright — this says why the operator is being asked.
+
+--- src/tui/tui-shell.ts
+@@ 5397,5403 @@
+       // message.
+       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
+         addCauseLine(tool, meta);
+-        return confirmUserPromptCard(meta.card);
++        return confirmUserPromptCard(meta.card, race);
+       }
+ 
+       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
+
+--- src/tui/tui-shell.ts
+@@ 5405,5411 @@
+       // never remembered — no mode and no saved pattern answers it.
+       if (meta?.alwaysAsk === true && meta.card !== undefined) {
+         addCauseLine(tool, meta);
+-        return confirmScheduleCard(meta.card);
++        return confirmScheduleCard(meta.card, race);
+       }
+ 
+       // Multi-agent spawn: auto-allow read_only; ask for general.
+
+--- src/tui/tui-shell.ts
+@@ 5456,5466 @@
+                 : "Spawn general subagent?",
+             subtitle: taskPreview,
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               {
+                 id: "allow",
+
+--- src/tui/tui-shell.ts
+@@ 5473,5479 @@
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         setMainAgent("running", id === "allow" ? "subagent" : "denied");
+         transcript.add(
+           new otui.TextRenderable(r, {
+
+--- src/tui/tui-shell.ts
+@@ 5526,5536 @@
+             title: "Approve apply_patch?",
+             subtitle: "Diff shown above · Esc denies",
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
+               { id: "deny", label: "Deny", description: "Do not write anything" },
+
+--- src/tui/tui-shell.ts
+@@ 5538,5544 @@
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         setMainAgent("running", id === "allow" ? "write" : "denied");
+         transcript.add(
+           new otui.TextRenderable(r, {
+
+--- src/tui/tui-shell.ts
+@@ 5609,5619 @@
+             // so no payload prefix can occupy the line read first.
+             subtitle: summariseUseToolApproval(described),
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
+               ...(canTrustMcp
+
+--- src/tui/tui-shell.ts
+@@ 5624,5630 @@
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         // Keep the allow/trust/deny mapping in a tested, fail-closed helper.
+         const verdict = mcpDockVerdict(id, canTrustMcp, meta?.fingerprint);
+         const allowed = verdict !== false;
+
+--- src/tui/tui-shell.ts
+@@ 5690,5700 @@
+             title: "Approve codex elicitation?",
+             subtitle: elicitationSubtitle,
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
+               { id: "deny", label: "Deny", description: "codex's action is refused" },
+
+--- src/tui/tui-shell.ts
+@@ 5702,5708 @@
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         setMainAgent("running", id === "allow" ? "write" : "denied");
+         transcript.add(
+           new otui.TextRenderable(r, {
+
+--- src/tui/tui-shell.ts
+@@ 5792,5802 @@
+           destructive,
+           meta?.credentials === true,
+           {
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+           },
+           // Flow 275 T7 (specification §4.4): never offer to remember while a
+           // peer's `git-publish` lease applies to this command.
+
+--- src/tui/tui-shell.ts
+@@ 5810,5816 @@
+         ),
+       );
+       input.focus();
++      if (race?.topicWon() === true) return false;
+ 
+       if (choice === "deny") {
+         transcript.add(
+
+--- src/tui/tui-shell.ts
+@@ 5924,5957 @@
+       if (decision !== "allow") return false;
+       return approvedAnswer();
+     };
+-    io.requestApproval = trackApproval(requestApprovalLocally);
++    // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
++    // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
++    // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
++    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;
++    // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.
++    const mirrorApprovalToTopic =
++      (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
++      async (tool, inputJson, meta) => {
++        const bridge = remoteBridge;
++        if (bridge === undefined || !bridge.active) {
++          return inner(tool, inputJson, meta);
++        }
++        const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
++        const outcome = await raceApproval({
++          turnSignal: foregroundOperation.signal,
++          dock: (race) => inner(tool, inputJson, meta, race),
++          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
++          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
++        });
++        if (outcome.from === "dock") return outcome.result;
++        const allowed = outcome.answer.decision === "allow";
++        input.focus();
++        setMainAgent("running", allowed ? "approved (telegram)" : "denied");
++        io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
++        if (!allowed) return false;
++        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
++      };
++    io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
+ 
+     /** Host for ask_user — Claude-style options docked above the composer. */
+     const askUserInteractive = async (req: {
+
+--- src/tui/tui-shell.ts
+@@ 5969,5976 @@
+           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
+         }),
+       );
+-      // flow 401: a question of a Telegram-started turn is also put in the topic; the first answer wins
+-      const topicBridge = remoteBridge?.telegramTurnActive === true ? remoteBridge : undefined;
++      // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
++      const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;
+       const outcome = await raceAskUser({
+         turnSignal: foregroundOperation.signal,
+         ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
+
+--- src/tui/tui-shell.ts
+@@ 10111,10117 @@
+         // the newest answer in `history` unfinished. A queued line or another holder of the lease
+         // makes the shell busy without making that answer incomplete.
+         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
++        sessionState: () => ({ queued: mainQueue.length, mode: formatModeInForce(modeForTurn(true)) }),
+         runLine: (text) => remoteQueue.runTelegramLine(text),
+         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
+         notice: (text) => io.onSystem?.(`${text}\n`),

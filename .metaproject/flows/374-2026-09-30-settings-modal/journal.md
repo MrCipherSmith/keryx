@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-09-30T21:03:01.927Z - flow created
+- 2026-09-30T22:23:36.650Z - frozen: 9 criteria; checksum recorded
+- 2026-09-30T22:23:37.067Z - started
+- 2026-09-30T22:48:47.501Z - ac-updated: AC8: "README or docs site, `commands-by-task` and CHANGELOG describe `/settings`; version bumped to 0.3.45." -> "README or docs site, `commands-by-task` and CHANGELOG describe `/settings`; version bumped to 0.3.46 (0.3.45 was taken by another release on main)." (0.3.45 already released from main (b0e9609f) while this flow was in progress; version number only, no behavioural change)
+- 2026-09-30T23:25:04.994Z - task-done: T1: Collect remaining context
+- 2026-09-30T23:25:05.166Z - task-done: T2: Implement per plan
+- 2026-09-30T23:25:05.333Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-30T23:25:05.505Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-30T23:25:05.677Z - ac-confirmed: AC1: settings-model tests (19+) and settings-state tests; PR #814 merged e357ccc3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:05.843Z - ac-confirmed: AC2: settings-modal tests incl. inputBlocked and two-step Enter; verifier refuted F-001..F-006 at f240da30 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:06.009Z - ac-confirmed: AC3: settings-actions tests: rows run the existing handlers, no disk write for mode/plan (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:06.175Z - ac-confirmed: AC4: modal tests: auto needs a second Enter at least 400 ms later (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:06.343Z - ac-confirmed: AC5: settings-model tests: scope per row and per reasoning source (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:06.513Z - ac-confirmed: AC6: shell-agent-repl tests for the readline table (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:06.680Z - ac-confirmed: AC7: agent-commands, help-groups, tui-shell tests; sidebar click via settingsOpenDecision (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:25:06.848Z - ac-confirmed: AC8: README, onboarding, modules, commands-by-task, CHANGELOG 0.3.46, package.json 0.3.46 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:37:56.487Z - ac-confirmed: AC9: live TUI smoke on npm-installed 0.3.46 in a scratch project via pty: /settings modal lists all rows; Plan on then off, Reasoning display expand then back to auto; no external agents used; keryx tree has no new tracked changes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T23:37:58.657Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/814 (warning: PR is not a draft) (base: main)
+- 2026-09-30T23:38:00.108Z - completing
+- 2026-09-30T23:38:04.105Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-30T23:38:04.106Z - done: all gates passed

@@ -1,3 +1,51 @@
 # Flow Journal
 
 - 2026-09-30T17:46:53.626Z - flow created
+- 2026-10-01T07:40:14.322Z - task-added: T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)
+- 2026-10-01T07:40:20.147Z - task-added: T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)
+- 2026-10-01T07:40:22.316Z - task-attempt: T5: started (attempt 1) — 362-T5 sonnet
+- 2026-10-01T07:40:27.781Z - task-attempt: T6: started (attempt 1) — 362-T6 sonnet
+- 2026-10-01T07:51:48.712Z - task-done: T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)
+- 2026-10-01T07:53:45.360Z - task-done: T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)
+- 2026-10-01T07:54:08.918Z - task-done: T1: Collect remaining context
+- 2026-10-01T07:54:10.661Z - task-done: T2: Implement per plan
+- 2026-10-01T07:54:12.579Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-01T07:54:14.443Z - task-added: T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged
+- 2026-10-01T07:54:16.443Z - task-added: T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)
+- 2026-10-01T07:54:18.278Z - task-added: T9: Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts
+- 2026-10-01T07:54:26.143Z - frozen: 4 criteria; checksum recorded
+- 2026-10-01T07:54:28.567Z - started
+- 2026-10-01T07:54:31.168Z - task-attempt: T7: started (attempt 1) — 362-T7 sonnet
+- 2026-10-01T07:54:33.780Z - task-attempt: T8: started (attempt 1) — 362-T8 sonnet
+- 2026-10-01T08:05:05.841Z - task-done: T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)
+- 2026-10-01T08:08:16.952Z - task-done: T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged
+- 2026-10-01T08:08:18.858Z - task-attempt: T9: started (attempt 1) — 362-T9 sonnet
+- 2026-10-01T08:13:49.615Z - task-done: T9: Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts
+- 2026-10-01T08:14:27.430Z - task-added: T10: Review round on PR #822, fixes, targeted re-verification
+- 2026-10-01T08:14:29.362Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-01T08:14:35.064Z - task-attempt: T10: started (attempt 1) — 362-T10 review round 1 over origin/main..c8ef114e
+- 2026-10-01T08:25:36.172Z - task-attempt: T10: failed (attempt 2) — round 1 at c8ef114e: 1 major (K-001 disabled module), 4 minor (K-002..K-005), 2 info; fix task T11
+- 2026-10-01T08:25:38.049Z - task-added: T11: Round 1 fixes: injection check without the security module, no rules from refused packages, non-zero exit on refusal, gate before scaffold, hint only for injection (K-001..K-004, K-006)
+- 2026-10-01T08:26:08.212Z - task-attempt: T11: started (attempt 1) — 362-T11 sonnet
+- 2026-10-01T09:58:19.297Z - task-done: T11: Round 1 fixes: injection check without the security module, no rules from refused packages, non-zero exit on refusal, gate before scaffold, hint only for injection (K-001..K-004, K-006)
+- 2026-10-01T09:58:44.333Z - task-attempt: T10: started (attempt 3) — independent re-verification of K-001..K-006 at 967e7020 (sonnet verifier)
+- 2026-10-01T10:11:41.918Z - task-added: T12: Fix CI: the bundled reviewer-skill-creator example must not quote injection text (own-repo round-trip audit refuses it)
+- 2026-10-01T10:11:48.855Z - task-attempt: T12: started (attempt 1) — 362-T12 sonnet
+- 2026-10-01T10:12:27.016Z - task-added: T13: skills update --dry-run gates the refreshed source so it reports would-refuse like the real run
+- 2026-10-01T10:12:28.678Z - task-attempt: T13: started (attempt 1) — 362-T13 sonnet
+- 2026-10-01T10:13:15.857Z - task-done: T12: Fix CI: the bundled reviewer-skill-creator example must not quote injection text (own-repo round-trip audit refuses it)
+- 2026-10-01T10:15:12.722Z - task-done: T13: skills update --dry-run gates the refreshed source so it reports would-refuse like the real run
+- 2026-10-01T10:38:11.957Z - task-attempt: T10: started (attempt 4) — closing review record at PR head (sonnet bookkeeping)
+- 2026-10-01T10:42:33.477Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/822 (warning: PR is not a draft)
+- 2026-10-01T10:43:01.986Z - ac-confirmed: AC1: src/gdskills/import-skills-gate.test.ts (refused/would-refuse for injection in advisory, enforced and with the security module disabled; secret redacted and reported; dry run equals real run for import and update; no scaffold on refusal; --json security object; --allow-flagged). Independently re-run against the source CLI at 967e7020 (K-001..K-004, K-006 refuted) and the update dry-run parity checked at 42201489. CI green on PR #822 head 42201489. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T10:43:02.155Z - ac-confirmed: AC2: src/gdskills/remove-skill.test.ts: a registry entry named '..' or '.' is refused (F-010/R02) and a registered path with a trailing slash is the entry's own package (R06); each test went red with its clause removed (2072edf4). CI green. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T10:43:02.327Z - ac-confirmed: AC3: reviewer-skill-creator SKILL.detail.md 'The security gate on import' and docs/docs/cli-reference.md (skills import, skills update, review import rows) describe the rows, --allow-flagged, the --json security object, the disabled-module check and exit 1 (c8ef114e, 967e7020, f5b69c80); skills verify --bundled 0 findings; the own-repo round-trip audit passes. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T10:43:02.480Z - ac-confirmed: AC4: CI on PR #822 head 42201489: every check green, including typecheck-and-tests (lint, typecheck, full suite) and the bundled-skill checks. keryx health run is evaluated by flow complete's health gate. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T10:43:02.665Z - completing
+- 2026-10-01T10:43:07.745Z - completion-attempt-recorded: attempt 1: failed
+- 2026-10-01T10:43:07.751Z - completion-failed: tasks: not done: T10 | health: no report; run `keryx health run` first
+- 2026-10-01T10:43:14.885Z - task-done: T10: Review round on PR #822, fixes, targeted re-verification
+- 2026-10-01T10:44:16.132Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/822 (warning: PR is not a draft)
+- 2026-10-01T10:44:19.679Z - completing
+- 2026-10-01T10:44:25.543Z - completion-attempt-recorded: attempt 2: passed
+- 2026-10-01T10:44:25.545Z - done: all gates passed

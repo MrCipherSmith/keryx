@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { saveOAuthGrant } from "../lib/oauth/grants";
 import {
   extractContextWindow,
   extractOllamaContextWindow,
@@ -132,6 +136,47 @@ describe("loadSessionLimits", () => {
       env: { GROQ_API_KEY: "k" },
     });
     expect(down.contextWindow).toBeUndefined();
+  });
+
+  // Flow 387 T6: shape-accurate, synthetic `chatgpt.com/backend-api/codex/models`
+  // body (no real token / account id). `context_window` wins; `max_context_window`
+  // is the fallback; an entry with neither stays unknown.
+  const CODEX_MODELS_FIXTURE = {
+    models: [
+      { slug: "gpt-5.3-codex", visibility: "list", context_window: 272000, max_context_window: 1000000 },
+      { slug: "gpt-5.2-codex", visibility: "list", max_context_window: 400000 },
+      { slug: "gpt-no-window", visibility: "list" },
+    ],
+  };
+
+  async function codexLimits(model: string) {
+    const dir = mkdtempSync(join(tmpdir(), "codex-limits-"));
+    try {
+      const access = `e30.${Buffer.from(JSON.stringify({ exp: 4102444800, "https://api.openai.com/auth": { chatgpt_account_id: "acct-synthetic" } })).toString("base64url")}.sig`;
+      saveOAuthGrant("openai-codex", { method: "device-code", access, expires: 4102444800000, accountId: "acct-synthetic", obtainedAt: "2026-01-01T00:00:00.000Z" }, dir);
+      const fetchFn = (async (url: string) => {
+        if (url.includes("registry.npmjs.org")) return Response.json({ name: "@openai/codex", version: "0.99.0" });
+        if (url.includes("/backend-api/codex/models")) return Response.json(CODEX_MODELS_FIXTURE);
+        return new Response("{}", { status: 404 });
+      }) as unknown as typeof fetch;
+      return await loadSessionLimits({ provider: "openai-codex", model, fetch: fetchFn, env: {}, configDir: dir });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("openai-codex reads context_window, else max_context_window, from the live /models entry", async () => {
+    const primary = await codexLimits("gpt-5.3-codex");
+    expect(primary.contextWindow).toBe(272000);
+    expect(primary.contextSource).toBe("live-models");
+    expect((await codexLimits("gpt-5.2-codex")).contextWindow).toBe(400000);
+  });
+
+  test("openai-codex: unknown slug or absent fields stay undefined — no hardcoded default", async () => {
+    expect((await codexLimits("gpt-no-window")).contextWindow).toBeUndefined();
+    const unknown = await codexLimits("not-a-model");
+    expect(unknown.contextWindow).toBeUndefined();
+    expect(unknown.contextSource).toBeUndefined();
   });
 
   test("ollama `/api/show` is used and private non-loopback is skipped", async () => {

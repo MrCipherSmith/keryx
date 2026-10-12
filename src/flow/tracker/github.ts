@@ -63,6 +63,7 @@ export const githubAdapter: TrackerAdapter = {
     checksGreen: boolean | null;
     headSha: string | null;
     baseRefName: string | null;
+    state: string | null;
   }> {
     try {
       // `headRefOid` is the head COMMIT of the PR branch, which is what the
@@ -74,12 +75,13 @@ export const githubAdapter: TrackerAdapter = {
       // flow recorded, and both sides of that comparison are names.
       const view = await gh(["pr", "view", url, "--json", "isDraft,state,headRefOid,baseRefName"]);
       if (view.exitCode !== 0) {
-        return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null };
+        return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null, state: null };
       }
       const parsed = JSON.parse(view.stdout) as {
         isDraft?: boolean;
         headRefOid?: string;
         baseRefName?: string;
+        state?: string;
       };
       // `gh pr checks` exits 0 when all checks pass, non-zero otherwise.
       const checks = await gh(["pr", "checks", url]);
@@ -96,9 +98,11 @@ export const githubAdapter: TrackerAdapter = {
         // fails differently for the two.
         baseRefName:
           typeof parsed.baseRefName === "string" && parsed.baseRefName !== "" ? parsed.baseRefName : null,
+        // Flow 364: `OPEN`, `MERGED` or `CLOSED`; `null` when `gh` did not say, read as unknown.
+        state: typeof parsed.state === "string" && parsed.state !== "" ? parsed.state : null,
       };
     } catch {
-      return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null };
+      return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null, state: null };
     }
   },
 

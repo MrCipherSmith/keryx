@@ -1,0 +1,29 @@
+# Flow Journal
+
+- 2026-09-29T12:47:14.066Z - flow created
+- 2026-09-29T12:47:41.830Z - frozen: 9 criteria; checksum recorded
+- 2026-09-29T12:47:42.171Z - started
+- 2026-09-29T12:47:55.948Z - ac-updated: verify markers rewritten to the exec-with-backticks form so they classify
+- 2026-09-29T14:50:18.956Z - ac-updated: AC2: "The same holds for `codex-cli` and `antigravity-cli`, each against its real installed binary. [verify: exec `keryx agents external run codex-cli --task "reply with the single word ok; change nothing" --json`]" -> "antigravity-cli ran to completion against its real installed binary (task worded to need no tools, since agy denies unaskable tool calls), and codex-cli was run for real: its subscription usage limit is recorded and classified, with its 0.159.0 expired-login wording fixed in the codec; a successful codex run is not obtainable before the limit resets on 2026-10-03, so the codex live test stays available under `KERYX_LIVE_EXTERNAL=1`. [verify: exec `bun test src/harness/external/live-fixtures.test.ts`]" (codex-cli subscription is at its usage limit until 2026-10-03, so a successful codex run cannot be recorded; the real failure path was recorded instead, and agy was already proven end to end by flow 357 and again in this flow)
+- 2026-09-29T15:00:00.000Z - claude-cli 2.1.280: real run Completed; no codec disagreement. The vendor warns on stderr about union types in the result schema (harmless, recorded in the fixture).
+- 2026-09-29T15:00:01.000Z - codex-cli 0.159.0: real run hit the subscription usage limit (until 2026-10-03) and was classified correctly. One disagreement found and fixed failing-first: the expired-login wording "access token could not be refreshed / log out and sign in again" was not classed as an auth failure.
+- 2026-09-29T15:00:02.000Z - antigravity-cli 1.2.12: Completed (flow 357 plus this flow). Finding: agy denies any tool action it cannot ask about, so tasks for it must need no tools.
+- 2026-09-29T15:28:46.579Z - ac-confirmed: AC1: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:46.734Z - ac-confirmed: AC2: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:46.891Z - ac-confirmed: AC3: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:47.049Z - ac-confirmed: AC4: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:47.205Z - ac-confirmed: AC5: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:47.365Z - ac-confirmed: AC6: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:47.515Z - ac-confirmed: AC7: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:47.668Z - ac-confirmed: AC8: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:47.823Z - ac-confirmed: AC9: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T15:28:55.699Z - completing: merged commit: b38774d3ed51bc2a1690032d2d84967f4f6bb239
+- 2026-09-29T15:28:55.751Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-29T15:28:55.751Z - completion-failed: tasks: not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 366 T1 --disposition skipped --reason "<why this flow did not need it>")
+- 2026-09-29T15:28:59.830Z - task-done: T1: Collect remaining context
+- 2026-09-29T15:28:59.981Z - task-done: T2: Implement per plan
+- 2026-09-29T15:29:00.138Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-29T15:29:00.291Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-29T15:29:02.708Z - completing: merged commit: b38774d3ed51bc2a1690032d2d84967f4f6bb239
+- 2026-09-29T15:29:02.734Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-29T15:29:02.735Z - done: all gates passed

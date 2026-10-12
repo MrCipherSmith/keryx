@@ -180,6 +180,7 @@ alike, whichever agent runtime happens to be open.
 | Judge readiness | Normalized health reports and a quality gate over lint, types, tests, coverage, complexity |
 | Coordinate work | Versioned task flows, managed review packages, generated agent skills |
 | Keep agents inside boundaries | Deterministic secret / PII / prompt-injection scanning, redaction, policy gate, OS sandbox |
+| Take work in from GitHub | Tickets assigned to you, review requests, failed CI and PR comments arrive as Telegram cards with buttons, read-only toward GitHub ([guide](docs/docs/guides/work-intake.md)) |
 | Run an agent at all | A first-party harness on top of all of the above: durable sessions, allow/ask/deny policy, child agents, evidence-gated completion |
 
 ## A typical agent workflow
@@ -273,6 +274,13 @@ keryx shell --no-tui                          # classic readline shell
 keryx shell --chat                            # chat without tools
 keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
+
+Interactive agent turns automatically recover from temporary provider/network
+outages in both the TUI and readline shell. The shell shows the next retry and
+keeps the same prompt active; use the normal stop control (Ctrl-C in readline)
+to cancel. Permanent access errors such as generic HTTP 403 require correcting
+provider access. See [shell recovery](docs/docs/shell-recovery.md) for timing,
+partial-output handling and limits.
 
 ### Finding a command
 
@@ -483,7 +491,15 @@ What is in it today:
   inside a running session, decide whether that approval is asked for at all
   — `ask` (default), `trust` (safe calls run, a destructive one still asks),
   `auto` (nothing asks except a credentials-touching command, which no mode
-  ever auto-approves). A session-level layer only: `harness run`/`exec`,
+  ever auto-approves). The mode also sets how many model rounds one turn may
+  run: 40 in `ask`, 200 in `trust` (asks at the limit) and 200 in `auto`, where
+  reaching the limit extends the turn without asking and the turn stops at 200
+  (`KERYX_AGENT_MAX_ROUNDS` overrides all three, up to 200). A turn that
+  belongs to an **automatic review** (named in the request; the package is
+  created with `keryx review start --automatic`) gets the 200 limit in any
+  mode, runs that review's own commands without a prompt and asks only in a
+  closed list of emergencies; `review complete` and its gate are unchanged.
+  A session-level layer only: `harness run`/`exec`,
   `keryx serve`, and MCP keep the unconditional policy engine above,
   untouched. See the [permission modes guide](docs/docs/guides/permission-modes.md).
 - **Kernel-enforced containment underneath.** The OS sandbox sits *below* the
@@ -592,7 +608,9 @@ Grouped by what you are trying to do, not by internal module layout.
   trends.
 - **review** — managed review packages, standalone under `.metaproject/reviews/`
   or inside the flow package when attached to a flow, so review findings become
-  durable project artifacts. A finding points at the code it **quotes**: the
+  durable project artifacts. `review-orchestrator` is the default way a review is
+  done: the main session runs it inline, and a session that cannot spawn the
+  reviewers stops with one `STATUS: BLOCKED` line instead of reviewing alone. A finding points at the code it **quotes**: the
   line is derived by locating that quote at the commit the round records, not
   taken on the reviewer's word, and a quote that cannot be found is marked
   unlocatable rather than carrying a number nobody checked. Each round also
@@ -703,6 +721,30 @@ Grouped by what you are trying to do, not by internal module layout.
   automatically and no flow transition waits on it. In the TUI, `/product`
   shows the same header and rows. See the
   [CLI reference](docs/docs/cli-reference.md#product).
+- **decisions** — the recommendation journal. Every agent question with options
+  writes one record under `.metaproject/data/decisions/`: the recommendation and
+  its reason (written before the question is shown), the display mode, the option
+  order, your choice, the time you took and, after a deviation, an optional
+  reason (asked once, and the tool result waits for it; an empty answer releases
+  the wait; add or change it later with `/decisions reason`).
+  A question with a recommendation is asked in one of four ways: ordinary (arm A, the
+  recommended option preselected), the mark with nothing preselected (B), shuffled with the
+  mark (C), or blind (D: no "recommended" mark in the flag or the words, random order,
+  revealed after the answer, changeable with `/decisions change`). The arm is a seeded
+  function of a per-repository salt; the weights are 0.4, 0.2, 0.2, 0.2. Never blind for
+  release, ship, publish, deploy, delete or push, nor for merge, drop, remove or
+  force next to main, production, a branch or a table, or with no real object
+  ("merge it"); agents set `--action` (or `irreversible: true` in `ask_user`) for
+  the irreversible ones, and the report counts how often blind was refused.
+  `keryx decisions report` prints the match share by mode, arm, channel and stage and
+  the deviations, with no model (the pre-arm records are shown apart as legacy);
+  `keryx decisions rate` records whether a recommendation was good (yours, or a
+  model's self-assessment in a clean context) and `keryx decisions export` writes
+  the structure of each decision with no question or option text;
+  `keryx decisions open|answer|reason` lets any agent
+  or chat bridge drive it. In the TUI, `/decisions` and a sidebar row show the
+  same report. The guide says what the journal does not measure. See the
+  [Recommendation journal guide](docs/docs/guides/recommendation-journal.md).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
@@ -725,7 +767,11 @@ Grouped by what you are trying to do, not by internal module layout.
   a working session keeps, plus an external hand onto it: the `slate.open` /
   `slate.writeSeed` / `slate.close` MCP tools let any MCP-connected harness open
   one scoped to its own session id and close it into the same review pipeline.
-  Local stdio only; there is no CLI verb. See the
+  Local stdio only; there is no CLI verb. In keryx's own sessions the slate is
+  also the model's working memory: a harness-written Trail of every tool call,
+  model-written Notes (`slate_note`), and read-only recall (`slate_trail`,
+  `recall_step`, `history_search`) replace re-sending old rounds; `/trail` and
+  `/notes` show you the same Trail and Notes in the shell. See the
   [Slate guide](docs/docs/guides/slate.md).
 
 **Run agents inside boundaries**
@@ -1019,11 +1065,62 @@ talk to `serve` over loopback with a local shell token (new on every `serve`
 start, and never sent to an endpoint whose `serve` is gone), they never poll
 Telegram themselves, and a second `keryx serve` does not poll while the first one
 runs. At most 500 lines wait per topic, and turning it off tells the topic which
-queued lines will not run.
+queued lines will not run. From the topic you can also run a fixed list of slash
+commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
+in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
+after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
+and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
+`/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
+`/external-agents` and `/model` are queued with a notice in the topic and run when
+it goes idle; `/mode` takes effect at once. A topic is archived when the shell
+exits (a closing note, the topic and its history stay readable), but a resumed
+session gets a new one, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
+back into the topic, yours and the agent's final answers, one message each; a resumed
+session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing
+while a turn runs; see
+[commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
+Every approval, `ask_user` question and queue dialog the shell raises is posted to
+the topic with buttons, whoever started the turn; the first answer wins, from the
+terminal or the topic, and an unanswered one gets a reminder every 2 minutes (at most 3).
+While a turn runs, the topic gets at most one progress note a minute (at wave
+boundaries and after tool-heavy stretches: counts and tool names, never tool output),
+and a short status question such as "how is it going?" is answered from session state
+without waiting for the turn; see
+[What the topic hears](docs/docs/guides/drive-keryx-remotely.md#what-the-topic-hears).
 Without a connection `serve` starts as before, with remote control off, and only
-offers the local `/channels` routes. This
-has been verified against a fake Bot API only; no run against real Telegram has
-been done yet. Setup and limits:
+offers the local `/channels` routes. Replies are rendered in one of four modes,
+`remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the
+`/settings` row **Telegram rendering**: a table goes out as a native Telegram rich
+message in `auto` and `rich`, as wide as its content and scrolling sideways with no
+cell shortened (an aligned `<pre>` block in HTML; more than 20 columns stays ordinary
+text), ordered and nested
+lists, task items and rules keep their shape, and a refused rich message falls back
+once to HTML and once to plain text, so a reply is never dropped. `keryx remote
+format-sample` prints the sample in every mode with no network, and `/channels`
+shows the mode and the last fallback; see
+[how replies look in Telegram](docs/docs/guides/drive-keryx-remotely.md#how-replies-look-in-telegram).
+A turn started from Telegram runs under `trust` by default, like a shell `trust`
+turn: ordinary commands in the project run without a question and are recorded with
+the Telegram user id, while destructive commands, privilege escalation, downloaders,
+agent credential files, publish leases, untrusted content and MCP tools still ask;
+`spawn_subagent` is auto-approved under `trust`, as in the shell.
+The question carries an `Always` button that saves a pattern (list and remove them
+with `keryx permissions` or `/permissions`), waits 15 minutes by default, and there
+is no run limit unless `runTimeoutMs` sets one; `/stop` in the topic ends a run.
+`/remote-policy` and the **Telegram** group of `/settings` change the defaults. To
+get the old behaviour back set `permissionMode: "ask"`, `runTimeoutMs: 1800000` and
+`approvalTimeoutMs: 300000` in `remote/config.json`; see
+[permissions in a topic](docs/docs/guides/drive-keryx-remotely.md#permissions-in-a-topic).
+An approval question is confirmed by the shell: after you press Allow or Deny,
+`serve` waits five seconds for the shell to say it applied the answer to the question
+it was waiting on, then edits the message to "Allowed by ... at ..." or "Denied by ... at ...".
+If the shell was no longer waiting (the question had timed out or the session had
+reconnected) the message says "Not applied" and that the answer changed nothing. If the shell does
+not answer in time the message says the answer was sent to the shell, **not
+confirmed**: the shell did not say in time that it received the answer (a shell that never got an Allow lets its own question time out as a denial; one that got it late still applies it); while
+that is so the shell shows an "Approvals not confirmed" count in `/remote-control`
+and in the sidebar row. This has been verified against a fake Bot API only; no run
+against real Telegram has been done yet. Setup and limits:
 [drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md#remote-control-from-telegram).
 
 ## CI integration
@@ -1082,6 +1179,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
 - **[Review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md)** — the GitHub Action, secrets, the same-repository rule, dry run, cost, and the precision and resolved-before-merge metrics.
+- **[Review a pull request with nobody at the keyboard](docs/docs/guides/autonomous-review.md)** — `keryx review run --autonomous`: exit codes, safe-default answers, budgets, the stall watchdog, `summary.json` and `report.md`, `/autoreview`, and a scheduled review on cron or a systemd timer.
 - **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 

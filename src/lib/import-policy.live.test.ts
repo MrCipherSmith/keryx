@@ -62,9 +62,9 @@ function pairsOf(report: Awaited<ReturnType<typeof checkImportPolicy>>, kind: st
 /**
  * RULE 1's allowlist, in two groups, each entry a `from -> to` pair.
  *
- * GROUP A — `src/sac/` importing five `src/session/` modules.
+ * GROUP A — `src/sac/` importing six `src/session/` modules.
  *
- * Not a defect, and not this guard's call to make: the SAME five modules are
+ * Not a defect, and not this guard's call to make: the SAME six modules are
  * already allowlisted BY NAME, with the same reasoning, in two other guards —
  * `src/core-package.test.ts::SESSION_STATE_ALLOWLIST` and
  * `src/sac/core-graph.test.ts::SESSION_STATE_ALLOWLIST`. Both record that these
@@ -94,13 +94,16 @@ function pairsOf(report: Awaited<ReturnType<typeof checkImportPolicy>>, kind: st
  * its work and can never quietly outlive the problem it records.
  */
 const OWNER_IMPORTS_CLIENT_ALLOWLIST = [
-  // Group A — sac -> the five documented session-state modules.
+  // Group A — sac -> the six documented session-state modules.
   "sac/catch-up.ts -> session/external-slate.ts",
   "sac/catch-up.ts -> session/paths.ts",
   "sac/catch-up.ts -> session/slate.ts",
   "sac/catch-up.ts -> session/store.ts",
   "sac/machine-wrap-up.ts -> session/slate-course.ts",
   "sac/machine-wrap-up.ts -> session/slate.ts",
+  "sac/preservation-replay.ts -> session/paths.ts",
+  "sac/preservation-replay.ts -> session/preservation.ts",
+  "sac/preserved-wrap-up.ts -> session/preservation.ts",
   "sac/service.ts -> session/external-slate.ts",
   "sac/service.ts -> session/slate.ts",
   "sac/service.ts -> session/store.ts",
@@ -121,12 +124,13 @@ const OWNER_IMPORTS_CLIENT_ALLOWLIST = [
 ].sort();
 
 /**
- * Group A's five targets, named so that a SIXTH `src/session/` module arriving
+ * Group A's six targets, named so that a SEVENTH `src/session/` module arriving
  * in the core graph fails here as well as in the two guards that already say so.
  */
 const SESSION_STATE_MODULES = [
   "session/external-slate.ts",
   "session/paths.ts",
+  "session/preservation.ts",
   "session/slate-course.ts",
   "session/slate.ts",
   "session/store.ts",
@@ -241,8 +245,17 @@ const AVOIDABLE_SLACK = 15;
  * into the new `cli-registry.ts` when the route table split out of `cli.ts`
  * to break its cycle with `commands/help.ts`. Same one edge, same count —
  * `cli.ts` itself now imports nothing from core at all.
+ *
+ * `scheduler` joined in flow 389 with only unavoidable edges: the digest reads the
+ * schedule's grants, config, store and cron from `src/trigger/`, which has no
+ * `service.ts`. Its one door into the product module is closed on purpose — the
+ * digest asks a reader that `commands/product.ts` registers, because only that file
+ * may read the product index.
+ *
+ * `intake` joined in flow 403 with only unavoidable edges: it reuses the granted-tool
+ * runner and binary pinning from `src/trigger/`, which has no `service.ts`.
  */
-const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "mcp", "session", "tui"];
+const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "intake", "mcp", "scheduler", "session", "tui"];
 
 let cached: Awaited<ReturnType<typeof checkImportPolicy>> | undefined;
 async function report() {
@@ -305,7 +318,7 @@ test("core owners import client/adapter modules in exactly the allowlisted place
   expect(pairsOf(r, "owner-imports-client")).toEqual(OWNER_IMPORTS_CLIENT_ALLOWLIST);
 });
 
-test("the sac group reaches only the five documented session-state modules", async () => {
+test("the sac group reaches only the six documented session-state modules", async () => {
   const r = await report();
   const targets = [
     ...new Set(

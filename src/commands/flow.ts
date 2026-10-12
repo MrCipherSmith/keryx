@@ -5,14 +5,20 @@ import { writeFileAtomic } from "../lib/fs";
 import {
   CONFIRMATION_CAVEAT,
   acCriterionKnown,
+  appendJournal,
+  completionFixHint,
   confirmPreconditionError,
   createFlowService,
   describeAcKind,
+  effectiveOutcomeAuthor,
+  freezePrecondition,
   intentNoteForNewFlow,
-  readOutcomeAuthor,
+  originDetailLines,
+  readOrigin,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
+  renderAcSensitivityLine,
   resolveFlowDir,
   uncommittedFlowStateNote,
   validateCriterionName,
@@ -48,7 +54,9 @@ import type {
   FlowService,
   FlowServiceDeps,
   FlowSignature,
+  FlowCompletionCheck,
   FlowStatus,
+  GateOutcome,
   TaskDisposition,
   TaskKind,
 } from "../flow/types";
@@ -308,7 +316,7 @@ async function readGitUserEmail(cwd: string): Promise<string | undefined> {
  * value sources, so the two commands' different flag-parsing rules never
  * have to agree with each other, only each with its own caller.
  */
-async function signerIdentityArgs(
+export async function signerIdentityArgs(
   cwd: string,
   signedBy: string | undefined,
 ): Promise<{ signedBy: string | undefined; signedByEnv: string | undefined; gitIdentity: string | undefined }> {
@@ -351,10 +359,14 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runOwner(args.slice(1));
       case "outcome":
         return await runOutcome(args.slice(1));
+      case "origin":
+        return await runOrigin(args.slice(1));
       case "implemented":
         return await runImplemented(args.slice(1));
       case "complete":
         return await runComplete(args.slice(1));
+      case "check-complete":
+        return await runCheckComplete(args.slice(1));
       case "confirm":
         return await runConfirm(args.slice(1));
       case "recover":
@@ -402,6 +414,11 @@ async function runInit(args: string[]): Promise<void> {
     requireConfirmation: args.includes("--require-confirmation"),
     // Never inferred: `agent` unless the flag is given, `human` only when it says so.
     outcomeAuthor: outcomeAuthorFlag(args),
+    // Evidence, not assertion: the service records the origin only with the
+    // evidence its kind needs and otherwise says why not. Never refuses.
+    origin: optionValue(args, "--origin"),
+    originQuote: textFlag(args, "--quote"),
+    originSource: textFlag(args, "--source"),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
@@ -411,7 +428,11 @@ async function runInit(args: string[]): Promise<void> {
     console.log(`  base:   ${result.flow.baseBranch}`);
   }
   console.log(`  owner:  ${result.flow.owner?.value ?? style.dim("not set")}`);
-  console.log(`  outcome author: ${readOutcomeAuthor(result.flow.outcomeAuthor)}`);
+  console.log(`  outcome author: ${outcomeAuthorLine(result.flow)}`);
+  for (const line of originDetailLines(readOrigin(result.flow.origin), "  ")) console.log(line);
+  if (result.originNote !== undefined) {
+    console.log(`  ${style.yellow(WARN)} ${result.originNote}`);
+  }
   if (result.flow.gates?.confirmation) {
     console.log(`  confirmation: required ${style.dim("(a terminal-minted token: `keryx flow confirm <id>`)")}`);
   }
@@ -428,6 +449,26 @@ async function runInit(args: string[]): Promise<void> {
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,
     `Freeze and start: ${style.cyan(`keryx flow freeze ${result.flow.id}`)} then ${style.cyan(`flow start ${result.flow.id}`)}.`,
   ]);
+}
+
+/**
+ * The value of a free-text flag such as `--quote`: the next token as it is,
+ * unless it is itself a flag (`--word`), so a quote that starts with dashes or
+ * a dash and a space is kept byte for byte. `--name=value` works too.
+ */
+function textFlag(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index >= 0) {
+    const next = args[index + 1];
+    return next !== undefined && !/^--[A-Za-z][\w-]*(=|$)/.test(next) ? next : undefined;
+  }
+  return args.find((argument) => argument.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+/** The outcome author a flow shows: an explicit value, else derived from the origin, else `unknown`. */
+function outcomeAuthorLine(flow: { outcomeAuthor?: unknown; origin?: unknown }): string {
+  const reading = effectiveOutcomeAuthor(flow);
+  return flow.outcomeAuthor === undefined && reading !== "unknown" ? `${reading} (derived from origin)` : reading;
 }
 
 /**
@@ -516,9 +557,32 @@ async function runList(args: string[] = []): Promise<void> {
   // A number shared by two packages makes every bare-id command ambiguous —
   // say so here, where the listing is what usually reveals it.
   const shared = duplicateFlowIds(flows.map((flow) => flow.id));
+  // Flow 384: the two folder-hygiene problems `flow check` reports, as a tag
+  // beside the row. One check pass for the whole list; informational, so a
+  // failure to compute it is silence.
+  const remoteClash = new Set<string>();
+  const notCommitted = new Set<string>();
+  try {
+    const checked = await getService().check({ cwd: process.cwd() });
+    for (const issue of checked.issues) {
+      if (issue.kind === "duplicate-id") remoteClash.add(issue.flow);
+    }
+    for (const warning of checked.warnings ?? []) {
+      if (warning.kind === "untracked") notCommitted.add(warning.flow);
+    }
+  } catch {
+    // `flow check` owns this report.
+  }
   heading(`Flows (${flows.length})`);
   for (const flow of flows) {
-    const marker = shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "";
+    // `flow.dir` is the project-relative path; the check keys by folder name.
+    const folder = flow.dir.slice(flow.dir.lastIndexOf("/") + 1);
+    const tags = [
+      ...(remoteClash.has(folder) && !shared.has(flow.id) ? ["dup id"] : []),
+      ...(notCommitted.has(folder) ? ["not committed"] : []),
+    ];
+    const hygieneMarker = tags.length > 0 ? ` ${style.yellow(tags.map((tag) => `[${tag}]`).join(" "))}` : "";
+    const marker = (shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "") + hygieneMarker;
     console.log(
       `  ${style.bold(flow.id)}${marker} ${style.dim("[")}${flowStatusLabel(flow.status)}${style.dim("]")} ${flow.title} ${style.dim(`(tasks ${flow.tasksDone}/${flow.tasksTotal})`)}`,
     );
@@ -584,7 +648,10 @@ async function runStatus(args: string[]): Promise<void> {
   // learn who owns or last signed this flow.
   // The author of the outcome criterion. A flow without the field reads `unknown`,
   // and reading it writes nothing.
-  console.log(`  outcome author: ${readOutcomeAuthor(flow.outcomeAuthor)}`);
+  console.log(`  outcome author: ${outcomeAuthorLine(flow)}`);
+  // Where the flow came from. A flow without one, or with a kind this build does
+  // not know, reads `unknown`; reading writes nothing and gates nothing.
+  for (const line of originDetailLines(readOrigin(flow.origin), "  ")) console.log(line);
   console.log(
     `  owner:   ${flow.owner?.value ? `${flow.owner.value} ${style.dim(`[${flow.owner.basis}]`)}` : style.dim("not set")}`,
   );
@@ -775,11 +842,104 @@ async function runNext(args: string[]): Promise<void> {
 }
 
 async function runSimple(args: string[], action: "freeze" | "start" | "unblock"): Promise<void> {
-  const id = requireId(args);
+  const skipPrompt = action === "freeze" && (args.includes("--yes") || process.env["KERYX_NONINTERACTIVE"] === "1");
+  const id = requireId(args.filter((arg) => arg !== "--yes"));
+  let unmarked: string[] = [];
+  let interactive = false;
+  // Only warn or ask when the freeze can actually happen; otherwise the service's own error surfaces.
+  if (action === "freeze" && (await freezeCanProceed(process.cwd(), id))) {
+    unmarked = await unmarkedCriteria(process.cwd(), id);
+    if (unmarked.length > 0) {
+      const names = unmarked.join(", ");
+      console.log(
+        `  ${style.yellow(WARN)} warning: no verification kind on ${names} — add [verify: …] or accept them unclassified`,
+      );
+      interactive = !skipPrompt && freezePromptIo.interactive();
+      if (interactive && !(await freezePromptIo.ask(`freeze without a verification kind on ${names}? [Y/n] `))) {
+        // The operator's own answer, not a gate: nothing was written, the flow stays as it was.
+        console.log(`  ${style.dim("Freeze cancelled: the flow is unchanged.")}`);
+        return;
+      }
+    }
+  }
   const flow = await getService()[action]({ cwd: process.cwd(), id });
   console.log(`  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)}`);
   if (action === "freeze") {
+    if (unmarked.length > 0) {
+      await journalUnmarkedWarning(process.cwd(), flow.id, unmarked, interactive);
+    }
     await printAcKindDistribution(process.cwd(), flow.id);
+  }
+}
+
+/**
+ * Read-only: would `service.freeze` get past its own status and criteria checks?
+ * Any doubt answers false, so the service call runs unwarned and its error surfaces.
+ */
+async function freezeCanProceed(cwd: string, id: string): Promise<boolean> {
+  return (await freezePrecondition({ cwd, id })).ok;
+}
+
+/**
+ * Test seam for the freeze confirmation: whether a human is at the terminal and
+ * what they answer. Lives in the command layer; the service-layer freeze never
+ * prompts and never refuses. The prompt defaults to proceeding ([Y/n]): an empty
+ * answer, "y" or "yes" freezes; only an explicit "n" or "no" stops it.
+ */
+export const freezePromptIo: {
+  interactive: () => boolean;
+  ask: (question: string) => Promise<boolean>;
+} = {
+  // A test run or CI inherits a terminal without a human at it: never prompt there.
+  interactive: () =>
+    Boolean(process.stdin.isTTY && process.stdout.isTTY) && process.env["NODE_ENV"] !== "test" && !process.env["CI"],
+  ask: async (question) => {
+    const readline = await import("node:readline/promises");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      return freezeAnswerProceeds(await rl.question(question));
+    } finally {
+      rl.close();
+    }
+  },
+};
+
+/** The freeze prompt defaults to proceeding: an empty answer, y or yes freezes; only an explicit n or no cancels. */
+export function freezeAnswerProceeds(raw: string): boolean {
+  const answer = raw.trim().toLowerCase();
+  return !(answer === "n" || answer === "no");
+}
+
+/** Ids of the criteria with no verification kind. Reporting only: a read failure yields none. */
+async function unmarkedCriteria(cwd: string, id: string): Promise<string[]> {
+  try {
+    const { report } = await getService().acKinds({ cwd, id });
+    return Object.entries(report.criteria)
+      .filter(([, record]) => record.kind === "unclassified")
+      .map(([criterionId]) => criterionId);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Leave the warning where the next reader of the flow will find it; after an
+ * interactive "yes" it records the operator's decision instead.
+ */
+async function journalUnmarkedWarning(cwd: string, id: string, unmarked: string[], accepted: boolean): Promise<void> {
+  const names = unmarked.join(", ");
+  try {
+    const dir = await resolveFlowDir(cwd, id);
+    await appendJournal(
+      cwd,
+      dir,
+      new Date().toISOString(),
+      accepted
+        ? `operator froze without a verification kind on ${names}`
+        : `warning: no verification kind on ${names} — add [verify: …] or accept them unclassified`,
+    );
+  } catch {
+    // Reporting only; the freeze already happened.
   }
 }
 
@@ -837,6 +997,7 @@ async function runAcKinds(args: string[]): Promise<void> {
   for (const line of renderAcKindDistribution(report)) {
     console.log(`  ${line}`);
   }
+  console.log(`  ${renderAcSensitivityLine(report)}`);
   for (const error of errors) {
     console.error(`${style.red(symbols.cross)} ${error.id}: ${error.message}`);
   }
@@ -1005,12 +1166,90 @@ async function runOutcome(args: string[]): Promise<void> {
     author,
     reason: optionValue(rest, "--reason") ?? "",
   });
-  const after = readOutcomeAuthor(result.flow.outcomeAuthor);
+  const after = effectiveOutcomeAuthor(result.flow);
   console.log(
     result.changed
       ? `  ${style.green(symbols.ok)} Outcome author ${result.previous} ${style.cyan(symbols.arrow)} ${style.bold(after)}`
       : `  ${style.dim(symbols.bullet)} Outcome author already ${style.bold(after)}; nothing written`,
   );
+}
+
+const ORIGIN_USAGE =
+  'Usage: keryx flow origin set <id> human-request|agent-finding|agent-proposal|unknown --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]';
+
+/** `flow origin set`: change where a flow came from. Journaled; works on any flow; never gates. */
+async function runOrigin(args: string[]): Promise<void> {
+  if (args[0] !== "set") {
+    throw new Error(ORIGIN_USAGE);
+  }
+  // `<id> <kind>` are the two positionals; the values of --reason, --quote and --source are not.
+  const rest = args.slice(1);
+  const positionals: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i] ?? "";
+    if (arg === "--reason" || arg === "--quote" || arg === "--source") {
+      i += 1;
+    } else if (!arg.startsWith("--")) {
+      positionals.push(arg);
+    }
+  }
+  const id = positionals[0];
+  const kind = positionals[1];
+  if (!id || kind === undefined || positionals.length > 2) {
+    throw new Error(ORIGIN_USAGE);
+  }
+  const result = await getService().originSet({
+    cwd: process.cwd(),
+    id,
+    kind,
+    reason: optionValue(rest, "--reason") ?? "",
+    quote: textFlag(rest, "--quote"),
+    source: textFlag(rest, "--source"),
+  });
+  if (result.note !== undefined) {
+    console.log(`  ${style.yellow(WARN)} ${result.note}`);
+    console.log(`  ${style.dim(symbols.bullet)} Origin stays ${style.bold(result.previous)}; nothing written`);
+    return;
+  }
+  console.log(
+    result.changed
+      ? `  ${style.green(symbols.ok)} Origin ${result.previous} ${style.cyan(symbols.arrow)} ${style.bold(result.next)}`
+      : `  ${style.dim(symbols.bullet)} Origin already ${style.bold(result.next)}; nothing written`,
+  );
+}
+
+const EVIDENCE_PLACEHOLDERS = new Set(["n/a", "na", "none", "-", "tbd", "todo", "ref"]);
+
+/**
+ * A note names evidence when it carries an `evidence:` label (case-insensitive) followed by a non-empty reference:
+ * the text up to the end of the note or the next `;`, trimmed, that is not a placeholder (`n/a`, `na`, `none`, `-`,
+ * `tbd`, `todo`, `ref`) after surrounding punctuation is stripped. The label needs a word boundary before it that is not a hyphen, so `no-evidence: x` does not count.
+ * Nothing else is inferred from the note.
+ */
+export function noteNamesEvidence(note?: string): boolean {
+  if (note === undefined) return false;
+  for (const match of note.matchAll(/(?<![\w-])evidence:([^;]*)/gi)) {
+    // Surrounding punctuation, symbols and whitespace never make a reference: `n/a.`, `(none)`, `<ref>` and a bare dash all strip to a placeholder or nothing.
+    const ref = (match[1] ?? "").replace(/^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/gu, "");
+    if (ref !== "" && !EVIDENCE_PLACEHOLDERS.has(ref.toLowerCase())) return true;
+  }
+  return false;
+}
+
+/**
+ * Flow 423: a criterion that claims `sensitive: <how>` is confirmed with a note carrying `evidence: <ref>` for that
+ * run. Warns, never refuses — the confirmation already happened and this reads kinds in the command layer only.
+ */
+async function warnUnevidencedSensitivity(cwd: string, id: string, criterion: string, noteText: string | undefined): Promise<void> {
+  try {
+    const { report } = await getService().acKinds({ cwd, id });
+    const record = report.criteria[criterion.toUpperCase()];
+    if ((record?.kind !== "exec" && record?.kind !== "invariant") || record.sensitivity === undefined) return;
+    if (noteNamesEvidence(noteText)) return;
+    console.log(`  ${style.yellow(WARN)} warning: ${criterion.toUpperCase()} claims sensitive: ${record.sensitivity}, but --note has no "evidence: <ref>" (e.g. evidence: abc1234 revert run)`);
+  } catch {
+    // Reporting only.
+  }
 }
 
 async function runAc(args: string[]): Promise<void> {
@@ -1031,6 +1270,7 @@ async function runAc(args: string[]): Promise<void> {
       ...(await signerIdentityArgs(cwd, values.get("--signed-by"))),
     });
     console.log(`  ${style.green(symbols.ok)} Confirmed ${style.bold(criterion.toUpperCase())} ${style.dim(`(${Object.keys(flow.acConfirmed).length} total)`)}`);
+    await warnUnevidencedSensitivity(cwd, id, criterion, values.get("--note"));
     const signature = flow.signatures?.at(-1);
     if (signature) {
       note(`Signed: ${signature.identity.value ?? "unknown"} [${signature.identity.basis}] — ${signature.identity.source}`);
@@ -1209,6 +1449,69 @@ export function completionSignatureNotes(signature: FlowSignature): string[] {
   return notes;
 }
 
+function printGateOutcomes(gates: readonly GateOutcome[], hint?: (gate: GateOutcome) => string | undefined): void {
+  for (const gate of gates) {
+    const mark =
+      gate.status === "pass"
+        ? style.green(symbols.ok)
+        : gate.status === "skipped"
+          ? style.gray(symbols.off)
+          : style.red(symbols.cross);
+    // A failing gate has to say WHICH condition failed and for which findings —
+    // one line per condition rather than one line per gate, because the review
+    // gate reports five and a single wrapped line hides four of them.
+    const [first = "", ...rest] = gate.detail.split(" | ");
+    console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
+    for (const [index, line] of rest.entries()) {
+      console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
+    }
+    const fix = gate.status === "fail" ? hint?.(gate) : undefined;
+    if (fix !== undefined) console.log(`      ${style.cyan(symbols.arrow)} ${fix}`);
+  }
+}
+
+/**
+ * `keryx flow check-complete <id> [--merged <commit>] [--json]` (flow 364,
+ * AC4): every gate `flow complete` would evaluate, plus the PR's merge state,
+ * with nothing written. Exit 0 when `complete` would pass, 1 when it would not,
+ * 2 (with `--json`: an `{error}` object) when the check could not run.
+ */
+async function runCheckComplete(args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  let result: FlowCompletionCheck;
+  try {
+    result = await getService().checkComplete({
+      cwd: process.cwd(),
+      id: requireId(args),
+      mergedCommit: optionValue(args, "--merged"),
+      confirmToken: optionValue(args, "--confirm-token"),
+    });
+  } catch (error) {
+    // Review A-003: under --json a check that could not run is still JSON, and
+    // exits 2 — never the 1 that means "ran, and complete would not pass".
+    if (!asJson) throw error;
+    console.log(JSON.stringify({ error: { message: error instanceof Error ? error.message : String(error) } }, null, 2));
+    process.exitCode = 2;
+    return;
+  }
+  process.exitCode = result.passed ? 0 : 1;
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  heading(
+    result.passed
+      ? `${style.green(symbols.ok)} flow check-complete ${result.id}: would pass`
+      : `${style.yellow(symbols.cross)} flow check-complete ${result.id}: would not pass`,
+  );
+  const transitionMark = result.transition.allowed ? style.green(symbols.ok) : style.red(symbols.cross);
+  console.log(`  ${transitionMark} status ${style.dim(`(${result.transition.detail})`)}`);
+  const mergeMark = result.merge.state === "merged" ? style.green(symbols.ok) : style.yellow(symbols.off);
+  console.log(`  ${mergeMark} merge ${style.dim(`(${result.merge.state}: ${result.merge.detail})`)}`);
+  printGateOutcomes(result.gates, (gate) => completionFixHint(gate, result.id));
+  note("Nothing was written: no status change, no completion attempt, no signature, no spent token.");
+}
+
 async function runComplete(args: string[]): Promise<void> {
   const id = requireId(args);
   const cwd = process.cwd();
@@ -1226,22 +1529,7 @@ async function runComplete(args: string[]): Promise<void> {
       ? `${style.green(symbols.ok)} flow complete: DONE`
       : `${style.yellow(symbols.cross)} flow complete: returned to in-progress`,
   );
-  for (const gate of result.gates) {
-    const mark =
-      gate.status === "pass"
-        ? style.green(symbols.ok)
-        : gate.status === "skipped"
-          ? style.gray(symbols.off)
-          : style.red(symbols.cross);
-    // A failing gate has to say WHICH condition failed and for which findings —
-    // one line per condition rather than one line per gate, because the review
-    // gate reports five and a single wrapped line hides four of them.
-    const [first = "", ...rest] = gate.detail.split(" | ");
-    console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
-    for (const [index, line] of rest.entries()) {
-      console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
-    }
-  }
+  printGateOutcomes(result.gates);
   if (result.passed) {
     const signature = result.flow.signatures?.at(-1);
     if (signature) {
@@ -1296,13 +1584,18 @@ async function runCheck(): Promise<void> {
   const result = await getService().check({ cwd: process.cwd() });
   if (result.ok) {
     console.log(`  ${style.green(symbols.ok)} All flows are consistent.`);
-    return;
+  } else {
+    heading(`${style.red(symbols.cross)} flow check: ${result.issues.length} issue(s)`);
+    for (const issue of result.issues) {
+      console.log(`  ${style.red(symbols.cross)} ${style.dim(`[${issue.kind}]`)} ${style.bold(issue.flow)}: ${issue.message}`);
+    }
+    process.exitCode = 1;
   }
-  heading(`${style.red(symbols.cross)} flow check: ${result.issues.length} issue(s)`);
-  for (const issue of result.issues) {
-    console.log(`  ${style.red(symbols.cross)} ${style.dim(`[${issue.kind}]`)} ${style.bold(issue.flow)}: ${issue.message}`);
+  // Flow 384: warnings never change the exit code — an uncommitted folder is
+  // the normal state between `flow init` and the first commit.
+  for (const warning of result.warnings) {
+    console.log(`  ${style.yellow(WARN)} ${warning.message}`);
   }
-  process.exitCode = 1;
 }
 
 async function runRenumber(args: string[]): Promise<void> {
@@ -1503,6 +1796,7 @@ function printHelp(): void {
     "keryx flow list",
     "keryx flow status <id>",
     "keryx flow freeze <id>",
+    "keryx flow freeze <id> --yes   (or KERYX_NONINTERACTIVE=1: skip the no-verification-kind prompt; the warning is journaled)",
     "keryx flow start <id>",
     "keryx flow next <id> [--json]   (first task not done whose dependsOn are all done)",
   'keryx flow task add <id> --title "<t>" [--kind context|implement|test|verify|review|docs] [--depends T1,T2]',
@@ -1511,6 +1805,7 @@ function printHelp(): void {
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',
     'keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)',
+    'keryx flow origin set <id> human-request|agent-finding|agent-proposal|unknown --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]   (where the flow came from; journaled, gates nothing)',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]',
     'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
@@ -1520,6 +1815,7 @@ function printHelp(): void {
     "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
     "keryx flow implemented <id> --pr <url>",
     'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]',
+    "keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)",
     "keryx flow confirm <id> [--merged]   (mint a completion confirmation token; needs a terminal and a typed challenge)",
     'keryx flow recover <id> --reason "<why>"   (move a flow left in `completing` back to `in-progress`)',
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
@@ -1541,6 +1837,9 @@ function printHelp(): void {
       "is absent) or `human`, and `human` only when the flag says so — never inferred from a git " +
       "identity, an owner or the environment. A flow without the field reads `unknown`. The flag " +
       "labels a sample and gates nothing.",
+  );
+  note(
+    "`flow init --origin human-request|agent-finding|agent-proposal --quote \"<verbatim>\" --source \"<ref>\"` records where the flow came from. Evidence, not assertion: `human-request` is recorded only with a verbatim `--quote` of the human's first message with the idea AND a `--source` (channel, message id or time); `agent-finding` and `agent-proposal` need a `--source`. Without the evidence, or with an invalid kind, the origin stays `unknown`, the command still succeeds and says why. The Outcome criteria template then holds the request (or the source), the agent's formalization and how to observe it. `flow origin set` changes it later, with a reason. The origin labels a sample and gates nothing.",
   );
   note(
     "`flow confirm` mints a short-lived, single-use token only for a flow created with " +

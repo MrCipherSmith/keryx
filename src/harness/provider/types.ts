@@ -78,12 +78,13 @@ export interface NormalizedError {
   /** Optional bounded backoff hint (ms) for retryable rows. */
   retryAfterMs?: number;
   /**
-   * Structured, kind-specific extra data. Today only `pendingToolCallId`
+   * Structured, kind-specific extra data. `incompleteStream` marks an empty/truncated
+   * transport response for interactive recovery without changing adapter retry disposition. `pendingToolCallId`
    * (flow 354, L-1): the id of the tool call still accumulating when the
    * stream ended mid tool-call — a `malformed` EOF, never a completed
    * `tool_call_end`. Absent for every other error.
    */
-  detail?: { pendingToolCallId?: string };
+  detail?: { pendingToolCallId?: string; incompleteStream?: boolean };
 }
 
 /**
@@ -142,11 +143,18 @@ export interface NormalizedUsage {
    * OpenAI documents as a SUBSET of `inputTokens` (never additional to it —
    * a cache hit is still an input token, just billed at a discount).
    * Absent when the provider did not report it. Anthropic's own cache-read
-   * count (`cache_read_input_tokens`) is ADDITIONAL to its `input_tokens`,
-   * not a subset — a different accounting shape this field does not (yet)
-   * carry; out of scope for L-11, which names only the OpenAI adapter.
+   * count (`cache_read_input_tokens`) is ADDITIONAL to its `input_tokens` on
+   * the wire; the Anthropic adapter folds it into `inputTokens` (flow 387 T15)
+   * so this field is a subset there too.
    */
   cacheReadTokens?: number;
+  /**
+   * Cache-write (prompt-cache creation) input tokens (flow 387 T15). Filled by
+   * the Anthropic adapter from `cache_creation_input_tokens`; like
+   * `cacheReadTokens` it is a SUBSET of `inputTokens` (the adapter folds
+   * Anthropic's additional counts into `inputTokens`).
+   */
+  cacheWriteTokens?: number;
   /** True only when the counts above are provider-reported exact values. */
   exact?: boolean;
 }
@@ -226,6 +234,18 @@ export interface NormalizedMessage {
    */
   provenance?: "trusted" | "project" | "model" | "tool" | "harness";
   /**
+   * Flow 387 T8: `true` on a `role: "user"` message the harness injected (an
+   * `Anchors:` block or delta, a compaction summary) rather than something the
+   * operator typed. Those share provenance `"project"` with operator input, so
+   * provenance alone cannot tell them apart; compaction counts only unmarked
+   * `"project"`/`"trusted"` user messages as operator turns. Store-only
+   * bookkeeping like `ts`: persisted in `context.jsonl`, never sent to a
+   * provider (request builders construct payloads field by field). A session
+   * saved before this field existed is classified by content instead — see
+   * `isOperatorMessage` in `src/session/compact.ts`.
+   */
+  injected?: true;
+  /**
    * Assistant only: the tool calls this turn emitted.
    *
    * Without this the assistant's own turn was absent from every subsequent
@@ -238,6 +258,47 @@ export interface NormalizedMessage {
   toolCalls?: NormalizedToolCall[];
   /** Tool only: the id of the assistant call this message answers. */
   toolCallId?: string;
+  /**
+   * Flow 387 T18: tool only; `true` when the tool reported failure. Store-only
+   * bookkeeping (never sent to a provider): lets a collapsed old tool exchange say
+   * `ok` or `error` without guessing from the output text.
+   */
+  isError?: true;
+  /**
+   * Flow 387 review r1 F-002: tool only; the file holding this result's full text,
+   * recorded by the harness when it spilled the output (or, after a prune, when it
+   * saved it). Store-only bookkeeping like `isError`: persisted in `context.jsonl`,
+   * never sent to a provider (request builders construct payloads field by field).
+   * Prune takes the path ONLY from here and never parses it out of `content`, which
+   * a page, an MCP result or a committed file controls.
+   */
+  spillPath?: string;
+  /**
+   * Flow 387 review r2 F-025: assistant only; `true` on the record prune writes when it
+   * collapses an old tool exchange. Store-only like `spillPath` (persisted in
+   * `context.jsonl`, never sent to a provider). It is the ONLY thing that marks a message
+   * as a harness-made record: a model-authored message that merely contains the record
+   * header is not one, so nothing (compaction, the /goal verifier) may read it as evidence.
+   */
+  collapsed?: true;
+  /**
+   * Flow 393: tool only; the Trail step (`slate.json#trail[].step`) this result was
+   * recorded under. Store-only like `spillPath`: lets an observation pack and the
+   * recall tools name the step. Never sent to a provider.
+   */
+  trailStep?: number;
+  /**
+   * Flow 393: tool only; `true` on a result the harness replaced with a fixed
+   * observation pack (size, first and last line, a reference to the saved full
+   * output). Store-only; marks it so it is never packed twice.
+   */
+  packed?: true;
+  /**
+   * Flow 393: user only; `true` on the harness-built working-memory frame (the
+   * rebuilt Anchors block and the Notes/Trail section). The next rebuild REPLACES
+   * every message carrying it instead of appending another. Store-only.
+   */
+  slateFrame?: true;
   /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes
@@ -301,6 +362,15 @@ export interface NormalizedRequest {
   /** Tool definitions with schemas and risk metadata. */
   tools?: NormalizedToolDefinition[];
   options?: NormalizedRequestOptions;
+  /**
+   * Flow 387 T5: a stable key for the provider's prompt-prefix cache — the
+   * shell session id. keryx re-sends the full history every round, so a
+   * provider that routes by this key (OpenAI Responses / Codex
+   * `prompt_cache_key`) can serve the shared prefix from cache. Absent when
+   * the caller has no session (never invented by an adapter); adapters that
+   * have no such field ignore it.
+   */
+  promptCacheKey?: string;
   budget: NormalizedBudget;
   /** Stream mode. */
   stream: boolean;

@@ -67,6 +67,9 @@ const defaultApprovalIO: ShellApprovalIO = {
   fingerprint: () => shellPermissionsFingerprint(),
 };
 
+/** Patterns each session set last received from the saved file (flow 396: removals reach a running shell). */
+const loadedFromDisk = new WeakMap<Set<string>, Set<string>>();
+
 export function evaluateShellApproval(input: {
   inputJson: string;
   meta?: ApprovalMeta | undefined;
@@ -86,7 +89,18 @@ export function evaluateShellApproval(input: {
   const hookAsk = input.meta?.hookAsk === true;
   const untrustedOrigin = input.meta?.untrustedOrigin === true;
   const audit = io.loadAudit();
-  for (const pattern of audit.permissions.allow) {
+  // The saved list is read on every call. What it held last time is remembered per set, so a rule
+  // taken back (`/permissions`, `keryx permissions remove`) stops approving in a running session on
+  // the next call. A grant made for this session only was never in the file and is left alone.
+  const current = new Set(audit.permissions.allow);
+  const loadedBefore = loadedFromDisk.get(input.sessionAllow);
+  if (loadedBefore !== undefined) {
+    for (const pattern of loadedBefore) {
+      if (!current.has(pattern)) input.sessionAllow.delete(pattern);
+    }
+  }
+  loadedFromDisk.set(input.sessionAllow, current);
+  for (const pattern of current) {
     input.sessionAllow.add(pattern);
   }
   const tampered = io.fingerprint() !== input.fingerprintAtStart;

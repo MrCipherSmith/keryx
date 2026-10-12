@@ -1,0 +1,107 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow365-pr796-review",
+    "severity": "minor",
+    "problem": "A repeated or mixed --outcome-author resolved unpredictably: the spaced form beat the = form and the first occurrence won.",
+    "impact": "flow init --title x --outcome-author=agent --outcome-author human silently recorded human, which decides the human row of G1a and G1b, so a mistyped command line mislabels the sample.",
+    "suggested_fix": "Count occurrences of the flag in runInit and refuse more than one before creating the flow.",
+    "evidence": "the reviewer read optionValue in src/lib/args.ts and runInit; not run",
+    "confidence": "high",
+    "file": "src/commands/flow.ts",
+    "line": null,
+    "quote": "outcomeAuthorFlag",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 439
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/flow.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow365-r1#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 275e8323 fixed: outcomeAuthorFlag counts both spellings and throws on a repeat before the service is called; six repeat cases in outcome-author-init.test.ts assert exit 1 and an empty flow directory list",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 275e8323fc962d0b8401a6861b1f85206d088852; the ingest carries a refuted verdict citing 275e8323"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow365-pr796-review",
+    "severity": "minor",
+    "problem": "The CLI setter read the previous value outside the lock, so under a concurrent change its message could contradict what happened.",
+    "impact": "Two racing setters could print already human, nothing written when the opposite occurred, or a stale agent -> human.",
+    "suggested_fix": "Have the service return the previous value from inside the lock.",
+    "evidence": "the reviewer read runOutcome and outcomeAuthorSet; not run",
+    "confidence": "high",
+    "file": "src/commands/flow.ts",
+    "line": null,
+    "quote": "runOutcome before via get",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 994
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/flow.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow365-r1#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 275e8323 fixed: outcomeAuthorSet returns previous and changed decided under the file lock, runOutcome prints from the result; a two-setter race test in outcome-author-set.test.ts",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 275e8323fc962d0b8401a6861b1f85206d088852; the ingest carries a refuted verdict citing 275e8323"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow365-pr796-review",
+    "severity": "minor",
+    "problem": "AUTHOR_READINGS duplicated the agent|human|unknown vocabulary instead of importing it through the flow facade.",
+    "impact": "The two lists can drift apart and product would then accept or reject a value flow does not know.",
+    "suggested_fix": "Import the vocabulary through src/flow/service.ts.",
+    "evidence": "the reviewer read store.ts and outcome-author.ts; not run",
+    "confidence": "high",
+    "file": "src/product/store.ts",
+    "line": null,
+    "quote": "AUTHOR_READINGS",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/store.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow365-r1#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 275e8323 fixed: OUTCOME_AUTHOR_READINGS derived in outcome-author.ts, re-exported by the facade and imported by store.ts; import-policy ratchet stays green",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 275e8323fc962d0b8401a6861b1f85206d088852; the ingest carries a refuted verdict citing 275e8323"
+    }
+  }
+]

@@ -21,6 +21,7 @@ import {
   parseChannelsArgs,
   projectChannelsRow,
   readlineChannelsText,
+  renderingLines,
   type ChannelsApi,
   type ChannelsSnapshot,
 } from "./channels-surface";
@@ -48,7 +49,7 @@ function pairing(partial: Partial<PairingResponse> & Pick<PairingResponse, "stat
 }
 
 function fakeClient(initial: { status?: ChannelsResult<ChannelsStatusResponse>; files?: { tokenFile: boolean; configFile: boolean } } = {}) {
-  const calls = { startPairing: [] as string[], pairingStatus: 0, cancel: 0, connectFinish: [] as { userId: number; chatId: number }[], test: 0, disconnect: 0 };
+  const calls = { startPairing: [] as string[], pairingStatus: 0, cancel: 0, connectFinish: [] as { userId: number; chatId: number }[], test: 0, disconnect: 0, reload: 0 };
   const fake = {
     calls,
     status: initial.status ?? ok(status("not-connected")),
@@ -56,6 +57,7 @@ function fakeClient(initial: { status?: ChannelsResult<ChannelsStatusResponse>; 
     start: ok(pairing({ state: "waiting-for-user", code: "K7Q-2MX", botUsername: "keryx_demo_bot" })) as ChannelsResult<PairingResponse>,
     pairingNow: ok(pairing({ state: "waiting-for-user", code: "K7Q-2MX", botUsername: "keryx_demo_bot" })) as ChannelsResult<PairingResponse>,
     testResult: ok({ schemaVersion: "1", delivered: true as const, machine: "devbox" }) as ChannelsResult<{ schemaVersion: string; delivered: true; machine: string }>,
+    reloadResult: ok({ schemaVersion: "1", state: "connected" as const }) as ChannelsResult<{ schemaVersion: string; state: string }>,
     disconnectResult: ok({ deleted: 3, remaining: 0, topicsDeleted: true, erased: true, message: "Disconnected: 3 topics deleted, 0 remaining. The token was erased." }) as ChannelsResult<ChannelsDisconnectResult>,
   };
   const api: ChannelsApi = {
@@ -82,6 +84,13 @@ function fakeClient(initial: { status?: ChannelsResult<ChannelsStatusResponse>; 
     test: async () => {
       calls.test += 1;
       return fake.testResult;
+    },
+    reload: async () => {
+      calls.reload += 1;
+      if (fake.reloadResult.ok) {
+        fake.status = ok(status("connected"));
+      }
+      return fake.reloadResult as never;
     },
     disconnect: async () => {
       calls.disconnect += 1;
@@ -407,6 +416,28 @@ otuiTest("pairing: an expired code says so and offers Try again", async () => {
   }
 });
 
+otuiTest("resume: a pairing that already reached ready is connected from the list view", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  // The modal was closed after the Telegram steps: serve still holds the finished pairing and reports "pairing".
+  const { api, fake } = fakeClient({ status: ok(status("pairing")) });
+  fake.pairingNow = ok(pairing({ state: "ready", userId: 42, chatId: -1001234, chatTitle: "Team room", botUsername: "keryx_demo_bot" }));
+  const modal = await openModalFor(h, api);
+  try {
+    expect(h.captureCharFrame()).toContain("Resume");
+    await h.mockInput.typeText("c");
+    await settle(h, 10);
+    expect(fake.calls.pairingStatus).toBe(1);
+    expect(fake.calls.connectFinish).toEqual([{ userId: 42, chatId: -1001234 }]);
+    expect(fake.calls.startPairing).toEqual([]);
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("Step 4 of 4");
+    expect(frame).toContain("Team room");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
 otuiTest("token entry: x, X and Esc belong to the hidden field on a SECOND open too", async () => {
   const h = await mountChrome(OTUI!, { height: 40, kittyKeyboard: true });
   const { api, fake } = fakeClient();
@@ -652,4 +683,123 @@ otuiTest("sidebar: the Telegram row follows refresh() and update(), and a click 
     expect(timer.active()).toBe(0);
     h.destroy();
   }
+});
+
+otuiTest("off: Retry starts Telegram again from the saved files and reports the result", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok(status("off", { reason: "Telegram refused the saved token." })), files: { tokenFile: true, configFile: true } });
+  fake.reloadResult = fail("cannot-connect", "Telegram is unreachable.") as never;
+  const modal = await openModalFor(h, api);
+  try {
+    let frame = h.captureCharFrame();
+    expect(frame).toContain("Retry");
+    expect(frame).toContain("Disconnect");
+
+    await h.mockInput.pressEnter();
+    await settle(h, 8);
+    expect(fake.calls.reload).toBe(1);
+    frame = h.captureCharFrame();
+    expect(frame).toContain("Telegram did not start: Telegram is unreachable.");
+    expect(frame).toContain("configured, but not running");
+
+    fake.reloadResult = ok({ schemaVersion: "1", state: "connected" }) as never;
+    await h.mockInput.pressEnter();
+    await settle(h, 8);
+    expect(fake.calls.reload).toBe(2);
+    frame = h.captureCharFrame();
+    expect(frame).toContain("Telegram is running again.");
+    expect(frame).toContain("Telegram: connected");
+    expect(fake.calls.disconnect).toBe(0);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("working: Esc is swallowed, the modal stays until the call finishes", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok(status("off", { reason: "Telegram refused the saved token." })), files: { tokenFile: true, configFile: true } });
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const slow: ChannelsApi = {
+    ...api,
+    reload: async () => {
+      await gate;
+      return api.reload();
+    },
+  };
+  const modal = await openModalFor(h, slow);
+  try {
+    await h.mockInput.pressEnter();
+    await settle(h, 6);
+    expect(h.captureCharFrame()).toContain("Starting Telegram again");
+    await h.mockInput.pressEscape();
+    // a lone Esc is held back briefly by the terminal parser before it is delivered
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await settle(h, 6);
+    expect(h.captureCharFrame()).toContain("Starting Telegram again");
+    release();
+    await settle(h, 8);
+    expect(fake.calls.reload).toBe(1);
+    expect(h.captureCharFrame()).toContain("Telegram is running again.");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+// ---- flow 395 (AC8): the rendering mode and the last fallback -----------------------------
+
+test("renderingLines: nothing when serve did not report a mode", () => {
+  expect(renderingLines(undefined)).toEqual([]);
+});
+
+test("renderingLines: the mode in effect with what it means, and no fallback yet", () => {
+  const lines = renderingLines({ mode: "auto" });
+  expect(lines[0]).toBe("Rendering: auto (rich for a reply with a table, HTML otherwise). Change it in /settings.");
+  expect(lines[1]).toBe("Last fallback: none since keryx serve started.");
+});
+
+test("renderingLines: the last fallback names its step, its time and its reason", () => {
+  const rich = renderingLines({ mode: "rich", lastFallback: { step: "rich-to-html", reason: "Bad Request: rich_message is invalid", at: T0 } });
+  expect(rich[1]).toBe("Last fallback: rich to HTML at 12:00:00 UTC: Bad Request: rich_message is invalid");
+  const plain = renderingLines({ mode: "html", lastFallback: { step: "html-to-plain", reason: "can't parse entities", at: T0 + 61_000 } });
+  expect(plain[1]).toBe("Last fallback: HTML to plain text at 12:01:01 UTC: can't parse entities");
+});
+
+test("every mode has a meaning line", () => {
+  for (const mode of ["auto", "rich", "html", "plain"] as const) {
+    expect(renderingLines({ mode })[0]).toContain(`Rendering: ${mode} (`);
+  }
+});
+
+test("the status block of a connected or stopped Telegram carries the rendering lines; not-connected does not", () => {
+  const rendering = { mode: "plain" as const, lastFallback: { step: "html-to-plain" as const, reason: "x", at: T0 } };
+  for (const state of ["connected", "off"] as const) {
+    const text = channelsStatusLines({ state, configured: true, rendering }).join("\n");
+    expect(text).toContain("Rendering: plain");
+    expect(text).toContain("Last fallback: HTML to plain text");
+  }
+  expect(channelsStatusLines({ state: "not-connected", configured: false, rendering }).join("\n")).not.toContain("Rendering:");
+});
+
+test("loadChannelsSnapshot carries what serve reported, and the readline text shows it", async () => {
+  const reported = ok<ChannelsStatusResponse>({
+    schemaVersion: "1",
+    machine: "devbox",
+    telegram: { state: "connected", sessions: 1, rendering: { mode: "rich", lastFallback: { step: "rich-to-html", reason: "unsupported", at: T0 } } },
+  });
+  const snapshot = await loadChannelsSnapshot({ status: async () => reported, localFiles: () => ({ tokenFile: true, configFile: true }) });
+  expect(snapshot.rendering).toEqual({ mode: "rich", lastFallback: { step: "rich-to-html", reason: "unsupported", at: T0 } });
+  const text = readlineChannelsText("/channels", snapshot);
+  expect(text).toContain("Rendering: rich");
+  expect(text).toContain("Last fallback: rich to HTML at 12:00:00 UTC: unsupported");
+});
+
+test("loadChannelsSnapshot without a reported mode has none, and the lines stay silent", async () => {
+  const snapshot = await loadChannelsSnapshot({ status: async () => ok(status("connected")), localFiles: () => ({ tokenFile: true, configFile: true }) });
+  expect(snapshot.rendering).toBeUndefined();
+  expect(readlineChannelsText("/channels", snapshot)).not.toContain("Rendering:");
 });

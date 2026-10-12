@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Evidence Search Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "code",
+    "coverage",
+    "generation",
+    "items",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "code": {
+      "enum": [
+        "ok",
+        "no-match",
+        "index-absent",
+        "disabled",
+        "budget-exceeded",
+        "source-unavailable",
+        "timeout"
+      ]
+    },
+    "coverage": {
+      "enum": [
+        "full",
+        "partial",
+        "unknown"
+      ]
+    },
+    "generation": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "enum": [
+          "empty-corpus",
+          "semantic-fallback",
+          "index-corrupt",
+          "index-incompatible",
+          "ledger-unavailable",
+          "stale-source",
+          "source-denied",
+          "source-removed",
+          "source-unreadable",
+          "retention-expired",
+          "visible-filtered",
+          "visibility-unstable",
+          "packing-budget",
+          "query-budget",
+          "query-timeout",
+          "index-absent",
+          "disabled"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "startByte",
+        "endByte"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "file",
+            "archive"
+          ]
+        },
+        "startByte": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endByte": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "recordId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "file"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "startLine",
+              "endLine"
+            ]
+          },
+          "else": {
+            "required": [
+              "recordId"
+            ]
+          }
+        }
+      ]
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "sourcePath",
+        "versionHash",
+        "chunkId",
+        "contentHash",
+        "locator",
+        "text",
+        "role",
+        "timestamp",
+        "trustedAsPolicy",
+        "redaction",
+        "score"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourcePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "versionHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "chunkId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "contentHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "locator": {
+          "$ref": "#/$defs/locator"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timestamp": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trustedAsPolicy": {
+          "const": false
+        },
+        "redaction": {
+          "enum": [
+            "not-needed",
+            "applied"
+          ]
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "const": "ok"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "minItems": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "items": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "code": {
+            "enum": [
+              "ok",
+              "no-match"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coverage": {
+            "enum": [
+              "full",
+              "partial"
+            ]
+          },
+          "generation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "coverage": {
+            "const": "unknown"
+          }
+        }
+      }
+    }
+  ]
+}

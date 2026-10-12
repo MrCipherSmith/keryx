@@ -113,7 +113,7 @@ export interface ChatBridgeHooks {
    */
   onTurnSettled?: () => void;
   /** A non-token line from the core: `/help`, errors, `/connect` guidance, … */
-  onSystem?: (text: string) => void;
+  onSystem?: ((text: string) => void) | undefined;
 }
 
 /** The push→pull adapter between the composer and `runShell`. */

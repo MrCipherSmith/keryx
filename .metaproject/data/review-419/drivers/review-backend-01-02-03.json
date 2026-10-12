@@ -1,0 +1,10 @@
+{
+ "reviewer": "review-backend",
+ "slices": [
+  "slice-01",
+  "slice-02",
+  "slice-03"
+ ],
+ "result": "raw/review-backend-01-02-03.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-backend/SKILL.md"
+}

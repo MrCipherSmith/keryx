@@ -1,0 +1,307 @@
+// Flow 419, AC5: progress notes at wave boundaries and tool-heavy steps, at most one per interval, never raw
+// tool output. AC6: a status question from the topic is answered from session state while a turn runs.
+
+import { describe, expect, it } from "bun:test";
+import { commandHarness, waitFor } from "./command.test-helpers";
+import { describeStatus, formatElapsed, isStatusQuestion, ProgressNotes } from "./progress-notes";
+
+interface Clock {
+  at: number;
+  timers: Array<{ at: number; run: () => void; live: boolean }>;
+  advance(ms: number): void;
+}
+
+function clock(): Clock {
+  const c: Clock = {
+    at: 1_000_000,
+    timers: [],
+    advance(ms) {
+      const target = c.at + ms;
+      for (;;) {
+        const due = c.timers.filter((t) => t.live && t.at <= target).sort((a, b) => a.at - b.at)[0];
+        if (due === undefined) break;
+        c.at = due.at;
+        due.live = false;
+        due.run();
+      }
+      c.at = target;
+    },
+  };
+  return c;
+}
+
+function notes(options: { intervalMs?: number; toolThreshold?: number } = {}) {
+  const c = clock();
+  const sent: string[] = [];
+  const progress = new ProgressNotes({
+    intervalMs: options.intervalMs ?? 60_000,
+    toolThreshold: options.toolThreshold ?? 3,
+    now: () => c.at,
+    send: (text) => sent.push(text),
+    setTimer: (run, ms) => {
+      const timer = { at: c.at + ms, run, live: true };
+      c.timers.push(timer);
+      return timer;
+    },
+    clearTimer: (handle) => {
+      (handle as { live: boolean }).live = false;
+    },
+  });
+  return { c, sent, progress };
+}
+
+describe("tool-heavy steps", () => {
+  it("say nothing for a few calls, then one note with counts and tool names", () => {
+    const { sent, progress } = notes();
+    progress.begin();
+    progress.tool("read_file");
+    progress.tool("read_file");
+    expect(sent).toEqual([]);
+    progress.tool("shell_exec");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain("Still working: 3 tool calls");
+    expect(sent[0]).toContain("read_file, shell_exec");
+  });
+
+  it("never carries a tool's input or output: only names and counts", () => {
+    const { sent, progress } = notes({ toolThreshold: 1 });
+    progress.begin();
+    progress.tool("shell_exec");
+    expect(sent[0]).not.toMatch(/sk-|rm -rf|stdout|\/home\//);
+    expect(sent[0]).toMatch(/^Still working: 1 tool calls/);
+  });
+
+  it("keep to one note per interval and send the held one when the interval ends", () => {
+    const { c, sent, progress } = notes();
+    progress.begin();
+    for (let i = 0; i < 3; i += 1) progress.tool("a");
+    expect(sent).toHaveLength(1);
+    for (let i = 0; i < 20; i += 1) progress.tool("b");
+    expect(sent).toHaveLength(1);
+    c.advance(59_000);
+    expect(sent).toHaveLength(1);
+    c.advance(1_000);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain("20 tool calls");
+    c.advance(10 * 60_000);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("an interval of 0 turns the notes off", () => {
+    const { sent, progress } = notes({ intervalMs: 0, toolThreshold: 1 });
+    progress.begin();
+    for (let i = 0; i < 5; i += 1) progress.tool("a");
+    expect(sent).toEqual([]);
+  });
+
+  it("a held note is dropped when the turn ends", () => {
+    const { c, sent, progress } = notes();
+    progress.begin();
+    for (let i = 0; i < 3; i += 1) progress.tool("a");
+    for (let i = 0; i < 3; i += 1) progress.tool("b");
+    progress.end();
+    c.advance(5 * 60_000);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("do nothing outside a turn", () => {
+    const { sent, progress } = notes({ toolThreshold: 1 });
+    progress.tool("a");
+    progress.subagent({ kind: "upsert", id: "r1", status: "running" });
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("wave boundaries", () => {
+  it("the first subagent to start opens a wave and the last to finish closes it", () => {
+    const { c, sent, progress } = notes({ intervalMs: 1_000 });
+    progress.begin();
+    progress.subagent({ kind: "upsert", id: "r1", label: "review-logic", status: "running" });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain("A subagent wave started");
+    expect(sent[0]).toContain("review-logic");
+    progress.subagent({ kind: "upsert", id: "r2", label: "review-style", status: "running" });
+    progress.subagent({ kind: "upsert", id: "r1", label: "review-logic", status: "done" });
+    expect(sent).toHaveLength(1);
+    c.advance(2_000);
+    progress.subagent({ kind: "upsert", id: "r2", label: "review-style", status: "failed" });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain("The wave finished: 1 done, 1 failed");
+  });
+
+  it("a second wave in the same turn gets its own notes", () => {
+    const { c, sent, progress } = notes({ intervalMs: 1_000 });
+    progress.begin();
+    progress.subagent({ kind: "upsert", id: "a", status: "running" });
+    progress.subagent({ kind: "upsert", id: "a", status: "done" });
+    c.advance(1_000);
+    expect(sent.length).toBeGreaterThanOrEqual(2);
+    c.advance(5_000);
+    progress.subagent({ kind: "upsert", id: "b", status: "running" });
+    expect(sent.at(-1)).toContain("A subagent wave started");
+  });
+
+  it("log events are not boundaries", () => {
+    const { sent, progress } = notes();
+    progress.begin();
+    progress.subagent({ kind: "log", id: "r1" });
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("status questions", () => {
+  it("are short plain lines that ask how the run is going", () => {
+    for (const line of [
+      "status",
+      "Status?",
+      "what's the status",
+      "What is going on?",
+      "how is it going?",
+      "are you still working?",
+      "is it done yet",
+      "what are you doing now?",
+      "статус",
+      "как дела?",
+      "ты тут?",
+      "ещё работаешь?",
+    ]) {
+      expect(isStatusQuestion(line)).toBe(true);
+    }
+  });
+
+  it("leave real work to the model", () => {
+    for (const line of [
+      "",
+      "fix the status page so it shows the build number",
+      "status of PR 123 and then merge it",
+      "run the tests",
+      "x".repeat(70),
+    ]) {
+      expect(isStatusQuestion(line)).toBe(false);
+    }
+  });
+});
+
+describe("describeStatus", () => {
+  it("names the turn, the queue, the open prompts and the mode", () => {
+    const text = describeStatus({
+      turnRunning: true,
+      snapshot: { running: true, elapsedMs: 252_000, toolCalls: 23, lastTool: "shell_exec", waveRunning: 2 },
+      topicWaiting: 1,
+      queued: 3,
+      openPrompts: 1,
+      mode: "ask",
+    });
+    expect(text).toContain("4m 12s");
+    expect(text).toContain("23 tool calls, last: shell_exec");
+    expect(text).toContain("Subagents: 2 still running");
+    expect(text).toContain("Queue: 3 messages waiting (1 from this topic)");
+    expect(text).toContain("Waiting for you: 1 approval or question");
+    expect(text).toContain("Mode: ask.");
+  });
+
+  it("says so when the shell is busy without a model turn", () => {
+    const text = describeStatus({
+      turnRunning: false,
+      snapshot: { running: false, elapsedMs: 0, toolCalls: 0, waveRunning: 0 },
+      topicWaiting: 0,
+      openPrompts: 0,
+    });
+    expect(text).toContain("no model turn is writing");
+  });
+
+  it("formats time", () => {
+    expect(formatElapsed(5_000)).toBe("5s");
+    expect(formatElapsed(60_000)).toBe("1m");
+    expect(formatElapsed(3_723_000)).toBe("1h 2m");
+  });
+});
+
+describe("the bridge", () => {
+  it("AC5: a turn the operator typed still gets progress notes in the topic", async () => {
+    const h = commandHarness({ busy: true, progressToolThreshold: 3 });
+    await h.bridge.enable();
+    h.bridge.turnStarted(undefined);
+    for (const name of ["read_file", "grep", "edit_file"]) h.bridge.toolCall(name);
+    expect(h.client().replies).toHaveLength(1);
+    expect(h.client().replies[0]).toContain("Still working: 3 tool calls");
+    h.bridge.toolCall("read_file");
+    h.bridge.toolCall("read_file");
+    h.bridge.toolCall("read_file");
+    expect(h.client().replies).toHaveLength(1);
+    await h.bridge.turnSettled({ failed: false });
+    expect(h.client().replies).toHaveLength(1);
+  });
+
+  it("AC5: a wave from the shell's subagents is posted to the topic", async () => {
+    const h = commandHarness({ busy: true });
+    await h.bridge.enable();
+    h.bridge.turnStarted(undefined);
+    h.bridge.subagentEvent({ kind: "upsert", id: "r1", label: "review-logic", status: "running" });
+    expect(h.client().replies.at(-1)).toContain("A subagent wave started");
+  });
+
+  it("AC5: nothing goes out with remote control off", async () => {
+    const h = commandHarness({ busy: true, progressToolThreshold: 1 });
+    h.bridge.turnStarted(undefined);
+    h.bridge.toolCall("grep");
+    h.bridge.subagentEvent({ kind: "upsert", id: "r1", status: "running" });
+    await h.bridge.enable();
+    expect(h.client().replies).toEqual([]);
+  });
+
+  it("AC6: a status question during a running turn is answered at once and never queued", async () => {
+    const h = commandHarness({
+      busy: true,
+      turnRunning: () => true,
+      sessionState: () => ({ queued: 2, mode: "ask" }),
+    });
+    await h.bridge.enable();
+    h.bridge.turnStarted(undefined);
+    h.bridge.toolCall("shell_exec");
+    h.state.now += 90_000;
+    await h.say("how is it going?");
+    await waitFor(() => h.client().replies.some((reply) => reply.startsWith("Working:")), "the status answer");
+    const answer = h.client().replies.find((reply) => reply.startsWith("Working:")) as string;
+    expect(answer).toContain("1m 30s");
+    expect(answer).toContain("1 tool call, last: shell_exec");
+    expect(answer).toContain("Queue: 2 messages waiting");
+    expect(answer).toContain("Mode: ask.");
+    expect(h.calls.filter((call) => call.startsWith("queue:") || call.startsWith("run:"))).toEqual([]);
+    await waitFor(() => h.client().reported.some(([, state]) => state === "done"), "the message to be marked done");
+  });
+
+  it("AC6: the answer counts an approval nobody has answered", async () => {
+    let release!: () => void;
+    const h = commandHarness({
+      busy: true,
+      turnRunning: () => true,
+      askApproval: () =>
+        new Promise((resolve) => {
+          release = () => resolve({ decision: "allow" });
+        }),
+    });
+    await h.bridge.enable();
+    h.bridge.turnStarted(undefined);
+    const asked = h.bridge.askApproval("rm -rf build");
+    await h.say("status");
+    await waitFor(() => h.client().replies.some((reply) => reply.includes("Waiting for you: 1")), "the open approval in the answer");
+    release();
+    await asked;
+  });
+
+  it("AC6: the same words go to the model when main is idle", async () => {
+    const h = commandHarness({ busy: false });
+    await h.bridge.enable();
+    await h.say("how is it going?");
+    expect(h.calls).toContain("run:how is it going?");
+    expect(h.client().replies).toEqual([]);
+  });
+
+  it("AC6: a long message that merely contains the word status is queued as work", async () => {
+    const h = commandHarness({ busy: true });
+    await h.bridge.enable();
+    await h.say("update the status page so it shows the build number");
+    expect(h.calls).toContain("queue:update the status page so it shows the build number");
+  });
+});

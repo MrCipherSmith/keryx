@@ -100,7 +100,8 @@ export class RemainingBudgetLedger {
    * unchanged. On success the running budget, cost (when tracked), and child
    * counter are decremented together.
    */
-  admit(request: BudgetReservation): LedgerAdmitResult {
+  /** Non-mutating budget/count/cost check; not a grant or policy approval. */
+  check(request: BudgetReservation): LedgerAdmitResult {
     if (this.maxChildren !== undefined && this.admittedChildren >= this.maxChildren) {
       return { ok: false, reason: `child count cap ${this.maxChildren} reached` };
     }
@@ -117,6 +118,15 @@ export class RemainingBudgetLedger {
         reason: `cost cap exceeded: reservation costUnits ${cost} > remaining ${this.costUnitsRemaining}`,
       };
     }
+
+    return { ok: true, reservation: request.costUnits !== undefined
+      ? { ...granted.reservation, costUnits: request.costUnits } : granted.reservation };
+  }
+
+  admit(request: BudgetReservation): LedgerAdmitResult {
+    const granted = this.check(request);
+    if (!granted.ok) return granted;
+    const cost = request.costUnits ?? 0;
 
     this.remainingBudget = decrement(this.remainingBudget, granted.reservation);
     this.admittedChildren += 1;

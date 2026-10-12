@@ -1872,10 +1872,10 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // rather than restated: `review/review-clean-code` is the entry a review
     // actually raised (545 -> 1200) while every test stayed green, so that
     // exact edit is the one this proves is now caught.
-    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(545);
+    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(543);
     const raised = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("review/review-clean-code", 1200));
     expect(raised).toHaveLength(1);
-    expect(raised[0]).toContain("review/review-clean-code: ships 545 lines, ceiling records 1200");
+    expect(raised[0]).toContain("review/review-clean-code: ships 543 lines, ceiling records 1200");
     expect(raised[0]).toContain("the ratchet forbids");
 
     // …and a skill that grows past a ceiling nobody touched is the other
@@ -1955,6 +1955,24 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(versionless.find((finding) => finding.check === "frontmatter:metadata")?.message).toContain(
       "declares no `version`",
     );
+  });
+
+  test("a CRLF file and a BOM file read their frontmatter as an LF file does", () => {
+    // The shared reader treats `\r\n` as `\n` and ignores a leading BOM; the
+    // evaluator's own parse used to read both as "no frontmatter block".
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-bundled-eval-crlf-"));
+    try {
+      writeSkill(root, "quality", "control-lf", CONTROL_SKILL);
+      writeSkill(root, "quality", "control-crlf", CONTROL_SKILL.replace(/\n/g, "\r\n"));
+      writeSkill(root, "quality", "control-bom", String.fromCharCode(0xfeff) + CONTROL_SKILL);
+      const frontmatterFindings = evaluateBundledTree(root)
+        .findings.filter((finding) => finding.check.startsWith("frontmatter:"))
+        .map((finding) => `${finding.skill}: ${finding.check}`);
+      // Name uniqueness fires between the copies; that is not what is asserted.
+      expect(frontmatterFindings.filter((entry) => !entry.endsWith("frontmatter:name-unique"))).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("a SKILL.md whose compatible_harnesses omits claude is rejected; a harness build that omits it is not", () => {

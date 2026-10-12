@@ -1,6 +1,7 @@
 import { gitHead, readProvenance, recordProvenance, SYNCED_MODULES, type SyncedModule } from "../sync/provenance";
 import { codeOnly, diffSince, totalChanges } from "../sync/diff";
 import { describeSourceGate, HEAD_NOT_REQUESTED, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
+import type { WikiWriteContext } from "../wiki/service";
 import type { DeletionWindow, RemovalAttribution } from "../forgetting/service";
 import { runInteractiveUnderMaintenanceLock } from "../lib/maintenance-lock";
 
@@ -73,6 +74,10 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
   // propagated on every run, report-only ones included.
   let graphRebuilt = false;
   let anyStale = false;
+  // One wiki history run for everything this sync writes or prunes, so a single
+  // `keryx wiki restore --run <id>` undoes it (flow 367).
+  const wiki = apply ? await import("../wiki/service") : undefined;
+  const wikiHistory = wiki ? await wiki.openWikiWriteContext(cwd, "sync --apply") : undefined;
   for (const module of SYNCED_MODULES) {
     const provenance = await readProvenance(cwd, module);
     console.log(`## ${module}`);
@@ -80,7 +85,7 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
     if (!provenance) {
       anyStale = true;
       if (apply) {
-        const outcome = await applyModule(cwd, module, null, at);
+        const outcome = await applyModule(cwd, module, null, at, wikiHistory);
         graphRebuilt ||= module === "gdgraph";
         printApplyOutcome(outcome, "  → built + provenance recorded (baseline)", "  → built; provenance NOT recorded (baseline)");
       } else {
@@ -106,7 +111,7 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
     if (diff === null) {
       anyStale = true;
       if (apply) {
-        const outcome = await applyModule(cwd, module, null, at);
+        const outcome = await applyModule(cwd, module, null, at, wikiHistory);
         graphRebuilt ||= module === "gdgraph";
         printApplyOutcome(
           outcome,
@@ -226,12 +231,12 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
     for (const f of code.added.slice(0, 5)) console.log(`    + ${f}`);
     for (const f of code.deleted.slice(0, 5)) console.log(`    - ${f}`);
     if (apply) {
-      const outcome = await applyModule(cwd, module, provenance.commit, at);
+      const outcome = await applyModule(cwd, module, provenance.commit, at, wikiHistory);
       graphRebuilt ||= module === "gdgraph";
       printApplyOutcome(outcome, "  → updated + provenance advanced", "  → updated; provenance NOT advanced");
       if (module === "gdwiki" && code.deleted.length > 0) {
         const { wikiPruneOrphans } = await import("../wiki/service");
-        const prune = await wikiPruneOrphans(cwd);
+        const prune = await wikiPruneOrphans(cwd, wikiHistory);
         for (const page of prune.pruned) console.log(`  - pruned orphan page (module removed): ${page}`);
         for (const page of prune.orphanedAccepted) {
           console.log(`  ! stale page — module removed but page is human-owned, delete manually if intended: ${page}`);
@@ -244,6 +249,7 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
   }
 
   await runForgettingStage(cwd, { apply, at, args, window, graphRebuilt });
+  if (wiki && wikiHistory) await wiki.printWikiUndoHint(wikiHistory);
 
   if (!apply && anyStale) {
     process.exitCode = 0; // advisory; hooks decide what to do with the report
@@ -553,14 +559,20 @@ async function applyModule(
   module: SyncedModule,
   base: string | null,
   at: string,
+  wikiHistory?: WikiWriteContext,
 ): Promise<{ recorded: boolean; gate?: WikiSourceGate }> {
   if (module === "gdgraph") {
     const { gdgraphCommand } = await import("./gdgraph");
     await gdgraphCommand(["build"]);
   } else if (module === "gdwiki") {
     const { wikiCollect, wikiGenerateIndex } = await import("../wiki/service");
-    await wikiCollect({ cwd, changed: base !== null, ...(base ? { since: base } : {}) });
-    await wikiGenerateIndex(cwd);
+    await wikiCollect({
+      cwd,
+      changed: base !== null,
+      ...(base ? { since: base } : {}),
+      ...(wikiHistory ? { history: wikiHistory } : {}),
+    });
+    await wikiGenerateIndex(cwd, wikiHistory);
     // No revision at stake on this path — it gates gdwiki's own provenance
     // record, never a page's `VerifiedAt` (AFC-22, T13).
     const gate = await resolveWikiSourceGate(cwd, HEAD_NOT_REQUESTED);

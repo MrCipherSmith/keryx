@@ -692,7 +692,17 @@ acceptance-criteria (intact + every criterion confirmed), (2) pull-request (PR e
 + checks green, or skipped if tracker unavailable), (3) health
 (`deps.healthGate(cwd)`), (4) owner — **opt-in per package** (`gates.owner`, written
 by `flow init`; flows created before flow 289 report it `skipped` rather than being
-retroactively blocked) — fails while `flow.owner` is unset. `passed = gates.every(g
+retroactively blocked) — fails while `flow.owner` is unset, (5) folder-committed — **opt-in per
+package** (`gates.folderCommitted`, written by `flow init` from 0.3.53; older packages
+report it `skipped`, as does a non-git directory) — fails while the flow folder is not in
+`HEAD`. The flow folder is committed in the same PR as the code; the commit at closing
+is a rule to follow, and the gate requires only that `flow.json` is in `HEAD` before
+closing. `flow init` and `flow renumber` avoid numbers used on known remote branches
+(`src/flow/remote-flows.ts`: up to 500 remote-tracking refs, no network; a never-fetched
+ref is invisible and the repair is `flow renumber`), and `flow check`
+reports a clash with the default branch as `duplicate-id` (a clash with any other remote
+branch is a non-failing `branch-duplicate-id` warning) and an uncommitted folder as a
+non-failing `untracked` warning. `passed = gates.every(g
 => g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and
 `complete` each append a signature (who, when, what was signed, and the identity's
 basis — `stated`/`derived`/`unknown`; flow 289), and `complete` persists every
@@ -1212,6 +1222,11 @@ keryx-native session uses.
 module name appears in the manifest's `expose.modules` list, which is what
 governs whether the tools are visible to a client.
 
+Inside keryx's own sessions the same file also holds the model's working memory
+(a harness-written Trail of tool calls and model-written Notes, with read-only
+`slate_trail`, `recall_step` and `history_search`); see the
+[Slate guide](./guides/slate.md#working-memory-in-keryxs-own-sessions).
+
 | Tool | Mutating | Behavior |
 |---|---|---|
 | `slate.open` | yes | Open or return an `externalSessionId`-scoped slate. A second `open` for the same id is a no-op returning the existing slate — never a second file. |
@@ -1571,9 +1586,10 @@ denied at expiry rather than auto-approved; the stock listener registers no tool
 so it raises none.
 
 **Remote control (Telegram).** Also opt-in: when `remote/bot-token` and
-`remote/config.json` exist, `serve` hosts the one Telegram poller and the seven
-`/v1/remote/*` routes, which a `keryx shell` reaches with a local shell token
-(not the serve bearer) to mirror a session into a topic via `/remote-control`.
+`remote/config.json` exist, `serve` hosts the one Telegram poller and the eight
+`/v1/remote/*` routes, which a `keryx shell` reaches with a nonce-bound HMAC of a
+local shell token (not the serve bearer; `serve` proves itself back with a signed
+answer, `src/remote/shell-token.ts`) to mirror a session into a topic via `/remote-control`.
 Without those files `serve` is unchanged. Tested against a fake Bot API only; see
 [Drive keryx remotely](./guides/drive-keryx-remotely.md#remote-control-from-telegram).
 

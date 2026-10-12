@@ -14,7 +14,7 @@ import { defaultServeConfig } from "../lib/serve-config";
 import { issueServeToken } from "../lib/serve-credential";
 import { type ServeListener, startServeListener } from "../lib/serve-server";
 import { RemoteClient, type RemoteClientOptions } from "./client";
-import { saveRemoteConfig } from "./config";
+import { type RemoteConfig, saveRemoteConfig } from "./config";
 import { FakeBotApi } from "./fake-bot-api";
 import type { RemoteEvent } from "./hub";
 import { type OpenRemoteServiceOptions, openRemoteService, type RemoteService } from "./service";
@@ -61,6 +61,8 @@ const FAST_SLEEP = (): Promise<void> => new Promise<void>((resolve) => setTimeou
 export interface RigOptions {
   /** False: no remote config is written, as on a machine where Telegram was never connected. Default true. */
   configured?: boolean;
+  /** Fields of the remote config to set (the rest is `testConfig`'s). */
+  config?: Partial<RemoteConfig>;
 }
 
 export function makeRig(rigOptions: RigOptions = {}): Rig {
@@ -72,7 +74,7 @@ export function makeRig(rigOptions: RigOptions = {}): Rig {
     throw new Error("fixture could not issue a serve token");
   }
   if (rigOptions.configured !== false) {
-    const saved = saveRemoteConfig(testConfig({ chatId: FAKE_CHAT_ID }), dir);
+    const saved = saveRemoteConfig(testConfig({ chatId: FAKE_CHAT_ID, ...rigOptions.config }), dir);
     if (!saved.ok) {
       throw new Error(`fixture could not save the remote config: ${saved.reason}`);
     }

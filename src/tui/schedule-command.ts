@@ -26,7 +26,8 @@ async function defaultCheckCredential(provider: string, model: string): ReturnTy
 export const SCHEDULE_SLASH_USAGE = [
   "usage: /schedule --name <name> --every \"<cadence>\" --rates <in>,<out> --ceiling <usd> [--tool <id>]... [--repo owner/name]...",
   "       [--mode ask|trust] [--network off|full] [--max-seconds N] [--provider P --model M] -- <what the agent should do>",
-  'cadence: cron, "every N hours", "every N minutes", "daily at HH:MM", "weekdays at HH:MM"; tools: gh.pr.list, gh.pr.view, gh.pr.checks, gh.issue.list, gh.issue.view, gh.run.list',
+  'cadence: cron, "every N hours", "every N minutes", "daily at HH:MM", "weekdays at HH:MM"; tools: gh.pr.list, gh.pr.view, gh.pr.checks, gh.issue.list, gh.issue.view, gh.run.list, gh.pr.review-requested, gh.run.failed',
+  "digest: /schedule --digest --name <name> --every \"daily at 08:00\" --rates <in>,<out> --ceiling <usd> [--repo owner/name]... [--topic <name>]  (read-only GitHub + board digest, run by `keryx serve`)",
   "or just ask the agent: \"schedule a task every 4 hours to check my open PRs\" — it proposes one, you confirm the same card.",
 ];
 
@@ -126,7 +127,12 @@ export async function runScheduleSlashCommand(raw: string, deps: ScheduleSlashDe
   }
   try {
     const created = await confirmSchedule(deps.cwd, drafted.draft, deps.host ?? {});
-    deps.print(`/schedule: "${created.name}" stored and installed (${created.backend}: ${created.unit}).`, "ok");
+    deps.print(
+      request.digest !== undefined
+        ? `/schedule: digest "${created.name}" stored. \`keryx serve\` runs it on its schedule (no OS timer); the first run is a baseline.`
+        : `/schedule: "${created.name}" stored and installed (${created.backend}: ${created.unit}).`,
+      "ok",
+    );
     return true;
   } catch (error) {
     deps.print(`/schedule: failed — nothing is scheduled: ${error instanceof Error ? error.message : String(error)}`, "error");

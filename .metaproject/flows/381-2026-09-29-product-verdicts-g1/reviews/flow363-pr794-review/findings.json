@@ -1,0 +1,212 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow363-pr794-review",
+    "severity": "minor",
+    "problem": "The flow-journal observation regex was not fence-aware, unlike the docpack path.",
+    "impact": "A journal holding a fenced example `outcome-observed: <verdict> — <note>` before a real observation reported observed:false plus a parse failure, and index exited 1.",
+    "suggested_fix": "Ignore fenced lines and take the first line outside a fence.",
+    "evidence": "the reviewer ran the input through the real function",
+    "confidence": "high",
+    "file": "src/product/extract.ts",
+    "line": null,
+    "quote": "const OBSERVATION = /^outcome-observed:[ \\t]*(.*)$/m",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 16
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/extract.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow363-pr794-review#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 6a430094 fixed: fencedLines helper; first observation outside a fence decides; test in observation.test.ts",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6a430094 (review-fix commit on PR #794)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow363-pr794-review",
+    "severity": "minor",
+    "problem": "A docpack section with placeholder text (`_None yet._`, an HTML comment, a fenced example) was a failure.",
+    "impact": "A package README with a comment placeholder made product index exit 1.",
+    "suggested_fix": "Strip fences and HTML comments; an empty remainder is no observation. Keep the grammar strict.",
+    "evidence": "the reviewer ran five inputs",
+    "confidence": "high",
+    "file": "src/product/extract.ts",
+    "line": null,
+    "quote": "Outcome observations section parsing",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 82
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/extract.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow363-pr794-review#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 6a430094 fixed: fences and comments stripped, empty section is no observation, non-empty text without a verdict still fails; tests in docpack-observation.test.ts",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6a430094 (review-fix commit on PR #794)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow363-pr794-review",
+    "severity": "minor",
+    "problem": "hasInstrument tested the joined criterion for a not measured prefix.",
+    "impact": "A `not measured` bullet followed by a real bullet counted as no instrument.",
+    "suggested_fix": "Evaluate per bullet.",
+    "evidence": "the reviewer ran the input",
+    "confidence": "high",
+    "file": "src/product/extract.ts",
+    "line": null,
+    "quote": "export function hasInstrument",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 37
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/extract.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow363-pr794-review#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 6a430094 fixed: per-bullet check; test in extract.test.ts",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6a430094 (review-fix commit on PR #794)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow363-pr794-review",
+    "severity": "minor",
+    "problem": "The hint skip matched a prefix, so a real bullet starting with the hint words was dropped.",
+    "impact": "`- State an outcome criterion for checkout: p95 under 2s` gave criterion null.",
+    "suggested_fix": "Skip only the exact template hint line.",
+    "evidence": "the reviewer ran the input",
+    "confidence": "high",
+    "file": "src/product/extract.ts",
+    "line": null,
+    "quote": "hint prefix skip",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 28
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/extract.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow363-pr794-review#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 6a430094 fixed: OUTCOME_HINT is the whole hint line; exact-hint and prefix-survives tests",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6a430094 (review-fix commit on PR #794)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow363-pr794-review",
+    "severity": "minor",
+    "problem": "No test covered an old-format index, and indexProblem accepted observed:true with verdict:null.",
+    "impact": "Removing the new checks would not have failed any test.",
+    "suggested_fix": "Add malformed-index tests and reject the inconsistent pair.",
+    "evidence": "the reviewer read store.ts and the tests",
+    "confidence": "high",
+    "file": "src/product/store.ts",
+    "line": null,
+    "quote": "indexProblem verdict and count keys",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 34
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/store.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow363-pr794-review#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 6a430094 fixed: indexProblem rejects observed:true with verdict:null; four cases in staleness.test.ts naming keryx product index",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6a430094 (review-fix commit on PR #794)"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow363-pr794-review",
+    "severity": "info",
+    "problem": "The document overstated that no journal line existed; G1a could be passed by writing not measured everywhere; the cli-reference header sketch omitted the counts.",
+    "impact": "A reader could take the arm as nothing observed anywhere, and read G1a as measuring criteria.",
+    "suggested_fix": "Soften the sentence, report the two shares separately, show the counts.",
+    "evidence": "the reviewer read the docs",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-product-module/metrics-and-validation.md",
+    "line": null,
+    "quote": "before arm wording",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1
+    },
+    "class_scope": {
+      "sites": [
+        "docs/requirements/keryx-product-module/metrics-and-validation.md"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow363-pr794-review#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 6a430094 fixed: metrics wording, G1a reports the declared-criterion and not-measured shares separately, cli-reference sketch shows verdict counts",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 6a430094 (review-fix commit on PR #794)"
+    }
+  }
+]

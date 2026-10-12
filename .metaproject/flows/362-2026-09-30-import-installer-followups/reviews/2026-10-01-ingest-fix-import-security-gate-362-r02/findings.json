@@ -1,0 +1,162 @@
+[
+  {
+    "id": "K-001",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "With the security module disabled, guardOutput returns ALLOW_DECISION with no findings, so the prompt-injection refusal never fires; injection text is imported verbatim with no reason and no security object, while the docs and help say it is refused in every security mode.",
+    "impact": "A project set up with --no-security imports instruction-override text as an active reviewer, indistinguishable from a clean pass.",
+    "suggested_fix": "Run the deterministic injection detector for imports regardless of the module and document the disabled-module behaviour.",
+    "evidence": "CLI probe in a temp project with modules.security absent: status imported, SKILL.md contains the text, exit 0; advisory/enforced probes refused it.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1006,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/import-skills.ts gateText (callers planOne, planUpdate, decideRule, overwriteImportedSkill)",
+        "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md:318",
+        "docs/docs/cli-reference.md:3200",
+        "src/gdskills/import-skills.ts SECURITY_GATE_HELP"
+      ],
+      "enumeration_method": "keryx ctx rg for gateText/guardOutput callers in import-skills.ts and for 'every security mode' in the changed docs"
+    },
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-ran the temp-project probe with modules.security absent against commit 967e7020, contained in PR #822 head 42201489: injection overlay is refused, exit 1, nothing written; no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 967e7020, contained in PR #822 head 42201489: import runs the deterministic injection detector with the security module off, so the disabled-module import is refused, exit 1, nothing written"
+    }
+  },
+  {
+    "id": "K-002",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "decideReferencedRules is fed every non-deprecated source, including refused packages, so rules cited by a refused package are still written.",
+    "impact": "A refused overlay still adds rule files to .metaproject/rules.",
+    "suggested_fix": "Exclude refused sources from rule collection or report their rules as skipped.",
+    "evidence": "Probe: skills [[review-bad, refused]], rules [[house/clean.mdc, imported]], file written.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 242,
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-ran the refused-package-plus-rule probe against commit 967e7020, contained in PR #822 head 42201489: house/clean.mdc is reported 'skipped — cited only by a refused package' and not written; no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 967e7020, contained in PR #822 head 42201489: rules cited only by a refused package are skipped, not written"
+    }
+  },
+  {
+    "id": "K-003",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Refused rows exit 0; a SKILL.md blocked under enforced mode used to throw (non-zero) and now exits 0.",
+    "impact": "A CI bootstrap passes while installing nothing.",
+    "suggested_fix": "Exit non-zero when a real run has any refused row.",
+    "evidence": "Enforced probe: status refused, exit 0.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1785,
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-ran the refused-rows probe against commit 967e7020, contained in PR #822 head 42201489: real run with refused rows exits 1, dry run exits 0, also under enforced; no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 967e7020, contained in PR #822 head 42201489: a real run with any refused row exits 1 after printing every row; dry runs exit 0"
+    }
+  },
+  {
+    "id": "K-004",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "createProjectSkill writes scaffold, registry and catalog (and overwrites on --force/update) before the final re-gate.",
+    "impact": "A late refusal leaves a header-only SKILL.md and registry entry, or destroys an installed skill on update/--force.",
+    "suggested_fix": "Gate the final stamped text before createProjectSkill.",
+    "evidence": "Mutation M4 forcing this path: 3 tests fail on a leftover scaffold.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1189,
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-ran the late-refusal, --force and skills update probes against commit 967e7020, contained in PR #822 head 42201489: a refusal writes no scaffold or registry entry and the installed SKILL.md stays byte-identical; no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 967e7020, contained in PR #822 head 42201489: the final stamped SKILL.md is gated before scaffold, registry and catalog, so a refusal writes nothing and --force and skills update leave the installed skill unchanged"
+    }
+  },
+  {
+    "id": "K-005",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The PR body said docs were still being written and omitted the exit-code change.",
+    "impact": "Readers of the merge commit get an out-of-date account.",
+    "suggested_fix": "Rewrite the PR body to match the head.",
+    "evidence": "gh pr view 822 at head c8ef114e.",
+    "confidence": "high",
+    "file": "PR #822 body",
+    "line": 1,
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "PR #822 body at head 42201489 (no commit carries the edit): states that a real run that refused anything exits 1 (dry runs 0) and has a Docs bullet saying the docs are done; the 'docs still being written' wording and the missing exit-code change are gone; no longer reproduces.",
+      "verifier": "close-verifier-362"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed by editing the PR #822 body on GitHub (no commit carries it), at head 42201489: the body now states the exit-code change and that the docs are done"
+    }
+  },
+  {
+    "id": "K-006",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The --allow-flagged hint printed for refusals the flag cannot override.",
+    "impact": "The operator is told to rerun with a flag that changes nothing.",
+    "suggested_fix": "Print the hint only for prompt-injection refusals.",
+    "evidence": "Code reading.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 399,
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "re-ran refusal probes against commit 967e7020, contained in PR #822 head 42201489: the --allow-flagged hint is printed only for injection refusals; no longer reproduces.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 967e7020, contained in PR #822 head 42201489: the --allow-flagged hint is printed only for prompt-injection refusals"
+    }
+  },
+  {
+    "id": "K-007",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "The example quoted injection text and the AWS placeholder key literally.",
+    "impact": "Later found to fail the own-repo export audit in CI; fixed in f5b69c80 by describing the fixtures.",
+    "suggested_fix": "Describe the fixtures instead of quoting them.",
+    "evidence": "CI on PR #822 at 967e7020: own-repo-roundtrip refused the doc; passes after f5b69c80.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+    "line": 333,
+    "global_id": "2026-10-01-ingest-fix-import-security-gate-362-r02#K-007"
+  }
+]
