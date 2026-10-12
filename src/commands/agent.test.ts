@@ -34,6 +34,7 @@ import {
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
 import { scriptedProvider as sharedScriptedProvider } from "./agent.test-helpers";
+import { AUTOMATIC_REVIEW_DISCLOSURE_FILE, AutomaticReviewRun } from "./automatic-review";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type {
@@ -1909,6 +1910,336 @@ test("flow 429 AC5: trust and ask still ask at the limit, and a trust reset gran
     expect(asked).toHaveLength(1);
     expect(systemMsgs.join("")).toContain(`[budget] Round limit increased — ${1 + grant} rounds`);
   }
+});
+
+// --- flow 429 (follow-up): the limit and the approvals of an automatic review ---
+
+test("flow 429 AC11: a turn that belongs to an automatic review gets 200 rounds in ask mode and never asks at the limit", async () => {
+  await withRoundsEnv(undefined, async () => {
+    const { provider, requests } = scriptedProvider(loopingReads(205));
+    let asked = 0;
+    const systemMsgs: string[] = [];
+    const result = await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => "ask" },
+      { ...baseDeps(provider), askUser: async () => { asked += 1; return "reset"; } },
+      [],
+      "run an automatic review of the branch",
+    );
+    expect(asked).toBe(0);
+    expect(requests).toHaveLength(200);
+    expect(result.finishReason).toBe("budget");
+    const text = systemMsgs.join("");
+    expect(text).toContain("[budget] Model-round limit reached: 200/200");
+    expect(text).toContain("An automatic review allows at most 200 rounds");
+  });
+});
+
+test("flow 429 AC11: the same line without the mark, or an explicit automaticReview:false, keeps the ask-mode limit", async () => {
+  await withRoundsEnv(undefined, async () => {
+    for (const [line, flag] of [["review the branch", undefined], ["run an automatic review", false]] as const) {
+      const { provider, requests } = scriptedProvider(loopingReads(60));
+      const result = await runAgentTurn(
+        { write: () => {}, onSystem: () => {}, permissionMode: () => "ask" },
+        baseDeps(provider),
+        [],
+        line,
+        flag === undefined ? {} : { automaticReview: flag },
+      );
+      expect(requests).toHaveLength(40);
+      expect(result.finishReason).toBe("budget");
+    }
+  });
+});
+
+test("flow 429 AC11: only an operator-origin line (not a task notification) can start an automatic review", async () => {
+  await withRoundsEnv(undefined, async () => {
+    const { provider, requests } = scriptedProvider(loopingReads(60));
+    await runAgentTurn(
+      { write: () => {}, onSystem: () => {}, permissionMode: () => "ask" },
+      {
+        ...baseDeps(provider),
+        jobRegistry: {
+          drainUndelivered: () => [
+            { jobId: "job-1", status: "completed", exitCode: 0, startedAt: "2026-10-12T00:00:00.000Z", endedAt: "2026-10-12T00:00:01.000Z", durationMs: 1000, output: "ok" },
+          ],
+        } as unknown as NonNullable<AgentDeps["jobRegistry"]>,
+      },
+      [],
+      "run an automatic review",
+      { origin: "task-notification" },
+    );
+    expect(requests).toHaveLength(40);
+  });
+});
+
+test("flow 429 AC1/AC5: the mode is read when the limit is reached — ask→trust asks and grants 120, ask→auto extends without asking", async () => {
+  await withRoundsEnv(undefined, async () => {
+    for (const [target, askedExpected, total] of [["trust", 1, 160], ["auto", 0, 200]] as const) {
+      const { provider, requests } = scriptedProvider([...loopingReads(100), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
+      let mode: "ask" | "trust" | "auto" = "ask";
+      let asked = 0;
+      let results = 0;
+      const systemMsgs: string[] = [];
+      await runAgentTurn(
+        {
+          write: () => {},
+          onSystem: (t) => systemMsgs.push(t),
+          onToolResult: () => {
+            results += 1;
+            if (results === 5) mode = target;
+          },
+          permissionMode: () => mode,
+        },
+        { ...baseDeps(provider), askUser: async () => { asked += 1; return "reset"; } },
+        [],
+        "read broadly",
+      );
+      expect(asked).toBe(askedExpected);
+      expect(systemMsgs.join("")).toContain(`[budget] Round limit increased — ${total} rounds`);
+      expect(requests.length).toBeGreaterThan(40);
+    }
+  });
+});
+
+test("flow 429 AC2: the env value is the first limit and the allotment, capped at 200 — 7 extends by 7, 150 reaches the ceiling at once", async () => {
+  await withRoundsEnv("7", async () => {
+    const { provider, requests } = scriptedProvider([...loopingReads(9), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
+    const systemMsgs: string[] = [];
+    await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => "auto" },
+      baseDeps(provider),
+      [],
+      "read broadly",
+    );
+    expect(requests).toHaveLength(10);
+    expect(systemMsgs.join("")).toContain("[budget] Round limit increased — 14 rounds");
+  });
+  await withRoundsEnv("150", async () => {
+    const { provider, requests } = scriptedProvider(loopingReads(205));
+    const systemMsgs: string[] = [];
+    await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => "ask" },
+      baseDeps(provider),
+      [],
+      "run an automatic review",
+    );
+    expect(requests).toHaveLength(200);
+    const text = systemMsgs.join("");
+    expect(text).toContain("[budget] Round limit increased — 200 rounds");
+    expect(text).toContain("[budget] Model-round limit reached: 200/200");
+  });
+});
+
+test("flow 429: an explicit deps.maxRounds in auto falls back to the question", async () => {
+  await withRoundsEnv(undefined, async () => {
+    const { provider } = scriptedProvider([
+      readToolRound("c1", "a"),
+      readToolRound("c2", "b"),
+      [{ kind: "text_delta", text: "Done." }, { kind: "model_end" }],
+    ]);
+    let asked = 0;
+    const systemMsgs: string[] = [];
+    await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => "auto" },
+      { ...baseDeps(provider, 1), askUser: async () => { asked += 1; return "reset"; } },
+      [],
+      "read twice",
+    );
+    expect(asked).toBe(1);
+    expect(systemMsgs.join("")).toContain("Round limit increased");
+  });
+});
+
+const REVIEW_ID = "2026-10-12-pr-7-aaaa1111";
+const REVIEW_CREATED = `# managed review: ${REVIEW_ID}\npath: .metaproject/reviews/${REVIEW_ID}\nrun mode: automatic review\n`;
+
+function shellRound(id: string, command: string): Partial<NormalizedEvent>[] {
+  return [
+    { kind: "tool_call_start", toolCallId: id, toolName: "shell_exec" },
+    { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ command }) },
+    { kind: "model_end" },
+  ];
+}
+
+function reviewShellTool(refuseComplete = false): { tool: InteractiveTool; ran: string[] } {
+  const ran: string[] = [];
+  return {
+    ran,
+    tool: {
+      definition: { name: "shell_exec", description: "", inputSchema: { type: "object", properties: {} }, risk: "shell" },
+      invoke: async (input) => {
+        const command = String(input.command);
+        ran.push(command);
+        if (command.startsWith("keryx review start")) return { output: REVIEW_CREATED, isError: false };
+        if (refuseComplete && command.startsWith("keryx review complete")) return { output: "gate refused", isError: true };
+        return { output: "ok", isError: false };
+      },
+    },
+  };
+}
+
+test("flow 429 AC12: an automatic review runs its own commands without a prompt; everything else still asks; the counts are written", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "auto-review-turn-"));
+  const { tool, ran } = reviewShellTool();
+  const { provider } = scriptedProvider([
+    shellRound("s1", "keryx review start --pr 7 --automatic"),
+    shellRound("s2", `keryx review status ${REVIEW_ID}`),
+    shellRound("s3", `keryx review status ${REVIEW_ID}; echo hi`),
+    shellRound("s4", "keryx review complete 2026-01-01-pr-1-bbbb2222"),
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const approvals: string[] = [];
+  const systemMsgs: string[] = [];
+  await runAgentTurn(
+    {
+      write: () => {},
+      onSystem: (t) => systemMsgs.push(t),
+      permissionMode: () => "ask",
+      requestApproval: async (_name, input) => {
+        approvals.push(String(JSON.parse(input).command));
+        return true;
+      },
+    },
+    { ...baseDeps(provider), tools: [tool] },
+    [],
+    "run an automatic review of PR 7",
+    { automaticReviewRun: new AutomaticReviewRun(root) },
+  );
+  expect(ran).toHaveLength(4);
+  expect(approvals).toEqual([`keryx review status ${REVIEW_ID}; echo hi`, "keryx review complete 2026-01-01-pr-1-bbbb2222"]);
+  const written = JSON.parse(
+    await readFile(path.join(root, ".metaproject", "reviews", REVIEW_ID, AUTOMATIC_REVIEW_DISCLOSURE_FILE), "utf8"),
+  );
+  expect(written).toMatchObject({ manual: 2, automatic: 2 });
+  expect(systemMsgs.join("")).toContain("[automatic review] inputs: 2 manual, 2 automatic");
+});
+
+test("flow 429 AC12: without the mark the same review command asks", async () => {
+  const { tool } = reviewShellTool();
+  const { provider } = scriptedProvider([
+    shellRound("s1", "keryx review start --pr 7 --automatic"),
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  let approvals = 0;
+  await runAgentTurn(
+    {
+      write: () => {},
+      onSystem: () => {},
+      permissionMode: () => "ask",
+      requestApproval: async () => {
+        approvals += 1;
+        return true;
+      },
+    },
+    { ...baseDeps(provider), tools: [tool] },
+    [],
+    "review PR 7",
+  );
+  expect(approvals).toBe(1);
+});
+
+test("flow 429 AC12: a review command still asks when the floor says so — untrusted content, unattended", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "auto-review-floor-"));
+  const { tool, ran } = reviewShellTool();
+  const web: InteractiveTool = {
+    definition: { name: "web_fetch", description: "", inputSchema: { type: "object", properties: {} }, risk: "read" },
+    invoke: async () => ({ output: "external", isError: false, untrusted: true }),
+  };
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "w1", toolName: "web_fetch" },
+      { kind: "tool_call_end", toolCallId: "w1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    shellRound("s1", "keryx review start --pr 7 --automatic"),
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  let approvals = 0;
+  await runAgentTurn(
+    {
+      write: () => {},
+      onSystem: () => {},
+      permissionMode: () => "ask",
+      requestApproval: async () => {
+        approvals += 1;
+        return false;
+      },
+    },
+    { ...baseDeps(provider), tools: [web, tool] },
+    [],
+    "run an automatic review",
+    { automaticReviewRun: new AutomaticReviewRun(root) },
+  );
+  expect(approvals).toBe(1);
+  expect(ran).toHaveLength(0);
+});
+
+test("flow 429 AC13: ask_user is answered with the default and not shown; only a claimed emergency after a gate refusal reaches the operator", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "auto-review-ask-"));
+  const { tool } = reviewShellTool(true);
+  const shown: string[] = [];
+  const askTool = createAskUserTool(async (request) => {
+    shown.push(request.question);
+    return "a";
+  });
+  const options = [
+    { id: "a", label: "A", description: "" },
+    { id: "b", label: "B", description: "", recommended: true },
+  ];
+  const askRound = (id: string, question: string, emergency?: string): Partial<NormalizedEvent>[] => [
+    { kind: "tool_call_start", toolCallId: id, toolName: "ask_user" },
+    { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ question, options, ...(emergency ? { emergency } : {}) }) },
+    { kind: "model_end" },
+  ];
+  const { provider, requests } = scriptedProvider([
+    shellRound("s1", "keryx review start --pr 7 --automatic"),
+    askRound("q1", "Which scope?"),
+    askRound("q2", "Waive early?", "gate-waiver"),
+    shellRound("s2", `keryx review complete ${REVIEW_ID}`),
+    askRound("q3", "Waive now?", "gate-waiver"),
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  await runAgentTurn(
+    { write: () => {}, onSystem: () => {}, permissionMode: () => "ask" },
+    { ...baseDeps(provider), tools: [tool, askTool] },
+    [],
+    "run an automatic review",
+    { automaticReviewRun: new AutomaticReviewRun(root) },
+  );
+  expect(shown).toEqual(["Waive now?"]);
+  const answers = JSON.stringify(requests.at(-1)?.messages);
+  expect(answers).toContain('id=\\"b\\"');
+  const written = JSON.parse(
+    await readFile(path.join(root, ".metaproject", "reviews", REVIEW_ID, AUTOMATIC_REVIEW_DISCLOSURE_FILE), "utf8"),
+  );
+  expect(written).toMatchObject({ manual: 1, automatic: 4 });
+});
+
+test("flow 429 AC13: outside an automatic review ask_user always reaches the operator", async () => {
+  const shown: string[] = [];
+  const askTool = createAskUserTool(async (request) => {
+    shown.push(request.question);
+    return "a";
+  });
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "q1", toolName: "ask_user" },
+      {
+        kind: "tool_call_end",
+        toolCallId: "q1",
+        input: JSON.stringify({ question: "Which?", options: [{ id: "a", label: "A" }, { id: "b", label: "B", recommended: true }] }),
+      },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  await runAgentTurn(
+    { write: () => {}, onSystem: () => {}, permissionMode: () => "ask" },
+    { ...baseDeps(provider), tools: [askTool] },
+    [],
+    "plan the work",
+  );
+  expect(shown).toEqual(["Which?"]);
 });
 
 test("runAgentTurn: identical failing calls only burn one unique slot; after 3 attempts further same hash is skipped", async () => {

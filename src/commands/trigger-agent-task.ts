@@ -39,6 +39,7 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { ensureScratchParent } from "./unattended-scratch";
 import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
@@ -572,6 +573,8 @@ async function runLocked(
         }),
         idSeq: () => randomUUID(),
         unattended: true,
+        // An unattended run keeps the `ask` limit whatever its entry's mode: 120/200 are for an operator at the keyboard.
+        maxRounds: resolveAgentMaxRounds(process.env, "ask"),
         hardDeny: unattendedRefusal,
         ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
@@ -593,7 +596,7 @@ async function runLocked(
           terminal = state.reason;
         },
       };
-      const result = await runAgentTurn(io, agentDeps, history, buildAgentTaskPrompt(entry, action), { signal: controller.signal });
+      const result = await runAgentTurn(io, agentDeps, history, buildAgentTaskPrompt(entry, action), { signal: controller.signal, automaticReview: false });
       finishReason = result.finishReason;
       if (result.caughtToolErrors !== undefined && result.caughtToolErrors.length > 0) {
         // Review r1 (item 1, MAJOR regression): before AC4 (flow 354, L-12)

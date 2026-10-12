@@ -33,9 +33,19 @@ export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";
 export const MAX_AGENT_MAX_ROUNDS = 200;
 
 /**
+ * True when a turn at this limit class extends itself instead of asking: the
+ * `auto` permission mode, or a turn that belongs to an automatic review (an
+ * orthogonal run mode — see ./automatic-review.ts — that leaves the permission
+ * mode, and so every approval, as it was).
+ */
+export function extendsWithoutAsking(mode: PermissionMode | undefined, automaticReview = false): boolean {
+  return automaticReview || mode === "auto";
+}
+
+/**
  * Resolve model-round-trip budget for an interactive agent turn.
  * - valid env integer ≥ 1 → that value, clamped to {@link MAX_AGENT_MAX_ROUNDS}, in every mode
- * - unset / empty / invalid env, `mode === "auto"` → {@link MAX_AGENT_MAX_ROUNDS}
+ * - unset / empty / invalid env, `mode === "auto"` or an automatic review → {@link MAX_AGENT_MAX_ROUNDS}
  * - unset / empty / invalid env, `mode === "trust"` → {@link TRUST_MAX_ROUNDS}
  * - unset / empty / invalid env, any other mode → {@link DEFAULT_MAX_ROUNDS}
  *
@@ -44,9 +54,13 @@ export const MAX_AGENT_MAX_ROUNDS = 200;
 export function resolveAgentMaxRounds(
   env: Record<string, string | undefined> = process.env,
   mode?: PermissionMode,
+  automaticReview = false,
 ): number {
-  const fallback =
-    mode === "auto" ? MAX_AGENT_MAX_ROUNDS : mode === "trust" ? TRUST_MAX_ROUNDS : DEFAULT_MAX_ROUNDS;
+  const fallback = extendsWithoutAsking(mode, automaticReview)
+    ? MAX_AGENT_MAX_ROUNDS
+    : mode === "trust"
+      ? TRUST_MAX_ROUNDS
+      : DEFAULT_MAX_ROUNDS;
   const raw = env[ENV_AGENT_MAX_ROUNDS];
   if (raw === undefined || raw.trim().length === 0) {
     return fallback;
@@ -62,8 +76,13 @@ export function resolveAgentMaxRounds(
 export function describeRoundLimitSplit(env: Record<string, string | undefined> = process.env): string {
   return (
     `${resolveAgentMaxRounds(env, "ask")} rounds per turn, ` +
-    `${resolveAgentMaxRounds(env, "trust")} in trust, ${resolveAgentMaxRounds(env, "auto")} in auto`
+    `${resolveAgentMaxRounds(env, "trust")} in trust, ${resolveAgentMaxRounds(env, "auto")} in auto and in automatic review`
   );
+}
+
+/** One-line description of the limit a turn gets while it belongs to an automatic review. */
+export function describeAutomaticReviewLimit(env: Record<string, string | undefined> = process.env): string {
+  return `${resolveAgentMaxRounds(env, undefined, true)} rounds per turn, extends without asking`;
 }
 
 /**

@@ -1166,6 +1166,8 @@ describe("flow 429 AC7 — the readline /mode output shows the round limit", () 
     try {
       const output = await repl(["/mode", "/mode trust", "/mode auto", "yes", "/exit"]);
       expect(output).toContain("Round limit: 40 rounds per turn, asks before extending");
+      expect(output).toContain("Automatic review (name it in a request): 200 rounds per turn, extends without asking");
+      expect(output).toContain("it stops to ask only for:");
       expect(output).toContain("Permission mode: trust (120 rounds per turn, asks before extending)");
       expect(output).toContain("Permission mode: auto (200 rounds per turn, extends without asking)");
     } finally {

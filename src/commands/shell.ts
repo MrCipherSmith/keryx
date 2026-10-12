@@ -18,6 +18,7 @@
 // / `Math.random`). Offline: the core never imports a provider SDK or touches
 // the network directly; all provider I/O flows through the injected port.
 
+import { describeAutomaticReviewMode } from "./automatic-review";
 import { randomUUID } from "node:crypto";
 import { join as joinPath } from "node:path";
 import * as readline from "node:readline";
@@ -2896,6 +2897,7 @@ export async function runAgentRepl(
             `Permission mode: ${permissionMode}` +
               (stored !== undefined ? ` (project default: ${stored})\n` : " (no project default set)\n") +
               `Round limit: ${describeRoundLimit(permissionMode)}\n` +
+              `${describeAutomaticReviewMode()}\n` +
               `Usage: /mode <${PERMISSION_MODES.join("|")}> [save] · /mode clear\n`,
           );
         } else if (wanted === "clear") {
