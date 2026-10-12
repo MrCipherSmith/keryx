@@ -28,6 +28,15 @@ import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touche
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand, isTrustRoutineTool } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
+import { ENV_AGENT_MAX_ROUNDS, MAX_AGENT_MAX_ROUNDS, resolveAgentMaxRounds } from "./round-limit";
+
+export {
+  DEFAULT_MAX_ROUNDS,
+  describeRoundLimit,
+  ENV_AGENT_MAX_ROUNDS,
+  MAX_AGENT_MAX_ROUNDS,
+  resolveAgentMaxRounds,
+} from "./round-limit";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
@@ -989,30 +998,6 @@ export function buildBudgetWarningLine(
   return wrapHarnessNudge(`Budget: ${parts.join("; ")}. Return your result now.`, nonce);
 }
 
-/**
- * Default model-round-trip budget per user turn for interactive agent
- * (`keryx shell` / TUI). A round is one `provider.stream()` request/response
- * cycle and may carry a batch of several tool calls, so this bounds runaway
- * ROUNDS rather than the number of distinct legitimate tool calls a big task
- * needs (see ADR-0010's "shape problem" — counting unique tool-call
- * signatures conflated task volume with actual repetition; this replaces
- * that axis rather than re-tuning its numbers, matching how grok-build,
- * Codex, and opencode all gate on rounds/tokens instead of call-signature
- * count). Real repetition is still caught independently by
- * {@link MAX_ATTEMPTS_PER_HASH}. Still a finite loop-safety guard — not
- * unlimited.
- */
-export const DEFAULT_MAX_ROUNDS = 40;
-
-/** Env override for {@link DEFAULT_MAX_ROUNDS} (positive integer). */
-export const ENV_AGENT_MAX_ROUNDS = "KERYX_AGENT_MAX_ROUNDS";
-
-/** Hard ceiling when env/CLI requests an extreme value (runaway guard). */
-export const MAX_AGENT_MAX_ROUNDS = 200;
-
-/** Round budget of a `trust`-mode turn: a long review orchestration must reach its end unattended. */
-export const TRUST_MODE_MAX_ROUNDS = 200;
-
 /** Turn-level cap on automatic plan follow-through continuations (a stalled one ends the turn earlier). */
 export const MAX_PLAN_FOLLOW_THROUGHS = 8;
 
@@ -1031,29 +1016,6 @@ export const MAX_PLAN_FOLLOW_THROUGHS = 8;
  * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
  */
 export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
-
-/**
- * Resolve model-round-trip budget for an interactive agent turn.
- * - unset / empty / invalid env → {@link DEFAULT_MAX_ROUNDS}
- * - valid integer ≥ 1 → clamped to {@link MAX_AGENT_MAX_ROUNDS}
- *
- * Callers pass `process.env` in production; tests inject a stub map.
- */
-export function resolveAgentMaxRounds(
-  env: Record<string, string | undefined> = process.env,
-  mode?: PermissionMode,
-): number {
-  const fallback = mode === "trust" ? TRUST_MODE_MAX_ROUNDS : DEFAULT_MAX_ROUNDS;
-  const raw = env[ENV_AGENT_MAX_ROUNDS];
-  if (raw === undefined || raw.trim().length === 0) {
-    return fallback;
-  }
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 1) {
-    return fallback;
-  }
-  return Math.min(n, MAX_AGENT_MAX_ROUNDS);
-}
 
 /**
  * Default per-request output-token budget for the main agent turn round
@@ -2871,7 +2833,9 @@ async function runAgentTurnCore(
   // output) enters `history`, so echoed content can never carry the marker.
   const controlNonce = deps.controlNonce ?? generateControlNonce();
   const scrub = (text: string): string => scrubControlNonce(text, controlNonce);
-  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds(process.env, io.permissionMode?.());
+  const explicitMaxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0);
+  const currentPermissionMode = (): PermissionMode => io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+  const maxRounds = explicitMaxRounds ?? resolveAgentMaxRounds(process.env, currentPermissionMode());
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   // Flow 347 T7: a subagent's advisory call target (warning threshold only).
   const subagentBudget = deps.subagentBudget;
@@ -3211,7 +3175,23 @@ async function runAgentTurnCore(
       await emitTerminalState(io, deps, options, "budget_exhausted");
       return "stop";
     }
-    const resolution = await offerRoundLimitReset(deps, roundState, system, io.permissionMode?.());
+    if (explicitMaxRounds === undefined && currentPermissionMode() === "auto") {
+      if (roundState.maxRounds < MAX_AGENT_MAX_ROUNDS) {
+        roundState.maxRounds = Math.min(
+          roundState.maxRounds + resolveAgentMaxRounds(process.env, "auto"),
+          MAX_AGENT_MAX_ROUNDS,
+        );
+        system(`\n[budget] Round limit increased — ${roundState.maxRounds} rounds. Continuing…\n`);
+        return "reset";
+      }
+      system(
+        `\n[budget] Model-round limit reached: ${roundState.round}/${roundState.maxRounds}. ` +
+          `Auto mode allows at most ${MAX_AGENT_MAX_ROUNDS} rounds per turn; ${ENV_AGENT_MAX_ROUNDS} can lower the limit, not raise it. ` +
+          "Stopping without another model request.\n",
+      );
+      return "stop";
+    }
+    const resolution = await offerRoundLimitReset(deps, roundState, system, currentPermissionMode());
     if (resolution === "reset") {
       return "reset";
     }
@@ -5881,6 +5861,7 @@ async function executeCallUnbounded(
   // and making the parameter conditional would hide which calls are abortable.
   mark("invoke");
   const result = await tool.invoke(input, {
+    permissionMode: mode,
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),

@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
 import { AGENT_SLASH_COMMANDS } from "../commands/agent-commands";
+import { describeRoundLimitSplit } from "../commands/round-limit";
 import {
   allHelpTokens,
   closestHelpTopics,
@@ -417,5 +418,14 @@ describe("/channels is documented where operators look", () => {
       .split(".")
       .map((part) => Number.parseInt(part, 10));
     expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_048);
+  });
+});
+
+describe("flow 429 AC7: /mode help states the round limit the turn loop enforces", () => {
+  test("the hardcoded /mode summary carries the same split describeRoundLimitSplit renders", () => {
+    const entry = HELP_GROUPS.find((e) => e.kind === "slash" && e.name === "/mode");
+    expect(entry?.summary).toContain(`Round limit: ${describeRoundLimitSplit({})}`);
+    const slash = AGENT_SLASH_COMMANDS.find((c) => c.name === "/mode");
+    expect(slash?.description).toContain(describeRoundLimitSplit({}));
   });
 });

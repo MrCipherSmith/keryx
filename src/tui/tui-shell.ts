@@ -42,6 +42,7 @@ import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
   describeReasoningEffortSource,
+  describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveMaxAutoWake,
@@ -3680,6 +3681,11 @@ const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
   auto: "Skips confirmation for everything except credential-touching commands",
 };
+
+/** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
+export function describeModePickerOption(mode: PermissionMode): string {
+  return `${MODE_PICKER_DESCRIPTIONS[mode]} · ${describeRoundLimit(mode)}`;
+}
 
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
@@ -7519,7 +7525,7 @@ export async function launchTuiAgentShell(opts: {
       permissionMode = next;
       modeChangedThisSession = true;
       paintModeRow();
-      chrome.showToast(`Permission mode: ${next}`);
+      chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
       const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
@@ -7539,7 +7545,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                "Only credential-touching commands still ask.",
+                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -7599,7 +7605,7 @@ export async function launchTuiAgentShell(opts: {
             options: PERMISSION_MODES.map((m) => ({
               id: m,
               label: m,
-              description: MODE_PICKER_DESCRIPTIONS[m],
+              description: describeModePickerOption(m),
               recommended: m === permissionMode,
             })),
           }),

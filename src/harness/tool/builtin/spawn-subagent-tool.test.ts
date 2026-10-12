@@ -103,6 +103,50 @@ test("per-child round cap is 200 even when the model asks for more", async () =>
   expect(result.output).toMatch(/rounds≤200\b/);
 });
 
+test("flow 429 AC11: in auto a child defaults to 40 rounds and may ask for up to 200", async () => {
+  const make = () =>
+    createSpawnSubagentTool({
+      cwd: process.cwd(),
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => stubProvider("ok"),
+      getDetectedProviders: () => [{ name: "ollama" }],
+    });
+  expect((await make().invoke({ task: "investigate" }, { permissionMode: "auto" })).output).toMatch(/rounds≤40\b/);
+  expect(
+    (await make().invoke({ task: "investigate", max_rounds: 150 }, { permissionMode: "auto" })).output,
+  ).toMatch(/rounds≤150\b/);
+  expect(
+    (await make().invoke({ task: "investigate", max_rounds: 999 }, { permissionMode: "auto" })).output,
+  ).toMatch(/rounds≤200\b/);
+});
+
+test("flow 429 AC11: in ask and trust a child keeps the 10 default and the 24 cap", async () => {
+  const make = () =>
+    createSpawnSubagentTool({
+      cwd: process.cwd(),
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => stubProvider("ok"),
+      getDetectedProviders: () => [{ name: "ollama" }],
+    });
+  for (const permissionMode of ["ask", "trust"] as const) {
+    expect((await make().invoke({ task: "investigate" }, { permissionMode })).output).toMatch(/rounds≤10\b/);
+    expect((await make().invoke({ task: "investigate", max_rounds: 999 }, { permissionMode })).output).toMatch(/rounds≤24\b/);
+  }
+});
+
+test("flow 429 AC11: a child makes at most max_rounds + 1 provider requests, in auto beyond 24", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const looping = (n: number) => toolCalls({ id: `t${n}`, name: "list_dir", input: JSON.stringify({ path: `missing-${n}` }) });
+  const auto = scriptedChildProvider(looping);
+  const autoResult = await childTool(auto.provider, events).invoke({ task: "explore", max_rounds: 30 }, { permissionMode: "auto" });
+  expect(autoResult.status).toBe("BudgetExhausted");
+  expect(auto.requests).toHaveLength(31);
+
+  const trust = scriptedChildProvider(looping);
+  await childTool(trust.provider, events).invoke({ task: "explore", max_rounds: 30 }, { permissionMode: "trust" });
+  expect(trust.requests).toHaveLength(25);
+});
+
 /**
  * Flow 347 T7: a child provider driven by a per-request script. Each request
  * is recorded (tools offered + messages) so a test can inspect exactly what

@@ -31,6 +31,28 @@ credential/permission files (`auth.json`, `permissions.json`,
 a compromised or confused turn cannot use `auto` mode to grant itself new
 authority.
 
+## Round limit per turn
+
+The mode also decides how many model rounds one turn may run before it stops.
+A round is one request to the model and may carry several tool calls.
+
+| Mode | Rounds per turn | At the limit |
+|---|---|---|
+| `ask` | 40 | Asks "Increase limit and continue / Cancel"; a yes grants 40 more. |
+| `trust` | 120 | Asks the same question; a yes grants 120 more. |
+| `auto` | 200 | Never asks. Below 200 the turn extends itself and prints a `[budget]` line; at 200 it stops with a `[budget]` message. |
+
+`KERYX_AGENT_MAX_ROUNDS` wins in every mode, and 200 is the ceiling: a larger
+value is clamped to 200. In `auto` the variable can lower the limit, not raise
+it; a turn then extends itself in steps of that value up to 200. The mode is
+read at the start of each turn, so `/mode auto`, `/mode trust` and `/mode ask`
+change the limit of the next turn without a restart. `/mode` and the `/mode`
+picker show the limit of each mode.
+
+Subagents, which is how review waves run, have their own round limit: 10 by
+default and at most 24 in `ask` and `trust`; in `auto` the default is 40 and a
+`max_rounds` request is honored up to 200.
+
 ## Trusting one MCP tool for the session
 
 An MCP tool called through `use_tool` always counts as destructive, so it asks

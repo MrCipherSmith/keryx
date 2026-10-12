@@ -491,7 +491,10 @@ What is in it today:
   inside a running session, decide whether that approval is asked for at all
   — `ask` (default), `trust` (safe calls run, a destructive one still asks),
   `auto` (nothing asks except a credentials-touching command, which no mode
-  ever auto-approves). A session-level layer only: `harness run`/`exec`,
+  ever auto-approves). The mode also sets how many model rounds one turn may
+  run: 40 in `ask`, 120 in `trust`, 200 in `auto`, where reaching the limit
+  never stops to ask (`KERYX_AGENT_MAX_ROUNDS` overrides all three, up to 200).
+  A session-level layer only: `harness run`/`exec`,
   `keryx serve`, and MCP keep the unconditional policy engine above,
   untouched. See the [permission modes guide](docs/docs/guides/permission-modes.md).
 - **Kernel-enforced containment underneath.** The OS sandbox sits *below* the

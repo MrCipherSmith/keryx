@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- **The round limit of a turn follows the permission mode.** A turn was capped at 40 model rounds in every mode, and the question "Increase limit and continue / Cancel" was the one prompt `auto` still left: a review shell sat on it for about 50 minutes. The default is now 40 in `ask` (unchanged), 120 in `trust` and 200 in `auto`; `KERYX_AGENT_MAX_ROUNDS` still wins in every mode and 200 stays the ceiling. In `auto` reaching the limit never asks: below 200 the turn extends itself and prints the `[budget]` line, and at 200 it stops with a `[budget]` message that names the ceiling. In `trust` and `ask` the question stays, and a yes grants one more allotment of the mode (120 or 40). The mode is read at the start of each turn, so `/mode` takes effect on the next turn; `/mode` (readline and TUI picker) and `/help` show the limit. Subagents, which is how review waves run, follow the same rule in `auto`: default 40 rounds, a `max_rounds` request honored up to 200; in `ask` and `trust` they keep 10 and 24.
 
 ## [0.3.112] - 2026-10-12
 

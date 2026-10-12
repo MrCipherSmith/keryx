@@ -14,6 +14,7 @@
 // (see {@link describeCommand} / {@link commandsForMode}).
 
 import { EXTERNAL_AGENTS, canonicalExternalAgentId, getExternalAgent } from "../harness/external/registry";
+import { describeRoundLimitSplit } from "./round-limit";
 
 /** The two shell modes. `agent` has tools; `chat` is a plain conversation. */
 export type ShellMode = "chat" | "agent";
@@ -511,7 +512,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/mode",
-    description: "Show or switch the permission mode — /mode [ask|trust|auto]",
+    description: `Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: ${describeRoundLimitSplit()}`,
     // Chat mode has no tools, so there is nothing for a permission mode to gate.
     modes: AGENT_ONLY,
   },

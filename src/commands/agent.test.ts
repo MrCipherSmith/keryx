@@ -1781,6 +1781,136 @@ test("runAgentTurn: askUser answering 'cancel' at the round budget stops without
   expect(systemMsgs.join("")).toMatch(/Model-round limit reached: 1\/1/);
 });
 
+// --- flow 429: the round limit follows the permission mode ---
+
+function loopingReads(count: number): Partial<NormalizedEvent>[][] {
+  return Array.from({ length: count }, (_unused, index) => readToolRound(`r${index}`, `missing-${index}`));
+}
+
+async function withRoundsEnv<T>(value: string | undefined, run: () => Promise<T>): Promise<T> {
+  const previous = process.env[ENV_AGENT_MAX_ROUNDS];
+  if (value === undefined) delete process.env[ENV_AGENT_MAX_ROUNDS];
+  else process.env[ENV_AGENT_MAX_ROUNDS] = value;
+  try {
+    return await run();
+  } finally {
+    if (previous === undefined) delete process.env[ENV_AGENT_MAX_ROUNDS];
+    else process.env[ENV_AGENT_MAX_ROUNDS] = previous;
+  }
+}
+
+test("flow 429 AC1: with the env unset the limit is 200 in auto, 120 in trust and 40 in ask", () => {
+  expect(resolveAgentMaxRounds({}, "auto")).toBe(200);
+  expect(resolveAgentMaxRounds({}, "trust")).toBe(120);
+  expect(resolveAgentMaxRounds({}, "ask")).toBe(40);
+  expect(resolveAgentMaxRounds({})).toBe(40);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "nope" }, "auto")).toBe(200);
+  expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "0" }, "trust")).toBe(120);
+});
+
+test("flow 429 AC2: the env wins in every mode and is clamped to 200", () => {
+  for (const mode of ["auto", "trust", "ask"] as const) {
+    expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "50" }, mode)).toBe(50);
+    expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: "999" }, mode)).toBe(200);
+  }
+});
+
+test("flow 429 AC1: a turn without an explicit budget stops at 40 in ask and 120 in trust", async () => {
+  await withRoundsEnv(undefined, async () => {
+    for (const [mode, limit] of [["ask", 40], ["trust", 120]] as const) {
+      const { provider, requests } = scriptedProvider(loopingReads(limit + 5));
+      const systemMsgs: string[] = [];
+      const result = await runAgentTurn(
+        { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => mode },
+        baseDeps(provider),
+        [],
+        "read broadly",
+      );
+      expect(requests).toHaveLength(limit);
+      expect(result.finishReason).toBe("budget");
+      expect(systemMsgs.join("")).toMatch(new RegExp(`Model-round limit reached: ${limit}/${limit}`));
+    }
+  });
+});
+
+test("flow 429 AC3: in auto the limit is never put to the user, it extends itself in allotments of the env value", async () => {
+  await withRoundsEnv("3", async () => {
+    const { provider, requests } = scriptedProvider([...loopingReads(5), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
+    let asked = 0;
+    const systemMsgs: string[] = [];
+    const deps: AgentDeps = {
+      ...baseDeps(provider),
+      askUser: async () => {
+        asked += 1;
+        return "cancel";
+      },
+    };
+    await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => "auto" },
+      deps,
+      [],
+      "read broadly",
+    );
+    expect(asked).toBe(0);
+    expect(requests).toHaveLength(6);
+    expect(systemMsgs.join("")).toContain("[budget] Round limit increased — 6 rounds");
+  });
+});
+
+test("flow 429 AC4: in auto a turn stops at the 200 ceiling with a budget message and no question", async () => {
+  await withRoundsEnv(undefined, async () => {
+    const { provider, requests } = scriptedProvider(loopingReads(205));
+    let asked = 0;
+    const systemMsgs: string[] = [];
+    const deps: AgentDeps = {
+      ...baseDeps(provider),
+      askUser: async () => {
+        asked += 1;
+        return "reset";
+      },
+    };
+    const result = await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => "auto" },
+      deps,
+      [],
+      "read very broadly",
+    );
+    expect(asked).toBe(0);
+    expect(requests).toHaveLength(200);
+    expect(result.finishReason).toBe("budget");
+    const text = systemMsgs.join("");
+    expect(text).toContain("[budget] Model-round limit reached: 200/200");
+    expect(text).toContain(ENV_AGENT_MAX_ROUNDS);
+  });
+});
+
+test("flow 429 AC5: trust and ask still ask at the limit, and a trust reset grants 120 more rounds", async () => {
+  for (const [mode, grant] of [["trust", 120], ["ask", 40]] as const) {
+    const { provider } = scriptedProvider([
+      readToolRound("c1", "a"),
+      readToolRound("c2", "b"),
+      [{ kind: "text_delta", text: "Done." }, { kind: "model_end" }],
+    ]);
+    const asked: unknown[] = [];
+    const systemMsgs: string[] = [];
+    const deps: AgentDeps = {
+      ...baseDeps(provider, 1),
+      askUser: async (request) => {
+        asked.push(request);
+        return "reset";
+      },
+    };
+    await runAgentTurn(
+      { write: () => {}, onSystem: (t) => systemMsgs.push(t), permissionMode: () => mode },
+      deps,
+      [],
+      "read twice",
+    );
+    expect(asked).toHaveLength(1);
+    expect(systemMsgs.join("")).toContain(`[budget] Round limit increased — ${1 + grant} rounds`);
+  }
+});
+
 test("runAgentTurn: identical failing calls only burn one unique slot; after 3 attempts further same hash is skipped", async () => {
   const round: Partial<NormalizedEvent>[] = [
     { kind: "tool_call_start", toolCallId: "c", toolName: "nonexistent_tool" },
