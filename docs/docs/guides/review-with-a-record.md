@@ -92,19 +92,32 @@ Before step 0 it checks three things:
    most 3 deep). If not, the whole output is
    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`,
    and nothing else runs. It never reviews alone.
-2. **A round is needed.** A diff that only touches markdown under `docs/` or the
-   `.metaproject` flows, wiki and reviews folders, a top-level README, CHANGELOG,
-   CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT, or machine-written data files
-   under `coverage/` and `__generated__/` gets `round not needed: <reason>` and
-   launches no reviewer. Everything else counts as code: lockfiles, committed `dist/`
-   output, CI, auth, migrations, and steering files wherever they sit (`CLAUDE.md`,
-   `AGENTS.md`, `SKILL.md`, anything in a dot-directory or under `agents/`, `skills/`,
-   `commands/`, `rules/`, `prompts/`, `hooks/`), dotfiles such as `.cursorrules` and
-   `.mcp.json`, and mcp, settings, hooks, package or tsconfig JSON, even inside `docs/`
-   or `coverage/`. A path with `..`, a
-   backslash, a leading `./` or `//` also counts as code. `--all`, an explicit reviewer
-   list or a gating round forces a round. The files are listed with
-   `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths.
+2. **A round is needed.** A diff where every file is prose or machine-written data
+   gets `round not needed: <reason>` and launches no reviewer. Prose is exactly:
+   README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT
+   at the top level; and, under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a
+   flow's `journal.md`, a file with extension `.md`, `.mdx`, `.rst` or `.adoc` whose
+   name holds a lowercase letter. An all-uppercase name (`AGENT.md`, `WARP.md`,
+   `CONTEXT.md`) is steering by convention. Machine-written data is a file under
+   `coverage/` or `__generated__/` with extension `.lcov`, `.info` or `.map`; json, txt,
+   html and md there are code. Everything else counts as code: lockfiles, committed
+   `dist/` output, CI, auth, migrations, config JSON, a flow's `description.md`,
+   `acceptance-criteria.md` and `tasks/` (they are gate inputs), and steering files
+   wherever they sit, `docs/` included: a directory named, singular or plural, agent,
+   skill, command, rule, prompt, instruction, persona, steering or hook; any path
+   segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`); a name starting
+   with `SKILL`, `AGENT`, `CLAUDE`, `GEMINI`, `QWEN`, `CODEX`, `WARP`, `CRUSH`, `JULES`,
+   `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending in `.local`,
+   `.override`, `.instructions` or `.prompt`, or containing `prompt`, `instruction` or
+   `system`. A path with `..`, a backslash, a leading `./` or `//` also counts as
+   code. `--all`, an explicit reviewer list or a gating round forces a round. The files
+   are listed with `git diff --name-status --no-renames <base>...HEAD`, so a rename
+   shows both paths.
+
+   The rule is written twice: the skill text above is what the host executes, and
+   `classifyRoundNeed` in `src/review/round-need.ts` is its tested reference. Nothing
+   in the CLI calls that function yet; a test keeps the skill text and the function's
+   token lists in step.
 3. **A round is left.** The ceiling is `REVIEW_ROUND_CAP` rounds on one
    `merge-base..HEAD` (5 today); after the last one it stops and reports to you.
 

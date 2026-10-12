@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { classifyRoundNeed } from "./round-need";
+import {
+  classifyRoundNeed,
+  DOC_EXTENSIONS,
+  GENERATED_DATA_EXTENSIONS,
+  PROSE_ANY_DEPTH_NAMES,
+  PROSE_TOP_LEVEL_NAMES,
+  STEERING_SEGMENT_TOKENS,
+  STEERING_STEM_TOKENS,
+} from "./round-need";
 
 const DOCS_ONLY = ["README.md", "docs/guide/setup.md", "CHANGELOG.md", ".metaproject/flows/1-x/journal.md"];
 const CODE = ["src/review/caps.ts", "README.md"];
@@ -76,6 +84,36 @@ describe("classifyRoundNeed", () => {
     ["docs/./guide.md"],
     ["NOTES.md"],
     ["packages/app/NOTES.md"],
+    ["docs/agent/x.md"],
+    ["docs/hook/x.md"],
+    ["docs/AGENT.md"],
+    ["docs/WARP.md"],
+    ["docs/CODEX.md"],
+    ["docs/CRUSH.md"],
+    ["docs/JULES.md"],
+    ["docs/GUIDELINES.md"],
+    ["docs/INSTRUCTIONS.md"],
+    ["docs/CONTEXT.md"],
+    ["docs/SYSTEM.md"],
+    ["docs/system-prompt.md"],
+    ["docs/personas/x.md"],
+    ["docs/persona/x.md"],
+    ["docs/Agents/x.md"],
+    [".metaproject/flows/1-x/description.md"],
+    [".metaproject/flows/1-x/acceptance-criteria.md"],
+    [".metaproject/flows/1-x/tasks/1.md"],
+    [".metaproject/flows/1-x/tasks/a/b.md"],
+    ["coverage/x.html"],
+    ["coverage/x.json"],
+    ["coverage/requirements.txt"],
+    ["coverage/x.md"],
+    ["src/__generated__/biome.json"],
+    ["src/__generated__/schema.json"],
+    ["coverage/index.html"],
+    ["docs/guide.txt"],
+    ["readme"],
+    ["README.txt"],
+    ["packages/app/CONTRIBUTING.md"],
     [""],
   ])("%s fails open: it needs a round", (file) => {
     expect(classifyRoundNeed({ files: [file] }).needed).toBe(true);
@@ -83,12 +121,16 @@ describe("classifyRoundNeed", () => {
 
   test.each([
     ["coverage/lcov.info"],
-    ["coverage/index.html"],
-    ["src/__generated__/schema.json"],
     ["src/__generated__/types.js.map"],
+    ["coverage/clover.info"],
+    ["docs/ARCHITECTURE-notes.md"],
+    ["docs/Guide.md"],
+    ["docs/README.md"],
+    [".metaproject/flows/1-x/journal.md"],
+    ["packages/app/docs/CHANGELOG.rst"],
     ["README.md"],
-    ["readme"],
     ["LICENSE"],
+    ["LICENSE.txt"],
     ["SECURITY.md"],
     ["CONTRIBUTING.md"],
     ["CODE_OF_CONDUCT.md"],
@@ -144,14 +186,17 @@ const CODE_EXTENSIONS = ["ts", "sql", "yml", "sh", "js", "json"];
 
 const join = (root: string, nesting: string, name: string): string => [root, nesting, name].filter((part) => part !== "").join("/");
 const isMachineRoot = (root: string): boolean => root === "coverage" || root.endsWith("__generated__");
+const DOC_ROOTS = ["docs", ".metaproject/wiki", ".metaproject/reviews"];
 
 const GENERATED_TABLE: [string, boolean][] = [];
 for (const root of ROOTS) {
   for (const nesting of NESTING) {
     for (const name of [...STEERING_NAMES, ...AGENT_LOADED_NAMES]) GENERATED_TABLE.push([join(root, nesting, name), true]);
     for (const ext of CODE_EXTENSIONS) {
-      const skippable = ext === "json" && isMachineRoot(root);
-      GENERATED_TABLE.push([join(root, nesting, `x.${ext}`), !skippable]);
+      GENERATED_TABLE.push([join(root, nesting, `x.${ext}`), true]);
+    }
+    if (isMachineRoot(root)) {
+      for (const ext of GENERATED_DATA_EXTENSIONS) GENERATED_TABLE.push([join(root, nesting, `x.${ext}`), false]);
     }
   }
 }
@@ -162,6 +207,33 @@ describe("classifyRoundNeed over the generated path table", () => {
   });
 
   test.each(GENERATED_TABLE)("%s needs a round: %p", (file, needed) => {
+    expect(classifyRoundNeed({ files: [file] }).needed).toBe(needed);
+  });
+});
+
+// Derived from the exported tokens, so a token added to the module is covered at once.
+const plural = (token: string): string[] => (token.endsWith("(s)") ? [token.slice(0, -3), `${token.slice(0, -3)}s`] : [token]);
+const mixedCase = (name: string): string => name.charAt(0).toUpperCase() + name.slice(1);
+
+describe("classifyRoundNeed over the exported tokens", () => {
+  const dirs = STEERING_SEGMENT_TOKENS.flatMap(plural).flatMap((name) => [name, mixedCase(name), name.toUpperCase()]);
+  const cases: [string, boolean][] = [];
+  for (const root of DOC_ROOTS) {
+    for (const dir of dirs) cases.push([`${root}/${dir}/x.md`, true], [`${root}/a/${dir}/b/x.md`, true]);
+    for (const stem of STEERING_STEM_TOKENS) {
+      cases.push([`${root}/${stem}.md`, true], [`${root}/${stem.toUpperCase()}.md`, true], [`${root}/a/${stem.toLowerCase()}.md`, true]);
+    }
+    for (const ext of DOC_EXTENSIONS) {
+      cases.push([`${root}/guide.${ext}`, false], [`${root}/a/b/Guide.${ext}`, false]);
+      for (const name of [...PROSE_ANY_DEPTH_NAMES, ...PROSE_TOP_LEVEL_NAMES]) cases.push([`${root}/a/${name}.${ext}`, false]);
+    }
+  }
+  for (const ext of DOC_EXTENSIONS) {
+    for (const name of PROSE_ANY_DEPTH_NAMES) cases.push([`${name}.${ext}`, false], [`packages/app/${name}.${ext}`, false]);
+    for (const name of PROSE_TOP_LEVEL_NAMES) cases.push([`${name}.${ext}`, false], [`packages/app/${name}.${ext}`, true]);
+  }
+
+  test.each(cases)("%s needs a round: %p", (file, needed) => {
     expect(classifyRoundNeed({ files: [file] }).needed).toBe(needed);
   });
 });

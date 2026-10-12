@@ -7,7 +7,17 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { MAX_RATE_HALVINGS, MAX_RETRY_AFTER_SECONDS, MAX_REVIEWERS_PER_WAVE_FULL } from "../review/caps";
 import { REVIEW_ROUND_CAP } from "../flow/review-gate";
-import { classifyRoundNeed } from "../review/round-need";
+import {
+  classifyRoundNeed,
+  DOC_EXTENSIONS,
+  GENERATED_DATA_EXTENSIONS,
+  PROSE_ANY_DEPTH_NAMES,
+  PROSE_TOP_LEVEL_NAMES,
+  STEERING_SEGMENT_TOKENS,
+  STEERING_STEM_TOKENS,
+  STEERING_SUFFIX_TOKENS,
+  STEERING_WORD_TOKENS,
+} from "../review/round-need";
 import { SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 
 const SKILLS = path.join(import.meta.dir, "bundled", "skills");
@@ -205,48 +215,44 @@ describe("AC7: a round that cannot find anything is not run", () => {
     expect(preflight).toContain("`git diff --name-status --no-renames <base>...HEAD`");
   });
 
-  test("every prose and steering token the preflight names agrees with classifyRoundNeed", () => {
+  test("the preflight names every token classifyRoundNeed exports, and the code agrees with each", () => {
     const preflight = section(SKILL, "## Preflight — before Step 0, in this order");
-    const proseSamples: Record<string, string> = {
-      README: "README.md",
-      CHANGELOG: "CHANGELOG.md",
-      CONTRIBUTING: "CONTRIBUTING.md",
-      LICENSE: "LICENSE",
-      SECURITY: "SECURITY.md",
-      CODE_OF_CONDUCT: "CODE_OF_CONDUCT.md",
-      "docs/": "docs/guide.md",
-      "`coverage/`": "coverage/lcov.info",
-      "`__generated__/`": "src/__generated__/schema.json",
-    };
-    for (const [token, sample] of Object.entries(proseSamples)) {
-      expect(preflight).toContain(token);
-      expect(classifyRoundNeed({ files: [sample] }).needed).toBe(false);
+    for (const name of PROSE_ANY_DEPTH_NAMES) {
+      expect(preflight).toContain(name);
+      expect(classifyRoundNeed({ files: [`packages/app/${name}.md`] }).needed).toBe(false);
     }
-    const steeringSamples: Record<string, string> = {
-      SKILL: "docs/SKILL.md",
-      AGENTS: "docs/AGENTS.md",
-      CLAUDE: "docs/CLAUDE.md",
-      GEMINI: "docs/GEMINI.md",
-      QWEN: "docs/QWEN.md",
-      CONVENTIONS: "docs/CONVENTIONS.md",
-      "copilot-instructions": "docs/copilot-instructions.md",
-      "`*.local.md`": "docs/x.local.md",
-      "`*.override.md`": "docs/x.override.md",
-      "`*.instructions.md`": "docs/x.instructions.md",
-      "`*.prompt.md`": "docs/x.prompt.md",
-      "dot-directory": "docs/.claude/x.md",
-      agents: "docs/agents/x.md",
-      skills: "docs/skills/x.md",
-      commands: "docs/commands/x.md",
-      rules: "docs/rules/x.md",
-      steering: "docs/steering/x.md",
-      prompts: "docs/prompts/x.md",
-      instructions: "docs/instructions/x.md",
-    };
-    for (const [token, sample] of Object.entries(steeringSamples)) {
-      expect(preflight).toContain(token);
-      expect(classifyRoundNeed({ files: [sample] }).needed).toBe(true);
+    for (const name of PROSE_TOP_LEVEL_NAMES) {
+      expect(preflight).toContain(name);
+      expect(classifyRoundNeed({ files: [`${name}.md`] }).needed).toBe(false);
     }
+    for (const ext of DOC_EXTENSIONS) {
+      expect(preflight).toMatch(new RegExp(`\\b${ext}\\b`));
+      expect(classifyRoundNeed({ files: [`docs/guide.${ext}`] }).needed).toBe(false);
+    }
+    for (const ext of GENERATED_DATA_EXTENSIONS) {
+      expect(preflight).toMatch(new RegExp(`\\b${ext}\\b`));
+      expect(classifyRoundNeed({ files: [`coverage/x.${ext}`] }).needed).toBe(false);
+    }
+    expect(preflight).toContain("singular or plural");
+    for (const token of STEERING_SEGMENT_TOKENS) {
+      const name = token.replace("(s)", "");
+      expect(preflight).toContain(name);
+      expect(classifyRoundNeed({ files: [`docs/${name}/x.md`] }).needed).toBe(true);
+      if (token.endsWith("(s)")) expect(classifyRoundNeed({ files: [`docs/${name}s/x.md`] }).needed).toBe(true);
+    }
+    for (const stem of STEERING_STEM_TOKENS) {
+      expect(preflight).toContain(stem);
+      expect(classifyRoundNeed({ files: [`docs/${stem}.md`] }).needed).toBe(true);
+    }
+    for (const suffix of STEERING_SUFFIX_TOKENS) {
+      expect(preflight).toContain(suffix);
+      expect(classifyRoundNeed({ files: [`docs/x${suffix}.md`] }).needed).toBe(true);
+    }
+    for (const word of STEERING_WORD_TOKENS) {
+      expect(preflight).toContain(word);
+      expect(classifyRoundNeed({ files: [`docs/my-${word}-notes.md`] }).needed).toBe(true);
+    }
+    for (const marker of ["description.md", "acceptance-criteria.md", "tasks/", "journal.md"]) expect(preflight).toContain(marker);
   });
 
   test("--all still forces a round on the docs-only fixture", () => {
@@ -412,5 +418,22 @@ describe("the retired nested model does not come back", () => {
   test.each(FILES)("%s carries none of the retired phrases", (rel) => {
     const text = readFileSync(path.join(ROOT, rel), "utf8");
     for (const phrase of RETIRED) expect(text).not.toMatch(phrase);
+  });
+});
+
+describe("the hand-written docs state the same numbers as the code", () => {
+  const ROOT = path.join(import.meta.dir, "..", "..");
+  const cliReference = read(ROOT, "docs", "docs", "cli-reference.md");
+  const guide = read(ROOT, "docs", "docs", "guides", "review-with-a-record.md");
+
+  test("cli-reference.md states the retry-after, wave and rate-limit numbers", () => {
+    expect(cliReference).toContain(`at most ${MAX_RETRY_AFTER_SECONDS} seconds`);
+    expect(cliReference).toContain(`**${MAX_REVIEWERS_PER_WAVE_FULL}** reviewers`);
+  });
+
+  test("review-with-a-record.md states the wave ceiling, the retry-after cap and the round cap", () => {
+    expect(guide).toContain(`${MAX_REVIEWERS_PER_WAVE_FULL} reviewers`);
+    expect(guide).toContain(`${MAX_RETRY_AFTER_SECONDS} seconds`);
+    expect(guide).toContain(`(${REVIEW_ROUND_CAP} today)`);
   });
 });

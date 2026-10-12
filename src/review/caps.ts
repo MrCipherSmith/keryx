@@ -417,6 +417,9 @@ export type ConcurrencyPlan = {
    * `false` with `outstanding: undefined` therefore means "the cap held for this
    * plan and nobody told us what else was running", which is exactly what the
    * record says.
+   *
+   * The key name is historical (from the retired nested model); it now means
+   * "the cap held against the declared `outstanding` count".
    */
   holdsAcrossNesting: boolean;
 };
