@@ -145,7 +145,7 @@ describe("surfaces share one projection", () => {
 
   test("the /reviews modal gets a Review depth tab, and scrolls the tab that is open", () => {
     const painted: Record<string, string> = {};
-    let tabs: { id: string; label: string }[] = [];
+    let tabs: readonly { id: string; label: string }[] = [];
     let current = "reviews";
     let key: ((k: { name: string; sequence: string }) => void) | undefined;
     const nodes: Record<string, { content: string }> = {};

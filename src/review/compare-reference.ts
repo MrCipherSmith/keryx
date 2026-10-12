@@ -157,17 +157,19 @@ export async function loadPackageEvidence(packageDir: string, inputDir?: string)
   }));
   const canonicalIds = new Set(findings.map((f) => f.id));
 
-  const research = (await readJson(path.join(packageDir, "research.json"))) as Record<string, any> | undefined;
-  const dispatch = research?.dispatch as Record<string, any> | undefined;
-  const ran = new Set<string>(Array.isArray(dispatch?.selected) ? dispatch.selected.filter((s: unknown) => typeof s === "string") : []);
-  for (const run of Array.isArray(dispatch?.runs) ? dispatch.runs : []) {
-    if (typeof run?.reviewer === "string" && run.status !== "not-run") ran.add(run.reviewer);
+  const research = (await readJson(path.join(packageDir, "research.json"))) as Record<string, unknown> | undefined;
+  const dispatch = research?.dispatch as Record<string, unknown> | undefined;
+  const rows = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter((r): r is Record<string, unknown> => r !== null && typeof r === "object") : []);
+  const selected: unknown[] = Array.isArray(dispatch?.selected) ? dispatch.selected : [];
+  const ran = new Set<string>(selected.filter((s): s is string => typeof s === "string"));
+  for (const run of rows(dispatch?.runs)) {
+    if (typeof run.reviewer === "string" && run.status !== "not-run") ran.add(run.reviewer);
   }
 
   const lost: EvidenceItem[] = [];
-  for (const o of Array.isArray(research?.obligations) ? research.obligations : []) {
-    if (o?.status === "finding" && canonicalIds.has(asText(o.finding))) continue;
-    lost.push({ id: asText(o?.id), text: [o?.question, o?.evidence, o?.reason].map(asText).join("\n") });
+  for (const o of rows(research?.obligations)) {
+    if (o.status === "finding" && canonicalIds.has(asText(o.finding))) continue;
+    lost.push({ id: asText(o.id), text: [o.question, o.evidence, o.reason].map(asText).join("\n") });
   }
   if (inputDir !== undefined) lost.push(...(await rawReplies(inputDir)));
 
