@@ -169,7 +169,7 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
 
     wrapOnToolCall(base) {
       return (...args) => {
-        deps.getBridge()?.toolCall();
+        deps.getBridge()?.toolCall(typeof args[0] === "string" ? args[0] : undefined);
         base?.(...args);
       };
     },

@@ -4623,6 +4623,8 @@ export async function launchTuiAgentShell(opts: {
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
+      // Flow 419 (AC5): the first subagent to start and the last to finish are a wave boundary for the topic.
+      remoteBridge?.subagentEvent(ev);
     });
     // Flow 173 (AC8): shell_exec(background:true)'s JobRegistry → sidebar/inspector.
     setBackgroundJobListener((ev) => {
@@ -10108,6 +10110,7 @@ export async function launchTuiAgentShell(opts: {
         // the newest answer in `history` unfinished. A queued line or another holder of the lease
         // makes the shell busy without making that answer incomplete.
         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
+        sessionState: () => ({ queued: mainQueue.length, mode: formatModeInForce(modeForTurn(true)) }),
         runLine: (text) => remoteQueue.runTelegramLine(text),
         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
         notice: (text) => io.onSystem?.(`${text}\n`),
