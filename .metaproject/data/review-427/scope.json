@@ -1,0 +1,462 @@
+{
+  "schemaVersion": 1,
+  "mode": "diff",
+  "contextLines": 20,
+  "files": [
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md",
+    "src/commands/agent-fewer-prompts.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/review-arbiter.test.ts",
+    "src/commands/review-arbiter.ts",
+    "src/commands/review-ledger.test.ts",
+    "src/commands/review-ledger.ts",
+    "src/commands/review-slice.ts",
+    "src/review/completion-gate.test.ts",
+    "src/review/completion-gate.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts",
+    "src/review/retry-plan.ts",
+    "src/review/slice-dispatch.test.ts",
+    "src/review/slice.ts",
+    "src/tui/ask-user-bridge-arbiter.test.ts",
+    "src/tui/ask-user-bridge.ts"
+  ],
+  "regions": [
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 11,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": "+# Acceptance Criteria\n+\n+- AC1: BLOCKED A + DONE B не закрывает A; slice claims вне конкретного dispatch не дают coverage. [verify: exec `bun test src/review/ledger.test.ts`]\n+- AC2: Изменение manifest/content инвалидирует covered/stalls/not-run, включая legacy state без identity. [verify: exec `bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts`]\n+- AC3: Отказ write/delegate сохраняется до auto-approval при изменении untrustedOrigin. [verify: judged]\n+- AC4: Untagged ask_user с action/untrustedContent обращается к human host. [verify: exec `bun test src/tui/ask-user-bridge-arbiter.test.ts`]\n+- AC5: Общий parser принимает bare/fenced/marked JSON, malformed input не даёт coverage. [verify: exec `bun test src/review/ledger.test.ts src/commands/review-slice.test.ts`]\n+- AC6: DONE с open needs_context даёт actionable context решение вместо accepted. [verify: exec `bun test src/review/slice-dispatch.test.ts`]\n+- AC7: Cache arbiter возвращает ID текущих options. [verify: exec `bun test src/commands/review-arbiter.test.ts`]\n+- AC8: Watchdog учитывает nested artifacts и same-size changes, неизменные artifacts распознаёт как stall. [verify: exec `bun test src/review/completion-gate.test.ts`]\n+- AC9: Восемь regressions и deterministic lifecycle fixture проходят; typecheck/CI результаты или blockers записаны. Нет реальных review-прогонов. [verify: judged]"
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md",
+      "startLine": 1,
+      "endLine": 63,
+      "changedLines": 63,
+      "contextTruncated": true,
+      "text": "+# Context\n+\n+Collected deterministically by `keryx flow init` at 2026-10-11T15:21:56.313Z.\n+The flow-init skill enriches this with formalization, brainstorm results, and\n+interview answers.\n+\n+## Related Memory\n+\n+1. [1.8] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md\n+   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.\n+   claimType: known-mistake | confidence: high | version: 0.3.0\n+   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate\n+   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded\n+   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`\n+2. [1.726] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review (constraint/accepted) - constraints/stale-installed-keryx-binary.md\n+   `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.\n+   claimType: constraint | confidence: high | version: 0.1.0\n+   scope: module:review, memory, entity:managed-review-package\n+   provenance: source=fix-round review of PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/220 author=unknown confirmedBy=unknown\n+3. [1.726] A fix round needs its own review: three consecutive rounds each introduced a blocker (lesson/accepted) - lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md\n+   On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.\n+   claimType: lesson | confidence: high | version: 0.5.0\n+   scope: module:core, entity:project-registry\n+   provenance: source=review rounds on PR #215 (flow 127), PR #216 (flow 128), PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/215 author=unknown confirmedBy=unknown\n+4. [1.642] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md\n+   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like \"the theme did not apply\". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.\n+   claimType: lesson | confidence: high | version: 0.2.0\n+   scope: module:src/tui, entity:shell-chrome.ts\n+   provenance: source=manual link=unknown author=unknown confirmedBy=unknown\n+5. [1.477] SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка… (task-note/accepted) - task-notes/sac-proposal-d820f7ae5c4b43af.md\n+   Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit.\n+   claimType: task-note | confidence: medium | version: 0.1.0\n+   scope: unknown\n+   provenance: source=sac-proposal link=./.metaproject/workspaces/workspace-55936fb9858144ec/session-evidence/6728c7b5-7e93-43a6-9ab4-ea0e9720eaf2.wrap-up.md (sha256 7f281c7cb8399293e9c361fcb0a4f19815108e08a6dfda27db1acdbd29e7f52b) author=unknown confirmedBy=unknown\n+\n+## Code Graph\n+\n+- `.metaproject/data/gdgraph/artifacts/summary.md`\n+- `.metaproject/data/gdgraph/artifacts/module-map.json`\n+\n+Use `keryx gdgraph affected <file>` for blast radius.\n+\n+## Code Health\n+\n+- gate: pass (as of 2026-09-27T14:21:03.234Z)\n+- refresh: `keryx health run`\n+\n+## Enabled Metaproject Modules\n+\n+- gdgraph\n+- gdctx\n+- gdskills\n+- memory\n+- tasks\n+- health\n+- testing\n+- gdwiki\n+- security\n+- mcp\n+\n+## Agent Findings\n+\n+_(flow-init skill appends here)_"
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md",
+      "startLine": 1,
+      "endLine": 17,
+      "changedLines": 17,
+      "contextTruncated": true,
+      "text": "+# Надёжность и безопасность автономного review\n+\n+Status: approved for implementation\n+Model: openai-codex/gpt-6.1-sol\n+\n+## Problem\n+Аудит до PR #974 выявил восемь дефектов: ложное покрытие ledger, stale retry-state, обход denial memory, разные safety floors, несовместимые parsers, starvation needs_context, неверные cached option IDs и неучтённый вложенный прогресс watchdog.\n+\n+## Expected Outcome\n+Восемь сценариев подтверждены regression-тестами и исправлены. Покрытие, safety boundaries, parser, retries и completion согласованы.\n+\n+## Outcome criteria\n+- Все regressions и профильные tests проходят, deterministic fixture проверяет согласованность компонентов без вызовов модели.\n+- CI результаты отделены от локальных; Flow закрывается только с подтверждением MrCipherSmith.\n+\n+## Out of Scope\n+Vantage review, реальные review-прогоны, dispatch-wave, релиз, merge и публикация без отдельного разрешения."
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json",
+      "startLine": 1,
+      "endLine": 166,
+      "changedLines": 166,
+      "contextTruncated": true,
+      "text": "+{\n+  \"schemaVersion\": 2,\n+  \"gates\": {\n+    \"tasks\": true,\n+    \"review\": true,\n+    \"owner\": true,\n+    \"folderCommitted\": true,\n+    \"confirmation\": true\n+  },\n+  \"id\": \"427\",\n+  \"slug\": \"review-autonomy-hardening\",\n+  \"title\": \"Надёжность и безопасность автономного review\",\n+  \"status\": \"in-progress\",\n+  \"createdAt\": \"2026-10-11T15:21:56.625Z\",\n+  \"updatedAt\": \"2026-10-11T17:20:35.043Z\",\n+  \"source\": {\n+    \"type\": \"description\",\n+    \"ref\": null\n+  },\n+  \"acChecksum\": \"sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb\",\n+  \"acConfirmed\": {},\n+  \"pr\": {\n+    \"url\": null\n+  },\n+  \"baseBranch\": \"main\",\n+  \"owner\": {\n+    \"value\": \"MrCipherSmith\",\n+    \"basis\": \"stated\",\n+    \"source\": \"`--owner` flag on `flow init`\"\n+  },\n+  \"outcomeAuthor\": \"agent\",\n+  \"tasks\": [\n+    {\n+      \"id\": \"T1\",\n+      \"title\": \"Collect remaining context\",\n+      \"kind\": \"context\",\n+      \"origin\": \"scaffold\",\n+      \"status\": \"done\",\n+      \"dependsOn\": [],\n+      \"attempts\": {\n+        \"count\": 0,\n+        \"log\": []\n+      },\n+      \"acRefs\": [],\n+      \"evidenceRefs\": [],\n+      \"budget\": {},\n+      \"disposition\": \"completed\",\n+      \"dispositionReason\": \"Baseline 00879558 isolated; original audit and regression scenarios recorded\"\n+    },\n+    {\n+      \"id\": \"T2\",\n+      \"title\": \"Implement per plan\",\n+      \"kind\": \"implement\",\n+      \"origin\": \"scaffold\",\n+      \"status\": \"done\",\n+      \"dependsOn\": [],\n+      \"attempts\": {\n+        \"count\": 0,\n+        \"log\": []\n+      },\n+      \"acRefs\": [],\n+      \"evidenceRefs\": [],\n+      \"budget\": {},\n+      \"disposition\": \"completed\",\n+      \"dispositionReason\": \"Eight hardening findings implemented; see implementation-report.md\"\n+    },\n+    {\n+      \"id\": \"T3\",\n+      \"title\": \"Add/adjust tests and make them pass\",\n+      \"kind\": \"test\",\n+      \"origin\": \"scaffold\",\n+      \"status\": \"done\",\n+      \"dependsOn\": [],\n+      \"attempts\": {\n+        \"count\": 0,\n+        \"log\": []\n+      },\n+      \"acRefs\": [],\n+      \"evidenceRefs\": [],\n+      \"budget\": {},\n+      \"disposition\": \"completed\",\n+      \"dispositionReason\": \"Typecheck and 1639 regression tests pass; CI pending\"\n+    },\n+    {\n+      \"id\": \"T4\",\n+      \"title\": \"Self-review and prepare draft PR\",\n+      \"kind\": \"review\",\n+      \"origin\": \"scaffold\",\n+      \"status\": \"todo\",\n+      \"dependsOn\": [],\n+      \"attempts\": {\n+        \"count\": 0,\n+        \"log\": []\n+      },\n+      \"acRefs\": [],\n+      \"evidenceRefs\": [],\n+      \"budget\": {}\n+    }\n+  ],\n+  \"history\": [\n+    {\n+      \"at\": \"2026-10-11T15:21:56.625Z\",\n+      \"event\": \"created\"\n+    },\n+    {\n+      \"at\": \"2026-10-11T17:20:33.264Z\",\n+      \"event\": \"frozen\",\n+      \"detail\": \"9 criteria; checksum recorded\"\n+    },\n+    {\n+      \"at\": \"2026-10-11T17:20:33.709Z\",\n+      \"event\": \"started\"\n+    },\n+    {\n+      \"at\": \"2026-10-11T17:20:34.163Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T1: Collect remaining context\"\n+    },\n+    {\n+      \"at\": \"2026-10-11T17:20:34.606Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T2: Implement per plan\"\n+    },\n+    {\n+      \"at\": \"2026-10-11T17:20:35.043Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T3: Add/adjust tests and make them pass\"\n+    }\n+  ],\n+  \"acKinds\": {\n+    \"AC1\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/review/ledger.test.ts\"\n+    },\n+    \"AC2\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts\"\n+    },\n+    \"AC3\": {\n+      \"kind\": \"judged\"\n+    },\n+    \"AC4\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/tui/ask-user-bridge-arbiter.test.ts\"\n+    },\n+    \"AC5\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/review/ledger.test.ts src/commands/review-slice.test.ts\"\n+    },\n+    \"AC6\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/review/slice-dispatch.test.ts\"\n+    },\n+    \"AC7\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/commands/review-arbiter.test.ts\"\n+    },\n+    \"AC8\": {\n+      \"kind\": \"exec\",\n+      \"check\": \"bun test src/review/completion-gate.test.ts\"\n+    },\n+    \"AC9\": {\n+      \"kind\": \"judged\"\n+    }\n+  }\n+}"
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md",
+      "startLine": 1,
+      "endLine": 13,
+      "changedLines": 13,
+      "contextTruncated": true,
+      "text": "+# Flow 427 — Implementation report\n+\n+Model: openai-codex/gpt-6.1-sol. Baseline: 00879558256cef065f5e22fb0df66d227253a180.\n+\n+1. Baseline isolated from dirty main checkout. Eight findings have regression coverage; only four were directly reproduced in the original audit. Eight archived pre-fix RED runs are not claimed.\n+2. Ledger restricted to concrete dispatch; ambiguous implicit assignment gives no union coverage. Manifest/content identity invalidates stale/legacy retry coverage and counters.\n+3. Write/delegate refusal checked before auto-approval across untrusted-origin changes. Review-auto safety floors fall back to human host.\n+4. Shared parser handles bare/fenced/marked JSON and fails closed on malformed explicit blocks. DONE with open needs_context drives context handling/redispatch.\n+5. Arbiter cache includes current option IDs. Watchdog recursively hashes artifacts, detecting nested and same-size changes.\n+6. Typecheck PASS; 1639 tests PASS, 0 FAIL, 76 files; git diff --check PASS. Deterministic lifecycle passes without model calls. Independent audit was partial; parent inspection covered remaining agent gates and retry-plan changes.\n+\n+Log: .metaproject/data/review/flow427-final-tests.log. No live review, Vantage run, commit, push, PR, CI or release performed. PR/CI and owner confirmation remain outstanding; Flow is not closed. Local tests are not CI evidence.\n+Separate dispatch-wave and original live acceptance criteria remain outside this hardening scope."
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md",
+      "startLine": 1,
+      "endLine": 8,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": "+# Flow Journal\n+\n+- 2026-10-11T15:21:56.625Z - flow created\n+- 2026-10-11T17:20:33.264Z - frozen: 9 criteria; checksum recorded\n+- 2026-10-11T17:20:33.709Z - started\n+- 2026-10-11T17:20:34.163Z - task-done: T1: Collect remaining context\n+- 2026-10-11T17:20:34.606Z - task-done: T2: Implement per plan\n+- 2026-10-11T17:20:35.043Z - task-done: T3: Add/adjust tests and make them pass"
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md",
+      "startLine": 1,
+      "endLine": 29,
+      "changedLines": 29,
+      "contextTruncated": true,
+      "text": "+# Implementation Plan\n+\n+Status: approved by operator\n+Model: openai-codex/gpt-6.1-sol\n+\n+## Approach\n+Test-first, минимальные изменения существующих компонентов. Worktree /home/altsay/keryx/.worktrees/review-autonomy-hardening, branch fix/review-autonomy-hardening, baseline 00879558256cef065f5e22fb0df66d227253a180.\n+Неатрибутированное покрытие не принимается. Широкая переработка runner и реальные model E2E отвергнуты как расширение scope и нарушение запрета запускать прогоны.\n+\n+## Steps\n+1. Baseline и RED regression evidence для восьми сценариев.\n+2. Coverage конкретного dispatch и manifest/content identity retry-state.\n+3. Denial memory до auto-approval и общие safety floors.\n+4. Общий parser и needs_context независимо от DONE.\n+5. Arbiter cache current options и recursive content watchdog.\n+6. Профильные tests/typecheck, deterministic lifecycle fixture, независимая проверка diff. CI после разрешённой публикации; локальные RED checks без model calls.\n+\n+## Execution tracking\n+- [ ] Baseline и восемь RED reproductions\n+- [ ] Coverage/retry identity\n+- [ ] Safety\n+- [ ] Parser/context\n+- [ ] Arbiter/watchdog\n+- [ ] Verification и change report\n+\n+## Risks\n+- Legacy результаты без identity не должны давать достоверное coverage.\n+- Основной checkout грязный, не изменять его файлы.\n+- Graph не содержит новых review-файлов; wiki freshness unknown. Использовать текущий код worktree и воспроизводимые tests."
+    },
+    {
+      "path": ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md",
+      "startLine": 1,
+      "endLine": 15,
+      "changedLines": 15,
+      "contextTruncated": true,
+      "text": "+# Tasks\n+\n+Task definitions live here; task **statuses** live in flow.json and are managed\n+only via `keryx flow task done <id> <taskId>`.\n+\n+These four are created by `keryx flow init` as a default checklist. Add your\n+own with `keryx flow task add`; a scaffold row your plan supersedes is closed\n+with `--disposition skipped --reason \"<why>\"`, not left open.\n+\n+| ID | Kind | Title |\n+|----|------|-------|\n+| T1 | context | Collect remaining context |\n+| T2 | implement | Implement per plan |\n+| T3 | test | Add/adjust tests and make them pass |\n+| T4 | review | Self-review and prepare draft PR |"
+    },
+    {
+      "path": "src/commands/agent-fewer-prompts.test.ts",
+      "startLine": 312,
+      "endLine": 334,
+      "changedLines": 20,
+      "contextTruncated": true,
+      "text": "   // The probe and the wave spec the operator denied in the log stay denied.\n   expect(ran.filter((entry) => entry.includes(\"127.0.0.1\") || entry.includes(\"harness wave --spec\"))).toEqual([]);\n });\n+\n+for (const risk of [\"write\", \"delegate\"] as const) {\n+  test(`hardening: refused ${risk} is checked before autoapproval`, async () => {\n+    setReviewSystem(\"review-auto\");\n+    const ran: string[] = [];\n+    const tool: InteractiveTool = {\n+      definition: { name: `test_${risk}`, description: \"test\", risk, inputSchema: { type: \"object\", properties: {} } },\n+      invoke: async () => { ran.push(risk); return { output: \"ran\", isError: false }; },\n+    };\n+    const asked: Asked[] = [];\n+    const first = scriptedProvider([callRound(\"f\", \"fetch_page\", \"{}\"), callRound(\"w\", tool.definition.name, \"{}\"), [...okReply]]);\n+    await runAgentTurn(ioWith(\"trust\", asked, false), makeDeps(first.provider, { tools: [fetchTool(), tool] }), [], \"first\");\n+    expect(asked).toHaveLength(1);\n+    const second = scriptedProvider([callRound(\"w2\", tool.definition.name, \"{}\"), [...okReply]]);\n+    await runAgentTurn(ioWith(\"trust\", asked, false), makeDeps(second.provider, { tools: [tool] }), [], \"retry\");\n+    expect(ran).toEqual([]);\n+    expect(asked).toHaveLength(1);\n+    expect(JSON.stringify(second.requests.at(-1))).toContain(REFUSED_EARLIER);\n+  });\n+}"
+    },
+    {
+      "path": "src/commands/agent.ts",
+      "startLine": 5697,
+      "endLine": 5705,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "       }\n     }\n   } else if (risk === \"delegate\") {\n+    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {\n+      return { output: REFUSED_EARLIER, isError: true };\n+    }\n     // Fail-closed like `shell`: a delegate with no approver present is denied,\n     // never silently invoked (F6). The three MAE containment invariants\n     // (read-only child tools, child policy deny, hard-false child approver)"
+    },
+    {
+      "path": "src/commands/agent.ts",
+      "startLine": 5742,
+      "endLine": 5750,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "       }\n     }\n   } else if (risk === \"write\") {\n+    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {\n+      return { output: REFUSED_EARLIER, isError: true };\n+    }\n     // ADR-0010: `write` joins the shell/destructive/delegate gate. Same\n     // shape as the shell branch, but the escalation input is chosen PER TOOL\n     // (flow 275 T6, specification §7.1), not shared by every `write`-risk"
+    },
+    {
+      "path": "src/commands/review-arbiter.test.ts",
+      "startLine": 486,
+      "endLine": 498,
+      "changedLines": 10,
+      "contextTruncated": true,
+      "text": "   expect((await arbiter.decide(ask(\"budget\", { budgetUsedPercent: 20, raisesBudget: false })))?.reason).toBe(\"invalid-output\");\n   expect((await arbiter.decide(ask(\"budget\", { budgetUsedPercent: 21, raisesBudget: false })))?.verdict).toBe(\"allow\");\n });\n+\n+test(\"hardening: cached allow binds current recommended option\", async () => {\n+  const arbiter = make(ruleFollowingModel());\n+  await arbiter.decide(ask(\"budget\", GOOD_FACTS));\n+  const decision = await arbiter.decide(ask(\"budget\", GOOD_FACTS, {\n+    options: [{ id: \"retry\", label: \"Retry\", description: \"Retry\", recommended: true }, { id: \"a\", label: \"Stop\", description: \"Stop\" }],\n+  }));\n+  expect(decision).toMatchObject({ verdict: \"allow\", answer: \"retry\", cached: false });\n+  expect(readArbiterLog(LOG()).at(-1)?.answer).toBe(\"retry\");\n+});"
+    },
+    {
+      "path": "src/commands/review-arbiter.ts",
+      "startLine": 325,
+      "endLine": 331,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     const rulesInForce = loaded.rules;\n     const ruleMeta = { rulesVersion: rulesInForce.version, rulesHash: rulesInForce.hash } as const;\n \n-    const key = cacheKey(question);\n+    const key = `${cacheKey(question)}:${JSON.stringify(request.options.map((option) => option.id))}`;\n     const hit = cache.get(key);\n     if (hit !== undefined) {\n       log({ ...base, ...ruleMeta, verdict: hit.verdict, rule: hit.rule, reason: \"cache\", cached: true, ...(hit.answer === undefined ? {} : { answer: hit.answer }) });"
+    },
+    {
+      "path": "src/commands/review-ledger.test.ts",
+      "startLine": 1,
+      "endLine": 17,
+      "changedLines": 17,
+      "contextTruncated": true,
+      "text": "+import { expect, test } from \"bun:test\";\n+import type { RawFile } from \"../review/ledger\";\n+import { assignRawDispatch } from \"./review-ledger\";\n+\n+for (const [label, reviewer, slices, expected] of [\n+  [\"ambiguous raw does not cover union\", \"reviewer\", [[\"A\"], [\"B\"]], []],\n+  [\"unique dispatch assigns only its slices\", \"reviewer\", [[\"B\"]], [\"B\"]],\n+  [\"other reviewer cannot assign reply\", \"other\", [[\"A\"]], undefined],\n+] as const) {\n+  test(label, () => {\n+    const raw: RawFile = { name: \"raw/reviewer.txt\", hash: \"hash\", mtimeMs: 1, empty: false,\n+      result: { reviewer: \"reviewer\", status: \"DONE\" } };\n+    const assignments = new Map<string, string[][]>([[`${reviewer}\\0raw/reviewer.txt`, slices.map((s) => [...s])]]);\n+    assignRawDispatch([raw], assignments);\n+    expect(raw.assignedSlices).toEqual(expected === undefined ? undefined : [...expected]);\n+  });\n+}"
+    },
+    {
+      "path": "src/commands/review-ledger.ts",
+      "startLine": 1,
+      "endLine": 12,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": " import { existsSync } from \"node:fs\";\n+import { createHash } from \"node:crypto\";\n import { readFile, readdir, stat } from \"node:fs/promises\";\n import path from \"node:path\";\n import { optionValue } from \"../lib/args\";\n import { writeFileAtomic } from \"../lib/fs\";\n import { packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from \"../review/coverage\";\n import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from \"../review/ledger\";\n-import { type RetryState, emptyRetryState } from \"../review/retry-plan\";\n+import { type RetryState, emptyRetryState, scopeFingerprint } from \"../review/retry-plan\";\n import type { SliceManifest } from \"../review/slice\";\n \n export const LEDGER_FLAGS = [\"--package\", \"--mode\", \"--findings\", \"--dispositions\", \"--out\", \"--dry-run\", \"--json\", \"--help\", \"-h\"] as const;"
+    },
+    {
+      "path": "src/commands/review-ledger.ts",
+      "startLine": 80,
+      "endLine": 91,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "   return { raws, ignored };\n }\n \n-async function loadRetry(...files: string[]): Promise<RetryState> {\n+async function loadRetry(fingerprint: string | undefined, ...files: string[]): Promise<RetryState> {\n   const merged = emptyRetryState();\n   for (const file of files) {\n     const state = await readJson<RetryState>(file);\n+    if (fingerprint === undefined || state?.scopeFingerprint !== fingerprint) continue;\n+    merged.scopeFingerprint = fingerprint;\n     for (const [reviewer, entry] of Object.entries(state?.reviewers ?? {})) {\n       const known = merged.reviewers[reviewer];\n       const covered = [...new Set([...(known?.covered ?? []), ...(entry.covered ?? [])])].sort();"
+    },
+    {
+      "path": "src/commands/review-ledger.ts",
+      "startLine": 108,
+      "endLine": 121,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": "   return lines.join(\"\\n\");\n }\n \n+/** Ambiguous raw-to-dispatch references never contribute implicit coverage. */\n+export function assignRawDispatch(raws: RawFile[], assignments: ReadonlyMap<string, readonly string[][]>): void {\n+  for (const raw of raws) {\n+    const matches = assignments.get(`${raw.result?.reviewer}\\0${raw.name}`);\n+    if (matches !== undefined) raw.assignedSlices = matches.length === 1 ? [...matches[0]!] : [];\n+  }\n+}\n+\n export async function runLedger(args: string[], deps: { rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void }): Promise<void> {\n   if (args.includes(\"--help\") || args.includes(\"-h\") || args[0] === undefined) return printLedgerHelp();\n   if (args[0] !== \"build\") throw new Error(`Unknown ledger subcommand \"${args[0]}\". See \\`keryx review ledger --help\\`.`);"
+    },
+    {
+      "path": "src/commands/review-ledger.ts",
+      "startLine": 135,
+      "endLine": 146,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "   const files = await packageScopeFiles(packageDir);\n   const manifestPath = path.join(inputDir, \"slices\", \"manifest.json\");\n   const manifest = await readJson<SliceManifest>(manifestPath);\n+  if (manifest !== undefined) for (const entry of manifest.slices) {\n+    const hash = await readFile(path.resolve(path.dirname(manifestPath), entry.path))\n+      .then((body) => createHash(\"sha256\").update(body).digest(\"hex\")).catch(() => undefined);\n+    if (hash === undefined) delete entry.contentHash;\n+    else entry.contentHash = hash;\n+  }\n   const { raws, ignored } = await loadRaws(inputDir);\n   const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(optionValue(rest, \"--findings\") ?? path.join(packageDir, \"findings.json\")))) ?? [];\n   const out = path.resolve(optionValue(rest, \"--out\") ?? path.join(packageDir, \"research.json\"));"
+    },
+    {
+      "path": "src/commands/review-ledger.ts",
+      "startLine": 149,
+      "endLine": 185,
+      "changedLines": 15,
+      "contextTruncated": true,
+      "text": "   const dispositions = (Array.isArray(given) ? given : given?.obligations) ?? [];\n \n   const payloadSlices: Record<string, string[]> = {};\n+  const payloadDispatchCounts: Record<string, number> = {};\n   const ruleFiles: Record<string, string> = {};\n+  const assignments = new Map<string, string[][]>();\n   for (const file of await jsonFiles(path.join(inputDir, \"drivers\"))) {\n-    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown }>(file);\n+    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown; result?: unknown }>(file);\n     if (typeof driver?.reviewer !== \"string\") continue;\n+    payloadDispatchCounts[driver.reviewer] = (payloadDispatchCounts[driver.reviewer] ?? 0) + 1;\n     if (Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === \"string\")) (payloadSlices[driver.reviewer] ??= []).push(...(driver.slices as string[]));\n+    if (typeof driver.result === \"string\" && Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === \"string\")) {\n+      const key = `${driver.reviewer}\\0${driver.result}`;\n+      const matches = assignments.get(key) ?? [];\n+      matches.push(driver.slices as string[]);\n+      assignments.set(key, matches);\n+    }\n     if (typeof driver.definition === \"string\") {\n       const definition = path.resolve(root, driver.definition);\n       if (existsSync(definition)) ruleFiles[driver.reviewer] = path.relative(root, definition);\n     }\n   }\n \n+  assignRawDispatch(raws, assignments);\n   const required = await requiredReviewers(root, mode, files);\n   const { ledger, gaps } = buildLedger({\n     mode,\n     selected: required.required,\n     manifest,\n     payloadSlices,\n+    payloadDispatchCounts,\n     ruleFiles,\n     raws,\n-    retry: await loadRetry(path.join(inputDir, \"slices\", \"retry-state.json\"), path.join(packageDir, \"retry-state.json\")),\n+    retry: await loadRetry(manifest === undefined ? undefined : scopeFingerprint(manifest), path.join(inputDir, \"slices\", \"retry-state.json\"), path.join(packageDir, \"retry-state.json\")),\n     canonical,\n     dispositions,\n     manifestPath: path.relative(process.cwd(), manifestPath),"
+    },
+    {
+      "path": "src/commands/review-slice.ts",
+      "startLine": 165,
+      "endLine": 173,
+      "changedLines": 12,
+      "contextTruncated": true,
+      "text": "   } catch (error) {\n     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);\n   }\n-  try {\n-    return JSON.parse(raw) as ReviewerResult;\n-  } catch {\n-    const parsed = parseReviewResult(raw);\n-    if (parsed === undefined) {\n-      throw new UnreadableInput(`result is not valid JSON and holds no REVIEW_RESULT block: ${source}`);\n-    }\n-    return parsed as ReviewerResult;\n-  }\n+  const parsed = parseReviewResult(raw);\n+  if (parsed === undefined) throw new UnreadableInput(`result holds no status-bearing JSON object: ${source}`);\n+  return parsed as ReviewerResult;\n }\n \n function failUnreadable(error: unknown): void {"
+    },
+    {
+      "path": "src/commands/review-slice.ts",
+      "startLine": 283,
+      "endLine": 289,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "             decision: plan.decision,\n             reviewer,\n             status: plan.status,\n+            scopeFingerprint: plan.state.scopeFingerprint ?? null,\n             priorAttempts: plan.priorAttempts,\n             reason: plan.reason,\n             reportLine: plan.reportLine ?? null,"
+    },
+    {
+      "path": "src/review/completion-gate.test.ts",
+      "startLine": 171,
+      "endLine": 186,
+      "changedLines": 13,
+      "contextTruncated": true,
+      "text": "     expect(REPEATABLE_TOOL_NAMES.has(name)).toBe(true);\n   }\n });\n+\n+test(\"hardening: nested same-size rewrite counts as progress\", async () => {\n+  await writePackage(\"live\", { mode: \"review-flow\", status: \"draft\" });\n+  const data = path.join(root, \".metaproject\", \"data\", \"review\", \"run\", \"raw\");\n+  await mkdir(data, { recursive: true });\n+  const file = path.join(data, \"logic.txt\");\n+  await writeFile(file, \"aaaa\");\n+  const before = await findReviewGateState(root, 0);\n+  await writeFile(file, \"bbbb\");\n+  const after = await findReviewGateState(root, 0);\n+  expect(after?.signature).not.toBe(before?.signature);\n+  expect(decideReviewGate({ ...idle, open: after, stalls: 2, lastSignature: before?.signature })).toMatchObject({ action: \"continue\", stalls: 0 });\n+});"
+    },
+    {
+      "path": "src/review/completion-gate.ts",
+      "startLine": 5,
+      "endLine": 11,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": " \n import { readdir, readFile, stat } from \"node:fs/promises\";\n import path from \"node:path\";\n+import { createHash } from \"node:crypto\";\n import { reviewCompletionBlockers, reviewsRoot } from \"./managed\";\n \n export const MAX_REVIEW_GATE_CONTINUES = 20;"
+    },
+    {
+      "path": "src/review/completion-gate.ts",
+      "startLine": 24,
+      "endLine": 35,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": "     const entries = await readdir(dir, { withFileTypes: true });\n     const parts: string[] = [];\n     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {\n-      const info = await stat(path.join(dir, entry.name)).catch(() => null);\n-      parts.push(`${entry.name}:${info?.size ?? 0}`);\n+      const file = path.join(dir, entry.name);\n+      if (entry.isSymbolicLink()) continue;\n+      const content = entry.isDirectory()\n+        ? await dirSignature(file)\n+        : await readFile(file).then((body) => createHash(\"sha256\").update(body).digest(\"hex\")).catch(() => \"unreadable\");\n+      parts.push(`${entry.name}:${content}`);\n     }\n     return parts.join(\",\");\n   } catch {"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 4,
+      "endLine": 10,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": " import path from \"node:path\";\n import { requiredReviewers } from \"./coverage\";\n import { type LedgerInputs, type RawFile, buildLedger, ledgerBlockers, parseReviewResult } from \"./ledger\";\n+import { emptyRetryState, planRetry, scopeFingerprint } from \"./retry-plan\";\n import type { SliceManifest } from \"./slice\";\n \n let root: string;"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 29,
+      "endLine": 35,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " const FILES = [\"src/a.ts\", \"src/b.test.ts\"];\n \n function slice(id: string, files: string[], extra: Record<string, unknown> = {}) {\n-  return { id, path: `${id}.diff`, bytes: 100, files, domain: \"src\", split: \"domain\" as const, ...extra };\n+  return { id, path: `${id}.diff`, bytes: 100, contentHash: `test-content-${id}`, files, domain: \"src\", split: \"domain\" as const, ...extra };\n }\n \n const MANIFEST = {"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 54,
+      "endLine": 60,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "     selected: required,\n     manifest: MANIFEST,\n     payloadSlices: Object.fromEntries(required.map((r) => [r, [\"slice-01\", \"slice-02\"]])),\n+    payloadDispatchCounts: Object.fromEntries(required.map((r) => [r, 1])),\n     ruleFiles: Object.fromEntries(required.map((r) => [r, `.metaproject/skills/gdskills/review/${r}/SKILL.md`])),\n     raws: required.map((r) => raw(r, \"DONE\")),\n     retry: { schemaVersion: 1, reviewers: {} },"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 148,
+      "endLine": 154,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " \n   test(\"a reviewer the retry state gave up on stays not-run and the gap says no retry is left\", async () => {\n     const base = await inputs();\n-    const result = buildLedger({ ...base, retry: { schemaVersion: 1, reviewers: { \"review-logic\": { attempt: 1, status: \"BLOCKED\", notRun: true } } } });\n+    const result = buildLedger({ ...base, retry: { schemaVersion: 1, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { \"review-logic\": { attempt: 1, status: \"BLOCKED\", notRun: true } } } });\n     const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === \"review-logic\")!;\n     expect(logic.status).toBe(\"not-run\");\n     expect(result.gaps.find((g) => g.reviewer === \"review-logic\")!.next).toContain(\"no retry is left\");"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 181,
+      "endLine": 187,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   test(\"a result already counted in retry-state is not named again in the next command\", async () => {\n     const base = await inputs();\n     const raws = base.raws.map((r) => (r.result?.reviewer === \"review-logic\" ? { ...r, result: { ...r.result, slices: [\"slice-01\"] } } : r));\n-    const retry = { schemaVersion: 1 as const, reviewers: { \"review-logic\": { attempt: 0, status: \"DONE\", notRun: false, stalls: 0, covered: [\"slice-01\"] } } };\n+    const retry = { schemaVersion: 1 as const, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { \"review-logic\": { attempt: 0, status: \"DONE\", notRun: false, stalls: 0, covered: [\"slice-01\"] } } };\n     const gap = buildLedger({ ...base, raws, retry }).gaps.find((g) => g.reviewer === \"review-logic\")!;\n     expect(gap.next).not.toContain(\"--result\");\n     expect(gap.next).toContain(\"--next-wave\");"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 190,
+      "endLine": 196,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   test(\"slices covered in earlier rounds, recorded in retry-state, finish an incomplete reviewer's scope\", async () => {\n     const base = await inputs();\n     const raws = base.raws.map((r) => (r.result?.reviewer === \"review-logic\" ? { ...r, result: { ...r.result, slices: [\"slice-02\"] } } : r));\n-    const retry = { schemaVersion: 1 as const, reviewers: { \"review-logic\": { attempt: 1, status: \"INCOMPLETE\", notRun: false, stalls: 0, covered: [\"slice-01\"] } } };\n+    const retry = { schemaVersion: 1 as const, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { \"review-logic\": { attempt: 1, status: \"INCOMPLETE\", notRun: false, stalls: 0, covered: [\"slice-01\"] } } };\n     const result = buildLedger({ ...base, raws, retry });\n     expect(result.gaps.find((g) => g.reviewer === \"review-logic\")).toBeUndefined();\n   });"
+    },
+    {
+      "path": "src/review/ledger.test.ts",
+      "startLine": 272,
+      "endLine": 353,
+      "changedLines": 79,
+      "contextTruncated": true,
+      "text": "     expect(JSON.stringify(buildLedger(base))).toBe(JSON.stringify(buildLedger(base)));\n   });\n });\n+\n+// Flow 427: coverage must not be inferred from the union of unrelated dispatch payloads.\n+describe(\"autonomy hardening regressions\", () => {\n+  test(\"bare JSON reviewer output is parsed\", () => {\n+    expect(parseReviewResult('{\"reviewer\":\"review-logic\",\"status\":\"DONE\",\"findings\":[],\"needs_context\":[]}')?.status).toBe(\"DONE\");\n+  });\n+\n+  test(\"BLOCKED A and DONE B without slice claims do not close payload union A+B\", async () => {\n+    const base = await inputs();\n+    const earlier = raw(\"review-logic\", \"BLOCKED\", {}, \"raw/logic-a.txt\");\n+    const later = raw(\"review-logic\", \"DONE\", {}, \"raw/logic-b.txt\");\n+    const result = buildLedger({ ...base, raws: [...base.raws.filter(r => r.result?.reviewer !== \"review-logic\"), earlier, later] });\n+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find(r => r.reviewer === \"review-logic\")!;\n+    expect(logic.scopeComplete).toBe(false);\n+    expect(result.ledger.scopeReviewed).toBe(false);\n+  });\n+});\n+\n+describe(\"dispatch attribution\", () => {\n+  test(\"one raw result cannot implicitly close multiple dispatches\", async () => {\n+    const base = await inputs();\n+    const result = buildLedger({ ...base, payloadDispatchCounts: { ...base.payloadDispatchCounts, \"review-logic\": 2 } });\n+    expect(result.ledger.scopeReviewed).toBe(false);\n+    expect(result.gaps.some(g => g.reviewer === \"review-logic\")).toBe(true);\n+  });\n+  test(\"explicit result assignments close only their own slices\", async () => {\n+    const base = await inputs();\n+    const a = { ...raw(\"review-logic\", \"DONE\", {}, \"raw/a.txt\"), assignedSlices: [\"slice-01\"] };\n+    const b = { ...raw(\"review-logic\", \"DONE\", {}, \"raw/b.txt\"), assignedSlices: [\"slice-02\"] };\n+    const others = base.raws.filter(r => r.result?.reviewer !== \"review-logic\");\n+    expect(buildLedger({ ...base, raws: [...others, a, b] }).ledger.scopeReviewed).toBe(true);\n+    const hostile = { ...b, result: { ...b.result!, slices: [\"slice-01\", \"slice-02\"] } };\n+    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: \"BLOCKED\" } }, hostile] }).ledger.scopeReviewed).toBe(false);\n+  });\n+  test(\"prose and JSON strings containing escaped quotes and braces parse\", () => {\n+    const object = { status: \"DONE\", summary: 'brace } and \"quote\"', reviewer: \"review-logic\" };\n+    expect(parseReviewResult(`prose {not JSON}\\n${JSON.stringify(object)}\\nend`)).toEqual(object);\n+  });\n+});\n+\n+ test(\"labelled context result is not replaced by a trailing JSON example\", () => {\n+  expect(parseReviewResult('```REVIEW_RESULT\\n{\"status\":\"NEEDS_CONTEXT\"}\\n```\\nExample: {\"status\":\"DONE\"}')?.status).toBe(\"NEEDS_CONTEXT\");\n+  expect(parseReviewResult('```REVIEW_RESULT\\ninvalid\\n```\\n{\"status\":\"DONE\"}')).toBeUndefined();\n+});\n+\n+\n+test(\"deterministic lifecycle: dispatch, context, redispatch and completion gate\", async () => {\n+  const input = await inputs();\n+  const reviewer = \"review-logic\";\n+  const readSliceText = () => \"fixture diff\";\n+  const dispatch = planRetry({ manifest: MANIFEST, reviewer, result: {}, state: emptyRetryState(), nextWave: true, readSliceText });\n+  expect(dispatch.decision).toBe(\"wave\");\n+  expect(dispatch.wave.length).toBeGreaterThan(0);\n+  const fingerprint = scopeFingerprint(MANIFEST, readSliceText)!;\n+  const pendingPayload = { reviewer, status: \"DONE\", scopeFingerprint: fingerprint, needs_context: [\"Explain the caller contract\"], findings: [] };\n+  const pending = parseReviewResult(JSON.stringify(pendingPayload))!;\n+  expect(pending).toEqual(pendingPayload);\n+  const context = planRetry({ manifest: MANIFEST, reviewer, result: pendingPayload, state: dispatch.state, readSliceText });\n+  expect(context.decision).toBe(\"context\");\n+  expect(context.needsContext).toEqual([\"Explain the caller contract\"]);\n+  const pendingRaw: RawFile = { ...raw(reviewer, \"DONE\"), result: pending, assignedSlices: context.wave.map(s => s.id) };\n+  const pendingLedger = buildLedger({ ...input, raws: [...input.raws.filter(r => r.result?.reviewer !== reviewer), pendingRaw] });\n+  expect(pendingLedger.ledger.scopeReviewed).toBe(false);\n+  expect((await blockersOf(pendingLedger)).length).toBeGreaterThan(0);\n+  const assigned = MANIFEST.slices.map(s => s.id);\n+  const finishedPayload = { reviewer, status: \"DONE\", scopeFingerprint: fingerprint, slices: assigned, needs_context: [], findings: [] };\n+  const finished = parseReviewResult(JSON.stringify(finishedPayload))!;\n+  expect(finished).toEqual(finishedPayload);\n+  const accepted = planRetry({ manifest: MANIFEST, reviewer, result: finishedPayload, state: context.state, readSliceText });\n+  expect(accepted.decision).toBe(\"accepted\");\n+  expect(accepted.remaining.slices).toBe(0);\n+  const finishedRaw: RawFile = { ...raw(reviewer, \"DONE\", {}, \"raw/review-logic-second.txt\"), result: finished, assignedSlices: assigned };\n+  const complete = buildLedger({ ...input, payloadDispatchCounts: { ...input.payloadDispatchCounts, [reviewer]: 2 }, raws: [...input.raws.filter(r => r.result?.reviewer !== reviewer), pendingRaw, finishedRaw] });\n+  expect(complete.gaps).toEqual([]);\n+  expect(complete.ledger.scopeReviewed).toBe(true);\n+  expect(await blockersOf(complete)).toEqual([]);\n+  const changed = { ...MANIFEST, slices: MANIFEST.slices.map(s => ({ ...s, contentHash: \"changed-content\" })) };\n+  expect(() => planRetry({ manifest: changed, reviewer, result: finishedPayload, state: accepted.state, readSliceText: () => \"changed diff\" })).toThrow(\"not bound to the current scope\");\n+});"
+    },
+    {
+      "path": "src/review/ledger.ts",
+      "startLine": 2,
+      "endLine": 8,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " import { coverageErrors, type ReviewMode } from \"./coverage\";\n import { dispatchErrors } from \"./dispatch\";\n import { researchErrors } from \"./research\";\n-import type { RetryState } from \"./retry-plan\";\n+import { scopeFingerprint, type RetryState } from \"./retry-plan\";\n import { type SliceManifest, packWaves, waveBytesOf } from \"./slice\";\n import { requiredSlices, sliceGraph, summarizeWaves } from \"./waves\";\n "
+    },
+    {
+      "path": "src/review/ledger.ts",
+      "startLine": 24,
+      "endLine": 31,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   name: string;\n   hash: string;\n   mtimeMs: number;\n+  /** Slice assignment from the driver explicitly naming this result file. */\n+  assignedSlices?: string[];\n   result?: ParsedResult;\n   /** True for a file a reviewer left empty (\"(subagent produced no text)\"): lost output, not a result to reconcile. */\n   empty: boolean;"
+    },
+    {
+      "path": "src/review/ledger.ts",
+      "startLine": 51,
+      "endLine": 58,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   manifest?: SliceManifest | undefined;\n   /** Reviewer → slice ids named by its dispatched payloads. */\n   payloadSlices: Record<string, string[]>;\n+  /** Only one dispatch may supply a legacy implicit assignment. */\n+  payloadDispatchCounts?: Record<string, number>;\n   /** Reviewer → resolved rule file, only when it exists. */\n   ruleFiles: Record<string, string>;\n   raws: RawFile[];"
+    },
+    {
+      "path": "src/review/ledger.ts",
+      "startLine": 79,
+      "endLine": 117,
+      "changedLines": 44,
+      "contextTruncated": true,
+      "text": " \n /** The reviewer's result: the last fenced block that parses to an object carrying `status`. Never guessed from prose. */\n export function parseReviewResult(raw: string): ParsedResult | undefined {\n-  const candidates: string[] = [];\n-  for (const match of raw.matchAll(/```[A-Za-z_]*[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n```/g)) candidates.push(match[1]!);\n-  const marker = raw.indexOf(\"REVIEW_RESULT\");\n-  if (marker >= 0) {\n-    const start = raw.indexOf(\"{\", marker);\n-    const end = raw.lastIndexOf(\"}\");\n-    if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1));\n-  }\n-  for (const candidate of candidates.reverse()) {\n+  const labelled = [...raw.matchAll(/```REVIEW_RESULT\\s*\\n([\\s\\S]*?)```/gi)];\n+  if (labelled.length > 0) {\n     try {\n-      const parsed = JSON.parse(candidate);\n-      if (parsed && typeof parsed === \"object\" && !Array.isArray(parsed) && typeof parsed.status === \"string\") return parsed as ParsedResult;\n-    } catch {\n-      /* not this block */\n+      const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);\n+      return parsed !== null && typeof parsed === \"object\" && typeof parsed.status === \"string\"\n+        ? parsed as ParsedResult : undefined;\n+    } catch { return undefined; }\n+  }\n+  let result: ParsedResult | undefined;\n+  for (let start = 0; start < raw.length; start += 1) {\n+    if (raw[start] !== \"{\") continue;\n+    let depth = 0;\n+    let quoted = false;\n+    let escaped = false;\n+    for (let end = start; end < raw.length; end += 1) {\n+      const char = raw[end];\n+      if (quoted) {\n+        if (escaped) escaped = false;\n+        else if (char === \"\\\\\") escaped = true;\n+        else if (char === '\"') quoted = false;\n+      } else if (char === '\"') quoted = true;\n+      else if (char === \"{\") depth += 1;\n+      else if (char === \"}\" && --depth === 0) {\n+        try {\n+          const parsed = JSON.parse(raw.slice(start, end + 1));\n+          if (typeof parsed.status === \"string\") result = parsed as ParsedResult;\n+          start = end;\n+        } catch { /* prose brace: try the next candidate */ }\n+        break;\n+      }\n     }\n   }\n-  return undefined;\n+  return result;\n }\n \n export function isEmptyOutput(raw: string): boolean {"
+    },
+    {
+      "path": "src/review/ledger.ts",
+      "startLine": 163,
+      "endLine": 170,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "   for (const reviewer of input.selected) {\n     const mine = attributed.filter((r) => r.result!.reviewer === reviewer).sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));\n     const latest = mine[mine.length - 1];\n-    const known = input.retry.reviewers[reviewer];\n+    const fingerprint = manifest === undefined ? undefined : scopeFingerprint(manifest);\n+    const known = fingerprint !== undefined && input.retry.scopeFingerprint === fingerprint ? input.retry.reviewers[reviewer] : undefined;\n     if (known?.notRun === true) {\n       runs.push({ reviewer, executionId: `${reviewer}:not-run`, status: \"not-run\", notRunReason: `${known.status} after the allowed retry (retry-state)`, scopeComplete: false });\n       gaps.push({ reviewer, detail: `${reviewer}: not run (${known.status} after the allowed retry)`, next: \"no retry is left; the report carries the Not run line, and only the operator can accept a smaller set (dispatch override with their own quote)\" });"
+    },
+    {
+      "path": "src/review/ledger.ts",
+      "startLine": 189,
+      "endLine": 205,
+      "changedLines": 13,
+      "contextTruncated": true,
+      "text": "     const rule = input.ruleFiles[reviewer];\n     run.ruleEvidence = rule === undefined ? [] : [rule];\n     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });\n-    const claimed = new Set<string>(sliceIdsOf(result.slices));\n+    const claimed = new Set<string>();\n     if (manifest !== undefined) {\n-      if (finished) for (const id of input.payloadSlices[reviewer] ?? []) if (result.slices === undefined) claimed.add(id);\n-      for (const earlier of mine.slice(0, -1)) sliceIdsOf(earlier.result?.slices).forEach((id) => claimed.add(id));\n+      for (const raw of mine) {\n+        const reply = raw.result!;\n+        const closed = FINISHED.has(String(reply.status).toUpperCase()) && (!Array.isArray(reply.needs_context) || reply.needs_context.filter(text).length === 0);\n+        const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);\n+        if (assigned === undefined) continue;\n+        const allowed = new Set(assigned);\n+        const ids = reply.slices === undefined && closed ? assigned : sliceIdsOf(reply.slices);\n+        for (const id of ids) if (allowed.has(id)) claimed.add(id);\n+      }\n       for (const id of known?.covered ?? []) claimed.add(id);\n     }\n     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);"
+    },
+    {
+      "path": "src/review/retry-plan.ts",
+      "startLine": 1,
+      "endLine": 4,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "+import { createHash } from \"node:crypto\";\n import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, resliceText, waveBytesOf } from \"./slice\";\n import { type WaveSummary, requiredSlices, sliceGraph, summarizeWaves } from \"./waves\";\n "
+    },
+    {
+      "path": "src/review/retry-plan.ts",
+      "startLine": 23,
+      "endLine": 37,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": " \n export type RetryState = {\n   schemaVersion: 1;\n+  scopeFingerprint?: string;\n   reviewers: Record<string, ReviewerRetryState>;\n };\n \n export type ReviewerResult = {\n   reviewer?: string;\n   status?: string;\n+  /** Scope identity from the dispatch that produced this result. */\n+  scopeFingerprint?: string;\n   attempt?: number;\n   /** The slices this result covered. */\n   slices?: string[];"
+    },
+    {
+      "path": "src/review/retry-plan.ts",
+      "startLine": 64,
+      "endLine": 80,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": "   state: RetryState;\n };\n \n+/** Retry children do not change the original scope identity. Missing content identity fails closed. */\n+export function scopeFingerprint(manifest: SliceManifest, read?: (entry: SliceEntry) => string): string | undefined {\n+  const originals = manifest.slices.filter((entry) => entry.retryOf === undefined);\n+  const slices = originals.map((entry) => {\n+    const contentHash = read === undefined ? entry.contentHash : createHash(\"sha256\").update(read(entry)).digest(\"hex\");\n+    return { ...entry, contentHash };\n+  });\n+  if (slices.some((entry) => entry.contentHash === undefined)) return undefined;\n+  return createHash(\"sha256\").update(JSON.stringify({ source: manifest.source, maxBytes: manifest.maxBytes, waveBytes: manifest.waveBytes, omissions: manifest.omissions, slices })).digest(\"hex\");\n+}\n+\n export function emptyRetryState(): RetryState {\n   return { schemaVersion: 1, reviewers: {} };\n }"
+    },
+    {
+      "path": "src/review/retry-plan.ts",
+      "startLine": 115,
+      "endLine": 139,
+      "changedLines": 18,
+      "contextTruncated": true,
+      "text": " export function planRetry(input: PlanRetryInput): RetryPlan {\n   const { manifest, result, reviewer } = input;\n   const status = String(result.status ?? \"\").toUpperCase();\n-  const known = input.state.reviewers[reviewer];\n+  const fingerprint = scopeFingerprint(manifest, input.readSliceText);\n+  const current = fingerprint !== undefined && input.state.scopeFingerprint === fingerprint;\n+  const hasIncoming = status !== \"\" || result.attempt !== undefined || asStrings(result.slices).length > 0 || asStrings(input.covered).length > 0;\n+  const hasPriorScope = input.state.scopeFingerprint !== undefined || Object.keys(input.state.reviewers).length > 0;\n+  if (hasIncoming && (\n+    (result.scopeFingerprint !== undefined && result.scopeFingerprint !== fingerprint) ||\n+    (!current && hasPriorScope && result.scopeFingerprint !== fingerprint)\n+  )) {\n+    throw new Error(\"Reviewer result is not bound to the current scope; re-dispatch before importing coverage or attempts.\");\n+  }\n+  if (result.reviewer !== undefined && result.reviewer !== reviewer) {\n+    throw new Error(\"Reviewer result belongs to a different reviewer.\");\n+  }\n+\n+  const known = current ? input.state.reviewers[reviewer] : undefined;\n   const resultAttempt = Number.isInteger(result.attempt) ? (result.attempt as number) : 0;\n   const priorRounds = Math.max(known?.attempt ?? 0, resultAttempt);\n   const priorStalls = Math.max(known?.stalls ?? known?.attempt ?? 0, resultAttempt);\n-  const state: RetryState = { schemaVersion: 1, reviewers: { ...input.state.reviewers } };\n+  const state: RetryState = { schemaVersion: 1, ...(fingerprint === undefined ? {} : { scopeFingerprint: fingerprint }), reviewers: current ? { ...input.state.reviewers } : {} };\n \n   const ids = new Set(manifest.slices.map((entry) => entry.id));\n   const priorCovered = new Set(known?.covered ?? []);"
+    },
+    {
+      "path": "src/review/retry-plan.ts",
+      "startLine": 174,
+      "endLine": 183,
+      "changedLines": 5,
+      "contextTruncated": true,
+      "text": "     return plan(\"not-run\", reason, { reportLine: notRunLine(reviewer, status), wave: [], remaining: summarizeWaves([]) });\n   };\n \n-  const finished = status !== \"NEEDS_CONTEXT\" && !RETRYABLE_STATUSES.includes(status);\n+  const hasContext = asStrings(result.needs_context).some((item) => item.trim() !== \"\");\n+  const planningOnly = status === \"\" && input.nextWave === true;\n+  const finished = !hasContext && (status === \"DONE\" || status === \"DONE_WITH_CONCERNS\" || planningOnly);\n+  if (!finished && status !== \"NEEDS_CONTEXT\" && !RETRYABLE_STATUSES.includes(status) && !hasContext) return notRun(`unrecognized or missing reviewer status: ${status || \"missing\"}`);\n   if (finished) {\n     const informed = input.nextWave === true || reportedSlices.length > 0 || Array.isArray(result.slices);\n     if (!informed) {"
+    },
+    {
+      "path": "src/review/retry-plan.ts",
+      "startLine": 204,
+      "endLine": 210,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   }\n   const rounds = priorRounds + 1;\n \n-  if (status === \"NEEDS_CONTEXT\") {\n+  if (status === \"NEEDS_CONTEXT\" || hasContext) {\n     // The reviewer stopped to ask. Folding that into the verdict as finished is the false pass this exists to prevent:\n     // the questions are put to it, and a reviewer that asks again having covered nothing new is a gap, not a pass.\n     remember({ attempt: rounds });"
+    },
+    {
+      "path": "src/review/slice-dispatch.test.ts",
+      "startLine": 238,
+      "endLine": 251,
+      "changedLines": 9,
+      "contextTruncated": true,
+      "text": "     expect(plan.state.reviewers[\"review-logic\"]?.attempt).toBe(0);\n   });\n \n-  test(\"a retry state written before progress was tracked still bounds the reviewer\", () => {\n+  test(\"a legacy retry state without scope identity is invalidated\", () => {\n     const legacy = { schemaVersion: 1 as const, reviewers: { \"review-logic\": { attempt: 1, status: \"INCOMPLETE\", notRun: false } } };\n-    expect(planRetry({ ...base, result: { status: \"BLOCKED\" }, state: legacy }).decision).toBe(\"not-run\");\n+    expect(() => planRetry({ ...base, result: { status: \"BLOCKED\" }, state: legacy })).toThrow(\"current scope\");\n+    const fresh = planRetry({ ...base, result: {}, nextWave: true, state: legacy });\n+    expect(fresh.decision).toBe(\"wave\");\n+    expect(fresh.priorAttempts).toBe(0);\n+    expect(fresh.stalls).toBe(0);\n+    expect(fresh.remaining.slices).toBe(ids.length);\n   });\n \n   test(\"covering one piece of a re-cut does not credit the slice it was cut from\", () => {"
+    },
+    {
+      "path": "src/review/slice-dispatch.test.ts",
+      "startLine": 258,
+      "endLine": 307,
+      "changedLines": 47,
+      "contextTruncated": true,
+      "text": "     expect(next.wave.map((slice) => slice.id)).not.toContain(piece);\n   });\n });\n+\n+describe(\"autonomy hardening retry regressions\", () => {\n+  const built = buildSlices(sliceSourceFromDiff(gitFile(\"src/a.ts\", 20)));\n+  const base = { manifest: built.manifest, reviewer: \"review-logic\", readSliceText: () => built.slices[0]!.text };\n+  test(\"DONE with open needs_context requests context instead of acceptance\", () => {\n+    const plan = planRetry({ ...base, result: { status: \"DONE\", needs_context: [\"which contract applies?\"] }, state: { schemaVersion: 1, reviewers: {} } });\n+    expect(plan.decision).toBe(\"context\");\n+    expect(plan.needsContext).toEqual([\"which contract applies?\"]);\n+  });\n+  test(\"legacy covered IDs do not accept a regenerated manifest without fresh review\", () => {\n+    const stale = { schemaVersion: 1 as const, reviewers: { \"review-logic\": { attempt: 1, status: \"DONE\", notRun: false, covered: built.manifest.slices.map(s => s.id), stalls: 0 } } };\n+    const changed = buildSlices(sliceSourceFromDiff(gitFile(\"src/new.ts\", 20)));\n+    const plan = planRetry({ ...base, manifest: changed.manifest, readSliceText: () => changed.slices[0]!.text, result: {}, nextWave: true, state: stale });\n+    expect(plan.decision).toBe(\"wave\");\n+    expect(plan.remaining.slices).toBeGreaterThan(0);\n+  });\n+});\n+\n+test(\"same-size content rewrite invalidates coverage and stalls\", () => {\n+  const built = buildSlices(sliceSourceFromDiff(gitFile(\"src/a.ts\", 20)));\n+  const base = { manifest: built.manifest, reviewer: \"review-logic\", readSliceText: () => built.slices[0]!.text };\n+  const first = planRetry({ ...base, result: { status: \"DONE\", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} } });\n+  expect(first.decision).toBe(\"accepted\");\n+  const next = planRetry({ ...base, readSliceText: () => built.slices[0]!.text.replace(\"src/a.ts\", \"src/z.ts\"), result: {}, nextWave: true, state: first.state });\n+  expect(next.decision).toBe(\"wave\");\n+  expect(next.priorAttempts).toBe(0);\n+  expect(next.remaining.slices).toBeGreaterThan(0);\n+});\n+\n+test(\"stale incoming coverage and attempts cannot repopulate a changed scope\", () => {\n+  const built = buildSlices(sliceSourceFromDiff(gitFile(\"src/a.ts\", 20)));\n+  const base = { manifest: built.manifest, reviewer: \"review-logic\", readSliceText: () => built.slices[0]!.text };\n+  const first = planRetry({ ...base, result: { status: \"DONE\", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} } });\n+  const changed = { ...base, readSliceText: () => built.slices[0]!.text.replace(\"src/a.ts\", \"src/z.ts\"), state: first.state };\n+  const stale = { status: \"DONE\", attempt: 6, slices: built.manifest.slices.map(s => s.id) };\n+  expect(() => planRetry({ ...changed, result: stale })).toThrow(\"current scope\");\n+  expect(() => planRetry({ ...changed, result: { ...stale, scopeFingerprint: first.state.scopeFingerprint! } })).toThrow(\"current scope\");\n+  const fresh = planRetry({ ...changed, result: {}, nextWave: true });\n+  expect(fresh.priorAttempts).toBe(0);\n+  expect(fresh.decision).toBe(\"wave\");\n+});\n+\n+test(\"unknown reviewer status never accepts scope\", () => {\n+  const built = buildSlices(sliceSourceFromDiff(gitFile(\"src/a.ts\", 20)));\n+  const plan = planRetry({ manifest: built.manifest, reviewer: \"review-logic\", result: { status: \"FAILED\", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} }, readSliceText: () => built.slices[0]!.text });\n+  expect(plan.decision).toBe(\"not-run\");\n+});"
+    },
+    {
+      "path": "src/review/slice.ts",
+      "startLine": 1,
+      "endLine": 4,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "+import { createHash } from \"node:crypto\";\n import { buildReviewScope, type ReviewScopeConfig, type ScopedRegion, type ScopeDrop } from \"./scope\";\n \n /** Per-reviewer ceiling for one slice, in bytes. A reviewer that must read more than this burns its round budget. */"
+    },
+    {
+      "path": "src/review/slice.ts",
+      "startLine": 17,
+      "endLine": 23,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   id: string;\n   path: string;\n   bytes: number;\n+  contentHash?: string;\n   files: string[];\n   domain: string;\n   /** The deepest cut this slice needed: a whole domain, one file of a big domain, or one hunk of a big file. */"
+    },
+    {
+      "path": "src/review/slice.ts",
+      "startLine": 443,
+      "endLine": 449,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "       id,\n       path: `${dir}${id}.diff`,\n       bytes: byteLength(text),\n+      contentHash: createHash(\"sha256\").update(text).digest(\"hex\"),\n       files: draft.files,\n       domain: domainLabel(draft.domains),\n       split: draft.split,"
+    },
+    {
+      "path": "src/tui/ask-user-bridge-arbiter.test.ts",
+      "startLine": 177,
+      "endLine": 190,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": "   expect(await journaledAskUser(root)(question(LARGE))).toBe(\"more\");\n   expect(host.calls).toHaveLength(0);\n });\n+\n+for (const floor of [{ action: \"release\" }, { untrustedContent: true }]) {\n+  test(`hardening: untagged floor ${JSON.stringify(floor)} reaches human`, async () => {\n+    process.env[\"KERYX_REVIEW_AUTO_ANSWER\"] = \"1\";\n+    const host = hostThatCounts(\"stop\");\n+    arbiterOn();\n+    const { policy: _drop, ...untagged } = question(SMALL, floor);\n+    expect(await journaledAskUser(root)(untagged)).toBe(\"stop\");\n+    expect(host.calls).toHaveLength(1);\n+  });\n+}"
+    },
+    {
+      "path": "src/tui/ask-user-bridge.ts",
+      "startLine": 7,
+      "endLine": 13,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": " import type { AskUserFn } from \"../harness/tool/builtin/ask-user-tool\";\n import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from \"../decisions/service\";\n import { reviewAutoActive, reviewAutoMayAnswer } from \"../review/review-system\";\n+import { askFloor } from \"../review/arbiter-floor\";\n import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from \"../review/autonomous-answers\";\n import { consultArbiter, installQuestionArbiter } from \"../commands/review-arbiter-install\";\n "
+    },
+    {
+      "path": "src/tui/ask-user-bridge.ts",
+      "startLine": 91,
+      "endLine": 98,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "  * irreversible question is never auto-answered.\n  */\n function reviewAutoAnswer(request: Parameters<AskUserFn>[0]): string | undefined {\n+  if (askFloor(request) !== undefined) return undefined;\n   if ((process.env.KERYX_REVIEW_AUTO_ANSWER !== \"1\" && !reviewAutoActive()) || !reviewAutoMayAnswer(request)) return undefined;\n   return (request.options.find((o) => o.recommended === true) ?? request.options[0])?.id;\n }\n"
+    }
+  ],
+  "drops": [],
+  "counts": {
+    "filesSeen": 24,
+    "filesRetained": 24,
+    "filesDropped": 0,
+    "blocksSeen": 66,
+    "blocksRetained": 66,
+    "blocksDropped": 0,
+    "changedLinesRetained": 715,
+    "changedLinesDropped": 0,
+    "droppedByReason": {
+      "lockfile": 0,
+      "generated": 0,
+      "vendored": 0,
+      "snapshot": 0,
+      "minified": 0,
+      "binary": 0,
+      "whitespace-only": 0,
+      "comment-only": 0
+    }
+  }
+}

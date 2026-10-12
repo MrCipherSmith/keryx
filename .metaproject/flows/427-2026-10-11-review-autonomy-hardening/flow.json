@@ -10,9 +10,9 @@
   "id": "427",
   "slug": "review-autonomy-hardening",
   "title": "Надёжность и безопасность автономного review",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-11T15:21:56.625Z",
-  "updatedAt": "2026-10-11T17:20:35.043Z",
+  "updatedAt": "2026-10-12T20:11:50.456Z",
   "source": {
     "type": "description",
     "ref": null
@@ -20,7 +20,7 @@
   "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/975"
   },
   "baseBranch": "main",
   "owner": {
@@ -86,7 +86,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -94,7 +94,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "PR 975 is already merged; the self-review and draft-PR step is replaced by a managed review round of the merged PR"
     }
   ],
   "history": [
@@ -125,6 +127,16 @@
       "at": "2026-10-11T17:20:35.043Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-12T20:11:47.917Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-12T20:11:50.456Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/975 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {

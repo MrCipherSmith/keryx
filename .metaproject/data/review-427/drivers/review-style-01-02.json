@@ -1,0 +1,9 @@
+{
+ "reviewer": "review-style",
+ "slices": [
+  "slice-01",
+  "slice-02"
+ ],
+ "result": "raw/review-style-01-02.txt",
+ "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-style/SKILL.md"
+}

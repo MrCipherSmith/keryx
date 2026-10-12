@@ -1,0 +1,77 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Review PR 975 (flow 427)",
+   "target": "pr",
+   "ref": "https://github.com/MrCipherSmith/keryx/pull/975"
+  },
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md",
+    "src/commands/agent-fewer-prompts.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/review-arbiter.test.ts",
+    "src/commands/review-arbiter.ts",
+    "src/commands/review-ledger.test.ts",
+    "src/commands/review-ledger.ts",
+    "src/commands/review-slice.ts",
+    "src/review/completion-gate.test.ts",
+    "src/review/completion-gate.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts",
+    "src/review/retry-plan.ts",
+    "src/review/slice-dispatch.test.ts",
+    "src/review/slice.ts",
+    "src/tui/ask-user-bridge-arbiter.test.ts",
+    "src/tui/ask-user-bridge.ts"
+   ],
+   "changed_lines": 715
+  },
+  "routing": {
+   "selected_reviewers": []
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "omissions": []
+  }
+ },
+ "scope_mode": "diff",
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "inherit": true,
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "the session names no model to anchor the ranking on"
+  }
+ },
+ "budget": {
+  "max_findings": 10
+ },
+ "base_sha": "00879558256cef065f5e22fb0df66d227253a180",
+ "pr_context": "/home/altsay/keryx-fcomplete/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/reviews/2026-10-12-ingest-github-com-mrciphersmith-keryx-pull-975/pr-context.md",
+ "round": 1,
+ "is_fix_round": false,
+ "prior_findings": [],
+ "reviewer": "review-highload",
+ "skill_path": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md",
+ "slices": [
+  "slice-01",
+  "slice-02"
+ ]
+}
