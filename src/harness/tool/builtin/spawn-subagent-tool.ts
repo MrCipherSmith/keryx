@@ -937,6 +937,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "at 200). A child that hits its round budget or the operator's call cap gets one final round to " +
         "submit a partial result, and the output's first line is then 'status: BudgetExhausted (...)'. " +
         "External runtimes cannot accept these limits. " +
+        "timeout_ms sets a positive native reservation/deadline (default 300000ms), tightened by " +
+        "operator timeout. runtime.timeoutMs also applies to runtime.kind='keryx'. " +
+        "preflight=true returns native budget/capabilities without provider, reservation or " +
+        "model/policy/hook approval; actual admission still checks all guards. Both native modes " +
+        "lack shell/test execution and nested spawn; summaries are capped at 16000 chars. " +
         "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
         "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
@@ -952,6 +957,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task: { type: "string" },
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
+          timeout_ms: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER,
+            description: "Native reservation/deadline in ms; operator timeout can tighten it. Default 300000ms." },
+          preflight: { type: "boolean",
+            description: "Native budget/capability snapshot only: no provider, reservation or policy/hook approval." },
           /**
            * Flow 347 T8: per-call working directory for the CHILD's tools and
            * "Project root:" prompt line only — see `resolveSubagentCwd`'s doc
@@ -1105,6 +1114,27 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const rawCwd = input.cwd as string | undefined;
       const isExternalRuntimeRequest =
         typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external";
+      if (input.preflight !== undefined && typeof input.preflight !== "boolean") {
+        return { status: "Error", output: "preflight must be a boolean", isError: true };
+      }
+      if (isExternalRuntimeRequest && (input.timeout_ms !== undefined || input.preflight === true)) {
+        return { status: "Error", output: "timeout_ms/preflight are native-only; external children use runtime budgets", isError: true };
+      }
+      const nativeRuntimeTimeout = typeof input.runtime === "object" && input.runtime !== null &&
+        Reflect.get(input.runtime, "kind") === "keryx" ? Reflect.get(input.runtime, "timeoutMs") : undefined;
+      for (const value of [input.timeout_ms, nativeRuntimeTimeout]) {
+        if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)) {
+          return { status: "Error", output: "native timeout must be a safe integer >= 1 ms", isError: true };
+        }
+      }
+      if (input.timeout_ms !== undefined && nativeRuntimeTimeout !== undefined && input.timeout_ms !== nativeRuntimeTimeout) {
+        return { status: "Error", output: "conflicting timeout_ms and runtime.timeoutMs", isError: true };
+      }
+      const requestedRuntimeMs = (input.timeout_ms ?? nativeRuntimeTimeout ?? 5 * 60_000) as number;
+      // Operator zero disables the timer, not accounting; never auto-shrink to fit the pool.
+      const operatorTimeoutMs = resolveSubagentTimeoutMs(requestedRuntimeMs);
+      const reservationRuntimeMs = isExternalRuntimeRequest ? 5 * 60_000
+        : operatorTimeoutMs === 0 ? requestedRuntimeMs : operatorTimeoutMs;
       if (rawCwd !== undefined && isExternalRuntimeRequest) {
         // The external runtime always runs the child in its OWN freshly-cut
         // disposable worktree (see `createRunExternal`/`runExternalChild`) —
@@ -1148,6 +1178,23 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // `task` stays the dispatcher's own words (fleet rows, hooks, artifact hash);
       // the attached file text reaches only the native child's prompt.
       const task = taskText;
+      if (input.preflight === true) {
+        const budget = ledger.check({ reservationId: "preflight", maxRuntimeMs: reservationRuntimeMs });
+        return { status: "Completed", isError: false, output: JSON.stringify({
+          kind: "native-preflight", runtime: "keryx", mode, cwd: childCwd,
+          budget: { requestedRuntimeMs, reservationRuntimeMs, timeoutMs: operatorTimeoutMs,
+            remainingRuntimeMs: ledger.remaining.maxRuntimeMs, childCount: ledger.childCount,
+            maxChildren: SUBAGENT_TURN_MAX_CHILDREN, canReserve: budget.ok,
+            ...(!budget.ok ? { reason: budget.reason } : {}) },
+          limits: { maxRounds, advisoryToolCalls: advisoryToolCalls ?? null,
+            hardToolCalls: configuredMaxToolCalls ?? null, summaryChars: MAX_CHILD_SUMMARY_CHARS },
+          capabilities: { tools: [ ...builtinReadOnlyTools(childCwd),
+            ...builtinMetaprojectTools(childCwd, makeKeryxRunner(childCwd), createMetaprojectAdapter(childCwd)),
+          ].map((tool) => tool.definition.name), shell: false, testExecution: false, nestedSpawn: false,
+            ephemeralSeedTool: "slate_write_seed (only if child slate opens)" },
+          admission: "not checked: model/policy/hooks; this snapshot grants nothing",
+        }) };
+      }
       const labelRaw = typeof input.label === "string" ? input.label.trim() : "";
       childSeq += 1;
       const workerId = `sub:${idSeq()}`;
@@ -1371,7 +1418,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           branchId,
           budgetRequest: {
             reservationId,
-            maxRuntimeMs: SUBAGENT_CHILD_RESERVATION_MS,
+            maxRuntimeMs: reservationRuntimeMs,
           },
           policyRequest: childReadOnlyPolicy(),
           durableResultArtifact: {
