@@ -160,6 +160,13 @@
         "null"
       ]
     },
+    "pr_context": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Path of the `pr-context.md` that `keryx review context-collect` wrote into the review package: every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names. Required of a pull-request review by `keryx review dispatch-check --pr-context <package>`; a reviewer reads it before the diff."
+    },
     "round": {
       "type": "integer",
       "minimum": 1,

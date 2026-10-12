@@ -29,7 +29,11 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
-import { requiredReviewers } from "../review/coverage";
+import { auditPackage } from "../review/severity-audit";
+import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
+import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
+import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -501,7 +505,11 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
-const REQUIRED_FLAGS = ["--mode", "--scope", "--json"] as const;
+const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
+const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
+const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -706,6 +714,22 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "required") {
       await runRequired(args.slice(1));
+      return;
+    }
+    if (command === "mutate") {
+      await runMutate(args.slice(1));
+      return;
+    }
+    if (command === "context-collect") {
+    await runContextCollect(args.slice(1));
+    return;
+  }
+  if (command === "severity-audit") {
+      await runSeverityAudit(args.slice(1));
+      return;
+    }
+    if (command === "compare-reference") {
+      await runCompareReference(args.slice(1));
       return;
     }
     if (command === "import") {
@@ -2929,8 +2953,13 @@ async function runRequired(args: string[]): Promise<void> {
   const mode = optionValue(args, "--mode") ?? "all";
   if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff"');
   const scope = await readScope(optionValue(args, "--scope"));
+  if (mode === "diff" && (optionValue(args, "--operator-quote") ?? "").trim() === "")
+    throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
-  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files]);
+  const radiusFile = optionValue(args, "--blast-radius");
+  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
+    blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
+  });
   if (args.includes("--json")) {
     console.log(JSON.stringify(set, null, 2));
     return;
@@ -2938,6 +2967,86 @@ async function runRequired(args: string[]): Promise<void> {
   console.log(`mode: ${set.mode}${set.filesKnown ? "" : " (no scope file list: path-gated reviewers stay required)"}`);
   console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+}
+
+async function runCompareReference(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMPARE_REFERENCE_FLAGS, "compare-reference");
+  const reference = optionValue(args, "--reference");
+  const packageArg = optionValue(args, "--package");
+  if (reference === undefined || packageArg === undefined) throw new Error("compare-reference needs --reference <report.md> and --package <review-dir>");
+  const items = parseReferenceReport(await readFile(path.resolve(reference), "utf8"));
+  if (items.length === 0) throw new Error(`${reference} holds no reference items (Major table rows, Cycle paragraphs, Minor and Question bullets)`);
+  const inputArg = optionValue(args, "--input");
+  const comparison = compareReference(items, await loadPackageEvidence(path.resolve(packageArg), inputArg === undefined ? undefined : path.resolve(inputArg)));
+  console.log(args.includes("--json") ? JSON.stringify(comparison, null, 2) : renderComparison(comparison));
+}
+
+async function runMutate(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, MUTATE_FLAGS, "mutate");
+  const testCommand = optionValue(args, "--test");
+  const packageArg = optionValue(args, "--package");
+  if (testCommand === undefined || packageArg === undefined) throw new Error("mutate needs --test \"<command>\" and --package <review-dir>");
+  const packageDir = path.resolve(packageArg);
+  const worktree = path.resolve(optionValue(args, "--worktree") ?? process.cwd());
+  const specFile = path.resolve(optionValue(args, "--spec") ?? path.join(packageDir, EVIDENCE_DIR, MUTANTS_SPEC));
+  const timeout = optionValue(args, "--timeout-ms");
+  const timeoutMs = timeout === undefined ? undefined : Number(timeout);
+  if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout-ms must be a positive number");
+  const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs });
+  const written = await writeMutationEvidence(packageDir, record);
+  if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
+  else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
+}
+
+/** CI checks from `--checks <file>`, else `gh pr checks`; undefined (CI status "unknown") when neither is available. */
+async function readCiChecks(args: string[], repo: string, number: number): Promise<CheckSummary[] | undefined> {
+  const file = optionValue(args, "--checks");
+  if (file !== undefined) return parseGhChecks(JSON.parse(await readFile(file, "utf8")) as unknown);
+  if (optionValue(args, "--fixtures") !== undefined) return undefined;
+  const proc = Bun.spawn(["gh", "pr", "checks", String(number), "--repo", repo, "--json", "name,bucket"], { stdout: "pipe", stderr: "pipe" });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (out.trim() === "") return code === 0 ? [] : undefined;
+  try {
+    return parseGhChecks(JSON.parse(out) as unknown);
+  } catch {
+    return undefined;
+  }
+}
+
+async function runContextCollect(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CONTEXT_COLLECT_FLAGS, "context-collect");
+  const repo = requiredOption(args, "--repo", "context-collect");
+  const number = requiredInteger(args, "--pr");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("context-collect needs --package <review-dir>");
+  const result = await collectPrContext({
+    port: await resolvePort(args),
+    repo,
+    number,
+    self: optionValue(args, "--self") ?? (await resolveSelfLogin(args)),
+    packageDir: path.resolve(packageArg),
+    checks: await readCiChecks(args, repo, number),
+  });
+  const { context } = result;
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ json: result.json, md: result.md, round: context.round, ci: context.ci.state, comments: context.comments.length, backendPins: context.backendPins.length }, null, 2));
+    return;
+  }
+  console.log(`${repo}#${number} round ${context.round}: ${context.comments.length} comment(s) in full, CI ${context.ci.state}, ${context.backendPins.length} backend pin(s)\npr_context: ${result.md}`);
+}
+
+async function runSeverityAudit(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, SEVERITY_AUDIT_FLAGS, "severity-audit");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("severity-audit needs --package <review-dir>");
+  const result = await auditPackage(path.resolve(packageArg), { dryRun: args.includes("--dry-run") });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""} - ${c.reason}`);
+  console.log(`${result.changes.length} of ${result.findings} finding(s) changed${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
 }
 
 async function runStack(args: string[]): Promise<void> {
@@ -3977,9 +4086,44 @@ Usage:
                      Cuts scope A into reviewer-sized slice files plus a manifest;
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
-  keryx review required [--mode all|diff] [--scope <scope.json>] [--json]
+  keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--json]
+                        Runs the reviewers' proposed mutants (default spec:
+                        <review-dir>/research-evidence/mutants.json) in a scratch
+                        copy of the worktree; the worktree is never written. The
+                        baseline must pass first. A survivor means no assertion
+                        pins that behaviour. Writes mutation-<n>.json and .md to
+                        research-evidence/.
+  keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>
+                        [--self <login>] [--checks <gh-checks.json>] [--json]
+                        Writes pr-context.json and pr-context.md into the package:
+                        every review comment in full (no cut), the round-1 intent,
+                        the CI status and the backend pins the pull request names.
+                        A pull-request review dispatches with pr_context set to the
+                        .md; "dispatch-check --pr-context" refuses a payload without.
+  keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+                        Raises a finding to major when the mutant it cites
+                        (evidence "mutant:<id>") survived a recorded run on a
+                        file the review changed; records the evidence id. A cited
+                        mutant no run executed stays minor with label "unproven".
+                        Never deletes a finding; separate from the verifier.
+  keryx review compare-reference --reference <report.md> --package <review-dir>
+                        [--input <dir>] [--json]
+                        Compares a reference report's items (Major rows, Cycle,
+                        Minor and Question bullets) with a package, per item:
+                        A role not run, B role ran and nothing matches, C seen and
+                        lost after the answer, D kept (with severity), E the
+                        reference ran a mutant and this package has no mutation
+                        pass. --input adds the raw reviewer replies for class C.
+  keryx review required [--mode all|diff] [--scope <scope.json>]
+                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
+                        --blast-radius adds review-regression to the set; without a
+                        computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available
-                        reviewer for all, the diff-derived set for diff.
+                        reviewer for all (the default for a pull request), the
+                        diff-derived set for diff. diff needs the operator's own
+                        words naming a narrower review in --operator-quote, and
+                        the dispatch records them as operatorQuote.
                         \`review complete\` refuses a smaller dispatch.
   keryx review dispatch-check --payload <file|-> [--manifest <file>]
                               [--max-bytes <n>] [--json]

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, derivedFromFiles, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 
 let root: string;
 
@@ -85,6 +85,88 @@ describe("requiredReviewers", () => {
   });
 });
 
+describe("review-regression and the blast radius", () => {
+  const withRadius = async (name: string, body: unknown): Promise<string> => {
+    const dir = path.join(root, ".metaproject", "reviews", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "blast-radius.json"), JSON.stringify(body), "utf8");
+    return dir;
+  };
+
+  test("a computed blast radius makes review-regression required, in both modes", async () => {
+    await install("review-regression");
+    for (const mode of ["all", "diff"] as const) {
+      const need = await requiredReviewers(root, mode, frontendFiles, { blastRadius: true });
+      expect(need.required).toContain("review-regression");
+    }
+  });
+
+  test("no blast radius leaves review-regression out with a recorded reason", async () => {
+    await install("review-regression");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).not.toContain("review-regression");
+    expect(need.excluded.find((e) => e.reviewer === "review-regression")?.reason).toContain("no blast radius computed");
+  });
+
+  test("a dispatch that skips review-regression is refused when a radius exists and passes when none was computed", async () => {
+    await install("review-regression");
+    const all = (await requiredReviewers(root, "all", frontendFiles)).required;
+    const dispatch = { mode: "all", selected: all };
+    expect(await coverageErrors(dispatch, { root, files: frontendFiles, blastRadius: true })).toEqual([
+      expect.stringContaining("missing: review-regression"),
+    ]);
+    expect(await coverageErrors(dispatch, { root, files: frontendFiles, blastRadius: false })).toEqual([]);
+  });
+
+  test("packageHasBlastRadius reads the record and rejects a malformed one", async () => {
+    const good = await withRadius("good", { files: [], changedFiles: ["a.ts"] });
+    const bad = await withRadius("bad", { nothing: true });
+    expect(await packageHasBlastRadius(good)).toBe(true);
+    expect(await packageHasBlastRadius(bad)).toBe(false);
+    expect(await packageHasBlastRadius(path.join(root, "missing"))).toBe(false);
+  });
+});
+
+describe("globToRegExp", () => {
+  test("a trailing /** matches every file under the directory", () => {
+    const glob = globToRegExp("src/pipelines/**");
+    expect(glob.test("src/pipelines/index.ts")).toBe(true);
+    expect(glob.test("src/pipelines/a/b.ts")).toBe(true);
+    expect(glob.test("src/pipelines2/index.ts")).toBe(false);
+    expect(glob.test("src/other/index.ts")).toBe(false);
+  });
+
+  test("a middle ** spans zero or more directories", () => {
+    const glob = globToRegExp("src/**/*.tsx");
+    expect(glob.test("src/a.tsx")).toBe(true);
+    expect(glob.test("src/a/b/c.tsx")).toBe(true);
+    expect(glob.test("src/a/b/c.ts")).toBe(false);
+  });
+});
+
+describe("project reviewers with description-derived globs", () => {
+  async function installProject(name: string, description: string): Promise<void> {
+    const dir = path.join(root, ".metaproject", "project-skills", "review", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n\n# body\n`, "utf8");
+  }
+
+  test("are selected when the scope matches, in both modes, and gated out when it does not", async () => {
+    await installProject("review-house-domains", "Use when reviewing domains. Dispatched for --house, --all, src/analytics/** or src/pipelines/** changes.");
+    await installProject("review-house-core", "Use when reviewing core. Dispatched for --house, --all, or src/core/** changes.");
+    const files = ["src/pipelines/index.ts", "src/pipelines/steps/load.ts"];
+    for (const mode of ["all", "diff"] as const) {
+      const need = await requiredReviewers(root, mode, files);
+      expect(need.required).toContain("review-house-domains");
+      expect(need.required).not.toContain("review-house-core");
+      expect(need.excluded.find((e) => e.reviewer === "review-house-core")?.reason).toContain("no-matching-paths");
+    }
+    const core = await requiredReviewers(root, "all", ["src/core/x.ts"]);
+    expect(core.required).toContain("review-house-core");
+    expect(core.excluded.some((e) => e.reviewer === "review-house-core")).toBe(false);
+  });
+});
+
 describe("coverageErrors", () => {
   const all = ["review-architecture", "review-clean-code", "review-core-boundaries", "review-frontend", "review-logic", "review-style", "review-testing-practices"];
 
@@ -103,13 +185,22 @@ describe("coverageErrors", () => {
     expect(await coverageErrors({ mode: "all", selected: all }, { root })).toEqual([]);
   });
 
-  test("mode diff with the derived set passes and extra reviewers are allowed", async () => {
+  test("mode diff with the derived set passes when the operator named the narrower review, and extra reviewers are allowed", async () => {
     const selected = ["review-frontend", "review-logic", "review-style", "review-clean-code"];
-    expect(await coverageErrors({ mode: "diff", selected }, { root, files: frontendFiles })).toEqual([]);
+    const operatorQuote = "только по диффу, без остального";
+    expect(await coverageErrors({ mode: "diff", selected, operatorQuote }, { root, files: frontendFiles })).toEqual([]);
+  });
+
+  test("mode diff without the operator's quote is refused, whatever the set", async () => {
+    const selected = ["review-frontend", "review-logic", "review-style"];
+    for (const operatorQuote of [undefined, "", "  ", 3]) {
+      const errors = await coverageErrors({ mode: "diff", selected, operatorQuote }, { root, files: frontendFiles });
+      expect(errors.join()).toContain("needs operatorQuote");
+    }
   });
 
   test("mode diff without a scope file list is refused", async () => {
-    const errors = await coverageErrors({ mode: "diff", selected: ["review-logic"] }, { root });
+    const errors = await coverageErrors({ mode: "diff", selected: ["review-logic"], operatorQuote: "только по диффу" }, { root });
     expect(errors.join()).toContain("scope-A file list");
   });
 

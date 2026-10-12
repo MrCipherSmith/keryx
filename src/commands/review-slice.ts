@@ -17,7 +17,7 @@ export type SliceDeps = {
 };
 
 export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--out", "--json", "--help", "-h"] as const;
-export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--json", "--help", "-h"] as const;
+export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--pr-context", "--json", "--help", "-h"] as const;
 export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--covered", "--next-wave", "--state", "--dry-run", "--json", "--help", "-h"] as const;
 
 const DEFAULT_SLICE_DIR = ".metaproject/data/review/slices";
@@ -53,7 +53,10 @@ export function printDispatchCheckHelp(): void {
   console.log(`keryx review dispatch-check — usage:
 
   keryx review dispatch-check --payload <file|-> [--manifest <manifest.json>]
-                              [--max-bytes <n>] [--json]
+                              [--max-bytes <n>] [--pr-context] [--json]
+
+--pr-context is for a pull-request review: every payload must carry \`pr_context\`,
+the path of the pr-context.md that \`keryx review context-collect\` wrote.
 
 Validates reviewer payload(s) before dispatch: one reviewer-input object, an
 array of them, or { "dispatches": [...] }. Shape comes from
@@ -63,7 +66,7 @@ must total at most --max-bytes (default: the manifest's wave budget, else
 ${DEFAULT_SLICE_MAX_BYTES}); more than that is dispatched in waves (\`retry-plan --next-wave\`).
 
 Codes: REVIEWER_INPUT_INVALID, REVIEWER_INPUT_NO_SLICE,
-REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE.
+REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE, REVIEWER_INPUT_NO_PR_CONTEXT.
 Exit 0 ok, 1 payload refused, 2 payload or manifest unreadable.
 `);
 }
@@ -209,6 +212,7 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
     const result = await checkDispatch(payloads, {
       ...(manifest === undefined ? {} : { manifest }),
       ...(rawMax === undefined ? {} : { maxBytes: validateSliceMaxBytes(Number(rawMax)) }),
+      ...(args.includes("--pr-context") ? { prContext: { exists: (contextPath: string) => existsSync(path.resolve(contextPath)) } } : {}),
       pathBytes: (slicePath) => {
         const file = path.resolve(base, slicePath);
         return existsSync(file) ? statSync(file).size : undefined;

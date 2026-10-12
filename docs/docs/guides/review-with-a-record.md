@@ -114,6 +114,47 @@ What the skill does not do: it does not run as a subagent of another orchestrato
 by default, it does not fix code, and it does not shrink the reviewer set to fit a
 budget.
 
+## How deep a round goes
+
+A pull-request round runs **every available reviewer** by default (`mode: all`):
+the bundled `review-*` roles and the project's own reviewers, minus the ones the
+stack rules out and the ones whose path triggers no changed file matches.
+`review-regression` joins the set only when a blast radius was computed for the
+package. `keryx review required` prints the set, and prints each excluded reviewer
+with its reason. A narrower set (`mode: diff`, the roles derived from the changed
+files) is the operator's call and the dispatch records their own words as
+`operatorQuote`; `review complete` refuses a smaller dispatch without them.
+
+Reading the code is not the same as running it. After the reviewers answer, the
+mutants they proposed are run against the tests:
+
+```bash
+keryx review mutate --test "bun test" --package <review-dir>
+keryx review severity-audit --package <review-dir>
+```
+
+`mutate` applies each proposed mutant in a scratch copy of the worktree (the
+worktree is never written) and records whether the tests failed. A mutant that
+**survived** means no test pins that behaviour. `severity-audit` raises a finding
+that cites a surviving mutant (`mutant:<id>` in its `evidence`) from minor to major
+and records why; it never deletes a finding. For an attended run `review complete`
+refuses a package with proposed mutants nobody ran, unless the dispatch carries a
+`mutationWaiver` with the operator's own words.
+
+Before dispatch, `keryx review context-collect` writes the pull request's
+comments in full, its intent, its CI status and the backend pins it names into
+the package, and `dispatch-check --pr-context` refuses a payload without them.
+To see what a round missed against a report someone else wrote, run
+`keryx review compare-reference --reference <report.md> --package <review-dir>`:
+each item of that report comes back as role-not-run, role-ran-and-found-nothing,
+seen-and-lost, or kept.
+
+The shell shows the same record. `/reviews` opens a **Review depth** tab next to
+the managed-review metrics: per pull request the mode, how many of the required
+reviewers were dispatched, which were missing, which were excluded and why, and the
+mutation totals with the number still pending. In the readline shell `/reviews`
+prints the same block under the metrics.
+
 ## Narrow the scope before anyone reads it
 
 ```bash

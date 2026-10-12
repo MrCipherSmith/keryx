@@ -689,3 +689,42 @@ Use it to understand:
 - Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
 
 If absent, proceed normally — context is optional and non-blocking.
+
+## The mutation pass — `keryx review mutate`
+
+Attended, the pass is not optional once mutants were proposed. The testing reviewer writes
+each proposed mutant to `<review-dir>/research-evidence/mutants.json`:
+`{ "mutants": [{ "id", "file", "anchor", "replacement" }] }`. `anchor` is exact text that
+occurs once in `file`; `"runnable": false` at the top level says the suite cannot run here.
+
+Run `keryx review mutate --test "<the nearest suite command>" --package <review-dir>`. It
+applies each mutant in a scratch copy of the worktree (never in the worktree), refuses to
+start when the baseline is red, and writes the table to `research-evidence/mutation-<n>.md`
+and `.json`. A mutant is `killed` (the suite went red), `survived` (nothing pins that
+behaviour), `timeout`, or `invalid` (anchor missing or not unique, file outside the copy).
+A survivor is evidence for the finding that names it.
+
+`keryx review complete` refuses while proposed mutants are unrun, unless
+`dispatch.mutationWaiver = { operatorQuote, reason }` carries the operator's own words.
+`keryx review run --autonomous` is unchanged: it records `Not run: mutation pass` as before.
+
+### Severity audit — `keryx review severity-audit`
+
+A reviewer that argues a finding from a mutant writes `mutant:<id>` in the finding's `evidence`.
+After the mutation pass run `keryx review severity-audit --package <review-dir>`: a cited mutant
+that survived on a file the review changed raises a minor finding to major and records
+`severity_audit {from, to, evidence: "mutation-<n>.json#<id>"}`. A finding that cites a mutant no
+run executed stays minor (a major is capped at minor) and gets the label `unproven`. The audit
+never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
+which can only delete. `--dry-run` prints the changes without writing `findings.json`.
+
+### Pull request context — `keryx review context-collect`
+
+A pull-request review starts with `keryx review context-collect --repo <o/r> --pr <n> --package <review-dir>`.
+It writes `pr-context.json` and `pr-context.md` into the package: every review comment in full (the
+800-character cut applies only to a finding's `problem`), the round-1 intent (kept when a later round
+collects a new head), the CI status (`--checks <file>` or `gh pr checks`; `unknown` when neither is
+available) and the backend pins the pull request names (refs on lines that talk about the backend).
+Set `pr_context` in every reviewer payload to the `.md` path; reviewers read it before the diff.
+`keryx review dispatch-check --payload <file> --pr-context` refuses a payload without it
+(`REVIEWER_INPUT_NO_PR_CONTEXT`).
