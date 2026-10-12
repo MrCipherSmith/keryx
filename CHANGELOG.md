@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.111] - 2026-10-12
+
 ### Remote control
 
 - Every approval, `ask_user` question and queue dialog the shell raises is mirrored to the Telegram topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other exactly once (`prompt-close`).
