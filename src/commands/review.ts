@@ -29,6 +29,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+import { auditPackage } from "../review/severity-audit";
 import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
@@ -505,6 +506,7 @@ const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
 const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
+const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
@@ -714,6 +716,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "mutate") {
       await runMutate(args.slice(1));
+      return;
+    }
+    if (command === "severity-audit") {
+      await runSeverityAudit(args.slice(1));
       return;
     }
     if (command === "compare-reference") {
@@ -2987,6 +2993,19 @@ async function runMutate(args: string[]): Promise<void> {
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
 }
 
+async function runSeverityAudit(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, SEVERITY_AUDIT_FLAGS, "severity-audit");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("severity-audit needs --package <review-dir>");
+  const result = await auditPackage(path.resolve(packageArg), { dryRun: args.includes("--dry-run") });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""} - ${c.reason}`);
+  console.log(`${result.changes.length} of ${result.findings} finding(s) changed${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
+}
+
 async function runStack(args: string[]): Promise<void> {
   rejectUnknownFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();
@@ -4032,6 +4051,12 @@ Usage:
                         baseline must pass first. A survivor means no assertion
                         pins that behaviour. Writes mutation-<n>.json and .md to
                         research-evidence/.
+  keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+                        Raises a finding to major when the mutant it cites
+                        (evidence "mutant:<id>") survived a recorded run on a
+                        file the review changed; records the evidence id. A cited
+                        mutant no run executed stays minor with label "unproven".
+                        Never deletes a finding; separate from the verifier.
   keryx review compare-reference --reference <report.md> --package <review-dir>
                         [--input <dir>] [--json]
                         Compares a reference report's items (Major rows, Cycle,

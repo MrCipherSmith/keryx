@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
 import { type LedgerInputs, type RawFile, buildLedger, ledgerBlockers, parseReviewResult } from "./ledger";
+import type { MutationRecord } from "./mutate";
 import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
+import { auditPackage, auditSeverity } from "./severity-audit";
 import type { SliceManifest } from "./slice";
 
 let root: string;
@@ -350,4 +352,55 @@ test("deterministic lifecycle: dispatch, context, redispatch and completion gate
   expect(await blockersOf(complete)).toEqual([]);
   const changed = { ...MANIFEST, slices: MANIFEST.slices.map(s => ({ ...s, contentHash: "changed-content" })) };
   expect(() => planRetry({ manifest: changed, reviewer, result: finishedPayload, state: accepted.state, readSliceText: () => "changed diff" })).toThrow("not bound to the current scope");
+});
+
+describe("severity audit (flow 428 AC6)", () => {
+  const record = (statuses: Record<string, "killed" | "survived" | "invalid">, file = "src/a.ts"): MutationRecord => ({
+    schemaVersion: 1, worktree: "/w", command: "t", baseline: { exitCode: 0, ms: 1 }, totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+    mutants: Object.entries(statuses).map(([id, status]) => ({ id, file, anchor: "a", replacement: "b", status, ms: 1 })),
+  });
+  const run = { name: "mutation-1.json", record: record({ M1: "survived", M2: "killed", M3: "invalid" }) };
+  const finding = (extra: Record<string, unknown>) => ({ id: "F1", severity: "minor", evidence: "mutant:M1 survives", ...extra });
+
+  test("a surviving mutant the finding cites raises it to major and records the evidence id", () => {
+    const { findings, changes } = auditSeverity([finding({})], [run], { changedFiles: ["src/a.ts"] });
+    expect(findings[0]).toMatchObject({ severity: "major", severity_audit: { from: "minor", to: "major", evidence: "mutation-1.json#M1" } });
+    expect(changes).toHaveLength(1);
+  });
+
+  test("a killed mutant, an invalid one, a blocker and a mutant outside the diff change nothing", () => {
+    expect(auditSeverity([finding({ evidence: "mutant:M2" })], [run]).changes).toEqual([]);
+    expect(auditSeverity([finding({ evidence: "mutant:M3" })], [run]).findings[0]).toMatchObject({ severity: "minor", labels: ["unproven"] });
+    expect(auditSeverity([finding({ severity: "blocker" })], [run]).changes).toEqual([]);
+    expect(auditSeverity([finding({})], [run], { changedFiles: ["src/other.ts"] }).changes).toEqual([]);
+    expect(auditSeverity([finding({ evidence: "no citation" })], [run]).changes).toEqual([]);
+  });
+
+  test("without an executed run the finding stays minor, carries the unproven label, and a major is capped", () => {
+    const minor = auditSeverity([finding({})], []);
+    expect(minor.findings[0]).toMatchObject({ severity: "minor", labels: ["unproven"] });
+    expect(minor.findings[0]!.severity_audit).toBeUndefined();
+    expect(auditSeverity([finding({ severity: "major" })], []).findings[0]).toMatchObject({ severity: "minor", labels: ["unproven"] });
+  });
+
+  test("the audit never drops a finding and never mutates its input", () => {
+    const input = [finding({}), { id: "F2", severity: "major", evidence: "plain" }];
+    const copy = JSON.stringify(input);
+    expect(auditSeverity(input, [run]).findings).toHaveLength(2);
+    expect(JSON.stringify(input)).toBe(copy);
+  });
+
+  test("auditPackage reads the recorded passes, rewrites findings.json, and --dry-run leaves it alone", async () => {
+    const pkg = path.join(root, "pkg");
+    await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
+    await writeFile(path.join(pkg, "research-evidence", "mutation-1.json"), JSON.stringify(run.record));
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }));
+    const before = JSON.stringify([finding({})]);
+    await writeFile(path.join(pkg, "findings.json"), before);
+    const dry = await auditPackage(pkg, { dryRun: true });
+    expect([dry.changes.length, dry.written]).toEqual([1, false]);
+    expect(await Bun.file(path.join(pkg, "findings.json")).text()).toBe(before);
+    expect((await auditPackage(pkg)).written).toBe(true);
+    expect(JSON.parse(await Bun.file(path.join(pkg, "findings.json")).text())[0].severity).toBe("major");
+  });
 });

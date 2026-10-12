@@ -707,3 +707,13 @@ A survivor is evidence for the finding that names it.
 `keryx review complete` refuses while proposed mutants are unrun, unless
 `dispatch.mutationWaiver = { operatorQuote, reason }` carries the operator's own words.
 `keryx review run --autonomous` is unchanged: it records `Not run: mutation pass` as before.
+
+### Severity audit — `keryx review severity-audit`
+
+A reviewer that argues a finding from a mutant writes `mutant:<id>` in the finding's `evidence`.
+After the mutation pass run `keryx review severity-audit --package <review-dir>`: a cited mutant
+that survived on a file the review changed raises a minor finding to major and records
+`severity_audit {from, to, evidence: "mutation-<n>.json#<id>"}`. A finding that cites a mutant no
+run executed stays minor (a major is capped at minor) and gets the label `unproven`. The audit
+never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
+which can only delete. `--dry-run` prints the changes without writing `findings.json`.
