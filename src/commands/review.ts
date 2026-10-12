@@ -29,6 +29,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
@@ -503,6 +504,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
 const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
@@ -708,6 +710,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "required") {
       await runRequired(args.slice(1));
+      return;
+    }
+    if (command === "mutate") {
+      await runMutate(args.slice(1));
       return;
     }
     if (command === "compare-reference") {
@@ -2963,6 +2969,24 @@ async function runCompareReference(args: string[]): Promise<void> {
   console.log(args.includes("--json") ? JSON.stringify(comparison, null, 2) : renderComparison(comparison));
 }
 
+async function runMutate(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, MUTATE_FLAGS, "mutate");
+  const testCommand = optionValue(args, "--test");
+  const packageArg = optionValue(args, "--package");
+  if (testCommand === undefined || packageArg === undefined) throw new Error("mutate needs --test \"<command>\" and --package <review-dir>");
+  const packageDir = path.resolve(packageArg);
+  const worktree = path.resolve(optionValue(args, "--worktree") ?? process.cwd());
+  const specFile = path.resolve(optionValue(args, "--spec") ?? path.join(packageDir, EVIDENCE_DIR, MUTANTS_SPEC));
+  const timeout = optionValue(args, "--timeout-ms");
+  const timeoutMs = timeout === undefined ? undefined : Number(timeout);
+  if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout-ms must be a positive number");
+  const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs });
+  const written = await writeMutationEvidence(packageDir, record);
+  if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
+  else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
+}
+
 async function runStack(args: string[]): Promise<void> {
   rejectUnknownFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();
@@ -4000,6 +4024,14 @@ Usage:
                      Cuts scope A into reviewer-sized slice files plus a manifest;
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
+  keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--json]
+                        Runs the reviewers' proposed mutants (default spec:
+                        <review-dir>/research-evidence/mutants.json) in a scratch
+                        copy of the worktree; the worktree is never written. The
+                        baseline must pass first. A survivor means no assertion
+                        pins that behaviour. Writes mutation-<n>.json and .md to
+                        research-evidence/.
   keryx review compare-reference --reference <report.md> --package <review-dir>
                         [--input <dir>] [--json]
                         Compares a reference report's items (Major rows, Cycle,
