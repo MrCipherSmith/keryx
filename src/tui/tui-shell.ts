@@ -1,4 +1,4 @@
-import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/preservation-replay";
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).

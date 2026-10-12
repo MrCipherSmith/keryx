@@ -1,4 +1,4 @@
-import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/preservation-replay";
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
 // Interactive `keryx` shell REPL (flow 021, T6 / AC1-AC4).
 //

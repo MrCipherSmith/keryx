@@ -11,7 +11,7 @@ import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
 import { mintConfirmToken } from "../sac/review-confirm-token";
 import { buildCatchUp, dismissUnboundByTarget, type CatchUpReport, type CatchUpUnknownItem } from "../sac/catch-up";
-import { retryProjectPreservation } from "../sac/preservation-replay";
+import { retryProjectPreservation } from "../sac/service";
 import { findSession } from "../session/store";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
