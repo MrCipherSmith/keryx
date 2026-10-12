@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.3.112] - 2026-10-12
+
+### Agent Runtime
+
+- Native `spawn_subagent` reservations now honor `timeout_ms` or `runtime.kind: "keryx"` with `timeoutMs`, bounded by the operator timeout, instead of always reserving the default child deadline.
+- A non-mutating preflight reports budget availability and child capabilities without reserving budget or starting a child. It is a snapshot, not a guarantee that a later spawn will succeed; shell and nested dispatch remain unavailable to native children.
+- One integrated end-to-end regression exercises refusal, a smaller reservation, preflight immutability, operator limits, reservation release and a native child tool call. Its model transport is scripted, not a live-provider review.
+- AC9 remains open: these runtime checks do not establish complete or higher-quality live review coverage.
+
 ## [0.3.111] - 2026-10-12
 
 ### Remote control
