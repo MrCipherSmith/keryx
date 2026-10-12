@@ -2778,8 +2778,8 @@ export async function runAgentRepl(
         const flight = runAgentTurn(agentIo, deps, history, "", {
           recovery: rich.recovery ?? {},
           origin: "task-notification",
-          ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
           signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
+          ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
         });
         activeAgentFlight = flight;
         await flight;

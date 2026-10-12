@@ -6710,7 +6710,7 @@ export async function launchTuiAgentShell(opts: {
       }
       io.onSystem?.(message);
     });
-    const saveSession = (): void => {
+    const saveSession = (paint = true): void => {
       if (!sessionLease.canPersist()) {
         return;
       }
@@ -6719,7 +6719,7 @@ export async function launchTuiAgentShell(opts: {
         provider: currentSel.provider,
         model: currentSel.model,
       });
-      paintSessionHeader();
+      if (paint) paintSessionHeader();
     };
 
     const syncArchive = (): void => {
@@ -6731,13 +6731,13 @@ export async function launchTuiAgentShell(opts: {
         nextArchiveIndex += 1;
       }
     };
-    const flushSessionCheckpoint = (): void => {
+    const flushSessionCheckpoint = (paint = true): void => {
       if (sessionPersistTimer !== undefined) {
         clearTimeout(sessionPersistTimer);
         sessionPersistTimer = undefined;
       }
       syncArchive();
-      saveSession();
+      saveSession(paint);
     };
 
     const preservationAbort = new AbortController();
@@ -6750,7 +6750,8 @@ export async function launchTuiAgentShell(opts: {
       },
       checkpoint: () => {
         if (!sessionLease.canPersist()) throw new Error("session ownership lost");
-        flushSessionCheckpoint();
+        // The renderer may already be destroyed on the exit path; painting then throws and fails the save.
+        flushSessionCheckpoint(false);
       },
       preserve: async () => {
         await closeSlateSession(slateSession, mintTimestampAttemptId);

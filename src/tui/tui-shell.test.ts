@@ -3148,7 +3148,8 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     const end = tuiSourceAc7.indexOf("io.onHistoryChange =", start);
     expect(start).toBeGreaterThanOrEqual(0);
     const block = tuiSourceAc7.slice(start, end);
-    expect(block).toContain("flushSessionCheckpoint();");
+    // The renderer is already destroyed on the exit path, so the final checkpoint must not repaint.
+    expect(block).toContain("flushSessionCheckpoint(false);");
     expect(block).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
     expect(block).toContain(onDestroySweepCall);
     expect(block).toContain(onDestroyRemoveAllCall);
