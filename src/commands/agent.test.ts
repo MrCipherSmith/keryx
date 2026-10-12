@@ -1972,6 +1972,21 @@ test("flow 429 AC11: only an operator-origin line (not a task notification) can 
   });
 });
 
+test("flow 429 AC11: a subagent's task text, which a model wrote, cannot start an automatic review", async () => {
+  await withRoundsEnv(undefined, async () => {
+    const { provider, requests } = scriptedProvider(loopingReads(60));
+    const flips: boolean[] = [];
+    await runAgentTurn(
+      { write: () => {}, onSystem: () => {}, onAutomaticReview: (on) => flips.push(on), permissionMode: () => "ask" },
+      { ...baseDeps(provider), subagentBudget: {} as unknown as NonNullable<AgentDeps["subagentBudget"]> },
+      [],
+      "## Subagent task\nReview the diff as part of the automatic review",
+    );
+    expect(flips).toEqual([]);
+    expect(requests.length).toBeLessThanOrEqual(41);
+  });
+});
+
 test("flow 429 AC1/AC5: the mode is read when the limit is reached — ask→trust asks and grants 200, ask→auto extends without asking", async () => {
   await withRoundsEnv(undefined, async () => {
     for (const [target, askedExpected, total] of [["trust", 1, 240], ["auto", 0, 200]] as const) {

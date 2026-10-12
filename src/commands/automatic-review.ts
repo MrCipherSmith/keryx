@@ -187,8 +187,21 @@ function flagValues(args: readonly string[]): Map<string, string[]> | undefined 
 /** `review mutate --test` runs a command: only the repository's own `bun test`, as the routine table allows. */
 function isBunTest(command: string): boolean {
   const words = command.trim().split(/\s+/);
-  return words[0] === "bun" && words[1] === "test" && words.every((word) => /^[A-Za-z0-9_@%+=,.:/-]+$/.test(word)) && !words.some((word) => word.split("/").includes(".."));
+  const args = words.slice(2);
+  return (
+    words[0] === "bun" &&
+    words[1] === "test" &&
+    words.every((word) => /^[A-Za-z0-9_@%+=,.:/-]+$/.test(word)) &&
+    !words.some((word) => word.split("/").includes("..")) &&
+    args.every((word) => !word.startsWith("-") || /^--(?:bail|timeout=\d+)$/.test(word))
+  );
 }
+
+/** Flags of `review start|attach|ingest` that read a file the model names. */
+const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verifications"] as const;
+
+/** What an approved `apply_patch` may write inside the package: data, never anything runnable. */
+const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".jsonl", ".txt"]);
 
 /**
  * The state of one automatic-review turn: which package it is bound to, whether
@@ -224,11 +237,16 @@ export class AutomaticReviewRun {
       return false;
     }
     if ((AUTOMATIC_REVIEW_CREATE_SUBCOMMANDS as readonly string[]).includes(sub)) {
-      return this.binding === undefined && words.includes(AUTOMATIC_REVIEW_FLAG);
+      if (this.binding !== undefined || !words.includes(AUTOMATIC_REVIEW_FLAG)) {
+        return false;
+      }
+      const flags = flagValues(words.slice(3));
+      return flags !== undefined && CREATE_PATH_FLAGS.every((name) => !flags.has(name) || this.insideCwd(flags.get(name)?.[0] ?? ""));
     }
     return this.approvesPackageCommand(sub, words.slice(3));
   }
 
+  /** Only data files: a test or script written into the package could later be run by an approved command. */
   approvesPatchTargets(targets: readonly string[]): boolean {
     const dir = this.binding?.dir;
     if (dir === undefined || targets.length === 0) {
@@ -236,7 +254,7 @@ export class AutomaticReviewRun {
     }
     return targets.every((target) => {
       const resolved = path.resolve(this.cwd, target);
-      return resolved === dir || resolved.startsWith(`${dir}${path.sep}`);
+      return resolved.startsWith(`${dir}${path.sep}`) && PACKAGE_DATA_EXTENSIONS.has(path.extname(resolved).toLowerCase());
     });
   }
 

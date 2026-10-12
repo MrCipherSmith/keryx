@@ -2214,6 +2214,14 @@ async function emitTerminalState(
   }
 }
 
+/** Only an operator turn's own line can ask for an automatic review: a child's task text is model-written. */
+function asksForAutomaticReview(deps: AgentDeps, options: RunAgentTurnOptions, userLine: string): boolean {
+  return (
+    options.automaticReview ??
+    ((options.origin ?? "operator") === "operator" && deps.subagentBudget === undefined && isAutomaticReviewRequest(userLine))
+  );
+}
+
 /**
  * Run ONE user turn to completion (possibly several model round-trips if tools are
  * called). Appends the user message plus every assistant/tool message produced to
@@ -2256,8 +2264,7 @@ export async function runAgentTurn(
   // `runConcurrentSpawnBatch`), read back here once the core settles,
   // regardless of which internal `return` fired.
   const caughtToolErrors: CaughtToolError[] = [];
-  const automaticReview =
-    options.automaticReview ?? ((options.origin ?? "operator") === "operator" && isAutomaticReviewRequest(userLine));
+  const automaticReview = asksForAutomaticReview(deps, options, userLine);
   const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(process.cwd())) : undefined;
   const turnOptions: RunAgentTurnOptions =
     reviewRun === undefined ? options : { ...options, automaticReview, automaticReviewRun: reviewRun };
@@ -2887,8 +2894,7 @@ async function runAgentTurnCore(
   const scrub = (text: string): string => scrubControlNonce(text, controlNonce);
   const explicitMaxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0);
   const currentPermissionMode = (): PermissionMode => io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
-  const automaticReview =
-    options.automaticReview ?? ((options.origin ?? "operator") === "operator" && isAutomaticReviewRequest(userLine));
+  const automaticReview = asksForAutomaticReview(deps, options, userLine);
   const reviewRun = automaticReview ? (options.automaticReviewRun ?? new AutomaticReviewRun(process.cwd())) : undefined;
   const maxRounds = explicitMaxRounds ?? resolveAgentMaxRounds(process.env, currentPermissionMode(), automaticReview);
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);

@@ -178,6 +178,31 @@ test("apply_patch targets are approved only inside the bound package", () => {
   expect(new AutomaticReviewRun(CWD).approvesPatchTargets([`.metaproject/reviews/${ID}/a.md`])).toBe(false);
 });
 
+test("apply_patch may write only data files into the package, never a test or a script", () => {
+  const run = boundRun();
+  for (const name of ["evil.test.ts", "run.sh", "x.js", "x.mjs", "x.ts", "Makefile", "noext"]) {
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/${name}`])).toBe(false);
+  }
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/mutants.json`, `.metaproject/reviews/${ID}/log.jsonl`])).toBe(true);
+});
+
+test("mutate --test takes only `bun test` with plain paths and no option that loads code", () => {
+  const run = boundRun();
+  expect(run.approvesShell(`keryx review mutate --test "bun test --bail src/a.test.ts" --package ${PKG}`)).toBe(true);
+  expect(run.approvesShell(`keryx review mutate --test "bun test --timeout=5000 src/a.test.ts" --package ${PKG}`)).toBe(true);
+  for (const test of ["bun test --preload=./x.ts", "bun test --preload ./x.ts", "bun test -c ./bunfig.toml", "bun test --config=x"]) {
+    expect(run.approvesShell(`keryx review mutate --test "${test}" --package ${PKG}`)).toBe(false);
+  }
+});
+
+test("a create command that reads a file the model names is approved only for paths under the project", () => {
+  const run = new AutomaticReviewRun(CWD);
+  expect(run.approvesShell(`${CREATE} --research .metaproject/r.json`)).toBe(true);
+  expect(run.approvesShell(`${CREATE} --research /home/u/.config/gcloud/creds.json`)).toBe(false);
+  expect(run.approvesShell("keryx review ingest ./f.json --automatic --report /root/secret")).toBe(false);
+  expect(run.approvesShell(`${CREATE} --refuted ../outside.json`)).toBe(false);
+});
+
 const OPTIONS = [
   { id: "a", label: "A", description: "" },
   { id: "b", label: "B", description: "", recommended: true },
