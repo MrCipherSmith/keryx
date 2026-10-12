@@ -46,7 +46,7 @@ export function isPathInside(root: string, candidate: string): boolean {
 export async function writeFileAtomic(
   filePath: string,
   content: string,
-  options: { mode?: number } = {},
+  options: { mode?: number; signal?: AbortSignal } = {},
 ): Promise<void> {
   const dir = path.dirname(filePath);
   await mkdir(dir, { recursive: true });
@@ -58,7 +58,13 @@ export async function writeFileAtomic(
       await writeFile(tmp, content, { encoding: "utf8", mode: options.mode });
       if (process.platform !== "win32") await chmod(tmp, options.mode);
     }
-    await rename(tmp, filePath);
+    if (options.signal !== undefined) {
+      options.signal.throwIfAborted();
+      // No await between cancellation fence and committing the visible file.
+      renameSync(tmp, filePath);
+    } else {
+      await rename(tmp, filePath);
+    }
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {});
     throw error;
@@ -77,6 +83,7 @@ export async function withFileLock<T>(
   lockPath: string,
   fn: () => Promise<T>,
   options: {
+    signal?: AbortSignal;
     timeoutMs?: number;
     retryMs?: number;
     staleMs?: number;
@@ -100,13 +107,16 @@ export async function withFileLock<T>(
   const owner = { pid: process.pid, token: randomUUID() };
   const ownerPath = path.join(lockPath, "owner.json");
 
+  options.signal?.throwIfAborted();
   await mkdir(path.dirname(lockPath), { recursive: true });
   while (true) {
+    options.signal?.throwIfAborted();
     try {
       await mkdir(lockPath);
       const createdIno = (await stat(lockPath)).ino;
       await options.raceHook?.("created");
       try {
+        options.signal?.throwIfAborted();
         await writeFile(ownerPath, JSON.stringify(owner), { encoding: "utf8", flag: "wx", mode: 0o600 });
       } catch (error) {
         // Remove only the directory this call created (review r2 N2). A
@@ -123,12 +133,13 @@ export async function withFileLock<T>(
       if (!isAlreadyExistsError(error)) {
         throw error;
       }
+      options.signal?.throwIfAborted();
       await removeStaleLock(lockPath, staleMs, options.raceHook);
       if (Date.now() - startedAt >= timeoutMs) {
         // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
         throw new Error(`Timed out waiting for lock: ${lockPath}`);
       }
-      await delay(retryMs);
+      await delay(retryMs, options.signal);
     }
   }
 
@@ -138,6 +149,7 @@ export async function withFileLock<T>(
   }, heartbeatMs);
   heartbeat.unref?.();
   try {
+    options.signal?.throwIfAborted();
     return await fn();
   } finally {
     clearInterval(heartbeat);
@@ -267,8 +279,18 @@ export function processIsAlive(pid: number): boolean {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, ms);
+    function abort(): void {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(signal?.reason ?? new Error("lock acquisition aborted"));
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
 }
 
 // ---------------------------------------------------------------------------

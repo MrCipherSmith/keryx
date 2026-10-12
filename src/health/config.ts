@@ -29,6 +29,7 @@ export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
   },
   sources: {
     eslint: { mode: "auto", required: true },
+    oxlint: { mode: "auto", required: false },
     typescript: { mode: "auto", required: true },
     tests: { mode: "auto", required: false },
     coverage: { mode: "import", required: false },

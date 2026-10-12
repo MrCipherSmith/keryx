@@ -15,12 +15,14 @@
 // Pure storage over `withFileLock`/`writeFileAtomic` (src/lib/fs.ts) —
 // deliberately no dependency on src/sac/* or src/harness/*.
 
-import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { unlinkSync } from "node:fs";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { assembleContext, type ContextCandidate } from "../ctx/assembly";
 import { estimateTokens } from "../gdgraph/repomap";
 import { redactSensitiveText } from "../security/redact";
+import { queuePreservedWrapUp, writePreservationFile } from "./preservation";
 
 /**
  * Mirrors `ProposalKind` from `src/sac/proposal-lifecycle.ts`. Duplicated
@@ -272,14 +274,15 @@ export async function readArchivedWorkingMemory(dir: string): Promise<WorkingMem
  * dir never lose data to a read-modify-write race — a plain `write(dir,
  * value)` API without an in-lock read cannot satisfy that.
  */
-export async function writeSlate(dir: string, update: (prev: Slate | undefined) => Slate): Promise<Slate> {
+export async function writeSlate(dir: string, update: (prev: Slate | undefined) => Slate, signal?: AbortSignal): Promise<Slate> {
   await mkdir(dir, { recursive: true });
   return withFileLock(slateLockPath(dir), async () => {
     const prev = await readSlate(dir);
+    signal?.throwIfAborted();
     const next = update(prev);
-    await writeFileAtomic(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    await writeFileAtomic(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`, signal ? { signal } : {});
     return next;
-  });
+  }, signal ? { signal } : {});
 }
 
 /**
@@ -293,10 +296,10 @@ export async function writeSlate(dir: string, update: (prev: Slate | undefined) 
  * value is a caller bug (programmer error), not a runtime condition to
  * swallow, so it throws rather than silently no-oping or continuing.
  */
-export async function archiveSlate(dir: string, attemptId: string): Promise<void> {
+export async function archiveSlate(dir: string, attemptId: string, signal?: AbortSignal): Promise<void> {
   if (!/^[A-Za-z0-9._-]+$/.test(attemptId)) throw new Error(`invalid attemptId: ${JSON.stringify(attemptId)}`);
   await mkdir(dir, { recursive: true });
-  return withFileLock(slateLockPath(dir), () => archiveIfExistsLocked(dir, attemptId));
+  return withFileLock(slateLockPath(dir), () => archiveIfExistsLocked(dir, attemptId, signal), signal ? { signal } : {});
 }
 
 /**
@@ -307,7 +310,7 @@ export async function archiveSlate(dir: string, attemptId: string): Promise<void
  * itself would deadlock (the lock is a non-reentrant `mkdir`-based mutex),
  * so this must only ever run already-inside a hold, never acquire its own.
  */
-async function archiveIfExistsLocked(dir: string, attemptId: string): Promise<void> {
+async function archiveIfExistsLocked(dir: string, attemptId: string, signal?: AbortSignal): Promise<void> {
   let raw: string;
   try {
     raw = await readFile(slatePath(dir), "utf8");
@@ -317,8 +320,12 @@ async function archiveIfExistsLocked(dir: string, attemptId: string): Promise<vo
   }
   const archiveDir = path.join(dir, "slate-archive");
   await mkdir(archiveDir, { recursive: true });
-  await writeFileAtomic(path.join(archiveDir, `${attemptId}.json`), raw);
-  await rm(slatePath(dir), { force: true });
+  signal?.throwIfAborted();
+  // No asynchronous gap between the ownership fence and archive/clear.
+  // Failure preserves the live Slate; queued is not delivered.
+  queuePreservedWrapUp(dir, raw);
+  writePreservationFile(path.join(archiveDir, `${attemptId}.json`), raw);
+  unlinkSync(slatePath(dir));
 }
 
 /**
@@ -355,18 +362,21 @@ async function archiveIfExistsLocked(dir: string, attemptId: string): Promise<vo
  * the removal a no-op when no `terminal-state.json` exists, which is the
  * common case (most opens follow a clean close, never a blocked stop).
  */
-export async function openSlateAtomic(dir: string, mintAttemptId: () => string, build: (existing?: Slate) => Slate): Promise<Slate> {
+export async function openSlateAtomic(dir: string, mintAttemptId: () => string, build: (existing?: Slate) => Slate, signal?: AbortSignal): Promise<Slate> {
   await mkdir(dir, { recursive: true });
   return withFileLock(slateLockPath(dir), async () => {
     const existing = await readSlate(dir);
     if (existing !== undefined) {
-      await archiveIfExistsLocked(dir, mintAttemptId());
+      await archiveIfExistsLocked(dir, mintAttemptId(), signal);
     }
+    signal?.throwIfAborted();
     const next = build(existing);
-    await writeFileAtomic(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`);
-    await rm(path.join(dir, "terminal-state.json"), { force: true });
+    signal?.throwIfAborted();
+    writePreservationFile(slatePath(dir), `${JSON.stringify(next, null, 2)}\n`);
+    try { unlinkSync(path.join(dir, "terminal-state.json")); }
+    catch (error) { if (!isNotFound(error)) throw error; }
     return next;
-  });
+  }, signal ? { signal } : {});
 }
 
 /**
@@ -398,6 +408,7 @@ export async function appendSeed(dir: string, seed: SlateSeed): Promise<Slate> {
 export async function appendTrailEntry(
   dir: string,
   entry: Omit<TrailEntry, "step">,
+  signal?: AbortSignal,
 ): Promise<TrailEntry | undefined> {
   let written: TrailEntry | undefined;
   try {
@@ -406,6 +417,7 @@ export async function appendTrailEntry(
       if (prev === undefined) {
         return;
       }
+      signal?.throwIfAborted();
       const trail = prev.trail ?? [];
       const step = (trail[trail.length - 1]?.step ?? 0) + 1;
       const files = (entry.files ?? [])
@@ -422,8 +434,8 @@ export async function appendTrailEntry(
       };
       // No cap on stored entries (decided by the operator, flow 393 review finding 7): what is SENT is
       // bounded by the frame's token budget, not by how many entries slate.json holds.
-      await writeFileAtomic(slatePath(dir), `${JSON.stringify({ ...prev, trail: [...trail, written] }, null, 2)}\n`);
-    });
+      await writeFileAtomic(slatePath(dir), `${JSON.stringify({ ...prev, trail: [...trail, written] }, null, 2)}\n`, signal ? { signal } : {});
+    }, signal ? { signal } : {});
   } catch (error) {
     if (isNotFound(error)) {
       return undefined;

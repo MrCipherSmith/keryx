@@ -5,7 +5,7 @@ name: Full check diagnostic (no publish)
 on:
   workflow_dispatch:
   push:
-    branches: [fix/411-routing-model-independence]
+    branches: [fix/411-routing-model-independence, feat/415-durable-shell-exit]
 
 permissions:
   contents: read

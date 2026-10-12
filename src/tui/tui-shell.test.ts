@@ -3130,56 +3130,29 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     }
   });
 
-  // Flow 277 (P2): the ORDER these two branches run their steps in used to be
-  // asserted here by comparing character offsets inside a 500-character
-  // window. Both branches now call the extracted `performSlateExit`
-  // (`src/tui/shell-exit.ts`), and `shell-exit.test.ts` asserts the order
-  // against the real function — including that each async step is AWAITED,
-  // which no offset comparison could express. What is left here is the
-  // wiring: that both exit paths go through it, with this session's own
-  // slate, jobs, bus and lease.
-  test("the non-busy /exit branch exits through performSlateExit, with this session's slate, jobs, bus and lease", () => {
-    const exitIdx = tuiSourceAc7.indexOf('if (command.name === "/exit") {');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
-    expect(exitBlock).toContain("await performSlateExit({");
-    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
-    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
-    expect(exitBlock).toContain("jobs.removeAll()");
-    expect(exitBlock).toContain("liveBus?.leave()");
-    expect(exitBlock).toContain("sessionLease.release()");
-  });
-  test("F-002: the busy-dispatch /exit branch (classifyBusyDispatch === 'exit') exits through the SAME helper — the second real exit path, once missing the sweep entirely", () => {
-    const exitIdx = tuiSourceAc7.indexOf('case "exit": {');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
-    expect(exitBlock).toContain("await performSlateExit({");
-    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
-    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
-    expect(exitBlock).toContain("jobs.removeAll()");
-  });
-  test("BOUNDARY — performSlateExit is wired at exactly those two paths, not sprinkled", () => {
-    // The point of the helper is that the two command-driven exits share ONE
-    // sequence. A third call site would be a third exit path nobody reviewed;
-    // zero would mean the two tests above are asserting nothing.
+  // Flow 415: wiring audits only. Executable barrier/failure/timeout checks
+  // live in session/shell-finalizer.test.ts; exit sequencing in shell-exit.test.ts.
+  test("both command exits await the shared preservation barrier", () => {
+    for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
+      const idx = tuiSourceAc7.indexOf(marker);
+      expect(idx).toBeGreaterThanOrEqual(0);
+      const block = tuiSourceAc7.slice(idx, idx + 900);
+      expect(block).toContain("await performSlateExit({");
+      expect(block).toContain("await finalizeShell?.();");
+      expect(block).not.toContain("closeSlateSession(");
+      expect(block).not.toContain("sessionLease.release()");
+    }
     expect(tuiSourceAc7.split("await performSlateExit({").length - 1).toBe(2);
   });
-  test("F-002: onDestroy (Ctrl+C) ALSO sweeps AND purges background jobs, and defers resolveDone() until the sweep settles — the THIRD real exit path that was previously missing it entirely", () => {
-    const onDestroyIdx = tuiSourceAc7.indexOf("onDestroy: () => {");
-    expect(onDestroyIdx).toBeGreaterThanOrEqual(0);
-    const nextTopLevelMarker = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", onDestroyIdx);
-    expect(nextTopLevelMarker).toBeGreaterThan(onDestroyIdx);
-    const onDestroyBlock = tuiSourceAc7.slice(onDestroyIdx, nextTopLevelMarker);
-    const removeIdx = onDestroyBlock.indexOf(onDestroyRemoveAllCall);
-    const sweepIdx = onDestroyBlock.indexOf(onDestroySweepCall);
-    const resolveIdx = onDestroyBlock.indexOf("resolveDone();");
-    expect(removeIdx).toBeGreaterThanOrEqual(0);
-    expect(sweepIdx).toBeGreaterThan(removeIdx);
-    // resolveDone() is called from INSIDE the deferred async IIFE (a
-    // `finally`), after the sweep — never synchronously alongside it — so
-    // nothing downstream of `launchTuiAgentShell()` can observe `done`
-    // resolving before the sweep has actually run.
-    expect(resolveIdx).toBeGreaterThan(sweepIdx);
+  test("renderer destruction waits for preservation before resolving done", () => {
+    const start = tuiSourceAc7.indexOf("onDestroy: () => {");
+    const end = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const block = tuiSourceAc7.slice(start, end);
+    const finalize = block.indexOf("await finalizeShell()");
+    expect(finalize).toBeGreaterThanOrEqual(0);
+    expect(block.indexOf("resolveDone();")).toBeGreaterThan(finalize);
   });
 
   test("AC9: /clear|/new does NOT sweep or purge background jobs — a running job must survive it", () => {
@@ -3193,23 +3166,24 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     expect(newBlock).not.toContain("removeAll");
   });
 
-  test("sweepBackgroundJobs (OS-level) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    const plainOccurrences = tuiSourceAc7.split(sweepCall).length - 1;
-    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
-    const onDestroyOccurrences = tuiSourceAc7.split(onDestroySweepCall).length - 1;
-    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveDeps` ref, not `deps` directly)
-  });
-
-  test("jobs.removeAll() (store-level purge) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    // Flow 277: the two command-driven purges are now `purgeJobList: () =>
-    // jobs.removeAll()` inside the `performSlateExit` steps, so they carry no
-    // trailing semicolon. onDestroy's own `liveJobs?.removeAll()` does not
-    // contain this substring (capital J, optional chaining), so it is counted
-    // separately below rather than subtracted here.
-    const plainOccurrences = tuiSourceAc7.split("jobs.removeAll()").length - 1;
-    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
-    const onDestroyOccurrences = tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1;
-    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveJobs` ref, not `jobs` directly)
+  test("cleanup and ownership release belong to the single finalizer", () => {
+    expect(tuiSourceAc7.split(sweepCall).length - 1).toBe(0);
+    expect(tuiSourceAc7.split("jobs.removeAll()").length - 1).toBe(0);
+    // Second site: startup destruction before the live finalizer exists.
+    // Command exits must not contain their own cleanup or release.
+    expect(tuiSourceAc7.split(onDestroySweepCall).length - 1).toBe(2);
+    expect(tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1).toBe(2);
+    const start = tuiSourceAc7.indexOf("finalizeShell = createShellFinalizer({");
+    const end = tuiSourceAc7.indexOf("io.onHistoryChange =", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = tuiSourceAc7.slice(start, end);
+    // The renderer is already destroyed on the exit path, so the final checkpoint must not repaint.
+    expect(block).toContain("flushSessionCheckpoint(false);");
+    expect(block).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
+    expect(block).toContain(onDestroySweepCall);
+    expect(block).toContain(onDestroyRemoveAllCall);
+    expect(block).toContain('hooks.runtime.fire("SessionEnd"');
+    expect(block).toContain("releaseLease: () => sessionLease.release()");
   });
 });
 
