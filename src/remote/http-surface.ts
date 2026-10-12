@@ -47,6 +47,8 @@ import {
   choiceCallbackData,
   DEFAULT_ACK_TIMEOUT_MS,
   DEFAULT_APPROVAL_ACK_MS,
+  DEFAULT_PROMPT_REMINDER_MS,
+  MAX_PROMPT_REMINDERS,
   DEFAULT_APPROVAL_TIMEOUT_MS,
   DEFAULT_KEEPALIVE_MS,
   encodeSseEvent,
@@ -112,6 +114,8 @@ export interface RemoteSurfaceOptions {
   ackTimeoutMs?: number;
   /** How long a pressed approval waits for the shell to confirm it received the decision (flow 397). */
   approvalAckMs?: number;
+  /** Flow 419: how long an unanswered approval or question waits before the topic is reminded of it. */
+  reminderMs?: number;
   /** Test seam: the approval id generator. Must produce `ap` and 12 lowercase hex characters. */
   approvalIds?: () => string;
   /** Test seam: the choice prompt id generator. Must produce `pk` and 12 lowercase hex characters. */
@@ -254,6 +258,9 @@ interface PendingApproval {
   text?: string;
   /** The pattern an "Always" press would remember (flow 396), as shown in the topic. Absent: no Always button. */
   remember?: string;
+  /** Flow 419: the pending reminder, and how many were already posted. */
+  reminder?: unknown;
+  reminded?: number;
 }
 
 /**
@@ -362,6 +369,7 @@ export class RemoteHttpSurface {
   private readonly keepaliveMs: number;
   private readonly ackTimeoutMs: number;
   private readonly approvalAckMs: number;
+  private readonly reminderMs: number;
   private readonly newApprovalId: () => string;
   private readonly newPromptId: () => string;
   private readonly streams = new Map<string, ShellStream>();
@@ -386,6 +394,7 @@ export class RemoteHttpSurface {
     this.keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
     this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
     this.approvalAckMs = options.approvalAckMs ?? DEFAULT_APPROVAL_ACK_MS;
+    this.reminderMs = options.reminderMs ?? DEFAULT_PROMPT_REMINDER_MS;
     this.newApprovalId = options.approvalIds ?? (() => `ap${randomBytes(6).toString("hex")}`);
     this.newPromptId = options.promptIds ?? (() => `pk${randomBytes(6).toString("hex")}`);
     this.consumer = {
@@ -719,6 +728,7 @@ export class RemoteHttpSurface {
       timer: this.timers.setTimeout(() => this.expireApproval(approvalId), timeoutMs),
       ...(remember === undefined ? {} : { remember }),
     });
+    this.scheduleReminder("approval", approvalId);
     // The operator approves what is shown, so the prompt goes out as a code block: nothing in it is read as markup.
     const offer = remember === undefined ? "" : `\nAlways would remember:\n${asCodeBlock(remember)}`;
     const sent = await hub.send(sessionId, `Approval needed:\n${asCodeBlock(redactSensitiveText(value.prompt))}${offer}`, {
@@ -862,6 +872,7 @@ export class RemoteHttpSurface {
       ...(own ? { own: true } : {}),
       timer: this.timers.setTimeout(() => this.expireChoice(promptId), timeoutMs),
     });
+    this.scheduleReminder("question", promptId);
     const keyboard: InlineKeyboard = [];
     let position = 0;
     for (const width of layout) {
@@ -1491,6 +1502,7 @@ export class RemoteHttpSurface {
       return;
     }
     this.timers.clearTimeout(entry.timer);
+    this.timers.clearTimeout(entry.reminder);
     this.choices.delete(promptId);
     if (entry.armedReplyId !== undefined) {
       const armed = this.armedOwn.get(entry.armedReplyId);
@@ -1578,6 +1590,7 @@ export class RemoteHttpSurface {
       return;
     }
     this.timers.clearTimeout(entry.timer);
+    this.timers.clearTimeout(entry.reminder);
     this.approvals.delete(approvalId);
   }
 
@@ -1616,12 +1629,39 @@ export class RemoteHttpSurface {
     });
   }
 
+  /** Flow 419, AC3: arm the next reminder for an approval or question that is still open. */
+  private scheduleReminder(kind: "approval" | "question", id: string): void {
+    const entry = kind === "approval" ? this.approvals.get(id) : this.choices.get(id);
+    if (entry === undefined || (entry.reminded ?? 0) >= MAX_PROMPT_REMINDERS || this.reminderMs <= 0) {
+      return;
+    }
+    entry.reminder = this.timers.setTimeout(() => this.remind(kind, id), this.reminderMs);
+  }
+
+  private remind(kind: "approval" | "question", id: string): void {
+    const entry = kind === "approval" ? this.approvals.get(id) : this.choices.get(id);
+    const hub = this.hub;
+    if (entry === undefined || hub === undefined || this.closed) {
+      return;
+    }
+    entry.reminded = (entry.reminded ?? 0) + 1;
+    const left = entry.expiresAt - this.now();
+    const what = kind === "approval" ? "An approval is" : "A question is";
+    const topic = reminderExcerpt(entry.text);
+    const ends = left > 0 ? ` It expires at ${clockText(entry.expiresAt)}.` : "";
+    void hub
+      .send(entry.sessionId, `Reminder: ${what} still waiting for an answer here${topic === "" ? "" : `: ${topic}`}.${ends} The buttons are on the message above.`)
+      .catch(() => undefined);
+    this.scheduleReminder(kind, id);
+  }
+
   private expireApproval(approvalId: string): void {
     const entry = this.approvals.get(approvalId);
     if (entry === undefined) {
       return;
     }
     this.timers.clearTimeout(entry.timer);
+    this.timers.clearTimeout(entry.reminder);
     this.approvals.delete(approvalId);
     this.finishApproval(approvalId, entry.sessionId, entry.messageId, entry.text, {
       result: `Expired at ${clockText(this.now())}: no answer, so it was denied.`,
@@ -1680,6 +1720,17 @@ export class RemoteHttpSurface {
       this.hub?.endActivity(stream.sessionId);
     }
   }
+}
+
+/** The first line of what was asked, for a reminder: no fences, no label, cut short. */
+export function reminderExcerpt(text: string | undefined): string {
+  const line =
+    (text ?? "")
+      .split("\n")
+      .map((part) => part.replace(/^`{3,}.*$/, "").replace(/^Approval needed:\s*/, "").trim())
+      .find((part) => part.length > 0) ?? "";
+  const flat = line.replace(/\s+/g, " ");
+  return flat.length <= 80 ? flat : `${flat.slice(0, 79)}…`;
 }
 
 /** The button for an "Always" offer: the pattern, cut to Telegram's button length. */

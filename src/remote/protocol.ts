@@ -169,6 +169,12 @@ export const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
 export const MAX_APPROVAL_TIMEOUT_MS = 60 * 60_000;
 export const MIN_APPROVAL_TIMEOUT_MS = 100;
 /**
+ * Flow 419, AC3: an approval or question nobody has answered gets a reminder in the topic after this long,
+ * and again at the same interval, at most {@link MAX_PROMPT_REMINDERS} times in all.
+ */
+export const DEFAULT_PROMPT_REMINDER_MS = 2 * 60_000;
+export const MAX_PROMPT_REMINDERS = 3;
+/**
  * How long serve waits, after it wrote an approval decision to the shell's stream, for the shell
  * to say it received it (flow 397). Without that word the approval is shown as "not confirmed",
  * never as granted: a write that went into a stalled socket proves nothing.
