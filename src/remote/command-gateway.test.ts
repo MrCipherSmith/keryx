@@ -22,7 +22,6 @@ const REFUSED_LINES: Array<[string, string]> = [
   ["/setup", "setup"],
   ["/mcp trust", "mcp"],
   ["/guard", "guard"],
-  ["/route", "route"],
   ["/editguard", "editguard"],
   ["/schedule", "schedule"],
   ["/rewind", "rewind"],
@@ -35,7 +34,7 @@ const REFUSED_LINES: Array<[string, string]> = [
 
 /** Refused commands whose reason is written in the gateway's own switch, not in REMOTE_REFUSED. */
 const INLINE_REASONS: Record<string, string> = {
-  "remote-control": "it would delete this topic; turn it off in the shell",
+  "remote-control": "it would archive this topic; turn it off in the shell",
   theme: "bare /theme opens a picker",
   think: "use /think auto, expand or hide",
 };

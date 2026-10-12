@@ -37,6 +37,8 @@ export interface CommandHarnessOptions {
   listSessions?: RemoteBridgeHost["listSessions"];
   resumeSession?: RemoteBridgeHost["resumeSession"];
   choiceTimeoutMs?: number;
+  idlePollMs?: number;
+  queuedCommandLimitMs?: number;
   /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
   runTimeoutMs?: number;
   /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */
@@ -84,6 +86,8 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
     ...(opts.runningNoticeMs !== undefined ? { commandRunningNoticeMs: opts.runningNoticeMs } : {}),
     ...(opts.commandLimitMs !== undefined ? { commandLimitMs: opts.commandLimitMs } : {}),
     ...(opts.choiceTimeoutMs !== undefined ? { choiceTimeoutMs: opts.choiceTimeoutMs } : {}),
+    idlePollMs: opts.idlePollMs ?? 5,
+    ...(opts.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: opts.queuedCommandLimitMs } : {}),
     makeClient: (options: RemoteClientOptions) => {
       const startResult: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0 };
       const fake = {

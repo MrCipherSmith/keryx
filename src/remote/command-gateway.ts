@@ -64,6 +64,7 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "delegate", kind: "confirm", description: "Hand a paid task to an external agent: /delegate <agent> <task>; asks first" },
   { name: "external", kind: "confirm", description: "Show or switch sending work to external providers; on and off ask first" },
   { name: "external-agents", kind: "confirm", description: "Show or switch the external agent runtime; on and off ask first" },
+  { name: "route", kind: "confirm", description: "Show or switch model routing: /route [on|off]; on and off ask first" },
 ];
 
 /** Commands that are never run from the topic, each with the reason the topic is told. */
@@ -81,7 +82,6 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   setup: "it asks for keys and changes the configuration",
   mcp: "it can trust tools and change server connections; use the shell",
   guard: "it changes a safety guard; use the shell",
-  route: "it changes where work is routed; use the shell",
   editguard: "it changes a safety guard; use the shell",
   settings: "it edits settings, some of them secret; use the shell",
   bus: "it talks to other agents on this machine",
@@ -112,7 +112,13 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
 };
 
 /** The commands a shell refuses while a turn runs, when the host gives no better answer. */
-export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect"];
+export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect", "route", "external", "external-agents"];
+
+/**
+ * Commands that are not refused while a turn runs but held: the topic is told they are queued, and each runs
+ * when main is idle (flow 419, AC4). Shell spelling. `/mode` is not here: the shell takes it at any moment.
+ */
+export const QUEUED_WHEN_BUSY_COMMANDS: readonly string[] = ["model", "route", "external", "external-agents"];
 
 /** The reason the shell gives for a command it will not run during a turn. */
 export const BUSY_REASON = "main is busy: command deferred";
@@ -242,6 +248,16 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
         };
       }
       return first === "" ? { kind: "run", command: name, line: "/external" } : refuse(name, "use /external, /external on or /external off", true);
+    case "route":
+      if (first === "on" || first === "off") {
+        return {
+          kind: "confirm",
+          command: name,
+          line: `/route ${first}`,
+          summary: `Switch model routing ${first}? This changes which model answers each turn.`,
+        };
+      }
+      return first === "" ? { kind: "run", command: name, line: "/route" } : refuse(name, "use /route, /route on or /route off", true);
     case "external-agents":
       if (first === "on" || first === "off") {
         return {
@@ -301,6 +317,11 @@ export function remoteHelpText(): string {
 /** Whether `name` (shell spelling) needs the shell idle. Used when the host gives no answer. */
 export function isBusyDeferred(name: string): boolean {
   return BUSY_DEFERRED_COMMANDS.includes(name);
+}
+
+/** Whether a command from the topic waits for an idle main instead of being refused while a turn runs. */
+export function isQueuedWhenBusy(name: string): boolean {
+  return QUEUED_WHEN_BUSY_COMMANDS.includes(name);
 }
 
 /** Every menu name is valid for Telegram; the test holds this. */

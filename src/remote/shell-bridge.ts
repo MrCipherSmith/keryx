@@ -146,6 +146,10 @@ export interface RemoteBridgeOptions {
   commandLimitMs?: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs?: number;
+  /** How often a command held for an idle main looks again (flow 419). */
+  idlePollMs?: number;
+  /** A command held for an idle main is dropped after this long (flow 419). */
+  queuedCommandLimitMs?: number;
   /** Pause between two restored messages, so the topic is not flooded (flow 399). */
   historyPaceMs?: number;
   /** Test seam for the pause. Default: a timer. */
@@ -317,6 +321,7 @@ export class RemoteBridge {
         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
       },
       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
+      live: () => this.client !== undefined,
       history: async (args) => await this.historyForCommand(args),
       record: (text) => this.push("command", text),
       compose: composeReply,
@@ -351,6 +356,8 @@ export class RemoteBridge {
         runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,
         commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,
         choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,
+        ...(options.idlePollMs !== undefined ? { idlePollMs: options.idlePollMs } : {}),
+        ...(options.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: options.queuedCommandLimitMs } : {}),
       },
     });
   }
