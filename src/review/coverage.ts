@@ -126,6 +126,8 @@ export async function coverageErrors(dispatch: unknown, options: CoverageOptions
   const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
   if (record.mode !== "all" && record.mode !== "diff")
     return ['dispatch must declare mode "all" (every available reviewer) or "diff" (the set derived from the diff); run `keryx review required --mode all|diff`'];
+  if (record.mode === "diff" && !text(record.operatorQuote))
+    return ['dispatch mode "diff" narrows the reviewer set and needs operatorQuote (the operator\'s own words naming a narrower review); a pull request defaults to mode "all"'];
   const override = record.override;
   if (override !== undefined) {
     const o = override && typeof override === "object" && !Array.isArray(override) ? (override as Record<string, unknown>) : {};

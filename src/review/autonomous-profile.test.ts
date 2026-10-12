@@ -65,6 +65,12 @@ describe("prompt", () => {
     expect(text).toMatch(/nobody (is )?(at the keyboard|answering)/i);
   });
 
+  test("dispatches the full reviewer set and never the diff-derived one", () => {
+    const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7" });
+    expect(text).toContain("keryx review required --mode all");
+    expect(text).toMatch(/do not use mode "diff"/);
+  });
+
   test("keeps the orchestration in the main session and says why a subagent cannot take it", () => {
     const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7" });
     expect(text).toContain("Run the whole orchestration yourself in this session");

@@ -501,7 +501,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
-const REQUIRED_FLAGS = ["--mode", "--scope", "--json"] as const;
+const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -2929,6 +2929,8 @@ async function runRequired(args: string[]): Promise<void> {
   const mode = optionValue(args, "--mode") ?? "all";
   if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff"');
   const scope = await readScope(optionValue(args, "--scope"));
+  if (mode === "diff" && (optionValue(args, "--operator-quote") ?? "").trim() === "")
+    throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
   const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files]);
   if (args.includes("--json")) {
@@ -3977,9 +3979,13 @@ Usage:
                      Cuts scope A into reviewer-sized slice files plus a manifest;
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
-  keryx review required [--mode all|diff] [--scope <scope.json>] [--json]
+  keryx review required [--mode all|diff] [--scope <scope.json>]
+                        [--operator-quote "<words>"] [--json]
                         The reviewer set a round must dispatch: every available
-                        reviewer for all, the diff-derived set for diff.
+                        reviewer for all (the default for a pull request), the
+                        diff-derived set for diff. diff needs the operator's own
+                        words naming a narrower review in --operator-quote, and
+                        the dispatch records them as operatorQuote.
                         \`review complete\` refuses a smaller dispatch.
   keryx review dispatch-check --payload <file|-> [--manifest <file>]
                               [--max-bytes <n>] [--json]

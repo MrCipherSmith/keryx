@@ -143,13 +143,22 @@ describe("coverageErrors", () => {
     expect(await coverageErrors({ mode: "all", selected: all }, { root })).toEqual([]);
   });
 
-  test("mode diff with the derived set passes and extra reviewers are allowed", async () => {
+  test("mode diff with the derived set passes when the operator named the narrower review, and extra reviewers are allowed", async () => {
     const selected = ["review-frontend", "review-logic", "review-style", "review-clean-code"];
-    expect(await coverageErrors({ mode: "diff", selected }, { root, files: frontendFiles })).toEqual([]);
+    const operatorQuote = "только по диффу, без остального";
+    expect(await coverageErrors({ mode: "diff", selected, operatorQuote }, { root, files: frontendFiles })).toEqual([]);
+  });
+
+  test("mode diff without the operator's quote is refused, whatever the set", async () => {
+    const selected = ["review-frontend", "review-logic", "review-style"];
+    for (const operatorQuote of [undefined, "", "  ", 3]) {
+      const errors = await coverageErrors({ mode: "diff", selected, operatorQuote }, { root, files: frontendFiles });
+      expect(errors.join()).toContain("needs operatorQuote");
+    }
   });
 
   test("mode diff without a scope file list is refused", async () => {
-    const errors = await coverageErrors({ mode: "diff", selected: ["review-logic"] }, { root });
+    const errors = await coverageErrors({ mode: "diff", selected: ["review-logic"], operatorQuote: "только по диффу" }, { root });
     expect(errors.join()).toContain("scope-A file list");
   });
 
