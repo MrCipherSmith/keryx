@@ -5284,7 +5284,12 @@ unreadable.
 
 `review retry-plan` decides what follows a reviewer result. `--result` is the
 reviewer's result JSON, or its saved raw reply (the last `REVIEW_RESULT` block is
-read); its `slices` list is what the reviewer covered. An attempt is spent only by
+read); its `slices` list is what the reviewer covered, written as slice ids or as
+objects carrying an `id` (`{"id": "slice-03", "status": "DONE", "coverage": "…"}`).
+An object counts as covered only when its `status` is absent or DONE, COMPLETE, COMPLETED,
+COVERED or OK (any case); NOT_READ, INCOMPLETE, SKIPPED, PARTIAL or any other status leaves
+that slice uncovered, and the plan's reason names those slices with their statuses. An entry
+with no usable id covers nothing and is named by count in the plan's reason. An attempt is spent only by
 a result that covered no slice the reviewer had not covered before. A reviewer that
 makes progress is handed the next wave of the slices still uncovered (decision
 `retry`, or `wave` after a finished result with slices still open) and is not
@@ -5324,6 +5329,20 @@ using the gate's own validators; exit 1 when not ready, so
 `ledger build && ingest --research` stops. Flags: `--package`, `--mode all|diff`,
 `--findings`, `--dispositions` (default: the obligations already in `research.json`),
 `--out` (default `<package>/research.json`), `--dry-run`, `--json`.
+
+`drivers/<reviewer>.json` records one dispatch:
+`{"reviewer", "slices": [...], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`.
+The rule file is taken from `definition`, or from a `skill_path` at the top level or
+inside a `payload` object, whichever names a file that exists; a reviewer with none
+stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.
+A file there with no `REVIEW_RESULT` block, that no driver names as its `result`, and
+whose name does not start with a dispatched or required reviewer's id is not a reply:
+the ledger lists it under `ignored` as `set aside: …`, records it in `setAside` in
+`research.json`, and leaves it where it is, never deleting it. A driver's `slices` is
+the list of slices handed to the reviewer, so a `status` on one of its entries is not
+read; an entry with no usable id there is reported as a gap by count, and none of that
+dispatch's slices counts as handed out until it is fixed. A file that holds a `REVIEW_RESULT` block, or is named by a driver, still
+has to be reconciled.
 
 **The set is under regression check, not under review**, and that is refused in
 code rather than discouraged in prose. Three rules, and every one of them is a
