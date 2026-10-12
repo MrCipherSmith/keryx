@@ -16,8 +16,8 @@ Causes found in the audit (`orchestrator-audit.md`, `review-orchestrator-skill-a
   sits at ~lines 1072 and 1188 of 1712, so an agent reaches it at Step 8, after it is already
   orchestrating.
 - "does not perform any review logic itself" invites handing the whole round to one subagent.
-- `job-orchestrator` carries a `SUBAGENT-STOP` block, while the work project's job facade is itself a subagent that
-  must run the skill. The chain main, job facade, orchestrator subagent, review, reviewers is four
+- `job-orchestrator` carries a `SUBAGENT-STOP` block, while `vantage-job` is itself a subagent that
+  must run the skill. The chain main, vantage-job, orchestrator subagent, review, reviewers is four
   layers against a default depth limit of three (Claude Code docs, sub-agents).
 - Keryx's exported agent vocabulary (`src/agents/tools.ts`) has no spawn tool.
 - `--all` contradicts the skill's own red flag; no "no round needed" branch; start questions without an
@@ -41,6 +41,6 @@ needed at all; how to spawn each wave; how many rounds are allowed; when it is d
 ## Out of Scope
 
 - Moving `review-orchestrator` or `flow-orchestrator` into subagents (decided: not by default; a later flow if the operator wants it, after the host and version of the two failing agents are known).
-- The operator's global `~/.claude/CLAUDE.md` (the line routing review through the work project's review facade): the operator's own file; recorded as a follow-up, not edited here.
+- The operator's global `~/.claude/CLAUDE.md` (the line routing review through `vantage-review`): the operator's own file; recorded as a follow-up, not edited here.
 - Flow 416 closing, flow 415 and any other open item.
 - TUI: no new user-facing surface. Wave progress already appears through the existing round record; a TUI view of waves is not added, by choice.
