@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md",
+    ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md",
+    "src/commands/agent-fewer-prompts.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/review-arbiter.test.ts",
+    "src/commands/review-arbiter.ts",
+    "src/commands/review-ledger.test.ts",
+    "src/commands/review-ledger.ts",
+    "src/commands/review-slice.ts",
+    "src/review/completion-gate.test.ts",
+    "src/review/completion-gate.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts",
+    "src/review/retry-plan.ts",
+    "src/review/slice-dispatch.test.ts",
+    "src/review/slice.ts",
+    "src/tui/ask-user-bridge-arbiter.test.ts",
+    "src/tui/ask-user-bridge.ts"
+  ]
+}

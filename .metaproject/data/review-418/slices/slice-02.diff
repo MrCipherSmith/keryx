@@ -1,0 +1,561 @@
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 13,19 @@
+   - "review --legacy-profiles"
+ metadata:
+   author: "MrCipherSmith"
+-  version: "1.10.0"
++  version: "1.11.0"
+   category: "review"
+   compatible_harnesses: "cursor,codex,zed,opencode,claude"
+ license: "MIT"
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 77,93 @@
+ - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`.
+ - The model comes from `keryx review tier` (Step 6).
+ 
++## Shell host (keryx shell, or any host with no file-reading subagent) — mandatory
++
++A reviewer on this host cannot open a path: its file tool reads inside its working directory only, and a pointer it cannot follow becomes a round spent on a refusal. So the pointer rule above does not apply; the TEXT travels in the prompt, in slices small enough to finish.
++
++1. **Slice first.** `keryx review slice --ref <base> --out <dir>` after `keryx review scope`. It writes `slice-NN.diff` files of at most 150000 bytes each and a `manifest.json`; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
++2. **Slice text in the prompt.** Each reviewer's prompt holds the content of the slices assigned to it (the file bodies, not their paths), plus the `slices` ids in its reviewer-input.
++3. **Check before dispatch.** `keryx review dispatch-check --payload <file> --manifest <dir>/manifest.json` for the wave; exit 1 means a payload names no slice, is over the ceiling, or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
++4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time.
++5. **Incomplete means retry once, then Not run.** On `INCOMPLETE` or `BLOCKED`, `keryx review retry-plan --manifest <dir>/manifest.json --result <result.json>` decides: it cuts the assigned slices in half and names the one retry, and after that prints the `- **Not run:** …` line to paste into the report. An unfinished reviewer is never counted as a clean pass.
++6. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
++
+ ## Control
+ 
+ - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 1579,1585 @@
+ 
+ ## Job Context Awareness
+ 
+-When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
+-
+-```
+-JOB_NAME:     <job-name>
+-CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
+-```
+-
+-If provided and the file exists, read the context document **before** running scope detection.
+-Use it to understand:
+-- Intentionally chosen libraries and patterns (do not flag as issues)
+-- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
+-
+-If absent, proceed normally — context is optional and non-blocking.
++When a prompt carries `JOB_NAME` and `CONTEXT_PATH`, read that context document before scope detection (`SKILL.detail.md` § "Job Context Awareness"). It is optional and non-blocking.
+ 
+ ---
+ 
+
+--- .metaproject/flows/418-2026-10-09-shell-review-orchestration/flow.json
+@@ 1,314 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "418",
++  "slug": "shell-review-orchestration",
++  "title": "Keryx Shell: review orchestration completes a round (follow-through, trust mode, 200 rounds)",
++  "status": "in-progress",
++  "createdAt": "2026-10-09T19:42:51.573Z",
++  "updatedAt": "2026-10-09T20:20:09.034Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "human",
++  "origin": {
++    "kind": "human-request",
++    "quote": "Заводи, так же нужно починить режим trust, и для него увеличить количество раундов. Например с 40 до 200",
++    "source": "helyx 195221, 2026-10-09T19:42Z"
++  },
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T5",
++      "title": "Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-09T19:52:55.967Z",
++            "outcome": "started",
++            "detail": "worker dispatched in keryx-f418"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-09T19:52:56.152Z",
++            "outcome": "started",
++            "detail": "worker dispatched in keryx-f418"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-09T19:52:56.338Z",
++            "outcome": "started",
++            "detail": "worker dispatched in keryx-f418"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T5",
++        "T6",
++        "T7"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-09T19:42:51.573Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-09T19:45:41.390Z",
++      "event": "frozen",
++      "detail": "13 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-09T19:45:50.262Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-09T19:52:50.484Z",
++      "event": "task-added",
++      "detail": "T5: Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests"
++    },
++    {
++      "at": "2026-10-09T19:52:50.668Z",
++      "event": "task-added",
++      "detail": "T6: TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests"
++    },
++    {
++      "at": "2026-10-09T19:52:50.860Z",
++      "event": "task-added",
++      "detail": "T7: Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests"
++    },
++    {
++      "at": "2026-10-09T19:52:55.779Z",
++      "event": "task-added",
++      "detail": "T8: Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)"
++    },
++    {
++      "at": "2026-10-09T19:52:55.967Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — worker dispatched in keryx-f418"
++    },
++    {
++      "at": "2026-10-09T19:52:56.152Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — worker dispatched in keryx-f418"
++    },
++    {
++      "at": "2026-10-09T19:52:56.338Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — worker dispatched in keryx-f418"
++    },
++    {
++      "at": "2026-10-09T20:16:28.231Z",
++      "event": "task-done",
++      "detail": "T5: Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests"
++    },
++    {
++      "at": "2026-10-09T20:16:28.442Z",
++      "event": "task-done",
++      "detail": "T6: TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests"
++    },
++    {
++      "at": "2026-10-09T20:16:28.656Z",
++      "event": "task-done",
++      "detail": "T7: Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests"
++    },
++    {
++      "at": "2026-10-09T20:16:28.869Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-09T20:16:29.081Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-09T20:16:29.278Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-10-09T20:20:08.818Z",
++      "event": "task-done",
++      "detail": "T8: Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)"
++    },
++    {
++      "at": "2026-10-09T20:20:09.034Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "unclassified"
++    },
++    "AC2": {
++      "kind": "unclassified"
++    },
++    "AC3": {
++      "kind": "unclassified"
++    },
++    "AC4": {
++      "kind": "unclassified"
++    },
++    "AC5": {
++      "kind": "unclassified"
++    },
++    "AC6": {
++      "kind": "unclassified"
++    },
++    "AC7": {
++      "kind": "unclassified"
++    },
++    "AC8": {
++      "kind": "unclassified"
++    },
++    "AC9": {
++      "kind": "unclassified"
++    },
++    "AC10": {
++      "kind": "unclassified"
++    },
++    "AC11": {
++      "kind": "unclassified"
++    },
++    "AC12": {
++      "kind": "unclassified"
++    },
++    "AC13": {
++      "kind": "unclassified"
++    }
++  }
++}
+
+--- .metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json
+@@ 1,137 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "419",
++  "slug": "telegram-remote-control-relay",
++  "title": "Keryx Telegram: remote-control relays approvals, questions and progress",
++  "status": "ready",
++  "createdAt": "2026-10-09T19:42:55.347Z",
++  "updatedAt": "2026-10-09T19:45:41.801Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "human",
++  "origin": {
++    "kind": "human-request",
++    "quote": "То, что потом через Keryx Surf приходит в Telegram, это тоже записываю, но это как отдельная проблема, которую мы будем потом фиксить и вообще дорабатывать Keryx Telegram.",
++    "source": "helyx 195182, 2026-10-09 (voice) + 195221 Заводи"
++  },
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-09T19:42:55.347Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-09T19:45:41.801Z",
++      "event": "frozen",
++      "detail": "9 criteria; checksum recorded"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "unclassified"
++    },
++    "AC2": {
++      "kind": "unclassified"
++    },
++    "AC3": {
++      "kind": "unclassified"
++    },
++    "AC4": {
++      "kind": "unclassified"
++    },
++    "AC5": {
++      "kind": "unclassified"
++    },
++    "AC6": {
++      "kind": "unclassified"
++    },
++    "AC7": {
++      "kind": "unclassified"
++    },
++    "AC8": {
++      "kind": "unclassified"
++    },
++    "AC9": {
++      "kind": "unclassified"
++    }
++  }
++}
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json
+@@ 22,28 @@
+         "string",
+         "null"
+       ],
+-      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional, and like the rest of this schema it is read by the dispatching agent — no keryx command validates a dispatch against it."
++      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional. `keryx review dispatch-check --payload <file>` validates a payload against this schema and refuses a `diff` scope that names no slice or whose assigned bytes exceed the ceiling."
+     },
+     "scope_mode": {
+       "type": "string",
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json
+@@ 31,44 @@
+         "path"
+       ]
+     },
++    "slices": {
++      "type": "array",
++      "description": "Slice ids (or manifest-relative paths) from `keryx review slice` that this reviewer is assigned. A `diff` scope names its slices here or carries a `diff` that fits the slice ceiling; `keryx review dispatch-check` refuses a payload that does neither.",
++      "items": {
++        "type": "string",
++        "minLength": 1
++      }
++    },
+     "context_doc": {
+       "type": [
+         "string",
+
+--- CHANGELOG.md
+@@ 1,20 @@
+ # Changelog
+ 
++## [0.3.87] - 2026-10-09
++
++### Shell
++
++- In `trust` mode a turn may use 200 tool rounds (40 in `ask` and `auto`); the limit follows the mode at the start of the turn and `KERYX_AGENT_MAX_ROUNDS` still overrides it. Subagents get 40 rounds by default and up to 200, and a wave runs up to 10 of them at once instead of 3 (flow 418).
++- In `trust`, routine commands (`keryx review`, `keryx ctx rg|read|diff|run --`, read-only `flow`/`gdgraph`/`git`, `bun test`, chained with `cd`) no longer ask for approval after the turn read untrusted content; destructive, credential, SAC and publish commands still ask.
++- A turn with open plan items continues on its own in `trust` (at most 8 times in a row), and answers to questions the agent asks are kept in the session slate instead of being asked again.
++- A slash command typed while a turn runs is queued (`queued as qN`) and runs when the turn ends, instead of being dropped; `/new`, `/clear` and `/resume` are refused while busy.
++- Ctrl+C cancels the running turn; at an idle prompt a second Ctrl+C within 2 seconds exits, and `/exit` always does.
++
++### Review Process
++
++- `keryx review slice` cuts a large diff by domain into slices of at most 150 KB with a manifest, and leaves data ledgers, lockfiles, snapshots and generated files out, listing them as omissions. `keryx review dispatch-check` refuses a reviewer payload without a slice assignment before it is sent, and `keryx review retry-plan` retries an INCOMPLETE or BLOCKED reviewer once on a smaller slice, then reports it as not run. `review-orchestrator` has a shell-host section that uses them.
++- `keryx ctx run --raw -- <cmd>` passes the command output through unchanged, for machine artifacts; the read tool's error for a path outside the working directory names the cause and the alternative.
++
+ ## [0.3.86] - 2026-10-09
+ 
+ ### Review Process

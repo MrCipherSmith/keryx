@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "scopeFingerprint": "0a3dea9412aaf1f1bf6e19451b2a37b84319b124cca1a15021865f016cdddfcb",
+  "reviewers": {
+    "review-clean-code": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-testing-practices": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-architecture --result .metaproject/data/review/raw/review-architecture-06-08-09.txt": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-security-code --result .metaproject/data/review/raw/review-security-code.txt": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    },
+    "review-backend": {
+      "attempt": 0,
+      "status": "DONE",
+      "notRun": false,
+      "stalls": 1,
+      "covered": []
+    }
+  }
+}

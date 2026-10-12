@@ -9,9 +9,9 @@
   "id": "418",
   "slug": "shell-review-orchestration",
   "title": "Keryx Shell: review orchestration completes a round (follow-through, trust mode, 200 rounds)",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-09T19:42:51.573Z",
-  "updatedAt": "2026-10-12T04:53:18.552Z",
+  "updatedAt": "2026-10-12T20:10:49.804Z",
   "source": {
     "type": "description",
     "ref": null
@@ -391,6 +391,20 @@
       "at": "2026-10-12T04:53:18.552Z",
       "event": "ac-confirmed",
       "detail": "AC12: Live 2026-10-12 on Presight-AI/vantage-frontend PR 7840 (0.3.110, openai-codex gpt-6.1-sol, keryx review run --autonomous): complete, exit 0, package closed via ingest, 2 rounds, 950 s, 5.86M tokens, 0 blocker 3 major 3 minor, 0 floor refusals. Claude run on the same PR: 10 reviewers + verifier + blast radius + design-system pass, 2 major. Compared by the operator 2026-10-12; depth parity (blast radius, verifier, mutation, design-system reviewer) moves to a separate flow. Operator accepted 198741. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-12T20:10:43.795Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-12T20:10:49.803Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-12T20:10:49.804Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -577,6 +591,76 @@
         "source": "`--signed-by` flag"
       },
       "criterion": "AC12",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-12T20:10:49.804Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc",
+      "headCommit": "489d410fa0a01c78ed42e6c96580245c65486d8a"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-12T20:10:49.803Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "13 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "418-2026-10-09-shell-review-orchestration is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
     }
   ]

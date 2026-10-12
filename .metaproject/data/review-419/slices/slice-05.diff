@@ -1,0 +1,636 @@
+--- src/remote/progress-notes.ts
+@@ 1,291 @@
++// Flow 419 (AC5, AC6): what the topic hears while a turn runs, and what a status question is answered with.
++// Progress is a short summary the shell composes from counts and names; the model's text and a tool's
++// input or output never go into a note. At most one note goes out per interval.
++
++/** One note per this long at most. */
++export const DEFAULT_PROGRESS_INTERVAL_MS = 60_000;
++/** A note about a tool-heavy stretch comes after this many tool calls since the last note. */
++export const DEFAULT_PROGRESS_TOOL_THRESHOLD = 8;
++
++const TOOL_NAMES_SHOWN = 4;
++const WAVE_LABELS_SHOWN = 3;
++
++/** The part of a subagent fleet event the notes read; the shell's own event type fits it. */
++export type WaveEvent = { kind: "upsert"; id: string; label?: string; status: string } | { kind: "remove"; id: string } | { kind: "log"; id: string };
++
++export interface ProgressOptions {
++  intervalMs?: number;
++  toolThreshold?: number;
++  now?: () => number;
++  send: (text: string) => void;
++  /** Test seam. */
++  setTimer?: (run: () => void, ms: number) => unknown;
++  clearTimer?: (handle: unknown) => void;
++}
++
++export interface TurnSnapshot {
++  running: boolean;
++  elapsedMs: number;
++  toolCalls: number;
++  lastTool?: string;
++  /** Subagents of the open wave that have not finished. */
++  waveRunning: number;
++}
++
++type Pending = { priority: number; build: () => string };
++
++const ACTIVE = new Set(["queued", "running", "blocked"]);
++
++export function formatElapsed(ms: number): string {
++  const total = Math.max(0, Math.round(ms / 1000));
++  if (total < 60) return `${total}s`;
++  const minutes = Math.floor(total / 60);
++  const seconds = total % 60;
++  if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
++  const hours = Math.floor(minutes / 60);
++  return `${hours}h ${minutes % 60}m`;
++}
++
++export class ProgressNotes {
++  private readonly intervalMs: number;
++  private readonly threshold: number;
++  private readonly now: () => number;
++  private readonly send: (text: string) => void;
++  private readonly setTimer: (run: () => void, ms: number) => unknown;
++  private readonly clearTimer: (handle: unknown) => void;
++
++  private startedAt: number | undefined;
++  private toolCalls = 0;
++  private lastTool: string | undefined;
++  private sinceNote = 0;
++  private namesSinceNote = new Set<string>();
++  private lastNoteAt: number | undefined;
++  private lastNoteWindowStart: number | undefined;
++  private pending: Pending | undefined;
++  private timer: unknown;
++  private readonly wave = new Map<string, { status: string; label: string }>();
++  private waveOpen = false;
++
++  constructor(options: ProgressOptions) {
++    this.intervalMs = options.intervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
++    this.threshold = Math.max(1, options.toolThreshold ?? DEFAULT_PROGRESS_TOOL_THRESHOLD);
++    this.now = options.now ?? Date.now;
++    this.send = options.send;
++    this.setTimer = options.setTimer ?? ((run, ms) => setTimeout(run, ms));
++    this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
++  }
++
++  get enabled(): boolean {
++    return this.intervalMs > 0;
++  }
++
++  /** A turn starts: the counts begin again. The time of the last note is kept so the interval spans turns. */
++  begin(): void {
++    this.dropPending();
++    this.startedAt = this.now();
++    this.toolCalls = 0;
++    this.lastTool = undefined;
++    this.sinceNote = 0;
++    this.namesSinceNote.clear();
++    this.wave.clear();
++    this.waveOpen = false;
++    this.lastNoteWindowStart = this.startedAt;
++  }
++
++  /** The turn ended or remote control went off: nothing is held back for later. */
++  end(): void {
++    this.dropPending();
++    this.startedAt = undefined;
++    this.wave.clear();
++    this.waveOpen = false;
++  }
++
++  /** Remote control went off: even the interval is forgotten. */
++  reset(): void {
++    this.end();
++    this.lastNoteAt = undefined;
++  }
++
++  tool(name?: string): void {
++    if (this.startedAt === undefined) return;
++    this.toolCalls += 1;
++    this.sinceNote += 1;
++    if (name !== undefined && name.length > 0) {
++      this.lastTool = name;
++      this.namesSinceNote.add(name);
++    }
++    if (this.sinceNote >= this.threshold) this.post({ priority: 1, build: () => this.toolNote() });
++  }
++
++  /** A subagent changed state. The first one to start opens a wave and the last one to finish closes it. */
++  subagent(event: WaveEvent): void {
++    if (this.startedAt === undefined) return;
++    if (event.kind === "upsert") {
++      this.wave.set(event.id, { status: event.status, label: event.label ?? event.id });
++      if (!this.waveOpen && ACTIVE.has(event.status)) {
++        this.waveOpen = true;
++        this.post({ priority: 2, build: () => this.waveStartNote() });
++        return;
++      }
++    } else if (event.kind === "remove") {
++      this.wave.delete(event.id);
++    } else {
++      return;
++    }
++    if (this.waveOpen && this.activeCount() === 0) {
++      const done = [...this.wave.values()].filter((one) => one.status === "done").length;
++      const failed = [...this.wave.values()].filter((one) => one.status === "failed").length;
++      this.waveOpen = false;
++      this.wave.clear();
++      this.post({ priority: 3, build: () => this.waveEndNote(done, failed) });
++    }
++  }
++
++  snapshot(): TurnSnapshot {
++    const running = this.startedAt !== undefined;
++    return {
++      running,
++      elapsedMs: running ? this.now() - (this.startedAt as number) : 0,
++      toolCalls: this.toolCalls,
++      ...(this.lastTool === undefined ? {} : { lastTool: this.lastTool }),
++      waveRunning: this.activeCount(),
++    };
++  }
++
++  private activeCount(): number {
++    let count = 0;
++    for (const one of this.wave.values()) if (ACTIVE.has(one.status)) count += 1;
++    return count;
++  }
++
++  private elapsed(): string {
++    return formatElapsed(this.startedAt === undefined ? 0 : this.now() - this.startedAt);
++  }
++
++  private toolNote(): string {
++    const names = [...this.namesSinceNote];
++    const shown = names.slice(0, TOOL_NAMES_SHOWN).join(", ");
++    const more = names.length > TOOL_NAMES_SHOWN ? ` and ${names.length - TOOL_NAMES_SHOWN} more` : "";
++    const window = this.lastNoteWindowStart === undefined ? "" : ` in the last ${formatElapsed(this.now() - this.lastNoteWindowStart)}`;
++    const used = shown.length > 0 ? ` (${shown}${more})` : "";
++    return `Still working: ${this.sinceNote} tool calls${window}${used}. ${this.elapsed()} into this turn.`;
++  }
++
++  private waveStartNote(): string {
++    const labels = [...this.wave.values()].map((one) => one.label).slice(0, WAVE_LABELS_SHOWN);
++    const total = this.activeCount();
++    const more = total > labels.length ? ` and ${total - labels.length} more` : "";
++    return `A subagent wave started: ${total} running${labels.length > 0 ? ` (${labels.join(", ")}${more})` : ""}. ${this.elapsed()} into this turn.`;
++  }
++
++  private waveEndNote(done: number, failed: number): string {
++    const failedPart = failed > 0 ? `, ${failed} failed` : "";
++    return `The wave finished: ${done} done${failedPart}. ${this.elapsed()} into this turn.`;
++  }
++
++  private post(next: Pending): void {
++    if (!this.enabled) return;
++    const at = this.now();
++    if (this.lastNoteAt === undefined || at - this.lastNoteAt >= this.intervalMs) {
++      this.emit(next);
++      return;
++    }
++    // Inside the interval: keep the weightier note and send it when the interval ends.
++    if (this.pending === undefined || next.priority >= this.pending.priority) this.pending = next;
++    if (this.timer === undefined) {
++      this.timer = this.setTimer(() => {
++        this.timer = undefined;
++        const held = this.pending;
++        this.pending = undefined;
++        if (held !== undefined && this.startedAt !== undefined) this.emit(held);
++      }, this.lastNoteAt + this.intervalMs - at);
++    }
++  }
++
++  private emit(note: Pending): void {
++    const text = note.build();
++    this.lastNoteAt = this.now();
++    this.lastNoteWindowStart = this.lastNoteAt;
++    this.sinceNote = 0;
++    this.namesSinceNote.clear();
++    this.pending = undefined;
++    try {
++      this.send(text);
++    } catch {
++      // a note that cannot be sent is not worth stopping the turn for
++    }
++  }
++
++  private dropPending(): void {
++    this.pending = undefined;
++    if (this.timer !== undefined) {
++      this.clearTimer(this.timer);
++      this.timer = undefined;
++    }
++  }
++}
++
++// ---- a status question ---------------------------------------------------------------
++
++const STATUS_PATTERNS: readonly RegExp[] = [
++  /^(status|progress|update)( (update|report|check))?( please| pls)?$/,
++  /^(what'?s|what is|whats) (the )?(current )?(status|progress|going on|happening|up)( (now|right now|here))?$/,
++  /^how('?s| is) (it|that|this|the (run|review|task|work|build)) (going|progressing|doing)( so far| now)?$/,
++  /^(are you|r u) (still )?(working|running|busy|alive|there|done|finished|stuck)( yet| now)?$/,
++  /^(is it|are we) (done|finished|ready|stuck)( yet)?$/,
++  /^what are you (doing|working on)( now| right now)?$/,
++  /^where are (you|we)( now| at)?$/,
++  /^(any )?(news|progress|updates?)$/,
++  /^still (working|running|there|alive)$/,
++  /^(статус|прогресс|как дела|как успехи|как идёт|как идет|как продвигается( работа)?|что там|что нового|что делаешь|что происходит|что сейчас происходит)( (сейчас|там|уже))*$/,
++  /^(ты )?(тут|жив|ещё работаешь|еще работаешь|работаешь|завис|завис(ла)?|закончил|закончила|готов|готово)( (там|уже|ещё|еще|сейчас))*$/,
++];
++
++/** A short plain line that only asks how the run is going. Anything longer or wider goes to the model. */
++export function isStatusQuestion(line: string): boolean {
++  const text = line
++    .trim()
++    .toLowerCase()
++    .replace(/[?!.…]+$/u, "")
++    .replace(/\s+/g, " ")
++    .trim();
++  if (text.length === 0 || text.length > 60) return false;
++  return STATUS_PATTERNS.some((pattern) => pattern.test(text));
++}
++
++export interface StatusFacts {
++  /** A model turn is writing now. */
++  turnRunning: boolean;
++  snapshot: TurnSnapshot;
++  /** Lines from this topic waiting for their turn. */
++  topicWaiting: number;
++  /** Everything waiting in the shell's queue, when the host says. */
++  queued?: number;
++  /** Approvals and questions waiting for an answer in the topic. */
++  openPrompts: number;
++  mode?: string;
++}
++
++/** The answer to a status question, from the session's own state. */
++export function describeStatus(facts: StatusFacts): string {
++  const lines: string[] = [];
++  const { snapshot } = facts;
++  if (facts.turnRunning && snapshot.running) {
++    const tools = snapshot.toolCalls === 0 ? "no tool calls yet" : `${snapshot.toolCalls} tool call${snapshot.toolCalls === 1 ? "" : "s"}${snapshot.lastTool === undefined ? "" : `, last: ${snapshot.lastTool}`}`;
++    lines.push(`Working: this turn has run for ${formatElapsed(snapshot.elapsedMs)}, ${tools}.`);
++  } else if (facts.turnRunning) {
++    lines.push("Working: a turn is running.");
++  } else {
++    lines.push("Busy: the shell is occupied with a command or its queue; no model turn is writing right now.");
++  }
++  if (snapshot.waveRunning > 0) lines.push(`Subagents: ${snapshot.waveRunning} still running.`);
++  const queued = Math.max(facts.queued ?? 0, facts.topicWaiting);
++  if (queued > 0) {
++    lines.push(`Queue: ${queued} message${queued === 1 ? "" : "s"} waiting${facts.topicWaiting > 0 ? ` (${facts.topicWaiting} from this topic)` : ""}.`);
++  }
++  if (facts.openPrompts > 0) {
++    lines.push(`Waiting for you: ${facts.openPrompts} approval or question open in this topic.`);
++  }
++  if (facts.mode !== undefined) lines.push(`Mode: ${facts.mode}.`);
++  return lines.join("\n");
++}
+
+--- src/remote/protocol.ts
+@@ 168,179 @@
+ export const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
+ export const MAX_APPROVAL_TIMEOUT_MS = 60 * 60_000;
+ export const MIN_APPROVAL_TIMEOUT_MS = 100;
++/**
++ * Flow 419, AC3: an approval or question nobody has answered gets a reminder in the topic after this long,
++ * and again at the same interval, at most {@link MAX_PROMPT_REMINDERS} times in all.
++ */
++export const DEFAULT_PROMPT_REMINDER_MS = 2 * 60_000;
++export const MAX_PROMPT_REMINDERS = 3;
+ /**
+  * How long serve waits, after it wrote an approval decision to the shell's stream, for the shell
+  * to say it received it (flow 397). Without that word the approval is shown as "not confirmed",
+
+--- src/remote/registry.ts
+@@ 30,37 @@
+   status: RemoteSessionStatus;
+   /** When the heartbeat went stale; the orphan timeout runs from here. */
+   unavailableSince?: number;
++  /** The closing note is queued and the topic is being archived; a retry must not queue it again. */
++  closing?: boolean;
+ }
+ 
+ const REGISTRY_VERSION = 1;
+
+--- src/remote/service.ts
+@@ 46,52 @@
+   machine?: string;
+   /** Called with a line for the operator. Never carries a secret. */
+   onNotice?: (message: string) => void;
+-  surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalAckMs" | "approvalIds">;
++  surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalAckMs" | "approvalIds" | "promptIds" | "reminderMs">;
+   lock?: Pick<AcquirePollLockOptions, "pid" | "isAlive"> & { disabled?: boolean };
+   /** Test seams for a pairing (code, expiry, poll cadence). */
+   pairing?: ChannelsOptions["pairing"];
+
+--- src/remote/shell-bridge.ts
+@@ 6,12 @@
+ //
+ //   - the lifecycle: OFF by default, turned on only by `enable()` (the explicit
+ //     `/remote-control` command), turned off by `disable()` or when the shell
+-//     closes (`disable()` deregisters, which deletes the topic);
++//     closes (`disable()` deregisters, which archives the topic: a closing note, history kept);
+ //   - a line from Telegram: idle, it runs as a typed line; busy, it goes through
+ //     the host's ordinary user queue. It does not invent a queue of its own;
+ //   - the reply: the final assistant text of a Telegram-originated turn,
+
+--- src/remote/shell-bridge.ts
+@@ 26,32 @@
+ import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
+ import type { NormalizedMessage } from "../harness/provider/types";
+ import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
++import { ProgressNotes, type WaveEvent, describeStatus, isStatusQuestion } from "./progress-notes";
+ import { HISTORY_DEFAULT_COUNT, HISTORY_EMPTY_MESSAGE, formatHistoryItem, parseHistoryArgs, selectHistory } from "./history";
+ 
+ /** The label a Telegram line carries in the queue and the transcript. */
+
+--- src/remote/shell-bridge.ts
+@@ 131,138 @@
+   turnRunning?(): boolean;
+   /** The live session was resumed (`-r`, `-c`, `/resume`), not started fresh. The automatic restore needs it. */
+   sessionResumed?(): boolean;
++  /** What a status question from the topic is answered with besides the bridge's own counts (flow 419, AC6). */
++  sessionState?(): { queued: number; mode?: string };
+ }
+ 
+ export interface RemoteBridgeOptions {
+
+--- src/remote/shell-bridge.ts
+@@ 149,162 @@
+   commandLimitMs?: number;
+   /** How long a picker or a Yes/No waits for a press. */
+   choiceTimeoutMs?: number;
++  /** How often a command held for an idle main looks again (flow 419). */
++  idlePollMs?: number;
++  /** A command held for an idle main is dropped after this long (flow 419). */
++  queuedCommandLimitMs?: number;
++  /** At most one progress note per this long; 0 turns the notes off (flow 419, AC5). */
++  progressIntervalMs?: number;
++  /** Tool calls since the last note that make a stretch "tool-heavy". */
++  progressToolThreshold?: number;
+   /** Pause between two restored messages, so the topic is not flooded (flow 399). */
+   historyPaceMs?: number;
+   /** Test seam for the pause. Default: a timer. */
+
+--- src/remote/shell-bridge.ts
+@@ 309,334 @@
+   private postingClient: RemoteClientLike | undefined;
+   /** Remote control has been turned on once in this process; only that first time can restore on its own. */
+   private enabledOnce = false;
++  /** Progress notes while a turn runs and the facts for a status question (flow 419, AC5 and AC6). */
++  private readonly progress: ProgressNotes;
++  /** Approvals and questions put in the topic that nobody has answered yet. */
++  private openPrompts = 0;
+ 
+   constructor(private readonly options: RemoteBridgeOptions) {
+     this.host = options.host;
+     this.now = options.now ?? Date.now;
+     this.approvalOverrideMs = options.approvalTimeoutMs;
++    this.progress = new ProgressNotes({
++      ...(options.progressIntervalMs === undefined ? {} : { intervalMs: options.progressIntervalMs }),
++      ...(options.progressToolThreshold === undefined ? {} : { toolThreshold: options.progressToolThreshold }),
++      now: this.now,
++      send: (text) => {
++        const client = this.client;
++        if (client === undefined || !client.connected) return;
++        this.push("reply", "progress note");
++        void client.reply(composeReply(text)).catch(() => false);
++      },
++    });
+     this.router = new RemoteCommandRouter({
+       host: {
+         isBusy: () => this.host.isBusy(),
+
+--- src/remote/shell-bridge.ts
+@@ 343,349 @@
+         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
+       },
+       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
++      live: () => this.client !== undefined,
+       history: async (args) => await this.historyForCommand(args),
+       record: (text) => this.push("command", text),
+       compose: composeReply,
+
+--- src/remote/shell-bridge.ts
+@@ 378,385 @@
+         runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,
+         commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,
+         choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,
++        ...(options.idlePollMs !== undefined ? { idlePollMs: options.idlePollMs } : {}),
++        ...(options.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: options.queuedCommandLimitMs } : {}),
+       },
+     });
+   }
+
+--- src/remote/shell-bridge.ts
+@@ 544,550 @@
+     this.clientConnected = false;
+     this.lastHistory = undefined;
+     this.endTurnState();
++    this.progress.reset();
+     this.waiting.length = 0;
+     // History first, before anything awaits: a host that is about to swap its session
+     // (`/new`, `/resume`) calls this and must close the interval on the session it opened.
+
+--- src/remote/shell-bridge.ts
+@@ 606,617 @@
+       return;
+     }
+     this.push("line", `Telegram: ${preview(line)}`);
++    // A question about how the run is going is answered from session state at once; behind a running
++    // turn it would wait for the very thing it asks about (flow 419, AC6).
++    if (this.host.isBusy() && isStatusQuestion(line)) {
++      this.answerStatus(meta.updateId);
++      return;
++    }
+     this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });
+     if (this.host.isBusy()) {
+       // Queued: the message keeps its "received" reaction until its own turn starts.
+
+--- src/remote/shell-bridge.ts
+@@ 622,646 @@
+     }
+   }
+ 
++  private answerStatus(updateId: number): void {
++    const client = this.client;
++    if (client === undefined) return;
++    this.push("command", "status question answered from session state");
++    const state = this.host.sessionState?.();
++    const text = describeStatus({
++      turnRunning: this.host.turnRunning !== undefined ? this.host.turnRunning() : true,
++      snapshot: this.progress.snapshot(),
++      topicWaiting: this.waiting.length,
++      ...(state === undefined ? {} : { queued: state.queued }),
++      openPrompts: this.openPrompts,
++      ...(state?.mode === undefined ? {} : { mode: state.mode }),
++    });
++    void client
++      .reply(composeReply(text))
++      .then((sent) => this.report(updateId, sent ? "done" : "failed"))
++      .catch(() => this.report(updateId, "failed"));
++  }
++
+   /** Where a message from the topic is. Best effort and never awaited: it cannot hold the line. */
+   private report(updateId: number, state: MessageState): void {
+     const client = this.client;
+
+--- src/remote/shell-bridge.ts
+@@ 781,787 @@
+   /** A turn is starting. `source` is `tg` only for a line that came from Telegram. */
+   turnStarted(source: RemoteLineSource | undefined): void {
+     this.endTurnState();
++    if (this.client !== undefined) this.progress.begin();
+     if (source !== TG_SOURCE || this.client === undefined) return;
+     const next = this.waiting.shift();
+     this.currentUpdate = next?.updateId;
+
+--- src/remote/shell-bridge.ts
+@@ 798,804 @@
+       this.runTimer = setTimeout(() => {
+         this.timedOut = true;
+         this.push("error", "run time limit reached; stopping the turn");
+-        this.turnAbort?.abort();
++        this.turnAbort?.abort("cancelled");
+         this.host.cancelTurn();
+       }, limit);
+     }
+
+--- src/remote/shell-bridge.ts
+@@ 815,821 @@
+     if (this.stoppedByUser) return "stopped";
+     this.stoppedByUser = true;
+     this.push("command", "/stop: stopping the turn");
+-    this.turnAbort?.abort();
++    this.turnAbort?.abort("cancelled");
+     this.host.cancelTurn();
+     return "stopped";
+   }
+
+--- src/remote/shell-bridge.ts
+@@ 832,839 @@
+    * not the answer: drop it. The reply is the text of a round that ended without a
+    * tool call.
+    */
+-  toolCall(): void {
++  toolCall(name?: string): void {
++    this.progress.tool(name);
+     if (!this.tgTurn) return;
+     this.lastAssistantText = "";
+   }
+
+--- src/remote/shell-bridge.ts
+@@ 858,864 @@
+ 
+   /** The turn finished (or was cancelled). Sends the reply for a Telegram turn. */
+   async turnSettled(outcome: { failed: boolean }): Promise<void> {
++    this.progress.end();
+     if (!this.tgTurn) return;
+     const client = this.client;
+     const text = this.lastAssistantText;
+
+--- src/remote/shell-bridge.ts
+@@ 884,904 @@
+     this.push(sent ? "reply" : "error", sent ? `reply sent (${body.length} chars)` : "the reply could not be sent");
+   }
+ 
++  /** A subagent started, changed or finished. The first to start and the last to finish bound a wave (flow 419, AC5). */
++  subagentEvent(event: WaveEvent): void {
++    if (this.client === undefined) return;
++    this.progress.subagent(event);
++  }
++
+   private endTurnState(): void {
++    this.progress.end();
+     this.tgTurn = false;
+     this.currentUpdate = undefined;
+     this.currentFromId = undefined;
+     this.lastAssistantText = "";
+     this.timedOut = false;
+     this.stoppedByUser = false;
+-    this.turnAbort?.abort();
++    this.turnAbort?.abort("cancelled");
+     this.turnAbort = undefined;
+     if (this.runTimer !== undefined) {
+       clearTimeout(this.runTimer);
+
+--- src/remote/shell-bridge.ts
+@@ 920,929 @@
+    * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
+    * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
+    */
+-  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {
++  async askApproval(
++    prompt: string,
++    options: { remember?: string; signal?: AbortSignal; timeoutMs?: number } = {},
++  ): Promise<RemoteApprovalAnswer> {
+     const client = this.client;
+     if (client === undefined || !client.connected) {
+       this.push("approval", "denied: not connected");
+
+--- src/remote/shell-bridge.ts
+@@ 931,943 @@
+     }
+     this.push("approval", "asked in the topic");
+     let answer: RemoteApprovalAnswer;
++    this.openPrompts += 1;
+     try {
+       const text = composeApprovalPrompt(prompt);
+-      const timeoutMs = this.approvalTimeoutMs;
++      const timeoutMs = options.timeoutMs ?? this.approvalTimeoutMs;
+       if (client.askApproval !== undefined) {
+-        const signal = this.turnAbort?.signal;
++        const signals = [this.turnAbort?.signal, options.signal].filter((one): one is AbortSignal => one !== undefined);
++        const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+         const got = await client.askApproval(text, timeoutMs, {
+           ...(options.remember === undefined ? {} : { remember: options.remember }),
+           ...(signal === undefined ? {} : { signal }),
+
+--- src/remote/shell-bridge.ts
+@@ 949,956 @@
+       }
+     } catch {
+       answer = { decision: "deny", always: false };
++    } finally {
++      this.openPrompts -= 1;
+     }
+     const by = answer.fromId === undefined ? "" : ` by user ${answer.fromId}`;
+     this.push(
+
+--- src/remote/shell-bridge.ts
+@@ 981,987 @@
+     const timeoutMs = this.options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs;
+     const forUserId = this.telegramTurnUserId;
+     this.push("command", "ask_user question asked in the topic");
++    this.openPrompts += 1;
+     try {
+       if (client.askChoice === undefined) {
+         const index = await client.requestChoice(text, rows, timeoutMs, forUserId);
+
+--- src/remote/shell-bridge.ts
+@@ 997,1004 @@
+       return undefined;
+     } catch {
+       return undefined;
++    } finally {
++      this.openPrompts -= 1;
+     }
+   }
+ 
+
+--- src/remote/types.ts
+@@ 165,172 @@
+   sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void>;
+   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }>;
+   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
++  /** Close a topic without deleting it: its messages stay readable, nothing new is expected. */
++  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
+   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;
+   answerCallbackQuery(params: { callbackQueryId: string; text?: string }): Promise<void>;
+   /** Who the token belongs to; a bad token is a `rejected` error (401). */

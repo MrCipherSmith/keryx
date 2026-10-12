@@ -69,3 +69,6 @@ Two older tests in `src/commands/review.test.ts` encoded the old cap of 4; they 
 - 2026-10-12T04:53:18.777Z - ac-confirmed: AC16: Shell half met 2026-10-12: autonomous review of PR 7840 on 0.3.110 reached review complete (418 AC12). Claude half 2026-10-09: inline in the main session 17m58s, 5 Majors; subagent without Agent ends BLOCKED. Operator accepted 198741; depth parity tracked in a separate flow. (signed: MrCipherSmith [stated])
 - 2026-10-12T04:53:21.846Z - task-done: T10: Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)
 - 2026-10-12T04:53:23.940Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/939 (warning: PR is not a draft) (base: main)
+- 2026-10-12T19:45:57.173Z - completing
+- 2026-10-12T19:46:03.068Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-12T19:46:03.069Z - done: all gates passed

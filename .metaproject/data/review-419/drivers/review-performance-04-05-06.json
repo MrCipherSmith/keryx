@@ -1,0 +1,10 @@
+{
+ "reviewer": "review-performance",
+ "slices": [
+  "slice-04",
+  "slice-05",
+  "slice-06"
+ ],
+ "result": "raw/review-performance-04-05-06.txt",
+ "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-performance/SKILL.md"
+}

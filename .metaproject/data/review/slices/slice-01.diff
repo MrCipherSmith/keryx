@@ -1,0 +1,331 @@
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/acceptance-criteria.md
+@@ 1,28 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: The first 60 lines of the bundled `review-orchestrator/SKILL.md` state that the reading agent is the orchestrator and runs the round inline in the main session, and hold a three-point preflight (can it spawn: `Agent` tool present and depth budget left; is a round needed; round ceiling). A test pins the phrases and that the preflight precedes the workflow checklist and Step 5.
++- AC2: When the preflight finds no spawn tool or no depth left, the skill ends before any Step 1 with exactly one line `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`. The two older BLOCKED statements in the body are reduced to a pointer to the preflight. A test fails if the BLOCKED rule appears only after the Step 5 heading.
++- AC3: `flow-orchestrator` and `job-orchestrator` carry the same preflight in their first 60 lines. The `SUBAGENT-STOP` block is gone from every orchestrating `SKILL.md`, and a test fails if one comes back.
++- AC4: The agent vocabulary in `src/agents/tools.ts` can express the spawn tool, and an exported agent declared as an orchestrator keeps it in its `tools`. A test fails for an orchestrating agent file that lacks it, and for one that names it where the host does not support nested spawn.
++- AC5: The skill holds a spawn recipe: all calls of one wave in a single message; the exact `subagent_type` when the host has it, else `general-purpose` with the reviewer's skill path in the prompt; the prompt carries pointers, not pasted files; each reviewer returns a `STATUS:` line and a `REVIEW_RESULT` block; the model tier comes from `keryx review tier`. A test pins each element.
++- AC6: Waves are split by diff domain by default (logic and security, then frontend and backend, then style and tests), keeping waves A, B, C by dependency. For `--all` and a full review a wave holds at most 10 reviewers. The cap is a setting; `DEFAULT_MAX_PARALLEL_REVIEWERS` is replaced by the domain rule and the 10 ceiling, and the skill states them. Unit tests cover the planner for a 3, a 14 and a 20 reviewer set.
++- AC7: A docs-only or config-only diff yields `round not needed` with the reason in the report, and launches no reviewer. A test over two fixtures (docs-only, code) asserts both outcomes; `--all` still forces a round.
++- AC8: The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the round ceiling, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts` (5 today; the earlier text said 3 by mistake). After the last round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.
++- AC9: A reviewer that hits a rate limit returns `STATUS: RATE_LIMITED`. The orchestrator halves the wave size, requeues the reviewer and honours `retry-after` when given, at most two halvings, then `BLOCKED rate_limited` naming the queue left. Unit tests cover the planner for one and for three consecutive rate limits.
++- AC10: Every start question in the skill has a stated default for an unattended run, and an unattended run asks nothing. A test fails for a prompt without a default.
++- AC11: Skill hygiene: `review-finding.schema.json` references point at the file that exists; the two Step 0 and Step 1 numberings are one; the raw `find` is replaced by `keryx ctx`; the model rule is stated once; CAPS and NEVER emphasis conform to `opus-5-5-prompting.mdc`; the skill is not longer than its ceiling in `skill-length-ceilings.ts`, and the ceiling is not raised. A test resolves every schema and file reference of the skill.
++- AC12: The facades `vantage-review` and `vantage-job`, where this repository generates their text, state the precondition and the depth budget: "the main agent runs the skill inline and does not spawn this agent for it". Where the text is generated outside this repository, the flow's journal names the owner of that text instead.
++- AC13: `.metaproject/skills/catalog.md`, `.metaproject/routing.md` and the managed block of `CLAUDE.md` and `AGENTS.md` say the orchestrators run in the main session. A test fails when the managed block is regenerated without it.
++- AC14: Negative proof: removing the preflight from each of the three orchestrators fails at least one test (mutation run, results in the journal). Existing `review-first-round-completeness` tests still pass.
++- AC15: Docs: `docs/docs/guides/review-with-a-record.md`, `cli-reference.md` where a flag changed, the README review line and the CHANGELOG describe the preflight, the profiles, the wave rule and the rate behaviour, and say what the skill does not do. `mkdocs build --strict` passes.
++- AC16: Smoke before release: one real round in the main session on a small diff ends in a consolidated report and a recorded round; the same skill started as a subagent without `Agent` ends in the single BLOCKED line. Both are run and written in the journal. The released package is installed from npm and the smoke repeated.
+
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/context.md
+@@ 1,63 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-10-09T14:29:08.585Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [2.02] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++2. [2.008] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++3. [1.926] A shell allowlist matched against the raw command string is not a security boundary (lesson/accepted) - lessons/allowlist-not-a-boundary.md
++   A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowlist contained `bash *`, `python3 *`, `curl *`, `cd *`, `# *`, `docker *`, `sudo *`, and the exact string `rm -rf /` — each an arbitrary-execution grant that auto-approved with no prompt.
++   claimType: lesson | confidence: high | version: 1.0.0
++   scope: module:src/lib, src/commands, src/tui, entity:shell-permissions, command-risk, approval gate
++   provenance: source=flow 115 (shell approval hardening), stress reports in `.metaproject/data/stress/` link=docs/decisions/keryx-harness/ADR-0009-destructive-command-escalation.md author=unknown confirmedBy=unknown
++4. [1.917] gdctx-flag-allowlist-no-bundle-expansion (known-mistake/accepted) - known-mistakes/gdctx-flag-allowlist-no-bundle-expansion.md
++   A per-flag string allowlist that doesn't expand POSIX-bundled short flags rejects the idiomatic form of a tool's own CLI habits (`-il` vs `-i -l`); expand-then-check, not check-then-reject, for any allowlisted boolean-flag set.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:ctx, ripgrep, flag-parsing, entity:buildRgCommand, RG_SAFE_FLAGS, RG_SAFE_VALUE_FLAGS
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-3) author=unknown confirmedBy=Reproduced this session via `keryx ctx rg -il "todo" src`
++5. [1.917] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Code Health
++
++- gate: pass (as of 2026-09-27T14:21:03.234Z)
++- refresh: `keryx health run`
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
+
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/description.md
+@@ 1,46 @@
++# review-orchestrator runs inline in the main session and never half-runs
++
++Status: draft, AC awaiting operator review before freeze
++Source: user description (origin: human-request)
++
++## Problem
++
++Two of the operator's agents could not run `review-orchestrator`. One ran it as a dispatch inside a
++separate subagent that had no way to spawn the reviewers. The other first failed to launch it, then
++launched it as a review subagent, which kept orchestrating by itself and stopped midway.
++
++Causes found in the audit (`orchestrator-audit.md`, `review-orchestrator-skill-audit.md`):
++
++- The skill's first 49 lines never say "you are the orchestrator, run the round yourself", carry no
++  preflight and no round ceiling. The only fail-closed rule (`BLOCKED nested_dispatch_unavailable`)
++  sits at ~lines 1072 and 1188 of 1712, so an agent reaches it at Step 8, after it is already
++  orchestrating.
++- "does not perform any review logic itself" invites handing the whole round to one subagent.
++- `job-orchestrator` carries a `SUBAGENT-STOP` block, while `vantage-job` is itself a subagent that
++  must run the skill. The chain main, vantage-job, orchestrator subagent, review, reviewers is four
++  layers against a default depth limit of three (Claude Code docs, sub-agents).
++- Keryx's exported agent vocabulary (`src/agents/tools.ts`) has no spawn tool.
++- `--all` contradicts the skill's own red flag; no "no round needed" branch; start questions without an
++  unattended default; a dead schema reference; double Step numbering; a raw `find` the hook blocks.
++- The dispatch cap (`DEFAULT_MAX_PARALLEL_REVIEWERS = 4`, `src/review/caps.ts`) is not in the skill and
++  cannot adapt to a rate limit.
++
++## Expected Outcome
++
++An agent that reads the skill knows within the first screen: it is the orchestrator and runs inline in
++the main session; if it cannot spawn, it stops with one line before doing anything; whether a round is
++needed at all; how to spawn each wave; how many rounds are allowed; when it is done.
++
++## Outcome criteria
++
++- Запрос (дословно): «после последнего обновления получилось так, что у меня два агента не смогли нормально запустить ревью оркестратора» (source: helyx 194482, 2026-10-09T13:03Z)
++- Эффект (оператор, дословно): «ревью оркестратор должен быть основным механизмом ревьюинга и работать безотказно максимально» (source: helyx 194614, 2026-10-09T14:28Z)
++- Эффект (формализация агента): `review-orchestrator` is the default way a review is done. Launched from the main session it completes a round; launched where it cannot spawn, it refuses in one line without side effects. It never stops midway silently: every end is either a consolidated report or a named `BLOCKED` reason.
++- Как наблюдать (предложение агента): run the skill in the main session on a small diff, and run it as a subagent without the `Agent` tool. The first ends in a consolidated report and a recorded round, the second in a single `STATUS: BLOCKED` line. The tests listed in the acceptance criteria fail when the preflight is removed.
++
++## Out of Scope
++
++- Moving `review-orchestrator` or `flow-orchestrator` into subagents (decided: not by default; a later flow if the operator wants it, after the host and version of the two failing agents are known).
++- The operator's global `~/.claude/CLAUDE.md` (the line routing review through `vantage-review`): the operator's own file; recorded as a follow-up, not edited here.
++- Flow 416 closing, flow 415 and any other open item.
++- TUI: no new user-facing surface. Wave progress already appears through the existing round record; a TUI view of waves is not added, by choice.
+
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/journal.md
+@@ 1,52 @@
++# Flow Journal
++
++- 2026-10-09T14:29:08.833Z - flow created
++- 2026-10-09T14:38:20.854Z - frozen: 16 criteria; checksum recorded
++- 2026-10-09T14:38:21.055Z - started
++- 2026-10-09T14:38:51.111Z - task-added: T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)
++- 2026-10-09T14:38:51.540Z - task-added: T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)
++- 2026-10-09T14:38:51.913Z - task-added: T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)
++- 2026-10-09T14:38:52.345Z - task-added: T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)
++- 2026-10-09T14:38:52.760Z - task-added: T9: Mutation proof, docs, CHANGELOG (AC14 AC15)
++- 2026-10-09T14:38:53.201Z - task-added: T10: Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)
++- 2026-10-09T14:38:53.631Z - task-depends-set: T5: dependsOn T1, T2, T3, T4 (was empty) — docs and mutation proof need the final behaviour
++- 2026-10-09T14:38:54.042Z - task-depends-set: T6: dependsOn T5 (was empty) — smoke runs on the finished change
++- 2026-10-09T14:40:21.845Z - task-depends-set: T5: dependsOn T1 (was T1, T2, T3, T4) — correct numbering: default scaffold tasks T1-T4 exist
++- 2026-10-09T14:40:22.048Z - task-depends-set: T7: dependsOn T1 (was empty) — after context
++- 2026-10-09T14:40:22.253Z - task-depends-set: T8: dependsOn T1 (was empty) — after context
++- 2026-10-09T14:40:22.456Z - task-depends-set: T9: dependsOn T5, T6, T7, T8 (was empty) — docs and mutation proof need final behaviour
++- 2026-10-09T14:40:22.664Z - task-depends-set: T10: dependsOn T9 (was empty) — smoke runs on the finished change
++- 2026-10-09T14:40:22.868Z - task-depends-set: T2: dependsOn T1 (was empty) — scaffold
++- 2026-10-09T14:40:29.905Z - task-done: T1: Collect remaining context
++- 2026-10-09T15:00:15.648Z - ac-updated: AC8: "The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the ceiling of 3, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`. After the third round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant." -> "The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the round ceiling, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts` (5 today; the earlier text said 3 by mistake). After the last round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant." (AC8 named 3 but the code constant REVIEW_ROUND_CAP is 5 (flow 391); the criterion's real content is equality with the constant. Agent error in the original text, found by the implementing fork. No confirmations existed yet.)
++- 2026-10-09T15:08:01.161Z - task-done: T2: Implement per plan
++- 2026-10-09T15:08:01.571Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-10-09T15:08:01.938Z - task-done: T4: Self-review and prepare draft PR
++- 2026-10-09T15:08:02.302Z - task-done: T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)
++- 2026-10-09T15:08:02.673Z - task-done: T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)
++- 2026-10-09T15:08:03.048Z - task-done: T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)
++- 2026-10-09T15:08:03.417Z - task-done: T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)
++
++## Notes (AC12, AC14)
++
++### AC12 — owner of the facade text
++
++The `vantage-review` and `vantage-job` facade text is not generated by Keryx: it comes from
++`~/.claude/vantage-source`. That path owns the wording. This flow changes the Keryx side only
++(skills, catalog, routing, managed block); the facade still has to say "run inline in the main
++session" in its own source.
++
++### AC14 — mutation proof
++
++Each mutation was applied to the shipped file, the named test file run, then the file restored.
++
++| Mutation | Test file | Result |
++|---|---|---|
++| `MAX_REVIEWERS_PER_WAVE_FULL` 10 -> 20 | `src/review/caps.test.ts` | killed (5 fail) |
++| `MAX_RATE_HALVINGS` 2 -> 5 | `src/review/caps.test.ts` | killed (2 fail) |
++| `claude` added to `HOSTS_WITH_NESTED_SPAWN` | `src/agents/tools.test.ts` | killed (1 fail) |
++| `STATUS: BLOCKED nested_dispatch_unavailable` replaced in the review-orchestrator SKILL.md | `src/gdskills/review-orchestrator-preflight.test.ts` | killed (1 fail) |
++
++Two older tests in `src/commands/review.test.ts` encoded the old cap of 4; they now pass
++`--parallel 4` explicitly.
++- 2026-10-09T15:08:56.912Z - task-done: T9: Mutation proof, docs, CHANGELOG (AC14 AC15)
+
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/plan.md
+@@ 1,15 @@
++# Implementation Plan
++
++Status: draft (flow-init skill fills this after context and brainstorm)
++
++## Approach
++
++Chosen approach and why (link brainstorm alternatives if any).
++
++## Steps
++
++1. ...
++
++## Risks
++
++- ...
+
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 21,30 @@
+ 
+ # Flow Orchestrator
+ 
++## Preflight
++
++Run in the main session: this skill dispatches workers. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
++
+ ## Purpose
+ 
+ Flow Orchestrator is the Task Manager-aware implementation orchestrator. Plan bridge: publish the tasks with `plan_set` under the ids `T1`…`Tn`, mirror each `keryx flow task done` with `plan_update`, and publish Phase 4's completion choice as `proposed` — see the `session-plan-bridge` rule.
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 32,37 @@
+ 
+ Use this skill instead of `job-orchestrator` when the user wants a managed story/issue lifecycle with frozen acceptance criteria, task state, an explicit completion choice, Code Health, and a durable flow package in `.metaproject/flows/`.
+ 
+-Do not modify `job-orchestrator` or `task-implementer` behavior. They remain usable without Task Manager. This skill coordinates them through flow state.
+-
+ ## Hard Preconditions
+ 
+ 1. Read `.metaproject/index.md` and `.metaproject/metaproject.json`.
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 124,131 @@
+       keryx flow next <id> --json
+       ```
+ 
+-      This is the first task whose `status` is not `done` and whose declared
+-      `dependsOn` are all `done` — the ordering computed from the package
+-      instead of re-derived by you from prose.
++      This is the first task not `done` whose declared `dependsOn` are all
++      `done` — computed from the package, not re-derived from prose.
+ 
+    4. **Read the `resume` field before dispatching anything.** It has three
+       answers and they are not interchangeable:
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 142,150 @@
+         or close the task (`keryx flow task done <id> <Tn>`). Re-dispatching
+         over an unresolved attempt is how the same work gets done twice.
+ 
+-      `keryx flow next` also lists every OTHER not-done task carrying an
+-      unresolved attempt, under `unresolved`. Those are parallel dispatches that
+-      never reported back; resolve them the same way before assuming the flow is
+-      idle.
++      `keryx flow next` also lists every OTHER not-done task with an unresolved
++      attempt, under `unresolved`: parallel dispatches that never reported back.
++      Resolve them the same way before assuming the flow is idle.
+ 
+    5. Before dispatching a worker for that task, record the attempt:
+ 
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 436,452 @@
+ 4. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
+    never handed whole to one subagent: one without a dispatch tool returns `STATUS: BLOCKED`.
+    ```bash
+-   keryx review budget --spent <usd-so-far> --outstanding <subagents you already have in flight>
++   keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
+    ```
+    A non-zero exit means the spend ceiling (3 USD by default) has been reached:
+    **stop and ask the user** rather than dispatching another fan-out — never shrink the fan-out to fit.
+    Dispatch prompts point at sources (files, SHAs, the PR) and never paraphrase a contract.
+ 
+-   `--outstanding` is the part that matters here. `review-orchestrator`
+-   dispatches reviewers in parallel and runs *nested* under this skill, and
+-   keryx cannot observe subagents in another process. Passing the count you
+-   already have in flight is the only thing that makes the concurrency cap mean
+-   anything across the nesting; omit it and the cap bounds the reviewer fan-out
+-   alone, which the review record then states plainly rather than implying
+-   otherwise.
++   `--outstanding` is the part that matters here. `review-orchestrator` runs inline
++   in this session and dispatches reviewers in parallel; keryx cannot observe other
++   subagents. Passing the count still running is the only thing that makes the
++   concurrency cap mean anything; omit it and the cap bounds the reviewer fan-out
++   alone, which the review record then states plainly. Add `--full` for `--all`.
+ 
+ 5. If findings require code changes, dispatch fix work through `task-implementer`
+    and record the fix task in the flow.
+
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 584,592 @@
+    findings, affected graph, relevant wiki, and health/testing artifacts;
+    identify the likely cycle cause; choose a materially different fix strategy
+    or split the work into narrower tasks; record the decision in `journal.md`;
+-   then continue with the enriched context.
++   then continue with the enriched context. The review round count is not reset:
++   past `REVIEW_ROUND_CAP` rounds on one merge-base..HEAD, report to the operator
++   instead of running another round.
+ 6. Never merge while findings or required checks remain unresolved. If the
+    re-planned approach still cannot produce a mergeable PR, leave the flow
+    `in-progress` and report the blocker instead of forcing completion.

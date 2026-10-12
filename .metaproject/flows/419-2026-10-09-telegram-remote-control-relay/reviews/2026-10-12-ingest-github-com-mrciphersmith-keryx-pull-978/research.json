@@ -1,0 +1,487 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-04-05-06:F-001",
+      "source": "raw/review-architecture-04-05-06.txt",
+      "question": "Is review-architecture finding F-001 (The shell tells the operator that turning remote control off deletes the topic, but this PR changed ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-04-05-06.txt F-001; keryx ctx rg --all -n 'deletes the topic|topic is deleted' src/tui/tui-shell.ts in the post-merge tree matches line 7036 and line 7044",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-01: The shell still tells the operator that closing remote control deletes the topic). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Reword line 7036 to 'closing the shell archives the topic.' and line 7044 to '◇ remote control off: the topic is archived.' (reuse the wording of remote-queue-wiring.ts or one shared constant), update any test that pins the old text, and fix the two stale comments at src/remote/shell-bridge.test.ts lines 178 and 216."
+    },
+    {
+      "id": "review-architecture-04-05-06:F-002",
+      "source": "raw/review-architecture-04-05-06.txt",
+      "question": "Is review-architecture finding F-002 (The new LocalApproval type and its doc comment were inserted between the JSDoc that describes StepTa) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-04-05-06.txt F-002; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-01: LocalApproval and its comment sit between the StepTarget JSDoc and `type StepTarget`), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. tui-shell.ts:1982-1996: the 'Where a wizard step renders' comment now documents LocalApproval and StepTarget has none. Optional: move the LocalApproval block above the JSDoc."
+    },
+    {
+      "id": "review-clean-code-01-02-03:F-001",
+      "source": "raw/review-clean-code-01-02-03.txt",
+      "question": "Is review-clean-code finding F-001 (This flow changed the orphan sweep from deleting the topic to archiving it, and renamed the sibling ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02-03.txt F-001; raw/review-clean-code-01-02-03.txt F-001 and F-002, review-logic-01-02-03.txt F-002, review-style-01-02-03.txt F-002; lines read in the reviewers' post-merge trees",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-08: Two tests no longer check what their names claim after the move from delete to archive). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Rename the orphan test to '...cancels the archive' and add expect(h.api.closedTopics).toEqual([]) next to the deletedTopics assertion; replace the last approval-mirror assertion with expect(current(prompt.message.messageId).text).toBe(textAfterShell)."
+    },
+    {
+      "id": "review-clean-code-01-02-03:F-002",
+      "source": "raw/review-clean-code-01-02-03.txt",
+      "question": "Is review-clean-code finding F-002 (textAfterShell is captured at line 66, before the late press is pushed. The assertion at line 71 rep) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02-03.txt F-002; raw/review-clean-code-01-02-03.txt F-001 and F-002, review-logic-01-02-03.txt F-002, review-style-01-02-03.txt F-002; lines read in the reviewers' post-merge trees",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-08: Two tests no longer check what their names claim after the move from delete to archive). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Rename the orphan test to '...cancels the archive' and add expect(h.api.closedTopics).toEqual([]) next to the deletedTopics assertion; replace the last approval-mirror assertion with expect(current(prompt.message.messageId).text).toBe(textAfterShell)."
+    },
+    {
+      "id": "review-clean-code-04-05-06:F-001",
+      "source": "raw/review-clean-code-04-05-06.txt",
+      "question": "Is review-clean-code finding F-001 (This flow changed closing the shell from deleting the topic to archiving it, and reworded the siblin) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-04-05-06.txt F-001; keryx ctx rg --all -n 'deletes the topic|topic is deleted' src/tui/tui-shell.ts in the post-merge tree matches line 7036 and line 7044",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-01: The shell still tells the operator that closing remote control deletes the topic). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Reword line 7036 to 'closing the shell archives the topic.' and line 7044 to '◇ remote control off: the topic is archived.' (reuse the wording of remote-queue-wiring.ts or one shared constant), update any test that pins the old text, and fix the two stale comments at src/remote/shell-bridge.test.ts lines 178 and 216."
+    },
+    {
+      "id": "review-clean-code-04-05-06:F-002",
+      "source": "raw/review-clean-code-04-05-06.txt",
+      "question": "Is review-clean-code finding F-002 (Seven approval docks repeat the same two pieces of code. The dock options block 'onOpen: () => { chr) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-04-05-06.txt F-002; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-02: The same dock wiring is pasted into seven (reviewers counted up to 14) approval docks), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. onOpen { blurComposer(); race?.opened() }, dockSignal and the `if (race?.topicWon() === true) return false;` bail repeat across requestApprovalLocally and its card helpers. Optional: dockOpen/dockSignal/lostToTopic helpers (see also D-11, which asks for the same helper for testability)."
+    },
+    {
+      "id": "review-clean-code-04-05-06:F-003",
+      "source": "raw/review-clean-code-04-05-06.txt",
+      "question": "Is review-clean-code finding F-003 (The new LocalApproval doc comment and type were inserted between the existing JSDoc 'Where a wizard ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-04-05-06.txt F-003; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-01: LocalApproval and its comment sit between the StepTarget JSDoc and `type StepTarget`), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. tui-shell.ts:1982-1996: the 'Where a wizard step renders' comment now documents LocalApproval and StepTarget has none. Optional: move the LocalApproval block above the JSDoc."
+    },
+    {
+      "id": "review-clean-code-04-05-06:F-004",
+      "source": "raw/review-clean-code-04-05-06.txt",
+      "question": "Is review-clean-code finding F-004 (toolNote() interpolates the count with a fixed plural. describeStatus in the same file (line 274) pl) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-04-05-06.txt F-004; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-03: toolNote says '1 tool calls'; describeStatus pluralises), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. progress-notes.ts:171 versus :274; only visible when the threshold is configured to 1 (default 8), and progress-notes.test.ts:73 pins the ungrammatical form. Optional: one plural helper and a test update."
+    },
+    {
+      "id": "review-clean-code-04-05-06:F-005",
+      "source": "raw/review-clean-code-04-05-06.txt",
+      "question": "Is review-clean-code finding F-005 (The same defaults (250 ms poll, 30 minute limit) are written in DEFAULT_ROUTER_LIMITS at lines 103-1) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-04-05-06.txt F-005; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-04: Router defaults (250 ms, 30 minutes) written in DEFAULT_ROUTER_LIMITS and again in awaitIdle), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. command-router.ts:103-104 and :304. Optional: name the two values once and read DEFAULT_ROUTER_LIMITS in awaitIdle."
+    },
+    {
+      "id": "review-clean-code-04-05-06:F-006",
+      "source": "raw/review-clean-code-04-05-06.txt",
+      "question": "Is review-clean-code finding F-006 (BUSY_DEFERRED_COMMANDS (line 115) already lists these four names, and QUEUED_WHEN_BUSY_COMMANDS repe) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-04-05-06.txt F-006; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-05: QUEUED_WHEN_BUSY_COMMANDS repeats four names of BUSY_DEFERRED_COMMANDS by hand), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. command-gateway.ts:115 and :121. Optional: build the deferred list from the queued list, or add a subset test."
+    },
+    {
+      "id": "review-logic-01-02-03:F-001",
+      "source": "raw/review-logic-01-02-03.txt",
+      "question": "Is review-logic finding F-001 (The new text (also in CHANGELOG.md line 39 and .metaproject/wiki/architecture/remote-control.md line) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02-03.txt F-001; src/remote/hub.ts:968 `await this.retire(existing, \"renamed by the session\");` and :1057 `deleteForumTopic` read in the post-merge tree",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-02: Renaming a session still deletes the old topic, but the docs say only Disconnect deletes). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Either archive on rename (call this.archive(existing, \"The session was renamed.\") instead of retire at hub.ts:968, with the matching test changes) or correct the three statements to 'Only Disconnect in /channels and renaming a session delete topics'."
+    },
+    {
+      "id": "review-logic-01-02-03:F-002",
+      "source": "raw/review-logic-01-02-03.txt",
+      "question": "Is review-logic finding F-002 (`textAfterShell` is captured before the late press (line 68) and was already asserted with the same ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02-03.txt F-002; raw/review-clean-code-01-02-03.txt F-001 and F-002, review-logic-01-02-03.txt F-002, review-style-01-02-03.txt F-002; lines read in the reviewers' post-merge trees",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-08: Two tests no longer check what their names claim after the move from delete to archive). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Rename the orphan test to '...cancels the archive' and add expect(h.api.closedTopics).toEqual([]) next to the deletedTopics assertion; replace the last approval-mirror assertion with expect(current(prompt.message.messageId).text).toBe(textAfterShell)."
+    },
+    {
+      "id": "review-logic-04-05-06:F-003",
+      "source": "raw/review-logic-04-05-06.txt",
+      "question": "Is review-logic finding F-003 (In archive(), every closeForumTopic failure that is not a retryable BotApiError (network, server, ra) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-04-05-06.txt F-003; read src/remote/hub.ts:1029-1041 in the post-merge tree: the catch returns only for `isBotApiError(error) && isRetryable(error)`, and the comment says 'A refusal ... leaves nothing to close'; retire() at :1059-1061 has the stillThere guard",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-03: archive() treats any non-retryable refusal as 'topic closed' and forgets the record). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Treat a refusal as done only when the topic is gone or already closed (isThreadGone, or Telegram's TOPIC_NOT_MODIFIED); for any other BotApiError keep the record on the retry path (unavailable, expired) and emit 'topic-close-failed'. Add a test with a fake Bot API that answers 403."
+    },
+    {
+      "id": "review-logic-04-05-06:F-004",
+      "source": "raw/review-logic-04-05-06.txt",
+      "question": "Is review-logic finding F-004 (The status answer reports the mode as it would apply to a Telegram turn (`modeForTurn(true)`), not t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-04-05-06.txt F-004; keryx ctx rg shows tui-shell.ts:10114 `mode: formatModeInForce(modeForTurn(true))` while :6125 and :7008 use modeNow()",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-04: The status answer shows the Telegram-default mode instead of the mode of the running turn). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Use modeNow() in sessionState so the running turn's mode is shown; if the intent is the next topic line, label it ('Next from Telegram: ...') and show both when they differ. Add a test with a shell-typed turn running."
+    },
+    {
+      "id": "review-logic-04-05-06:F-005",
+      "source": "raw/review-logic-04-05-06.txt",
+      "question": "Is review-logic finding F-005 (isStatusQuestion matches single words that are as likely to be an instruction or an answer to the mo) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-04-05-06.txt F-005; read src/remote/progress-notes.ts:230-254 in the post-merge tree: line 241 lists закончил|закончила|готов|готово and line 231 matches a bare 'update'",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-05: isStatusQuestion swallows short lines that are answers or instructions ('готово', 'готов', 'закончил', 'update')). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Drop the bare statements that are not questions ('готов', 'готово', 'закончил', 'закончила', bare 'update') from the list, or require a question form (a kept '?' or an interrogative such as 'уже' or 'is it'); if a bare word stays, also forward the line to the model queue. Add a test that 'готово' reaches the model."
+    },
+    {
+      "id": "review-logic-04-05-06:F-006",
+      "source": "raw/review-logic-04-05-06.txt",
+      "question": "Is review-logic finding F-006 (The topic leg is capped at MAX_APPROVAL_TIMEOUT_MS (one hour), and the dock has no cap. If nobody an) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-04-05-06.txt F-006; raw/review-logic-04-05-06.txt F-006; MAX_APPROVAL_TIMEOUT_MS used at tui-shell.ts:5944 (read in the post-merge tree)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item D-06: The topic says 'denied' after an hour while the shell dock is still open and can still be allowed). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: When the topic leg ends without a press while the dock is still open, word the topic's expiry as 'no longer answerable here; still open in the shell', or re-arm the topic leg once on expiry."
+    },
+    {
+      "id": "review-security-code-04-05-06:F-001",
+      "source": "raw/review-security-code-04-05-06.txt",
+      "question": "Is review-security-code finding F-001 (awaitIdle checks this.ctx.live?.() only inside the loop body, before each poll sleep. If remote cont) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-04-05-06.txt F-001; raw/review-security-code-04-05-06.txt F-001; awaitIdle at src/remote/command-router.ts:304-320",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item D-07: awaitIdle does not re-check liveness after its last poll, so one accepted command can run after remote control went off). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Re-check liveness once after the loop: if (this.ctx.live?.() === false) { this.ctx.record(`${line} dropped: remote control went off while it waited`); return false; } return true;"
+    },
+    {
+      "id": "review-style-01-02-03:F-001",
+      "source": "raw/review-style-01-02-03.txt",
+      "question": "Is review-style finding F-001 (The two new sections 'What the topic hears' and 'What happens when the shell closes' were inserted b) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03.txt F-001; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-06: The Commands-tab paragraph of the guide now sits under the 'What happens when the shell closes' heading), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. docs/docs/guides/drive-keryx-remotely.md:645. Optional: move it back above '### What the topic hears' or give it its own heading."
+    },
+    {
+      "id": "review-style-01-02-03:F-002",
+      "source": "raw/review-style-01-02-03.txt",
+      "question": "Is review-style finding F-002 (The sibling tests in this file were renamed from 'deleted' to 'archived' in this PR, but this title ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03.txt F-002; raw/review-clean-code-01-02-03.txt F-001 and F-002, review-logic-01-02-03.txt F-002, review-style-01-02-03.txt F-002; lines read in the reviewers' post-merge trees",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-08: Two tests no longer check what their names claim after the move from delete to archive). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Rename the orphan test to '...cancels the archive' and add expect(h.api.closedTopics).toEqual([]) next to the deletedTopics assertion; replace the last approval-mirror assertion with expect(current(prompt.message.messageId).text).toBe(textAfterShell)."
+    },
+    {
+      "id": "review-style-01-02-03:F-003",
+      "source": "raw/review-style-01-02-03.txt",
+      "question": "Is review-style finding F-003 (`session()` is a near-identical copy of the helper added in src/remote/approval-mirror.test.ts (same) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03.txt F-003; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-10: session() test helper duplicated in prompt-reminder.test.ts and approval-mirror.test.ts), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. Optional: one startSession(rig, sessionId) in remote.http.test-helpers.ts."
+    },
+    {
+      "id": "review-style-04-05-06:F-001",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-001 (This PR changes close/orphan to archive the topic and updates the matching strings in remote-queue-w) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-001; keryx ctx rg --all -n 'deletes the topic|topic is deleted' src/tui/tui-shell.ts in the post-merge tree matches line 7036 and line 7044",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-01: The shell still tells the operator that closing remote control deletes the topic). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Reword line 7036 to 'closing the shell archives the topic.' and line 7044 to '◇ remote control off: the topic is archived.' (reuse the wording of remote-queue-wiring.ts or one shared constant), update any test that pins the old text, and fix the two stale comments at src/remote/shell-bridge.test.ts lines 178 and 216."
+    },
+    {
+      "id": "review-style-04-05-06:F-002",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-002 (The same wiring is pasted into every dock in `requestApprovalLocally` and its two card helpers: an `) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-002; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-02: The same dock wiring is pasted into seven (reviewers counted up to 14) approval docks), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. onOpen { blurComposer(); race?.opened() }, dockSignal and the `if (race?.topicWon() === true) return false;` bail repeat across requestApprovalLocally and its card helpers. Optional: dockOpen/dockSignal/lostToTopic helpers (see also D-11, which asks for the same helper for testability)."
+    },
+    {
+      "id": "review-style-04-05-06:F-003",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-003 (The new `LocalApproval` type and its comment were inserted between the existing JSDoc 'Where a wizar) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-003; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-01: LocalApproval and its comment sit between the StepTarget JSDoc and `type StepTarget`), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. tui-shell.ts:1982-1996: the 'Where a wizard step renders' comment now documents LocalApproval and StepTarget has none. Optional: move the LocalApproval block above the JSDoc."
+    },
+    {
+      "id": "review-style-04-05-06:F-004",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-004 (The count is not pluralised, so a threshold of 1 produces 'Still working: 1 tool calls'. `describeSt) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-004; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-03: toolNote says '1 tool calls'; describeStatus pluralises), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. progress-notes.ts:171 versus :274; only visible when the threshold is configured to 1 (default 8), and progress-notes.test.ts:73 pins the ungrammatical form. Optional: one plural helper and a test update."
+    },
+    {
+      "id": "review-style-04-05-06:F-005",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-005 (The defaults 250 and 30 * 60_000 are written twice: in `DEFAULT_ROUTER_LIMITS` (lines 103-104) and a) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-005; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-04: Router defaults (250 ms, 30 minutes) written in DEFAULT_ROUTER_LIMITS and again in awaitIdle), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. command-router.ts:103-104 and :304. Optional: name the two values once and read DEFAULT_ROUTER_LIMITS in awaitIdle."
+    },
+    {
+      "id": "review-style-04-05-06:F-006",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-006 (A ternary chain (a ternary inside a ternary) is used to pick between no signal, one signal and a com) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-006; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-07: Nested ternary choosing between no, one and a combined abort signal), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. shell-bridge.ts:940. Optional: combineSignals(signals) with early returns."
+    },
+    {
+      "id": "review-style-04-05-06:F-007",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-007 (`QUEUED_WHEN_BUSY_COMMANDS` (line 121) repeats four names that are also in this list (model, route, ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-007; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-05: QUEUED_WHEN_BUSY_COMMANDS repeats four names of BUSY_DEFERRED_COMMANDS by hand), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. command-gateway.ts:115 and :121. Optional: build the deferred list from the queued list, or add a subset test."
+    },
+    {
+      "id": "review-style-04-05-06:F-008",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-008 (The alternation lists `завис` and `завис(ла)?`. The second already matches the first, so the first i) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-008; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-08: Duplicate `завис` alternative and unnamed 60/80 caps in progress-notes and http-surface), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. progress-notes.ts:241 and :252, http-surface.ts:1733. Optional: drop the duplicate alternative and name STATUS_QUESTION_MAX_CHARS and REMINDER_EXCERPT_CHARS."
+    },
+    {
+      "id": "review-style-04-05-06:F-009",
+      "source": "raw/review-style-04-05-06.txt",
+      "question": "Is review-style finding F-009 (The two new names are inserted in the middle of the alphabetically ordered `DEFAULT_*` specifiers, b) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-04-05-06.txt F-009; read against the post-merge tree by the reviewer",
+      "reason": "Maintainability observation (item O-09: Two new names inserted mid-list in the alphabetical DEFAULT_* import of http-surface.ts), no behavioural defect. Not fixed: PR 978 is merged and this change closes the flow without touching code. http-surface.ts:50. Optional: place DEFAULT_PROMPT_REMINDER_MS and MAX_PROMPT_REMINDERS in order."
+    },
+    {
+      "id": "review-testing-practices-01-02-03:F-001",
+      "source": "raw/review-testing-practices-01-02-03.txt",
+      "question": "Is review-testing-practices finding F-001 (Absence assertions are made by sleeping a fixed time on a real clock and then asserting nothing arri) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02-03.txt F-001; raw/review-testing-practices-01-02-03.txt F-001 and raw/review-testing-practices-04-05-06.txt F-004",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-09: Absence assertions rest on fixed sleeps on a real clock). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Replace each sleep with a positive barrier: start a control prompt in a second session with the same reminderMs, wait with until() for its reminder, then assert the first topic has none; for the TUI pair make the topic fake resolve through a promise the test controls and await one extra macrotask."
+    },
+    {
+      "id": "review-testing-practices-01-02-03:F-002",
+      "source": "raw/review-testing-practices-01-02-03.txt",
+      "question": "Is review-testing-practices finding F-002 (The test aborts the signal before calling askApproval, so it returns at the very first guard (client) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02-03.txt F-002; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-01-02-03:F-003",
+      "source": "raw/review-testing-practices-01-02-03.txt",
+      "question": "Is review-testing-practices finding F-003 (The 'leave real work to the model' case lists a 70-character line as the fixture for the length guar) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02-03.txt F-003; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-001",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-001 (The wiring that makes a shell-typed turn relay to the topic lives in the 10k-line launchTuiAgentShel) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-001; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-002",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-002 (After the topic wins the race, 'if (!allowed) return false;' is the fail-closed exit for a denial pr) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-002; raw/review-testing-practices-04-05-06.txt F-002 (mutation T9) and F-008 (mutation R13), run by the reviewer against the tui and remote suites",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-10: Two permission-relevant gates survive mutation untested: a topic denial and cross-session close). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Extract the post-race mapping into approval-mirror.ts (answerFromOutcome) and test topic deny -> false, topic allow without fingerprint -> true, with fingerprint -> { approved: true, fingerprint }, dock outcome unchanged. Add a test that posts the close route for session A's approvalId with session B's sessionId and expects closed:false, A's buttons intact, and a topic press still resolving A's askApproval."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-003",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-003 (The real Telegram transport's new closeForumTopic method is not exercised by any test: orphan.test.t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-003; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-004",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-004 (The 'silence in the topic never ends the dock' test waits a fixed 15 ms inside the dock fake and the) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-004; raw/review-testing-practices-01-02-03.txt F-001 and raw/review-testing-practices-04-05-06.txt F-004",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-09: Absence assertions rest on fixed sleeps on a real clock). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Replace each sleep with a positive barrier: start a control prompt in a second session with the same reminderMs, wait with until() for its reminder, then assert the first topic has none; for the TUI pair make the topic fake resolve through a promise the test controls and await one extra macrotask."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-005",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-005 (Three places stop a turn and abort turnAbort with the reason \"cancelled\" so the topic says 'Cancelle) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-005; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-006",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-006 (openPrompts feeds the status answer ('Waiting for you: N approval or question open in this topic'). ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-006; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-007",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-007 (Two lifecycle details of ProgressNotes are unpinned. Removing progress.reset() from the disable path) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-007; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-008",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-008 (closeApproval refuses to act on an approval that belongs to another session. The new close route is ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-008; raw/review-testing-practices-04-05-06.txt F-002 (mutation T9) and F-008 (mutation R13), run by the reviewer against the tui and remote suites",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-10: Two permission-relevant gates survive mutation untested: a topic denial and cross-session close). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Extract the post-race mapping into approval-mirror.ts (answerFromOutcome) and test topic deny -> false, topic allow without fingerprint -> true, with fingerprint -> { approved: true, fingerprint }, dock outcome unchanged. Add a test that posts the close route for session A's approvalId with session B's sessionId and expects closed:false, A's buttons intact, and a topic press still resolving A's askApproval."
+    },
+    {
+      "id": "review-testing-practices-04-05-06:F-009",
+      "source": "raw/review-testing-practices-04-05-06.txt",
+      "question": "Is review-testing-practices finding F-009 (describeStatus takes the larger of the host's queue count and the lines waiting from this topic. The) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-06.txt F-009; raw/review-testing-practices-01-02-03.txt F-002 and F-003 and raw/review-testing-practices-04-05-06.txt F-001, F-003, F-005, F-006, F-007, F-009 (mutation ids R15, P10, T1-T8, T16, R29a-c, R23b-c, R28, P13, P9)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-11: Further behaviours of the PR survive mutation: post-response abort gate, length guard, dock plumbing, closeForumTopic transport, cancel reason, openPrompts, progress lifecycle, queue figure). Outside this round: PR 978 is merged and this change closes the flow without touching code. Follow-up: Add the tests the reviewer listed: a client test that aborts after the call has started; a length-guard fixture such as 'статус' + ' сейчас там уже'.repeat(5) and a just-under case; extract the per-dock plumbing into a helper in src/tui/approval-mirror.ts and test it; a createHttpBotApi test with a stubbed fetch for closeForumTopic (path and chat_id/message_thread_id body); three bridge-level tests for run-time limit, /stop and end of turn with an open approval; status tests for pending question and approval including the throw path; fake-clock progress tests for reset on disable and one note per minute across turns; describeStatus cases for queued undefined and queued below topicWaiting."
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-frontend",
+      "review-frontend-conventions",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:f144fcbeab8e",
+        "rawEvidence": "raw/review-architecture-04-05-06.txt#sha256:f144fcbeab8e",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:4a48a50c1341",
+        "rawEvidence": "raw/review-backend-04-05-06.txt#sha256:4a48a50c1341",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:1453931315db",
+        "rawEvidence": "raw/review-clean-code-04-05-06.txt#sha256:1453931315db",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:bad152f5c930",
+        "rawEvidence": "raw/review-frontend-04-05-06.txt#sha256:bad152f5c930",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend-conventions",
+        "executionId": "review-frontend-conventions:2609003e585e",
+        "rawEvidence": "raw/review-frontend-conventions-04-05-06.txt#sha256:2609003e585e",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-frontend-conventions/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:e4021350dbdd",
+        "rawEvidence": "raw/review-highload-04-05-06.txt#sha256:e4021350dbdd",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:aa5787233380",
+        "rawEvidence": "raw/review-logic-04-05-06.txt#sha256:aa5787233380",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:6b08d4ff22a0",
+        "rawEvidence": "raw/review-performance-04-05-06.txt#sha256:6b08d4ff22a0",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:2c89c71e2543",
+        "rawEvidence": "raw/review-security-code-04-05-06.txt#sha256:2c89c71e2543",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:04e402e5f0f2",
+        "rawEvidence": "raw/review-style-04-05-06.txt#sha256:04e402e5f0f2",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:bb9ff93ada23",
+        "rawEvidence": "raw/review-testing-practices-04-05-06.txt#sha256:bb9ff93ada23",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  }
+}

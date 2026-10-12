@@ -1,0 +1,1138 @@
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md
+new file mode 100644
+index 00000000..26eadec1
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md
+@@ -0,0 +1,11 @@
++# Acceptance Criteria
++
++- AC1: BLOCKED A + DONE B не закрывает A; slice claims вне конкретного dispatch не дают coverage. [verify: exec `bun test src/review/ledger.test.ts`]
++- AC2: Изменение manifest/content инвалидирует covered/stalls/not-run, включая legacy state без identity. [verify: exec `bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts`]
++- AC3: Отказ write/delegate сохраняется до auto-approval при изменении untrustedOrigin. [verify: judged]
++- AC4: Untagged ask_user с action/untrustedContent обращается к human host. [verify: exec `bun test src/tui/ask-user-bridge-arbiter.test.ts`]
++- AC5: Общий parser принимает bare/fenced/marked JSON, malformed input не даёт coverage. [verify: exec `bun test src/review/ledger.test.ts src/commands/review-slice.test.ts`]
++- AC6: DONE с open needs_context даёт actionable context решение вместо accepted. [verify: exec `bun test src/review/slice-dispatch.test.ts`]
++- AC7: Cache arbiter возвращает ID текущих options. [verify: exec `bun test src/commands/review-arbiter.test.ts`]
++- AC8: Watchdog учитывает nested artifacts и same-size changes, неизменные artifacts распознаёт как stall. [verify: exec `bun test src/review/completion-gate.test.ts`]
++- AC9: Восемь regressions и deterministic lifecycle fixture проходят; typecheck/CI результаты или blockers записаны. Нет реальных review-прогонов. [verify: judged]
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md
+new file mode 100644
+index 00000000..fcfb0a4c
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md
+@@ -0,0 +1,63 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-10-11T15:21:56.313Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.8] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++2. [1.726] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review (constraint/accepted) - constraints/stale-installed-keryx-binary.md
++   `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that build, so the review pipeline routinely does not exercise the code being reviewed.
++   claimType: constraint | confidence: high | version: 0.1.0
++   scope: module:review, memory, entity:managed-review-package
++   provenance: source=fix-round review of PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/220 author=unknown confirmedBy=unknown
++3. [1.726] A fix round needs its own review: three consecutive rounds each introduced a blocker (lesson/accepted) - lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md
++   On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.
++   claimType: lesson | confidence: high | version: 0.5.0
++   scope: module:core, entity:project-registry
++   provenance: source=review rounds on PR #215 (flow 127), PR #216 (flow 128), PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/215 author=unknown confirmedBy=unknown
++4. [1.642] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++5. [1.477] SAC: Напиши мне скрипт на питоне цикла от 1 до 10 с промежутка… (task-note/accepted) - task-notes/sac-proposal-d820f7ae5c4b43af.md
++   Session fixed /theme perception bug: applyTheme in shell-chrome.ts now repaints already-rendered chrome (transcript frames, tone block headers, dock buttons, sidebar panels) via themeColorToHex/themeColorRemap/recolorThemeTree, because OpenTUI stores colors as RGBA objects. Committed a6dd8dd, pushed to main. Lesson already accepted directly: .metaproject/memory/lessons/theme-switch-repaint.md (created via keryx memory new, bypassing SAC because no slate was open). This proposal records the work for review/audit.
++   claimType: task-note | confidence: medium | version: 0.1.0
++   scope: unknown
++   provenance: source=sac-proposal link=./.metaproject/workspaces/workspace-55936fb9858144ec/session-evidence/6728c7b5-7e93-43a6-9ab4-ea0e9720eaf2.wrap-up.md (sha256 7f281c7cb8399293e9c361fcb0a4f19815108e08a6dfda27db1acdbd29e7f52b) author=unknown confirmedBy=unknown
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Code Health
++
++- gate: pass (as of 2026-09-27T14:21:03.234Z)
++- refresh: `keryx health run`
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md
+new file mode 100644
+index 00000000..b71ef8b0
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md
+@@ -0,0 +1,17 @@
++# Надёжность и безопасность автономного review
++
++Status: approved for implementation
++Model: openai-codex/gpt-6.1-sol
++
++## Problem
++Аудит до PR #974 выявил восемь дефектов: ложное покрытие ledger, stale retry-state, обход denial memory, разные safety floors, несовместимые parsers, starvation needs_context, неверные cached option IDs и неучтённый вложенный прогресс watchdog.
++
++## Expected Outcome
++Восемь сценариев подтверждены regression-тестами и исправлены. Покрытие, safety boundaries, parser, retries и completion согласованы.
++
++## Outcome criteria
++- Все regressions и профильные tests проходят, deterministic fixture проверяет согласованность компонентов без вызовов модели.
++- CI результаты отделены от локальных; Flow закрывается только с подтверждением MrCipherSmith.
++
++## Out of Scope
++Vantage review, реальные review-прогоны, dispatch-wave, релиз, merge и публикация без отдельного разрешения.
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json
+new file mode 100644
+index 00000000..562ff76b
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json
+@@ -0,0 +1,166 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true,
++    "confirmation": true
++  },
++  "id": "427",
++  "slug": "review-autonomy-hardening",
++  "title": "Надёжность и безопасность автономного review",
++  "status": "in-progress",
++  "createdAt": "2026-10-11T15:21:56.625Z",
++  "updatedAt": "2026-10-11T17:20:35.043Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Baseline 00879558 isolated; original audit and regression scenarios recorded"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Eight hardening findings implemented; see implementation-report.md"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "Typecheck and 1639 regression tests pass; CI pending"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "todo",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-11T15:21:56.625Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-11T17:20:33.264Z",
++      "event": "frozen",
++      "detail": "9 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-11T17:20:33.709Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-11T17:20:34.163Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-11T17:20:34.606Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-11T17:20:35.043Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/review/ledger.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts"
++    },
++    "AC3": {
++      "kind": "judged"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/tui/ask-user-bridge-arbiter.test.ts"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/review/ledger.test.ts src/commands/review-slice.test.ts"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "bun test src/review/slice-dispatch.test.ts"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "bun test src/commands/review-arbiter.test.ts"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "bun test src/review/completion-gate.test.ts"
++    },
++    "AC9": {
++      "kind": "judged"
++    }
++  }
++}
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md
+new file mode 100644
+index 00000000..ced5e129
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md
+@@ -0,0 +1,13 @@
++# Flow 427 — Implementation report
++
++Model: openai-codex/gpt-6.1-sol. Baseline: 00879558256cef065f5e22fb0df66d227253a180.
++
++1. Baseline isolated from dirty main checkout. Eight findings have regression coverage; only four were directly reproduced in the original audit. Eight archived pre-fix RED runs are not claimed.
++2. Ledger restricted to concrete dispatch; ambiguous implicit assignment gives no union coverage. Manifest/content identity invalidates stale/legacy retry coverage and counters.
++3. Write/delegate refusal checked before auto-approval across untrusted-origin changes. Review-auto safety floors fall back to human host.
++4. Shared parser handles bare/fenced/marked JSON and fails closed on malformed explicit blocks. DONE with open needs_context drives context handling/redispatch.
++5. Arbiter cache includes current option IDs. Watchdog recursively hashes artifacts, detecting nested and same-size changes.
++6. Typecheck PASS; 1639 tests PASS, 0 FAIL, 76 files; git diff --check PASS. Deterministic lifecycle passes without model calls. Independent audit was partial; parent inspection covered remaining agent gates and retry-plan changes.
++
++Log: .metaproject/data/review/flow427-final-tests.log. No live review, Vantage run, commit, push, PR, CI or release performed. PR/CI and owner confirmation remain outstanding; Flow is not closed. Local tests are not CI evidence.
++Separate dispatch-wave and original live acceptance criteria remain outside this hardening scope.
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md
+new file mode 100644
+index 00000000..b901bd78
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md
+@@ -0,0 +1,8 @@
++# Flow Journal
++
++- 2026-10-11T15:21:56.625Z - flow created
++- 2026-10-11T17:20:33.264Z - frozen: 9 criteria; checksum recorded
++- 2026-10-11T17:20:33.709Z - started
++- 2026-10-11T17:20:34.163Z - task-done: T1: Collect remaining context
++- 2026-10-11T17:20:34.606Z - task-done: T2: Implement per plan
++- 2026-10-11T17:20:35.043Z - task-done: T3: Add/adjust tests and make them pass
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md
+new file mode 100644
+index 00000000..1db9aa1f
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md
+@@ -0,0 +1,29 @@
++# Implementation Plan
++
++Status: approved by operator
++Model: openai-codex/gpt-6.1-sol
++
++## Approach
++Test-first, минимальные изменения существующих компонентов. Worktree /home/altsay/keryx/.worktrees/review-autonomy-hardening, branch fix/review-autonomy-hardening, baseline 00879558256cef065f5e22fb0df66d227253a180.
++Неатрибутированное покрытие не принимается. Широкая переработка runner и реальные model E2E отвергнуты как расширение scope и нарушение запрета запускать прогоны.
++
++## Steps
++1. Baseline и RED regression evidence для восьми сценариев.
++2. Coverage конкретного dispatch и manifest/content identity retry-state.
++3. Denial memory до auto-approval и общие safety floors.
++4. Общий parser и needs_context независимо от DONE.
++5. Arbiter cache current options и recursive content watchdog.
++6. Профильные tests/typecheck, deterministic lifecycle fixture, независимая проверка diff. CI после разрешённой публикации; локальные RED checks без model calls.
++
++## Execution tracking
++- [ ] Baseline и восемь RED reproductions
++- [ ] Coverage/retry identity
++- [ ] Safety
++- [ ] Parser/context
++- [ ] Arbiter/watchdog
++- [ ] Verification и change report
++
++## Risks
++- Legacy результаты без identity не должны давать достоверное coverage.
++- Основной checkout грязный, не изменять его файлы.
++- Graph не содержит новых review-файлов; wiki freshness unknown. Использовать текущий код worktree и воспроизводимые tests.
+diff --git a/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md
+new file mode 100644
+index 00000000..b625c288
+--- /dev/null
++++ b/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md
+@@ -0,0 +1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+diff --git a/src/commands/agent-fewer-prompts.test.ts b/src/commands/agent-fewer-prompts.test.ts
+index f513a59a..ba48eda9 100644
+--- a/src/commands/agent-fewer-prompts.test.ts
++++ b/src/commands/agent-fewer-prompts.test.ts
+@@ -312,3 +312,23 @@ test("AC7: the approval log of runs 17-19 replayed in review-auto leaves 5 of 12
+   // The probe and the wave spec the operator denied in the log stay denied.
+   expect(ran.filter((entry) => entry.includes("127.0.0.1") || entry.includes("harness wave --spec"))).toEqual([]);
+ });
++
++for (const risk of ["write", "delegate"] as const) {
++  test(`hardening: refused ${risk} is checked before autoapproval`, async () => {
++    setReviewSystem("review-auto");
++    const ran: string[] = [];
++    const tool: InteractiveTool = {
++      definition: { name: `test_${risk}`, description: "test", risk, inputSchema: { type: "object", properties: {} } },
++      invoke: async () => { ran.push(risk); return { output: "ran", isError: false }; },
++    };
++    const asked: Asked[] = [];
++    const first = scriptedProvider([callRound("f", "fetch_page", "{}"), callRound("w", tool.definition.name, "{}"), [...okReply]]);
++    await runAgentTurn(ioWith("trust", asked, false), makeDeps(first.provider, { tools: [fetchTool(), tool] }), [], "first");
++    expect(asked).toHaveLength(1);
++    const second = scriptedProvider([callRound("w2", tool.definition.name, "{}"), [...okReply]]);
++    await runAgentTurn(ioWith("trust", asked, false), makeDeps(second.provider, { tools: [tool] }), [], "retry");
++    expect(ran).toEqual([]);
++    expect(asked).toHaveLength(1);
++    expect(JSON.stringify(second.requests.at(-1))).toContain(REFUSED_EARLIER);
++  });
++}
+diff --git a/src/commands/agent.ts b/src/commands/agent.ts
+index 1367c486..6c0cf38b 100644
+--- a/src/commands/agent.ts
++++ b/src/commands/agent.ts
+@@ -5697,6 +5697,9 @@ async function executeCallUnbounded(
+       }
+     }
+   } else if (risk === "delegate") {
++    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
++      return { output: REFUSED_EARLIER, isError: true };
++    }
+     // Fail-closed like `shell`: a delegate with no approver present is denied,
+     // never silently invoked (F6). The three MAE containment invariants
+     // (read-only child tools, child policy deny, hard-false child approver)
+@@ -5739,6 +5742,9 @@ async function executeCallUnbounded(
+       }
+     }
+   } else if (risk === "write") {
++    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
++      return { output: REFUSED_EARLIER, isError: true };
++    }
+     // ADR-0010: `write` joins the shell/destructive/delegate gate. Same
+     // shape as the shell branch, but the escalation input is chosen PER TOOL
+     // (flow 275 T6, specification §7.1), not shared by every `write`-risk
+diff --git a/src/commands/review-arbiter.test.ts b/src/commands/review-arbiter.test.ts
+index e86fe77e..67fc3acf 100644
+--- a/src/commands/review-arbiter.test.ts
++++ b/src/commands/review-arbiter.test.ts
+@@ -486,3 +486,13 @@ test("replayed recorded replies are used in order", async () => {
+   expect((await arbiter.decide(ask("budget", { budgetUsedPercent: 20, raisesBudget: false })))?.reason).toBe("invalid-output");
+   expect((await arbiter.decide(ask("budget", { budgetUsedPercent: 21, raisesBudget: false })))?.verdict).toBe("allow");
+ });
++
++test("hardening: cached allow binds current recommended option", async () => {
++  const arbiter = make(ruleFollowingModel());
++  await arbiter.decide(ask("budget", GOOD_FACTS));
++  const decision = await arbiter.decide(ask("budget", GOOD_FACTS, {
++    options: [{ id: "retry", label: "Retry", description: "Retry", recommended: true }, { id: "a", label: "Stop", description: "Stop" }],
++  }));
++  expect(decision).toMatchObject({ verdict: "allow", answer: "retry", cached: false });
++  expect(readArbiterLog(LOG()).at(-1)?.answer).toBe("retry");
++});
+diff --git a/src/commands/review-arbiter.ts b/src/commands/review-arbiter.ts
+index 3fe77d9b..c1f94edd 100644
+--- a/src/commands/review-arbiter.ts
++++ b/src/commands/review-arbiter.ts
+@@ -325,7 +325,7 @@ export function createArbiter(deps: ArbiterDeps): Arbiter {
+     const rulesInForce = loaded.rules;
+     const ruleMeta = { rulesVersion: rulesInForce.version, rulesHash: rulesInForce.hash } as const;
+ 
+-    const key = cacheKey(question);
++    const key = `${cacheKey(question)}:${JSON.stringify(request.options.map((option) => option.id))}`;
+     const hit = cache.get(key);
+     if (hit !== undefined) {
+       log({ ...base, ...ruleMeta, verdict: hit.verdict, rule: hit.rule, reason: "cache", cached: true, ...(hit.answer === undefined ? {} : { answer: hit.answer }) });
+diff --git a/src/commands/review-ledger.test.ts b/src/commands/review-ledger.test.ts
+new file mode 100644
+index 00000000..239864f0
+--- /dev/null
++++ b/src/commands/review-ledger.test.ts
+@@ -0,0 +1,17 @@
++import { expect, test } from "bun:test";
++import type { RawFile } from "../review/ledger";
++import { assignRawDispatch } from "./review-ledger";
++
++for (const [label, reviewer, slices, expected] of [
++  ["ambiguous raw does not cover union", "reviewer", [["A"], ["B"]], []],
++  ["unique dispatch assigns only its slices", "reviewer", [["B"]], ["B"]],
++  ["other reviewer cannot assign reply", "other", [["A"]], undefined],
++] as const) {
++  test(label, () => {
++    const raw: RawFile = { name: "raw/reviewer.txt", hash: "hash", mtimeMs: 1, empty: false,
++      result: { reviewer: "reviewer", status: "DONE" } };
++    const assignments = new Map<string, string[][]>([[`${reviewer}\0raw/reviewer.txt`, slices.map((s) => [...s])]]);
++    assignRawDispatch([raw], assignments);
++    expect(raw.assignedSlices).toEqual(expected === undefined ? undefined : [...expected]);
++  });
++}
+diff --git a/src/commands/review-ledger.ts b/src/commands/review-ledger.ts
+index 9fcdbce5..5c508a6c 100644
+--- a/src/commands/review-ledger.ts
++++ b/src/commands/review-ledger.ts
+@@ -1,11 +1,12 @@
+ import { existsSync } from "node:fs";
++import { createHash } from "node:crypto";
+ import { readFile, readdir, stat } from "node:fs/promises";
+ import path from "node:path";
+ import { optionValue } from "../lib/args";
+ import { writeFileAtomic } from "../lib/fs";
+ import { packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+ import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
+-import { type RetryState, emptyRetryState } from "../review/retry-plan";
++import { type RetryState, emptyRetryState, scopeFingerprint } from "../review/retry-plan";
+ import type { SliceManifest } from "../review/slice";
+ 
+ export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--dry-run", "--json", "--help", "-h"] as const;
+@@ -79,10 +80,12 @@ async function loadRaws(inputDir: string): Promise<{ raws: RawFile[]; ignored: s
+   return { raws, ignored };
+ }
+ 
+-async function loadRetry(...files: string[]): Promise<RetryState> {
++async function loadRetry(fingerprint: string | undefined, ...files: string[]): Promise<RetryState> {
+   const merged = emptyRetryState();
+   for (const file of files) {
+     const state = await readJson<RetryState>(file);
++    if (fingerprint === undefined || state?.scopeFingerprint !== fingerprint) continue;
++    merged.scopeFingerprint = fingerprint;
+     for (const [reviewer, entry] of Object.entries(state?.reviewers ?? {})) {
+       const known = merged.reviewers[reviewer];
+       const covered = [...new Set([...(known?.covered ?? []), ...(entry.covered ?? [])])].sort();
+@@ -105,6 +108,14 @@ export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers:
+   return lines.join("\n");
+ }
+ 
++/** Ambiguous raw-to-dispatch references never contribute implicit coverage. */
++export function assignRawDispatch(raws: RawFile[], assignments: ReadonlyMap<string, readonly string[][]>): void {
++  for (const raw of raws) {
++    const matches = assignments.get(`${raw.result?.reviewer}\0${raw.name}`);
++    if (matches !== undefined) raw.assignedSlices = matches.length === 1 ? [...matches[0]!] : [];
++  }
++}
++
+ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void }): Promise<void> {
+   if (args.includes("--help") || args.includes("-h") || args[0] === undefined) return printLedgerHelp();
+   if (args[0] !== "build") throw new Error(`Unknown ledger subcommand "${args[0]}". See \`keryx review ledger --help\`.`);
+@@ -124,6 +135,12 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
+   const files = await packageScopeFiles(packageDir);
+   const manifestPath = path.join(inputDir, "slices", "manifest.json");
+   const manifest = await readJson<SliceManifest>(manifestPath);
++  if (manifest !== undefined) for (const entry of manifest.slices) {
++    const hash = await readFile(path.resolve(path.dirname(manifestPath), entry.path))
++      .then((body) => createHash("sha256").update(body).digest("hex")).catch(() => undefined);
++    if (hash === undefined) delete entry.contentHash;
++    else entry.contentHash = hash;
++  }
+   const { raws, ignored } = await loadRaws(inputDir);
+   const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json")))) ?? [];
+   const out = path.resolve(optionValue(rest, "--out") ?? path.join(packageDir, "research.json"));
+@@ -132,26 +149,37 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
+   const dispositions = (Array.isArray(given) ? given : given?.obligations) ?? [];
+ 
+   const payloadSlices: Record<string, string[]> = {};
++  const payloadDispatchCounts: Record<string, number> = {};
+   const ruleFiles: Record<string, string> = {};
++  const assignments = new Map<string, string[][]>();
+   for (const file of await jsonFiles(path.join(inputDir, "drivers"))) {
+-    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown }>(file);
++    const driver = await readJson<{ reviewer?: unknown; slices?: unknown; definition?: unknown; result?: unknown }>(file);
+     if (typeof driver?.reviewer !== "string") continue;
++    payloadDispatchCounts[driver.reviewer] = (payloadDispatchCounts[driver.reviewer] ?? 0) + 1;
+     if (Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === "string")) (payloadSlices[driver.reviewer] ??= []).push(...(driver.slices as string[]));
++    if (typeof driver.result === "string" && Array.isArray(driver.slices) && driver.slices.every((s) => typeof s === "string")) {
++      const key = `${driver.reviewer}\0${driver.result}`;
++      const matches = assignments.get(key) ?? [];
++      matches.push(driver.slices as string[]);
++      assignments.set(key, matches);
++    }
+     if (typeof driver.definition === "string") {
+       const definition = path.resolve(root, driver.definition);
+       if (existsSync(definition)) ruleFiles[driver.reviewer] = path.relative(root, definition);
+     }
+   }
+ 
++  assignRawDispatch(raws, assignments);
+   const required = await requiredReviewers(root, mode, files);
+   const { ledger, gaps } = buildLedger({
+     mode,
+     selected: required.required,
+     manifest,
+     payloadSlices,
++    payloadDispatchCounts,
+     ruleFiles,
+     raws,
+-    retry: await loadRetry(path.join(inputDir, "slices", "retry-state.json"), path.join(packageDir, "retry-state.json")),
++    retry: await loadRetry(manifest === undefined ? undefined : scopeFingerprint(manifest), path.join(inputDir, "slices", "retry-state.json"), path.join(packageDir, "retry-state.json")),
+     canonical,
+     dispositions,
+     manifestPath: path.relative(process.cwd(), manifestPath),
+diff --git a/src/commands/review-slice.ts b/src/commands/review-slice.ts
+index 1a8275a6..c05933d9 100644
+--- a/src/commands/review-slice.ts
++++ b/src/commands/review-slice.ts
+@@ -165,15 +165,9 @@ async function readResult(source: string): Promise<ReviewerResult> {
+   } catch (error) {
+     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
+   }
+-  try {
+-    return JSON.parse(raw) as ReviewerResult;
+-  } catch {
+-    const parsed = parseReviewResult(raw);
+-    if (parsed === undefined) {
+-      throw new UnreadableInput(`result is not valid JSON and holds no REVIEW_RESULT block: ${source}`);
+-    }
+-    return parsed as ReviewerResult;
+-  }
++  const parsed = parseReviewResult(raw);
++  if (parsed === undefined) throw new UnreadableInput(`result holds no status-bearing JSON object: ${source}`);
++  return parsed as ReviewerResult;
+ }
+ 
+ function failUnreadable(error: unknown): void {
+@@ -289,6 +283,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
+             decision: plan.decision,
+             reviewer,
+             status: plan.status,
++            scopeFingerprint: plan.state.scopeFingerprint ?? null,
+             priorAttempts: plan.priorAttempts,
+             reason: plan.reason,
+             reportLine: plan.reportLine ?? null,
+diff --git a/src/review/completion-gate.test.ts b/src/review/completion-gate.test.ts
+index 756a04de..00d4baf0 100644
+--- a/src/review/completion-gate.test.ts
++++ b/src/review/completion-gate.test.ts
+@@ -171,3 +171,16 @@ test("read-only introspection tools are exempt from the repeated-call guard", ()
+     expect(REPEATABLE_TOOL_NAMES.has(name)).toBe(true);
+   }
+ });
++
++test("hardening: nested same-size rewrite counts as progress", async () => {
++  await writePackage("live", { mode: "review-flow", status: "draft" });
++  const data = path.join(root, ".metaproject", "data", "review", "run", "raw");
++  await mkdir(data, { recursive: true });
++  const file = path.join(data, "logic.txt");
++  await writeFile(file, "aaaa");
++  const before = await findReviewGateState(root, 0);
++  await writeFile(file, "bbbb");
++  const after = await findReviewGateState(root, 0);
++  expect(after?.signature).not.toBe(before?.signature);
++  expect(decideReviewGate({ ...idle, open: after, stalls: 2, lastSignature: before?.signature })).toMatchObject({ action: "continue", stalls: 0 });
++});
+diff --git a/src/review/completion-gate.ts b/src/review/completion-gate.ts
+index c9520d4b..6247d64a 100644
+--- a/src/review/completion-gate.ts
++++ b/src/review/completion-gate.ts
+@@ -5,6 +5,7 @@
+ 
+ import { readdir, readFile, stat } from "node:fs/promises";
+ import path from "node:path";
++import { createHash } from "node:crypto";
+ import { reviewCompletionBlockers, reviewsRoot } from "./managed";
+ 
+ export const MAX_REVIEW_GATE_CONTINUES = 20;
+@@ -23,8 +24,12 @@ async function dirSignature(dir: string): Promise<string> {
+     const entries = await readdir(dir, { withFileTypes: true });
+     const parts: string[] = [];
+     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+-      const info = await stat(path.join(dir, entry.name)).catch(() => null);
+-      parts.push(`${entry.name}:${info?.size ?? 0}`);
++      const file = path.join(dir, entry.name);
++      if (entry.isSymbolicLink()) continue;
++      const content = entry.isDirectory()
++        ? await dirSignature(file)
++        : await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
++      parts.push(`${entry.name}:${content}`);
+     }
+     return parts.join(",");
+   } catch {
+diff --git a/src/review/ledger.test.ts b/src/review/ledger.test.ts
+index 596bb28a..4e008263 100644
+--- a/src/review/ledger.test.ts
++++ b/src/review/ledger.test.ts
+@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { requiredReviewers } from "./coverage";
+ import { type LedgerInputs, type RawFile, buildLedger, ledgerBlockers, parseReviewResult } from "./ledger";
++import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
+ import type { SliceManifest } from "./slice";
+ 
+ let root: string;
+@@ -28,7 +29,7 @@ afterEach(async () => {
+ const FILES = ["src/a.ts", "src/b.test.ts"];
+ 
+ function slice(id: string, files: string[], extra: Record<string, unknown> = {}) {
+-  return { id, path: `${id}.diff`, bytes: 100, files, domain: "src", split: "domain" as const, ...extra };
++  return { id, path: `${id}.diff`, bytes: 100, contentHash: `test-content-${id}`, files, domain: "src", split: "domain" as const, ...extra };
+ }
+ 
+ const MANIFEST = {
+@@ -53,6 +54,7 @@ async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInpu
+     selected: required,
+     manifest: MANIFEST,
+     payloadSlices: Object.fromEntries(required.map((r) => [r, ["slice-01", "slice-02"]])),
++    payloadDispatchCounts: Object.fromEntries(required.map((r) => [r, 1])),
+     ruleFiles: Object.fromEntries(required.map((r) => [r, `.metaproject/skills/gdskills/review/${r}/SKILL.md`])),
+     raws: required.map((r) => raw(r, "DONE")),
+     retry: { schemaVersion: 1, reviewers: {} },
+@@ -146,7 +148,7 @@ describe("buildLedger", () => {
+ 
+   test("a reviewer the retry state gave up on stays not-run and the gap says no retry is left", async () => {
+     const base = await inputs();
+-    const result = buildLedger({ ...base, retry: { schemaVersion: 1, reviewers: { "review-logic": { attempt: 1, status: "BLOCKED", notRun: true } } } });
++    const result = buildLedger({ ...base, retry: { schemaVersion: 1, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { "review-logic": { attempt: 1, status: "BLOCKED", notRun: true } } } });
+     const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+     expect(logic.status).toBe("not-run");
+     expect(result.gaps.find((g) => g.reviewer === "review-logic")!.next).toContain("no retry is left");
+@@ -179,7 +181,7 @@ describe("buildLedger", () => {
+   test("a result already counted in retry-state is not named again in the next command", async () => {
+     const base = await inputs();
+     const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ["slice-01"] } } : r));
+-    const retry = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 0, status: "DONE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
++    const retry = { schemaVersion: 1 as const, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { "review-logic": { attempt: 0, status: "DONE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
+     const gap = buildLedger({ ...base, raws, retry }).gaps.find((g) => g.reviewer === "review-logic")!;
+     expect(gap.next).not.toContain("--result");
+     expect(gap.next).toContain("--next-wave");
+@@ -188,7 +190,7 @@ describe("buildLedger", () => {
+   test("slices covered in earlier rounds, recorded in retry-state, finish an incomplete reviewer's scope", async () => {
+     const base = await inputs();
+     const raws = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ["slice-02"] } } : r));
+-    const retry = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
++    const retry = { schemaVersion: 1 as const, scopeFingerprint: scopeFingerprint(MANIFEST)!, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false, stalls: 0, covered: ["slice-01"] } } };
+     const result = buildLedger({ ...base, raws, retry });
+     expect(result.gaps.find((g) => g.reviewer === "review-logic")).toBeUndefined();
+   });
+@@ -270,3 +272,82 @@ describe("raw files", () => {
+     expect(JSON.stringify(buildLedger(base))).toBe(JSON.stringify(buildLedger(base)));
+   });
+ });
++
++// Flow 427: coverage must not be inferred from the union of unrelated dispatch payloads.
++describe("autonomy hardening regressions", () => {
++  test("bare JSON reviewer output is parsed", () => {
++    expect(parseReviewResult('{"reviewer":"review-logic","status":"DONE","findings":[],"needs_context":[]}')?.status).toBe("DONE");
++  });
++
++  test("BLOCKED A and DONE B without slice claims do not close payload union A+B", async () => {
++    const base = await inputs();
++    const earlier = raw("review-logic", "BLOCKED", {}, "raw/logic-a.txt");
++    const later = raw("review-logic", "DONE", {}, "raw/logic-b.txt");
++    const result = buildLedger({ ...base, raws: [...base.raws.filter(r => r.result?.reviewer !== "review-logic"), earlier, later] });
++    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find(r => r.reviewer === "review-logic")!;
++    expect(logic.scopeComplete).toBe(false);
++    expect(result.ledger.scopeReviewed).toBe(false);
++  });
++});
++
++describe("dispatch attribution", () => {
++  test("one raw result cannot implicitly close multiple dispatches", async () => {
++    const base = await inputs();
++    const result = buildLedger({ ...base, payloadDispatchCounts: { ...base.payloadDispatchCounts, "review-logic": 2 } });
++    expect(result.ledger.scopeReviewed).toBe(false);
++    expect(result.gaps.some(g => g.reviewer === "review-logic")).toBe(true);
++  });
++  test("explicit result assignments close only their own slices", async () => {
++    const base = await inputs();
++    const a = { ...raw("review-logic", "DONE", {}, "raw/a.txt"), assignedSlices: ["slice-01"] };
++    const b = { ...raw("review-logic", "DONE", {}, "raw/b.txt"), assignedSlices: ["slice-02"] };
++    const others = base.raws.filter(r => r.result?.reviewer !== "review-logic");
++    expect(buildLedger({ ...base, raws: [...others, a, b] }).ledger.scopeReviewed).toBe(true);
++    const hostile = { ...b, result: { ...b.result!, slices: ["slice-01", "slice-02"] } };
++    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: "BLOCKED" } }, hostile] }).ledger.scopeReviewed).toBe(false);
++  });
++  test("prose and JSON strings containing escaped quotes and braces parse", () => {
++    const object = { status: "DONE", summary: 'brace } and "quote"', reviewer: "review-logic" };
++    expect(parseReviewResult(`prose {not JSON}\n${JSON.stringify(object)}\nend`)).toEqual(object);
++  });
++});
++
++ test("labelled context result is not replaced by a trailing JSON example", () => {
++  expect(parseReviewResult('```REVIEW_RESULT\n{"status":"NEEDS_CONTEXT"}\n```\nExample: {"status":"DONE"}')?.status).toBe("NEEDS_CONTEXT");
++  expect(parseReviewResult('```REVIEW_RESULT\ninvalid\n```\n{"status":"DONE"}')).toBeUndefined();
++});
++
++
++test("deterministic lifecycle: dispatch, context, redispatch and completion gate", async () => {
++  const input = await inputs();
++  const reviewer = "review-logic";
++  const readSliceText = () => "fixture diff";
++  const dispatch = planRetry({ manifest: MANIFEST, reviewer, result: {}, state: emptyRetryState(), nextWave: true, readSliceText });
++  expect(dispatch.decision).toBe("wave");
++  expect(dispatch.wave.length).toBeGreaterThan(0);
++  const fingerprint = scopeFingerprint(MANIFEST, readSliceText)!;
++  const pendingPayload = { reviewer, status: "DONE", scopeFingerprint: fingerprint, needs_context: ["Explain the caller contract"], findings: [] };
++  const pending = parseReviewResult(JSON.stringify(pendingPayload))!;
++  expect(pending).toEqual(pendingPayload);
++  const context = planRetry({ manifest: MANIFEST, reviewer, result: pendingPayload, state: dispatch.state, readSliceText });
++  expect(context.decision).toBe("context");
++  expect(context.needsContext).toEqual(["Explain the caller contract"]);
++  const pendingRaw: RawFile = { ...raw(reviewer, "DONE"), result: pending, assignedSlices: context.wave.map(s => s.id) };
++  const pendingLedger = buildLedger({ ...input, raws: [...input.raws.filter(r => r.result?.reviewer !== reviewer), pendingRaw] });
++  expect(pendingLedger.ledger.scopeReviewed).toBe(false);
++  expect((await blockersOf(pendingLedger)).length).toBeGreaterThan(0);
++  const assigned = MANIFEST.slices.map(s => s.id);
++  const finishedPayload = { reviewer, status: "DONE", scopeFingerprint: fingerprint, slices: assigned, needs_context: [], findings: [] };
++  const finished = parseReviewResult(JSON.stringify(finishedPayload))!;
++  expect(finished).toEqual(finishedPayload);
++  const accepted = planRetry({ manifest: MANIFEST, reviewer, result: finishedPayload, state: context.state, readSliceText });
++  expect(accepted.decision).toBe("accepted");
++  expect(accepted.remaining.slices).toBe(0);
++  const finishedRaw: RawFile = { ...raw(reviewer, "DONE", {}, "raw/review-logic-second.txt"), result: finished, assignedSlices: assigned };
++  const complete = buildLedger({ ...input, payloadDispatchCounts: { ...input.payloadDispatchCounts, [reviewer]: 2 }, raws: [...input.raws.filter(r => r.result?.reviewer !== reviewer), pendingRaw, finishedRaw] });
++  expect(complete.gaps).toEqual([]);
++  expect(complete.ledger.scopeReviewed).toBe(true);
++  expect(await blockersOf(complete)).toEqual([]);
++  const changed = { ...MANIFEST, slices: MANIFEST.slices.map(s => ({ ...s, contentHash: "changed-content" })) };
++  expect(() => planRetry({ manifest: changed, reviewer, result: finishedPayload, state: accepted.state, readSliceText: () => "changed diff" })).toThrow("not bound to the current scope");
++});
+diff --git a/src/review/ledger.ts b/src/review/ledger.ts
+index 1c2e9b3a..3116d020 100644
+--- a/src/review/ledger.ts
++++ b/src/review/ledger.ts
+@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
+ import { coverageErrors, type ReviewMode } from "./coverage";
+ import { dispatchErrors } from "./dispatch";
+ import { researchErrors } from "./research";
+-import type { RetryState } from "./retry-plan";
++import { scopeFingerprint, type RetryState } from "./retry-plan";
+ import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
+ import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
+ 
+@@ -24,6 +24,8 @@ export type RawFile = {
+   name: string;
+   hash: string;
+   mtimeMs: number;
++  /** Slice assignment from the driver explicitly naming this result file. */
++  assignedSlices?: string[];
+   result?: ParsedResult;
+   /** True for a file a reviewer left empty ("(subagent produced no text)"): lost output, not a result to reconcile. */
+   empty: boolean;
+@@ -49,6 +51,8 @@ export type LedgerInputs = {
+   manifest?: SliceManifest | undefined;
+   /** Reviewer → slice ids named by its dispatched payloads. */
+   payloadSlices: Record<string, string[]>;
++  /** Only one dispatch may supply a legacy implicit assignment. */
++  payloadDispatchCounts?: Record<string, number>;
+   /** Reviewer → resolved rule file, only when it exists. */
+   ruleFiles: Record<string, string>;
+   raws: RawFile[];
+@@ -75,23 +79,39 @@ const text = (v: unknown): v is string => typeof v === "string" && v.trim().leng
+ 
+ /** The reviewer's result: the last fenced block that parses to an object carrying `status`. Never guessed from prose. */
+ export function parseReviewResult(raw: string): ParsedResult | undefined {
+-  const candidates: string[] = [];
+-  for (const match of raw.matchAll(/```[A-Za-z_]*[ \t]*\r?\n([\s\S]*?)\r?\n```/g)) candidates.push(match[1]!);
+-  const marker = raw.indexOf("REVIEW_RESULT");
+-  if (marker >= 0) {
+-    const start = raw.indexOf("{", marker);
+-    const end = raw.lastIndexOf("}");
+-    if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1));
+-  }
+-  for (const candidate of candidates.reverse()) {
++  const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
++  if (labelled.length > 0) {
+     try {
+-      const parsed = JSON.parse(candidate);
+-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed.status === "string") return parsed as ParsedResult;
+-    } catch {
+-      /* not this block */
++      const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
++      return parsed !== null && typeof parsed === "object" && typeof parsed.status === "string"
++        ? parsed as ParsedResult : undefined;
++    } catch { return undefined; }
++  }
++  let result: ParsedResult | undefined;
++  for (let start = 0; start < raw.length; start += 1) {
++    if (raw[start] !== "{") continue;
++    let depth = 0;
++    let quoted = false;
++    let escaped = false;
++    for (let end = start; end < raw.length; end += 1) {
++      const char = raw[end];
++      if (quoted) {
++        if (escaped) escaped = false;
++        else if (char === "\\") escaped = true;
++        else if (char === '"') quoted = false;
++      } else if (char === '"') quoted = true;
++      else if (char === "{") depth += 1;
++      else if (char === "}" && --depth === 0) {
++        try {
++          const parsed = JSON.parse(raw.slice(start, end + 1));
++          if (typeof parsed.status === "string") result = parsed as ParsedResult;
++          start = end;
++        } catch { /* prose brace: try the next candidate */ }
++        break;
++      }
+     }
+   }
+-  return undefined;
++  return result;
+ }
+ 
+ export function isEmptyOutput(raw: string): boolean {
+@@ -143,7 +163,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
+   for (const reviewer of input.selected) {
+     const mine = attributed.filter((r) => r.result!.reviewer === reviewer).sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
+     const latest = mine[mine.length - 1];
+-    const known = input.retry.reviewers[reviewer];
++    const fingerprint = manifest === undefined ? undefined : scopeFingerprint(manifest);
++    const known = fingerprint !== undefined && input.retry.scopeFingerprint === fingerprint ? input.retry.reviewers[reviewer] : undefined;
+     if (known?.notRun === true) {
+       runs.push({ reviewer, executionId: `${reviewer}:not-run`, status: "not-run", notRunReason: `${known.status} after the allowed retry (retry-state)`, scopeComplete: false });
+       gaps.push({ reviewer, detail: `${reviewer}: not run (${known.status} after the allowed retry)`, next: "no retry is left; the report carries the Not run line, and only the operator can accept a smaller set (dispatch override with their own quote)" });
+@@ -168,10 +189,17 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
+     const rule = input.ruleFiles[reviewer];
+     run.ruleEvidence = rule === undefined ? [] : [rule];
+     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
+-    const claimed = new Set<string>(sliceIdsOf(result.slices));
++    const claimed = new Set<string>();
+     if (manifest !== undefined) {
+-      if (finished) for (const id of input.payloadSlices[reviewer] ?? []) if (result.slices === undefined) claimed.add(id);
+-      for (const earlier of mine.slice(0, -1)) sliceIdsOf(earlier.result?.slices).forEach((id) => claimed.add(id));
++      for (const raw of mine) {
++        const reply = raw.result!;
++        const closed = FINISHED.has(String(reply.status).toUpperCase()) && (!Array.isArray(reply.needs_context) || reply.needs_context.filter(text).length === 0);
++        const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
++        if (assigned === undefined) continue;
++        const allowed = new Set(assigned);
++        const ids = reply.slices === undefined && closed ? assigned : sliceIdsOf(reply.slices);
++        for (const id of ids) if (allowed.has(id)) claimed.add(id);
++      }
+       for (const id of known?.covered ?? []) claimed.add(id);
+     }
+     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+diff --git a/src/review/retry-plan.ts b/src/review/retry-plan.ts
+index 3a2bbc5d..3e204d23 100644
+--- a/src/review/retry-plan.ts
++++ b/src/review/retry-plan.ts
+@@ -1,3 +1,4 @@
++import { createHash } from "node:crypto";
+ import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, resliceText, waveBytesOf } from "./slice";
+ import { type WaveSummary, requiredSlices, sliceGraph, summarizeWaves } from "./waves";
+ 
+@@ -22,12 +23,15 @@ export type ReviewerRetryState = {
+ 
+ export type RetryState = {
+   schemaVersion: 1;
++  scopeFingerprint?: string;
+   reviewers: Record<string, ReviewerRetryState>;
+ };
+ 
+ export type ReviewerResult = {
+   reviewer?: string;
+   status?: string;
++  /** Scope identity from the dispatch that produced this result. */
++  scopeFingerprint?: string;
+   attempt?: number;
+   /** The slices this result covered. */
+   slices?: string[];
+@@ -60,6 +64,17 @@ export type RetryPlan = {
+   state: RetryState;
+ };
+ 
++/** Retry children do not change the original scope identity. Missing content identity fails closed. */
++export function scopeFingerprint(manifest: SliceManifest, read?: (entry: SliceEntry) => string): string | undefined {
++  const originals = manifest.slices.filter((entry) => entry.retryOf === undefined);
++  const slices = originals.map((entry) => {
++    const contentHash = read === undefined ? entry.contentHash : createHash("sha256").update(read(entry)).digest("hex");
++    return { ...entry, contentHash };
++  });
++  if (slices.some((entry) => entry.contentHash === undefined)) return undefined;
++  return createHash("sha256").update(JSON.stringify({ source: manifest.source, maxBytes: manifest.maxBytes, waveBytes: manifest.waveBytes, omissions: manifest.omissions, slices })).digest("hex");
++}
++
+ export function emptyRetryState(): RetryState {
+   return { schemaVersion: 1, reviewers: {} };
+ }
+@@ -100,11 +115,25 @@ const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.fi
+ export function planRetry(input: PlanRetryInput): RetryPlan {
+   const { manifest, result, reviewer } = input;
+   const status = String(result.status ?? "").toUpperCase();
+-  const known = input.state.reviewers[reviewer];
++  const fingerprint = scopeFingerprint(manifest, input.readSliceText);
++  const current = fingerprint !== undefined && input.state.scopeFingerprint === fingerprint;
++  const hasIncoming = status !== "" || result.attempt !== undefined || asStrings(result.slices).length > 0 || asStrings(input.covered).length > 0;
++  const hasPriorScope = input.state.scopeFingerprint !== undefined || Object.keys(input.state.reviewers).length > 0;
++  if (hasIncoming && (
++    (result.scopeFingerprint !== undefined && result.scopeFingerprint !== fingerprint) ||
++    (!current && hasPriorScope && result.scopeFingerprint !== fingerprint)
++  )) {
++    throw new Error("Reviewer result is not bound to the current scope; re-dispatch before importing coverage or attempts.");
++  }
++  if (result.reviewer !== undefined && result.reviewer !== reviewer) {
++    throw new Error("Reviewer result belongs to a different reviewer.");
++  }
++
++  const known = current ? input.state.reviewers[reviewer] : undefined;
+   const resultAttempt = Number.isInteger(result.attempt) ? (result.attempt as number) : 0;
+   const priorRounds = Math.max(known?.attempt ?? 0, resultAttempt);
+   const priorStalls = Math.max(known?.stalls ?? known?.attempt ?? 0, resultAttempt);
+-  const state: RetryState = { schemaVersion: 1, reviewers: { ...input.state.reviewers } };
++  const state: RetryState = { schemaVersion: 1, ...(fingerprint === undefined ? {} : { scopeFingerprint: fingerprint }), reviewers: current ? { ...input.state.reviewers } : {} };
+ 
+   const ids = new Set(manifest.slices.map((entry) => entry.id));
+   const priorCovered = new Set(known?.covered ?? []);
+@@ -145,7 +174,10 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
+     return plan("not-run", reason, { reportLine: notRunLine(reviewer, status), wave: [], remaining: summarizeWaves([]) });
+   };
+ 
+-  const finished = status !== "NEEDS_CONTEXT" && !RETRYABLE_STATUSES.includes(status);
++  const hasContext = asStrings(result.needs_context).some((item) => item.trim() !== "");
++  const planningOnly = status === "" && input.nextWave === true;
++  const finished = !hasContext && (status === "DONE" || status === "DONE_WITH_CONCERNS" || planningOnly);
++  if (!finished && status !== "NEEDS_CONTEXT" && !RETRYABLE_STATUSES.includes(status) && !hasContext) return notRun(`unrecognized or missing reviewer status: ${status || "missing"}`);
+   if (finished) {
+     const informed = input.nextWave === true || reportedSlices.length > 0 || Array.isArray(result.slices);
+     if (!informed) {
+@@ -172,7 +204,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
+   }
+   const rounds = priorRounds + 1;
+ 
+-  if (status === "NEEDS_CONTEXT") {
++  if (status === "NEEDS_CONTEXT" || hasContext) {
+     // The reviewer stopped to ask. Folding that into the verdict as finished is the false pass this exists to prevent:
+     // the questions are put to it, and a reviewer that asks again having covered nothing new is a gap, not a pass.
+     remember({ attempt: rounds });
+diff --git a/src/review/slice-dispatch.test.ts b/src/review/slice-dispatch.test.ts
+index ce92428b..ac413f85 100644
+--- a/src/review/slice-dispatch.test.ts
++++ b/src/review/slice-dispatch.test.ts
+@@ -238,9 +238,14 @@ describe("waves", () => {
+     expect(plan.state.reviewers["review-logic"]?.attempt).toBe(0);
+   });
+ 
+-  test("a retry state written before progress was tracked still bounds the reviewer", () => {
++  test("a legacy retry state without scope identity is invalidated", () => {
+     const legacy = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "INCOMPLETE", notRun: false } } };
+-    expect(planRetry({ ...base, result: { status: "BLOCKED" }, state: legacy }).decision).toBe("not-run");
++    expect(() => planRetry({ ...base, result: { status: "BLOCKED" }, state: legacy })).toThrow("current scope");
++    const fresh = planRetry({ ...base, result: {}, nextWave: true, state: legacy });
++    expect(fresh.decision).toBe("wave");
++    expect(fresh.priorAttempts).toBe(0);
++    expect(fresh.stalls).toBe(0);
++    expect(fresh.remaining.slices).toBe(ids.length);
+   });
+ 
+   test("covering one piece of a re-cut does not credit the slice it was cut from", () => {
+@@ -253,3 +258,50 @@ describe("waves", () => {
+     expect(next.wave.map((slice) => slice.id)).not.toContain(piece);
+   });
+ });
++
++describe("autonomy hardening retry regressions", () => {
++  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
++  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: () => built.slices[0]!.text };
++  test("DONE with open needs_context requests context instead of acceptance", () => {
++    const plan = planRetry({ ...base, result: { status: "DONE", needs_context: ["which contract applies?"] }, state: { schemaVersion: 1, reviewers: {} } });
++    expect(plan.decision).toBe("context");
++    expect(plan.needsContext).toEqual(["which contract applies?"]);
++  });
++  test("legacy covered IDs do not accept a regenerated manifest without fresh review", () => {
++    const stale = { schemaVersion: 1 as const, reviewers: { "review-logic": { attempt: 1, status: "DONE", notRun: false, covered: built.manifest.slices.map(s => s.id), stalls: 0 } } };
++    const changed = buildSlices(sliceSourceFromDiff(gitFile("src/new.ts", 20)));
++    const plan = planRetry({ ...base, manifest: changed.manifest, readSliceText: () => changed.slices[0]!.text, result: {}, nextWave: true, state: stale });
++    expect(plan.decision).toBe("wave");
++    expect(plan.remaining.slices).toBeGreaterThan(0);
++  });
++});
++
++test("same-size content rewrite invalidates coverage and stalls", () => {
++  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
++  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: () => built.slices[0]!.text };
++  const first = planRetry({ ...base, result: { status: "DONE", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} } });
++  expect(first.decision).toBe("accepted");
++  const next = planRetry({ ...base, readSliceText: () => built.slices[0]!.text.replace("src/a.ts", "src/z.ts"), result: {}, nextWave: true, state: first.state });
++  expect(next.decision).toBe("wave");
++  expect(next.priorAttempts).toBe(0);
++  expect(next.remaining.slices).toBeGreaterThan(0);
++});
++
++test("stale incoming coverage and attempts cannot repopulate a changed scope", () => {
++  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
++  const base = { manifest: built.manifest, reviewer: "review-logic", readSliceText: () => built.slices[0]!.text };
++  const first = planRetry({ ...base, result: { status: "DONE", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} } });
++  const changed = { ...base, readSliceText: () => built.slices[0]!.text.replace("src/a.ts", "src/z.ts"), state: first.state };
++  const stale = { status: "DONE", attempt: 6, slices: built.manifest.slices.map(s => s.id) };
++  expect(() => planRetry({ ...changed, result: stale })).toThrow("current scope");
++  expect(() => planRetry({ ...changed, result: { ...stale, scopeFingerprint: first.state.scopeFingerprint! } })).toThrow("current scope");
++  const fresh = planRetry({ ...changed, result: {}, nextWave: true });
++  expect(fresh.priorAttempts).toBe(0);
++  expect(fresh.decision).toBe("wave");
++});
++
++test("unknown reviewer status never accepts scope", () => {
++  const built = buildSlices(sliceSourceFromDiff(gitFile("src/a.ts", 20)));
++  const plan = planRetry({ manifest: built.manifest, reviewer: "review-logic", result: { status: "FAILED", slices: built.manifest.slices.map(s => s.id) }, state: { schemaVersion: 1, reviewers: {} }, readSliceText: () => built.slices[0]!.text });
++  expect(plan.decision).toBe("not-run");
++});
+diff --git a/src/review/slice.ts b/src/review/slice.ts
+index baa221f2..6f79625c 100644
+--- a/src/review/slice.ts
++++ b/src/review/slice.ts
+@@ -1,3 +1,4 @@
++import { createHash } from "node:crypto";
+ import { buildReviewScope, type ReviewScopeConfig, type ScopedRegion, type ScopeDrop } from "./scope";
+ 
+ /** Per-reviewer ceiling for one slice, in bytes. A reviewer that must read more than this burns its round budget. */
+@@ -16,6 +17,7 @@ export type SliceEntry = {
+   id: string;
+   path: string;
+   bytes: number;
++  contentHash?: string;
+   files: string[];
+   domain: string;
+   /** The deepest cut this slice needed: a whole domain, one file of a big domain, or one hunk of a big file. */
+@@ -441,6 +443,7 @@ export function buildSlices(
+       id,
+       path: `${dir}${id}.diff`,
+       bytes: byteLength(text),
++      contentHash: createHash("sha256").update(text).digest("hex"),
+       files: draft.files,
+       domain: domainLabel(draft.domains),
+       split: draft.split,
+diff --git a/src/tui/ask-user-bridge-arbiter.test.ts b/src/tui/ask-user-bridge-arbiter.test.ts
+index 841fe3b1..c0ad8dac 100644
+--- a/src/tui/ask-user-bridge-arbiter.test.ts
++++ b/src/tui/ask-user-bridge-arbiter.test.ts
+@@ -177,3 +177,14 @@ test("review.arbiter.enabled: false leaves review-auto on its old behaviour", as
+   expect(await journaledAskUser(root)(question(LARGE))).toBe("more");
+   expect(host.calls).toHaveLength(0);
+ });
++
++for (const floor of [{ action: "release" }, { untrustedContent: true }]) {
++  test(`hardening: untagged floor ${JSON.stringify(floor)} reaches human`, async () => {
++    process.env["KERYX_REVIEW_AUTO_ANSWER"] = "1";
++    const host = hostThatCounts("stop");
++    arbiterOn();
++    const { policy: _drop, ...untagged } = question(SMALL, floor);
++    expect(await journaledAskUser(root)(untagged)).toBe("stop");
++    expect(host.calls).toHaveLength(1);
++  });
++}
+diff --git a/src/tui/ask-user-bridge.ts b/src/tui/ask-user-bridge.ts
+index 430443d4..71d4c8c2 100644
+--- a/src/tui/ask-user-bridge.ts
++++ b/src/tui/ask-user-bridge.ts
+@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
+ import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+ import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
+ import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
++import { askFloor } from "../review/arbiter-floor";
+ import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
+ import { consultArbiter, installQuestionArbiter } from "../commands/review-arbiter-install";
+ 
+@@ -90,6 +91,7 @@ export function journaledAskUser(cwd: string): AskUserFn {
+  * irreversible question is never auto-answered.
+  */
+ function reviewAutoAnswer(request: Parameters<AskUserFn>[0]): string | undefined {
++  if (askFloor(request) !== undefined) return undefined;
+   if ((process.env.KERYX_REVIEW_AUTO_ANSWER !== "1" && !reviewAutoActive()) || !reviewAutoMayAnswer(request)) return undefined;
+   return (request.options.find((o) => o.recommended === true) ?? request.options[0])?.id;
+ }
