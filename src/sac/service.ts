@@ -6,6 +6,8 @@
  * actor composition remains inside the implementation; callers cannot supply
  * identity or roles through this facade.
  */
+// Flow 415: durable replay is exposed through the SAC facade.
+export { replayPreservationOutbox, replayProjectPreservationOutboxes, retryProjectPreservation } from "./preservation-replay";
 export {
   createLocalFwkReadService,
   normalizeFwkResult,

@@ -14,12 +14,15 @@ import {
   openSlate,
   readSlateSession,
   recordSlateSessionTouch,
+  recordSlateSessionTrail,
   recordSlateTouch,
   slateSessionDir,
   writeSlateSession,
   type SlateSessionRef,
 } from "./slate-lifecycle";
 import { appendTrailEntry, readSlate, writeSlate, type Slate } from "./slate";
+import { withFileLock } from "../lib/fs";
+import { slateLockPath } from "./slate";
 import type { CourseProjection } from "./slate-course";
 
 async function tempCwd(): Promise<string> {
@@ -524,3 +527,36 @@ test("a session with no working memory anywhere opens a slate without trail or n
   expect(slate?.trail).toBeUndefined();
   expect(slate?.notes).toBeUndefined();
 });
+
+for (const operation of ["write", "touch", "trail", "close", "open"] as const) {
+  test(`Flow415: ${operation} queued behind Slate lock cannot mutate after detach`, async () => {
+    const dir = await tempSessionDir();
+    const cwd = await tempCwd();
+    await writeSlate(dir, () => ({ anchors: { root: cwd, touched: [] }, course: {}, seeds: [] }));
+    const before = await snapshotSessionDir(dir);
+    const ref: SlateSessionRef = { dir, cwd, opened: operation !== "open" };
+    let release!: () => void;
+    let acquired!: () => void;
+    const held = new Promise<void>((resolve) => { acquired = resolve; });
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    const holding = withFileLock(slateLockPath(dir), async () => { acquired(); await barrier; });
+    await held;
+    let updateCalled = false;
+    const pending = operation === "write"
+      ? writeSlateSession(ref, (prev) => { updateCalled = true; return { ...(prev as Slate), workspaceId: "stolen" }; })
+      : operation === "touch"
+        ? recordSlateSessionTouch(ref, ["stolen.ts"])
+        : operation === "trail"
+          ? recordSlateSessionTrail(ref, { tool: "read_file", digest: "stolen.ts", outcome: "ok", ts: memoryTs })
+          : operation === "open"
+            ? ensureSlateOpened(ref, () => "stolen")
+            : closeSlateSession(ref, () => "stolen");
+    detachSlateSession(ref);
+    release();
+    await holding;
+    await pending;
+    expect(updateCalled).toBe(false);
+    expect(ref.opened).toBe(operation !== "open");
+    expect(await snapshotSessionDir(dir)).toEqual(before);
+  });
+}

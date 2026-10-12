@@ -202,7 +202,7 @@ export class WorkspaceService {
    * manifest only after trusted-actor authorization has been rechecked at use;
    * it cannot turn the manifest into a client supplied capability.
    */
-  async withAuthorizedActor<T>(input: { actorContext: TrustedActorContext; workspaceId: string; action: "write" | "review"; execute: (manifest: WorkspaceManifest) => Promise<T> }): Promise<T> {
+  async withAuthorizedActor<T>(input: { actorContext: TrustedActorContext; workspaceId: string; action: "write" | "review"; signal?: AbortSignal; execute: (manifest: WorkspaceManifest) => Promise<T> }): Promise<T> {
     await this.requireStrict("write");
     const initial = await this.readManifest(input.workspaceId);
     const authorization = await this.requireAuthorization(input.actorContext, initial.id, input.action);
@@ -217,8 +217,9 @@ export class WorkspaceService {
       // re-read because they run with no lock held.
       const atUse = await authorization.authorizeAtUse(async () => currentRoleOrRevoked(manifest, input.actorContext.subject));
       if (!atUse.allowed) throw new WorkspaceServiceError("access_denied", atUse.code);
+      input.signal?.throwIfAborted();
       return input.execute(manifest);
-    });
+    }, input.signal ? { signal: input.signal } : {});
   }
 
   /** Re-checks the trusted actor and current role at a guarded owner-use point. */
