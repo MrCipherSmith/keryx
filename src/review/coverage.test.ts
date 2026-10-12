@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, derivedFromFiles, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, derivedFromFiles, globToRegExp, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 
 let root: string;
 
@@ -82,6 +82,46 @@ describe("requiredReviewers", () => {
   test("mode diff narrows to the derived set", async () => {
     const need = await requiredReviewers(root, "diff", frontendFiles);
     expect(need.required).toEqual(["review-frontend", "review-logic", "review-style"]);
+  });
+});
+
+describe("globToRegExp", () => {
+  test("a trailing /** matches every file under the directory", () => {
+    const glob = globToRegExp("src/pipelines/**");
+    expect(glob.test("src/pipelines/index.ts")).toBe(true);
+    expect(glob.test("src/pipelines/a/b.ts")).toBe(true);
+    expect(glob.test("src/pipelines2/index.ts")).toBe(false);
+    expect(glob.test("src/other/index.ts")).toBe(false);
+  });
+
+  test("a middle ** spans zero or more directories", () => {
+    const glob = globToRegExp("src/**/*.tsx");
+    expect(glob.test("src/a.tsx")).toBe(true);
+    expect(glob.test("src/a/b/c.tsx")).toBe(true);
+    expect(glob.test("src/a/b/c.ts")).toBe(false);
+  });
+});
+
+describe("project reviewers with description-derived globs", () => {
+  async function installProject(name: string, description: string): Promise<void> {
+    const dir = path.join(root, ".metaproject", "project-skills", "review", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n\n# body\n`, "utf8");
+  }
+
+  test("are selected when the scope matches, in both modes, and gated out when it does not", async () => {
+    await installProject("review-house-domains", "Use when reviewing domains. Dispatched for --house, --all, src/analytics/** or src/pipelines/** changes.");
+    await installProject("review-house-core", "Use when reviewing core. Dispatched for --house, --all, or src/core/** changes.");
+    const files = ["src/pipelines/index.ts", "src/pipelines/steps/load.ts"];
+    for (const mode of ["all", "diff"] as const) {
+      const need = await requiredReviewers(root, mode, files);
+      expect(need.required).toContain("review-house-domains");
+      expect(need.required).not.toContain("review-house-core");
+      expect(need.excluded.find((e) => e.reviewer === "review-house-core")?.reason).toContain("no-matching-paths");
+    }
+    const core = await requiredReviewers(root, "all", ["src/core/x.ts"]);
+    expect(core.required).toContain("review-house-core");
+    expect(core.excluded.some((e) => e.reviewer === "review-house-core")).toBe(false);
   });
 });
 

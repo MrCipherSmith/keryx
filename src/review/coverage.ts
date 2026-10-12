@@ -39,11 +39,12 @@ export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
   "review-layout": (f) => /\.(tsx|jsx|css|scss)$/.test(f),
 };
 
-function globToRegExp(glob: string): RegExp {
+export function globToRegExp(glob: string): RegExp {
   const body = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*\/?/g, "\uE000")
+    .replace(/\*\*\/?/g, (match, offset: number, whole: string) => (offset + match.length === whole.length ? "\uE001" : "\uE000"))
     .replace(/\*/g, "[^/]*")
+    .replace(/\uE001/g, ".*")
     .replace(/\uE000/g, "(?:.*/)?");
   return new RegExp(`^${body}$`);
 }
