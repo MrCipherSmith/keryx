@@ -29,7 +29,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
-import { requiredReviewers } from "../review/coverage";
+import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -501,7 +501,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
-const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--json"] as const;
+const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -2932,7 +2932,10 @@ async function runRequired(args: string[]): Promise<void> {
   if (mode === "diff" && (optionValue(args, "--operator-quote") ?? "").trim() === "")
     throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
-  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files]);
+  const radiusFile = optionValue(args, "--blast-radius");
+  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
+    blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
+  });
   if (args.includes("--json")) {
     console.log(JSON.stringify(set, null, 2));
     return;
@@ -3980,7 +3983,9 @@ Usage:
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
   keryx review required [--mode all|diff] [--scope <scope.json>]
-                        [--operator-quote "<words>"] [--json]
+                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
+                        --blast-radius adds review-regression to the set; without a
+                        computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available
                         reviewer for all (the default for a pull request), the
                         diff-derived set for diff. diff needs the operator's own

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, derivedFromFiles, globToRegExp, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 
 let root: string;
 
@@ -82,6 +82,48 @@ describe("requiredReviewers", () => {
   test("mode diff narrows to the derived set", async () => {
     const need = await requiredReviewers(root, "diff", frontendFiles);
     expect(need.required).toEqual(["review-frontend", "review-logic", "review-style"]);
+  });
+});
+
+describe("review-regression and the blast radius", () => {
+  const withRadius = async (name: string, body: unknown): Promise<string> => {
+    const dir = path.join(root, ".metaproject", "reviews", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "blast-radius.json"), JSON.stringify(body), "utf8");
+    return dir;
+  };
+
+  test("a computed blast radius makes review-regression required, in both modes", async () => {
+    await install("review-regression");
+    for (const mode of ["all", "diff"] as const) {
+      const need = await requiredReviewers(root, mode, frontendFiles, { blastRadius: true });
+      expect(need.required).toContain("review-regression");
+    }
+  });
+
+  test("no blast radius leaves review-regression out with a recorded reason", async () => {
+    await install("review-regression");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).not.toContain("review-regression");
+    expect(need.excluded.find((e) => e.reviewer === "review-regression")?.reason).toContain("no blast radius computed");
+  });
+
+  test("a dispatch that skips review-regression is refused when a radius exists and passes when none was computed", async () => {
+    await install("review-regression");
+    const all = (await requiredReviewers(root, "all", frontendFiles)).required;
+    const dispatch = { mode: "all", selected: all };
+    expect(await coverageErrors(dispatch, { root, files: frontendFiles, blastRadius: true })).toEqual([
+      expect.stringContaining("missing: review-regression"),
+    ]);
+    expect(await coverageErrors(dispatch, { root, files: frontendFiles, blastRadius: false })).toEqual([]);
+  });
+
+  test("packageHasBlastRadius reads the record and rejects a malformed one", async () => {
+    const good = await withRadius("good", { files: [], changedFiles: ["a.ts"] });
+    const bad = await withRadius("bad", { nothing: true });
+    expect(await packageHasBlastRadius(good)).toBe(true);
+    expect(await packageHasBlastRadius(bad)).toBe(false);
+    expect(await packageHasBlastRadius(path.join(root, "missing"))).toBe(false);
   });
 });
 

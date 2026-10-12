@@ -73,7 +73,14 @@ async function readSkill(root: string, relativePath: string): Promise<string | u
   return existsSync(file) ? readFile(file, "utf8").catch(() => undefined) : undefined;
 }
 
-export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined): Promise<RequiredSet> {
+export type RequiredOptions = {
+  /** Whether a blast-radius record exists for the package: scope B exists, so the regression reviewer has a set to review. */
+  blastRadius?: boolean | undefined;
+};
+
+const REGRESSION = "review-regression";
+
+export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
   const stack = await detectProjectStack(root);
   const excluded: RequiredSet["excluded"] = [];
@@ -111,6 +118,10 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
       return false;
     });
   }
+  if (inventory.bundled.some((r) => r.name === REGRESSION)) {
+    if (options.blastRadius === true) required.push(REGRESSION);
+    else excluded.push({ reviewer: REGRESSION, reason: "no blast radius computed for the package: there is no scope B to review" });
+  }
   return { mode, required: required.sort(), excluded, filesKnown };
 }
 
@@ -118,7 +129,19 @@ export type CoverageOptions = {
   root: string;
   /** Scope-A files recorded with the package, when there are any. */
   files?: readonly string[] | undefined;
+  /** Whether the package holds a blast-radius record. */
+  blastRadius?: boolean | undefined;
 };
+
+/** Whether `keryx review start|ingest` stored a blast-radius record in the package. */
+export async function packageHasBlastRadius(packageDir: string, name = "blast-radius.json"): Promise<boolean> {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(packageDir, name), "utf8"));
+    return Array.isArray(parsed?.files) && Array.isArray(parsed?.changedFiles);
+  } catch {
+    return false;
+  }
+}
 
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
@@ -137,7 +160,7 @@ export async function coverageErrors(dispatch: unknown, options: CoverageOptions
   }
   if (record.mode === "diff" && options.files === undefined)
     return ["diff mode needs the scope-A file list: pass `--scope <scope.json>` to `keryx review start|ingest`, or run mode all"];
-  const need = await requiredReviewers(options.root, record.mode, options.files);
+  const need = await requiredReviewers(options.root, record.mode, options.files, { blastRadius: options.blastRadius });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];

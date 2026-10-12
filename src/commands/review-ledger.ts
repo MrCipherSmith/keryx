@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, emptyRetryState, scopeFingerprint } from "../review/retry-plan";
 import type { SliceManifest } from "../review/slice";
@@ -170,7 +170,8 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   }
 
   assignRawDispatch(raws, assignments);
-  const required = await requiredReviewers(root, mode, files);
+  const blastRadius = await packageHasBlastRadius(packageDir);
+  const required = await requiredReviewers(root, mode, files, { blastRadius });
   const { ledger, gaps } = buildLedger({
     mode,
     selected: required.required,
@@ -184,7 +185,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),
   });
-  const blockers = await ledgerBlockers(ledger, canonical, { root, files });
+  const blockers = await ledgerBlockers(ledger, canonical, { root, files, blastRadius });
   const ready = blockers.length === 0;
   if (!rest.includes("--dry-run")) await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
   console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run")));
