@@ -928,9 +928,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         model: modelName,
       });
     } catch {
-      // best-effort
+      if (!saveFailureShown) {
+        saveFailureShown = true;
+        system("keryx: session history could not be saved; it may be missing on resume.\n");
+      }
     }
   };
+  let saveFailureShown = false;
 
   let closing = false;
   let activeTurn: { user: string; text: string; abort: AbortController } | undefined;
@@ -945,6 +949,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           const reply: NormalizedMessage = { role: "assistant", content: activeTurn.text, provenance: "model" };
           history.push(reply);
           archive.push(reply);
+        } else if (history[history.length - 1]?.role === "user") {
+          history.pop();
         }
         activeTurn = undefined;
       }
@@ -2599,8 +2605,10 @@ export async function runAgentRepl(
   const finalizeForSignal = async (): Promise<void> => { await finalizeShell(); };
   if (sessionOpts?.finalizerBox !== undefined) sessionOpts.finalizerBox.current = finalizeForSignal;
   if (live !== undefined && leaseWatch.canPersist()) {
-    const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: live.dir, signal: preservationAbort.signal });
-    if (replay.proposed + replay.deferred + replay.unbound > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred, ${replay.unbound} unbound (not accepted memory).\n`);
+    try {
+      const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: live.dir, signal: preservationAbort.signal });
+      if (replay.proposed + replay.deferred > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred (not accepted memory).\n`);
+    } catch { /* an unreadable sessions root must not keep the lease held or end the shell */ }
   }
   if (finalizing) return;
   // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
@@ -3699,6 +3707,10 @@ export interface SignalShutdownParts {
   readonly exit: (code: number) => void;
   readonly preserve?: () => Promise<void>;
   readonly cleanupTimeoutMs?: number;
+  /** Shared by every handler of one process so SIGINT/SIGTERM/SIGHUP do not each start a shutdown. */
+  readonly guard?: { startedAt: number | undefined };
+  /** A signal arriving this long after the first one forces the exit instead of being ignored. */
+  readonly forceGraceMs?: number;
 }
 
 /**
@@ -3712,17 +3724,23 @@ export interface SignalShutdownParts {
  * closes and the process exits.
  */
 export function makeSignalShutdown(parts: SignalShutdownParts, code: number): () => void {
-  let started = false;
+  const state = parts.guard ?? { startedAt: undefined as number | undefined };
+  const release = (): void => {
+    parts.busBox.current?.leave();
+    parts.busBox.current = undefined;
+    parts.releaseLease(parts.leaseBox.current);
+    parts.leaseBox.current = undefined;
+  };
   return (): void => {
-    if (started) return;
-    started = true;
+    if (state.startedAt !== undefined) {
+      if (Date.now() - state.startedAt >= (parts.forceGraceMs ?? 1000)) {
+        release();
+        parts.exit(code);
+      }
+      return;
+    }
+    state.startedAt = Date.now();
     parts.abortTurn?.();
-    const release = (): void => {
-      parts.busBox.current?.leave();
-      parts.busBox.current = undefined;
-      parts.releaseLease(parts.leaseBox.current);
-      parts.leaseBox.current = undefined;
-    };
     if (parts.preserve === undefined) release();
     void (async (): Promise<void> => {
       let failed = false;
@@ -4404,9 +4422,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
   const readlineAbort = new AbortController();
+  const signalGuard: { startedAt: number | undefined } = { startedAt: undefined };
   const closeAndExit = (code: number): (() => void) =>
     makeSignalShutdown(
       {
+        guard: signalGuard,
         busBox,
         leaseBox,
         jobRegistryBox,

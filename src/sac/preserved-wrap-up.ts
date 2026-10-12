@@ -15,14 +15,18 @@ export async function resolvePreservedWrapUp(input: {
   const slate: unknown = JSON.parse(rawSlate);
   if (!slate || typeof slate !== "object" || Array.isArray(slate)) throw new Error("invalid preserved Slate");
   if ((slate as { workspaceId?: unknown }).workspaceId !== input.workspaceId) throw new Error("snapshot workspace mismatch");
-  const base = `.metaproject/workspaces/${input.workspaceId}/preserved-evidence/${input.snapshot}`;
+  const evidenceDir = `.metaproject/workspaces/${input.workspaceId}/preserved-evidence`;
+  const base = `${evidenceDir}/${input.snapshot}`;
+  // A fence longer than any backtick run in the captured Slate cannot be closed from inside it.
+  const fence = "`".repeat(Math.max(3, ...(rawSlate.match(/`+/g) ?? []).map((run) => run.length + 1)));
+  await writeContained(input.cwd, `${evidenceDir}/.gitignore`, "*\n", { mode: 0o600, ...(input.signal ? { signal: input.signal } : {}) });
   const bodies = [
     { name: "wrap-up.md", path: `${base}/wrap-up.md`, source: "generated" as const,
       content: ["# Preserved session evidence", `Snapshot: ${input.snapshot}`,
         "Review evidence, not accepted memory. Notes are not Seeds.",
         "Working-tree diff: NOT MEASURED in this capture.",
         "Current Course status: NOT MEASURED; only the captured reference is retained.",
-        "## Captured Slate (Notes, Trail, Course, Seeds)", "```json", rawSlate, "```", ""].join("\n") },
+        "## Captured Slate (Notes, Trail, Course, Seeds)", `${fence}json`, rawSlate, fence, ""].join("\n") },
     { name: "archive.jsonl", path: `${base}/archive.jsonl`, source: "tool-output" as const,
       content: snapshot.files["archive.jsonl"] ?? "Transcript NOT CAPTURED\n" },
   ];

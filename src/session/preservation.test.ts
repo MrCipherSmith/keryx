@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { MAX_TRANSCRIPT_FILE_BYTES } from "../lib/config-dir";
-import { commitPreservation, queuePreservedWrapUp, readPreservation, restorePreservedHistory } from "./preservation";
+import { commitHistoryCheckpoint, commitPreservation, queuePreservedWrapUp, readPendingHistory, readPreservation, restorePreservedHistory } from "./preservation";
 const dirs: string[] = [];
 const temp = (): string => { const dir = mkdtempSync(path.join(tmpdir(), "keryx-preserve-")); dirs.push(dir); return dir; };
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -96,4 +96,18 @@ test("oversized escaped aggregate retains the readable checkpoint", () => {
   expect(() => commitPreservation(dir, { "context.jsonl": content, "transcript.jsonl": content })).toThrow("size limit");
   expect(readFileSync(path.join(dir, "preservation", "CURRENT"), "utf8")).toBe(prior);
   expect(readPreservation(dir)?.files["context.jsonl"]).toBe("old");
+});
+test("history checkpoints prune old generations but keep current, previous and outbox-referenced ones", () => {
+  const dir = temp();
+  const base = { "context.jsonl": "c", "archive.jsonl": "a", "summary.json": "{}" };
+  const ids = [1, 2, 3, 4].map((n) => commitHistoryCheckpoint(dir, { ...base, "transcript.jsonl": `t${n}` }));
+  const queued = queuePreservedWrapUp(dir, JSON.stringify({ seeds: [], notes: {}, trail: [] })).snapshot;
+  const more = commitHistoryCheckpoint(dir, { ...base, "transcript.jsonl": "t5" });
+  const left = readdirSync(path.join(dir, "preservation", "generations")).map((f) => f.replace(".json", ""));
+  expect(left).toContain(more);
+  expect(left).toContain(ids[3]!);
+  expect(left).toContain(queued);
+  expect(left).not.toContain(ids[0]!);
+  expect(left).not.toContain(ids[1]!);
+  expect(readPendingHistory(dir)?.files["transcript.jsonl"]).toBe("t5");
 });

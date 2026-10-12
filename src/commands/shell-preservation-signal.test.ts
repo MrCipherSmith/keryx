@@ -41,3 +41,23 @@ test("signal exits when both job sweep and MCP close never settle", async () => 
   expect(await exited).toBe(143);
   expect(order).toEqual(["preserved", "released", "jobs", "mcp", "readline"]);
 });
+
+test("handlers sharing one guard start a single shutdown; a later signal forces the exit", async () => {
+  const started: string[] = [];
+  const exits: number[] = [];
+  const guard = { startedAt: undefined as number | undefined };
+  const make = (code: number) => makeSignalShutdown({
+    guard, forceGraceMs: 0,
+    busBox: { current: undefined }, leaseBox: { current: {} as NonNullable<SignalShutdownParts["leaseBox"]["current"]> },
+    jobRegistryBox: { current: undefined },
+    preserve: () => { started.push(String(code)); return new Promise<void>(() => {}); },
+    releaseLease: () => { started.push("release"); }, closeMcp: async () => {},
+    closeReadline: () => {}, exit: (c) => { exits.push(c); },
+  }, code);
+  const sigint = make(130); const sigterm = make(143);
+  sigint();
+  expect(started).toEqual(["130"]);
+  sigterm();
+  expect(started).toEqual(["130", "release"]);
+  expect(exits).toEqual([143]);
+});

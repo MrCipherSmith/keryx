@@ -112,3 +112,14 @@ test("cleanup timeout aborts late side effects before releasing ownership", asyn
   await new Promise(resolve => setTimeout(resolve, 10));
   expect(seen).toEqual(["release"]);
 });
+
+test("a stop that never settles is abandoned after the hard deadline; preserve and release still run", async () => {
+  const seen: string[] = [];
+  const finalize = createShellFinalizer({
+    stop: () => new Promise<void>(() => {}), stopTimeoutMs: 5, hardStopTimeoutMs: 5,
+    checkpoint: () => { seen.push("checkpoint"); }, preserve: async () => { seen.push("preserve"); },
+    cleanup: async () => {}, release: () => { seen.push("release"); }, progress: stage => { seen.push(stage); },
+  });
+  expect(await finalize()).toEqual({ preserved: true, cleanupFailed: false });
+  expect(seen).toEqual(["saving", "waiting", "checkpoint", "stuck", "checkpoint", "preserve", "queued", "release", "released"]);
+});

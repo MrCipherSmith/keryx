@@ -1,6 +1,6 @@
 // Flow 415: immutable local evidence; queued is NOT delivered or accepted.
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { MAX_TRANSCRIPT_FILE_BYTES, readConfigFile, readTranscriptFile } from "../lib/config-dir";
 
@@ -140,6 +140,8 @@ export function commitHistoryCheckpoint(dir: string, files: PreservationFiles, b
   }
   // HISTORY is the single history commit boundary. An interruption between
   // CURRENT and HISTORY retains the previous committed history.
+  let previous: string | undefined;
+  try { previous = readFileSync(path.join(dir, "preservation", "HISTORY"), "utf8").trim(); } catch { /* first checkpoint */ }
   const id = commitPreservation(dir, files);
   const marker = path.join(dir, "preservation", "HISTORY");
   writePreservationFile(marker, id);
@@ -147,5 +149,28 @@ export function commitHistoryCheckpoint(dir: string, files: PreservationFiles, b
   for (const [name, body] of Object.entries(files)) {
     if (name !== "slate.json") writePreservationFile(path.join(dir, name), body);
   }
+  prunePreservationGenerations(dir, [id, ...(previous === undefined ? [] : [previous])]);
   return id;
+}
+
+/** Best-effort: a generation is dropped unless it is current, the previous history, or named by an outbox receipt. */
+export function prunePreservationGenerations(dir: string, keep: readonly string[]): void {
+  try {
+    const base = path.join(dir, "preservation");
+    const kept = new Set(keep);
+    try { kept.add(readFileSync(path.join(base, "CURRENT"), "utf8").trim()); } catch { /* absent */ }
+    try {
+      for (const entry of readdirSync(path.join(base, "outbox"))) {
+        const match = /^([a-f0-9]{64})/.exec(entry);
+        if (match !== null) kept.add(match[1]!);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return;
+    }
+    for (const entry of readdirSync(path.join(base, "generations"))) {
+      const match = /^([a-f0-9]{64})\.json$/.exec(entry);
+      if (match === null || kept.has(match[1]!)) continue;
+      try { unlinkSync(path.join(base, "generations", entry)); } catch { /* next checkpoint retries */ }
+    }
+  } catch { /* pruning never fails a checkpoint */ }
 }

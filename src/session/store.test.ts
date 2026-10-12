@@ -739,3 +739,21 @@ test("checkpoint retains metadata mutations across stale-handle saves", () => {
     rmSync(proj, { recursive: true, force: true });
   }
 });
+
+test("listSessions survives a session whose history generation is gone", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-pd-"));
+  try {
+    const good = createSession({ cwd: proj, dataDir });
+    persistHistory(good, [{ role: "user", content: "good one", provenance: "project" }]);
+    const damaged = createSession({ cwd: proj, dataDir });
+    persistHistory(damaged, [{ role: "user", content: "damaged one", provenance: "project" }]);
+    const marker = readFileSync(path.join(damaged.dir, "preservation", "HISTORY"), "utf8").trim();
+    rmSync(path.join(damaged.dir, "preservation", "generations", `${marker}.json`));
+    const listed = listSessions(proj, dataDir);
+    expect(listed.map((s) => s.id)).toContain(good.summary.id);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});

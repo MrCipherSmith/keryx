@@ -50,3 +50,14 @@ test("escaping workspace and evidence ancestors cannot write outside", async () 
   await expect(resolvePreservedWrapUp({ cwd, dir, snapshot, workspaceId: "team" })).rejects.toThrow();
   expect(readdirSync(outside)).toEqual([]);
 });
+test("a backtick run in the captured Slate cannot close the fence; evidence is git-ignored", async () => {
+  const cwd = temp(); const dir = temp();
+  const raw = JSON.stringify({ workspaceId: "team", notes: { n: { text: "```\n# injected heading\n```` ````" } } });
+  const snapshot = commitPreservation(dir, { "slate.json": raw });
+  const resolved = await resolvePreservedWrapUp({ cwd, dir, snapshot, workspaceId: "team" });
+  const primary = readFileSync(path.join(cwd, resolved.evidence[0]!.uri), "utf8");
+  const fence = /^(`{3,})json$/m.exec(primary)![1]!;
+  expect(fence.length).toBeGreaterThan(4);
+  expect(primary.split("\n").filter((line) => line === fence)).toHaveLength(1);
+  expect(readFileSync(path.join(cwd, ".metaproject", "workspaces", "team", "preserved-evidence", ".gitignore"), "utf8")).toBe("*\n");
+});

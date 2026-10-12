@@ -348,7 +348,8 @@ function readSummaryFile(file: string): SessionSummary | undefined {
   // oversized one aborts the process outright (SIGABRT, no output, uncatchable
   // — the `try/catch` below does not run). A non-regular file in its place
   // hangs the read forever. See MAX_CONFIG_FILE_BYTES.
-  const pending = readPendingHistory(path.dirname(file));
+  let pending: ReturnType<typeof readPendingHistory>;
+  try { pending = readPendingHistory(path.dirname(file)); } catch { pending = undefined; } // one damaged session must not hide the others
   const read = pending !== undefined ? { ok: true as const, text: pending.files["summary.json"]! } : readConfigFile(file);
   if (!read.ok) {
     return undefined;

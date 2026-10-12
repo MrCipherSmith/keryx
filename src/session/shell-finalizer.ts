@@ -2,12 +2,14 @@
 export interface ShellFinalizerSteps {
   stop: () => void | Promise<void>;
   stopTimeoutMs?: number;
+  /** Second deadline after `stopTimeoutMs`: past it the stuck operation is abandoned and preserve/release still run. */
+  hardStopTimeoutMs?: number;
   checkpoint: () => void | Promise<void>;
   preserve: () => Promise<void>;
   cleanup: (signal: AbortSignal) => Promise<void>;
   release: () => void;
   cleanupTimeoutMs?: number;
-  progress: (stage: "saving" | "waiting" | "queued" | "failed" | "released") => void;
+  progress: (stage: "saving" | "waiting" | "stuck" | "queued" | "failed" | "released") => void;
 }
 export interface ShellFinalizationResult { preserved: boolean; cleanupFailed: boolean }
 export function createShellFinalizer(steps: ShellFinalizerSteps): () => Promise<ShellFinalizationResult> {
@@ -36,7 +38,15 @@ export function createShellFinalizer(steps: ShellFinalizerSteps): () => Promise<
             // A deadline is not cancellation. Retain ownership until mutations stop.
             progress("waiting");
             try { await steps.checkpoint(); } catch { progress("failed"); }
-            await stopped;
+            let hardTimer: ReturnType<typeof setTimeout> | undefined;
+            const finished = await Promise.race([
+              stopped.then(() => true, () => true),
+              new Promise<false>((resolve) => {
+                hardTimer = setTimeout(() => resolve(false), steps.hardStopTimeoutMs ?? 20_000);
+              }),
+            ]);
+            if (hardTimer !== undefined) clearTimeout(hardTimer);
+            if (!finished) progress("stuck");
           }
         } finally {
           if (stopTimer !== undefined) clearTimeout(stopTimer);
@@ -69,6 +79,7 @@ export function preservationProgress(stage: Parameters<ShellFinalizerSteps["prog
   switch (stage) {
     case "saving": return "keryx: saving session history and memory…";
     case "waiting": return "keryx: active operation is still stopping; saving partial checkpoint and retaining session ownership until it settles.";
+    case "stuck": return "keryx: the active operation did not stop; saving what is recorded and releasing session ownership anyway.";
     case "queued": return "keryx: local evidence preserved; workspace review/delivery pending (not accepted memory).";
     case "failed": return "keryx: PRESERVATION FAILED; session was not confirmed saved. Inspect session storage before resuming.";
     case "released": return "keryx: session ownership released.";

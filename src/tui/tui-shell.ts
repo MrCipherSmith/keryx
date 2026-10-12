@@ -6779,8 +6779,10 @@ export async function launchTuiAgentShell(opts: {
       },
     });
     if (sessionLease.canPersist()) {
-      const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: liveSession.dir, signal: preservationAbort.signal });
-      if (replay.proposed + replay.deferred + replay.unbound > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred, ${replay.unbound} unbound (not accepted memory).\n`);
+      try {
+        const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: liveSession.dir, signal: preservationAbort.signal });
+        if (replay.proposed + replay.deferred > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred (not accepted memory).\n`);
+      } catch { /* an unreadable sessions root must not keep the lease held or end the shell */ }
     }
     if (foregroundOperation.isDisposed) return false;
     io.onHistoryChange = (kind) => {
