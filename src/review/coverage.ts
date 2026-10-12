@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers } from "./reviewers";
+import { ENV_AUTONOMOUS_ANSWERS_FILE } from "./autonomous-answers";
 
 export type ReviewMode = "all" | "diff";
 
@@ -131,7 +132,29 @@ export type CoverageOptions = {
   files?: readonly string[] | undefined;
   /** Whether the package holds a blast-radius record. */
   blastRadius?: boolean | undefined;
+  /** Proposed mutants no recorded mutation pass has run (`pendingMutants`). */
+  pendingMutants?: number | undefined;
+  /** False for `keryx review run --autonomous`; defaults to the environment the process runs in. */
+  attended?: boolean | undefined;
 };
+
+/** An attended run is every run except the autonomous runner's child shell. */
+export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[ENV_AUTONOMOUS_ANSWERS_FILE] === undefined;
+}
+
+function mutationErrors(record: Record<string, unknown>, options: CoverageOptions): string[] {
+  const pending = options.pendingMutants ?? 0;
+  if (pending === 0 || (options.attended ?? isAttendedRun()) === false) return [];
+  const w = record.mutationWaiver;
+  const waiver = w && typeof w === "object" && !Array.isArray(w) ? (w as Record<string, unknown>) : {};
+  const text = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
+  if (text(waiver.operatorQuote) && text(waiver.reason)) return [];
+  return [
+    `${pending} proposed mutant(s) in research-evidence/mutants.json were never run, so \`Not run: mutation pass\` is not allowed on an attended review. ` +
+      "Run `keryx review mutate --test \"<command>\" --package <review-dir>`, or record dispatch.mutationWaiver {operatorQuote, reason} with the operator's own words",
+  ];
+}
 
 /** Whether `keryx review start|ingest` stored a blast-radius record in the package. */
 export async function packageHasBlastRadius(packageDir: string, name = "blast-radius.json"): Promise<boolean> {
@@ -144,6 +167,11 @@ export async function packageHasBlastRadius(packageDir: string, name = "blast-ra
 }
 
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
+  const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
+  return [...(await reviewerSetErrors(dispatch, options)), ...(record === undefined ? [] : mutationErrors(record, options))];
+}
+
+async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
   const record = dispatch as Record<string, unknown>;
   const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;

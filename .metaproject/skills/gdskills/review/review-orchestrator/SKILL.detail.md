@@ -689,3 +689,21 @@ Use it to understand:
 - Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
 
 If absent, proceed normally — context is optional and non-blocking.
+
+## The mutation pass — `keryx review mutate`
+
+Attended, the pass is not optional once mutants were proposed. The testing reviewer writes
+each proposed mutant to `<review-dir>/research-evidence/mutants.json`:
+`{ "mutants": [{ "id", "file", "anchor", "replacement" }] }`. `anchor` is exact text that
+occurs once in `file`; `"runnable": false` at the top level says the suite cannot run here.
+
+Run `keryx review mutate --test "<the nearest suite command>" --package <review-dir>`. It
+applies each mutant in a scratch copy of the worktree (never in the worktree), refuses to
+start when the baseline is red, and writes the table to `research-evidence/mutation-<n>.md`
+and `.json`. A mutant is `killed` (the suite went red), `survived` (nothing pins that
+behaviour), `timeout`, or `invalid` (anchor missing or not unique, file outside the copy).
+A survivor is evidence for the finding that names it.
+
+`keryx review complete` refuses while proposed mutants are unrun, unless
+`dispatch.mutationWaiver = { operatorQuote, reason }` carries the operator's own words.
+`keryx review run --autonomous` is unchanged: it records `Not run: mutation pass` as before.

@@ -287,7 +287,7 @@ function closeWith(given: Disposition | undefined, canonical: Array<Record<strin
 }
 
 /** The gate's own validators over the built ledger, so "ready" cannot disagree with `keryx review complete`. */
-export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; files: readonly string[] | undefined; blastRadius?: boolean | undefined }): Promise<string[]> {
+export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; files: readonly string[] | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
   const dispatch = dispatchErrors(ledger.dispatch);
   const coverage = dispatch.length === 0 ? await coverageErrors(ledger.dispatch, options) : [];
   return [...researchErrors(ledger, canonical), ...dispatch, ...coverage];

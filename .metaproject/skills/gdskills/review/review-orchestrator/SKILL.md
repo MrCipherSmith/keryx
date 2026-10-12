@@ -1124,7 +1124,7 @@ finding class is unreachable for the entire round, and no amount of verification
 downstream recovers it. When a testing reviewer returns without a mutation table,
 treat it the way you would treat a reviewer that returned without findings *and*
 without evidence: ask once, then record that the pass did not run. Unattended: record
-`Not run: mutation pass` without asking.
+`Not run: mutation pass` without asking. Attended: run `keryx review mutate` ([The mutation pass](SKILL.detail.md#the-mutation-pass-keryx-review-mutate)).
 
 ### Wave C — verification, and what it replaced
 

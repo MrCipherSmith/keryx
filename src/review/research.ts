@@ -1,4 +1,5 @@
 import { dispatchErrors } from "./dispatch";
+import { pendingMutants } from "./mutate";
 import { coverageErrors, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage } from "./coverage";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -45,6 +46,7 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
           root: projectRootOfPackage(packageDir),
           files: await packageScopeFiles(packageDir),
           blastRadius: await packageHasBlastRadius(packageDir),
+          pendingMutants: (await pendingMutants(packageDir)).length,
         });
     return [...researchErrors(ledger, findings), ...dispatch, ...coverage];
   }

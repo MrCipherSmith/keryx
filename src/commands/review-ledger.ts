@@ -5,6 +5,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, emptyRetryState, scopeFingerprint } from "../review/retry-plan";
 import type { SliceManifest } from "../review/slice";
@@ -185,7 +186,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),
   });
-  const blockers = await ledgerBlockers(ledger, canonical, { root, files, blastRadius });
+  const blockers = await ledgerBlockers(ledger, canonical, { root, files, blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
   const ready = blockers.length === 0;
   if (!rest.includes("--dry-run")) await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
   console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run")));

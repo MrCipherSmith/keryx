@@ -192,14 +192,16 @@ export async function writeMutationEvidence(packageDir: string, record: Mutation
   return { json, md };
 }
 
-/** Mutants the reviewers proposed (`research-evidence/mutants.json`) that no recorded mutation pass has run yet. */
+/** Mutants the reviewers proposed (`research-evidence/mutants.json`) that no recorded mutation pass has run yet. A spec with `"runnable": false` says the tests cannot be run here, so nothing is pending. */
 export async function pendingMutants(packageDir: string): Promise<MutantSpec[]> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
   const specFile = path.join(dir, MUTANTS_SPEC);
   if (!existsSync(specFile)) return [];
   let specs: MutantSpec[];
   try {
-    specs = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+    const raw: unknown = JSON.parse(await readFile(specFile, "utf8"));
+    if ((raw as { runnable?: unknown } | null)?.runnable === false) return [];
+    specs = parseMutantSpec(raw);
   } catch {
     return [];
   }
