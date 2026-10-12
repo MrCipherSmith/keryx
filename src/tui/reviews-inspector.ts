@@ -2,6 +2,7 @@
 // and the readline text are all built from one `BotMetrics`, so no surface states a number the
 // CLI does not. Read-only: opening it reads the managed review packages and changes nothing.
 
+import { formatReviewDepthLines, loadReviewDepth, renderReviewDepthText, type ReviewDepthRow } from "./review-panel";
 import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
@@ -46,8 +47,9 @@ export function formatReviewsRowLines(metrics: BotMetrics): string[] {
 }
 
 /** The readline shell's `/reviews`: the block `keryx review metrics` prints, then the review rows. */
-export function renderReviewsText(metrics: BotMetrics): string {
-  return `${renderBotMetrics(metrics)}\n${formatReviewsRowLines(metrics).join("\n")}\n`;
+export function renderReviewsText(metrics: BotMetrics, depth?: readonly ReviewDepthRow[]): string {
+  const base = `${renderBotMetrics(metrics)}\n${formatReviewsRowLines(metrics).join("\n")}\n`;
+  return depth === undefined ? base : `${base}\n${renderReviewDepthText(depth)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,20 +58,24 @@ export function renderReviewsText(metrics: BotMetrics): string {
 
 export type PresentReviewsOptions = {
   metrics: BotMetrics;
+  /** What each review ran (mode, reviewer set, mutation); adds the "Review depth" tab. */
+  depth?: readonly ReviewDepthRow[];
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
 };
 
-function paint(otui: unknown, renderer: unknown, body: unknown, content: string): { content: string } | undefined {
+function paint(otui: unknown, renderer: unknown, body: unknown, content: string, id: string): { content: string } | undefined {
   const parent = body as { add?: (child: unknown) => void } | undefined | null;
   const ctor = (otui as { TextRenderable?: new (r: unknown, opts: { id: string; content: string }) => { content: string } } | undefined | null)
     ?.TextRenderable;
   if (parent?.add === undefined || ctor === undefined) return undefined;
-  const node = new ctor(renderer, { id: "reviews-body", content });
+  const node = new ctor(renderer, { id, content });
   parent.add(node);
   return node;
 }
+
+type TabView = { rows: string[]; header: string[]; scroll: number; node: { content: string } | undefined };
 
 export function presentReviews(
   open: OpenModalFn,
@@ -77,36 +83,41 @@ export function presentReviews(
   chrome: unknown,
   options: PresentReviewsOptions,
 ): ModalHandle | undefined {
-  const header = formatReviewsHeaderLines(options.metrics);
-  const rows = formatReviewsRowLines(options.metrics);
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
     options.visibleRows ??
     (typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
       ? modalBodyRows(resolveModalPanelSize(rendererHint.width, rendererHint.height).height)
       : 13);
-  const rowWindow = Math.max(1, bodyRows - header.length);
-  let scroll = 0;
-  let width: number | undefined;
-  let node: { content: string } | undefined;
-  let unsubscribeKey: (() => void) | undefined;
-
-  const content = (): string => {
-    scroll = clampScroll(scroll, rows.length, rowWindow);
-    return wrapLines([...header, ...windowLines(rows, scroll, rowWindow)].join("\n"), width);
+  const views: Record<string, TabView> = {
+    reviews: { header: formatReviewsHeaderLines(options.metrics), rows: formatReviewsRowLines(options.metrics), scroll: 0, node: undefined },
   };
-  const repaint = (): void => {
-    if (node !== undefined) node.content = content();
+  const tabs = [{ id: "reviews", label: "Managed reviews" }];
+  if (options.depth !== undefined) {
+    views.depth = { header: [], rows: formatReviewDepthLines(options.depth), scroll: 0, node: undefined };
+    tabs.push({ id: "depth", label: "Review depth" });
+  }
+  const windowOf = (view: TabView): number => Math.max(1, bodyRows - view.header.length);
+  let width: number | undefined;
+  let unsubscribeKey: (() => void) | undefined;
+  let active = "reviews";
+
+  const content = (view: TabView): string => {
+    view.scroll = clampScroll(view.scroll, view.rows.length, windowOf(view));
+    return wrapLines([...view.header, ...windowLines(view.rows, view.scroll, windowOf(view))].join("\n"), width);
   };
 
   const handle = open(otui, chrome, {
     title: REVIEWS_COMMAND,
-    tabs: [{ id: "reviews", label: "Managed reviews" }],
+    tabs,
     initialTab: "reviews",
     footer: REVIEWS_FOOTER,
-    renderTab: (_tabId, body, ctx) => {
+    renderTab: (tabId, body, ctx) => {
       width = ctx?.width;
-      node = paint(otui, options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer, body, content());
+      active = tabId;
+      const view = views[tabId];
+      if (view === undefined) return;
+      view.node = paint(otui, options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer, body, content(view), `reviews-${tabId}-body`);
     },
     onClose: () => {
       unsubscribeKey?.();
@@ -116,10 +127,13 @@ export function presentReviews(
   if (options.onKeypress !== undefined) {
     unsubscribeKey = options.onKeypress((key) => {
       const token = key.name || key.sequence;
+      const view = views[handle.activeTab() || active];
+      if (view === undefined) return;
+      const rowWindow = windowOf(view);
       const step = token === "up" || token === "k" ? -1 : token === "down" || token === "j" ? 1 : token === "pageup" ? -rowWindow : token === "pagedown" ? rowWindow : 0;
       if (step === 0) return;
-      scroll = clampScroll(scroll + step, rows.length, rowWindow);
-      repaint();
+      view.scroll = clampScroll(view.scroll + step, view.rows.length, rowWindow);
+      if (view.node !== undefined) view.node.content = content(view);
     });
   }
   return handle;
@@ -139,11 +153,12 @@ export async function openReviews(
   const { cwd, read = computeBotMetrics, ...rest } = options;
   const metrics = await read(cwd).catch((): BotMetrics | undefined => undefined);
   if (metrics === undefined) return undefined;
+  const depth = await loadReviewDepth(cwd).catch((): ReviewDepthRow[] | undefined => undefined);
   return presentReviews(
     (hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input),
     otui,
     chrome,
-    { ...rest, metrics },
+    { ...rest, metrics, ...(depth !== undefined ? { depth } : {}) },
   );
 }
 

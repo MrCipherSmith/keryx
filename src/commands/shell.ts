@@ -117,6 +117,7 @@ import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
 import { parseReviewSystem, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
@@ -2709,7 +2710,7 @@ export async function runAgentRepl(
       } else if (isReviewsCommand(command)) {
         // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
         try {
-          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd)));
+          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd), await loadReviewDepth(sessionCwd)));
         } catch {
           agentIo.onSystem?.("The managed reviews could not be read.\n");
         }
