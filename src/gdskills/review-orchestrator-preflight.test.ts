@@ -375,3 +375,42 @@ describe("AC11: the skill is internally consistent", () => {
     expect(ceiling).toBeLessThanOrEqual(343);
   });
 });
+
+describe("the retired nested model does not come back", () => {
+  const ROOT = path.join(import.meta.dir, "..", "..");
+  const FILES = [
+    "docs/docs/guides/review-with-a-record.md",
+    "docs/docs/cli-reference.md",
+    "src/review/caps.ts",
+    "src/review/types.ts",
+    "src/lib/orchestrators-inline.ts",
+    ...["src/gdskills/bundled/skills", ".metaproject/skills/gdskills"].flatMap((base) =>
+      [
+        "review/review-orchestrator/SKILL.md",
+        "review/review-orchestrator/SKILL.detail.md",
+        "orchestration/flow-orchestrator/SKILL.md",
+        "orchestration/job-orchestrator/SKILL.md",
+        "orchestration/job-orchestrator/orchestrator-prompt.md",
+        "planning/autodoc-orchestrator/SKILL.md",
+      ].map((rel) => `${base}/${rel}`),
+    ),
+  ];
+  const RETIRED: RegExp[] = [
+    /nested under `?flow-orchestrator/i,
+    /nests under this skill/i,
+    /orchestration nesting/i,
+    /three orchestration levels/i,
+    /nested total/i,
+    /enclosing orchestrator/i,
+    /round bound is 3/i,
+    /\*\*4\*\* reviewers in flight/i,
+    /review-orchestrator sub-agent\]/i,
+    /# dispatch review-orchestrator/i,
+    /engine running inside a subagent/i,
+    /job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator/i,
+  ];
+  test.each(FILES)("%s carries none of the retired phrases", (rel) => {
+    const text = readFileSync(path.join(ROOT, rel), "utf8");
+    for (const phrase of RETIRED) expect(text).not.toMatch(phrase);
+  });
+});

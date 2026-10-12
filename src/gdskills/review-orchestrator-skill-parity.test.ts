@@ -47,6 +47,12 @@ describe("review-orchestrator: the two SKILL copies stay byte-identical", () => 
 
 describe("the other orchestrators carry the same preflight, so their copies stay byte-identical too", () => {
   const SKILLS = ["orchestration/flow-orchestrator", "orchestration/job-orchestrator", "planning/autodoc-orchestrator"];
+  test.each(["orchestration/job-orchestrator/orchestrator-prompt.md"])("%s", (file) => {
+    const metaproject = path.join(REPO_ROOT, ".metaproject", "skills", "gdskills");
+    const bundled = path.join(REPO_ROOT, "src", "gdskills", "bundled", "skills");
+    expect(read(metaproject, file)).toBe(read(bundled, file));
+  });
+
   test.each(SKILLS)("%s SKILL.md", (skill) => {
     const metaproject = path.join(REPO_ROOT, ".metaproject", "skills", "gdskills", skill);
     const bundled = path.join(REPO_ROOT, "src", "gdskills", "bundled", "skills", skill);

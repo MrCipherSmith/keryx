@@ -8,6 +8,8 @@
 - The review-orchestrator preflight lists changed files with `git diff --name-status --no-renames <base>...HEAD`, so a rename into `docs/` shows both paths. The preflight prose, `docs/docs/guides/review-with-a-record.md` and `docs/docs/cli-reference.md` state the same rule, and the flow, job and autodoc orchestrator skills are now parity-tested between `src/gdskills/bundled` and `.metaproject`.
 - The four orchestrator skills name the spawn tool as `Agent`, `spawn_subagent` or the host's equivalent, and the preflight test pins the phrase. `review-orchestrator` path mode lists files with a form that returns a complete plain path list, its "Done when" line applies to managed rounds only, and a bare `STATUS: RATE_LIMITED` follows the rate-limit rule instead of `BLOCKED`.
 - `keryx review budget` help documents `--full` and no longer describes the retired job -> flow -> review nesting. `orchestratorToolProblems` reports nothing on hosts without nested spawn. `retry-after` is capped at 300 seconds.
+- Wording that still described the retired nested model is gone from the docs, `caps.ts`, `types.ts`, the flow, job and review orchestrator skills (both copies) and the job prompt: `review-orchestrator` runs inline in the main session, `--outstanding` is the number of subagents that session still has running, and the wave ceiling is 10 (`--parallel` replaces it without `--full`; with `--full` it can only lower it). The `review budget` flag table lists `--full`, and a drift test keeps the retired phrases out.
+- `autodoc-orchestrator` joins the orchestrators the inline note and `ORCHESTRATOR_AGENT_NAMES` list, so the generated managed block, routing and catalog text name four.
 
 ### Review depth (flow 430)
 

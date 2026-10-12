@@ -6,8 +6,8 @@
  * Nothing in the review pipeline was capped. `budget.max_findings` was
  * schema-required with no default anywhere, so every caller had to invent one;
  * there was no token or currency ceiling at all; and `review-orchestrator`
- * dispatched reviewers in parallel with no wave size, while itself running
- * nested under `flow-orchestrator` and `job-orchestrator`.
+ * dispatched reviewers in parallel with no wave size, while running inline in a
+ * main session that may already have other subagents going.
  *
  * # The rule every cap here obeys
  *
@@ -232,7 +232,7 @@ function isExemptFromFindingsCap(finding: CappableFinding): boolean {
  * - Currency is the unit the operator's budget is actually denominated in, and
  *   the unit a harness reports back. It is also the unit the decision is made
  *   in: nobody stops a review because it used tokens.
- * - Steps and rounds are already bounded (AC8, and the round bound is 3). A
+ * - Steps and rounds are already bounded (AC8; the review round cap is 5, `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`, and the self-fix bound is 3). A
  *   token cap would be a third bound in the same shape as the first two —
  *   "how much work" — while leaving "how much money" unbounded, which is the
  *   only one of the three that can surprise anybody.

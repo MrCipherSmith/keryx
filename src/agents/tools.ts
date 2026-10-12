@@ -133,7 +133,7 @@ export function mapToolsForTarget(tools: readonly string[], target: HostToolTarg
 export const SPAWN_TOOL: AgentToolName = "spawn_subagent";
 
 /** Agents that coordinate other agents. The main agent runs them inline. Only the keryx-shell host enforces SPAWN_TOOL in `tools` (see `orchestratorToolProblems`); other hosts spawn through their own tool. */
-export const ORCHESTRATOR_AGENT_NAMES = ["review-orchestrator", "flow-orchestrator", "job-orchestrator"] as const;
+export const ORCHESTRATOR_AGENT_NAMES = ["review-orchestrator", "flow-orchestrator", "job-orchestrator", "autodoc-orchestrator"] as const;
 
 export function isOrchestratorAgent(name: string): boolean {
   return (ORCHESTRATOR_AGENT_NAMES as readonly string[]).includes(name);

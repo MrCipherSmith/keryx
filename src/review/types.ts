@@ -597,8 +597,8 @@ export type ManagedReviewInput = {
    *
    * `outstanding` is the count of subagents the main session still has running,
    * as the CALLER declares it. It is the only thing that lets the cap say anything
-   * about the `job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator` nesting,
-   * and it is a declaration rather than an observation — see
+   * beyond this dispatch plan, and it is a declaration rather than an
+   * observation — see
    * {@link module:review/caps.ConcurrencyPlan.holdsAcrossNesting}.
    */
   concurrency?:

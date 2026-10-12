@@ -137,7 +137,7 @@ describe("spawn tool in the agent vocabulary (flow 417 AC4)", () => {
   });
 
   test("orchestrators are declared by name", () => {
-    expect([...ORCHESTRATOR_AGENT_NAMES]).toEqual(["review-orchestrator", "flow-orchestrator", "job-orchestrator"]);
+    expect([...ORCHESTRATOR_AGENT_NAMES]).toEqual(["review-orchestrator", "flow-orchestrator", "job-orchestrator", "autodoc-orchestrator"]);
     expect(isOrchestratorAgent("job-orchestrator")).toBe(true);
     expect(isOrchestratorAgent("codebase-navigator")).toBe(false);
   });

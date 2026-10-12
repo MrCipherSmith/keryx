@@ -19,10 +19,11 @@ const FLAGS = {
   ruleSources: [],
 };
 
-test("the note names the three orchestrators and the main session", () => {
+test("the note names the four orchestrators and the main session", () => {
   expect(ORCHESTRATORS_INLINE_NOTE).toContain("review-orchestrator");
   expect(ORCHESTRATORS_INLINE_NOTE).toContain("flow-orchestrator");
   expect(ORCHESTRATORS_INLINE_NOTE).toContain("job-orchestrator");
+  expect(ORCHESTRATORS_INLINE_NOTE).toContain("autodoc-orchestrator");
   expect(ORCHESTRATORS_INLINE_NOTE).toContain("main session");
 });
 

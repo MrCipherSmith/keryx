@@ -5378,7 +5378,8 @@ refused rather than reported as an empty radius.
 Nothing in the review pipeline was capped: `budget.max_findings` was required by
 the schema with no default anywhere, there was no cost ceiling, and reviewers
 were dispatched in parallel with no wave size while `review-orchestrator` itself
-can run nested under `flow-orchestrator` and `job-orchestrator`.
+runs inline in the main session, next to the subagents that session has already
+dispatched.
 
 The defaults are in code (`src/review/caps.ts`), so a caller that says nothing
 still gets a bound.
@@ -5410,12 +5411,12 @@ is denominated in, and token counts convert to it while the reverse does not.
 3.00 USD follows SWE-agent's $3/instance cap; a keryx review round is one target
 and one reviewer fan-out, the analogue of one instance.
 
-**The concurrency cap does not bind the nested total on its own, and says so.**
+**The concurrency cap does not bind the session's total on its own, and says so.**
 keryx is a CLI invoked once per command: it cannot observe the subagents the main
-session still has running, and there is no lease between the three
-orchestration levels. `--outstanding <n>` is an enclosing orchestrator declaring
-what it already has in flight, which shrinks the effective wave; it is a
-declaration, not an observation, and nothing verifies it. The record therefore
+session still has running, and there is no lease between them and this dispatch.
+`--outstanding <n>` is the main session declaring how many it has running, which
+shrinks the effective wave; it is a declaration, not an observation, and nothing
+verifies it. The record therefore
 carries `holds_across_nesting: yes (against the declared count)` or `no`, rather
 than implying a guarantee that does not exist.
 
@@ -6288,15 +6289,16 @@ keryx review budget --spent 2.10 --reviewers review-logic,review-style --outstan
 
 Exits 1 when spend has reached the ceiling, with a message naming the overage and
 asking the operator. Prints the dispatch waves, the queue size, and whether the
-concurrency cap holds across the nesting.
+concurrency cap is measured against a declared count of running subagents.
 
 | Flag | Description |
 |---|---|
 | `--spent <usd>` | Spend so far. Omitted, the record reads `not recorded` — which is **not** `under`: staying inside the ceiling was never demonstrated. |
 | `--ceiling <usd>` | Override the 3.00 USD default. |
 | `--reviewers a,b` | The reviewer set to plan into waves. |
-| `--parallel <n>` | Override the wave size (default 10, split by diff domain). |
-| `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+| `--parallel <n>` | Override the wave size (default 10, split by diff domain). With `--full` it can only lower it. |
+| `--full` | A full review or `--all`: holds the wave to 10 whatever `--parallel` says. |
+| `--outstanding <n>` | Subagents the main session still has running. The only thing that makes the cap mean anything beyond this dispatch. |
 
 ### `review bot` and `review metrics`
 

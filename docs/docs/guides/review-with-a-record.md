@@ -405,15 +405,16 @@ keryx review budget --spent 2.10 --reviewers review-logic,review-style,review-se
 
 Three caps, all with defaults in code so a caller that says nothing still gets a
 bound: **10 findings per reviewer** (blockers exempt), a **3.00 USD** spend
-ceiling, and **4** reviewers in flight at once. This command exits non-zero when
+ceiling, and a wave of at most **10** reviewers (`--parallel <n>` replaces the 10
+without `--full`; with `--full` it can only lower it). This command exits non-zero when
 the spend ceiling is reached, which is the point at which stopping is still
 possible — an ingest can only record that a round already went over.
 
-`--outstanding` is what an enclosing orchestrator already has in flight. It
-matters because `review-orchestrator` can run nested under `flow-orchestrator` and
-`job-orchestrator`, and keryx cannot see the subagents the main session still has
-running: without a declared count the cap bounds this dispatch alone, and the record says so rather
-than implying it covered more.
+`--outstanding` is the number of subagents the main session still has running. It
+matters because `review-orchestrator` runs inline in that session next to whatever
+else it has dispatched, and keryx cannot see those subagents: without a declared
+count the cap bounds this dispatch alone, and the record says so rather than
+implying it covered more.
 
 **Every cap records what it dropped** — the truncated finding ids, the queued
 reviewers, the stop — in the package's `scope.md` under `## Caps`. A cap that
