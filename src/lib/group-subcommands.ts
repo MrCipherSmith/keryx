@@ -164,6 +164,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "stack",
       "reviewers",
       "required",
+      "compare-reference",
       "import",
       "status",
       "complete",

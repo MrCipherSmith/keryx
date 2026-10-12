@@ -29,6 +29,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -501,7 +502,8 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
-const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
+const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -706,6 +708,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "required") {
       await runRequired(args.slice(1));
+      return;
+    }
+    if (command === "compare-reference") {
+      await runCompareReference(args.slice(1));
       return;
     }
     if (command === "import") {
@@ -2945,6 +2951,18 @@ async function runRequired(args: string[]): Promise<void> {
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
 }
 
+async function runCompareReference(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMPARE_REFERENCE_FLAGS, "compare-reference");
+  const reference = optionValue(args, "--reference");
+  const packageArg = optionValue(args, "--package");
+  if (reference === undefined || packageArg === undefined) throw new Error("compare-reference needs --reference <report.md> and --package <review-dir>");
+  const items = parseReferenceReport(await readFile(path.resolve(reference), "utf8"));
+  if (items.length === 0) throw new Error(`${reference} holds no reference items (Major table rows, Cycle paragraphs, Minor and Question bullets)`);
+  const inputArg = optionValue(args, "--input");
+  const comparison = compareReference(items, await loadPackageEvidence(path.resolve(packageArg), inputArg === undefined ? undefined : path.resolve(inputArg)));
+  console.log(args.includes("--json") ? JSON.stringify(comparison, null, 2) : renderComparison(comparison));
+}
+
 async function runStack(args: string[]): Promise<void> {
   rejectUnknownFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();
@@ -3982,6 +4000,14 @@ Usage:
                      Cuts scope A into reviewer-sized slice files plus a manifest;
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
+  keryx review compare-reference --reference <report.md> --package <review-dir>
+                        [--input <dir>] [--json]
+                        Compares a reference report's items (Major rows, Cycle,
+                        Minor and Question bullets) with a package, per item:
+                        A role not run, B role ran and nothing matches, C seen and
+                        lost after the answer, D kept (with severity), E the
+                        reference ran a mutant and this package has no mutation
+                        pass. --input adds the raw reviewer replies for class C.
   keryx review required [--mode all|diff] [--scope <scope.json>]
                         [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
                         --blast-radius adds review-regression to the set; without a
