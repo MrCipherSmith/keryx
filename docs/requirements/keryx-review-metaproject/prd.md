@@ -125,3 +125,12 @@ A sidebar panel, a modal, a slash command and a settings entry (details in the a
 5. **What happens to a layer that does not pay for itself.** Recommended: report it after the replay and let the operator decide, no automatic removal. Alternative: freeze a rule now (for example remove a layer that contributes no cited finding on the replay set).
 6. **Stale graph handling during a review.** Recommended: rebuild the graph automatically when the round is allowed to run commands, otherwise label the layer `stale` and say it predates the changes. Alternative: never rebuild inside a review, always label.
 7. **Privacy of memory content.** Recommended: include only memory entries with an accepted (non-draft) status - the status names are to be confirmed in T1 - and apply the diff-slice redaction. Alternative: include all statuses, or make memory opt-in per project.
+
+## Operator answers (poll, 2026-10-12)
+
+Recorded from the operator's poll answers. The PRD and acceptance criteria are still a draft: the operator has not frozen them.
+
+- Decision 1 (builder ownership and order): **one flow builds both sections** (see the sibling PRD `keryx-review-depth-parity`, Decision 5). This PRD becomes the metaproject-layer slice of that flow.
+- Decision 2 (default state of each layer): graph, testing and flow default-on; wiki and memory default-on, individually switchable, and reported with their cost.
+- Decision 5 (a layer that does not pay for itself): reported to the operator, who decides; no automatic removal.
+- Decisions 3, 4, 6 and 7: not asked; the recommended options stand.

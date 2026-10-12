@@ -134,3 +134,14 @@ Every function above that a person uses has a visible surface (details in the ac
 5. **Ordering and the shared context builder.** Recommended: this flow first; it creates the pack skeleton with the pull-request section (R5); the metaproject flow adds layer sections to it. Alternative: build both sections in one flow, or the other order.
 6. **Evidence floor strictness (R8).** Recommended: a `shallow` reviewer fails the gate unless accepted by an operator quote. Alternative: warn only, never fail.
 7. **Scope of mutants.** Recommended: the testing reviewer's proposal plus a small deterministic default set, cap 6 by default, 12 on request. Alternative: only reviewer-proposed mutants.
+
+## Operator answers (poll, 2026-10-12)
+
+Recorded from the operator's poll answers. The PRD and acceptance criteria are still a draft: the operator has not frozen them.
+
+- Decision 1 (severity upgrade path): not asked; the recommended separate `severity audit` pass stands.
+- Decision 2 (default mode for a pull request): `all`; `diff` only on an explicit operator quote.
+- Decision 3 (mutation policy): mutations are required; `Not run` only with an operator quote or a recorded environment reason.
+- Decision 4 (parity targets): the note's targets go into the AC as frozen numbers (A = 0, at least 12 of 19, 3-7 raw findings per reviewer, no false major on PR 7840).
+- Decision 5 (ordering and the shared context builder): **one flow builds both sections** (the pull-request section and the metaproject layer sections). This replaces the recommended two-flow order. The sibling PRD `keryx-review-metaproject` becomes the metaproject-layer slice of the same flow; whether it is registered as one flow or two is to be confirmed when the flows are created.
+- Decisions 6 and 7: not asked; the recommended options stand (a `shallow` reviewer fails the gate; mutant cap 6, 12 on request).
