@@ -1,0 +1,113 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Review PR 940 (flow 418)",
+   "target": "pr",
+   "ref": "https://github.com/MrCipherSmith/keryx/pull/940"
+  },
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/acceptance-criteria.md",
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/context.md",
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/description.md",
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/flow.json",
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/journal.md",
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md",
+    ".metaproject/flows/418-2026-10-09-shell-review-orchestration/tasks.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/acceptance-criteria.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/context.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/tasks.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json",
+    "CHANGELOG.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/permission-modes.md",
+    "docs/requirements/keryx-shell-split/source-text-audit-inventory.md",
+    "package.json",
+    "src/commands/agent-trust-orchestration.test.ts",
+    "src/commands/agent.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/ctx.test.ts",
+    "src/commands/ctx.ts",
+    "src/commands/review-slice.ts",
+    "src/commands/review.test.ts",
+    "src/commands/review.ts",
+    "src/commands/shell-pty-launch.smoke.test.ts",
+    "src/commands/shell.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+    "src/gdskills/skill-length-ceilings.ts",
+    "src/harness/tool/builtin/interactive-tools.test.ts",
+    "src/harness/tool/builtin/interactive-tools.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/lib/group-subcommands.ts",
+    "src/lib/trust-routine-command.ts",
+    "src/review/dispatch-check.ts",
+    "src/review/dispatch.test.ts",
+    "src/review/dispatch.ts",
+    "src/review/retry-plan.ts",
+    "src/review/slice-dispatch.test.ts",
+    "src/review/slice.test.ts",
+    "src/review/slice.ts",
+    "src/session/ask-answer-notes.ts",
+    "src/tui/busy-dispatch.test.ts",
+    "src/tui/busy-dispatch.ts",
+    "src/tui/ctrl-c-policy.test.ts",
+    "src/tui/ctrl-c-policy.ts",
+    "src/tui/shell-chrome.test.ts",
+    "src/tui/shell-chrome.ts",
+    "src/tui/tui-shell.ts"
+   ],
+   "changed_lines": 3604
+  },
+  "routing": {
+   "selected_reviewers": []
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "omissions": []
+  }
+ },
+ "scope_mode": "diff",
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "inherit": true,
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "the session names no model to anchor the ranking on"
+  }
+ },
+ "budget": {
+  "max_findings": 10
+ },
+ "base_sha": "628d6e5ea9d0f3698e7f115122096a63c0913974",
+ "pr_context": "/home/altsay/keryx-fcomplete/.metaproject/flows/418-2026-10-09-shell-review-orchestration/reviews/2026-10-12-pr-github-com-mrciphersmith-keryx-pull-940/pr-context.md",
+ "round": 1,
+ "is_fix_round": false,
+ "prior_findings": [],
+ "reviewer": "review-style",
+ "skill_path": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-style/SKILL.md",
+ "slices": [
+  "slice-01",
+  "slice-02",
+  "slice-03",
+  "slice-04",
+  "slice-05"
+ ]
+}

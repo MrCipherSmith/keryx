@@ -1,0 +1,428 @@
+[
+  {
+    "id": "review-logic-10-11:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-10-11.txt F-1; confirmed present in the post-merge tree at src/tui/tui-shell.ts drain sites at lines 9565, 9874, 9970 (each `forceHandoff.takeNext() ?? mainQueue.shift()` once)",
+    "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-001). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: after runQueued runs an item that starts no foreground operation, drain the next item (shared drainNext helper used by the three sites), stopping once an item starts a turn. Add a headless test that queues ['/compact', 'question'] and asserts the question is dispatched."
+  },
+  {
+    "id": "review-architecture-10-11:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-10-11.txt F-1; confirmed present in the post-merge tree at src/tui/busy-dispatch.ts:197 (BUSY_REFUSED_COMMANDS = /new, /clear, /resume); /sessions is dispatched to the same resumeSessionInteractive branch",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-002). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add /sessions to the refused set, or derive the refused set from the handlers that swap the session so an alias cannot drift; add a test for the alias."
+  },
+  {
+    "id": "review-logic-10-11:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-10-11.txt F-2; confirmed present in the post-merge tree at src/tui/busy-dispatch.ts:197 (BUSY_REFUSED_COMMANDS = /new, /clear, /resume); /sessions is dispatched to the same resumeSessionInteractive branch",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-002). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add /sessions to the refused set, or derive the refused set from the handlers that swap the session so an alias cannot drift; add a test for the alias."
+  },
+  {
+    "id": "review-architecture-10-11:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-10-11.txt F-2; confirmed present in the post-merge tree at src/tui/tui-shell.ts, three copies of the mint-id/push/paintMainQueue sequence (busy deferred case, lease-held busy branch, lease-held idle branch)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-003). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add an enqueue helper to main-queue.ts and call it from the three sites; keep the tests that pin the push text pointing at the helper."
+  },
+  {
+    "id": "review-clean-code-10-11:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-10-11.txt F-1; confirmed present in the post-merge tree at src/tui/tui-shell.ts, three copies of the mint-id/push/paintMainQueue sequence (busy deferred case, lease-held busy branch, lease-held idle branch)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-003). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add an enqueue helper to main-queue.ts and call it from the three sites; keep the tests that pin the push text pointing at the helper."
+  },
+  {
+    "id": "review-architecture-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+  },
+  {
+    "id": "review-highload-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-highload-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+  },
+  {
+    "id": "review-logic-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+  },
+  {
+    "id": "review-highload-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-highload-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+  },
+  {
+    "id": "review-architecture-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/commands/review-slice.ts runRetryPlan; manifest totals live in src/review/slice.ts:47",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-005). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: move manifest extension into src/review (retry-plan or slice) and recompute totals there."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/review/retry-plan.ts:87 (notRunLine text 'after a smaller-slice retry')",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-006). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: make the line depend on the exit (retried or not) and add a test per exit."
+  },
+  {
+    "id": "review-security-code-01-02-03-04-05:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-security-code-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at src/lib/trust-routine-command.ts:129-130 (case \"bun\": return words[1] === \"test\")",
+    "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-007). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: drop `bun test` from the routine list for the post-untrusted case or allow it only with no arguments and an unchanged bunfig; add a test with `--preload` and a foreign `cd`."
+  },
+  {
+    "id": "review-security-code-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-security-code-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/lib/trust-routine-command.ts:129-130 (case \"bun\": return words[1] === \"test\")",
+    "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-007). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: drop `bun test` from the routine list for the post-untrusted case or allow it only with no arguments and an unchanged bunfig; add a test with `--preload` and a foreign `cd`."
+  },
+  {
+    "id": "review-security-code-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-security-code-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/commands/review-slice.ts:248 (--state resolved verbatim); slice, dispatch-check, retry-plan are rows of TRUST_ROUTINE_KEYRYX (src/lib/trust-routine-command.ts:60-78)",
+    "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-008). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: confine --out, --state and --manifest to the project root or .metaproject, or leave these verbs out of the routine list when a path flag is given; add tests for an outside path."
+  },
+  {
+    "id": "review-logic-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/lib/trust-routine-command.ts:149 (`!hasUnquotedMetacharacter(seg.raw)`; > and < are metacharacters)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-009). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: either allow a single redirection to a path under the project, or change the SKILL and help text to name an output flag instead of a shell redirection."
+  },
+  {
+    "id": "review-logic-06-07-08-09:F-005",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-06-07-08-09.txt F-5; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+  },
+  {
+    "id": "review-security-code-10-11:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-security-code-10-11.txt F-1; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+  },
+  {
+    "id": "review-logic-10-11:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-10-11.txt F-3; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-008",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-8; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+  },
+  {
+    "id": "review-clean-code-01-02-03-04-05:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-clean-code-01-02-03-04-05:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-clean-code-01-02-03-04-05:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-4; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-007",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-7; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-clean-code-10-11:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-10-11.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-008",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-8; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-010",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-10; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-logic-01-02-03-04-05:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+  },
+  {
+    "id": "review-style-01-02-03-04-05:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-01-02-03-04-05.txt F-3; confirmed present in the post-merge tree at .metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md:3 (Status: draft); tasks.md lists T1-T4 only",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-012). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fill plan.md with the approach as built and bring tasks.md in line with flow.json."
+  },
+  {
+    "id": "review-style-01-02-03-04-05:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-01-02-03-04-05.txt F-4; confirmed present in the post-merge tree at .metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md:3 (Status: draft); tasks.md lists T1-T4 only",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-012). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fill plan.md with the approach as built and bring tasks.md in line with flow.json."
+  },
+  {
+    "id": "review-testing-practices-04-05-07-10:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-testing-practices-04-05-07-10.txt F-1; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-testing-practices-04-05-07-10:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-testing-practices-04-05-07-10.txt F-2; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-testing-practices-04-05-07-10:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-testing-practices-04-05-07-10.txt F-3; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-testing-practices-04-05-07-10:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-testing-practices-04-05-07-10.txt F-4; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-clean-code-01-02-03-04-05:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-3; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-style-01-02-03-04-05:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-style-01-02-03-04-05:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-01-02-03-04-05.txt F-2; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-logic-10-11:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-10-11.txt F-4; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-architecture-10-11:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-10-11.txt F-3; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-style-10-11:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-2; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+    "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+  },
+  {
+    "id": "review-architecture-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+  },
+  {
+    "id": "review-performance-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-performance-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+  },
+  {
+    "id": "review-performance-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw/review-performance-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+  },
+  {
+    "id": "review-highload-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-highload-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+  },
+  {
+    "id": "review-logic-06-07-08-09:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-logic-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-005",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-clean-code-06-07-08-09:F-006",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-06-07-08-09.txt F-6; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-clean-code-10-11:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-clean-code-10-11.txt F-3; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-005",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-006",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-6; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-007",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-7; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-06-07-08-09:F-009",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-06-07-08-09.txt F-9; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-10-11:F-001",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-1; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-10-11:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-3; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-10-11:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-10-11:F-005",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-10-11:F-006",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-6; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-10-11:F-007",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-10-11.txt F-7; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-style-01-02-03-04-05:F-005",
+    "status": "out-of-scope",
+    "evidence": "raw/review-style-01-02-03-04-05.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-architecture-06-07-08-09:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw/review-architecture-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+    "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+  },
+  {
+    "id": "review-security-code-06-07-08-09:F-001",
+    "status": "out-of-scope",
+    "evidence": "Real defect in PR 940, fixed after merge: isTrustRoutineCommand had no guard for command substitution inside double quotes. Commit bc02c45d (flow 423) added `if (/\\$\\(|\\$\\{|`/.test(command)) return false;` at src/lib/trust-routine-command.ts:141 (absent from the PR 940 version in pr940.diff).",
+    "reason": "fixed by bc02c45d on main; the checked-out tree no longer has the defect, so it is not carried as an open canonical finding"
+  },
+  {
+    "id": "review-logic-06-07-08-09:F-002",
+    "status": "out-of-scope",
+    "evidence": "Real defect in PR 940, fixed after merge: on main src/review/retry-plan.ts:195 reads `input.sliceIds ?? requiredSlices(manifest, reviewer)`, the assigned slices, not the slices the truncated reply reports as covered.",
+    "reason": "fixed after the PR; no open defect in the post-merge tree"
+  },
+  {
+    "id": "review-security-code-01-02-03-04-05:F-002",
+    "status": "out-of-scope",
+    "evidence": "raw reply review-security-code-01-02-03-04-05.txt F-002 states that the implementing ctx.ts is not in slices 01-05 and that no concrete leak path is shown.",
+    "reason": "an observation with no attack path established by the reviewer; nothing to fix or track"
+  },
+  {
+    "id": "review-performance-06-07-08-09:F-003",
+    "status": "out-of-scope",
+    "evidence": "raw reply review-performance-06-07-08-09.txt F-003: runs once per `keryx review slice` and once per retry-plan reslice, off any server or render path; the reviewer's own impact statement.",
+    "reason": "quadratic repacking is accepted at this scale (a 1.65 MB PR slices in seconds); not worth a change"
+  },
+  {
+    "id": "review-performance-06-07-08-09:F-004",
+    "status": "out-of-scope",
+    "evidence": "raw reply review-performance-06-07-08-09.txt F-004: JSON.parse of a tool argument string is milliseconds, once per tool call, against a model round trip.",
+    "reason": "negligible by the reviewer's own measurement"
+  }
+]

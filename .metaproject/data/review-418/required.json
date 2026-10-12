@@ -1,0 +1,44 @@
+{
+  "mode": "all",
+  "required": [
+    "review-architecture",
+    "review-clean-code",
+    "review-highload",
+    "review-logic",
+    "review-performance",
+    "review-security-code",
+    "review-style",
+    "review-testing-practices"
+  ],
+  "excluded": [
+    {
+      "reviewer": "review-backend",
+      "reason": "stack: none of [nestjs, prisma] detected in package.json (detected from /home/altsay/keryx-fcomplete/package.json (10 declared dependencies))"
+    },
+    {
+      "reviewer": "review-frontend",
+      "reason": "stack: none of [react, mobx] detected in package.json (detected from /home/altsay/keryx-fcomplete/package.json (10 declared dependencies))"
+    },
+    {
+      "reviewer": "review-frontend-conventions",
+      "reason": "stack: none of [react, mobx] detected in package.json (detected from /home/altsay/keryx-fcomplete/package.json (10 declared dependencies))"
+    },
+    {
+      "reviewer": "review-core-boundaries",
+      "reason": "no-matching-paths: no scope-A file matches its path triggers"
+    },
+    {
+      "reviewer": "review-flow-graph",
+      "reason": "no-matching-paths: no scope-A file matches its path triggers"
+    },
+    {
+      "reviewer": "review-layout",
+      "reason": "no-matching-paths: no scope-A file matches its path triggers"
+    },
+    {
+      "reviewer": "review-regression",
+      "reason": "no blast radius computed for the package: there is no scope B to review"
+    }
+  ],
+  "filesKnown": true
+}

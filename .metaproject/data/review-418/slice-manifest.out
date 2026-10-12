@@ -1,0 +1,16 @@
+slices: 11 (<= 30000 bytes each, 202879 bytes total, 57 files)
+waves: 3 for one reviewer owning every slice (<= 90000 bytes per dispatch)
+- slice-01  26532 bytes  13 files  [file]  .metaproject [docs]
+- slice-02  20456 bytes  5 files  [file]  .metaproject [docs], .metaproject, . [docs]
+- slice-03  10158 bytes  4 files  [domain]  docs [docs], .
+- slice-04  28858 bytes  4 files  [file]  src/commands [test]
+- slice-05  1236 bytes  1 files  [file]  src/commands [test]
+- slice-06  20275 bytes  2 files  [file]  src/commands
+- slice-07  28544 bytes  11 files  [file]  src/commands, src/gdskills [docs], src/gdskills +2 more
+- slice-08  3830 bytes  2 files  [domain]  src/lib
+- slice-09  27211 bytes  4 files  [domain]  src/review
+- slice-10  26411 bytes  7 files  [domain]  src/review [test], src/session, src/tui [test]
+- slice-11  9368 bytes  4 files  [domain]  src/tui
+omitted: 0 files (0 bytes of diff)
+
+manifest: /home/altsay/keryx-fcomplete/.metaproject/data/review-418/slices/manifest.json
