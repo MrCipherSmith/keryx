@@ -9,9 +9,9 @@
   "id": "419",
   "slug": "telegram-remote-control-relay",
   "title": "Keryx Telegram: remote-control relays approvals, questions and progress",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-09T19:42:55.347Z",
-  "updatedAt": "2026-10-12T05:57:45.315Z",
+  "updatedAt": "2026-10-12T05:58:34.181Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/978"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -99,7 +99,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -107,7 +107,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "self-review done; draft PR #978"
     }
   ],
   "history": [
@@ -138,6 +140,16 @@
       "at": "2026-10-12T05:57:45.315Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-12T05:58:31.785Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-12T05:58:34.181Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)"
     }
   ],
   "acKinds": {
@@ -168,5 +180,6 @@
     "AC9": {
       "kind": "unclassified"
     }
-  }
+  },
+  "baseBranch": "main"
 }
