@@ -1,0 +1,1226 @@
+{
+  "schemaVersion": 1,
+  "mode": "diff",
+  "contextLines": 20,
+  "files": [
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    "src/remote/approval-mirror.test.ts",
+    "src/remote/bot-api-http.ts",
+    "src/remote/client.ts",
+    "src/remote/command-busy.test.ts",
+    "src/remote/command-gateway.test.ts",
+    "src/remote/command-gateway.ts",
+    "src/remote/command-model.test.ts",
+    "src/remote/command-queued.test.ts",
+    "src/remote/command-router.ts",
+    "src/remote/command.test-helpers.ts",
+    "src/remote/fake-bot-api.ts",
+    "src/remote/http-surface.ts",
+    "src/remote/hub.ts",
+    "src/remote/lifecycle.test.ts",
+    "src/remote/orphan.test.ts",
+    "src/remote/progress-notes.test.ts",
+    "src/remote/progress-notes.ts",
+    "src/remote/prompt-reminder.test.ts",
+    "src/remote/protocol.ts",
+    "src/remote/registry.ts",
+    "src/remote/service.ts",
+    "src/remote/shell-bridge.ts",
+    "src/remote/types.ts",
+    "src/tui/approval-mirror.test.ts",
+    "src/tui/approval-mirror.ts",
+    "src/tui/remote-queue-wiring.test.ts",
+    "src/tui/remote-queue-wiring.ts",
+    "src/tui/tui-shell.test.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "regions": [
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md",
+      "startLine": 1,
+      "endLine": 7,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " # Keryx Telegram: remote-control relays approvals, questions and progress\n \n Status: approved by operator (helyx 195233), frozen\n-Source: live run of the review of a PR in a work project on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).\n+Source: live run of the review of PR 7435 on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).\n \n ## Problem\n "
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 9,
+      "endLine": 17,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "   \"id\": \"419\",\n   \"slug\": \"telegram-remote-control-relay\",\n   \"title\": \"Keryx Telegram: remote-control relays approvals, questions and progress\",\n-  \"status\": \"ready\",\n+  \"status\": \"implemented\",\n   \"createdAt\": \"2026-10-09T19:42:55.347Z\",\n-  \"updatedAt\": \"2026-10-09T19:45:41.801Z\",\n+  \"updatedAt\": \"2026-10-12T05:58:34.181Z\",\n   \"source\": {\n     \"type\": \"description\",\n     \"ref\": null"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 19,
+      "endLine": 25,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   \"acChecksum\": \"sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6\",\n   \"acConfirmed\": {},\n   \"pr\": {\n-    \"url\": null\n+    \"url\": \"https://github.com/MrCipherSmith/keryx/pull/978\"\n   },\n   \"owner\": {\n     \"value\": \"MrCipherSmith\","
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 38,
+      "endLine": 44,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       \"title\": \"Collect remaining context\",\n       \"kind\": \"context\",\n       \"origin\": \"scaffold\",\n-      \"status\": \"todo\",\n+      \"status\": \"done\",\n       \"dependsOn\": [],\n       \"attempts\": {\n         \"count\": 0,"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 46,
+      "endLine": 88,
+      "changedLines": 26,
+      "contextTruncated": true,
+      "text": "       },\n       \"acRefs\": [],\n       \"evidenceRefs\": [],\n-      \"budget\": {}\n+      \"budget\": {},\n+      \"disposition\": \"completed\",\n+      \"dispositionReason\": \"context gathered; plan.md written\"\n     },\n     {\n       \"id\": \"T2\",\n       \"title\": \"Implement per plan\",\n       \"kind\": \"implement\",\n       \"origin\": \"scaffold\",\n-      \"status\": \"todo\",\n+      \"status\": \"done\",\n       \"dependsOn\": [],\n       \"attempts\": {\n         \"count\": 0,\n         \"log\": []\n       },\n-      \"acRefs\": [],\n-      \"evidenceRefs\": [],\n-      \"budget\": {}\n+      \"acRefs\": [\n+        \"AC1\",\n+        \"AC2\",\n+        \"AC3\",\n+        \"AC4\",\n+        \"AC5\",\n+        \"AC6\",\n+        \"AC7\",\n+        \"AC9\"\n+      ],\n+      \"evidenceRefs\": [\n+        \"a556a84a c9d17c57 2121fcf5 f9f0ee34\"\n+      ],\n+      \"budget\": {},\n+      \"disposition\": \"completed\"\n     },\n     {\n       \"id\": \"T3\",\n       \"title\": \"Add/adjust tests and make them pass\",\n       \"kind\": \"test\",\n       \"origin\": \"scaffold\",\n-      \"status\": \"todo\",\n+      \"status\": \"done\",\n       \"dependsOn\": [],\n       \"attempts\": {\n         \"count\": 0,"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 90,
+      "endLine": 105,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "       },\n       \"acRefs\": [],\n       \"evidenceRefs\": [],\n-      \"budget\": {}\n+      \"budget\": {},\n+      \"disposition\": \"completed\",\n+      \"dispositionReason\": \"targeted tests 1331 pass, tsc clean\"\n     },\n     {\n       \"id\": \"T4\",\n       \"title\": \"Self-review and prepare draft PR\",\n       \"kind\": \"review\",\n       \"origin\": \"scaffold\",\n-      \"status\": \"todo\",\n+      \"status\": \"done\",\n       \"dependsOn\": [],\n       \"attempts\": {\n         \"count\": 0,"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 107,
+      "endLine": 115,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "       },\n       \"acRefs\": [],\n       \"evidenceRefs\": [],\n-      \"budget\": {}\n+      \"budget\": {},\n+      \"disposition\": \"completed\",\n+      \"dispositionReason\": \"self-review done; draft PR #978\"\n     }\n   ],\n   \"history\": ["
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 121,
+      "endLine": 155,
+      "changedLines": 29,
+      "contextTruncated": true,
+      "text": "       \"at\": \"2026-10-09T19:45:41.801Z\",\n       \"event\": \"frozen\",\n       \"detail\": \"9 criteria; checksum recorded\"\n+    },\n+    {\n+      \"at\": \"2026-10-12T05:23:29.972Z\",\n+      \"event\": \"started\"\n+    },\n+    {\n+      \"at\": \"2026-10-12T05:57:41.703Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T1: Collect remaining context\"\n+    },\n+    {\n+      \"at\": \"2026-10-12T05:57:41.894Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T2: Implement per plan\"\n+    },\n+    {\n+      \"at\": \"2026-10-12T05:57:45.315Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T3: Add/adjust tests and make them pass\"\n+    },\n+    {\n+      \"at\": \"2026-10-12T05:58:31.785Z\",\n+      \"event\": \"task-done\",\n+      \"detail\": \"T4: Self-review and prepare draft PR\"\n+    },\n+    {\n+      \"at\": \"2026-10-12T05:58:34.181Z\",\n+      \"event\": \"implemented\",\n+      \"detail\": \"draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)\"\n     }\n   ],\n   \"acKinds\": {"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+      "startLine": 180,
+      "endLine": 185,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "     \"AC9\": {\n       \"kind\": \"unclassified\"\n     }\n-  }\n+  },\n+  \"baseBranch\": \"main\"\n }"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md",
+      "startLine": 2,
+      "endLine": 10,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": " \n - 2026-10-09T19:42:55.347Z - flow created\n - 2026-10-09T19:45:41.801Z - frozen: 9 criteria; checksum recorded\n+- 2026-10-12T05:23:29.972Z - started\n+- 2026-10-12T05:57:41.703Z - task-done: T1: Collect remaining context\n+- 2026-10-12T05:57:41.894Z - task-done: T2: Implement per plan\n+- 2026-10-12T05:57:45.315Z - task-done: T3: Add/adjust tests and make them pass\n+- 2026-10-12T05:58:31.785Z - task-done: T4: Self-review and prepare draft PR\n+- 2026-10-12T05:58:34.181Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)"
+    },
+    {
+      "path": ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md",
+      "startLine": 1,
+      "endLine": 49,
+      "changedLines": 42,
+      "contextTruncated": true,
+      "text": " # Implementation Plan\n \n-Status: draft (flow-init skill fills this after context and brainstorm)\n+Status: implemented on `feat/telegram-remote-control-relay`; AC8 (live run) waits for the operator.\n \n ## Approach\n \n-Chosen approach and why (link brainstorm alternatives if any).\n+Keep the existing split: `keryx serve` owns Telegram, the shell is a client over `/v1/remote/*`. Each\n+criterion is closed at the narrowest layer that already owns the behaviour, with a test beside it:\n+\n+- Mirror shell prompts through the bridge's `askApproval`/`askUser`, not through the TUI, so a turn typed in\n+  the shell is covered too (`src/tui/approval-mirror.ts`). First answer wins; the loser is closed with\n+  `prompt-close`.\n+- Reminders live in `RemoteHttpSurface`, next to the prompt table, so the timer dies with the prompt.\n+- Commands from the topic wait for an idle main in the command router (`awaitIdle`), with a notice, instead of\n+  being refused.\n+- Progress notes are composed from counts and names only (`src/remote/progress-notes.ts`), driven by the tool\n+  hook and the subagent fleet listener, with one rate limiter.\n+- A status question is answered by the bridge from session state, so it never reaches the model or the queue.\n+- Close archives (`closeForumTopic`) instead of deleting; the orphan sweep does the same for a killed shell.\n+\n+Rejected: a timer-driven ticker for progress (notes would fire in an idle turn), and a model-written summary\n+(slow, can leak tool output).\n \n ## Steps\n \n-1. ...\n+1. AC7 + AC1/AC2: archive on close, mirror approvals and `ask_user`, `prompt-close` for the loser. (a556a84a)\n+2. AC3: reminders, 2 min, at most 3. (c9d17c57)\n+3. AC4: `/route` on the menu, queue-when-busy for `/route`, `/external`, `/external-agents`, `/model`. (2121fcf5)\n+4. AC5, AC6, AC7 explicit test: progress notes, instant status answers, topic survives exit and Ctrl+C. (f9f0ee34)\n+5. AC9: README, drive-keryx-remotely guide (new \"What the topic hears\" and \"What happens when the shell closes\"),\n+   cli-reference, wiki page, CHANGELOG; `mkdocs build --strict` passes.\n+6. AC8: operator-run live review (not started; the operator runs it):\n+   1. Install the branch build (`npm pack`, then `npm i -g` the tarball; npm only) and run `keryx update` in the\n+      test project. Telegram connected via `/channels`; `keryx serve` running.\n+   2. `/clear`, then in a shell start a long review (a real PR with several reviewers) and type `/remote-control`.\n+   3. From now on touch only Telegram: answer every approval and `ask_user` from the topic; ask \"how is it going?\"\n+      once mid-run; send `/model` or `/route` once while main is busy and check the queued notice.\n+   4. Leave one prompt unanswered for over 2 minutes and check the reminder.\n+   5. When the review ends, `/exit` in the shell and check the topic is archived with its history.\n+   6. Export the topic's message log and attach it to the flow with the shell's transcript; then\n+      `keryx flow ac confirm 419 AC8 --note \"<log path>\"`.\n \n ## Risks\n \n-- ...\n+- Progress notes fire on tool calls and subagent events only; a long silent model step produces no note.\n+- A wave-start note names only the subagents known at that moment; the rate limit coalesces the rest.\n+- Status questions are matched by a short phrase list (en/ru); anything else goes to the model when main is idle\n+  and is queued as work when busy.\n+- Everything was tested against a fake Bot API; real Telegram behaviour (closed topics, reactions) is AC8."
+    },
+    {
+      "path": ".metaproject/wiki/architecture/remote-control.md",
+      "startLine": 53,
+      "endLine": 59,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " \n ### Limits and orphans\n \n-`orphanMs` (default 10 minutes): a session that stops heartbeating is announced in its topic, and the topic is deleted after the window; a heartbeat inside it cancels this. `runTimeoutMs` (default 30 minutes): a run started from Telegram is interrupted by the shell and the topic is told (`run-limits.ts`).\n+`orphanMs` (default 10 minutes): a session that stops heartbeating is announced in its topic, and the topic is archived (closing note, `closeForumTopic`, history stays readable) after the window; a heartbeat inside it cancels this. A clean exit (`deregister`) archives at once. Only channel Disconnect deletes topics. `runTimeoutMs` (default 30 minutes): a run started from Telegram is interrupted by the shell and the topic is told (`run-limits.ts`).\n \n ### Session record (`remote` in the summary)\n "
+    },
+    {
+      "path": ".metaproject/wiki/architecture/remote-control.md",
+      "startLine": 61,
+      "endLine": 67,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " \n ### Restoring the conversation into a topic (`/history`)\n \n-A topic is deleted when the shell exits, and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. `/history [N]` is the same code from the shell (a router `builtin`) and from the topic. The panel's `h` key runs it and the modal and the sidebar show the last post.\n+A topic is archived when the shell exits (still readable), and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. `/history [N]` is the same code from the shell (a router `builtin`) and from the topic. The panel's `h` key runs it and the modal and the sidebar show the last post.\n \n ### Connecting from the shell (`/channels`)\n "
+    },
+    {
+      "path": "CHANGELOG.md",
+      "startLine": 2,
+      "endLine": 15,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": " \n ## [Unreleased]\n \n+### Remote control\n+\n+- Every approval, `ask_user` question and queue dialog the shell raises is mirrored to the Telegram topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other exactly once (`prompt-close`).\n+- An unanswered question gets a reminder in the topic every 2 minutes, at most 3 times.\n+- `/route` is on the topic menu (`/route on|off` ask first). `/route`, `/external`, `/external-agents` and `/model` are queued with a notice while main is busy and run when it goes idle, instead of being refused. `/mode` takes effect at once.\n+- Progress notes in the topic at subagent wave boundaries and after tool-heavy stretches, at most one a minute: counts, tool names and labels only, never tool output. A short status question (\"how is it going?\") is answered from session state while the turn runs.\n+- Closing the shell archives the topic (closing note, topic and history stay readable) instead of deleting it; a killed shell is archived after the orphan window. Only channel Disconnect deletes topics.\n+\n ## [0.3.110] - 2026-10-11\n \n ### Review"
+    },
+    {
+      "path": "README.md",
+      "startLine": 1060,
+      "endLine": 1084,
+      "changedLines": 18,
+      "contextTruncated": true,
+      "text": " queued lines will not run. From the topic you can also run a fixed list of slash\n commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`\n in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only\n-after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,\n-`/schedule`, `/rewind`, `/conform` and `/ci` stay local. A topic is deleted when the\n-shell exits, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages\n+after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),\n+and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,\n+`/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,\n+`/external-agents` and `/model` are queued with a notice in the topic and run when\n+it goes idle; `/mode` takes effect at once. A topic is archived when the shell\n+exits (a closing note, the topic and its history stay readable), but a resumed\n+session gets a new one, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages\n back into the topic, yours and the agent's final answers, one message each; a resumed\n session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing\n while a turn runs; see\n [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).\n+Every approval, `ask_user` question and queue dialog the shell raises is posted to\n+the topic with buttons, whoever started the turn; the first answer wins, from the\n+terminal or the topic, and an unanswered one gets a reminder every 2 minutes (at most 3).\n+While a turn runs, the topic gets at most one progress note a minute (at wave\n+boundaries and after tool-heavy stretches: counts and tool names, never tool output),\n+and a short status question such as \"how is it going?\" is answered from session state\n+without waiting for the turn; see\n+[What the topic hears](docs/docs/guides/drive-keryx-remotely.md#what-the-topic-hears).\n Without a connection `serve` starts as before, with remote control off, and only\n offers the local `/channels` routes. Replies are rendered in one of four modes,\n `remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the"
+    },
+    {
+      "path": "docs/docs/cli-reference.md",
+      "startLine": 1907,
+      "endLine": 1913,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " | Route | Description |\n |---|---|\n | `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |\n-| `POST /v1/remote/deregister` | The shell stops remote control; the topic is deleted. |\n+| `POST /v1/remote/deregister` | The shell stops remote control; the topic gets a closing note and is archived (closed, still readable), not deleted. |\n | `POST /v1/remote/heartbeat` | Keeps the session alive; a heartbeat from an unregistered session is refused with a reason. |\n | `POST /v1/remote/reply` | Text for the topic. Replies over 4096 characters are split. |\n | `POST /v1/remote/approval` | Raises an approval question in the topic, with Allow and Deny buttons. |"
+    },
+    {
+      "path": "docs/docs/guides/drive-keryx-remotely.md",
+      "startLine": 536,
+      "endLine": 550,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": " was refused and why.\n \n **While a turn runs.** The shell refuses `/new`, `/clear`, `/resume`, `/sessions`,\n-`/compact`, `/model` and `/connect`, and the topic says\n-`main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a\n+`/compact` and `/connect`, and the topic says `main is busy: command deferred`;\n+nothing is queued behind it. `/route`, `/external`, `/external-agents` and `/model`\n+are different: when main is busy they are **queued**, the topic gets\n+`<command> is queued: main is busy` at once, and the command runs when main goes\n+idle (a confirmation, where one is needed, is still asked first). The queued command\n+is dropped with a note if main stays busy too long, or quietly if remote control goes\n+off. When main is idle they run as soon as you press Yes. `/route` is on the menu:\n+bare `/route` shows the routing, `/route on` and `/route off` ask Yes / No first, and\n+any other argument is refused. `/mode` takes effect at once. A command that runs is answered with a\n short notice if it takes a while. A command from the topic never cancels the turn\n you are running in the shell: one that outlasts the limit is only no longer waited\n for, the topic is told it is still running in the shell, and it is left alone; when it"
+    },
+    {
+      "path": "docs/docs/guides/drive-keryx-remotely.md",
+      "startLine": 557,
+      "endLine": 564,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": " (`--- resumed session ---`). Typing `/new` in the shell still ends remote control\n as before.\n \n-**History in the topic.** A topic is deleted when the shell exits, so a session you resume\n+**History in the topic.** A topic is archived when the shell exits (see\n+[What happens when the shell closes](#what-happens-when-the-shell-closes)), so a session you resume\n with `keryx shell --continue` gets a new, empty one. `/history [N]` posts the session's last\n messages back, from the topic or from the shell (`N` is 1 to 20, and 10 when you give no\n number). Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about"
+    },
+    {
+      "path": "docs/docs/guides/drive-keryx-remotely.md",
+      "startLine": 592,
+      "endLine": 647,
+      "changedLines": 50,
+      "contextTruncated": true,
+      "text": " the typing indicator still works. A failed reaction call never delays or blocks a\n message.\n \n+### What the topic hears\n+\n+While `/remote-control` is on, you can run a long job from your phone and not lose\n+track of it. Nothing below needs a setting; the intervals are fixed.\n+\n+**Every question the shell raises is posted.** A command approval, an `ask_user`\n+question and a queue dialog all appear in the topic with Allow / Deny or one button\n+per option, **whether the turn started in the shell or in the topic**. The first\n+answer wins and the other side is closed exactly once:\n+\n+- Answer in the topic first: the shell's dock closes the same question and carries on\n+  with your answer; the message is edited to say who answered and when.\n+- Answer in the terminal first: the Telegram message is edited to \"answered in the\n+  shell\" and its buttons stop working, so a late press does nothing.\n+\n+**Reminders.** A question nobody has answered gets a reminder in the topic every\n+2 minutes, at most 3 times. The reminder quotes the first line of what was asked (cut at 80 characters), says\n+when the question expires and points at the buttons on the original message; it adds\n+no new buttons. A question that is answered, expired or closed stops its reminders.\n+\n+**Progress notes.** During a turn the topic gets a short note at a wave boundary (the\n+first subagent of a review fan-out starting, and the last one finishing) and after a\n+tool-heavy stretch (8 tool calls since the last note). At most **one note a minute**\n+goes out; if a second one is due earlier, the weightier one is held and sent when the\n+minute ends, and any note still held when the turn ends is dropped. A note carries\n+counts, tool names and subagent labels only, for example `Still working: 12 tool calls\n+in the last 1m (read_file, shell_exec). 3m 20s into this turn.` Tool input, tool output\n+and the model's text never go into a note.\n+\n+**Status questions are answered at once.** While a turn runs, a short plain line that\n+only asks how it is going (`status`, `how is it going?`, `are you still working?`,\n+`статус`, `как дела?`) is answered from the shell's own state without waiting for the\n+turn: elapsed time, tool calls so far and the last tool, subagents still running, how\n+many messages wait, how many questions wait for you, and the mode. It is not queued\n+and does not reach the model. A longer message that merely contains the word \"status\"\n+is work and is queued as usual, and when the shell is idle the same words go to the\n+model like any other line.\n+\n+### What happens when the shell closes\n+\n+The topic is **archived, not deleted**. When the shell exits (`/exit`, `/quit`), the\n+topic gets a closing note (\"This topic is archived: the history stays here and nothing\n+more will be posted\") and is closed. It stays in the group, readable, with everything that was said in it.\n+When the shell is killed (Ctrl+C twice, a closed terminal, a crash) it cannot say\n+goodbye: `serve` announces the silence in the topic and, after the orphan window\n+(10 minutes by default), posts the same note and archives it. A heartbeat inside the\n+window cancels that. A resumed session (`keryx shell --continue`) gets a new topic;\n+`/history` copies the last messages into it. Only **Disconnect** in `/channels` deletes\n+topics.\n+\n In the full-screen shell, the `/remote-control` modal has a **Commands** tab with\n the recent commands from the topic, including refused ones and confirmations nobody\n has answered yet. A command that came from Telegram is echoed in the transcript as"
+    },
+    {
+      "path": "src/remote/approval-mirror.test.ts",
+      "startLine": 1,
+      "endLine": 121,
+      "changedLines": 121,
+      "contextTruncated": true,
+      "text": "+// AC1 and AC2 (flow 419): an approval the shell raises reaches the topic with its buttons; an answer in the\n+// shell takes the buttons away (the topic text says \"Answered in the shell\"), a stopped turn says \"Cancelled\",\n+// and a press that comes after finds nothing to answer. Real client and serve over loopback, fake Bot API.\n+\n+import { afterEach, describe, expect, test } from \"bun:test\";\n+import type { RemoteClient } from \"./client\";\n+import type { FakeSentMessage } from \"./fake-bot-api\";\n+import { makeRig, type Rig } from \"./remote.http.test-helpers\";\n+import { OWNER_ID, until } from \"./remote.test-helpers\";\n+\n+let rig: Rig;\n+afterEach(async () => {\n+  await rig.cleanup();\n+});\n+\n+async function session(sessionId: string): Promise<{ client: RemoteClient; threadId: number }> {\n+  const client = rig.makeClient({ sessionId, project: \"/work/mirror\", name: \"mirror\", onLine: () => undefined });\n+  const started = await client.start();\n+  if (!started.ok) throw new Error(`session did not start: ${started.message}`);\n+  return { client, threadId: started.threadId };\n+}\n+\n+async function untilPrompt(threadId: number): Promise<{ message: FakeSentMessage; allow: string; deny: string }> {\n+  const find = (): FakeSentMessage | undefined => rig.api.sentTo(threadId).find((message) => message.inlineKeyboard !== undefined);\n+  await until(() => find() !== undefined, \"the approval buttons in the topic\");\n+  const message = find() as FakeSentMessage;\n+  const buttons = (message.inlineKeyboard ?? []).flat();\n+  const allow = buttons.find((button) => button.text === \"Allow\")?.callback_data;\n+  const deny = buttons.find((button) => button.text === \"Deny\")?.callback_data;\n+  if (allow === undefined || deny === undefined) throw new Error(\"no Allow and Deny buttons\");\n+  return { message, allow, deny };\n+}\n+\n+function current(messageId: number): FakeSentMessage {\n+  const message = rig.api.message(messageId);\n+  if (message === undefined) throw new Error(`message ${messageId} is not in the topic`);\n+  return message;\n+}\n+\n+describe(\"an approval raised in the shell\", () => {\n+  test(\"AC1: the prompt reaches the outbound log with Allow and Deny\", async () => {\n+    rig = makeRig();\n+    await rig.startServe();\n+    const { client, threadId } = await session(\"sess-mir-0001\");\n+    const abort = new AbortController();\n+    void client.askApproval(\"Run `bun test`?\", 10_000, { signal: abort.signal });\n+    const prompt = await untilPrompt(threadId);\n+    expect(prompt.message.text).toContain(\"Run `bun test`?\");\n+    expect(rig.api.sentTo(threadId).some((message) => message.inlineKeyboard !== undefined)).toBe(true);\n+    abort.abort(\"shell\");\n+  });\n+\n+  test(\"AC2, shell first: the buttons go, the text says it was answered in the shell, a late press changes nothing\", async () => {\n+    rig = makeRig();\n+    await rig.startServe();\n+    const { client, threadId } = await session(\"sess-mir-0002\");\n+    const abort = new AbortController();\n+    const asked = client.askApproval(\"Delete the build directory?\", 10_000, { signal: abort.signal });\n+    const prompt = await untilPrompt(threadId);\n+\n+    abort.abort(\"shell\");\n+    expect((await asked).decision).toBe(\"deny\");\n+    await until(() => current(prompt.message.messageId).inlineKeyboard === undefined, \"the buttons to go\");\n+    expect(current(prompt.message.messageId).text).toContain(\"Answered in the shell\");\n+\n+    const textAfterShell = current(prompt.message.messageId).text;\n+    rig.api.pushCallback({ fromId: OWNER_ID, data: prompt.allow, threadId, messageId: prompt.message.messageId });\n+    await until(() => rig.api.answeredCallbacks.length >= 1, \"the late press to be answered\");\n+    expect(current(prompt.message.messageId).text).not.toContain(\"Allowed by\");\n+    expect(current(prompt.message.messageId).inlineKeyboard).toBeUndefined();\n+    expect(textAfterShell).toContain(\"Answered in the shell\");\n+  });\n+\n+  test(\"AC2, a stopped turn says the approval is no longer open\", async () => {\n+    rig = makeRig();\n+    await rig.startServe();\n+    const { client, threadId } = await session(\"sess-mir-0003\");\n+    const abort = new AbortController();\n+    const asked = client.askApproval(\"Write the file?\", 10_000, { signal: abort.signal });\n+    const prompt = await untilPrompt(threadId);\n+\n+    abort.abort(\"cancelled\");\n+    await asked;\n+    await until(() => current(prompt.message.messageId).inlineKeyboard === undefined, \"the buttons to go\");\n+    expect(current(prompt.message.messageId).text).toContain(\"Cancelled at \");\n+  });\n+\n+  test(\"AC2, topic first: the press resolves the shell exactly once and a shell abort afterwards changes nothing\", async () => {\n+    rig = makeRig();\n+    await rig.startServe();\n+    const { client, threadId } = await session(\"sess-mir-0004\");\n+    const abort = new AbortController();\n+    const asked = client.askApproval(\"Run the migration?\", 10_000, { signal: abort.signal });\n+    const prompt = await untilPrompt(threadId);\n+\n+    rig.api.pushCallback({ fromId: OWNER_ID, data: prompt.allow, threadId, messageId: prompt.message.messageId });\n+    const answer = await asked;\n+    expect(answer.decision).toBe(\"allow\");\n+    await until(() => current(prompt.message.messageId).text.includes(\"Allowed by user\"), \"the edit\");\n+\n+    // The shell closes its dock after the topic won: that must not rewrite the final state.\n+    abort.abort(\"shell\");\n+    await new Promise((resolve) => setTimeout(resolve, 50));\n+    expect(current(prompt.message.messageId).text).toContain(\"Allowed by user\");\n+    expect(current(prompt.message.messageId).text).not.toContain(\"Answered in the shell\");\n+  });\n+\n+  test(\"a signal that is already aborted never posts a prompt that outlives it\", async () => {\n+    rig = makeRig();\n+    await rig.startServe();\n+    const { client, threadId } = await session(\"sess-mir-0005\");\n+    const abort = new AbortController();\n+    abort.abort(\"cancelled\");\n+    const answer = await client.askApproval(\"Too late\", 10_000, { signal: abort.signal });\n+    expect(answer.decision).toBe(\"deny\");\n+    await new Promise((resolve) => setTimeout(resolve, 30));\n+    for (const message of rig.api.sentTo(threadId)) {\n+      expect(message.inlineKeyboard).toBeUndefined();\n+    }\n+  });\n+});"
+    },
+    {
+      "path": "src/remote/bot-api-http.ts",
+      "startLine": 227,
+      "endLine": 238,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "         message_thread_id: params.messageThreadId,\n       });\n     },\n+    async closeForumTopic(params) {\n+      await call<boolean>(\"closeForumTopic\", {\n+        chat_id: params.chatId,\n+        message_thread_id: params.messageThreadId,\n+      });\n+    },\n     async editForumTopic(params) {\n       await call<boolean>(\"editForumTopic\", {\n         chat_id: params.chatId,"
+    },
+    {
+      "path": "src/remote/client.ts",
+      "startLine": 69,
+      "endLine": 79,
+      "changedLines": 5,
+      "contextTruncated": true,
+      "text": "   | { kind: \"own\"; text: string; refusal?: undefined }\n   | { kind: \"none\"; refusal?: string };\n \n+/** Read at the call: an earlier check on the same signal must not narrow it to \"not aborted\". */\n+function isAborted(signal: AbortSignal | undefined): boolean {\n+  return signal?.aborted === true;\n+}\n+\n function closeByFor(signal: AbortSignal | undefined): \"shell\" | \"cancelled\" {\n   return signal?.reason === \"cancelled\" ? \"cancelled\" : \"shell\";\n }"
+    },
+    {
+      "path": "src/remote/client.ts",
+      "startLine": 469,
+      "endLine": 478,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "     if (!this.connected) {\n       return { decision: \"deny\" };\n     }\n+    if (isAborted(options.signal)) {\n+      await this.closePrompt(approvalId, closeByFor(options.signal));\n+      return { decision: \"deny\", approvalId };\n+    }\n     return new Promise<ApprovalAnswer>((resolve) => {\n       const signal = options.signal;\n       const onAbort = (): void => {"
+    },
+    {
+      "path": "src/remote/client.ts",
+      "startLine": 481,
+      "endLine": 488,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "         if (waiter !== undefined) clearTimeout(waiter.timer);\n         this.waiters.delete(approvalId);\n         resolve({ decision: \"deny\", approvalId });\n+        // Flow 419: the buttons may still be in the topic; serve takes them down and says where it was answered.\n+        void this.closePrompt(approvalId, closeByFor(signal));\n       };\n       const timer = setTimeout(() => {\n         signal?.removeEventListener(\"abort\", onAbort);"
+    },
+    {
+      "path": "src/remote/command-busy.test.ts",
+      "startLine": 13,
+      "endLine": 19,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     }\n   });\n \n-  for (const line of [\"/new\", \"/resume\", \"/sessions\", \"/compact\", \"/model\"]) {\n+  for (const line of [\"/new\", \"/resume\", \"/sessions\", \"/compact\"]) {\n     it(`${line} is refused with the shell's reason while a turn runs`, async () => {\n       const h = commandHarness({ busy: true });\n       await h.bridge.enable();"
+    },
+    {
+      "path": "src/remote/command-gateway.test.ts",
+      "startLine": 22,
+      "endLine": 27,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   [\"/setup\", \"setup\"],\n   [\"/mcp trust\", \"mcp\"],\n   [\"/guard\", \"guard\"],\n-  [\"/route\", \"route\"],\n   [\"/editguard\", \"editguard\"],\n   [\"/schedule\", \"schedule\"],\n   [\"/rewind\", \"rewind\"],"
+    },
+    {
+      "path": "src/remote/command-gateway.test.ts",
+      "startLine": 34,
+      "endLine": 40,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " \n /** Refused commands whose reason is written in the gateway's own switch, not in REMOTE_REFUSED. */\n const INLINE_REASONS: Record<string, string> = {\n-  \"remote-control\": \"it would delete this topic; turn it off in the shell\",\n+  \"remote-control\": \"it would archive this topic; turn it off in the shell\",\n   theme: \"bare /theme opens a picker\",\n   think: \"use /think auto, expand or hide\",\n };"
+    },
+    {
+      "path": "src/remote/command-gateway.ts",
+      "startLine": 64,
+      "endLine": 70,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   { name: \"delegate\", kind: \"confirm\", description: \"Hand a paid task to an external agent: /delegate <agent> <task>; asks first\" },\n   { name: \"external\", kind: \"confirm\", description: \"Show or switch sending work to external providers; on and off ask first\" },\n   { name: \"external-agents\", kind: \"confirm\", description: \"Show or switch the external agent runtime; on and off ask first\" },\n+  { name: \"route\", kind: \"confirm\", description: \"Show or switch model routing: /route [on|off]; on and off ask first\" },\n ];\n \n /** Commands that are never run from the topic, each with the reason the topic is told. */"
+    },
+    {
+      "path": "src/remote/command-gateway.ts",
+      "startLine": 75,
+      "endLine": 87,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "   provider: \"it asks for provider keys and addresses, which are never typed into a chat\",\n   \"search-provider\": \"it asks for provider keys, which are never typed into a chat\",\n   \"search-connect\": \"it changes where searches are sent\",\n-  \"remote-control\": \"turning remote control off would delete this topic, and its panel is local\",\n+  \"remote-control\": \"turning remote control off would archive this topic, and its panel is local\",\n   integrate: \"it edits other tools' configuration on this machine\",\n   copy: \"it uses this machine's clipboard\",\n   game: \"it needs the shell's screen\",\n   setup: \"it asks for keys and changes the configuration\",\n   mcp: \"it can trust tools and change server connections; use the shell\",\n   guard: \"it changes a safety guard; use the shell\",\n-  route: \"it changes where work is routed; use the shell\",\n   editguard: \"it changes a safety guard; use the shell\",\n   settings: \"it edits settings, some of them secret; use the shell\",\n   bus: \"it talks to other agents on this machine\","
+    },
+    {
+      "path": "src/remote/command-gateway.ts",
+      "startLine": 112,
+      "endLine": 124,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": " };\n \n /** The commands a shell refuses while a turn runs, when the host gives no better answer. */\n-export const BUSY_DEFERRED_COMMANDS: readonly string[] = [\"new\", \"clear\", \"resume\", \"sessions\", \"compact\", \"model\", \"connect\"];\n+export const BUSY_DEFERRED_COMMANDS: readonly string[] = [\"new\", \"clear\", \"resume\", \"sessions\", \"compact\", \"model\", \"connect\", \"route\", \"external\", \"external-agents\"];\n+\n+/**\n+ * Commands that are not refused while a turn runs but held: the topic is told they are queued, and each runs\n+ * when main is idle (flow 419, AC4). Shell spelling. `/mode` is not here: the shell takes it at any moment.\n+ */\n+export const QUEUED_WHEN_BUSY_COMMANDS: readonly string[] = [\"model\", \"route\", \"external\", \"external-agents\"];\n \n /** The reason the shell gives for a command it will not run during a turn. */\n export const BUSY_REASON = \"main is busy: command deferred\";"
+    },
+    {
+      "path": "src/remote/command-gateway.ts",
+      "startLine": 197,
+      "endLine": 203,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " \n   if (canonical === \"remote-control\") {\n     const sub = args.split(/\\s+/)[0]?.toLowerCase() ?? \"\";\n-    return refuse(canonical, sub === \"off\" ? \"it would delete this topic; turn it off in the shell\" : (refusedReason ?? \"its panel is local\"), true);\n+    return refuse(canonical, sub === \"off\" ? \"it would archive this topic; turn it off in the shell\" : (refusedReason ?? \"its panel is local\"), true);\n   }\n   if (spec === undefined) {\n     if (refusedReason !== undefined) {"
+    },
+    {
+      "path": "src/remote/command-gateway.ts",
+      "startLine": 248,
+      "endLine": 263,
+      "changedLines": 10,
+      "contextTruncated": true,
+      "text": "         };\n       }\n       return first === \"\" ? { kind: \"run\", command: name, line: \"/external\" } : refuse(name, \"use /external, /external on or /external off\", true);\n+    case \"route\":\n+      if (first === \"on\" || first === \"off\") {\n+        return {\n+          kind: \"confirm\",\n+          command: name,\n+          line: `/route ${first}`,\n+          summary: `Switch model routing ${first}? This changes which model answers each turn.`,\n+        };\n+      }\n+      return first === \"\" ? { kind: \"run\", command: name, line: \"/route\" } : refuse(name, \"use /route, /route on or /route off\", true);\n     case \"external-agents\":\n       if (first === \"on\" || first === \"off\") {\n         return {"
+    },
+    {
+      "path": "src/remote/command-gateway.ts",
+      "startLine": 319,
+      "endLine": 329,
+      "changedLines": 5,
+      "contextTruncated": true,
+      "text": "   return BUSY_DEFERRED_COMMANDS.includes(name);\n }\n \n+/** Whether a command from the topic waits for an idle main instead of being refused while a turn runs. */\n+export function isQueuedWhenBusy(name: string): boolean {\n+  return QUEUED_WHEN_BUSY_COMMANDS.includes(name);\n+}\n+\n /** Every menu name is valid for Telegram; the test holds this. */\n export function menuNamesAreValid(): boolean {\n   return REMOTE_COMMANDS.every((spec) => MENU_NAME.test(menuName(spec.name)));"
+    },
+    {
+      "path": "src/remote/command-model.test.ts",
+      "startLine": 124,
+      "endLine": 130,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": "     expect(h.client().replies[0]).toContain(\"no models\");\n   });\n \n-  it(\"is not run when the shell is busy\", async () => {\n-    const h = commandHarness({ busy: true, listModels: async () => ({ provider: \"acme\", models: models(2) }), switchModel: async () => ({ output: \"\", ok: true }) });\n-    await h.bridge.enable();\n-    await h.say(\"/model\");\n-    await h.bridge.idle();\n-    expect(h.client().choices).toEqual([]);\n-    expect(h.client().replies[0]).toContain(\"/model was not run\");\n-  });\n-\n-  it(\"does not switch if the shell became busy while the picker was open\", async () => {\n+  it(\"does not switch while the shell is busy; it says so, and switches once the shell is idle (flow 419)\", async () => {\n     const switched: Array<[string, string | undefined]> = [];\n     const h = withModels(3, { switched });\n     await h.bridge.enable();"
+    },
+    {
+      "path": "src/remote/command-model.test.ts",
+      "startLine": 132,
+      "endLine": 142,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "     await waitFor(() => h.client().choices.length === 1, \"the picker\");\n     h.state.busy = true;\n     h.client().choices[0]?.answer(1);\n-    await h.bridge.idle();\n+    await waitFor(() => h.client().replies.length === 1, \"the queued notice\");\n     expect(switched).toEqual([]);\n-    expect(h.client().replies[0]).toContain(\"/model was not run\");\n+    expect(h.client().replies[0]).toContain(\"is queued: main is busy\");\n+    h.state.busy = false;\n+    await h.bridge.idle();\n+    expect(switched).toEqual([[\"m1\", undefined]]);\n   });\n });"
+    },
+    {
+      "path": "src/remote/command-queued.test.ts",
+      "startLine": 1,
+      "endLine": 132,
+      "changedLines": 132,
+      "contextTruncated": true,
+      "text": "+// Flow 419, AC4: /route, /external and /model from the topic take effect when main is idle and are queued, with a\n+// notice in the topic, when main is busy. Nothing is refused for being busy, and nothing waits on the command line.\n+\n+import { describe, expect, it } from \"bun:test\";\n+import { classifyRemoteCommand, QUEUED_WHEN_BUSY_COMMANDS, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from \"./command-gateway\";\n+import { commandHarness, waitFor } from \"./command.test-helpers\";\n+\n+describe(\"the gateway (AC4)\", () => {\n+  it(\"no longer refuses /route, and puts it on the menu\", () => {\n+    expect(REMOTE_REFUSED.route).toBeUndefined();\n+    expect(REMOTE_COMMANDS.some((spec) => spec.name === \"route\")).toBe(true);\n+    expect(remoteMenu().some((entry) => entry.command === \"route\")).toBe(true);\n+  });\n+\n+  it(\"/route shows at once, /route on and off ask first, anything else is refused\", () => {\n+    expect(classifyRemoteCommand(\"/route\")).toEqual({ kind: \"run\", command: \"route\", line: \"/route\" });\n+    for (const arg of [\"on\", \"off\"]) {\n+      const decision = classifyRemoteCommand(`/route ${arg}`);\n+      expect(decision.kind).toBe(\"confirm\");\n+      if (decision.kind === \"confirm\") expect(decision.line).toBe(`/route ${arg}`);\n+    }\n+    expect(classifyRemoteCommand(\"/route sideways\").kind).toBe(\"refuse\");\n+  });\n+\n+  it(\"names the commands that wait for an idle main\", () => {\n+    expect([...QUEUED_WHEN_BUSY_COMMANDS].sort()).toEqual([\"external\", \"external-agents\", \"model\", \"route\"]);\n+  });\n+});\n+\n+describe(\"main idle\", () => {\n+  it(\"/route on runs after Yes\", async () => {\n+    const h = commandHarness();\n+    await h.bridge.enable();\n+    await h.say(\"/route on\");\n+    await waitFor(() => h.client().choices.length === 1, \"the question\");\n+    h.client().choices[0]?.answer(0);\n+    await h.bridge.idle();\n+    expect(h.ran).toEqual([\"/route on\"]);\n+    expect(h.client().replies.some((reply) => reply.includes(\"queued\"))).toBe(false);\n+  });\n+});\n+\n+describe(\"main busy\", () => {\n+  it(\"/route on is queued with a notice, then runs when main goes idle\", async () => {\n+    const h = commandHarness({ busy: true });\n+    await h.bridge.enable();\n+    await h.say(\"/route on\");\n+    await waitFor(() => h.client().choices.length === 1, \"the question\");\n+    h.client().choices[0]?.answer(0);\n+    await waitFor(() => h.client().replies.some((reply) => reply.includes(\"/route on is queued: main is busy\")), \"the queued notice\");\n+    expect(h.ran).toEqual([]);\n+    expect(h.client().replies.join(\"\\n\")).not.toContain(\"was not run\");\n+\n+    h.state.busy = false;\n+    await h.bridge.idle();\n+    expect(h.ran).toEqual([\"/route on\"]);\n+    expect(h.client().replies.at(-1)).toContain(\"ran /route on\");\n+  });\n+\n+  it(\"bare /external and /route are queued too, and both run\", async () => {\n+    const h = commandHarness({ busy: true });\n+    await h.bridge.enable();\n+    await h.say(\"/external\");\n+    await h.say(\"/route\");\n+    await waitFor(() => h.client().replies.filter((reply) => reply.includes(\"is queued\")).length === 2, \"both notices\");\n+    expect(h.ran).toEqual([]);\n+    h.state.busy = false;\n+    await h.bridge.idle();\n+    expect([...h.ran].sort()).toEqual([\"/external\", \"/route\"]);\n+  });\n+\n+  it(\"a status question is not stuck behind a queued command\", async () => {\n+    const h = commandHarness({ busy: true });\n+    await h.bridge.enable();\n+    await h.say(\"/external\");\n+    await waitFor(() => h.client().replies.some((reply) => reply.includes(\"is queued\")), \"the notice\");\n+    await h.say(\"/status\");\n+    await waitFor(() => h.ran.includes(\"/status\"), \"the status to run\");\n+    expect(h.ran).toEqual([\"/status\"]);\n+    h.state.busy = false;\n+    await h.bridge.idle();\n+  });\n+\n+  it(\"/model shows its buttons while busy and the switch waits for an idle main\", async () => {\n+    const switched: string[] = [];\n+    const h = commandHarness({\n+      busy: true,\n+      listModels: async () => ({\n+        provider: \"acme\",\n+        models: [\n+          { id: \"m0\", label: \"Model 0\", current: true },\n+          { id: \"m1\", label: \"Model 1\" },\n+        ],\n+      }),\n+      switchModel: async (id) => {\n+        switched.push(id);\n+        return { output: `Model: ${id}`, ok: true };\n+      },\n+    });\n+    await h.bridge.enable();\n+    await h.say(\"/model\");\n+    await waitFor(() => h.client().choices.length === 1, \"the picker\");\n+    h.client().choices[0]?.answer(1);\n+    await waitFor(() => h.client().replies.some((reply) => reply.includes(\"is queued: main is busy\")), \"the queued notice\");\n+    expect(switched).toEqual([]);\n+    h.state.busy = false;\n+    await h.bridge.idle();\n+    expect(switched).toEqual([\"m1\"]);\n+    expect(h.client().replies.at(-1)).toContain(\"Model: m1\");\n+  });\n+\n+  it(\"a command held too long is dropped and the topic is told\", async () => {\n+    const h = commandHarness({ busy: true, queuedCommandLimitMs: 30 });\n+    await h.bridge.enable();\n+    await h.say(\"/external\");\n+    await h.bridge.idle();\n+    expect(h.ran).toEqual([]);\n+    expect(h.client().replies.at(-1)).toContain(\"main stayed busy\");\n+  });\n+\n+  it(\"a command held when remote control goes off is dropped quietly\", async () => {\n+    const h = commandHarness({ busy: true });\n+    await h.bridge.enable();\n+    await h.say(\"/external\");\n+    await waitFor(() => h.client().replies.some((reply) => reply.includes(\"is queued\")), \"the notice\");\n+    await h.bridge.disable();\n+    await h.bridge.idle();\n+    h.state.busy = false;\n+    await new Promise((resolve) => setTimeout(resolve, 30));\n+    expect(h.ran).toEqual([]);\n+  });\n+});"
+    },
+    {
+      "path": "src/remote/command-router.ts",
+      "startLine": 15,
+      "endLine": 21,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   classifyRemoteCommand,\n   type GatewayDecision,\n   isBusyDeferred,\n+  isQueuedWhenBusy,\n   refusalText,\n   remoteHelpText,\n } from \"./command-gateway\";"
+    },
+    {
+      "path": "src/remote/command-router.ts",
+      "startLine": 90,
+      "endLine": 108,
+      "changedLines": 12,
+      "contextTruncated": true,
+      "text": "   commandLimitMs: number;\n   /** How long a picker or a Yes/No waits for a press. */\n   choiceTimeoutMs: number;\n+  /** How often a command held for an idle main looks again (flow 419, AC4). */\n+  idlePollMs?: number;\n+  /** After this long a held command is dropped, and the topic is told. */\n+  queuedCommandLimitMs?: number;\n }\n \n-export const DEFAULT_ROUTER_LIMITS: RouterLimits = { runningNoticeMs: 4_000, commandLimitMs: 120_000, choiceTimeoutMs: 120_000 };\n+export const DEFAULT_ROUTER_LIMITS: RouterLimits = {\n+  runningNoticeMs: 4_000,\n+  commandLimitMs: 120_000,\n+  choiceTimeoutMs: 120_000,\n+  idlePollMs: 250,\n+  queuedCommandLimitMs: 30 * 60_000,\n+};\n \n /** The most items on one picker page; with the navigation row this stays within the eight rows a keyboard may have. */\n export const PICKER_PAGE_SIZE = 7;"
+    },
+    {
+      "path": "src/remote/command-router.ts",
+      "startLine": 117,
+      "endLine": 124,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   host: RemoteCommandHost;\n   /** Send text to the topic. False when it could not be sent. */\n   reply(text: string): Promise<boolean>;\n+  /** False once remote control is off: a command held for an idle main is dropped. Absent: always live. */\n+  live?(): boolean;\n   /**\n    * `/history [N]` (flow 399): post the session's last messages to the topic. Resolves with the one\n    * line to answer with when nothing was posted (usage, empty history), undefined when the messages went out."
+    },
+    {
+      "path": "src/remote/command-router.ts",
+      "startLine": 274,
+      "endLine": 323,
+      "changedLines": 39,
+      "contextTruncated": true,
+      "text": " \n   /** Put a run on the line. Used by the gateway's `run` and by an answered Yes/No. */\n   enqueue(line: string, command: string, end?: CommandEnd): void {\n+    if (isQueuedWhenBusy(command) && this.busyReason(line, command) !== undefined) {\n+      this.detach(async () => {\n+        if (await this.awaitIdle(line, command)) {\n+          this.enqueueNow(line, command, end);\n+        } else {\n+          ended(end, \"failed\");\n+        }\n+      });\n+      return;\n+    }\n+    this.enqueueNow(line, command, end);\n+  }\n+\n+  private enqueueNow(line: string, command: string, end?: CommandEnd): void {\n     this.chain = this.chain\n       .then(() => this.execute(command, line, async () => (this.ctx.host.runCommand === undefined ? undefined : this.ctx.host.runCommand(line)), end))\n       .catch(() => undefined);\n   }\n \n+  /**\n+   * Flow 419, AC4: main is busy and the command is one the shell would defer. Say it is queued, then wait\n+   * until main is idle. Resolves true when it is, false when the wait was given up (the topic was told or\n+   * is gone). Never on the line, so a status question or a stop is not stuck behind it.\n+   */\n+  private async awaitIdle(line: string, command: string): Promise<boolean> {\n+    this.ctx.record(`/${command} queued: main is busy`);\n+    await this.ctx.reply(this.ctx.compose(`${line} is queued: main is busy. It runs when main is idle.`)).catch(() => false);\n+    const { idlePollMs = 250, queuedCommandLimitMs = 30 * 60_000 } = this.ctx.limits;\n+    const until = Date.now() + queuedCommandLimitMs;\n+    while (this.ctx.host.isBusy()) {\n+      if (this.ctx.live?.() === false) {\n+        this.ctx.record(`${line} dropped: remote control went off while it waited`);\n+        return false;\n+      }\n+      if (Date.now() >= until) {\n+        this.ctx.record(`${line} dropped: main stayed busy`);\n+        await this.ctx.reply(`${line} was not run: main stayed busy for ${Math.max(1, Math.round(queuedCommandLimitMs / 60_000))} minutes. Send it again when the run ends.`).catch(() => false);\n+        return false;\n+      }\n+      await new Promise<void>((resolve) => setTimeout(resolve, idlePollMs));\n+    }\n+    return true;\n+  }\n+\n   /** Run `work` after everything already on the line, and hold the line until it settles. */\n   private serial<T>(work: () => Promise<T>): Promise<T> {\n     const run = this.chain.then(work);"
+    },
+    {
+      "path": "src/remote/command-router.ts",
+      "startLine": 512,
+      "endLine": 519,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "   private async picker(command: string, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {\n     const line = `/${command}`;\n     const busy = this.busyReason(line, command);\n-    if (busy !== undefined) {\n+    // A model picker is shown even while main is busy; only the switch itself waits for an idle main.\n+    if (busy !== undefined && !isQueuedWhenBusy(command)) {\n       this.ctx.record(`${line} not run: ${busy}`);\n       await this.ctx.reply(`${line} was not run: ${busy}.`).catch(() => false);\n       return \"failed\";"
+    },
+    {
+      "path": "src/remote/command-router.ts",
+      "startLine": 555,
+      "endLine": 563,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "       return \"failed\";\n     }\n     const switchModel = host.switchModel.bind(host);\n+    if (this.busyReason(\"/model\", \"model\") !== undefined && !(await this.awaitIdle(`/model ${chosen.label.replace(/^\\* /, \"\")}`, \"model\"))) {\n+      return \"failed\";\n+    }\n     // On the same line as every other command: a switch never overlaps one that is still executing.\n     const switched = await this.serial(async (): Promise<CommandOutcome | { busy: string }> => {\n       const busy = this.busyReason(\"/model\", \"model\");"
+    },
+    {
+      "path": "src/remote/command.test-helpers.ts",
+      "startLine": 37,
+      "endLine": 52,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "   listSessions?: RemoteBridgeHost[\"listSessions\"];\n   resumeSession?: RemoteBridgeHost[\"resumeSession\"];\n   choiceTimeoutMs?: number;\n+  idlePollMs?: number;\n+  queuedCommandLimitMs?: number;\n   /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */\n   runTimeoutMs?: number;\n   /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */\n   refuseChoice?: string;\n+  progressIntervalMs?: number;\n+  progressToolThreshold?: number;\n+  sessionState?: RemoteBridgeHost[\"sessionState\"];\n+  turnRunning?: RemoteBridgeHost[\"turnRunning\"];\n   /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */\n   askApproval?: NonNullable<RemoteClientLike[\"askApproval\"]>;\n }"
+    },
+    {
+      "path": "src/remote/command.test-helpers.ts",
+      "startLine": 76,
+      "endLine": 83,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "             return (opts.runCommand as (line: string) => Promise<CommandOutcome>)(line);\n           },\n     ...(opts.busyRefusal !== undefined ? { busyRefusal: opts.busyRefusal } : {}),\n+    ...(opts.sessionState !== undefined ? { sessionState: opts.sessionState } : {}),\n+    ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),\n     ...(opts.listModels !== undefined ? { listModels: opts.listModels } : {}),\n     ...(opts.switchModel !== undefined ? { switchModel: opts.switchModel } : {}),\n     ...(opts.listProviders !== undefined ? { listProviders: opts.listProviders } : {}),"
+    },
+    {
+      "path": "src/remote/command.test-helpers.ts",
+      "startLine": 92,
+      "endLine": 101,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "     ...(opts.runningNoticeMs !== undefined ? { commandRunningNoticeMs: opts.runningNoticeMs } : {}),\n     ...(opts.commandLimitMs !== undefined ? { commandLimitMs: opts.commandLimitMs } : {}),\n     ...(opts.choiceTimeoutMs !== undefined ? { choiceTimeoutMs: opts.choiceTimeoutMs } : {}),\n+    idlePollMs: opts.idlePollMs ?? 5,\n+    ...(opts.progressIntervalMs !== undefined ? { progressIntervalMs: opts.progressIntervalMs } : {}),\n+    ...(opts.progressToolThreshold !== undefined ? { progressToolThreshold: opts.progressToolThreshold } : {}),\n+    ...(opts.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: opts.queuedCommandLimitMs } : {}),\n     makeClient: (options: RemoteClientOptions) => {\n       const startResult: StartResult = { ok: true, name: \"topic-a\", threadId: 7, runTimeoutMs: 0 };\n       const fake = {"
+    },
+    {
+      "path": "src/remote/fake-bot-api.ts",
+      "startLine": 125,
+      "endLine": 131,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   | \"sendChatAction\"\n   | \"createForumTopic\"\n   | \"deleteForumTopic\"\n+  | \"closeForumTopic\"\n   | \"editForumTopic\"\n   | \"answerCallbackQuery\"\n   | \"getMe\""
+    },
+    {
+      "path": "src/remote/fake-bot-api.ts",
+      "startLine": 158,
+      "endLine": 165,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   myCommands: BotCommandMenuEntry[] = [];\n   readonly myCommandsCalls: BotCommandMenuEntry[][] = [];\n   readonly deletedTopics: { chatId: number; messageThreadId: number }[] = [];\n+  /** Topics the bot closed (archived); they stay in `liveTopics` with their messages. */\n+  readonly closedTopics: { chatId: number; messageThreadId: number }[] = [];\n   readonly renamedTopics: { messageThreadId: number; name: string }[] = [];\n   /** Every call, in order, by client label. */\n   readonly calls: { method: FakeMethod; label: string }[] = [];"
+    },
+    {
+      "path": "src/remote/fake-bot-api.ts",
+      "startLine": 212,
+      "endLine": 218,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "       sendChatAction: (params) => this.chatActionFor(label, params),\n       createForumTopic: (params) => this.createTopicFor(label, params),\n       deleteForumTopic: (params) => this.deleteTopicFor(label, params),\n+      closeForumTopic: (params) => this.closeTopicFor(label, params),\n       editForumTopic: (params) => this.editTopicFor(label, params),\n       answerCallbackQuery: (params) => this.answerFor(label, params),\n       getMe: () => this.getMeFor(label),"
+    },
+    {
+      "path": "src/remote/fake-bot-api.ts",
+      "startLine": 445,
+      "endLine": 454,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "     return this.defaultClient.deleteForumTopic(params);\n   }\n \n+  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {\n+    return this.defaultClient.closeForumTopic(params);\n+  }\n+\n   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {\n     return this.defaultClient.editForumTopic(params);\n   }"
+    },
+    {
+      "path": "src/remote/fake-bot-api.ts",
+      "startLine": 815,
+      "endLine": 828,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": "     this.deletedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });\n   }\n \n+  private async closeTopicFor(label: string, params: { chatId: number; messageThreadId: number }): Promise<void> {\n+    this.begin(\"closeForumTopic\", label);\n+    if (!this.liveTopics.has(params.messageThreadId)) {\n+      throw rejected(\"closeForumTopic\", 400, \"Bad Request: message thread not found\");\n+    }\n+    this.closedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });\n+  }\n+\n   private async editTopicFor(label: string, params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {\n     this.begin(\"editForumTopic\", label);\n     const topic = this.liveTopics.get(params.messageThreadId);"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 47,
+      "endLine": 54,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   choiceCallbackData,\n   DEFAULT_ACK_TIMEOUT_MS,\n   DEFAULT_APPROVAL_ACK_MS,\n+  DEFAULT_PROMPT_REMINDER_MS,\n+  MAX_PROMPT_REMINDERS,\n   DEFAULT_APPROVAL_TIMEOUT_MS,\n   DEFAULT_KEEPALIVE_MS,\n   encodeSseEvent,"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 114,
+      "endLine": 121,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   ackTimeoutMs?: number;\n   /** How long a pressed approval waits for the shell to confirm it received the decision (flow 397). */\n   approvalAckMs?: number;\n+  /** Flow 419: how long an unanswered approval or question waits before the topic is reminded of it. */\n+  reminderMs?: number;\n   /** Test seam: the approval id generator. Must produce `ap` and 12 lowercase hex characters. */\n   approvalIds?: () => string;\n   /** Test seam: the choice prompt id generator. Must produce `pk` and 12 lowercase hex characters. */"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 258,
+      "endLine": 266,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "   text?: string;\n   /** The pattern an \"Always\" press would remember (flow 396), as shown in the topic. Absent: no Always button. */\n   remember?: string;\n+  /** Flow 419: the pending reminder, and how many were already posted. */\n+  reminder?: unknown;\n+  reminded?: number;\n }\n \n /**"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 369,
+      "endLine": 375,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   private readonly keepaliveMs: number;\n   private readonly ackTimeoutMs: number;\n   private readonly approvalAckMs: number;\n+  private readonly reminderMs: number;\n   private readonly newApprovalId: () => string;\n   private readonly newPromptId: () => string;\n   private readonly streams = new Map<string, ShellStream>();"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 394,
+      "endLine": 400,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "     this.keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;\n     this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;\n     this.approvalAckMs = options.approvalAckMs ?? DEFAULT_APPROVAL_ACK_MS;\n+    this.reminderMs = options.reminderMs ?? DEFAULT_PROMPT_REMINDER_MS;\n     this.newApprovalId = options.approvalIds ?? (() => `ap${randomBytes(6).toString(\"hex\")}`);\n     this.newPromptId = options.promptIds ?? (() => `pk${randomBytes(6).toString(\"hex\")}`);\n     this.consumer = {"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 728,
+      "endLine": 734,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "       timer: this.timers.setTimeout(() => this.expireApproval(approvalId), timeoutMs),\n       ...(remember === undefined ? {} : { remember }),\n     });\n+    this.scheduleReminder(\"approval\", approvalId);\n     // The operator approves what is shown, so the prompt goes out as a code block: nothing in it is read as markup.\n     const offer = remember === undefined ? \"\" : `\\nAlways would remember:\\n${asCodeBlock(remember)}`;\n     const sent = await hub.send(sessionId, `Approval needed:\\n${asCodeBlock(redactSensitiveText(value.prompt))}${offer}`, {"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 872,
+      "endLine": 878,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "       ...(own ? { own: true } : {}),\n       timer: this.timers.setTimeout(() => this.expireChoice(promptId), timeoutMs),\n     });\n+    this.scheduleReminder(\"question\", promptId);\n     const keyboard: InlineKeyboard = [];\n     let position = 0;\n     for (const width of layout) {"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 911,
+      "endLine": 925,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "     if (!isSessionId(value.sessionId)) {\n       return invalid(\"sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.\");\n     }\n-    if (typeof value.promptId !== \"string\" || !isPromptId(value.promptId)) {\n-      return invalid(\"promptId must be a prompt id this serve issued.\");\n+    if (typeof value.promptId !== \"string\" || !(isPromptId(value.promptId) || isApprovalId(value.promptId))) {\n+      return invalid(\"promptId must be a prompt or approval id this serve issued.\");\n     }\n     if (value.by !== undefined && value.by !== \"shell\" && value.by !== \"cancelled\") {\n       return invalid(\"by must be 'shell' or 'cancelled'.\");\n     }\n+    if (isApprovalId(value.promptId)) {\n+      return this.closeApproval(value.promptId, value.sessionId, value.by);\n+    }\n     const entry = this.choices.get(value.promptId);\n     if (entry === undefined || entry.sessionId !== value.sessionId) {\n       const done = this.finished.get(value.promptId);"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 943,
+      "endLine": 969,
+      "changedLines": 21,
+      "contextTruncated": true,
+      "text": "     return ok({ closed: true });\n   }\n \n+  /**\n+   * Flow 419: the shell answered an approval at the keyboard (or the turn stopped) while the buttons were\n+   * still in the topic. The buttons go away and the message says where it was answered. An approval that was\n+   * already pressed in the topic is left alone: that press is the answer and is being delivered.\n+   */\n+  private closeApproval(approvalId: string, sessionId: string, by: \"shell\" | \"cancelled\" | undefined): Response {\n+    const entry = this.approvals.get(approvalId);\n+    if (entry === undefined || entry.sessionId !== sessionId) {\n+      return ok({ closed: false });\n+    }\n+    this.dropApproval(approvalId);\n+    this.rememberDecided(approvalId, sessionId);\n+    const when = clockText(this.now());\n+    const answered = by !== \"cancelled\";\n+    this.finishApproval(approvalId, sessionId, entry.messageId, entry.text, {\n+      result: answered ? `Answered in the shell at ${when}.` : `Cancelled at ${when}: the request is no longer open.`,\n+      shortReply: answered ? \"Answered in the shell.\" : \"That approval is no longer open.\",\n+    });\n+    return ok({ closed: true });\n+  }\n+\n   /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */\n   private async messageState(hub: RemoteHub, request: Request): Promise<Response> {\n     const body = await readJsonBody(request);"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 1502,
+      "endLine": 1508,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "       return;\n     }\n     this.timers.clearTimeout(entry.timer);\n+    this.timers.clearTimeout(entry.reminder);\n     this.choices.delete(promptId);\n     if (entry.armedReplyId !== undefined) {\n       const armed = this.armedOwn.get(entry.armedReplyId);"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 1590,
+      "endLine": 1596,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "       return;\n     }\n     this.timers.clearTimeout(entry.timer);\n+    this.timers.clearTimeout(entry.reminder);\n     this.approvals.delete(approvalId);\n   }\n "
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 1629,
+      "endLine": 1667,
+      "changedLines": 27,
+      "contextTruncated": true,
+      "text": "     });\n   }\n \n+  /** Flow 419, AC3: arm the next reminder for an approval or question that is still open. */\n+  private scheduleReminder(kind: \"approval\" | \"question\", id: string): void {\n+    const entry = kind === \"approval\" ? this.approvals.get(id) : this.choices.get(id);\n+    if (entry === undefined || (entry.reminded ?? 0) >= MAX_PROMPT_REMINDERS || this.reminderMs <= 0) {\n+      return;\n+    }\n+    entry.reminder = this.timers.setTimeout(() => this.remind(kind, id), this.reminderMs);\n+  }\n+\n+  private remind(kind: \"approval\" | \"question\", id: string): void {\n+    const entry = kind === \"approval\" ? this.approvals.get(id) : this.choices.get(id);\n+    const hub = this.hub;\n+    if (entry === undefined || hub === undefined || this.closed) {\n+      return;\n+    }\n+    entry.reminded = (entry.reminded ?? 0) + 1;\n+    const left = entry.expiresAt - this.now();\n+    const what = kind === \"approval\" ? \"An approval is\" : \"A question is\";\n+    const topic = reminderExcerpt(entry.text);\n+    const ends = left > 0 ? ` It expires at ${clockText(entry.expiresAt)}.` : \"\";\n+    void hub\n+      .send(entry.sessionId, `Reminder: ${what} still waiting for an answer here${topic === \"\" ? \"\" : `: ${topic}`}.${ends} The buttons are on the message above.`)\n+      .catch(() => undefined);\n+    this.scheduleReminder(kind, id);\n+  }\n+\n   private expireApproval(approvalId: string): void {\n     const entry = this.approvals.get(approvalId);\n     if (entry === undefined) {\n       return;\n     }\n     this.timers.clearTimeout(entry.timer);\n+    this.timers.clearTimeout(entry.reminder);\n     this.approvals.delete(approvalId);\n     this.finishApproval(approvalId, entry.sessionId, entry.messageId, entry.text, {\n       result: `Expired at ${clockText(this.now())}: no answer, so it was denied.`,"
+    },
+    {
+      "path": "src/remote/http-surface.ts",
+      "startLine": 1722,
+      "endLine": 1738,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": "   }\n }\n \n+/** The first line of what was asked, for a reminder: no fences, no label, cut short. */\n+export function reminderExcerpt(text: string | undefined): string {\n+  const line =\n+    (text ?? \"\")\n+      .split(\"\\n\")\n+      .map((part) => part.replace(/^`{3,}.*$/, \"\").replace(/^Approval needed:\\s*/, \"\").trim())\n+      .find((part) => part.length > 0) ?? \"\";\n+  const flat = line.replace(/\\s+/g, \" \");\n+  return flat.length <= 80 ? flat : `${flat.slice(0, 79)}…`;\n+}\n+\n /** The button for an \"Always\" offer: the pattern, cut to Telegram's button length. */\n export function alwaysButtonText(pattern: string): string {\n   const text = `Always: ${pattern.replace(/\\s+/g, \" \")}`;"
+    },
+    {
+      "path": "src/remote/hub.ts",
+      "startLine": 110,
+      "endLine": 117,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   | \"topic-renamed\"\n   | \"topic-deleted\"\n   | \"topic-delete-failed\"\n+  | \"topic-archived\"\n+  | \"topic-close-failed\"\n   | \"session-unavailable\"\n   | \"session-returned\"\n   | \"sender-refused\""
+    },
+    {
+      "path": "src/remote/hub.ts",
+      "startLine": 470,
+      "endLine": 476,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       if (record === undefined) {\n         return { ok: true as const, existed: false };\n       }\n-      await this.retire(record, \"closed by the session\");\n+      await this.archive(record, \"The session was closed.\");\n       return { ok: true as const, existed: true };\n     });\n   }"
+    },
+    {
+      "path": "src/remote/hub.ts",
+      "startLine": 533,
+      "endLine": 539,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     });\n   }\n \n-  /** Mark stale heartbeats unavailable and delete topics whose orphan timeout has run out. */\n+  /** Mark stale heartbeats unavailable and archive topics whose orphan timeout has run out. */\n   sweep(): Promise<void> {\n     return this.serial(async () => {\n       const now = this.now();"
+    },
+    {
+      "path": "src/remote/hub.ts",
+      "startLine": 556,
+      "endLine": 567,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "           if (now - record.unavailableSince < this.config.orphanMs) {\n             this.queueStatus(\n               record,\n-              `Session unavailable: the shell stopped responding. This topic is deleted in ${formatDuration(this.config.orphanMs)} unless the session returns.`,\n+              `Session unavailable: the shell stopped responding. This topic is archived in ${formatDuration(this.config.orphanMs)} unless the session returns.`,\n             );\n           }\n         }\n         if (record.status === \"unavailable\" && record.unavailableSince !== undefined && now - record.unavailableSince >= this.config.orphanMs) {\n-          await this.retire(record, \"orphan timeout\");\n+          await this.archive(record, \"The shell stopped responding and did not return.\");\n         }\n       }\n       await this.flushOutbound();"
+    },
+    {
+      "path": "src/remote/hub.ts",
+      "startLine": 925,
+      "endLine": 931,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   private markLive(record: RemoteSessionRecord): void {\n     record.status = \"live\";\n     delete record.unavailableSince;\n+    delete record.closing;\n   }\n \n   private queueStatus(record: RemoteSessionRecord, text: string): void {"
+    },
+    {
+      "path": "src/remote/hub.ts",
+      "startLine": 1012,
+      "endLine": 1050,
+      "changedLines": 33,
+      "contextTruncated": true,
+      "text": "     return { ok: true, name, threadId: record.threadId, reused: false };\n   }\n \n+  /**\n+   * End a session's topic without deleting it (flow 419): a closing note goes in, the topic is closed,\n+   * and its messages stay readable. The record is forgotten, so a later session starts a new topic.\n+   * A transient failure leaves an ownerless, already-expired record behind so the next sweep retries\n+   * the close; the closing note is queued once.\n+   */\n+  private async archive(record: RemoteSessionRecord, reason: string): Promise<void> {\n+    this.stopTyping(record);\n+    if (record.closing !== true) {\n+      record.closing = true;\n+      this.queueStatus(record, `${reason} This topic is archived: the history stays here and nothing more will be posted. A new session opens a new topic.`);\n+      this.registry.save();\n+    }\n+    await this.flushOutbound();\n+    try {\n+      await this.api.closeForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });\n+    } catch (error) {\n+      if (isBotApiError(error) && isRetryable(error)) {\n+        record.sessionId = \"\";\n+        record.status = \"unavailable\";\n+        record.unavailableSince = this.now() - this.config.orphanMs;\n+        this.registry.save();\n+        this.event(\"topic-close-failed\", `${record.name}: ${describeError(error)}`);\n+        return;\n+      }\n+      // A refusal (the topic is gone, or already closed) leaves nothing to close.\n+    }\n+    this.inbound.remove(nameKey(record.name));\n+    this.registry.remove(record.name);\n+    this.registry.save();\n+    this.event(\"topic-archived\", `${record.name}: ${reason}`);\n+  }\n+\n   /**\n    * Delete a record's topic and forget it. A topic that is already gone counts\n    * as deleted; a transient failure leaves an ownerless, already-expired record"
+    },
+    {
+      "path": "src/remote/lifecycle.test.ts",
+      "startLine": 1,
+      "endLine": 9,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": " // AC1: a session registers, gets a topic, exchanges messages with it, and the\n-// topic is deleted when the session deregisters.\n+// topic is archived (a closing note, closed, history kept) when the session deregisters.\n \n import { afterEach, describe, expect, test } from \"bun:test\";\n-import { type Harness, makeHarness, OWNER_ID, until } from \"./remote.test-helpers\";\n+import { SESSION_LEASE_HEARTBEAT_MS } from \"../session/lease\";\n+import { type Harness, makeHarness, OWNER_ID, STALE_MS, until } from \"./remote.test-helpers\";\n \n let h: Harness;\n afterEach(async () => {"
+    },
+    {
+      "path": "src/remote/lifecycle.test.ts",
+      "startLine": 49,
+      "endLine": 55,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     expect(await hub.send(\"unknown-session\", \"nobody home\")).toBe(false);\n   });\n \n-  test(\"deregister deletes the topic and later messages in it are ignored\", async () => {\n+  test(\"deregister archives the topic with a closing note and later messages in it are ignored\", async () => {\n     h = makeHarness();\n     const hub = h.makeHub();\n     const reg = await hub.register({ sessionId: \"sess-one-0001\", project: \"/work/app\" });"
+    },
+    {
+      "path": "src/remote/lifecycle.test.ts",
+      "startLine": 57,
+      "endLine": 66,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "     await hub.start();\n \n     expect(await hub.deregister(\"sess-one-0001\")).toEqual({ ok: true, existed: true });\n-    expect(h.api.topics()).toEqual([]);\n-    expect(h.api.deletedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);\n+    expect(h.api.topics().map((t) => t.messageThreadId)).toEqual([reg.threadId]);\n+    expect(h.api.deletedTopics).toEqual([]);\n+    expect(h.api.closedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);\n+    expect(h.api.sentTo(reg.threadId).map((m) => m.text).some((t) => /history stays here/i.test(t))).toBe(true);\n     expect(hub.list()).toEqual([]);\n \n     h.api.pushMessage({ fromId: OWNER_ID, text: \"anyone?\", threadId: reg.threadId });"
+    },
+    {
+      "path": "src/remote/lifecycle.test.ts",
+      "startLine": 69,
+      "endLine": 99,
+      "changedLines": 25,
+      "contextTruncated": true,
+      "text": "     expect(await hub.deregister(\"sess-one-0001\")).toEqual({ ok: true, existed: false });\n   });\n \n+  test(\"flow 419 AC7: topic and history survive a shell that exits and a shell that is killed with Ctrl+C\", async () => {\n+    h = makeHarness();\n+    const hub = h.makeHub();\n+    const exits = await hub.register({ sessionId: \"sess-exit-0001\", project: \"/work/app\", name: \"exits\" });\n+    const killed = await hub.register({ sessionId: \"sess-kill-0002\", project: \"/work/app\", name: \"killed\" });\n+    if (!exits.ok || !killed.ok) throw new Error(\"register failed\");\n+    await hub.start();\n+    await hub.send(\"sess-exit-0001\", \"first reply\");\n+    await hub.send(\"sess-kill-0002\", \"second reply\");\n+\n+    // An orderly exit deregisters. A Ctrl+C sends nothing: serve only notices the silence.\n+    await hub.deregister(\"sess-exit-0001\");\n+    await h.clock.advance(STALE_MS);\n+    await h.clock.advance(10 * 60_000 + SESSION_LEASE_HEARTBEAT_MS);\n+    await until(() => h.api.closedTopics.length === 2, \"both topics archived\");\n+\n+    expect(h.api.deletedTopics).toEqual([]);\n+    for (const thread of [exits.threadId, killed.threadId]) {\n+      expect(h.api.topic(thread)).toBeDefined();\n+      expect(h.api.sentTo(thread).some((m) => /history stays here/i.test(m.text))).toBe(true);\n+    }\n+    expect(h.api.sentTo(exits.threadId).map((m) => m.text)).toContain(\"first reply\");\n+    expect(h.api.sentTo(killed.threadId).map((m) => m.text)).toContain(\"second reply\");\n+  });\n+\n   test(\"a heartbeat from an unregistered session is refused with a reason\", async () => {\n     h = makeHarness();\n     const hub = h.makeHub();"
+    },
+    {
+      "path": "src/remote/orphan.test.ts",
+      "startLine": 27,
+      "endLine": 33,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " }\n \n describe(\"orphaned sessions\", () => {\n-  test(\"a silent session is announced, kept for the orphan timeout, then its topic is deleted\", async () => {\n+  test(\"a silent session is announced, kept for the orphan timeout, then its topic is archived, not deleted\", async () => {\n     h = makeHarness();\n     const hub = h.makeHub();\n     const reg = await hub.register({ sessionId: \"sess-one-0001\", project: \"/w/app\", name: \"release\" });"
+    },
+    {
+      "path": "src/remote/orphan.test.ts",
+      "startLine": 43,
+      "endLine": 53,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "     expect(h.api.topic(reg.threadId)).toBeDefined();\n \n     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);\n-    await until(() => h.api.topic(reg.threadId) === undefined, \"topic deleted\");\n+    await until(() => h.api.closedTopics.length === 1, \"topic archived\");\n+    expect(h.api.topic(reg.threadId)).toBeDefined();\n+    expect(h.api.deletedTopics).toEqual([]);\n+    expect(texts(reg.threadId).some((t) => /history stays here/i.test(t))).toBe(true);\n     expect(hub.list()).toEqual([]);\n-    expect(h.api.deletedTopics).toHaveLength(1);\n   });\n \n   test(\"the notice says how long the topic is kept\", async () => {"
+    },
+    {
+      "path": "src/remote/orphan.test.ts",
+      "startLine": 68,
+      "endLine": 74,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     if (!reg.ok) throw new Error(\"register failed\");\n     await hub.start();\n     await h.clock.advance(STALE_MS + 30_000);\n-    await until(() => h.api.topic(reg.threadId) === undefined, \"topic deleted after 30 s\");\n+    await until(() => h.api.closedTopics.length === 1, \"topic archived after 30 s\");\n   });\n \n   test(\"a heartbeat inside the window brings the session back and cancels deletion\", async () => {"
+    },
+    {
+      "path": "src/remote/orphan.test.ts",
+      "startLine": 115,
+      "endLine": 121,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     if (!first.ok) throw new Error(\"register failed\");\n     await hub.start();\n     await h.clock.advance(STALE_MS + ORPHAN_MS + SESSION_LEASE_HEARTBEAT_MS);\n-    await until(() => h.api.topic(first.threadId) === undefined, \"topic deleted\");\n+    await until(() => h.api.closedTopics.length === 1, \"topic archived\");\n \n     const again = await hub.register({ sessionId: \"sess-two-0002\", project: \"/w/app\", name: \"release\" });\n     expect(again.ok).toBe(true);"
+    },
+    {
+      "path": "src/remote/orphan.test.ts",
+      "startLine": 143,
+      "endLine": 164,
+      "changedLines": 11,
+      "contextTruncated": true,
+      "text": "     expect(h.deliveries[0]?.line).toBe(\"are you there\");\n   });\n \n-  test(\"a topic that cannot be deleted right now is retried by the next sweep\", async () => {\n+  test(\"a topic that cannot be closed right now is retried by the next sweep, with one closing note\", async () => {\n     h = makeHarness();\n     const hub = h.makeHub();\n     const reg = await hub.register({ sessionId: \"sess-one-0001\", project: \"/w/app\", name: \"release\" });\n     if (!reg.ok) throw new Error(\"register failed\");\n     await hub.start();\n-    h.api.failNext(\"deleteForumTopic\", new BotApiError(\"network\", \"deleteForumTopic: request failed\"));\n+    h.api.failNext(\"closeForumTopic\", new BotApiError(\"network\", \"closeForumTopic: request failed\"));\n \n     await h.clock.advance(STALE_MS + ORPHAN_MS);\n-    await until(() => hub.events().some((e) => e.type === \"topic-delete-failed\"), \"failed deletion\");\n-    expect(h.api.topic(reg.threadId)).toBeDefined();\n+    await until(() => hub.events().some((e) => e.type === \"topic-close-failed\"), \"failed close\");\n+    expect(h.api.closedTopics).toEqual([]);\n \n     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);\n-    await until(() => h.api.topic(reg.threadId) === undefined, \"retried deletion\");\n+    await until(() => h.api.closedTopics.length === 1, \"retried close\");\n     expect(hub.list()).toEqual([]);\n+    expect(texts(reg.threadId).filter((t) => /history stays here/i.test(t))).toHaveLength(1);\n   });\n \n   test(\"a clock that jumps back does not orphan a live session, nor keep a dead one forever\", async () => {"
+    },
+    {
+      "path": "src/remote/progress-notes.test.ts",
+      "startLine": 1,
+      "endLine": 307,
+      "changedLines": 307,
+      "contextTruncated": true,
+      "text": "+// Flow 419, AC5: progress notes at wave boundaries and tool-heavy steps, at most one per interval, never raw\n+// tool output. AC6: a status question from the topic is answered from session state while a turn runs.\n+\n+import { describe, expect, it } from \"bun:test\";\n+import { commandHarness, waitFor } from \"./command.test-helpers\";\n+import { describeStatus, formatElapsed, isStatusQuestion, ProgressNotes } from \"./progress-notes\";\n+\n+interface Clock {\n+  at: number;\n+  timers: Array<{ at: number; run: () => void; live: boolean }>;\n+  advance(ms: number): void;\n+}\n+\n+function clock(): Clock {\n+  const c: Clock = {\n+    at: 1_000_000,\n+    timers: [],\n+    advance(ms) {\n+      const target = c.at + ms;\n+      for (;;) {\n+        const due = c.timers.filter((t) => t.live && t.at <= target).sort((a, b) => a.at - b.at)[0];\n+        if (due === undefined) break;\n+        c.at = due.at;\n+        due.live = false;\n+        due.run();\n+      }\n+      c.at = target;\n+    },\n+  };\n+  return c;\n+}\n+\n+function notes(options: { intervalMs?: number; toolThreshold?: number } = {}) {\n+  const c = clock();\n+  const sent: string[] = [];\n+  const progress = new ProgressNotes({\n+    intervalMs: options.intervalMs ?? 60_000,\n+    toolThreshold: options.toolThreshold ?? 3,\n+    now: () => c.at,\n+    send: (text) => sent.push(text),\n+    setTimer: (run, ms) => {\n+      const timer = { at: c.at + ms, run, live: true };\n+      c.timers.push(timer);\n+      return timer;\n+    },\n+    clearTimer: (handle) => {\n+      (handle as { live: boolean }).live = false;\n+    },\n+  });\n+  return { c, sent, progress };\n+}\n+\n+describe(\"tool-heavy steps\", () => {\n+  it(\"say nothing for a few calls, then one note with counts and tool names\", () => {\n+    const { sent, progress } = notes();\n+    progress.begin();\n+    progress.tool(\"read_file\");\n+    progress.tool(\"read_file\");\n+    expect(sent).toEqual([]);\n+    progress.tool(\"shell_exec\");\n+    expect(sent).toHaveLength(1);\n+    expect(sent[0]).toContain(\"Still working: 3 tool calls\");\n+    expect(sent[0]).toContain(\"read_file, shell_exec\");\n+  });\n+\n+  it(\"never carries a tool's input or output: only names and counts\", () => {\n+    const { sent, progress } = notes({ toolThreshold: 1 });\n+    progress.begin();\n+    progress.tool(\"shell_exec\");\n+    expect(sent[0]).not.toMatch(/sk-|rm -rf|stdout|\\/home\\//);\n+    expect(sent[0]).toMatch(/^Still working: 1 tool calls/);\n+  });\n+\n+  it(\"keep to one note per interval and send the held one when the interval ends\", () => {\n+    const { c, sent, progress } = notes();\n+    progress.begin();\n+    for (let i = 0; i < 3; i += 1) progress.tool(\"a\");\n+    expect(sent).toHaveLength(1);\n+    for (let i = 0; i < 20; i += 1) progress.tool(\"b\");\n+    expect(sent).toHaveLength(1);\n+    c.advance(59_000);\n+    expect(sent).toHaveLength(1);\n+    c.advance(1_000);\n+    expect(sent).toHaveLength(2);\n+    expect(sent[1]).toContain(\"20 tool calls\");\n+    c.advance(10 * 60_000);\n+    expect(sent).toHaveLength(2);\n+  });\n+\n+  it(\"an interval of 0 turns the notes off\", () => {\n+    const { sent, progress } = notes({ intervalMs: 0, toolThreshold: 1 });\n+    progress.begin();\n+    for (let i = 0; i < 5; i += 1) progress.tool(\"a\");\n+    expect(sent).toEqual([]);\n+  });\n+\n+  it(\"a held note is dropped when the turn ends\", () => {\n+    const { c, sent, progress } = notes();\n+    progress.begin();\n+    for (let i = 0; i < 3; i += 1) progress.tool(\"a\");\n+    for (let i = 0; i < 3; i += 1) progress.tool(\"b\");\n+    progress.end();\n+    c.advance(5 * 60_000);\n+    expect(sent).toHaveLength(1);\n+  });\n+\n+  it(\"do nothing outside a turn\", () => {\n+    const { sent, progress } = notes({ toolThreshold: 1 });\n+    progress.tool(\"a\");\n+    progress.subagent({ kind: \"upsert\", id: \"r1\", status: \"running\" });\n+    expect(sent).toEqual([]);\n+  });\n+});\n+\n+describe(\"wave boundaries\", () => {\n+  it(\"the first subagent to start opens a wave and the last to finish closes it\", () => {\n+    const { c, sent, progress } = notes({ intervalMs: 1_000 });\n+    progress.begin();\n+    progress.subagent({ kind: \"upsert\", id: \"r1\", label: \"review-logic\", status: \"running\" });\n+    expect(sent).toHaveLength(1);\n+    expect(sent[0]).toContain(\"A subagent wave started\");\n+    expect(sent[0]).toContain(\"review-logic\");\n+    progress.subagent({ kind: \"upsert\", id: \"r2\", label: \"review-style\", status: \"running\" });\n+    progress.subagent({ kind: \"upsert\", id: \"r1\", label: \"review-logic\", status: \"done\" });\n+    expect(sent).toHaveLength(1);\n+    c.advance(2_000);\n+    progress.subagent({ kind: \"upsert\", id: \"r2\", label: \"review-style\", status: \"failed\" });\n+    expect(sent).toHaveLength(2);\n+    expect(sent[1]).toContain(\"The wave finished: 1 done, 1 failed\");\n+  });\n+\n+  it(\"a second wave in the same turn gets its own notes\", () => {\n+    const { c, sent, progress } = notes({ intervalMs: 1_000 });\n+    progress.begin();\n+    progress.subagent({ kind: \"upsert\", id: \"a\", status: \"running\" });\n+    progress.subagent({ kind: \"upsert\", id: \"a\", status: \"done\" });\n+    c.advance(1_000);\n+    expect(sent.length).toBeGreaterThanOrEqual(2);\n+    c.advance(5_000);\n+    progress.subagent({ kind: \"upsert\", id: \"b\", status: \"running\" });\n+    expect(sent.at(-1)).toContain(\"A subagent wave started\");\n+  });\n+\n+  it(\"log events are not boundaries\", () => {\n+    const { sent, progress } = notes();\n+    progress.begin();\n+    progress.subagent({ kind: \"log\", id: \"r1\" });\n+    expect(sent).toEqual([]);\n+  });\n+});\n+\n+describe(\"status questions\", () => {\n+  it(\"are short plain lines that ask how the run is going\", () => {\n+    for (const line of [\n+      \"status\",\n+      \"Status?\",\n+      \"what's the status\",\n+      \"What is going on?\",\n+      \"how is it going?\",\n+      \"are you still working?\",\n+      \"is it done yet\",\n+      \"what are you doing now?\",\n+      \"статус\",\n+      \"как дела?\",\n+      \"ты тут?\",\n+      \"ещё работаешь?\",\n+    ]) {\n+      expect(isStatusQuestion(line)).toBe(true);\n+    }\n+  });\n+\n+  it(\"leave real work to the model\", () => {\n+    for (const line of [\n+      \"\",\n+      \"fix the status page so it shows the build number\",\n+      \"status of PR 123 and then merge it\",\n+      \"run the tests\",\n+      \"x\".repeat(70),\n+    ]) {\n+      expect(isStatusQuestion(line)).toBe(false);\n+    }\n+  });\n+});\n+\n+describe(\"describeStatus\", () => {\n+  it(\"names the turn, the queue, the open prompts and the mode\", () => {\n+    const text = describeStatus({\n+      turnRunning: true,\n+      snapshot: { running: true, elapsedMs: 252_000, toolCalls: 23, lastTool: \"shell_exec\", waveRunning: 2 },\n+      topicWaiting: 1,\n+      queued: 3,\n+      openPrompts: 1,\n+      mode: \"ask\",\n+    });\n+    expect(text).toContain(\"4m 12s\");\n+    expect(text).toContain(\"23 tool calls, last: shell_exec\");\n+    expect(text).toContain(\"Subagents: 2 still running\");\n+    expect(text).toContain(\"Queue: 3 messages waiting (1 from this topic)\");\n+    expect(text).toContain(\"Waiting for you: 1 approval or question\");\n+    expect(text).toContain(\"Mode: ask.\");\n+  });\n+\n+  it(\"says so when the shell is busy without a model turn\", () => {\n+    const text = describeStatus({\n+      turnRunning: false,\n+      snapshot: { running: false, elapsedMs: 0, toolCalls: 0, waveRunning: 0 },\n+      topicWaiting: 0,\n+      openPrompts: 0,\n+    });\n+    expect(text).toContain(\"no model turn is writing\");\n+  });\n+\n+  it(\"formats time\", () => {\n+    expect(formatElapsed(5_000)).toBe(\"5s\");\n+    expect(formatElapsed(60_000)).toBe(\"1m\");\n+    expect(formatElapsed(3_723_000)).toBe(\"1h 2m\");\n+  });\n+});\n+\n+describe(\"the bridge\", () => {\n+  it(\"AC5: a turn the operator typed still gets progress notes in the topic\", async () => {\n+    const h = commandHarness({ busy: true, progressToolThreshold: 3 });\n+    await h.bridge.enable();\n+    h.bridge.turnStarted(undefined);\n+    for (const name of [\"read_file\", \"grep\", \"edit_file\"]) h.bridge.toolCall(name);\n+    expect(h.client().replies).toHaveLength(1);\n+    expect(h.client().replies[0]).toContain(\"Still working: 3 tool calls\");\n+    h.bridge.toolCall(\"read_file\");\n+    h.bridge.toolCall(\"read_file\");\n+    h.bridge.toolCall(\"read_file\");\n+    expect(h.client().replies).toHaveLength(1);\n+    await h.bridge.turnSettled({ failed: false });\n+    expect(h.client().replies).toHaveLength(1);\n+  });\n+\n+  it(\"AC5: a wave from the shell's subagents is posted to the topic\", async () => {\n+    const h = commandHarness({ busy: true });\n+    await h.bridge.enable();\n+    h.bridge.turnStarted(undefined);\n+    h.bridge.subagentEvent({ kind: \"upsert\", id: \"r1\", label: \"review-logic\", status: \"running\" });\n+    expect(h.client().replies.at(-1)).toContain(\"A subagent wave started\");\n+  });\n+\n+  it(\"AC5: nothing goes out with remote control off\", async () => {\n+    const h = commandHarness({ busy: true, progressToolThreshold: 1 });\n+    h.bridge.turnStarted(undefined);\n+    h.bridge.toolCall(\"grep\");\n+    h.bridge.subagentEvent({ kind: \"upsert\", id: \"r1\", status: \"running\" });\n+    await h.bridge.enable();\n+    expect(h.client().replies).toEqual([]);\n+  });\n+\n+  it(\"AC6: a status question during a running turn is answered at once and never queued\", async () => {\n+    const h = commandHarness({\n+      busy: true,\n+      turnRunning: () => true,\n+      sessionState: () => ({ queued: 2, mode: \"ask\" }),\n+    });\n+    await h.bridge.enable();\n+    h.bridge.turnStarted(undefined);\n+    h.bridge.toolCall(\"shell_exec\");\n+    h.state.now += 90_000;\n+    await h.say(\"how is it going?\");\n+    await waitFor(() => h.client().replies.some((reply) => reply.startsWith(\"Working:\")), \"the status answer\");\n+    const answer = h.client().replies.find((reply) => reply.startsWith(\"Working:\")) as string;\n+    expect(answer).toContain(\"1m 30s\");\n+    expect(answer).toContain(\"1 tool call, last: shell_exec\");\n+    expect(answer).toContain(\"Queue: 2 messages waiting\");\n+    expect(answer).toContain(\"Mode: ask.\");\n+    expect(h.calls.filter((call) => call.startsWith(\"queue:\") || call.startsWith(\"run:\"))).toEqual([]);\n+    await waitFor(() => h.client().reported.some(([, state]) => state === \"done\"), \"the message to be marked done\");\n+  });\n+\n+  it(\"AC6: the answer counts an approval nobody has answered\", async () => {\n+    let release!: () => void;\n+    const h = commandHarness({\n+      busy: true,\n+      turnRunning: () => true,\n+      askApproval: () =>\n+        new Promise((resolve) => {\n+          release = () => resolve({ decision: \"allow\" });\n+        }),\n+    });\n+    await h.bridge.enable();\n+    h.bridge.turnStarted(undefined);\n+    const asked = h.bridge.askApproval(\"rm -rf build\");\n+    await h.say(\"status\");\n+    await waitFor(() => h.client().replies.some((reply) => reply.includes(\"Waiting for you: 1\")), \"the open approval in the answer\");\n+    release();\n+    await asked;\n+  });\n+\n+  it(\"AC6: the same words go to the model when main is idle\", async () => {\n+    const h = commandHarness({ busy: false });\n+    await h.bridge.enable();\n+    await h.say(\"how is it going?\");\n+    expect(h.calls).toContain(\"run:how is it going?\");\n+    expect(h.client().replies).toEqual([]);\n+  });\n+\n+  it(\"AC6: a long message that merely contains the word status is queued as work\", async () => {\n+    const h = commandHarness({ busy: true });\n+    await h.bridge.enable();\n+    await h.say(\"update the status page so it shows the build number\");\n+    expect(h.calls).toContain(\"queue:update the status page so it shows the build number\");\n+  });\n+});"
+    },
+    {
+      "path": "src/remote/progress-notes.ts",
+      "startLine": 1,
+      "endLine": 291,
+      "changedLines": 291,
+      "contextTruncated": true,
+      "text": "+// Flow 419 (AC5, AC6): what the topic hears while a turn runs, and what a status question is answered with.\n+// Progress is a short summary the shell composes from counts and names; the model's text and a tool's\n+// input or output never go into a note. At most one note goes out per interval.\n+\n+/** One note per this long at most. */\n+export const DEFAULT_PROGRESS_INTERVAL_MS = 60_000;\n+/** A note about a tool-heavy stretch comes after this many tool calls since the last note. */\n+export const DEFAULT_PROGRESS_TOOL_THRESHOLD = 8;\n+\n+const TOOL_NAMES_SHOWN = 4;\n+const WAVE_LABELS_SHOWN = 3;\n+\n+/** The part of a subagent fleet event the notes read; the shell's own event type fits it. */\n+export type WaveEvent = { kind: \"upsert\"; id: string; label?: string; status: string } | { kind: \"remove\"; id: string } | { kind: \"log\"; id: string };\n+\n+export interface ProgressOptions {\n+  intervalMs?: number;\n+  toolThreshold?: number;\n+  now?: () => number;\n+  send: (text: string) => void;\n+  /** Test seam. */\n+  setTimer?: (run: () => void, ms: number) => unknown;\n+  clearTimer?: (handle: unknown) => void;\n+}\n+\n+export interface TurnSnapshot {\n+  running: boolean;\n+  elapsedMs: number;\n+  toolCalls: number;\n+  lastTool?: string;\n+  /** Subagents of the open wave that have not finished. */\n+  waveRunning: number;\n+}\n+\n+type Pending = { priority: number; build: () => string };\n+\n+const ACTIVE = new Set([\"queued\", \"running\", \"blocked\"]);\n+\n+export function formatElapsed(ms: number): string {\n+  const total = Math.max(0, Math.round(ms / 1000));\n+  if (total < 60) return `${total}s`;\n+  const minutes = Math.floor(total / 60);\n+  const seconds = total % 60;\n+  if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;\n+  const hours = Math.floor(minutes / 60);\n+  return `${hours}h ${minutes % 60}m`;\n+}\n+\n+export class ProgressNotes {\n+  private readonly intervalMs: number;\n+  private readonly threshold: number;\n+  private readonly now: () => number;\n+  private readonly send: (text: string) => void;\n+  private readonly setTimer: (run: () => void, ms: number) => unknown;\n+  private readonly clearTimer: (handle: unknown) => void;\n+\n+  private startedAt: number | undefined;\n+  private toolCalls = 0;\n+  private lastTool: string | undefined;\n+  private sinceNote = 0;\n+  private namesSinceNote = new Set<string>();\n+  private lastNoteAt: number | undefined;\n+  private lastNoteWindowStart: number | undefined;\n+  private pending: Pending | undefined;\n+  private timer: unknown;\n+  private readonly wave = new Map<string, { status: string; label: string }>();\n+  private waveOpen = false;\n+\n+  constructor(options: ProgressOptions) {\n+    this.intervalMs = options.intervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;\n+    this.threshold = Math.max(1, options.toolThreshold ?? DEFAULT_PROGRESS_TOOL_THRESHOLD);\n+    this.now = options.now ?? Date.now;\n+    this.send = options.send;\n+    this.setTimer = options.setTimer ?? ((run, ms) => setTimeout(run, ms));\n+    this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));\n+  }\n+\n+  get enabled(): boolean {\n+    return this.intervalMs > 0;\n+  }\n+\n+  /** A turn starts: the counts begin again. The time of the last note is kept so the interval spans turns. */\n+  begin(): void {\n+    this.dropPending();\n+    this.startedAt = this.now();\n+    this.toolCalls = 0;\n+    this.lastTool = undefined;\n+    this.sinceNote = 0;\n+    this.namesSinceNote.clear();\n+    this.wave.clear();\n+    this.waveOpen = false;\n+    this.lastNoteWindowStart = this.startedAt;\n+  }\n+\n+  /** The turn ended or remote control went off: nothing is held back for later. */\n+  end(): void {\n+    this.dropPending();\n+    this.startedAt = undefined;\n+    this.wave.clear();\n+    this.waveOpen = false;\n+  }\n+\n+  /** Remote control went off: even the interval is forgotten. */\n+  reset(): void {\n+    this.end();\n+    this.lastNoteAt = undefined;\n+  }\n+\n+  tool(name?: string): void {\n+    if (this.startedAt === undefined) return;\n+    this.toolCalls += 1;\n+    this.sinceNote += 1;\n+    if (name !== undefined && name.length > 0) {\n+      this.lastTool = name;\n+      this.namesSinceNote.add(name);\n+    }\n+    if (this.sinceNote >= this.threshold) this.post({ priority: 1, build: () => this.toolNote() });\n+  }\n+\n+  /** A subagent changed state. The first one to start opens a wave and the last one to finish closes it. */\n+  subagent(event: WaveEvent): void {\n+    if (this.startedAt === undefined) return;\n+    if (event.kind === \"upsert\") {\n+      this.wave.set(event.id, { status: event.status, label: event.label ?? event.id });\n+      if (!this.waveOpen && ACTIVE.has(event.status)) {\n+        this.waveOpen = true;\n+        this.post({ priority: 2, build: () => this.waveStartNote() });\n+        return;\n+      }\n+    } else if (event.kind === \"remove\") {\n+      this.wave.delete(event.id);\n+    } else {\n+      return;\n+    }\n+    if (this.waveOpen && this.activeCount() === 0) {\n+      const done = [...this.wave.values()].filter((one) => one.status === \"done\").length;\n+      const failed = [...this.wave.values()].filter((one) => one.status === \"failed\").length;\n+      this.waveOpen = false;\n+      this.wave.clear();\n+      this.post({ priority: 3, build: () => this.waveEndNote(done, failed) });\n+    }\n+  }\n+\n+  snapshot(): TurnSnapshot {\n+    const running = this.startedAt !== undefined;\n+    return {\n+      running,\n+      elapsedMs: running ? this.now() - (this.startedAt as number) : 0,\n+      toolCalls: this.toolCalls,\n+      ...(this.lastTool === undefined ? {} : { lastTool: this.lastTool }),\n+      waveRunning: this.activeCount(),\n+    };\n+  }\n+\n+  private activeCount(): number {\n+    let count = 0;\n+    for (const one of this.wave.values()) if (ACTIVE.has(one.status)) count += 1;\n+    return count;\n+  }\n+\n+  private elapsed(): string {\n+    return formatElapsed(this.startedAt === undefined ? 0 : this.now() - this.startedAt);\n+  }\n+\n+  private toolNote(): string {\n+    const names = [...this.namesSinceNote];\n+    const shown = names.slice(0, TOOL_NAMES_SHOWN).join(\", \");\n+    const more = names.length > TOOL_NAMES_SHOWN ? ` and ${names.length - TOOL_NAMES_SHOWN} more` : \"\";\n+    const window = this.lastNoteWindowStart === undefined ? \"\" : ` in the last ${formatElapsed(this.now() - this.lastNoteWindowStart)}`;\n+    const used = shown.length > 0 ? ` (${shown}${more})` : \"\";\n+    return `Still working: ${this.sinceNote} tool calls${window}${used}. ${this.elapsed()} into this turn.`;\n+  }\n+\n+  private waveStartNote(): string {\n+    const labels = [...this.wave.values()].map((one) => one.label).slice(0, WAVE_LABELS_SHOWN);\n+    const total = this.activeCount();\n+    const more = total > labels.length ? ` and ${total - labels.length} more` : \"\";\n+    return `A subagent wave started: ${total} running${labels.length > 0 ? ` (${labels.join(\", \")}${more})` : \"\"}. ${this.elapsed()} into this turn.`;\n+  }\n+\n+  private waveEndNote(done: number, failed: number): string {\n+    const failedPart = failed > 0 ? `, ${failed} failed` : \"\";\n+    return `The wave finished: ${done} done${failedPart}. ${this.elapsed()} into this turn.`;\n+  }\n+\n+  private post(next: Pending): void {\n+    if (!this.enabled) return;\n+    const at = this.now();\n+    if (this.lastNoteAt === undefined || at - this.lastNoteAt >= this.intervalMs) {\n+      this.emit(next);\n+      return;\n+    }\n+    // Inside the interval: keep the weightier note and send it when the interval ends.\n+    if (this.pending === undefined || next.priority >= this.pending.priority) this.pending = next;\n+    if (this.timer === undefined) {\n+      this.timer = this.setTimer(() => {\n+        this.timer = undefined;\n+        const held = this.pending;\n+        this.pending = undefined;\n+        if (held !== undefined && this.startedAt !== undefined) this.emit(held);\n+      }, this.lastNoteAt + this.intervalMs - at);\n+    }\n+  }\n+\n+  private emit(note: Pending): void {\n+    const text = note.build();\n+    this.lastNoteAt = this.now();\n+    this.lastNoteWindowStart = this.lastNoteAt;\n+    this.sinceNote = 0;\n+    this.namesSinceNote.clear();\n+    this.pending = undefined;\n+    try {\n+      this.send(text);\n+    } catch {\n+      // a note that cannot be sent is not worth stopping the turn for\n+    }\n+  }\n+\n+  private dropPending(): void {\n+    this.pending = undefined;\n+    if (this.timer !== undefined) {\n+      this.clearTimer(this.timer);\n+      this.timer = undefined;\n+    }\n+  }\n+}\n+\n+// ---- a status question ---------------------------------------------------------------\n+\n+const STATUS_PATTERNS: readonly RegExp[] = [\n+  /^(status|progress|update)( (update|report|check))?( please| pls)?$/,\n+  /^(what'?s|what is|whats) (the )?(current )?(status|progress|going on|happening|up)( (now|right now|here))?$/,\n+  /^how('?s| is) (it|that|this|the (run|review|task|work|build)) (going|progressing|doing)( so far| now)?$/,\n+  /^(are you|r u) (still )?(working|running|busy|alive|there|done|finished|stuck)( yet| now)?$/,\n+  /^(is it|are we) (done|finished|ready|stuck)( yet)?$/,\n+  /^what are you (doing|working on)( now| right now)?$/,\n+  /^where are (you|we)( now| at)?$/,\n+  /^(any )?(news|progress|updates?)$/,\n+  /^still (working|running|there|alive)$/,\n+  /^(статус|прогресс|как дела|как успехи|как идёт|как идет|как продвигается( работа)?|что там|что нового|что делаешь|что происходит|что сейчас происходит)( (сейчас|там|уже))*$/,\n+  /^(ты )?(тут|жив|ещё работаешь|еще работаешь|работаешь|завис|завис(ла)?|закончил|закончила|готов|готово)( (там|уже|ещё|еще|сейчас))*$/,\n+];\n+\n+/** A short plain line that only asks how the run is going. Anything longer or wider goes to the model. */\n+export function isStatusQuestion(line: string): boolean {\n+  const text = line\n+    .trim()\n+    .toLowerCase()\n+    .replace(/[?!.…]+$/u, \"\")\n+    .replace(/\\s+/g, \" \")\n+    .trim();\n+  if (text.length === 0 || text.length > 60) return false;\n+  return STATUS_PATTERNS.some((pattern) => pattern.test(text));\n+}\n+\n+export interface StatusFacts {\n+  /** A model turn is writing now. */\n+  turnRunning: boolean;\n+  snapshot: TurnSnapshot;\n+  /** Lines from this topic waiting for their turn. */\n+  topicWaiting: number;\n+  /** Everything waiting in the shell's queue, when the host says. */\n+  queued?: number;\n+  /** Approvals and questions waiting for an answer in the topic. */\n+  openPrompts: number;\n+  mode?: string;\n+}\n+\n+/** The answer to a status question, from the session's own state. */\n+export function describeStatus(facts: StatusFacts): string {\n+  const lines: string[] = [];\n+  const { snapshot } = facts;\n+  if (facts.turnRunning && snapshot.running) {\n+    const tools = snapshot.toolCalls === 0 ? \"no tool calls yet\" : `${snapshot.toolCalls} tool call${snapshot.toolCalls === 1 ? \"\" : \"s\"}${snapshot.lastTool === undefined ? \"\" : `, last: ${snapshot.lastTool}`}`;\n+    lines.push(`Working: this turn has run for ${formatElapsed(snapshot.elapsedMs)}, ${tools}.`);\n+  } else if (facts.turnRunning) {\n+    lines.push(\"Working: a turn is running.\");\n+  } else {\n+    lines.push(\"Busy: the shell is occupied with a command or its queue; no model turn is writing right now.\");\n+  }\n+  if (snapshot.waveRunning > 0) lines.push(`Subagents: ${snapshot.waveRunning} still running.`);\n+  const queued = Math.max(facts.queued ?? 0, facts.topicWaiting);\n+  if (queued > 0) {\n+    lines.push(`Queue: ${queued} message${queued === 1 ? \"\" : \"s\"} waiting${facts.topicWaiting > 0 ? ` (${facts.topicWaiting} from this topic)` : \"\"}.`);\n+  }\n+  if (facts.openPrompts > 0) {\n+    lines.push(`Waiting for you: ${facts.openPrompts} approval or question open in this topic.`);\n+  }\n+  if (facts.mode !== undefined) lines.push(`Mode: ${facts.mode}.`);\n+  return lines.join(\"\\n\");\n+}"
+    },
+    {
+      "path": "src/remote/prompt-reminder.test.ts",
+      "startLine": 1,
+      "endLine": 100,
+      "changedLines": 100,
+      "contextTruncated": true,
+      "text": "+// AC3 (flow 419): an approval or question nobody has answered gets a reminder in the topic after a stated\n+// interval; an answered one gets none, and the number of reminders is bounded.\n+\n+import { afterEach, describe, expect, test } from \"bun:test\";\n+import type { RemoteClient } from \"./client\";\n+import { MAX_PROMPT_REMINDERS } from \"./protocol\";\n+import { reminderExcerpt } from \"./http-surface\";\n+import { makeRig, type Rig } from \"./remote.http.test-helpers\";\n+import { OWNER_ID, until } from \"./remote.test-helpers\";\n+\n+let rig: Rig;\n+afterEach(async () => {\n+  await rig.cleanup();\n+});\n+\n+async function session(sessionId: string): Promise<{ client: RemoteClient; threadId: number }> {\n+  const client = rig.makeClient({ sessionId, project: \"/work/remind\", name: \"remind\", onLine: () => undefined });\n+  const started = await client.start();\n+  if (!started.ok) throw new Error(`session did not start: ${started.message}`);\n+  return { client, threadId: started.threadId };\n+}\n+\n+const reminders = (threadId: number): string[] => rig.api.sentTo(threadId).map((m) => m.text).filter((t) => t.startsWith(\"Reminder:\"));\n+\n+describe(\"reminders for an unanswered prompt\", () => {\n+  test(\"an approval nobody answers gets a reminder naming what is asked\", async () => {\n+    rig = makeRig();\n+    await rig.startServe({ service: { surface: { reminderMs: 40 } } });\n+    const { client, threadId } = await session(\"sess-rem-0001\");\n+    const abort = new AbortController();\n+    void client.askApproval(\"rm -rf build\", 30_000, { signal: abort.signal });\n+    await until(() => reminders(threadId).length >= 1, \"the first reminder\");\n+    const first = reminders(threadId)[0] as string;\n+    expect(first).toContain(\"An approval is still waiting\");\n+    expect(first).toContain(\"rm -rf build\");\n+    expect(first).toContain(\"It expires at \");\n+    abort.abort(\"shell\");\n+  });\n+\n+  test(\"reminders stop at the stated number\", async () => {\n+    rig = makeRig();\n+    await rig.startServe({ service: { surface: { reminderMs: 20 } } });\n+    const { client, threadId } = await session(\"sess-rem-0002\");\n+    const abort = new AbortController();\n+    void client.askApproval(\"npm publish\", 30_000, { signal: abort.signal });\n+    await until(() => reminders(threadId).length >= MAX_PROMPT_REMINDERS, \"every reminder\");\n+    await new Promise((resolve) => setTimeout(resolve, 120));\n+    expect(reminders(threadId)).toHaveLength(MAX_PROMPT_REMINDERS);\n+    abort.abort(\"shell\");\n+  });\n+\n+  test(\"an approval answered before the interval gets no reminder\", async () => {\n+    rig = makeRig();\n+    await rig.startServe({ service: { surface: { reminderMs: 150 } } });\n+    const { client, threadId } = await session(\"sess-rem-0003\");\n+    const asked = client.askApproval(\"git push\", 30_000);\n+    await until(() => rig.api.sentTo(threadId).some((m) => m.inlineKeyboard !== undefined), \"the buttons\");\n+    const message = rig.api.sentTo(threadId).find((m) => m.inlineKeyboard !== undefined)!;\n+    const allow = (message.inlineKeyboard ?? []).flat().find((b) => b.text === \"Allow\")!.callback_data;\n+    rig.api.pushCallback({ fromId: OWNER_ID, data: allow, threadId, messageId: message.messageId });\n+    expect((await asked).decision).toBe(\"allow\");\n+    await new Promise((resolve) => setTimeout(resolve, 300));\n+    expect(reminders(threadId)).toHaveLength(0);\n+  });\n+\n+  test(\"an approval closed in the shell gets no reminder\", async () => {\n+    rig = makeRig();\n+    await rig.startServe({ service: { surface: { reminderMs: 150 } } });\n+    const { client, threadId } = await session(\"sess-rem-0004\");\n+    const abort = new AbortController();\n+    const asked = client.askApproval(\"make deploy\", 30_000, { signal: abort.signal });\n+    await until(() => rig.api.sentTo(threadId).some((m) => m.inlineKeyboard !== undefined), \"the buttons\");\n+    abort.abort(\"shell\");\n+    await asked;\n+    await new Promise((resolve) => setTimeout(resolve, 300));\n+    expect(reminders(threadId)).toHaveLength(0);\n+  });\n+});\n+\n+describe(\"reminders for a question\", () => {\n+  test(\"an ask_user menu nobody answers gets a reminder\", async () => {\n+    rig = makeRig();\n+    await rig.startServe({ service: { surface: { reminderMs: 40 } } });\n+    const { client, threadId } = await session(\"sess-rem-0005\");\n+    const abort = new AbortController();\n+    void client.askChoice(\"Which branch should I use?\", [[\"main\", \"dev\"]], 30_000, { signal: abort.signal });\n+    await until(() => reminders(threadId).length >= 1, \"the reminder\");\n+    expect(reminders(threadId)[0]).toContain(\"A question is still waiting\");\n+    expect(reminders(threadId)[0]).toContain(\"Which branch should I use?\");\n+    abort.abort(\"shell\");\n+  });\n+});\n+\n+describe(\"reminderExcerpt\", () => {\n+  test(\"drops the label and the fence and cuts a long line\", () => {\n+    expect(reminderExcerpt(\"Approval needed:\\n```\\nbun test\\n```\")).toBe(\"bun test\");\n+    expect(reminderExcerpt(undefined)).toBe(\"\");\n+    expect(reminderExcerpt(\"x\".repeat(200))).toHaveLength(80);\n+  });\n+});"
+    },
+    {
+      "path": "src/remote/protocol.ts",
+      "startLine": 168,
+      "endLine": 179,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": " export const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;\n export const MAX_APPROVAL_TIMEOUT_MS = 60 * 60_000;\n export const MIN_APPROVAL_TIMEOUT_MS = 100;\n+/**\n+ * Flow 419, AC3: an approval or question nobody has answered gets a reminder in the topic after this long,\n+ * and again at the same interval, at most {@link MAX_PROMPT_REMINDERS} times in all.\n+ */\n+export const DEFAULT_PROMPT_REMINDER_MS = 2 * 60_000;\n+export const MAX_PROMPT_REMINDERS = 3;\n /**\n  * How long serve waits, after it wrote an approval decision to the shell's stream, for the shell\n  * to say it received it (flow 397). Without that word the approval is shown as \"not confirmed\","
+    },
+    {
+      "path": "src/remote/registry.ts",
+      "startLine": 30,
+      "endLine": 37,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   status: RemoteSessionStatus;\n   /** When the heartbeat went stale; the orphan timeout runs from here. */\n   unavailableSince?: number;\n+  /** The closing note is queued and the topic is being archived; a retry must not queue it again. */\n+  closing?: boolean;\n }\n \n const REGISTRY_VERSION = 1;"
+    },
+    {
+      "path": "src/remote/service.ts",
+      "startLine": 46,
+      "endLine": 52,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   machine?: string;\n   /** Called with a line for the operator. Never carries a secret. */\n   onNotice?: (message: string) => void;\n-  surface?: Pick<RemoteSurfaceOptions, \"keepaliveMs\" | \"ackTimeoutMs\" | \"approvalAckMs\" | \"approvalIds\">;\n+  surface?: Pick<RemoteSurfaceOptions, \"keepaliveMs\" | \"ackTimeoutMs\" | \"approvalAckMs\" | \"approvalIds\" | \"promptIds\" | \"reminderMs\">;\n   lock?: Pick<AcquirePollLockOptions, \"pid\" | \"isAlive\"> & { disabled?: boolean };\n   /** Test seams for a pairing (code, expiry, poll cadence). */\n   pairing?: ChannelsOptions[\"pairing\"];"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 6,
+      "endLine": 12,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " //\n //   - the lifecycle: OFF by default, turned on only by `enable()` (the explicit\n //     `/remote-control` command), turned off by `disable()` or when the shell\n-//     closes (`disable()` deregisters, which deletes the topic);\n+//     closes (`disable()` deregisters, which archives the topic: a closing note, history kept);\n //   - a line from Telegram: idle, it runs as a typed line; busy, it goes through\n //     the host's ordinary user queue. It does not invent a queue of its own;\n //   - the reply: the final assistant text of a Telegram-originated turn,"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 26,
+      "endLine": 32,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": " import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from \"./command-router\";\n import type { NormalizedMessage } from \"../harness/provider/types\";\n import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from \"./protocol\";\n+import { ProgressNotes, type WaveEvent, describeStatus, isStatusQuestion } from \"./progress-notes\";\n import { HISTORY_DEFAULT_COUNT, HISTORY_EMPTY_MESSAGE, formatHistoryItem, parseHistoryArgs, selectHistory } from \"./history\";\n \n /** The label a Telegram line carries in the queue and the transcript. */"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 131,
+      "endLine": 138,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   turnRunning?(): boolean;\n   /** The live session was resumed (`-r`, `-c`, `/resume`), not started fresh. The automatic restore needs it. */\n   sessionResumed?(): boolean;\n+  /** What a status question from the topic is answered with besides the bridge's own counts (flow 419, AC6). */\n+  sessionState?(): { queued: number; mode?: string };\n }\n \n export interface RemoteBridgeOptions {"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 149,
+      "endLine": 162,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": "   commandLimitMs?: number;\n   /** How long a picker or a Yes/No waits for a press. */\n   choiceTimeoutMs?: number;\n+  /** How often a command held for an idle main looks again (flow 419). */\n+  idlePollMs?: number;\n+  /** A command held for an idle main is dropped after this long (flow 419). */\n+  queuedCommandLimitMs?: number;\n+  /** At most one progress note per this long; 0 turns the notes off (flow 419, AC5). */\n+  progressIntervalMs?: number;\n+  /** Tool calls since the last note that make a stretch \"tool-heavy\". */\n+  progressToolThreshold?: number;\n   /** Pause between two restored messages, so the topic is not flooded (flow 399). */\n   historyPaceMs?: number;\n   /** Test seam for the pause. Default: a timer. */"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 309,
+      "endLine": 334,
+      "changedLines": 15,
+      "contextTruncated": true,
+      "text": "   private postingClient: RemoteClientLike | undefined;\n   /** Remote control has been turned on once in this process; only that first time can restore on its own. */\n   private enabledOnce = false;\n+  /** Progress notes while a turn runs and the facts for a status question (flow 419, AC5 and AC6). */\n+  private readonly progress: ProgressNotes;\n+  /** Approvals and questions put in the topic that nobody has answered yet. */\n+  private openPrompts = 0;\n \n   constructor(private readonly options: RemoteBridgeOptions) {\n     this.host = options.host;\n     this.now = options.now ?? Date.now;\n     this.approvalOverrideMs = options.approvalTimeoutMs;\n+    this.progress = new ProgressNotes({\n+      ...(options.progressIntervalMs === undefined ? {} : { intervalMs: options.progressIntervalMs }),\n+      ...(options.progressToolThreshold === undefined ? {} : { toolThreshold: options.progressToolThreshold }),\n+      now: this.now,\n+      send: (text) => {\n+        const client = this.client;\n+        if (client === undefined || !client.connected) return;\n+        this.push(\"reply\", \"progress note\");\n+        void client.reply(composeReply(text)).catch(() => false);\n+      },\n+    });\n     this.router = new RemoteCommandRouter({\n       host: {\n         isBusy: () => this.host.isBusy(),"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 343,
+      "endLine": 349,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),\n       },\n       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),\n+      live: () => this.client !== undefined,\n       history: async (args) => await this.historyForCommand(args),\n       record: (text) => this.push(\"command\", text),\n       compose: composeReply,"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 378,
+      "endLine": 385,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "         runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,\n         commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,\n         choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,\n+        ...(options.idlePollMs !== undefined ? { idlePollMs: options.idlePollMs } : {}),\n+        ...(options.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: options.queuedCommandLimitMs } : {}),\n       },\n     });\n   }"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 544,
+      "endLine": 550,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "     this.clientConnected = false;\n     this.lastHistory = undefined;\n     this.endTurnState();\n+    this.progress.reset();\n     this.waiting.length = 0;\n     // History first, before anything awaits: a host that is about to swap its session\n     // (`/new`, `/resume`) calls this and must close the interval on the session it opened."
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 606,
+      "endLine": 617,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "       return;\n     }\n     this.push(\"line\", `Telegram: ${preview(line)}`);\n+    // A question about how the run is going is answered from session state at once; behind a running\n+    // turn it would wait for the very thing it asks about (flow 419, AC6).\n+    if (this.host.isBusy() && isStatusQuestion(line)) {\n+      this.answerStatus(meta.updateId);\n+      return;\n+    }\n     this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });\n     if (this.host.isBusy()) {\n       // Queued: the message keeps its \"received\" reaction until its own turn starts."
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 622,
+      "endLine": 646,
+      "changedLines": 19,
+      "contextTruncated": true,
+      "text": "     }\n   }\n \n+  private answerStatus(updateId: number): void {\n+    const client = this.client;\n+    if (client === undefined) return;\n+    this.push(\"command\", \"status question answered from session state\");\n+    const state = this.host.sessionState?.();\n+    const text = describeStatus({\n+      turnRunning: this.host.turnRunning !== undefined ? this.host.turnRunning() : true,\n+      snapshot: this.progress.snapshot(),\n+      topicWaiting: this.waiting.length,\n+      ...(state === undefined ? {} : { queued: state.queued }),\n+      openPrompts: this.openPrompts,\n+      ...(state?.mode === undefined ? {} : { mode: state.mode }),\n+    });\n+    void client\n+      .reply(composeReply(text))\n+      .then((sent) => this.report(updateId, sent ? \"done\" : \"failed\"))\n+      .catch(() => this.report(updateId, \"failed\"));\n+  }\n+\n   /** Where a message from the topic is. Best effort and never awaited: it cannot hold the line. */\n   private report(updateId: number, state: MessageState): void {\n     const client = this.client;"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 781,
+      "endLine": 787,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "   /** A turn is starting. `source` is `tg` only for a line that came from Telegram. */\n   turnStarted(source: RemoteLineSource | undefined): void {\n     this.endTurnState();\n+    if (this.client !== undefined) this.progress.begin();\n     if (source !== TG_SOURCE || this.client === undefined) return;\n     const next = this.waiting.shift();\n     this.currentUpdate = next?.updateId;"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 798,
+      "endLine": 804,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       this.runTimer = setTimeout(() => {\n         this.timedOut = true;\n         this.push(\"error\", \"run time limit reached; stopping the turn\");\n-        this.turnAbort?.abort();\n+        this.turnAbort?.abort(\"cancelled\");\n         this.host.cancelTurn();\n       }, limit);\n     }"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 815,
+      "endLine": 821,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     if (this.stoppedByUser) return \"stopped\";\n     this.stoppedByUser = true;\n     this.push(\"command\", \"/stop: stopping the turn\");\n-    this.turnAbort?.abort();\n+    this.turnAbort?.abort(\"cancelled\");\n     this.host.cancelTurn();\n     return \"stopped\";\n   }"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 832,
+      "endLine": 839,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "    * not the answer: drop it. The reply is the text of a round that ended without a\n    * tool call.\n    */\n-  toolCall(): void {\n+  toolCall(name?: string): void {\n+    this.progress.tool(name);\n     if (!this.tgTurn) return;\n     this.lastAssistantText = \"\";\n   }"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 858,
+      "endLine": 864,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": " \n   /** The turn finished (or was cancelled). Sends the reply for a Telegram turn. */\n   async turnSettled(outcome: { failed: boolean }): Promise<void> {\n+    this.progress.end();\n     if (!this.tgTurn) return;\n     const client = this.client;\n     const text = this.lastAssistantText;"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 884,
+      "endLine": 904,
+      "changedLines": 9,
+      "contextTruncated": true,
+      "text": "     this.push(sent ? \"reply\" : \"error\", sent ? `reply sent (${body.length} chars)` : \"the reply could not be sent\");\n   }\n \n+  /** A subagent started, changed or finished. The first to start and the last to finish bound a wave (flow 419, AC5). */\n+  subagentEvent(event: WaveEvent): void {\n+    if (this.client === undefined) return;\n+    this.progress.subagent(event);\n+  }\n+\n   private endTurnState(): void {\n+    this.progress.end();\n     this.tgTurn = false;\n     this.currentUpdate = undefined;\n     this.currentFromId = undefined;\n     this.lastAssistantText = \"\";\n     this.timedOut = false;\n     this.stoppedByUser = false;\n-    this.turnAbort?.abort();\n+    this.turnAbort?.abort(\"cancelled\");\n     this.turnAbort = undefined;\n     if (this.runTimer !== undefined) {\n       clearTimeout(this.runTimer);"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 920,
+      "endLine": 929,
+      "changedLines": 5,
+      "contextTruncated": true,
+      "text": "    * Like {@link requestApproval}; with `remember` the prompt carries an \"Always: <pattern>\" button\n    * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.\n    */\n-  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {\n+  async askApproval(\n+    prompt: string,\n+    options: { remember?: string; signal?: AbortSignal; timeoutMs?: number } = {},\n+  ): Promise<RemoteApprovalAnswer> {\n     const client = this.client;\n     if (client === undefined || !client.connected) {\n       this.push(\"approval\", \"denied: not connected\");"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 931,
+      "endLine": 943,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "     }\n     this.push(\"approval\", \"asked in the topic\");\n     let answer: RemoteApprovalAnswer;\n+    this.openPrompts += 1;\n     try {\n       const text = composeApprovalPrompt(prompt);\n-      const timeoutMs = this.approvalTimeoutMs;\n+      const timeoutMs = options.timeoutMs ?? this.approvalTimeoutMs;\n       if (client.askApproval !== undefined) {\n-        const signal = this.turnAbort?.signal;\n+        const signals = [this.turnAbort?.signal, options.signal].filter((one): one is AbortSignal => one !== undefined);\n+        const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);\n         const got = await client.askApproval(text, timeoutMs, {\n           ...(options.remember === undefined ? {} : { remember: options.remember }),\n           ...(signal === undefined ? {} : { signal }),"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 949,
+      "endLine": 956,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       }\n     } catch {\n       answer = { decision: \"deny\", always: false };\n+    } finally {\n+      this.openPrompts -= 1;\n     }\n     const by = answer.fromId === undefined ? \"\" : ` by user ${answer.fromId}`;\n     this.push("
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 981,
+      "endLine": 987,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "     const timeoutMs = this.options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs;\n     const forUserId = this.telegramTurnUserId;\n     this.push(\"command\", \"ask_user question asked in the topic\");\n+    this.openPrompts += 1;\n     try {\n       if (client.askChoice === undefined) {\n         const index = await client.requestChoice(text, rows, timeoutMs, forUserId);"
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "startLine": 997,
+      "endLine": 1004,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       return undefined;\n     } catch {\n       return undefined;\n+    } finally {\n+      this.openPrompts -= 1;\n     }\n   }\n "
+    },
+    {
+      "path": "src/remote/types.ts",
+      "startLine": 165,
+      "endLine": 172,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void>;\n   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }>;\n   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;\n+  /** Close a topic without deleting it: its messages stay readable, nothing new is expected. */\n+  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;\n   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;\n   answerCallbackQuery(params: { callbackQueryId: string; text?: string }): Promise<void>;\n   /** Who the token belongs to; a bad token is a `rejected` error (401). */"
+    },
+    {
+      "path": "src/tui/approval-mirror.test.ts",
+      "startLine": 1,
+      "endLine": 157,
+      "changedLines": 157,
+      "contextTruncated": true,
+      "text": "+// AC2 (flow 419): an approval raised in the shell is answered once, from whichever place answers first,\n+// and the other place is taken down. Both orders, plus silence in the topic and a stopped turn.\n+\n+import { describe, expect, test } from \"bun:test\";\n+import type { RemoteApprovalAnswer } from \"../remote/shell-bridge\";\n+import { type DockRace, isTopicPress, raceApproval } from \"./approval-mirror\";\n+\n+const press = (decision: \"allow\" | \"deny\", fromId = 7): RemoteApprovalAnswer => ({ decision, always: false, fromId });\n+const silence: RemoteApprovalAnswer = { decision: \"deny\", always: false };\n+\n+function abortedWith(signal: AbortSignal): Promise<unknown> {\n+  return new Promise((resolve) => {\n+    if (signal.aborted) return resolve(signal.reason);\n+    signal.addEventListener(\"abort\", () => resolve(signal.reason), { once: true });\n+  });\n+}\n+\n+describe(\"isTopicPress\", () => {\n+  test(\"an allow, or a deny from a named user, is a press; a timeout deny is not\", () => {\n+    expect(isTopicPress(press(\"allow\"))).toBe(true);\n+    expect(isTopicPress(press(\"deny\"))).toBe(true);\n+    expect(isTopicPress(silence)).toBe(false);\n+  });\n+});\n+\n+describe(\"raceApproval\", () => {\n+  test(\"the dock answers first: the topic leg is aborted with the reason shell\", async () => {\n+    let topicSignal: AbortSignal | undefined;\n+    const outcome = await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async (race: DockRace) => {\n+        race.opened();\n+        return \"allowed-in-dock\";\n+      },\n+      topic: (signal) => {\n+        topicSignal = signal;\n+        return new Promise<RemoteApprovalAnswer>(() => undefined);\n+      },\n+    });\n+    expect(outcome).toEqual({ from: \"dock\", result: \"allowed-in-dock\" });\n+    expect(topicSignal?.aborted).toBe(true);\n+    expect(topicSignal?.reason).toBe(\"shell\");\n+  });\n+\n+  test(\"a press in the topic ends the dock and wins\", async () => {\n+    const answer = press(\"allow\");\n+    let dockReason: unknown;\n+    const outcome = await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async (race) => {\n+        race.opened();\n+        dockReason = await abortedWith(race.signal);\n+        expect(race.topicWon()).toBe(true);\n+        return \"ignored\";\n+      },\n+      topic: async () => answer,\n+    });\n+    expect(outcome).toEqual({ from: \"topic\", answer });\n+    expect(dockReason).toBe(\"topic\");\n+  });\n+\n+  test(\"a denial pressed in the topic wins too\", async () => {\n+    const answer = press(\"deny\");\n+    const outcome = await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async (race) => {\n+        race.opened();\n+        await abortedWith(race.signal);\n+        return \"ignored\";\n+      },\n+      topic: async () => answer,\n+    });\n+    expect(outcome).toEqual({ from: \"topic\", answer });\n+  });\n+\n+  test(\"silence in the topic never ends the dock\", async () => {\n+    let dockAbortedEarly = true;\n+    const outcome = await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async (race) => {\n+        race.opened();\n+        await new Promise((resolve) => setTimeout(resolve, 15));\n+        dockAbortedEarly = race.signal.aborted;\n+        return \"dock\";\n+      },\n+      topic: async () => silence,\n+    });\n+    expect(dockAbortedEarly).toBe(false);\n+    expect(outcome).toEqual({ from: \"dock\", result: \"dock\" });\n+  });\n+\n+  test(\"a topic that fails never ends the dock\", async () => {\n+    const outcome = await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async (race) => {\n+        race.opened();\n+        await new Promise((resolve) => setTimeout(resolve, 5));\n+        return \"dock\";\n+      },\n+      topic: async () => {\n+        throw new Error(\"serve is gone\");\n+      },\n+    });\n+    expect(outcome).toEqual({ from: \"dock\", result: \"dock\" });\n+  });\n+\n+  test(\"the turn stops: the dock closes and the topic leg is told it was cancelled\", async () => {\n+    const turn = new AbortController();\n+    let topicSignal: AbortSignal | undefined;\n+    const outcome = await raceApproval({\n+      turnSignal: turn.signal,\n+      dock: async (race) => {\n+        race.opened();\n+        queueMicrotask(() => turn.abort(\"cancelled\"));\n+        await abortedWith(race.signal);\n+        return \"stopped\";\n+      },\n+      topic: (signal) => {\n+        topicSignal = signal;\n+        return new Promise<RemoteApprovalAnswer>(() => undefined);\n+      },\n+    });\n+    expect(outcome).toEqual({ from: \"dock\", result: \"stopped\" });\n+    expect(topicSignal?.reason).toBe(\"cancelled\");\n+  });\n+\n+  test(\"a dock that never opens never starts the topic leg\", async () => {\n+    let started = false;\n+    const outcome = await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async () => \"auto-approved\",\n+      topic: () => {\n+        started = true;\n+        return new Promise<RemoteApprovalAnswer>(() => undefined);\n+      },\n+    });\n+    expect(outcome).toEqual({ from: \"dock\", result: \"auto-approved\" });\n+    expect(started).toBe(false);\n+  });\n+\n+  test(\"opened() starts the topic leg once\", async () => {\n+    let starts = 0;\n+    await raceApproval({\n+      turnSignal: new AbortController().signal,\n+      dock: async (race) => {\n+        race.opened();\n+        race.opened();\n+        return \"x\";\n+      },\n+      topic: () => {\n+        starts += 1;\n+        return new Promise<RemoteApprovalAnswer>(() => undefined);\n+      },\n+    });\n+    expect(starts).toBe(1);\n+  });\n+});"
+    },
+    {
+      "path": "src/tui/approval-mirror.ts",
+      "startLine": 1,
+      "endLine": 67,
+      "changedLines": 67,
+      "contextTruncated": true,
+      "text": "+// Where an approval of a turn typed in the shell is answered (flow 419, AC1 and AC2).\n+//\n+// The dock opens in the terminal; when remote control is on, the same question is posted to the topic at\n+// the moment the dock opens (a call that is auto-approved never reaches the topic). The first answer wins and\n+// the other place is taken down: a press in the topic aborts the dock, an answer in the dock aborts the topic\n+// leg, which tells serve to remove the buttons. Silence in the topic (a timeout, no connection) never ends\n+// the question; the dock stays. Kept apart from the TUI so the race can be tested without a renderer.\n+\n+import type { RemoteApprovalAnswer } from \"../remote/shell-bridge\";\n+\n+/** What the dock-opening code in the shell sees of the race. */\n+export interface DockRace {\n+  /** Aborted when the turn stops or the topic answered first: the dock closes. */\n+  readonly signal: AbortSignal;\n+  /** The dock just opened: the topic leg starts (once). */\n+  opened(): void;\n+  /** The topic answered first. The dock's own result is then to be thrown away. */\n+  topicWon(): boolean;\n+}\n+\n+export type ApprovalRaceOutcome<V> = { from: \"dock\"; result: V } | { from: \"topic\"; answer: RemoteApprovalAnswer };\n+\n+/** An explicit press in the topic: an allow, or a deny that names who pressed. A timeout or an abort is neither. */\n+export function isTopicPress(answer: RemoteApprovalAnswer): boolean {\n+  return answer.decision === \"allow\" || answer.fromId !== undefined;\n+}\n+\n+export async function raceApproval<V>(options: {\n+  /** Runs the dock; resolves with its verdict, or early when `race.signal` aborted it. */\n+  dock: (race: DockRace) => Promise<V>;\n+  /** Asks in the topic; the answer is judged by {@link isTopicPress}. `signal` aborts it, with the reason \"shell\" or \"cancelled\". */\n+  topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;\n+  /** The turn stopped: both places are closed, the topic one as cancelled. */\n+  turnSignal: AbortSignal;\n+}): Promise<ApprovalRaceOutcome<V>> {\n+  const dockAbort = new AbortController();\n+  const topicAbort = new AbortController();\n+  let topicAnswer: RemoteApprovalAnswer | undefined;\n+  let settled = false;\n+  let started = false;\n+  const race: DockRace = {\n+    signal: AbortSignal.any([options.turnSignal, dockAbort.signal]),\n+    opened: () => {\n+      if (started || settled) return;\n+      started = true;\n+      void options\n+        .topic(topicAbort.signal)\n+        .then((answer) => {\n+          if (settled || !isTopicPress(answer)) return;\n+          topicAnswer = answer;\n+          dockAbort.abort(\"topic\");\n+        })\n+        .catch(() => undefined);\n+    },\n+    topicWon: () => topicAnswer !== undefined,\n+  };\n+  try {\n+    const result = await options.dock(race);\n+    if (topicAnswer !== undefined) return { from: \"topic\", answer: topicAnswer };\n+    return { from: \"dock\", result };\n+  } finally {\n+    settled = true;\n+    // answered in the dock: serve says \"answered in the shell\"; the turn stopped: \"cancelled\". A leg that\n+    // already ended ignores the abort, so a press that won keeps its own final state.\n+    if (topicAnswer === undefined) topicAbort.abort(options.turnSignal.aborted ? \"cancelled\" : \"shell\");\n+  }\n+}"
+    },
+    {
+      "path": "src/tui/remote-queue-wiring.test.ts",
+      "startLine": 211,
+      "endLine": 217,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "   // The closing line comes once the topic is really gone.\n   await Promise.resolve();\n   await new Promise((resolve) => setTimeout(resolve, 0));\n-  expect(r.said.join(\"\")).toContain(\"remote control off: the topic is deleted.\");\n+  expect(r.said.join(\"\")).toContain(\"remote control off: the topic is archived.\");\n });\n \n test(\"AC4 F-014: with remote control off a session switch says nothing\", async () => {"
+    },
+    {
+      "path": "src/tui/remote-queue-wiring.test.ts",
+      "startLine": 259,
+      "endLine": 294,
+      "changedLines": 30,
+      "contextTruncated": true,
+      "text": "   expect(said).toEqual([]);\n });\n \n+test(\"flow 419 AC5: the tool's name reaches the bridge, its input does not\", () => {\n+  const seen: unknown[][] = [];\n+  const bridge = {\n+    active: true,\n+    keepingTopic: false,\n+    disable: async () => true,\n+    sessionLeaving: () => {},\n+    queuedLineRemoved: () => {},\n+    turnStarted: () => {},\n+    assistantText: () => {},\n+    toolCall: (...args: unknown[]) => seen.push(args),\n+    turnSettled: async () => {},\n+  } satisfies RemoteQueueBridge;\n+  const wiring = createRemoteQueueWiring({\n+    getBridge: () => bridge,\n+    getQueue: () => [],\n+    setQueue: () => {},\n+    nextId: () => \"q\",\n+    summarize: (text) => text,\n+    paint: () => {},\n+    composer: { setText: () => {}, focus: () => {} },\n+    say: () => {},\n+    runLine: () => {},\n+  });\n+  const base: string[] = [];\n+  wiring.wrapOnToolCall((name: string, input: string) => base.push(`${name}:${input}`))(\"shell_exec\", '{\"command\":\"ls\"}');\n+  expect(seen).toEqual([[\"shell_exec\"]]);\n+  expect(base).toEqual(['shell_exec:{\"command\":\"ls\"}']);\n+});\n+\n // ---- F-015: narration before a tool call is not the answer ---------------------------\n \n test(\"AC4 F-015: text said before a tool call is dropped; a settled turn with no later text says so\", async () => {"
+    },
+    {
+      "path": "src/tui/remote-queue-wiring.ts",
+      "startLine": 128,
+      "endLine": 139,
+      "changedLines": 6,
+      "contextTruncated": true,
+      "text": "         return;\n       }\n       if (bridge?.active !== true) return;\n-      // The close is asynchronous (it deregisters, which deletes the topic): say it is\n+      // The close is asynchronous (it deregisters, which archives the topic): say it is\n       // being turned off now, and that the topic is gone only once it really is. `disable`\n       // takes the queued Telegram lines out before its first await, so none is left behind.\n       const closing = bridge.disable();\n-      deps.say(\"◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\\n\");\n-      void closing.then(() => deps.say(\"◇ remote control off: the topic is deleted.\\n\"));\n+      deps.say(\"◇ remote control is turning off: the session changed, and its Telegram topic is being archived. Turn it on again with /remote-control <name>.\\n\");\n+      void closing.then(() => deps.say(\"◇ remote control off: the topic is archived.\\n\"));\n     },\n \n     dropQueuedTelegramLines() {"
+    },
+    {
+      "path": "src/tui/remote-queue-wiring.ts",
+      "startLine": 169,
+      "endLine": 175,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " \n     wrapOnToolCall(base) {\n       return (...args) => {\n-        deps.getBridge()?.toolCall();\n+        deps.getBridge()?.toolCall(typeof args[0] === \"string\" ? args[0] : undefined);\n         base?.(...args);\n       };\n     },"
+    },
+    {
+      "path": "src/tui/tui-shell.test.ts",
+      "startLine": 2927,
+      "endLine": 2941,
+      "changedLines": 10,
+      "contextTruncated": true,
+      "text": "     expect(fnBodyPlan).toContain(\"const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;\");\n     expect(fnBodyPlan).toContain(\"createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})\");\n     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.\n-    expect(fnBodyPlan).toContain(\"io.requestApproval = trackApproval(requestApprovalLocally);\");\n+    // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the\n+    // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.\n+    expect(fnBodyPlan).toContain(\"io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));\");\n+    const mirrorStart = fnBodyPlan.indexOf(\"const mirrorApprovalToTopic =\");\n+    const mirrorEnd = fnBodyPlan.indexOf(\"io.requestApproval = trackApproval(mirrorApprovalToTopic\", mirrorStart);\n+    expect(mirrorStart).toBeGreaterThanOrEqual(0);\n+    expect(mirrorEnd).toBeGreaterThan(mirrorStart);\n+    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).not.toContain(\"telegramTurnActive\");\n+    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).toContain(\"inner(tool, inputJson, meta, race)\");\n     expect(fnBodyPlan).toContain(\"io.onAutoApproved = autoApprovedFor(false);\");\n     expect(fnBodyPlan).not.toContain(\"io.mcpGrantsApply\");\n   });"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 82,
+      "endLine": 89,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": " import { openPermissions, PERMISSIONS_COMMAND } from \"./permissions-inspector\";\n import { approvalCauseLine, causeOfMeta, type ApprovalCause } from \"../commands/approval-cause\";\n import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from \"../remote/shell-bridge\";\n+import { MAX_APPROVAL_TIMEOUT_MS } from \"../remote/protocol\";\n+import { type DockRace, raceApproval } from \"./approval-mirror\";\n import { BUSY_REASON } from \"../remote/command-gateway\";\n import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from \"../remote/history-host\";\n import type { CommandOutcome } from \"../remote/command-router\";"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 1985,
+      "endLine": 1998,
+      "changedLines": 8,
+      "contextTruncated": true,
+      "text": "  * renderer before it does (the startup picker) and in the chat shell, which\n  * keep the full-screen overlay.\n  */\n+/** The dock side of an approval: `race` is set when the question is also in the Telegram topic. */\n+type LocalApproval = (\n+  tool: string,\n+  inputJson: string,\n+  meta: Parameters<NonNullable<TuiAgentIo[\"requestApproval\"]>>[2],\n+  race?: DockRace,\n+) => ReturnType<NonNullable<TuiAgentIo[\"requestApproval\"]>>;\n+\n type StepTarget = Renderer | ModalChrome;\n \n /** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 3952,
+      "endLine": 3958,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "         liveReviewsPanel?.dispose();\n         liveRemotePanel?.dispose();\n         liveChannelsPanel?.dispose();\n-        // Closing the shell deregisters: the topic goes with it. Best effort here\n+        // Closing the shell deregisters: the topic is archived (closing note, history kept). Best effort here\n         // (this callback is synchronous); the `finally` below awaits the same call.\n         void remoteBridge?.disable();\n         liveApprovals?.dispose();"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 4623,
+      "endLine": 4630,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).\n     setSubagentFleetListener((ev) => {\n       sessions.apply(ev);\n+      // Flow 419 (AC5): the first subagent to start and the last to finish are a wave boundary for the topic.\n+      remoteBridge?.subagentEvent(ev);\n     });\n     // Flow 173 (AC8): shell_exec(background:true)'s JobRegistry → sidebar/inspector.\n     setBackgroundJobListener((ev) => {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5262,
+      "endLine": 5269,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "     // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the\n     // `schedule_create` tool's approval and by `/schedule`. Prints the card, then\n     // offers exactly two choices; Esc/cancel is \"no\".\n-    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {\n+    const confirmScheduleCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {\n+      const dockSignal = race?.signal ?? foregroundOperation.signal;\n       for (const line of card) {\n         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, \"attention\", line)}` }));\n       }"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5274,
+      "endLine": 5284,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "           title: \"Create this schedule and install its background timer?\",\n           subtitle: card[0] ?? \"\",\n           cancelId: \"cancel\",\n-          onOpen: () => chrome.blurComposer(),\n-          signal: foregroundOperation.signal,\n+          onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+          signal: dockSignal,\n           options: [\n             { id: \"create\", label: \"Create and install\", description: \"Store it and install the timer shown above\" },\n             { id: \"cancel\", label: \"Cancel\", description: \"Nothing is written or installed\" },"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5286,
+      "endLine": 5292,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "         }),\n       );\n       input.focus();\n+      if (race?.topicWon() === true) return false;\n       setMainAgent(\"running\", id === \"create\" ? \"schedule\" : \"denied\");\n       transcript.add(\n         new otui.TextRenderable(r, {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5308,
+      "endLine": 5315,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "     // chat message may reach the model. Same card-then-choice shape, accurate\n     // wording, never remembered — like `confirmScheduleCard`, this answers a\n     // gate a hook raised, not a grant a saved pattern could stand in for.\n-    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {\n+    const confirmUserPromptCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {\n+      const dockSignal = race?.signal ?? foregroundOperation.signal;\n       for (const line of card) {\n         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, \"attention\", line)}` }));\n       }"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5320,
+      "endLine": 5330,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "           title: \"Send this message to the model?\",\n           subtitle: card[0] ?? \"\",\n           cancelId: \"cancel\",\n-          onOpen: () => chrome.blurComposer(),\n-          signal: foregroundOperation.signal,\n+          onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+          signal: dockSignal,\n           options: [\n             { id: \"send\", label: \"Send\", description: \"Let the message reach the model as written\" },\n             { id: \"cancel\", label: \"Cancel\", description: \"The message is not sent\" },"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5332,
+      "endLine": 5338,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "         }),\n       );\n       input.focus();\n+      if (race?.topicWon() === true) return false;\n       setMainAgent(\"running\", id === \"send\" ? \"prompt\" : \"denied\");\n       transcript.add(\n         new otui.TextRenderable(r, {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5378,
+      "endLine": 5385,
+      "changedLines": 3,
+      "contextTruncated": true,
+      "text": "         }),\n       );\n     };\n-    const requestApprovalLocally: NonNullable<TuiAgentIo[\"requestApproval\"]> = async (tool, inputJson, meta) => {\n+    const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {\n+      const dockSignal = race?.signal ?? foregroundOperation.signal;\n       if (meta?.untrustedOrigin === true) {\n         // `agent.ts`'s untrusted-content gate asks the human instead of refusing\n         // the call outright — this says why the operator is being asked."
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5397,
+      "endLine": 5403,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       // message.\n       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {\n         addCauseLine(tool, meta);\n-        return confirmUserPromptCard(meta.card);\n+        return confirmUserPromptCard(meta.card, race);\n       }\n \n       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5405,
+      "endLine": 5411,
+      "changedLines": 2,
+      "contextTruncated": true,
+      "text": "       // never remembered — no mode and no saved pattern answers it.\n       if (meta?.alwaysAsk === true && meta.card !== undefined) {\n         addCauseLine(tool, meta);\n-        return confirmScheduleCard(meta.card);\n+        return confirmScheduleCard(meta.card, race);\n       }\n \n       // Multi-agent spawn: auto-allow read_only; ask for general."
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5456,
+      "endLine": 5466,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "                 : \"Spawn general subagent?\",\n             subtitle: taskPreview,\n             cancelId: \"deny\",\n-            onOpen: () => chrome.blurComposer(),\n-            signal: foregroundOperation.signal,\n+            onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+            signal: dockSignal,\n             options: [\n               {\n                 id: \"allow\","
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5473,
+      "endLine": 5479,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "           }),\n         );\n         input.focus();\n+      if (race?.topicWon() === true) return false;\n         setMainAgent(\"running\", id === \"allow\" ? \"subagent\" : \"denied\");\n         transcript.add(\n           new otui.TextRenderable(r, {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5526,
+      "endLine": 5536,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "             title: \"Approve apply_patch?\",\n             subtitle: \"Diff shown above · Esc denies\",\n             cancelId: \"deny\",\n-            onOpen: () => chrome.blurComposer(),\n-            signal: foregroundOperation.signal,\n+            onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+            signal: dockSignal,\n             options: [\n               { id: \"allow\", label: \"Approve\", description: \"Write the patch to disk\", recommended: true },\n               { id: \"deny\", label: \"Deny\", description: \"Do not write anything\" },"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5538,
+      "endLine": 5544,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "           }),\n         );\n         input.focus();\n+      if (race?.topicWon() === true) return false;\n         setMainAgent(\"running\", id === \"allow\" ? \"write\" : \"denied\");\n         transcript.add(\n           new otui.TextRenderable(r, {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5609,
+      "endLine": 5619,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "             // so no payload prefix can occupy the line read first.\n             subtitle: summariseUseToolApproval(described),\n             cancelId: \"deny\",\n-            onOpen: () => chrome.blurComposer(),\n-            signal: foregroundOperation.signal,\n+            onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+            signal: dockSignal,\n             options: [\n               { id: APPROVAL_ALLOW_ID, label: \"Approve\", description: `run ${described.tool} on ${described.server}` },\n               ...(canTrustMcp"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5624,
+      "endLine": 5630,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "           }),\n         );\n         input.focus();\n+      if (race?.topicWon() === true) return false;\n         // Keep the allow/trust/deny mapping in a tested, fail-closed helper.\n         const verdict = mcpDockVerdict(id, canTrustMcp, meta?.fingerprint);\n         const allowed = verdict !== false;"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5690,
+      "endLine": 5700,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "             title: \"Approve codex elicitation?\",\n             subtitle: elicitationSubtitle,\n             cancelId: \"deny\",\n-            onOpen: () => chrome.blurComposer(),\n-            signal: foregroundOperation.signal,\n+            onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+            signal: dockSignal,\n             options: [\n               { id: \"allow\", label: \"Approve\", description: \"codex proceeds with this action\", recommended: true },\n               { id: \"deny\", label: \"Deny\", description: \"codex's action is refused\" },"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5702,
+      "endLine": 5708,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "           }),\n         );\n         input.focus();\n+      if (race?.topicWon() === true) return false;\n         setMainAgent(\"running\", id === \"allow\" ? \"write\" : \"denied\");\n         transcript.add(\n           new otui.TextRenderable(r, {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5792,
+      "endLine": 5802,
+      "changedLines": 7,
+      "contextTruncated": true,
+      "text": "           destructive,\n           meta?.credentials === true,\n           {\n-            onOpen: () => chrome.blurComposer(),\n-            signal: foregroundOperation.signal,\n+            onOpen: () => {\n+              chrome.blurComposer();\n+              race?.opened();\n+            },\n+            signal: dockSignal,\n           },\n           // Flow 275 T7 (specification §4.4): never offer to remember while a\n           // peer's `git-publish` lease applies to this command."
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5810,
+      "endLine": 5816,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "         ),\n       );\n       input.focus();\n+      if (race?.topicWon() === true) return false;\n \n       if (choice === \"deny\") {\n         transcript.add("
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5924,
+      "endLine": 5957,
+      "changedLines": 29,
+      "contextTruncated": true,
+      "text": "       if (decision !== \"allow\") return false;\n       return approvedAnswer();\n     };\n-    io.requestApproval = trackApproval(requestApprovalLocally);\n+    // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic\n+    // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a\n+    // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in\n+    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;\n+    // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.\n+    const mirrorApprovalToTopic =\n+      (inner: LocalApproval): NonNullable<TuiAgentIo[\"requestApproval\"]> =>\n+      async (tool, inputJson, meta) => {\n+        const bridge = remoteBridge;\n+        if (bridge === undefined || !bridge.active) {\n+          return inner(tool, inputJson, meta);\n+        }\n+        const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;\n+        const outcome = await raceApproval({\n+          turnSignal: foregroundOperation.signal,\n+          dock: (race) => inner(tool, inputJson, meta, race),\n+          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.\n+          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),\n+        });\n+        if (outcome.from === \"dock\") return outcome.result;\n+        const allowed = outcome.answer.decision === \"allow\";\n+        input.focus();\n+        setMainAgent(\"running\", allowed ? \"approved (telegram)\" : \"denied\");\n+        io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\\n` : `◇ ${brief} denied in Telegram.\\n`);\n+        if (!allowed) return false;\n+        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;\n+      };\n+    io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));\n \n     /** Host for ask_user — Claude-style options docked above the composer. */\n     const askUserInteractive = async (req: {"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 5969,
+      "endLine": 5976,
+      "changedLines": 4,
+      "contextTruncated": true,
+      "text": "           content: otui.t`${roleChunk(otui, \"attention\", \"? \")} ${dimChunk(otui, qShort)}`,\n         }),\n       );\n-      // flow 401: a question of a Telegram-started turn is also put in the topic; the first answer wins\n-      const topicBridge = remoteBridge?.telegramTurnActive === true ? remoteBridge : undefined;\n+      // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins\n+      const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;\n       const outcome = await raceAskUser({\n         turnSignal: foregroundOperation.signal,\n         ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),"
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "startLine": 10111,
+      "endLine": 10117,
+      "changedLines": 1,
+      "contextTruncated": true,
+      "text": "         // the newest answer in `history` unfinished. A queued line or another holder of the lease\n         // makes the shell busy without making that answer incomplete.\n         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,\n+        sessionState: () => ({ queued: mainQueue.length, mode: formatModeInForce(modeForTurn(true)) }),\n         runLine: (text) => remoteQueue.runTelegramLine(text),\n         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),\n         notice: (text) => io.onSystem?.(`${text}\\n`),"
+    }
+  ],
+  "drops": [
+    {
+      "path": "src/remote/history.ts",
+      "reason": "comment-only",
+      "detail": "comment-only: every changed line is a comment in .ts and none is a tool directive",
+      "granularity": "block",
+      "startLine": 3,
+      "endLine": 3,
+      "changedLines": 2
+    },
+    {
+      "path": "src/remote/lifecycle.test.ts",
+      "reason": "comment-only",
+      "detail": "comment-only: every changed line is a comment in .ts and none is a tool directive",
+      "granularity": "block",
+      "startLine": 2,
+      "endLine": 2,
+      "changedLines": 2
+    },
+    {
+      "path": "src/remote/orphan.test.ts",
+      "reason": "comment-only",
+      "detail": "comment-only: every changed line is a comment in .ts and none is a tool directive",
+      "granularity": "block",
+      "startLine": 2,
+      "endLine": 3,
+      "changedLines": 4
+    },
+    {
+      "path": "src/remote/shell-bridge.ts",
+      "reason": "comment-only",
+      "detail": "comment-only: every changed line is a comment in .ts and none is a tool directive",
+      "granularity": "block",
+      "startLine": 532,
+      "endLine": 532,
+      "changedLines": 2
+    },
+    {
+      "path": "src/tui/tui-shell.ts",
+      "reason": "comment-only",
+      "detail": "comment-only: every changed line is a comment in .ts and none is a tool directive",
+      "granularity": "block",
+      "startLine": 10257,
+      "endLine": 10257,
+      "changedLines": 2
+    }
+  ],
+  "counts": {
+    "filesSeen": 39,
+    "filesRetained": 38,
+    "filesDropped": 1,
+    "blocksSeen": 172,
+    "blocksRetained": 167,
+    "blocksDropped": 5,
+    "changedLinesRetained": 2006,
+    "changedLinesDropped": 12,
+    "droppedByReason": {
+      "lockfile": 0,
+      "generated": 0,
+      "vendored": 0,
+      "snapshot": 0,
+      "minified": 0,
+      "binary": 0,
+      "whitespace-only": 0,
+      "comment-only": 5
+    }
+  }
+}

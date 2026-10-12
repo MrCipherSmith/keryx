@@ -1,0 +1,3225 @@
+diff --git a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md
+index d4c48b52..658c0408 100644
+--- a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md
++++ b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md
+@@ -1,7 +1,7 @@
+ # Keryx Telegram: remote-control relays approvals, questions and progress
+ 
+ Status: approved by operator (helyx 195233), frozen
+-Source: live run of the review of a PR in a work project on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).
++Source: live run of the review of PR 7435 on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).
+ 
+ ## Problem
+ 
+diff --git a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json
+index 73f34d5f..f1b3f6df 100644
+--- a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json
++++ b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json
+@@ -9,9 +9,9 @@
+   "id": "419",
+   "slug": "telegram-remote-control-relay",
+   "title": "Keryx Telegram: remote-control relays approvals, questions and progress",
+-  "status": "ready",
++  "status": "implemented",
+   "createdAt": "2026-10-09T19:42:55.347Z",
+-  "updatedAt": "2026-10-09T19:45:41.801Z",
++  "updatedAt": "2026-10-12T05:58:34.181Z",
+   "source": {
+     "type": "description",
+     "ref": null
+@@ -19,7 +19,7 @@
+   "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6",
+   "acConfirmed": {},
+   "pr": {
+-    "url": null
++    "url": "https://github.com/MrCipherSmith/keryx/pull/978"
+   },
+   "owner": {
+     "value": "MrCipherSmith",
+@@ -38,7 +38,7 @@
+       "title": "Collect remaining context",
+       "kind": "context",
+       "origin": "scaffold",
+-      "status": "todo",
++      "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+@@ -46,29 +46,43 @@
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+-      "budget": {}
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "context gathered; plan.md written"
+     },
+     {
+       "id": "T2",
+       "title": "Implement per plan",
+       "kind": "implement",
+       "origin": "scaffold",
+-      "status": "todo",
++      "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+         "log": []
+       },
+-      "acRefs": [],
+-      "evidenceRefs": [],
+-      "budget": {}
++      "acRefs": [
++        "AC1",
++        "AC2",
++        "AC3",
++        "AC4",
++        "AC5",
++        "AC6",
++        "AC7",
++        "AC9"
++      ],
++      "evidenceRefs": [
++        "a556a84a c9d17c57 2121fcf5 f9f0ee34"
++      ],
++      "budget": {},
++      "disposition": "completed"
+     },
+     {
+       "id": "T3",
+       "title": "Add/adjust tests and make them pass",
+       "kind": "test",
+       "origin": "scaffold",
+-      "status": "todo",
++      "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+@@ -76,14 +90,16 @@
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+-      "budget": {}
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "targeted tests 1331 pass, tsc clean"
+     },
+     {
+       "id": "T4",
+       "title": "Self-review and prepare draft PR",
+       "kind": "review",
+       "origin": "scaffold",
+-      "status": "todo",
++      "status": "done",
+       "dependsOn": [],
+       "attempts": {
+         "count": 0,
+@@ -91,7 +107,9 @@
+       },
+       "acRefs": [],
+       "evidenceRefs": [],
+-      "budget": {}
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "self-review done; draft PR #978"
+     }
+   ],
+   "history": [
+@@ -103,6 +121,35 @@
+       "at": "2026-10-09T19:45:41.801Z",
+       "event": "frozen",
+       "detail": "9 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-12T05:23:29.972Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-12T05:57:41.703Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-12T05:57:41.894Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-12T05:57:45.315Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-10-12T05:58:31.785Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-10-12T05:58:34.181Z",
++      "event": "implemented",
++      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)"
+     }
+   ],
+   "acKinds": {
+@@ -133,5 +180,6 @@
+     "AC9": {
+       "kind": "unclassified"
+     }
+-  }
++  },
++  "baseBranch": "main"
+ }
+diff --git a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md
+index ff52c25f..439c3a2c 100644
+--- a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md
++++ b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md
+@@ -2,3 +2,9 @@
+ 
+ - 2026-10-09T19:42:55.347Z - flow created
+ - 2026-10-09T19:45:41.801Z - frozen: 9 criteria; checksum recorded
++- 2026-10-12T05:23:29.972Z - started
++- 2026-10-12T05:57:41.703Z - task-done: T1: Collect remaining context
++- 2026-10-12T05:57:41.894Z - task-done: T2: Implement per plan
++- 2026-10-12T05:57:45.315Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-10-12T05:58:31.785Z - task-done: T4: Self-review and prepare draft PR
++- 2026-10-12T05:58:34.181Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)
+diff --git a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md
+index 17f80230..348b640d 100644
+--- a/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md
++++ b/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md
+@@ -1,15 +1,49 @@
+ # Implementation Plan
+ 
+-Status: draft (flow-init skill fills this after context and brainstorm)
++Status: implemented on `feat/telegram-remote-control-relay`; AC8 (live run) waits for the operator.
+ 
+ ## Approach
+ 
+-Chosen approach and why (link brainstorm alternatives if any).
++Keep the existing split: `keryx serve` owns Telegram, the shell is a client over `/v1/remote/*`. Each
++criterion is closed at the narrowest layer that already owns the behaviour, with a test beside it:
++
++- Mirror shell prompts through the bridge's `askApproval`/`askUser`, not through the TUI, so a turn typed in
++  the shell is covered too (`src/tui/approval-mirror.ts`). First answer wins; the loser is closed with
++  `prompt-close`.
++- Reminders live in `RemoteHttpSurface`, next to the prompt table, so the timer dies with the prompt.
++- Commands from the topic wait for an idle main in the command router (`awaitIdle`), with a notice, instead of
++  being refused.
++- Progress notes are composed from counts and names only (`src/remote/progress-notes.ts`), driven by the tool
++  hook and the subagent fleet listener, with one rate limiter.
++- A status question is answered by the bridge from session state, so it never reaches the model or the queue.
++- Close archives (`closeForumTopic`) instead of deleting; the orphan sweep does the same for a killed shell.
++
++Rejected: a timer-driven ticker for progress (notes would fire in an idle turn), and a model-written summary
++(slow, can leak tool output).
+ 
+ ## Steps
+ 
+-1. ...
++1. AC7 + AC1/AC2: archive on close, mirror approvals and `ask_user`, `prompt-close` for the loser. (a556a84a)
++2. AC3: reminders, 2 min, at most 3. (c9d17c57)
++3. AC4: `/route` on the menu, queue-when-busy for `/route`, `/external`, `/external-agents`, `/model`. (2121fcf5)
++4. AC5, AC6, AC7 explicit test: progress notes, instant status answers, topic survives exit and Ctrl+C. (f9f0ee34)
++5. AC9: README, drive-keryx-remotely guide (new "What the topic hears" and "What happens when the shell closes"),
++   cli-reference, wiki page, CHANGELOG; `mkdocs build --strict` passes.
++6. AC8: operator-run live review (not started; the operator runs it):
++   1. Install the branch build (`npm pack`, then `npm i -g` the tarball; npm only) and run `keryx update` in the
++      test project. Telegram connected via `/channels`; `keryx serve` running.
++   2. `/clear`, then in a shell start a long review (a real PR with several reviewers) and type `/remote-control`.
++   3. From now on touch only Telegram: answer every approval and `ask_user` from the topic; ask "how is it going?"
++      once mid-run; send `/model` or `/route` once while main is busy and check the queued notice.
++   4. Leave one prompt unanswered for over 2 minutes and check the reminder.
++   5. When the review ends, `/exit` in the shell and check the topic is archived with its history.
++   6. Export the topic's message log and attach it to the flow with the shell's transcript; then
++      `keryx flow ac confirm 419 AC8 --note "<log path>"`.
+ 
+ ## Risks
+ 
+-- ...
++- Progress notes fire on tool calls and subagent events only; a long silent model step produces no note.
++- A wave-start note names only the subagents known at that moment; the rate limit coalesces the rest.
++- Status questions are matched by a short phrase list (en/ru); anything else goes to the model when main is idle
++  and is queued as work when busy.
++- Everything was tested against a fake Bot API; real Telegram behaviour (closed topics, reactions) is AC8.
+diff --git a/.metaproject/wiki/architecture/remote-control.md b/.metaproject/wiki/architecture/remote-control.md
+index cad59950..e3ee8216 100644
+--- a/.metaproject/wiki/architecture/remote-control.md
++++ b/.metaproject/wiki/architecture/remote-control.md
+@@ -53,7 +53,7 @@ A button press on an approval makes the surface (`http-surface.ts`, `pressApprov
+ 
+ ### Limits and orphans
+ 
+-`orphanMs` (default 10 minutes): a session that stops heartbeating is announced in its topic, and the topic is deleted after the window; a heartbeat inside it cancels this. `runTimeoutMs` (default 30 minutes): a run started from Telegram is interrupted by the shell and the topic is told (`run-limits.ts`).
++`orphanMs` (default 10 minutes): a session that stops heartbeating is announced in its topic, and the topic is archived (closing note, `closeForumTopic`, history stays readable) after the window; a heartbeat inside it cancels this. A clean exit (`deregister`) archives at once. Only channel Disconnect deletes topics. `runTimeoutMs` (default 30 minutes): a run started from Telegram is interrupted by the shell and the topic is told (`run-limits.ts`).
+ 
+ ### Session record (`remote` in the summary)
+ 
+@@ -61,7 +61,7 @@ A session driven from a topic records `remote: { name, intervals: [{ on, off? }]
+ 
+ ### Restoring the conversation into a topic (`/history`)
+ 
+-A topic is deleted when the shell exits, and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. `/history [N]` is the same code from the shell (a router `builtin`) and from the topic. The panel's `h` key runs it and the modal and the sidebar show the last post.
++A topic is archived when the shell exits (still readable), and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. `/history [N]` is the same code from the shell (a router `builtin`) and from the topic. The panel's `h` key runs it and the modal and the sidebar show the last post.
+ 
+ ### Connecting from the shell (`/channels`)
+ 
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 9c631f3b..e6fb31e4 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,6 +2,14 @@
+ 
+ ## [Unreleased]
+ 
++### Remote control
++
++- Every approval, `ask_user` question and queue dialog the shell raises is mirrored to the Telegram topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other exactly once (`prompt-close`).
++- An unanswered question gets a reminder in the topic every 2 minutes, at most 3 times.
++- `/route` is on the topic menu (`/route on|off` ask first). `/route`, `/external`, `/external-agents` and `/model` are queued with a notice while main is busy and run when it goes idle, instead of being refused. `/mode` takes effect at once.
++- Progress notes in the topic at subagent wave boundaries and after tool-heavy stretches, at most one a minute: counts, tool names and labels only, never tool output. A short status question ("how is it going?") is answered from session state while the turn runs.
++- Closing the shell archives the topic (closing note, topic and history stay readable) instead of deleting it; a killed shell is archived after the orphan window. Only channel Disconnect deletes topics.
++
+ ## [0.3.110] - 2026-10-11
+ 
+ ### Review
+diff --git a/README.md b/README.md
+index e743d399..a3676dea 100644
+--- a/README.md
++++ b/README.md
+@@ -1060,13 +1060,25 @@ runs. At most 500 lines wait per topic, and turning it off tells the topic which
+ queued lines will not run. From the topic you can also run a fixed list of slash
+ commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
+ in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
+-after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,
+-`/schedule`, `/rewind`, `/conform` and `/ci` stay local. A topic is deleted when the
+-shell exits, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
++after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
++and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
++`/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
++`/external-agents` and `/model` are queued with a notice in the topic and run when
++it goes idle; `/mode` takes effect at once. A topic is archived when the shell
++exits (a closing note, the topic and its history stay readable), but a resumed
++session gets a new one, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
+ back into the topic, yours and the agent's final answers, one message each; a resumed
+ session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing
+ while a turn runs; see
+ [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
++Every approval, `ask_user` question and queue dialog the shell raises is posted to
++the topic with buttons, whoever started the turn; the first answer wins, from the
++terminal or the topic, and an unanswered one gets a reminder every 2 minutes (at most 3).
++While a turn runs, the topic gets at most one progress note a minute (at wave
++boundaries and after tool-heavy stretches: counts and tool names, never tool output),
++and a short status question such as "how is it going?" is answered from session state
++without waiting for the turn; see
++[What the topic hears](docs/docs/guides/drive-keryx-remotely.md#what-the-topic-hears).
+ Without a connection `serve` starts as before, with remote control off, and only
+ offers the local `/channels` routes. Replies are rendered in one of four modes,
+ `remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index 5ae36332..6d71e504 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -1907,7 +1907,7 @@ raw token from older shells is still accepted by `serve`.
+ | Route | Description |
+ |---|---|
+ | `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |
+-| `POST /v1/remote/deregister` | The shell stops remote control; the topic is deleted. |
++| `POST /v1/remote/deregister` | The shell stops remote control; the topic gets a closing note and is archived (closed, still readable), not deleted. |
+ | `POST /v1/remote/heartbeat` | Keeps the session alive; a heartbeat from an unregistered session is refused with a reason. |
+ | `POST /v1/remote/reply` | Text for the topic. Replies over 4096 characters are split. |
+ | `POST /v1/remote/approval` | Raises an approval question in the topic, with Allow and Deny buttons. |
+diff --git a/docs/docs/guides/drive-keryx-remotely.md b/docs/docs/guides/drive-keryx-remotely.md
+index cbe152e9..624f6ba0 100644
+--- a/docs/docs/guides/drive-keryx-remotely.md
++++ b/docs/docs/guides/drive-keryx-remotely.md
+@@ -536,8 +536,15 @@ would close the shell. `/mcp trust`, `/guard`,
+ was refused and why.
+ 
+ **While a turn runs.** The shell refuses `/new`, `/clear`, `/resume`, `/sessions`,
+-`/compact`, `/model` and `/connect`, and the topic says
+-`main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a
++`/compact` and `/connect`, and the topic says `main is busy: command deferred`;
++nothing is queued behind it. `/route`, `/external`, `/external-agents` and `/model`
++are different: when main is busy they are **queued**, the topic gets
++`<command> is queued: main is busy` at once, and the command runs when main goes
++idle (a confirmation, where one is needed, is still asked first). The queued command
++is dropped with a note if main stays busy too long, or quietly if remote control goes
++off. When main is idle they run as soon as you press Yes. `/route` is on the menu:
++bare `/route` shows the routing, `/route on` and `/route off` ask Yes / No first, and
++any other argument is refused. `/mode` takes effect at once. A command that runs is answered with a
+ short notice if it takes a while. A command from the topic never cancels the turn
+ you are running in the shell: one that outlasts the limit is only no longer waited
+ for, the topic is told it is still running in the shell, and it is left alone; when it
+@@ -550,7 +557,8 @@ earlier sessions as buttons and returns to the one you press
+ (`--- resumed session ---`). Typing `/new` in the shell still ends remote control
+ as before.
+ 
+-**History in the topic.** A topic is deleted when the shell exits, so a session you resume
++**History in the topic.** A topic is archived when the shell exits (see
++[What happens when the shell closes](#what-happens-when-the-shell-closes)), so a session you resume
+ with `keryx shell --continue` gets a new, empty one. `/history [N]` posts the session's last
+ messages back, from the topic or from the shell (`N` is 1 to 20, and 10 when you give no
+ number). Each message is posted on its own, oldest first, with a `You:` or `Agent:` label, about
+@@ -584,6 +592,56 @@ reactions turn off for good with one `reactions-unavailable` event in `serve`, a
+ the typing indicator still works. A failed reaction call never delays or blocks a
+ message.
+ 
++### What the topic hears
++
++While `/remote-control` is on, you can run a long job from your phone and not lose
++track of it. Nothing below needs a setting; the intervals are fixed.
++
++**Every question the shell raises is posted.** A command approval, an `ask_user`
++question and a queue dialog all appear in the topic with Allow / Deny or one button
++per option, **whether the turn started in the shell or in the topic**. The first
++answer wins and the other side is closed exactly once:
++
++- Answer in the topic first: the shell's dock closes the same question and carries on
++  with your answer; the message is edited to say who answered and when.
++- Answer in the terminal first: the Telegram message is edited to "answered in the
++  shell" and its buttons stop working, so a late press does nothing.
++
++**Reminders.** A question nobody has answered gets a reminder in the topic every
++2 minutes, at most 3 times. The reminder quotes the first line of what was asked (cut at 80 characters), says
++when the question expires and points at the buttons on the original message; it adds
++no new buttons. A question that is answered, expired or closed stops its reminders.
++
++**Progress notes.** During a turn the topic gets a short note at a wave boundary (the
++first subagent of a review fan-out starting, and the last one finishing) and after a
++tool-heavy stretch (8 tool calls since the last note). At most **one note a minute**
++goes out; if a second one is due earlier, the weightier one is held and sent when the
++minute ends, and any note still held when the turn ends is dropped. A note carries
++counts, tool names and subagent labels only, for example `Still working: 12 tool calls
++in the last 1m (read_file, shell_exec). 3m 20s into this turn.` Tool input, tool output
++and the model's text never go into a note.
++
++**Status questions are answered at once.** While a turn runs, a short plain line that
++only asks how it is going (`status`, `how is it going?`, `are you still working?`,
++`статус`, `как дела?`) is answered from the shell's own state without waiting for the
++turn: elapsed time, tool calls so far and the last tool, subagents still running, how
++many messages wait, how many questions wait for you, and the mode. It is not queued
++and does not reach the model. A longer message that merely contains the word "status"
++is work and is queued as usual, and when the shell is idle the same words go to the
++model like any other line.
++
++### What happens when the shell closes
++
++The topic is **archived, not deleted**. When the shell exits (`/exit`, `/quit`), the
++topic gets a closing note ("This topic is archived: the history stays here and nothing
++more will be posted") and is closed. It stays in the group, readable, with everything that was said in it.
++When the shell is killed (Ctrl+C twice, a closed terminal, a crash) it cannot say
++goodbye: `serve` announces the silence in the topic and, after the orphan window
++(10 minutes by default), posts the same note and archives it. A heartbeat inside the
++window cancels that. A resumed session (`keryx shell --continue`) gets a new topic;
++`/history` copies the last messages into it. Only **Disconnect** in `/channels` deletes
++topics.
++
+ In the full-screen shell, the `/remote-control` modal has a **Commands** tab with
+ the recent commands from the topic, including refused ones and confirmations nobody
+ has answered yet. A command that came from Telegram is echoed in the transcript as
+diff --git a/src/remote/approval-mirror.test.ts b/src/remote/approval-mirror.test.ts
+new file mode 100644
+index 00000000..e96746d6
+--- /dev/null
++++ b/src/remote/approval-mirror.test.ts
+@@ -0,0 +1,121 @@
++// AC1 and AC2 (flow 419): an approval the shell raises reaches the topic with its buttons; an answer in the
++// shell takes the buttons away (the topic text says "Answered in the shell"), a stopped turn says "Cancelled",
++// and a press that comes after finds nothing to answer. Real client and serve over loopback, fake Bot API.
++
++import { afterEach, describe, expect, test } from "bun:test";
++import type { RemoteClient } from "./client";
++import type { FakeSentMessage } from "./fake-bot-api";
++import { makeRig, type Rig } from "./remote.http.test-helpers";
++import { OWNER_ID, until } from "./remote.test-helpers";
++
++let rig: Rig;
++afterEach(async () => {
++  await rig.cleanup();
++});
++
++async function session(sessionId: string): Promise<{ client: RemoteClient; threadId: number }> {
++  const client = rig.makeClient({ sessionId, project: "/work/mirror", name: "mirror", onLine: () => undefined });
++  const started = await client.start();
++  if (!started.ok) throw new Error(`session did not start: ${started.message}`);
++  return { client, threadId: started.threadId };
++}
++
++async function untilPrompt(threadId: number): Promise<{ message: FakeSentMessage; allow: string; deny: string }> {
++  const find = (): FakeSentMessage | undefined => rig.api.sentTo(threadId).find((message) => message.inlineKeyboard !== undefined);
++  await until(() => find() !== undefined, "the approval buttons in the topic");
++  const message = find() as FakeSentMessage;
++  const buttons = (message.inlineKeyboard ?? []).flat();
++  const allow = buttons.find((button) => button.text === "Allow")?.callback_data;
++  const deny = buttons.find((button) => button.text === "Deny")?.callback_data;
++  if (allow === undefined || deny === undefined) throw new Error("no Allow and Deny buttons");
++  return { message, allow, deny };
++}
++
++function current(messageId: number): FakeSentMessage {
++  const message = rig.api.message(messageId);
++  if (message === undefined) throw new Error(`message ${messageId} is not in the topic`);
++  return message;
++}
++
++describe("an approval raised in the shell", () => {
++  test("AC1: the prompt reaches the outbound log with Allow and Deny", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0001");
++    const abort = new AbortController();
++    void client.askApproval("Run `bun test`?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++    expect(prompt.message.text).toContain("Run `bun test`?");
++    expect(rig.api.sentTo(threadId).some((message) => message.inlineKeyboard !== undefined)).toBe(true);
++    abort.abort("shell");
++  });
++
++  test("AC2, shell first: the buttons go, the text says it was answered in the shell, a late press changes nothing", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0002");
++    const abort = new AbortController();
++    const asked = client.askApproval("Delete the build directory?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++
++    abort.abort("shell");
++    expect((await asked).decision).toBe("deny");
++    await until(() => current(prompt.message.messageId).inlineKeyboard === undefined, "the buttons to go");
++    expect(current(prompt.message.messageId).text).toContain("Answered in the shell");
++
++    const textAfterShell = current(prompt.message.messageId).text;
++    rig.api.pushCallback({ fromId: OWNER_ID, data: prompt.allow, threadId, messageId: prompt.message.messageId });
++    await until(() => rig.api.answeredCallbacks.length >= 1, "the late press to be answered");
++    expect(current(prompt.message.messageId).text).not.toContain("Allowed by");
++    expect(current(prompt.message.messageId).inlineKeyboard).toBeUndefined();
++    expect(textAfterShell).toContain("Answered in the shell");
++  });
++
++  test("AC2, a stopped turn says the approval is no longer open", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0003");
++    const abort = new AbortController();
++    const asked = client.askApproval("Write the file?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++
++    abort.abort("cancelled");
++    await asked;
++    await until(() => current(prompt.message.messageId).inlineKeyboard === undefined, "the buttons to go");
++    expect(current(prompt.message.messageId).text).toContain("Cancelled at ");
++  });
++
++  test("AC2, topic first: the press resolves the shell exactly once and a shell abort afterwards changes nothing", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0004");
++    const abort = new AbortController();
++    const asked = client.askApproval("Run the migration?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++
++    rig.api.pushCallback({ fromId: OWNER_ID, data: prompt.allow, threadId, messageId: prompt.message.messageId });
++    const answer = await asked;
++    expect(answer.decision).toBe("allow");
++    await until(() => current(prompt.message.messageId).text.includes("Allowed by user"), "the edit");
++
++    // The shell closes its dock after the topic won: that must not rewrite the final state.
++    abort.abort("shell");
++    await new Promise((resolve) => setTimeout(resolve, 50));
++    expect(current(prompt.message.messageId).text).toContain("Allowed by user");
++    expect(current(prompt.message.messageId).text).not.toContain("Answered in the shell");
++  });
++
++  test("a signal that is already aborted never posts a prompt that outlives it", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0005");
++    const abort = new AbortController();
++    abort.abort("cancelled");
++    const answer = await client.askApproval("Too late", 10_000, { signal: abort.signal });
++    expect(answer.decision).toBe("deny");
++    await new Promise((resolve) => setTimeout(resolve, 30));
++    for (const message of rig.api.sentTo(threadId)) {
++      expect(message.inlineKeyboard).toBeUndefined();
++    }
++  });
++});
+diff --git a/src/remote/bot-api-http.ts b/src/remote/bot-api-http.ts
+index aba8e94c..3f1f8dc8 100644
+--- a/src/remote/bot-api-http.ts
++++ b/src/remote/bot-api-http.ts
+@@ -227,6 +227,12 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
+         message_thread_id: params.messageThreadId,
+       });
+     },
++    async closeForumTopic(params) {
++      await call<boolean>("closeForumTopic", {
++        chat_id: params.chatId,
++        message_thread_id: params.messageThreadId,
++      });
++    },
+     async editForumTopic(params) {
+       await call<boolean>("editForumTopic", {
+         chat_id: params.chatId,
+diff --git a/src/remote/client.ts b/src/remote/client.ts
+index c68e369d..1cad4c5c 100644
+--- a/src/remote/client.ts
++++ b/src/remote/client.ts
+@@ -69,6 +69,11 @@ export type ChoiceAnswer =
+   | { kind: "own"; text: string; refusal?: undefined }
+   | { kind: "none"; refusal?: string };
+ 
++/** Read at the call: an earlier check on the same signal must not narrow it to "not aborted". */
++function isAborted(signal: AbortSignal | undefined): boolean {
++  return signal?.aborted === true;
++}
++
+ function closeByFor(signal: AbortSignal | undefined): "shell" | "cancelled" {
+   return signal?.reason === "cancelled" ? "cancelled" : "shell";
+ }
+@@ -464,6 +469,10 @@ export class RemoteClient {
+     if (!this.connected) {
+       return { decision: "deny" };
+     }
++    if (isAborted(options.signal)) {
++      await this.closePrompt(approvalId, closeByFor(options.signal));
++      return { decision: "deny", approvalId };
++    }
+     return new Promise<ApprovalAnswer>((resolve) => {
+       const signal = options.signal;
+       const onAbort = (): void => {
+@@ -472,6 +481,8 @@ export class RemoteClient {
+         if (waiter !== undefined) clearTimeout(waiter.timer);
+         this.waiters.delete(approvalId);
+         resolve({ decision: "deny", approvalId });
++        // Flow 419: the buttons may still be in the topic; serve takes them down and says where it was answered.
++        void this.closePrompt(approvalId, closeByFor(signal));
+       };
+       const timer = setTimeout(() => {
+         signal?.removeEventListener("abort", onAbort);
+diff --git a/src/remote/command-busy.test.ts b/src/remote/command-busy.test.ts
+index 5d077c8f..4ebb56de 100644
+--- a/src/remote/command-busy.test.ts
++++ b/src/remote/command-busy.test.ts
+@@ -13,7 +13,7 @@ describe("commands the shell defers while busy (AC9)", () => {
+     }
+   });
+ 
+-  for (const line of ["/new", "/resume", "/sessions", "/compact", "/model"]) {
++  for (const line of ["/new", "/resume", "/sessions", "/compact"]) {
+     it(`${line} is refused with the shell's reason while a turn runs`, async () => {
+       const h = commandHarness({ busy: true });
+       await h.bridge.enable();
+diff --git a/src/remote/command-gateway.test.ts b/src/remote/command-gateway.test.ts
+index e2b9b732..52b9bb0c 100644
+--- a/src/remote/command-gateway.test.ts
++++ b/src/remote/command-gateway.test.ts
+@@ -22,7 +22,6 @@ const REFUSED_LINES: Array<[string, string]> = [
+   ["/setup", "setup"],
+   ["/mcp trust", "mcp"],
+   ["/guard", "guard"],
+-  ["/route", "route"],
+   ["/editguard", "editguard"],
+   ["/schedule", "schedule"],
+   ["/rewind", "rewind"],
+@@ -35,7 +34,7 @@ const REFUSED_LINES: Array<[string, string]> = [
+ 
+ /** Refused commands whose reason is written in the gateway's own switch, not in REMOTE_REFUSED. */
+ const INLINE_REASONS: Record<string, string> = {
+-  "remote-control": "it would delete this topic; turn it off in the shell",
++  "remote-control": "it would archive this topic; turn it off in the shell",
+   theme: "bare /theme opens a picker",
+   think: "use /think auto, expand or hide",
+ };
+diff --git a/src/remote/command-gateway.ts b/src/remote/command-gateway.ts
+index 8da13ee0..ce7e1173 100644
+--- a/src/remote/command-gateway.ts
++++ b/src/remote/command-gateway.ts
+@@ -64,6 +64,7 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
+   { name: "delegate", kind: "confirm", description: "Hand a paid task to an external agent: /delegate <agent> <task>; asks first" },
+   { name: "external", kind: "confirm", description: "Show or switch sending work to external providers; on and off ask first" },
+   { name: "external-agents", kind: "confirm", description: "Show or switch the external agent runtime; on and off ask first" },
++  { name: "route", kind: "confirm", description: "Show or switch model routing: /route [on|off]; on and off ask first" },
+ ];
+ 
+ /** Commands that are never run from the topic, each with the reason the topic is told. */
+@@ -74,14 +75,13 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
+   provider: "it asks for provider keys and addresses, which are never typed into a chat",
+   "search-provider": "it asks for provider keys, which are never typed into a chat",
+   "search-connect": "it changes where searches are sent",
+-  "remote-control": "turning remote control off would delete this topic, and its panel is local",
++  "remote-control": "turning remote control off would archive this topic, and its panel is local",
+   integrate: "it edits other tools' configuration on this machine",
+   copy: "it uses this machine's clipboard",
+   game: "it needs the shell's screen",
+   setup: "it asks for keys and changes the configuration",
+   mcp: "it can trust tools and change server connections; use the shell",
+   guard: "it changes a safety guard; use the shell",
+-  route: "it changes where work is routed; use the shell",
+   editguard: "it changes a safety guard; use the shell",
+   settings: "it edits settings, some of them secret; use the shell",
+   bus: "it talks to other agents on this machine",
+@@ -112,7 +112,13 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
+ };
+ 
+ /** The commands a shell refuses while a turn runs, when the host gives no better answer. */
+-export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect"];
++export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect", "route", "external", "external-agents"];
++
++/**
++ * Commands that are not refused while a turn runs but held: the topic is told they are queued, and each runs
++ * when main is idle (flow 419, AC4). Shell spelling. `/mode` is not here: the shell takes it at any moment.
++ */
++export const QUEUED_WHEN_BUSY_COMMANDS: readonly string[] = ["model", "route", "external", "external-agents"];
+ 
+ /** The reason the shell gives for a command it will not run during a turn. */
+ export const BUSY_REASON = "main is busy: command deferred";
+@@ -191,7 +197,7 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
+ 
+   if (canonical === "remote-control") {
+     const sub = args.split(/\s+/)[0]?.toLowerCase() ?? "";
+-    return refuse(canonical, sub === "off" ? "it would delete this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
++    return refuse(canonical, sub === "off" ? "it would archive this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
+   }
+   if (spec === undefined) {
+     if (refusedReason !== undefined) {
+@@ -242,6 +248,16 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
+         };
+       }
+       return first === "" ? { kind: "run", command: name, line: "/external" } : refuse(name, "use /external, /external on or /external off", true);
++    case "route":
++      if (first === "on" || first === "off") {
++        return {
++          kind: "confirm",
++          command: name,
++          line: `/route ${first}`,
++          summary: `Switch model routing ${first}? This changes which model answers each turn.`,
++        };
++      }
++      return first === "" ? { kind: "run", command: name, line: "/route" } : refuse(name, "use /route, /route on or /route off", true);
+     case "external-agents":
+       if (first === "on" || first === "off") {
+         return {
+@@ -303,6 +319,11 @@ export function isBusyDeferred(name: string): boolean {
+   return BUSY_DEFERRED_COMMANDS.includes(name);
+ }
+ 
++/** Whether a command from the topic waits for an idle main instead of being refused while a turn runs. */
++export function isQueuedWhenBusy(name: string): boolean {
++  return QUEUED_WHEN_BUSY_COMMANDS.includes(name);
++}
++
+ /** Every menu name is valid for Telegram; the test holds this. */
+ export function menuNamesAreValid(): boolean {
+   return REMOTE_COMMANDS.every((spec) => MENU_NAME.test(menuName(spec.name)));
+diff --git a/src/remote/command-model.test.ts b/src/remote/command-model.test.ts
+index 93617044..5ca998bc 100644
+--- a/src/remote/command-model.test.ts
++++ b/src/remote/command-model.test.ts
+@@ -124,16 +124,7 @@ describe("/model buttons (AC3)", () => {
+     expect(h.client().replies[0]).toContain("no models");
+   });
+ 
+-  it("is not run when the shell is busy", async () => {
+-    const h = commandHarness({ busy: true, listModels: async () => ({ provider: "acme", models: models(2) }), switchModel: async () => ({ output: "", ok: true }) });
+-    await h.bridge.enable();
+-    await h.say("/model");
+-    await h.bridge.idle();
+-    expect(h.client().choices).toEqual([]);
+-    expect(h.client().replies[0]).toContain("/model was not run");
+-  });
+-
+-  it("does not switch if the shell became busy while the picker was open", async () => {
++  it("does not switch while the shell is busy; it says so, and switches once the shell is idle (flow 419)", async () => {
+     const switched: Array<[string, string | undefined]> = [];
+     const h = withModels(3, { switched });
+     await h.bridge.enable();
+@@ -141,8 +132,11 @@ describe("/model buttons (AC3)", () => {
+     await waitFor(() => h.client().choices.length === 1, "the picker");
+     h.state.busy = true;
+     h.client().choices[0]?.answer(1);
+-    await h.bridge.idle();
++    await waitFor(() => h.client().replies.length === 1, "the queued notice");
+     expect(switched).toEqual([]);
+-    expect(h.client().replies[0]).toContain("/model was not run");
++    expect(h.client().replies[0]).toContain("is queued: main is busy");
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect(switched).toEqual([["m1", undefined]]);
+   });
+ });
+diff --git a/src/remote/command-queued.test.ts b/src/remote/command-queued.test.ts
+new file mode 100644
+index 00000000..8ed1bda1
+--- /dev/null
++++ b/src/remote/command-queued.test.ts
+@@ -0,0 +1,132 @@
++// Flow 419, AC4: /route, /external and /model from the topic take effect when main is idle and are queued, with a
++// notice in the topic, when main is busy. Nothing is refused for being busy, and nothing waits on the command line.
++
++import { describe, expect, it } from "bun:test";
++import { classifyRemoteCommand, QUEUED_WHEN_BUSY_COMMANDS, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from "./command-gateway";
++import { commandHarness, waitFor } from "./command.test-helpers";
++
++describe("the gateway (AC4)", () => {
++  it("no longer refuses /route, and puts it on the menu", () => {
++    expect(REMOTE_REFUSED.route).toBeUndefined();
++    expect(REMOTE_COMMANDS.some((spec) => spec.name === "route")).toBe(true);
++    expect(remoteMenu().some((entry) => entry.command === "route")).toBe(true);
++  });
++
++  it("/route shows at once, /route on and off ask first, anything else is refused", () => {
++    expect(classifyRemoteCommand("/route")).toEqual({ kind: "run", command: "route", line: "/route" });
++    for (const arg of ["on", "off"]) {
++      const decision = classifyRemoteCommand(`/route ${arg}`);
++      expect(decision.kind).toBe("confirm");
++      if (decision.kind === "confirm") expect(decision.line).toBe(`/route ${arg}`);
++    }
++    expect(classifyRemoteCommand("/route sideways").kind).toBe("refuse");
++  });
++
++  it("names the commands that wait for an idle main", () => {
++    expect([...QUEUED_WHEN_BUSY_COMMANDS].sort()).toEqual(["external", "external-agents", "model", "route"]);
++  });
++});
++
++describe("main idle", () => {
++  it("/route on runs after Yes", async () => {
++    const h = commandHarness();
++    await h.bridge.enable();
++    await h.say("/route on");
++    await waitFor(() => h.client().choices.length === 1, "the question");
++    h.client().choices[0]?.answer(0);
++    await h.bridge.idle();
++    expect(h.ran).toEqual(["/route on"]);
++    expect(h.client().replies.some((reply) => reply.includes("queued"))).toBe(false);
++  });
++});
++
++describe("main busy", () => {
++  it("/route on is queued with a notice, then runs when main goes idle", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/route on");
++    await waitFor(() => h.client().choices.length === 1, "the question");
++    h.client().choices[0]?.answer(0);
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("/route on is queued: main is busy")), "the queued notice");
++    expect(h.ran).toEqual([]);
++    expect(h.client().replies.join("\n")).not.toContain("was not run");
++
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect(h.ran).toEqual(["/route on"]);
++    expect(h.client().replies.at(-1)).toContain("ran /route on");
++  });
++
++  it("bare /external and /route are queued too, and both run", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/external");
++    await h.say("/route");
++    await waitFor(() => h.client().replies.filter((reply) => reply.includes("is queued")).length === 2, "both notices");
++    expect(h.ran).toEqual([]);
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect([...h.ran].sort()).toEqual(["/external", "/route"]);
++  });
++
++  it("a status question is not stuck behind a queued command", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/external");
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("is queued")), "the notice");
++    await h.say("/status");
++    await waitFor(() => h.ran.includes("/status"), "the status to run");
++    expect(h.ran).toEqual(["/status"]);
++    h.state.busy = false;
++    await h.bridge.idle();
++  });
++
++  it("/model shows its buttons while busy and the switch waits for an idle main", async () => {
++    const switched: string[] = [];
++    const h = commandHarness({
++      busy: true,
++      listModels: async () => ({
++        provider: "acme",
++        models: [
++          { id: "m0", label: "Model 0", current: true },
++          { id: "m1", label: "Model 1" },
++        ],
++      }),
++      switchModel: async (id) => {
++        switched.push(id);
++        return { output: `Model: ${id}`, ok: true };
++      },
++    });
++    await h.bridge.enable();
++    await h.say("/model");
++    await waitFor(() => h.client().choices.length === 1, "the picker");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("is queued: main is busy")), "the queued notice");
++    expect(switched).toEqual([]);
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect(switched).toEqual(["m1"]);
++    expect(h.client().replies.at(-1)).toContain("Model: m1");
++  });
++
++  it("a command held too long is dropped and the topic is told", async () => {
++    const h = commandHarness({ busy: true, queuedCommandLimitMs: 30 });
++    await h.bridge.enable();
++    await h.say("/external");
++    await h.bridge.idle();
++    expect(h.ran).toEqual([]);
++    expect(h.client().replies.at(-1)).toContain("main stayed busy");
++  });
++
++  it("a command held when remote control goes off is dropped quietly", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/external");
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("is queued")), "the notice");
++    await h.bridge.disable();
++    await h.bridge.idle();
++    h.state.busy = false;
++    await new Promise((resolve) => setTimeout(resolve, 30));
++    expect(h.ran).toEqual([]);
++  });
++});
+diff --git a/src/remote/command-router.ts b/src/remote/command-router.ts
+index bc3d21c7..da9c217f 100644
+--- a/src/remote/command-router.ts
++++ b/src/remote/command-router.ts
+@@ -15,6 +15,7 @@ import {
+   classifyRemoteCommand,
+   type GatewayDecision,
+   isBusyDeferred,
++  isQueuedWhenBusy,
+   refusalText,
+   remoteHelpText,
+ } from "./command-gateway";
+@@ -89,9 +90,19 @@ export interface RouterLimits {
+   commandLimitMs: number;
+   /** How long a picker or a Yes/No waits for a press. */
+   choiceTimeoutMs: number;
++  /** How often a command held for an idle main looks again (flow 419, AC4). */
++  idlePollMs?: number;
++  /** After this long a held command is dropped, and the topic is told. */
++  queuedCommandLimitMs?: number;
+ }
+ 
+-export const DEFAULT_ROUTER_LIMITS: RouterLimits = { runningNoticeMs: 4_000, commandLimitMs: 120_000, choiceTimeoutMs: 120_000 };
++export const DEFAULT_ROUTER_LIMITS: RouterLimits = {
++  runningNoticeMs: 4_000,
++  commandLimitMs: 120_000,
++  choiceTimeoutMs: 120_000,
++  idlePollMs: 250,
++  queuedCommandLimitMs: 30 * 60_000,
++};
+ 
+ /** The most items on one picker page; with the navigation row this stays within the eight rows a keyboard may have. */
+ export const PICKER_PAGE_SIZE = 7;
+@@ -106,6 +117,8 @@ export interface RouterContext {
+   host: RemoteCommandHost;
+   /** Send text to the topic. False when it could not be sent. */
+   reply(text: string): Promise<boolean>;
++  /** False once remote control is off: a command held for an idle main is dropped. Absent: always live. */
++  live?(): boolean;
+   /**
+    * `/history [N]` (flow 399): post the session's last messages to the topic. Resolves with the one
+    * line to answer with when nothing was posted (usage, empty history), undefined when the messages went out.
+@@ -261,11 +274,50 @@ export class RemoteCommandRouter {
+ 
+   /** Put a run on the line. Used by the gateway's `run` and by an answered Yes/No. */
+   enqueue(line: string, command: string, end?: CommandEnd): void {
++    if (isQueuedWhenBusy(command) && this.busyReason(line, command) !== undefined) {
++      this.detach(async () => {
++        if (await this.awaitIdle(line, command)) {
++          this.enqueueNow(line, command, end);
++        } else {
++          ended(end, "failed");
++        }
++      });
++      return;
++    }
++    this.enqueueNow(line, command, end);
++  }
++
++  private enqueueNow(line: string, command: string, end?: CommandEnd): void {
+     this.chain = this.chain
+       .then(() => this.execute(command, line, async () => (this.ctx.host.runCommand === undefined ? undefined : this.ctx.host.runCommand(line)), end))
+       .catch(() => undefined);
+   }
+ 
++  /**
++   * Flow 419, AC4: main is busy and the command is one the shell would defer. Say it is queued, then wait
++   * until main is idle. Resolves true when it is, false when the wait was given up (the topic was told or
++   * is gone). Never on the line, so a status question or a stop is not stuck behind it.
++   */
++  private async awaitIdle(line: string, command: string): Promise<boolean> {
++    this.ctx.record(`/${command} queued: main is busy`);
++    await this.ctx.reply(this.ctx.compose(`${line} is queued: main is busy. It runs when main is idle.`)).catch(() => false);
++    const { idlePollMs = 250, queuedCommandLimitMs = 30 * 60_000 } = this.ctx.limits;
++    const until = Date.now() + queuedCommandLimitMs;
++    while (this.ctx.host.isBusy()) {
++      if (this.ctx.live?.() === false) {
++        this.ctx.record(`${line} dropped: remote control went off while it waited`);
++        return false;
++      }
++      if (Date.now() >= until) {
++        this.ctx.record(`${line} dropped: main stayed busy`);
++        await this.ctx.reply(`${line} was not run: main stayed busy for ${Math.max(1, Math.round(queuedCommandLimitMs / 60_000))} minutes. Send it again when the run ends.`).catch(() => false);
++        return false;
++      }
++      await new Promise<void>((resolve) => setTimeout(resolve, idlePollMs));
++    }
++    return true;
++  }
++
+   /** Run `work` after everything already on the line, and hold the line until it settles. */
+   private serial<T>(work: () => Promise<T>): Promise<T> {
+     const run = this.chain.then(work);
+@@ -460,7 +512,8 @@ export class RemoteCommandRouter {
+   private async picker(command: string, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
+     const line = `/${command}`;
+     const busy = this.busyReason(line, command);
+-    if (busy !== undefined) {
++    // A model picker is shown even while main is busy; only the switch itself waits for an idle main.
++    if (busy !== undefined && !isQueuedWhenBusy(command)) {
+       this.ctx.record(`${line} not run: ${busy}`);
+       await this.ctx.reply(`${line} was not run: ${busy}.`).catch(() => false);
+       return "failed";
+@@ -502,6 +555,9 @@ export class RemoteCommandRouter {
+       return "failed";
+     }
+     const switchModel = host.switchModel.bind(host);
++    if (this.busyReason("/model", "model") !== undefined && !(await this.awaitIdle(`/model ${chosen.label.replace(/^\* /, "")}`, "model"))) {
++      return "failed";
++    }
+     // On the same line as every other command: a switch never overlaps one that is still executing.
+     const switched = await this.serial(async (): Promise<CommandOutcome | { busy: string }> => {
+       const busy = this.busyReason("/model", "model");
+diff --git a/src/remote/command.test-helpers.ts b/src/remote/command.test-helpers.ts
+index 5d3555ab..ff9e79f5 100644
+--- a/src/remote/command.test-helpers.ts
++++ b/src/remote/command.test-helpers.ts
+@@ -37,10 +37,16 @@ export interface CommandHarnessOptions {
+   listSessions?: RemoteBridgeHost["listSessions"];
+   resumeSession?: RemoteBridgeHost["resumeSession"];
+   choiceTimeoutMs?: number;
++  idlePollMs?: number;
++  queuedCommandLimitMs?: number;
+   /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
+   runTimeoutMs?: number;
+   /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */
+   refuseChoice?: string;
++  progressIntervalMs?: number;
++  progressToolThreshold?: number;
++  sessionState?: RemoteBridgeHost["sessionState"];
++  turnRunning?: RemoteBridgeHost["turnRunning"];
+   /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */
+   askApproval?: NonNullable<RemoteClientLike["askApproval"]>;
+ }
+@@ -70,6 +76,8 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
+             return (opts.runCommand as (line: string) => Promise<CommandOutcome>)(line);
+           },
+     ...(opts.busyRefusal !== undefined ? { busyRefusal: opts.busyRefusal } : {}),
++    ...(opts.sessionState !== undefined ? { sessionState: opts.sessionState } : {}),
++    ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),
+     ...(opts.listModels !== undefined ? { listModels: opts.listModels } : {}),
+     ...(opts.switchModel !== undefined ? { switchModel: opts.switchModel } : {}),
+     ...(opts.listProviders !== undefined ? { listProviders: opts.listProviders } : {}),
+@@ -84,6 +92,10 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
+     ...(opts.runningNoticeMs !== undefined ? { commandRunningNoticeMs: opts.runningNoticeMs } : {}),
+     ...(opts.commandLimitMs !== undefined ? { commandLimitMs: opts.commandLimitMs } : {}),
+     ...(opts.choiceTimeoutMs !== undefined ? { choiceTimeoutMs: opts.choiceTimeoutMs } : {}),
++    idlePollMs: opts.idlePollMs ?? 5,
++    ...(opts.progressIntervalMs !== undefined ? { progressIntervalMs: opts.progressIntervalMs } : {}),
++    ...(opts.progressToolThreshold !== undefined ? { progressToolThreshold: opts.progressToolThreshold } : {}),
++    ...(opts.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: opts.queuedCommandLimitMs } : {}),
+     makeClient: (options: RemoteClientOptions) => {
+       const startResult: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0 };
+       const fake = {
+diff --git a/src/remote/fake-bot-api.ts b/src/remote/fake-bot-api.ts
+index 39bdd85d..6f0a5531 100644
+--- a/src/remote/fake-bot-api.ts
++++ b/src/remote/fake-bot-api.ts
+@@ -125,6 +125,7 @@ export type FakeMethod =
+   | "sendChatAction"
+   | "createForumTopic"
+   | "deleteForumTopic"
++  | "closeForumTopic"
+   | "editForumTopic"
+   | "answerCallbackQuery"
+   | "getMe"
+@@ -157,6 +158,8 @@ export class FakeBotApi implements BotApi {
+   myCommands: BotCommandMenuEntry[] = [];
+   readonly myCommandsCalls: BotCommandMenuEntry[][] = [];
+   readonly deletedTopics: { chatId: number; messageThreadId: number }[] = [];
++  /** Topics the bot closed (archived); they stay in `liveTopics` with their messages. */
++  readonly closedTopics: { chatId: number; messageThreadId: number }[] = [];
+   readonly renamedTopics: { messageThreadId: number; name: string }[] = [];
+   /** Every call, in order, by client label. */
+   readonly calls: { method: FakeMethod; label: string }[] = [];
+@@ -209,6 +212,7 @@ export class FakeBotApi implements BotApi {
+       sendChatAction: (params) => this.chatActionFor(label, params),
+       createForumTopic: (params) => this.createTopicFor(label, params),
+       deleteForumTopic: (params) => this.deleteTopicFor(label, params),
++      closeForumTopic: (params) => this.closeTopicFor(label, params),
+       editForumTopic: (params) => this.editTopicFor(label, params),
+       answerCallbackQuery: (params) => this.answerFor(label, params),
+       getMe: () => this.getMeFor(label),
+@@ -441,6 +445,10 @@ export class FakeBotApi implements BotApi {
+     return this.defaultClient.deleteForumTopic(params);
+   }
+ 
++  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {
++    return this.defaultClient.closeForumTopic(params);
++  }
++
+   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
+     return this.defaultClient.editForumTopic(params);
+   }
+@@ -807,6 +815,14 @@ export class FakeBotApi implements BotApi {
+     this.deletedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
+   }
+ 
++  private async closeTopicFor(label: string, params: { chatId: number; messageThreadId: number }): Promise<void> {
++    this.begin("closeForumTopic", label);
++    if (!this.liveTopics.has(params.messageThreadId)) {
++      throw rejected("closeForumTopic", 400, "Bad Request: message thread not found");
++    }
++    this.closedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
++  }
++
+   private async editTopicFor(label: string, params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
+     this.begin("editForumTopic", label);
+     const topic = this.liveTopics.get(params.messageThreadId);
+diff --git a/src/remote/history.ts b/src/remote/history.ts
+index 86f60738..d0f6fdc0 100644
+--- a/src/remote/history.ts
++++ b/src/remote/history.ts
+@@ -1,6 +1,6 @@
+ // What the topic gets back when it asks for the session's history (flow 399).
+ //
+-// A topic is deleted when the shell exits, and a resumed session gets a new, empty one. The
++// A topic is archived when the shell exits, and a resumed session gets a new, empty one. The
+ // operator wants the last few messages of the conversation there again: what they wrote and
+ // what the agent answered. Pure functions only; the bridge does the sending.
+ //
+diff --git a/src/remote/http-surface.ts b/src/remote/http-surface.ts
+index c5f4e51d..142ff7ea 100644
+--- a/src/remote/http-surface.ts
++++ b/src/remote/http-surface.ts
+@@ -47,6 +47,8 @@ import {
+   choiceCallbackData,
+   DEFAULT_ACK_TIMEOUT_MS,
+   DEFAULT_APPROVAL_ACK_MS,
++  DEFAULT_PROMPT_REMINDER_MS,
++  MAX_PROMPT_REMINDERS,
+   DEFAULT_APPROVAL_TIMEOUT_MS,
+   DEFAULT_KEEPALIVE_MS,
+   encodeSseEvent,
+@@ -112,6 +114,8 @@ export interface RemoteSurfaceOptions {
+   ackTimeoutMs?: number;
+   /** How long a pressed approval waits for the shell to confirm it received the decision (flow 397). */
+   approvalAckMs?: number;
++  /** Flow 419: how long an unanswered approval or question waits before the topic is reminded of it. */
++  reminderMs?: number;
+   /** Test seam: the approval id generator. Must produce `ap` and 12 lowercase hex characters. */
+   approvalIds?: () => string;
+   /** Test seam: the choice prompt id generator. Must produce `pk` and 12 lowercase hex characters. */
+@@ -254,6 +258,9 @@ interface PendingApproval {
+   text?: string;
+   /** The pattern an "Always" press would remember (flow 396), as shown in the topic. Absent: no Always button. */
+   remember?: string;
++  /** Flow 419: the pending reminder, and how many were already posted. */
++  reminder?: unknown;
++  reminded?: number;
+ }
+ 
+ /**
+@@ -362,6 +369,7 @@ export class RemoteHttpSurface {
+   private readonly keepaliveMs: number;
+   private readonly ackTimeoutMs: number;
+   private readonly approvalAckMs: number;
++  private readonly reminderMs: number;
+   private readonly newApprovalId: () => string;
+   private readonly newPromptId: () => string;
+   private readonly streams = new Map<string, ShellStream>();
+@@ -386,6 +394,7 @@ export class RemoteHttpSurface {
+     this.keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
+     this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
+     this.approvalAckMs = options.approvalAckMs ?? DEFAULT_APPROVAL_ACK_MS;
++    this.reminderMs = options.reminderMs ?? DEFAULT_PROMPT_REMINDER_MS;
+     this.newApprovalId = options.approvalIds ?? (() => `ap${randomBytes(6).toString("hex")}`);
+     this.newPromptId = options.promptIds ?? (() => `pk${randomBytes(6).toString("hex")}`);
+     this.consumer = {
+@@ -719,6 +728,7 @@ export class RemoteHttpSurface {
+       timer: this.timers.setTimeout(() => this.expireApproval(approvalId), timeoutMs),
+       ...(remember === undefined ? {} : { remember }),
+     });
++    this.scheduleReminder("approval", approvalId);
+     // The operator approves what is shown, so the prompt goes out as a code block: nothing in it is read as markup.
+     const offer = remember === undefined ? "" : `\nAlways would remember:\n${asCodeBlock(remember)}`;
+     const sent = await hub.send(sessionId, `Approval needed:\n${asCodeBlock(redactSensitiveText(value.prompt))}${offer}`, {
+@@ -862,6 +872,7 @@ export class RemoteHttpSurface {
+       ...(own ? { own: true } : {}),
+       timer: this.timers.setTimeout(() => this.expireChoice(promptId), timeoutMs),
+     });
++    this.scheduleReminder("question", promptId);
+     const keyboard: InlineKeyboard = [];
+     let position = 0;
+     for (const width of layout) {
+@@ -900,12 +911,15 @@ export class RemoteHttpSurface {
+     if (!isSessionId(value.sessionId)) {
+       return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+     }
+-    if (typeof value.promptId !== "string" || !isPromptId(value.promptId)) {
+-      return invalid("promptId must be a prompt id this serve issued.");
++    if (typeof value.promptId !== "string" || !(isPromptId(value.promptId) || isApprovalId(value.promptId))) {
++      return invalid("promptId must be a prompt or approval id this serve issued.");
+     }
+     if (value.by !== undefined && value.by !== "shell" && value.by !== "cancelled") {
+       return invalid("by must be 'shell' or 'cancelled'.");
+     }
++    if (isApprovalId(value.promptId)) {
++      return this.closeApproval(value.promptId, value.sessionId, value.by);
++    }
+     const entry = this.choices.get(value.promptId);
+     if (entry === undefined || entry.sessionId !== value.sessionId) {
+       const done = this.finished.get(value.promptId);
+@@ -929,6 +943,27 @@ export class RemoteHttpSurface {
+     return ok({ closed: true });
+   }
+ 
++  /**
++   * Flow 419: the shell answered an approval at the keyboard (or the turn stopped) while the buttons were
++   * still in the topic. The buttons go away and the message says where it was answered. An approval that was
++   * already pressed in the topic is left alone: that press is the answer and is being delivered.
++   */
++  private closeApproval(approvalId: string, sessionId: string, by: "shell" | "cancelled" | undefined): Response {
++    const entry = this.approvals.get(approvalId);
++    if (entry === undefined || entry.sessionId !== sessionId) {
++      return ok({ closed: false });
++    }
++    this.dropApproval(approvalId);
++    this.rememberDecided(approvalId, sessionId);
++    const when = clockText(this.now());
++    const answered = by !== "cancelled";
++    this.finishApproval(approvalId, sessionId, entry.messageId, entry.text, {
++      result: answered ? `Answered in the shell at ${when}.` : `Cancelled at ${when}: the request is no longer open.`,
++      shortReply: answered ? "Answered in the shell." : "That approval is no longer open.",
++    });
++    return ok({ closed: true });
++  }
++
+   /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */
+   private async messageState(hub: RemoteHub, request: Request): Promise<Response> {
+     const body = await readJsonBody(request);
+@@ -1467,6 +1502,7 @@ export class RemoteHttpSurface {
+       return;
+     }
+     this.timers.clearTimeout(entry.timer);
++    this.timers.clearTimeout(entry.reminder);
+     this.choices.delete(promptId);
+     if (entry.armedReplyId !== undefined) {
+       const armed = this.armedOwn.get(entry.armedReplyId);
+@@ -1554,6 +1590,7 @@ export class RemoteHttpSurface {
+       return;
+     }
+     this.timers.clearTimeout(entry.timer);
++    this.timers.clearTimeout(entry.reminder);
+     this.approvals.delete(approvalId);
+   }
+ 
+@@ -1592,12 +1629,39 @@ export class RemoteHttpSurface {
+     });
+   }
+ 
++  /** Flow 419, AC3: arm the next reminder for an approval or question that is still open. */
++  private scheduleReminder(kind: "approval" | "question", id: string): void {
++    const entry = kind === "approval" ? this.approvals.get(id) : this.choices.get(id);
++    if (entry === undefined || (entry.reminded ?? 0) >= MAX_PROMPT_REMINDERS || this.reminderMs <= 0) {
++      return;
++    }
++    entry.reminder = this.timers.setTimeout(() => this.remind(kind, id), this.reminderMs);
++  }
++
++  private remind(kind: "approval" | "question", id: string): void {
++    const entry = kind === "approval" ? this.approvals.get(id) : this.choices.get(id);
++    const hub = this.hub;
++    if (entry === undefined || hub === undefined || this.closed) {
++      return;
++    }
++    entry.reminded = (entry.reminded ?? 0) + 1;
++    const left = entry.expiresAt - this.now();
++    const what = kind === "approval" ? "An approval is" : "A question is";
++    const topic = reminderExcerpt(entry.text);
++    const ends = left > 0 ? ` It expires at ${clockText(entry.expiresAt)}.` : "";
++    void hub
++      .send(entry.sessionId, `Reminder: ${what} still waiting for an answer here${topic === "" ? "" : `: ${topic}`}.${ends} The buttons are on the message above.`)
++      .catch(() => undefined);
++    this.scheduleReminder(kind, id);
++  }
++
+   private expireApproval(approvalId: string): void {
+     const entry = this.approvals.get(approvalId);
+     if (entry === undefined) {
+       return;
+     }
+     this.timers.clearTimeout(entry.timer);
++    this.timers.clearTimeout(entry.reminder);
+     this.approvals.delete(approvalId);
+     this.finishApproval(approvalId, entry.sessionId, entry.messageId, entry.text, {
+       result: `Expired at ${clockText(this.now())}: no answer, so it was denied.`,
+@@ -1658,6 +1722,17 @@ export class RemoteHttpSurface {
+   }
+ }
+ 
++/** The first line of what was asked, for a reminder: no fences, no label, cut short. */
++export function reminderExcerpt(text: string | undefined): string {
++  const line =
++    (text ?? "")
++      .split("\n")
++      .map((part) => part.replace(/^`{3,}.*$/, "").replace(/^Approval needed:\s*/, "").trim())
++      .find((part) => part.length > 0) ?? "";
++  const flat = line.replace(/\s+/g, " ");
++  return flat.length <= 80 ? flat : `${flat.slice(0, 79)}…`;
++}
++
+ /** The button for an "Always" offer: the pattern, cut to Telegram's button length. */
+ export function alwaysButtonText(pattern: string): string {
+   const text = `Always: ${pattern.replace(/\s+/g, " ")}`;
+diff --git a/src/remote/hub.ts b/src/remote/hub.ts
+index b0f79799..5d60099c 100644
+--- a/src/remote/hub.ts
++++ b/src/remote/hub.ts
+@@ -110,6 +110,8 @@ export type RemoteEventType =
+   | "topic-renamed"
+   | "topic-deleted"
+   | "topic-delete-failed"
++  | "topic-archived"
++  | "topic-close-failed"
+   | "session-unavailable"
+   | "session-returned"
+   | "sender-refused"
+@@ -468,7 +470,7 @@ export class RemoteHub {
+       if (record === undefined) {
+         return { ok: true as const, existed: false };
+       }
+-      await this.retire(record, "closed by the session");
++      await this.archive(record, "The session was closed.");
+       return { ok: true as const, existed: true };
+     });
+   }
+@@ -531,7 +533,7 @@ export class RemoteHub {
+     });
+   }
+ 
+-  /** Mark stale heartbeats unavailable and delete topics whose orphan timeout has run out. */
++  /** Mark stale heartbeats unavailable and archive topics whose orphan timeout has run out. */
+   sweep(): Promise<void> {
+     return this.serial(async () => {
+       const now = this.now();
+@@ -554,12 +556,12 @@ export class RemoteHub {
+           if (now - record.unavailableSince < this.config.orphanMs) {
+             this.queueStatus(
+               record,
+-              `Session unavailable: the shell stopped responding. This topic is deleted in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
++              `Session unavailable: the shell stopped responding. This topic is archived in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
+             );
+           }
+         }
+         if (record.status === "unavailable" && record.unavailableSince !== undefined && now - record.unavailableSince >= this.config.orphanMs) {
+-          await this.retire(record, "orphan timeout");
++          await this.archive(record, "The shell stopped responding and did not return.");
+         }
+       }
+       await this.flushOutbound();
+@@ -923,6 +925,7 @@ export class RemoteHub {
+   private markLive(record: RemoteSessionRecord): void {
+     record.status = "live";
+     delete record.unavailableSince;
++    delete record.closing;
+   }
+ 
+   private queueStatus(record: RemoteSessionRecord, text: string): void {
+@@ -1009,6 +1012,39 @@ export class RemoteHub {
+     return { ok: true, name, threadId: record.threadId, reused: false };
+   }
+ 
++  /**
++   * End a session's topic without deleting it (flow 419): a closing note goes in, the topic is closed,
++   * and its messages stay readable. The record is forgotten, so a later session starts a new topic.
++   * A transient failure leaves an ownerless, already-expired record behind so the next sweep retries
++   * the close; the closing note is queued once.
++   */
++  private async archive(record: RemoteSessionRecord, reason: string): Promise<void> {
++    this.stopTyping(record);
++    if (record.closing !== true) {
++      record.closing = true;
++      this.queueStatus(record, `${reason} This topic is archived: the history stays here and nothing more will be posted. A new session opens a new topic.`);
++      this.registry.save();
++    }
++    await this.flushOutbound();
++    try {
++      await this.api.closeForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
++    } catch (error) {
++      if (isBotApiError(error) && isRetryable(error)) {
++        record.sessionId = "";
++        record.status = "unavailable";
++        record.unavailableSince = this.now() - this.config.orphanMs;
++        this.registry.save();
++        this.event("topic-close-failed", `${record.name}: ${describeError(error)}`);
++        return;
++      }
++      // A refusal (the topic is gone, or already closed) leaves nothing to close.
++    }
++    this.inbound.remove(nameKey(record.name));
++    this.registry.remove(record.name);
++    this.registry.save();
++    this.event("topic-archived", `${record.name}: ${reason}`);
++  }
++
+   /**
+    * Delete a record's topic and forget it. A topic that is already gone counts
+    * as deleted; a transient failure leaves an ownerless, already-expired record
+diff --git a/src/remote/lifecycle.test.ts b/src/remote/lifecycle.test.ts
+index e6d4cca5..90fa7ea1 100644
+--- a/src/remote/lifecycle.test.ts
++++ b/src/remote/lifecycle.test.ts
+@@ -1,8 +1,9 @@
+ // AC1: a session registers, gets a topic, exchanges messages with it, and the
+-// topic is deleted when the session deregisters.
++// topic is archived (a closing note, closed, history kept) when the session deregisters.
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+-import { type Harness, makeHarness, OWNER_ID, until } from "./remote.test-helpers";
++import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
++import { type Harness, makeHarness, OWNER_ID, STALE_MS, until } from "./remote.test-helpers";
+ 
+ let h: Harness;
+ afterEach(async () => {
+@@ -48,7 +49,7 @@ describe("remote session lifecycle", () => {
+     expect(await hub.send("unknown-session", "nobody home")).toBe(false);
+   });
+ 
+-  test("deregister deletes the topic and later messages in it are ignored", async () => {
++  test("deregister archives the topic with a closing note and later messages in it are ignored", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/work/app" });
+@@ -56,8 +57,10 @@ describe("remote session lifecycle", () => {
+     await hub.start();
+ 
+     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: true });
+-    expect(h.api.topics()).toEqual([]);
+-    expect(h.api.deletedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
++    expect(h.api.topics().map((t) => t.messageThreadId)).toEqual([reg.threadId]);
++    expect(h.api.deletedTopics).toEqual([]);
++    expect(h.api.closedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
++    expect(h.api.sentTo(reg.threadId).map((m) => m.text).some((t) => /history stays here/i.test(t))).toBe(true);
+     expect(hub.list()).toEqual([]);
+ 
+     h.api.pushMessage({ fromId: OWNER_ID, text: "anyone?", threadId: reg.threadId });
+@@ -66,6 +69,31 @@ describe("remote session lifecycle", () => {
+     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: false });
+   });
+ 
++  test("flow 419 AC7: topic and history survive a shell that exits and a shell that is killed with Ctrl+C", async () => {
++    h = makeHarness();
++    const hub = h.makeHub();
++    const exits = await hub.register({ sessionId: "sess-exit-0001", project: "/work/app", name: "exits" });
++    const killed = await hub.register({ sessionId: "sess-kill-0002", project: "/work/app", name: "killed" });
++    if (!exits.ok || !killed.ok) throw new Error("register failed");
++    await hub.start();
++    await hub.send("sess-exit-0001", "first reply");
++    await hub.send("sess-kill-0002", "second reply");
++
++    // An orderly exit deregisters. A Ctrl+C sends nothing: serve only notices the silence.
++    await hub.deregister("sess-exit-0001");
++    await h.clock.advance(STALE_MS);
++    await h.clock.advance(10 * 60_000 + SESSION_LEASE_HEARTBEAT_MS);
++    await until(() => h.api.closedTopics.length === 2, "both topics archived");
++
++    expect(h.api.deletedTopics).toEqual([]);
++    for (const thread of [exits.threadId, killed.threadId]) {
++      expect(h.api.topic(thread)).toBeDefined();
++      expect(h.api.sentTo(thread).some((m) => /history stays here/i.test(m.text))).toBe(true);
++    }
++    expect(h.api.sentTo(exits.threadId).map((m) => m.text)).toContain("first reply");
++    expect(h.api.sentTo(killed.threadId).map((m) => m.text)).toContain("second reply");
++  });
++
+   test("a heartbeat from an unregistered session is refused with a reason", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+diff --git a/src/remote/orphan.test.ts b/src/remote/orphan.test.ts
+index 89d2fcc2..7c78405d 100644
+--- a/src/remote/orphan.test.ts
++++ b/src/remote/orphan.test.ts
+@@ -1,6 +1,6 @@
+ // AC6: orphaned sessions. A shell that stops heartbeating is announced as
+-// unavailable in its topic; the topic is deleted after the orphan timeout; the
+-// same name returning before then takes the topic back.
++// unavailable in its topic; the topic is archived (closed, history kept) after the
++// orphan timeout; the same name returning before then takes the topic back.
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+ import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
+@@ -27,7 +27,7 @@ function texts(threadId: number): string[] {
+ }
+ 
+ describe("orphaned sessions", () => {
+-  test("a silent session is announced, kept for the orphan timeout, then its topic is deleted", async () => {
++  test("a silent session is announced, kept for the orphan timeout, then its topic is archived, not deleted", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
+@@ -43,9 +43,11 @@ describe("orphaned sessions", () => {
+     expect(h.api.topic(reg.threadId)).toBeDefined();
+ 
+     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
+-    await until(() => h.api.topic(reg.threadId) === undefined, "topic deleted");
++    await until(() => h.api.closedTopics.length === 1, "topic archived");
++    expect(h.api.topic(reg.threadId)).toBeDefined();
++    expect(h.api.deletedTopics).toEqual([]);
++    expect(texts(reg.threadId).some((t) => /history stays here/i.test(t))).toBe(true);
+     expect(hub.list()).toEqual([]);
+-    expect(h.api.deletedTopics).toHaveLength(1);
+   });
+ 
+   test("the notice says how long the topic is kept", async () => {
+@@ -66,7 +68,7 @@ describe("orphaned sessions", () => {
+     if (!reg.ok) throw new Error("register failed");
+     await hub.start();
+     await h.clock.advance(STALE_MS + 30_000);
+-    await until(() => h.api.topic(reg.threadId) === undefined, "topic deleted after 30 s");
++    await until(() => h.api.closedTopics.length === 1, "topic archived after 30 s");
+   });
+ 
+   test("a heartbeat inside the window brings the session back and cancels deletion", async () => {
+@@ -113,7 +115,7 @@ describe("orphaned sessions", () => {
+     if (!first.ok) throw new Error("register failed");
+     await hub.start();
+     await h.clock.advance(STALE_MS + ORPHAN_MS + SESSION_LEASE_HEARTBEAT_MS);
+-    await until(() => h.api.topic(first.threadId) === undefined, "topic deleted");
++    await until(() => h.api.closedTopics.length === 1, "topic archived");
+ 
+     const again = await hub.register({ sessionId: "sess-two-0002", project: "/w/app", name: "release" });
+     expect(again.ok).toBe(true);
+@@ -141,21 +143,22 @@ describe("orphaned sessions", () => {
+     expect(h.deliveries[0]?.line).toBe("are you there");
+   });
+ 
+-  test("a topic that cannot be deleted right now is retried by the next sweep", async () => {
++  test("a topic that cannot be closed right now is retried by the next sweep, with one closing note", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
+     if (!reg.ok) throw new Error("register failed");
+     await hub.start();
+-    h.api.failNext("deleteForumTopic", new BotApiError("network", "deleteForumTopic: request failed"));
++    h.api.failNext("closeForumTopic", new BotApiError("network", "closeForumTopic: request failed"));
+ 
+     await h.clock.advance(STALE_MS + ORPHAN_MS);
+-    await until(() => hub.events().some((e) => e.type === "topic-delete-failed"), "failed deletion");
+-    expect(h.api.topic(reg.threadId)).toBeDefined();
++    await until(() => hub.events().some((e) => e.type === "topic-close-failed"), "failed close");
++    expect(h.api.closedTopics).toEqual([]);
+ 
+     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
+-    await until(() => h.api.topic(reg.threadId) === undefined, "retried deletion");
++    await until(() => h.api.closedTopics.length === 1, "retried close");
+     expect(hub.list()).toEqual([]);
++    expect(texts(reg.threadId).filter((t) => /history stays here/i.test(t))).toHaveLength(1);
+   });
+ 
+   test("a clock that jumps back does not orphan a live session, nor keep a dead one forever", async () => {
+diff --git a/src/remote/progress-notes.test.ts b/src/remote/progress-notes.test.ts
+new file mode 100644
+index 00000000..c46d7644
+--- /dev/null
++++ b/src/remote/progress-notes.test.ts
+@@ -0,0 +1,307 @@
++// Flow 419, AC5: progress notes at wave boundaries and tool-heavy steps, at most one per interval, never raw
++// tool output. AC6: a status question from the topic is answered from session state while a turn runs.
++
++import { describe, expect, it } from "bun:test";
++import { commandHarness, waitFor } from "./command.test-helpers";
++import { describeStatus, formatElapsed, isStatusQuestion, ProgressNotes } from "./progress-notes";
++
++interface Clock {
++  at: number;
++  timers: Array<{ at: number; run: () => void; live: boolean }>;
++  advance(ms: number): void;
++}
++
++function clock(): Clock {
++  const c: Clock = {
++    at: 1_000_000,
++    timers: [],
++    advance(ms) {
++      const target = c.at + ms;
++      for (;;) {
++        const due = c.timers.filter((t) => t.live && t.at <= target).sort((a, b) => a.at - b.at)[0];
++        if (due === undefined) break;
++        c.at = due.at;
++        due.live = false;
++        due.run();
++      }
++      c.at = target;
++    },
++  };
++  return c;
++}
++
++function notes(options: { intervalMs?: number; toolThreshold?: number } = {}) {
++  const c = clock();
++  const sent: string[] = [];
++  const progress = new ProgressNotes({
++    intervalMs: options.intervalMs ?? 60_000,
++    toolThreshold: options.toolThreshold ?? 3,
++    now: () => c.at,
++    send: (text) => sent.push(text),
++    setTimer: (run, ms) => {
++      const timer = { at: c.at + ms, run, live: true };
++      c.timers.push(timer);
++      return timer;
++    },
++    clearTimer: (handle) => {
++      (handle as { live: boolean }).live = false;
++    },
++  });
++  return { c, sent, progress };
++}
++
++describe("tool-heavy steps", () => {
++  it("say nothing for a few calls, then one note with counts and tool names", () => {
++    const { sent, progress } = notes();
++    progress.begin();
++    progress.tool("read_file");
++    progress.tool("read_file");
++    expect(sent).toEqual([]);
++    progress.tool("shell_exec");
++    expect(sent).toHaveLength(1);
++    expect(sent[0]).toContain("Still working: 3 tool calls");
++    expect(sent[0]).toContain("read_file, shell_exec");
++  });
++
++  it("never carries a tool's input or output: only names and counts", () => {
++    const { sent, progress } = notes({ toolThreshold: 1 });
++    progress.begin();
++    progress.tool("shell_exec");
++    expect(sent[0]).not.toMatch(/sk-|rm -rf|stdout|\/home\//);
++    expect(sent[0]).toMatch(/^Still working: 1 tool calls/);
++  });
++
++  it("keep to one note per interval and send the held one when the interval ends", () => {
++    const { c, sent, progress } = notes();
++    progress.begin();
++    for (let i = 0; i < 3; i += 1) progress.tool("a");
++    expect(sent).toHaveLength(1);
++    for (let i = 0; i < 20; i += 1) progress.tool("b");
++    expect(sent).toHaveLength(1);
++    c.advance(59_000);
++    expect(sent).toHaveLength(1);
++    c.advance(1_000);
++    expect(sent).toHaveLength(2);
++    expect(sent[1]).toContain("20 tool calls");
++    c.advance(10 * 60_000);
++    expect(sent).toHaveLength(2);
++  });
++
++  it("an interval of 0 turns the notes off", () => {
++    const { sent, progress } = notes({ intervalMs: 0, toolThreshold: 1 });
++    progress.begin();
++    for (let i = 0; i < 5; i += 1) progress.tool("a");
++    expect(sent).toEqual([]);
++  });
++
++  it("a held note is dropped when the turn ends", () => {
++    const { c, sent, progress } = notes();
++    progress.begin();
++    for (let i = 0; i < 3; i += 1) progress.tool("a");
++    for (let i = 0; i < 3; i += 1) progress.tool("b");
++    progress.end();
++    c.advance(5 * 60_000);
++    expect(sent).toHaveLength(1);
++  });
++
++  it("do nothing outside a turn", () => {
++    const { sent, progress } = notes({ toolThreshold: 1 });
++    progress.tool("a");
++    progress.subagent({ kind: "upsert", id: "r1", status: "running" });
++    expect(sent).toEqual([]);
++  });
++});
++
++describe("wave boundaries", () => {
++  it("the first subagent to start opens a wave and the last to finish closes it", () => {
++    const { c, sent, progress } = notes({ intervalMs: 1_000 });
++    progress.begin();
++    progress.subagent({ kind: "upsert", id: "r1", label: "review-logic", status: "running" });
++    expect(sent).toHaveLength(1);
++    expect(sent[0]).toContain("A subagent wave started");
++    expect(sent[0]).toContain("review-logic");
++    progress.subagent({ kind: "upsert", id: "r2", label: "review-style", status: "running" });
++    progress.subagent({ kind: "upsert", id: "r1", label: "review-logic", status: "done" });
++    expect(sent).toHaveLength(1);
++    c.advance(2_000);
++    progress.subagent({ kind: "upsert", id: "r2", label: "review-style", status: "failed" });
++    expect(sent).toHaveLength(2);
++    expect(sent[1]).toContain("The wave finished: 1 done, 1 failed");
++  });
++
++  it("a second wave in the same turn gets its own notes", () => {
++    const { c, sent, progress } = notes({ intervalMs: 1_000 });
++    progress.begin();
++    progress.subagent({ kind: "upsert", id: "a", status: "running" });
++    progress.subagent({ kind: "upsert", id: "a", status: "done" });
++    c.advance(1_000);
++    expect(sent.length).toBeGreaterThanOrEqual(2);
++    c.advance(5_000);
++    progress.subagent({ kind: "upsert", id: "b", status: "running" });
++    expect(sent.at(-1)).toContain("A subagent wave started");
++  });
++
++  it("log events are not boundaries", () => {
++    const { sent, progress } = notes();
++    progress.begin();
++    progress.subagent({ kind: "log", id: "r1" });
++    expect(sent).toEqual([]);
++  });
++});
++
++describe("status questions", () => {
++  it("are short plain lines that ask how the run is going", () => {
++    for (const line of [
++      "status",
++      "Status?",
++      "what's the status",
++      "What is going on?",
++      "how is it going?",
++      "are you still working?",
++      "is it done yet",
++      "what are you doing now?",
++      "статус",
++      "как дела?",
++      "ты тут?",
++      "ещё работаешь?",
++    ]) {
++      expect(isStatusQuestion(line)).toBe(true);
++    }
++  });
++
++  it("leave real work to the model", () => {
++    for (const line of [
++      "",
++      "fix the status page so it shows the build number",
++      "status of PR 123 and then merge it",
++      "run the tests",
++      "x".repeat(70),
++    ]) {
++      expect(isStatusQuestion(line)).toBe(false);
++    }
++  });
++});
++
++describe("describeStatus", () => {
++  it("names the turn, the queue, the open prompts and the mode", () => {
++    const text = describeStatus({
++      turnRunning: true,
++      snapshot: { running: true, elapsedMs: 252_000, toolCalls: 23, lastTool: "shell_exec", waveRunning: 2 },
++      topicWaiting: 1,
++      queued: 3,
++      openPrompts: 1,
++      mode: "ask",
++    });
++    expect(text).toContain("4m 12s");
++    expect(text).toContain("23 tool calls, last: shell_exec");
++    expect(text).toContain("Subagents: 2 still running");
++    expect(text).toContain("Queue: 3 messages waiting (1 from this topic)");
++    expect(text).toContain("Waiting for you: 1 approval or question");
++    expect(text).toContain("Mode: ask.");
++  });
++
++  it("says so when the shell is busy without a model turn", () => {
++    const text = describeStatus({
++      turnRunning: false,
++      snapshot: { running: false, elapsedMs: 0, toolCalls: 0, waveRunning: 0 },
++      topicWaiting: 0,
++      openPrompts: 0,
++    });
++    expect(text).toContain("no model turn is writing");
++  });
++
++  it("formats time", () => {
++    expect(formatElapsed(5_000)).toBe("5s");
++    expect(formatElapsed(60_000)).toBe("1m");
++    expect(formatElapsed(3_723_000)).toBe("1h 2m");
++  });
++});
++
++describe("the bridge", () => {
++  it("AC5: a turn the operator typed still gets progress notes in the topic", async () => {
++    const h = commandHarness({ busy: true, progressToolThreshold: 3 });
++    await h.bridge.enable();
++    h.bridge.turnStarted(undefined);
++    for (const name of ["read_file", "grep", "edit_file"]) h.bridge.toolCall(name);
++    expect(h.client().replies).toHaveLength(1);
++    expect(h.client().replies[0]).toContain("Still working: 3 tool calls");
++    h.bridge.toolCall("read_file");
++    h.bridge.toolCall("read_file");
++    h.bridge.toolCall("read_file");
++    expect(h.client().replies).toHaveLength(1);
++    await h.bridge.turnSettled({ failed: false });
++    expect(h.client().replies).toHaveLength(1);
++  });
++
++  it("AC5: a wave from the shell's subagents is posted to the topic", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    h.bridge.turnStarted(undefined);
++    h.bridge.subagentEvent({ kind: "upsert", id: "r1", label: "review-logic", status: "running" });
++    expect(h.client().replies.at(-1)).toContain("A subagent wave started");
++  });
++
++  it("AC5: nothing goes out with remote control off", async () => {
++    const h = commandHarness({ busy: true, progressToolThreshold: 1 });
++    h.bridge.turnStarted(undefined);
++    h.bridge.toolCall("grep");
++    h.bridge.subagentEvent({ kind: "upsert", id: "r1", status: "running" });
++    await h.bridge.enable();
++    expect(h.client().replies).toEqual([]);
++  });
++
++  it("AC6: a status question during a running turn is answered at once and never queued", async () => {
++    const h = commandHarness({
++      busy: true,
++      turnRunning: () => true,
++      sessionState: () => ({ queued: 2, mode: "ask" }),
++    });
++    await h.bridge.enable();
++    h.bridge.turnStarted(undefined);
++    h.bridge.toolCall("shell_exec");
++    h.state.now += 90_000;
++    await h.say("how is it going?");
++    await waitFor(() => h.client().replies.some((reply) => reply.startsWith("Working:")), "the status answer");
++    const answer = h.client().replies.find((reply) => reply.startsWith("Working:")) as string;
++    expect(answer).toContain("1m 30s");
++    expect(answer).toContain("1 tool call, last: shell_exec");
++    expect(answer).toContain("Queue: 2 messages waiting");
++    expect(answer).toContain("Mode: ask.");
++    expect(h.calls.filter((call) => call.startsWith("queue:") || call.startsWith("run:"))).toEqual([]);
++    await waitFor(() => h.client().reported.some(([, state]) => state === "done"), "the message to be marked done");
++  });
++
++  it("AC6: the answer counts an approval nobody has answered", async () => {
++    let release!: () => void;
++    const h = commandHarness({
++      busy: true,
++      turnRunning: () => true,
++      askApproval: () =>
++        new Promise((resolve) => {
++          release = () => resolve({ decision: "allow" });
++        }),
++    });
++    await h.bridge.enable();
++    h.bridge.turnStarted(undefined);
++    const asked = h.bridge.askApproval("rm -rf build");
++    await h.say("status");
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("Waiting for you: 1")), "the open approval in the answer");
++    release();
++    await asked;
++  });
++
++  it("AC6: the same words go to the model when main is idle", async () => {
++    const h = commandHarness({ busy: false });
++    await h.bridge.enable();
++    await h.say("how is it going?");
++    expect(h.calls).toContain("run:how is it going?");
++    expect(h.client().replies).toEqual([]);
++  });
++
++  it("AC6: a long message that merely contains the word status is queued as work", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("update the status page so it shows the build number");
++    expect(h.calls).toContain("queue:update the status page so it shows the build number");
++  });
++});
+diff --git a/src/remote/progress-notes.ts b/src/remote/progress-notes.ts
+new file mode 100644
+index 00000000..e22c6c96
+--- /dev/null
++++ b/src/remote/progress-notes.ts
+@@ -0,0 +1,291 @@
++// Flow 419 (AC5, AC6): what the topic hears while a turn runs, and what a status question is answered with.
++// Progress is a short summary the shell composes from counts and names; the model's text and a tool's
++// input or output never go into a note. At most one note goes out per interval.
++
++/** One note per this long at most. */
++export const DEFAULT_PROGRESS_INTERVAL_MS = 60_000;
++/** A note about a tool-heavy stretch comes after this many tool calls since the last note. */
++export const DEFAULT_PROGRESS_TOOL_THRESHOLD = 8;
++
++const TOOL_NAMES_SHOWN = 4;
++const WAVE_LABELS_SHOWN = 3;
++
++/** The part of a subagent fleet event the notes read; the shell's own event type fits it. */
++export type WaveEvent = { kind: "upsert"; id: string; label?: string; status: string } | { kind: "remove"; id: string } | { kind: "log"; id: string };
++
++export interface ProgressOptions {
++  intervalMs?: number;
++  toolThreshold?: number;
++  now?: () => number;
++  send: (text: string) => void;
++  /** Test seam. */
++  setTimer?: (run: () => void, ms: number) => unknown;
++  clearTimer?: (handle: unknown) => void;
++}
++
++export interface TurnSnapshot {
++  running: boolean;
++  elapsedMs: number;
++  toolCalls: number;
++  lastTool?: string;
++  /** Subagents of the open wave that have not finished. */
++  waveRunning: number;
++}
++
++type Pending = { priority: number; build: () => string };
++
++const ACTIVE = new Set(["queued", "running", "blocked"]);
++
++export function formatElapsed(ms: number): string {
++  const total = Math.max(0, Math.round(ms / 1000));
++  if (total < 60) return `${total}s`;
++  const minutes = Math.floor(total / 60);
++  const seconds = total % 60;
++  if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
++  const hours = Math.floor(minutes / 60);
++  return `${hours}h ${minutes % 60}m`;
++}
++
++export class ProgressNotes {
++  private readonly intervalMs: number;
++  private readonly threshold: number;
++  private readonly now: () => number;
++  private readonly send: (text: string) => void;
++  private readonly setTimer: (run: () => void, ms: number) => unknown;
++  private readonly clearTimer: (handle: unknown) => void;
++
++  private startedAt: number | undefined;
++  private toolCalls = 0;
++  private lastTool: string | undefined;
++  private sinceNote = 0;
++  private namesSinceNote = new Set<string>();
++  private lastNoteAt: number | undefined;
++  private lastNoteWindowStart: number | undefined;
++  private pending: Pending | undefined;
++  private timer: unknown;
++  private readonly wave = new Map<string, { status: string; label: string }>();
++  private waveOpen = false;
++
++  constructor(options: ProgressOptions) {
++    this.intervalMs = options.intervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
++    this.threshold = Math.max(1, options.toolThreshold ?? DEFAULT_PROGRESS_TOOL_THRESHOLD);
++    this.now = options.now ?? Date.now;
++    this.send = options.send;
++    this.setTimer = options.setTimer ?? ((run, ms) => setTimeout(run, ms));
++    this.clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
++  }
++
++  get enabled(): boolean {
++    return this.intervalMs > 0;
++  }
++
++  /** A turn starts: the counts begin again. The time of the last note is kept so the interval spans turns. */
++  begin(): void {
++    this.dropPending();
++    this.startedAt = this.now();
++    this.toolCalls = 0;
++    this.lastTool = undefined;
++    this.sinceNote = 0;
++    this.namesSinceNote.clear();
++    this.wave.clear();
++    this.waveOpen = false;
++    this.lastNoteWindowStart = this.startedAt;
++  }
++
++  /** The turn ended or remote control went off: nothing is held back for later. */
++  end(): void {
++    this.dropPending();
++    this.startedAt = undefined;
++    this.wave.clear();
++    this.waveOpen = false;
++  }
++
++  /** Remote control went off: even the interval is forgotten. */
++  reset(): void {
++    this.end();
++    this.lastNoteAt = undefined;
++  }
++
++  tool(name?: string): void {
++    if (this.startedAt === undefined) return;
++    this.toolCalls += 1;
++    this.sinceNote += 1;
++    if (name !== undefined && name.length > 0) {
++      this.lastTool = name;
++      this.namesSinceNote.add(name);
++    }
++    if (this.sinceNote >= this.threshold) this.post({ priority: 1, build: () => this.toolNote() });
++  }
++
++  /** A subagent changed state. The first one to start opens a wave and the last one to finish closes it. */
++  subagent(event: WaveEvent): void {
++    if (this.startedAt === undefined) return;
++    if (event.kind === "upsert") {
++      this.wave.set(event.id, { status: event.status, label: event.label ?? event.id });
++      if (!this.waveOpen && ACTIVE.has(event.status)) {
++        this.waveOpen = true;
++        this.post({ priority: 2, build: () => this.waveStartNote() });
++        return;
++      }
++    } else if (event.kind === "remove") {
++      this.wave.delete(event.id);
++    } else {
++      return;
++    }
++    if (this.waveOpen && this.activeCount() === 0) {
++      const done = [...this.wave.values()].filter((one) => one.status === "done").length;
++      const failed = [...this.wave.values()].filter((one) => one.status === "failed").length;
++      this.waveOpen = false;
++      this.wave.clear();
++      this.post({ priority: 3, build: () => this.waveEndNote(done, failed) });
++    }
++  }
++
++  snapshot(): TurnSnapshot {
++    const running = this.startedAt !== undefined;
++    return {
++      running,
++      elapsedMs: running ? this.now() - (this.startedAt as number) : 0,
++      toolCalls: this.toolCalls,
++      ...(this.lastTool === undefined ? {} : { lastTool: this.lastTool }),
++      waveRunning: this.activeCount(),
++    };
++  }
++
++  private activeCount(): number {
++    let count = 0;
++    for (const one of this.wave.values()) if (ACTIVE.has(one.status)) count += 1;
++    return count;
++  }
++
++  private elapsed(): string {
++    return formatElapsed(this.startedAt === undefined ? 0 : this.now() - this.startedAt);
++  }
++
++  private toolNote(): string {
++    const names = [...this.namesSinceNote];
++    const shown = names.slice(0, TOOL_NAMES_SHOWN).join(", ");
++    const more = names.length > TOOL_NAMES_SHOWN ? ` and ${names.length - TOOL_NAMES_SHOWN} more` : "";
++    const window = this.lastNoteWindowStart === undefined ? "" : ` in the last ${formatElapsed(this.now() - this.lastNoteWindowStart)}`;
++    const used = shown.length > 0 ? ` (${shown}${more})` : "";
++    return `Still working: ${this.sinceNote} tool calls${window}${used}. ${this.elapsed()} into this turn.`;
++  }
++
++  private waveStartNote(): string {
++    const labels = [...this.wave.values()].map((one) => one.label).slice(0, WAVE_LABELS_SHOWN);
++    const total = this.activeCount();
++    const more = total > labels.length ? ` and ${total - labels.length} more` : "";
++    return `A subagent wave started: ${total} running${labels.length > 0 ? ` (${labels.join(", ")}${more})` : ""}. ${this.elapsed()} into this turn.`;
++  }
++
++  private waveEndNote(done: number, failed: number): string {
++    const failedPart = failed > 0 ? `, ${failed} failed` : "";
++    return `The wave finished: ${done} done${failedPart}. ${this.elapsed()} into this turn.`;
++  }
++
++  private post(next: Pending): void {
++    if (!this.enabled) return;
++    const at = this.now();
++    if (this.lastNoteAt === undefined || at - this.lastNoteAt >= this.intervalMs) {
++      this.emit(next);
++      return;
++    }
++    // Inside the interval: keep the weightier note and send it when the interval ends.
++    if (this.pending === undefined || next.priority >= this.pending.priority) this.pending = next;
++    if (this.timer === undefined) {
++      this.timer = this.setTimer(() => {
++        this.timer = undefined;
++        const held = this.pending;
++        this.pending = undefined;
++        if (held !== undefined && this.startedAt !== undefined) this.emit(held);
++      }, this.lastNoteAt + this.intervalMs - at);
++    }
++  }
++
++  private emit(note: Pending): void {
++    const text = note.build();
++    this.lastNoteAt = this.now();
++    this.lastNoteWindowStart = this.lastNoteAt;
++    this.sinceNote = 0;
++    this.namesSinceNote.clear();
++    this.pending = undefined;
++    try {
++      this.send(text);
++    } catch {
++      // a note that cannot be sent is not worth stopping the turn for
++    }
++  }
++
++  private dropPending(): void {
++    this.pending = undefined;
++    if (this.timer !== undefined) {
++      this.clearTimer(this.timer);
++      this.timer = undefined;
++    }
++  }
++}
++
++// ---- a status question ---------------------------------------------------------------
++
++const STATUS_PATTERNS: readonly RegExp[] = [
++  /^(status|progress|update)( (update|report|check))?( please| pls)?$/,
++  /^(what'?s|what is|whats) (the )?(current )?(status|progress|going on|happening|up)( (now|right now|here))?$/,
++  /^how('?s| is) (it|that|this|the (run|review|task|work|build)) (going|progressing|doing)( so far| now)?$/,
++  /^(are you|r u) (still )?(working|running|busy|alive|there|done|finished|stuck)( yet| now)?$/,
++  /^(is it|are we) (done|finished|ready|stuck)( yet)?$/,
++  /^what are you (doing|working on)( now| right now)?$/,
++  /^where are (you|we)( now| at)?$/,
++  /^(any )?(news|progress|updates?)$/,
++  /^still (working|running|there|alive)$/,
++  /^(статус|прогресс|как дела|как успехи|как идёт|как идет|как продвигается( работа)?|что там|что нового|что делаешь|что происходит|что сейчас происходит)( (сейчас|там|уже))*$/,
++  /^(ты )?(тут|жив|ещё работаешь|еще работаешь|работаешь|завис|завис(ла)?|закончил|закончила|готов|готово)( (там|уже|ещё|еще|сейчас))*$/,
++];
++
++/** A short plain line that only asks how the run is going. Anything longer or wider goes to the model. */
++export function isStatusQuestion(line: string): boolean {
++  const text = line
++    .trim()
++    .toLowerCase()
++    .replace(/[?!.…]+$/u, "")
++    .replace(/\s+/g, " ")
++    .trim();
++  if (text.length === 0 || text.length > 60) return false;
++  return STATUS_PATTERNS.some((pattern) => pattern.test(text));
++}
++
++export interface StatusFacts {
++  /** A model turn is writing now. */
++  turnRunning: boolean;
++  snapshot: TurnSnapshot;
++  /** Lines from this topic waiting for their turn. */
++  topicWaiting: number;
++  /** Everything waiting in the shell's queue, when the host says. */
++  queued?: number;
++  /** Approvals and questions waiting for an answer in the topic. */
++  openPrompts: number;
++  mode?: string;
++}
++
++/** The answer to a status question, from the session's own state. */
++export function describeStatus(facts: StatusFacts): string {
++  const lines: string[] = [];
++  const { snapshot } = facts;
++  if (facts.turnRunning && snapshot.running) {
++    const tools = snapshot.toolCalls === 0 ? "no tool calls yet" : `${snapshot.toolCalls} tool call${snapshot.toolCalls === 1 ? "" : "s"}${snapshot.lastTool === undefined ? "" : `, last: ${snapshot.lastTool}`}`;
++    lines.push(`Working: this turn has run for ${formatElapsed(snapshot.elapsedMs)}, ${tools}.`);
++  } else if (facts.turnRunning) {
++    lines.push("Working: a turn is running.");
++  } else {
++    lines.push("Busy: the shell is occupied with a command or its queue; no model turn is writing right now.");
++  }
++  if (snapshot.waveRunning > 0) lines.push(`Subagents: ${snapshot.waveRunning} still running.`);
++  const queued = Math.max(facts.queued ?? 0, facts.topicWaiting);
++  if (queued > 0) {
++    lines.push(`Queue: ${queued} message${queued === 1 ? "" : "s"} waiting${facts.topicWaiting > 0 ? ` (${facts.topicWaiting} from this topic)` : ""}.`);
++  }
++  if (facts.openPrompts > 0) {
++    lines.push(`Waiting for you: ${facts.openPrompts} approval or question open in this topic.`);
++  }
++  if (facts.mode !== undefined) lines.push(`Mode: ${facts.mode}.`);
++  return lines.join("\n");
++}
+diff --git a/src/remote/prompt-reminder.test.ts b/src/remote/prompt-reminder.test.ts
+new file mode 100644
+index 00000000..a27a7f8f
+--- /dev/null
++++ b/src/remote/prompt-reminder.test.ts
+@@ -0,0 +1,100 @@
++// AC3 (flow 419): an approval or question nobody has answered gets a reminder in the topic after a stated
++// interval; an answered one gets none, and the number of reminders is bounded.
++
++import { afterEach, describe, expect, test } from "bun:test";
++import type { RemoteClient } from "./client";
++import { MAX_PROMPT_REMINDERS } from "./protocol";
++import { reminderExcerpt } from "./http-surface";
++import { makeRig, type Rig } from "./remote.http.test-helpers";
++import { OWNER_ID, until } from "./remote.test-helpers";
++
++let rig: Rig;
++afterEach(async () => {
++  await rig.cleanup();
++});
++
++async function session(sessionId: string): Promise<{ client: RemoteClient; threadId: number }> {
++  const client = rig.makeClient({ sessionId, project: "/work/remind", name: "remind", onLine: () => undefined });
++  const started = await client.start();
++  if (!started.ok) throw new Error(`session did not start: ${started.message}`);
++  return { client, threadId: started.threadId };
++}
++
++const reminders = (threadId: number): string[] => rig.api.sentTo(threadId).map((m) => m.text).filter((t) => t.startsWith("Reminder:"));
++
++describe("reminders for an unanswered prompt", () => {
++  test("an approval nobody answers gets a reminder naming what is asked", async () => {
++    rig = makeRig();
++    await rig.startServe({ service: { surface: { reminderMs: 40 } } });
++    const { client, threadId } = await session("sess-rem-0001");
++    const abort = new AbortController();
++    void client.askApproval("rm -rf build", 30_000, { signal: abort.signal });
++    await until(() => reminders(threadId).length >= 1, "the first reminder");
++    const first = reminders(threadId)[0] as string;
++    expect(first).toContain("An approval is still waiting");
++    expect(first).toContain("rm -rf build");
++    expect(first).toContain("It expires at ");
++    abort.abort("shell");
++  });
++
++  test("reminders stop at the stated number", async () => {
++    rig = makeRig();
++    await rig.startServe({ service: { surface: { reminderMs: 20 } } });
++    const { client, threadId } = await session("sess-rem-0002");
++    const abort = new AbortController();
++    void client.askApproval("npm publish", 30_000, { signal: abort.signal });
++    await until(() => reminders(threadId).length >= MAX_PROMPT_REMINDERS, "every reminder");
++    await new Promise((resolve) => setTimeout(resolve, 120));
++    expect(reminders(threadId)).toHaveLength(MAX_PROMPT_REMINDERS);
++    abort.abort("shell");
++  });
++
++  test("an approval answered before the interval gets no reminder", async () => {
++    rig = makeRig();
++    await rig.startServe({ service: { surface: { reminderMs: 150 } } });
++    const { client, threadId } = await session("sess-rem-0003");
++    const asked = client.askApproval("git push", 30_000);
++    await until(() => rig.api.sentTo(threadId).some((m) => m.inlineKeyboard !== undefined), "the buttons");
++    const message = rig.api.sentTo(threadId).find((m) => m.inlineKeyboard !== undefined)!;
++    const allow = (message.inlineKeyboard ?? []).flat().find((b) => b.text === "Allow")!.callback_data;
++    rig.api.pushCallback({ fromId: OWNER_ID, data: allow, threadId, messageId: message.messageId });
++    expect((await asked).decision).toBe("allow");
++    await new Promise((resolve) => setTimeout(resolve, 300));
++    expect(reminders(threadId)).toHaveLength(0);
++  });
++
++  test("an approval closed in the shell gets no reminder", async () => {
++    rig = makeRig();
++    await rig.startServe({ service: { surface: { reminderMs: 150 } } });
++    const { client, threadId } = await session("sess-rem-0004");
++    const abort = new AbortController();
++    const asked = client.askApproval("make deploy", 30_000, { signal: abort.signal });
++    await until(() => rig.api.sentTo(threadId).some((m) => m.inlineKeyboard !== undefined), "the buttons");
++    abort.abort("shell");
++    await asked;
++    await new Promise((resolve) => setTimeout(resolve, 300));
++    expect(reminders(threadId)).toHaveLength(0);
++  });
++});
++
++describe("reminders for a question", () => {
++  test("an ask_user menu nobody answers gets a reminder", async () => {
++    rig = makeRig();
++    await rig.startServe({ service: { surface: { reminderMs: 40 } } });
++    const { client, threadId } = await session("sess-rem-0005");
++    const abort = new AbortController();
++    void client.askChoice("Which branch should I use?", [["main", "dev"]], 30_000, { signal: abort.signal });
++    await until(() => reminders(threadId).length >= 1, "the reminder");
++    expect(reminders(threadId)[0]).toContain("A question is still waiting");
++    expect(reminders(threadId)[0]).toContain("Which branch should I use?");
++    abort.abort("shell");
++  });
++});
++
++describe("reminderExcerpt", () => {
++  test("drops the label and the fence and cuts a long line", () => {
++    expect(reminderExcerpt("Approval needed:\n```\nbun test\n```")).toBe("bun test");
++    expect(reminderExcerpt(undefined)).toBe("");
++    expect(reminderExcerpt("x".repeat(200))).toHaveLength(80);
++  });
++});
+diff --git a/src/remote/protocol.ts b/src/remote/protocol.ts
+index 987629bd..a3448620 100644
+--- a/src/remote/protocol.ts
++++ b/src/remote/protocol.ts
+@@ -168,6 +168,12 @@ export const MAX_CALLBACK_DATA_BYTES = 64;
+ export const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
+ export const MAX_APPROVAL_TIMEOUT_MS = 60 * 60_000;
+ export const MIN_APPROVAL_TIMEOUT_MS = 100;
++/**
++ * Flow 419, AC3: an approval or question nobody has answered gets a reminder in the topic after this long,
++ * and again at the same interval, at most {@link MAX_PROMPT_REMINDERS} times in all.
++ */
++export const DEFAULT_PROMPT_REMINDER_MS = 2 * 60_000;
++export const MAX_PROMPT_REMINDERS = 3;
+ /**
+  * How long serve waits, after it wrote an approval decision to the shell's stream, for the shell
+  * to say it received it (flow 397). Without that word the approval is shown as "not confirmed",
+diff --git a/src/remote/registry.ts b/src/remote/registry.ts
+index 7920c3c0..bde6bd30 100644
+--- a/src/remote/registry.ts
++++ b/src/remote/registry.ts
+@@ -30,6 +30,8 @@ export interface RemoteSessionRecord {
+   status: RemoteSessionStatus;
+   /** When the heartbeat went stale; the orphan timeout runs from here. */
+   unavailableSince?: number;
++  /** The closing note is queued and the topic is being archived; a retry must not queue it again. */
++  closing?: boolean;
+ }
+ 
+ const REGISTRY_VERSION = 1;
+diff --git a/src/remote/service.ts b/src/remote/service.ts
+index 559e3b38..040a1225 100644
+--- a/src/remote/service.ts
++++ b/src/remote/service.ts
+@@ -46,7 +46,7 @@ export interface OpenRemoteServiceOptions
+   machine?: string;
+   /** Called with a line for the operator. Never carries a secret. */
+   onNotice?: (message: string) => void;
+-  surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalAckMs" | "approvalIds">;
++  surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalAckMs" | "approvalIds" | "promptIds" | "reminderMs">;
+   lock?: Pick<AcquirePollLockOptions, "pid" | "isAlive"> & { disabled?: boolean };
+   /** Test seams for a pairing (code, expiry, poll cadence). */
+   pairing?: ChannelsOptions["pairing"];
+diff --git a/src/remote/shell-bridge.ts b/src/remote/shell-bridge.ts
+index d16f49f5..ea315987 100644
+--- a/src/remote/shell-bridge.ts
++++ b/src/remote/shell-bridge.ts
+@@ -6,7 +6,7 @@
+ //
+ //   - the lifecycle: OFF by default, turned on only by `enable()` (the explicit
+ //     `/remote-control` command), turned off by `disable()` or when the shell
+-//     closes (`disable()` deregisters, which deletes the topic);
++//     closes (`disable()` deregisters, which archives the topic: a closing note, history kept);
+ //   - a line from Telegram: idle, it runs as a typed line; busy, it goes through
+ //     the host's ordinary user queue. It does not invent a queue of its own;
+ //   - the reply: the final assistant text of a Telegram-originated turn,
+@@ -26,6 +26,7 @@ import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOpt
+ import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
+ import type { NormalizedMessage } from "../harness/provider/types";
+ import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
++import { ProgressNotes, type WaveEvent, describeStatus, isStatusQuestion } from "./progress-notes";
+ import { HISTORY_DEFAULT_COUNT, HISTORY_EMPTY_MESSAGE, formatHistoryItem, parseHistoryArgs, selectHistory } from "./history";
+ 
+ /** The label a Telegram line carries in the queue and the transcript. */
+@@ -130,6 +131,8 @@ export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBus
+   turnRunning?(): boolean;
+   /** The live session was resumed (`-r`, `-c`, `/resume`), not started fresh. The automatic restore needs it. */
+   sessionResumed?(): boolean;
++  /** What a status question from the topic is answered with besides the bridge's own counts (flow 419, AC6). */
++  sessionState?(): { queued: number; mode?: string };
+ }
+ 
+ export interface RemoteBridgeOptions {
+@@ -146,6 +149,14 @@ export interface RemoteBridgeOptions {
+   commandLimitMs?: number;
+   /** How long a picker or a Yes/No waits for a press. */
+   choiceTimeoutMs?: number;
++  /** How often a command held for an idle main looks again (flow 419). */
++  idlePollMs?: number;
++  /** A command held for an idle main is dropped after this long (flow 419). */
++  queuedCommandLimitMs?: number;
++  /** At most one progress note per this long; 0 turns the notes off (flow 419, AC5). */
++  progressIntervalMs?: number;
++  /** Tool calls since the last note that make a stretch "tool-heavy". */
++  progressToolThreshold?: number;
+   /** Pause between two restored messages, so the topic is not flooded (flow 399). */
+   historyPaceMs?: number;
+   /** Test seam for the pause. Default: a timer. */
+@@ -298,11 +309,26 @@ export class RemoteBridge {
+   private postingClient: RemoteClientLike | undefined;
+   /** Remote control has been turned on once in this process; only that first time can restore on its own. */
+   private enabledOnce = false;
++  /** Progress notes while a turn runs and the facts for a status question (flow 419, AC5 and AC6). */
++  private readonly progress: ProgressNotes;
++  /** Approvals and questions put in the topic that nobody has answered yet. */
++  private openPrompts = 0;
+ 
+   constructor(private readonly options: RemoteBridgeOptions) {
+     this.host = options.host;
+     this.now = options.now ?? Date.now;
+     this.approvalOverrideMs = options.approvalTimeoutMs;
++    this.progress = new ProgressNotes({
++      ...(options.progressIntervalMs === undefined ? {} : { intervalMs: options.progressIntervalMs }),
++      ...(options.progressToolThreshold === undefined ? {} : { toolThreshold: options.progressToolThreshold }),
++      now: this.now,
++      send: (text) => {
++        const client = this.client;
++        if (client === undefined || !client.connected) return;
++        this.push("reply", "progress note");
++        void client.reply(composeReply(text)).catch(() => false);
++      },
++    });
+     this.router = new RemoteCommandRouter({
+       host: {
+         isBusy: () => this.host.isBusy(),
+@@ -317,6 +343,7 @@ export class RemoteBridge {
+         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
+       },
+       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
++      live: () => this.client !== undefined,
+       history: async (args) => await this.historyForCommand(args),
+       record: (text) => this.push("command", text),
+       compose: composeReply,
+@@ -351,6 +378,8 @@ export class RemoteBridge {
+         runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,
+         commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,
+         choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,
++        ...(options.idlePollMs !== undefined ? { idlePollMs: options.idlePollMs } : {}),
++        ...(options.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: options.queuedCommandLimitMs } : {}),
+       },
+     });
+   }
+@@ -500,7 +529,7 @@ export class RemoteBridge {
+   }
+ 
+   /**
+-   * Turn it off: deregisters, which deletes the topic. Safe when already off. A
++   * Turn it off: deregisters, which archives the topic (closing note, history kept). Safe when already off. A
+    * second call while the first is still closing waits for it (and returns false):
+    * "off" is only true once the topic is actually gone.
+    */
+@@ -515,6 +544,7 @@ export class RemoteBridge {
+     this.clientConnected = false;
+     this.lastHistory = undefined;
+     this.endTurnState();
++    this.progress.reset();
+     this.waiting.length = 0;
+     // History first, before anything awaits: a host that is about to swap its session
+     // (`/new`, `/resume`) calls this and must close the interval on the session it opened.
+@@ -576,6 +606,12 @@ export class RemoteBridge {
+       return;
+     }
+     this.push("line", `Telegram: ${preview(line)}`);
++    // A question about how the run is going is answered from session state at once; behind a running
++    // turn it would wait for the very thing it asks about (flow 419, AC6).
++    if (this.host.isBusy() && isStatusQuestion(line)) {
++      this.answerStatus(meta.updateId);
++      return;
++    }
+     this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });
+     if (this.host.isBusy()) {
+       // Queued: the message keeps its "received" reaction until its own turn starts.
+@@ -586,6 +622,25 @@ export class RemoteBridge {
+     }
+   }
+ 
++  private answerStatus(updateId: number): void {
++    const client = this.client;
++    if (client === undefined) return;
++    this.push("command", "status question answered from session state");
++    const state = this.host.sessionState?.();
++    const text = describeStatus({
++      turnRunning: this.host.turnRunning !== undefined ? this.host.turnRunning() : true,
++      snapshot: this.progress.snapshot(),
++      topicWaiting: this.waiting.length,
++      ...(state === undefined ? {} : { queued: state.queued }),
++      openPrompts: this.openPrompts,
++      ...(state?.mode === undefined ? {} : { mode: state.mode }),
++    });
++    void client
++      .reply(composeReply(text))
++      .then((sent) => this.report(updateId, sent ? "done" : "failed"))
++      .catch(() => this.report(updateId, "failed"));
++  }
++
+   /** Where a message from the topic is. Best effort and never awaited: it cannot hold the line. */
+   private report(updateId: number, state: MessageState): void {
+     const client = this.client;
+@@ -726,6 +781,7 @@ export class RemoteBridge {
+   /** A turn is starting. `source` is `tg` only for a line that came from Telegram. */
+   turnStarted(source: RemoteLineSource | undefined): void {
+     this.endTurnState();
++    if (this.client !== undefined) this.progress.begin();
+     if (source !== TG_SOURCE || this.client === undefined) return;
+     const next = this.waiting.shift();
+     this.currentUpdate = next?.updateId;
+@@ -742,7 +798,7 @@ export class RemoteBridge {
+       this.runTimer = setTimeout(() => {
+         this.timedOut = true;
+         this.push("error", "run time limit reached; stopping the turn");
+-        this.turnAbort?.abort();
++        this.turnAbort?.abort("cancelled");
+         this.host.cancelTurn();
+       }, limit);
+     }
+@@ -759,7 +815,7 @@ export class RemoteBridge {
+     if (this.stoppedByUser) return "stopped";
+     this.stoppedByUser = true;
+     this.push("command", "/stop: stopping the turn");
+-    this.turnAbort?.abort();
++    this.turnAbort?.abort("cancelled");
+     this.host.cancelTurn();
+     return "stopped";
+   }
+@@ -776,7 +832,8 @@ export class RemoteBridge {
+    * not the answer: drop it. The reply is the text of a round that ended without a
+    * tool call.
+    */
+-  toolCall(): void {
++  toolCall(name?: string): void {
++    this.progress.tool(name);
+     if (!this.tgTurn) return;
+     this.lastAssistantText = "";
+   }
+@@ -801,6 +858,7 @@ export class RemoteBridge {
+ 
+   /** The turn finished (or was cancelled). Sends the reply for a Telegram turn. */
+   async turnSettled(outcome: { failed: boolean }): Promise<void> {
++    this.progress.end();
+     if (!this.tgTurn) return;
+     const client = this.client;
+     const text = this.lastAssistantText;
+@@ -826,14 +884,21 @@ export class RemoteBridge {
+     this.push(sent ? "reply" : "error", sent ? `reply sent (${body.length} chars)` : "the reply could not be sent");
+   }
+ 
++  /** A subagent started, changed or finished. The first to start and the last to finish bound a wave (flow 419, AC5). */
++  subagentEvent(event: WaveEvent): void {
++    if (this.client === undefined) return;
++    this.progress.subagent(event);
++  }
++
+   private endTurnState(): void {
++    this.progress.end();
+     this.tgTurn = false;
+     this.currentUpdate = undefined;
+     this.currentFromId = undefined;
+     this.lastAssistantText = "";
+     this.timedOut = false;
+     this.stoppedByUser = false;
+-    this.turnAbort?.abort();
++    this.turnAbort?.abort("cancelled");
+     this.turnAbort = undefined;
+     if (this.runTimer !== undefined) {
+       clearTimeout(this.runTimer);
+@@ -855,7 +920,10 @@ export class RemoteBridge {
+    * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
+    * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
+    */
+-  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {
++  async askApproval(
++    prompt: string,
++    options: { remember?: string; signal?: AbortSignal; timeoutMs?: number } = {},
++  ): Promise<RemoteApprovalAnswer> {
+     const client = this.client;
+     if (client === undefined || !client.connected) {
+       this.push("approval", "denied: not connected");
+@@ -863,11 +931,13 @@ export class RemoteBridge {
+     }
+     this.push("approval", "asked in the topic");
+     let answer: RemoteApprovalAnswer;
++    this.openPrompts += 1;
+     try {
+       const text = composeApprovalPrompt(prompt);
+-      const timeoutMs = this.approvalTimeoutMs;
++      const timeoutMs = options.timeoutMs ?? this.approvalTimeoutMs;
+       if (client.askApproval !== undefined) {
+-        const signal = this.turnAbort?.signal;
++        const signals = [this.turnAbort?.signal, options.signal].filter((one): one is AbortSignal => one !== undefined);
++        const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+         const got = await client.askApproval(text, timeoutMs, {
+           ...(options.remember === undefined ? {} : { remember: options.remember }),
+           ...(signal === undefined ? {} : { signal }),
+@@ -879,6 +949,8 @@ export class RemoteBridge {
+       }
+     } catch {
+       answer = { decision: "deny", always: false };
++    } finally {
++      this.openPrompts -= 1;
+     }
+     const by = answer.fromId === undefined ? "" : ` by user ${answer.fromId}`;
+     this.push(
+@@ -909,6 +981,7 @@ export class RemoteBridge {
+     const timeoutMs = this.options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs;
+     const forUserId = this.telegramTurnUserId;
+     this.push("command", "ask_user question asked in the topic");
++    this.openPrompts += 1;
+     try {
+       if (client.askChoice === undefined) {
+         const index = await client.requestChoice(text, rows, timeoutMs, forUserId);
+@@ -924,6 +997,8 @@ export class RemoteBridge {
+       return undefined;
+     } catch {
+       return undefined;
++    } finally {
++      this.openPrompts -= 1;
+     }
+   }
+ 
+diff --git a/src/remote/types.ts b/src/remote/types.ts
+index f7611ae7..4ad926d5 100644
+--- a/src/remote/types.ts
++++ b/src/remote/types.ts
+@@ -165,6 +165,8 @@ export interface BotApi {
+   sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void>;
+   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }>;
+   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
++  /** Close a topic without deleting it: its messages stay readable, nothing new is expected. */
++  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
+   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;
+   answerCallbackQuery(params: { callbackQueryId: string; text?: string }): Promise<void>;
+   /** Who the token belongs to; a bad token is a `rejected` error (401). */
+diff --git a/src/tui/approval-mirror.test.ts b/src/tui/approval-mirror.test.ts
+new file mode 100644
+index 00000000..7d383540
+--- /dev/null
++++ b/src/tui/approval-mirror.test.ts
+@@ -0,0 +1,157 @@
++// AC2 (flow 419): an approval raised in the shell is answered once, from whichever place answers first,
++// and the other place is taken down. Both orders, plus silence in the topic and a stopped turn.
++
++import { describe, expect, test } from "bun:test";
++import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
++import { type DockRace, isTopicPress, raceApproval } from "./approval-mirror";
++
++const press = (decision: "allow" | "deny", fromId = 7): RemoteApprovalAnswer => ({ decision, always: false, fromId });
++const silence: RemoteApprovalAnswer = { decision: "deny", always: false };
++
++function abortedWith(signal: AbortSignal): Promise<unknown> {
++  return new Promise((resolve) => {
++    if (signal.aborted) return resolve(signal.reason);
++    signal.addEventListener("abort", () => resolve(signal.reason), { once: true });
++  });
++}
++
++describe("isTopicPress", () => {
++  test("an allow, or a deny from a named user, is a press; a timeout deny is not", () => {
++    expect(isTopicPress(press("allow"))).toBe(true);
++    expect(isTopicPress(press("deny"))).toBe(true);
++    expect(isTopicPress(silence)).toBe(false);
++  });
++});
++
++describe("raceApproval", () => {
++  test("the dock answers first: the topic leg is aborted with the reason shell", async () => {
++    let topicSignal: AbortSignal | undefined;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race: DockRace) => {
++        race.opened();
++        return "allowed-in-dock";
++      },
++      topic: (signal) => {
++        topicSignal = signal;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "allowed-in-dock" });
++    expect(topicSignal?.aborted).toBe(true);
++    expect(topicSignal?.reason).toBe("shell");
++  });
++
++  test("a press in the topic ends the dock and wins", async () => {
++    const answer = press("allow");
++    let dockReason: unknown;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        dockReason = await abortedWith(race.signal);
++        expect(race.topicWon()).toBe(true);
++        return "ignored";
++      },
++      topic: async () => answer,
++    });
++    expect(outcome).toEqual({ from: "topic", answer });
++    expect(dockReason).toBe("topic");
++  });
++
++  test("a denial pressed in the topic wins too", async () => {
++    const answer = press("deny");
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        await abortedWith(race.signal);
++        return "ignored";
++      },
++      topic: async () => answer,
++    });
++    expect(outcome).toEqual({ from: "topic", answer });
++  });
++
++  test("silence in the topic never ends the dock", async () => {
++    let dockAbortedEarly = true;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        await new Promise((resolve) => setTimeout(resolve, 15));
++        dockAbortedEarly = race.signal.aborted;
++        return "dock";
++      },
++      topic: async () => silence,
++    });
++    expect(dockAbortedEarly).toBe(false);
++    expect(outcome).toEqual({ from: "dock", result: "dock" });
++  });
++
++  test("a topic that fails never ends the dock", async () => {
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        await new Promise((resolve) => setTimeout(resolve, 5));
++        return "dock";
++      },
++      topic: async () => {
++        throw new Error("serve is gone");
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "dock" });
++  });
++
++  test("the turn stops: the dock closes and the topic leg is told it was cancelled", async () => {
++    const turn = new AbortController();
++    let topicSignal: AbortSignal | undefined;
++    const outcome = await raceApproval({
++      turnSignal: turn.signal,
++      dock: async (race) => {
++        race.opened();
++        queueMicrotask(() => turn.abort("cancelled"));
++        await abortedWith(race.signal);
++        return "stopped";
++      },
++      topic: (signal) => {
++        topicSignal = signal;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "stopped" });
++    expect(topicSignal?.reason).toBe("cancelled");
++  });
++
++  test("a dock that never opens never starts the topic leg", async () => {
++    let started = false;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async () => "auto-approved",
++      topic: () => {
++        started = true;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(outcome).toEqual({ from: "dock", result: "auto-approved" });
++    expect(started).toBe(false);
++  });
++
++  test("opened() starts the topic leg once", async () => {
++    let starts = 0;
++    await raceApproval({
++      turnSignal: new AbortController().signal,
++      dock: async (race) => {
++        race.opened();
++        race.opened();
++        return "x";
++      },
++      topic: () => {
++        starts += 1;
++        return new Promise<RemoteApprovalAnswer>(() => undefined);
++      },
++    });
++    expect(starts).toBe(1);
++  });
++});
+diff --git a/src/tui/approval-mirror.ts b/src/tui/approval-mirror.ts
+new file mode 100644
+index 00000000..f4e21d08
+--- /dev/null
++++ b/src/tui/approval-mirror.ts
+@@ -0,0 +1,67 @@
++// Where an approval of a turn typed in the shell is answered (flow 419, AC1 and AC2).
++//
++// The dock opens in the terminal; when remote control is on, the same question is posted to the topic at
++// the moment the dock opens (a call that is auto-approved never reaches the topic). The first answer wins and
++// the other place is taken down: a press in the topic aborts the dock, an answer in the dock aborts the topic
++// leg, which tells serve to remove the buttons. Silence in the topic (a timeout, no connection) never ends
++// the question; the dock stays. Kept apart from the TUI so the race can be tested without a renderer.
++
++import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
++
++/** What the dock-opening code in the shell sees of the race. */
++export interface DockRace {
++  /** Aborted when the turn stops or the topic answered first: the dock closes. */
++  readonly signal: AbortSignal;
++  /** The dock just opened: the topic leg starts (once). */
++  opened(): void;
++  /** The topic answered first. The dock's own result is then to be thrown away. */
++  topicWon(): boolean;
++}
++
++export type ApprovalRaceOutcome<V> = { from: "dock"; result: V } | { from: "topic"; answer: RemoteApprovalAnswer };
++
++/** An explicit press in the topic: an allow, or a deny that names who pressed. A timeout or an abort is neither. */
++export function isTopicPress(answer: RemoteApprovalAnswer): boolean {
++  return answer.decision === "allow" || answer.fromId !== undefined;
++}
++
++export async function raceApproval<V>(options: {
++  /** Runs the dock; resolves with its verdict, or early when `race.signal` aborted it. */
++  dock: (race: DockRace) => Promise<V>;
++  /** Asks in the topic; the answer is judged by {@link isTopicPress}. `signal` aborts it, with the reason "shell" or "cancelled". */
++  topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
++  /** The turn stopped: both places are closed, the topic one as cancelled. */
++  turnSignal: AbortSignal;
++}): Promise<ApprovalRaceOutcome<V>> {
++  const dockAbort = new AbortController();
++  const topicAbort = new AbortController();
++  let topicAnswer: RemoteApprovalAnswer | undefined;
++  let settled = false;
++  let started = false;
++  const race: DockRace = {
++    signal: AbortSignal.any([options.turnSignal, dockAbort.signal]),
++    opened: () => {
++      if (started || settled) return;
++      started = true;
++      void options
++        .topic(topicAbort.signal)
++        .then((answer) => {
++          if (settled || !isTopicPress(answer)) return;
++          topicAnswer = answer;
++          dockAbort.abort("topic");
++        })
++        .catch(() => undefined);
++    },
++    topicWon: () => topicAnswer !== undefined,
++  };
++  try {
++    const result = await options.dock(race);
++    if (topicAnswer !== undefined) return { from: "topic", answer: topicAnswer };
++    return { from: "dock", result };
++  } finally {
++    settled = true;
++    // answered in the dock: serve says "answered in the shell"; the turn stopped: "cancelled". A leg that
++    // already ended ignores the abort, so a press that won keeps its own final state.
++    if (topicAnswer === undefined) topicAbort.abort(options.turnSignal.aborted ? "cancelled" : "shell");
++  }
++}
+diff --git a/src/tui/remote-queue-wiring.test.ts b/src/tui/remote-queue-wiring.test.ts
+index 3273c9ee..b4e55a0d 100644
+--- a/src/tui/remote-queue-wiring.test.ts
++++ b/src/tui/remote-queue-wiring.test.ts
+@@ -211,7 +211,7 @@ test("AC4 F-014: a session switch turns remote control off and no Telegram line
+   // The closing line comes once the topic is really gone.
+   await Promise.resolve();
+   await new Promise((resolve) => setTimeout(resolve, 0));
+-  expect(r.said.join("")).toContain("remote control off: the topic is deleted.");
++  expect(r.said.join("")).toContain("remote control off: the topic is archived.");
+ });
+ 
+ test("AC4 F-014: with remote control off a session switch says nothing", async () => {
+@@ -259,6 +259,36 @@ test("AC4 F-014: a switch asked for from the topic keeps the topic and closes on
+   expect(said).toEqual([]);
+ });
+ 
++test("flow 419 AC5: the tool's name reaches the bridge, its input does not", () => {
++  const seen: unknown[][] = [];
++  const bridge = {
++    active: true,
++    keepingTopic: false,
++    disable: async () => true,
++    sessionLeaving: () => {},
++    queuedLineRemoved: () => {},
++    turnStarted: () => {},
++    assistantText: () => {},
++    toolCall: (...args: unknown[]) => seen.push(args),
++    turnSettled: async () => {},
++  } satisfies RemoteQueueBridge;
++  const wiring = createRemoteQueueWiring({
++    getBridge: () => bridge,
++    getQueue: () => [],
++    setQueue: () => {},
++    nextId: () => "q",
++    summarize: (text) => text,
++    paint: () => {},
++    composer: { setText: () => {}, focus: () => {} },
++    say: () => {},
++    runLine: () => {},
++  });
++  const base: string[] = [];
++  wiring.wrapOnToolCall((name: string, input: string) => base.push(`${name}:${input}`))("shell_exec", '{"command":"ls"}');
++  expect(seen).toEqual([["shell_exec"]]);
++  expect(base).toEqual(['shell_exec:{"command":"ls"}']);
++});
++
+ // ---- F-015: narration before a tool call is not the answer ---------------------------
+ 
+ test("AC4 F-015: text said before a tool call is dropped; a settled turn with no later text says so", async () => {
+diff --git a/src/tui/remote-queue-wiring.ts b/src/tui/remote-queue-wiring.ts
+index 57919c1c..6564dfad 100644
+--- a/src/tui/remote-queue-wiring.ts
++++ b/src/tui/remote-queue-wiring.ts
+@@ -128,12 +128,12 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
+         return;
+       }
+       if (bridge?.active !== true) return;
+-      // The close is asynchronous (it deregisters, which deletes the topic): say it is
++      // The close is asynchronous (it deregisters, which archives the topic): say it is
+       // being turned off now, and that the topic is gone only once it really is. `disable`
+       // takes the queued Telegram lines out before its first await, so none is left behind.
+       const closing = bridge.disable();
+-      deps.say("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
+-      void closing.then(() => deps.say("◇ remote control off: the topic is deleted.\n"));
++      deps.say("◇ remote control is turning off: the session changed, and its Telegram topic is being archived. Turn it on again with /remote-control <name>.\n");
++      void closing.then(() => deps.say("◇ remote control off: the topic is archived.\n"));
+     },
+ 
+     dropQueuedTelegramLines() {
+@@ -169,7 +169,7 @@ export function createRemoteQueueWiring(deps: RemoteQueueWiringDeps): RemoteQueu
+ 
+     wrapOnToolCall(base) {
+       return (...args) => {
+-        deps.getBridge()?.toolCall();
++        deps.getBridge()?.toolCall(typeof args[0] === "string" ? args[0] : undefined);
+         base?.(...args);
+       };
+     },
+diff --git a/src/tui/tui-shell.test.ts b/src/tui/tui-shell.test.ts
+index d09772f6..e2740412 100644
+--- a/src/tui/tui-shell.test.ts
++++ b/src/tui/tui-shell.test.ts
+@@ -2927,7 +2927,15 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
+     expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
+     expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
+     // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
+-    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(requestApprovalLocally);");
++    // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the
++    // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.
++    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));");
++    const mirrorStart = fnBodyPlan.indexOf("const mirrorApprovalToTopic =");
++    const mirrorEnd = fnBodyPlan.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic", mirrorStart);
++    expect(mirrorStart).toBeGreaterThanOrEqual(0);
++    expect(mirrorEnd).toBeGreaterThan(mirrorStart);
++    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).not.toContain("telegramTurnActive");
++    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).toContain("inner(tool, inputJson, meta, race)");
+     expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
+     expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
+   });
+diff --git a/src/tui/tui-shell.ts b/src/tui/tui-shell.ts
+index 77bdf9fc..b3a51204 100644
+--- a/src/tui/tui-shell.ts
++++ b/src/tui/tui-shell.ts
+@@ -82,6 +82,8 @@ import {
+ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+ import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
+ import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
++import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
++import { type DockRace, raceApproval } from "./approval-mirror";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+ import type { CommandOutcome } from "../remote/command-router";
+@@ -1983,6 +1985,14 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void):
+  * renderer before it does (the startup picker) and in the chat shell, which
+  * keep the full-screen overlay.
+  */
++/** The dock side of an approval: `race` is set when the question is also in the Telegram topic. */
++type LocalApproval = (
++  tool: string,
++  inputJson: string,
++  meta: Parameters<NonNullable<TuiAgentIo["requestApproval"]>>[2],
++  race?: DockRace,
++) => ReturnType<NonNullable<TuiAgentIo["requestApproval"]>>;
++
+ type StepTarget = Renderer | ModalChrome;
+ 
+ /** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
+@@ -3942,7 +3952,7 @@ export async function launchTuiAgentShell(opts: {
+         liveReviewsPanel?.dispose();
+         liveRemotePanel?.dispose();
+         liveChannelsPanel?.dispose();
+-        // Closing the shell deregisters: the topic goes with it. Best effort here
++        // Closing the shell deregisters: the topic is archived (closing note, history kept). Best effort here
+         // (this callback is synchronous); the `finally` below awaits the same call.
+         void remoteBridge?.disable();
+         liveApprovals?.dispose();
+@@ -4613,6 +4623,8 @@ export async function launchTuiAgentShell(opts: {
+     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
+     setSubagentFleetListener((ev) => {
+       sessions.apply(ev);
++      // Flow 419 (AC5): the first subagent to start and the last to finish are a wave boundary for the topic.
++      remoteBridge?.subagentEvent(ev);
+     });
+     // Flow 173 (AC8): shell_exec(background:true)'s JobRegistry → sidebar/inspector.
+     setBackgroundJobListener((ev) => {
+@@ -5250,7 +5262,8 @@ export async function launchTuiAgentShell(opts: {
+     // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
+     // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
+     // offers exactly two choices; Esc/cancel is "no".
+-    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {
++    const confirmScheduleCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
++      const dockSignal = race?.signal ?? foregroundOperation.signal;
+       for (const line of card) {
+         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+       }
+@@ -5261,8 +5274,11 @@ export async function launchTuiAgentShell(opts: {
+           title: "Create this schedule and install its background timer?",
+           subtitle: card[0] ?? "",
+           cancelId: "cancel",
+-          onOpen: () => chrome.blurComposer(),
+-          signal: foregroundOperation.signal,
++          onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++          signal: dockSignal,
+           options: [
+             { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
+             { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
+@@ -5270,6 +5286,7 @@ export async function launchTuiAgentShell(opts: {
+         }),
+       );
+       input.focus();
++      if (race?.topicWon() === true) return false;
+       setMainAgent("running", id === "create" ? "schedule" : "denied");
+       transcript.add(
+         new otui.TextRenderable(r, {
+@@ -5291,7 +5308,8 @@ export async function launchTuiAgentShell(opts: {
+     // chat message may reach the model. Same card-then-choice shape, accurate
+     // wording, never remembered — like `confirmScheduleCard`, this answers a
+     // gate a hook raised, not a grant a saved pattern could stand in for.
+-    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {
++    const confirmUserPromptCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
++      const dockSignal = race?.signal ?? foregroundOperation.signal;
+       for (const line of card) {
+         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
+       }
+@@ -5302,8 +5320,11 @@ export async function launchTuiAgentShell(opts: {
+           title: "Send this message to the model?",
+           subtitle: card[0] ?? "",
+           cancelId: "cancel",
+-          onOpen: () => chrome.blurComposer(),
+-          signal: foregroundOperation.signal,
++          onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++          signal: dockSignal,
+           options: [
+             { id: "send", label: "Send", description: "Let the message reach the model as written" },
+             { id: "cancel", label: "Cancel", description: "The message is not sent" },
+@@ -5311,6 +5332,7 @@ export async function launchTuiAgentShell(opts: {
+         }),
+       );
+       input.focus();
++      if (race?.topicWon() === true) return false;
+       setMainAgent("running", id === "send" ? "prompt" : "denied");
+       transcript.add(
+         new otui.TextRenderable(r, {
+@@ -5356,7 +5378,8 @@ export async function launchTuiAgentShell(opts: {
+         }),
+       );
+     };
+-    const requestApprovalLocally: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
++    const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
++      const dockSignal = race?.signal ?? foregroundOperation.signal;
+       if (meta?.untrustedOrigin === true) {
+         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
+         // the call outright — this says why the operator is being asked.
+@@ -5374,7 +5397,7 @@ export async function launchTuiAgentShell(opts: {
+       // message.
+       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
+         addCauseLine(tool, meta);
+-        return confirmUserPromptCard(meta.card);
++        return confirmUserPromptCard(meta.card, race);
+       }
+ 
+       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
+@@ -5382,7 +5405,7 @@ export async function launchTuiAgentShell(opts: {
+       // never remembered — no mode and no saved pattern answers it.
+       if (meta?.alwaysAsk === true && meta.card !== undefined) {
+         addCauseLine(tool, meta);
+-        return confirmScheduleCard(meta.card);
++        return confirmScheduleCard(meta.card, race);
+       }
+ 
+       // Multi-agent spawn: auto-allow read_only; ask for general.
+@@ -5433,8 +5456,11 @@ export async function launchTuiAgentShell(opts: {
+                 : "Spawn general subagent?",
+             subtitle: taskPreview,
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               {
+                 id: "allow",
+@@ -5447,6 +5473,7 @@ export async function launchTuiAgentShell(opts: {
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         setMainAgent("running", id === "allow" ? "subagent" : "denied");
+         transcript.add(
+           new otui.TextRenderable(r, {
+@@ -5499,8 +5526,11 @@ export async function launchTuiAgentShell(opts: {
+             title: "Approve apply_patch?",
+             subtitle: "Diff shown above · Esc denies",
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
+               { id: "deny", label: "Deny", description: "Do not write anything" },
+@@ -5508,6 +5538,7 @@ export async function launchTuiAgentShell(opts: {
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         setMainAgent("running", id === "allow" ? "write" : "denied");
+         transcript.add(
+           new otui.TextRenderable(r, {
+@@ -5578,8 +5609,11 @@ export async function launchTuiAgentShell(opts: {
+             // so no payload prefix can occupy the line read first.
+             subtitle: summariseUseToolApproval(described),
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
+               ...(canTrustMcp
+@@ -5590,6 +5624,7 @@ export async function launchTuiAgentShell(opts: {
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         // Keep the allow/trust/deny mapping in a tested, fail-closed helper.
+         const verdict = mcpDockVerdict(id, canTrustMcp, meta?.fingerprint);
+         const allowed = verdict !== false;
+@@ -5655,8 +5690,11 @@ export async function launchTuiAgentShell(opts: {
+             title: "Approve codex elicitation?",
+             subtitle: elicitationSubtitle,
+             cancelId: "deny",
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+             options: [
+               { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
+               { id: "deny", label: "Deny", description: "codex's action is refused" },
+@@ -5664,6 +5702,7 @@ export async function launchTuiAgentShell(opts: {
+           }),
+         );
+         input.focus();
++      if (race?.topicWon() === true) return false;
+         setMainAgent("running", id === "allow" ? "write" : "denied");
+         transcript.add(
+           new otui.TextRenderable(r, {
+@@ -5753,8 +5792,11 @@ export async function launchTuiAgentShell(opts: {
+           destructive,
+           meta?.credentials === true,
+           {
+-            onOpen: () => chrome.blurComposer(),
+-            signal: foregroundOperation.signal,
++            onOpen: () => {
++              chrome.blurComposer();
++              race?.opened();
++            },
++            signal: dockSignal,
+           },
+           // Flow 275 T7 (specification §4.4): never offer to remember while a
+           // peer's `git-publish` lease applies to this command.
+@@ -5768,6 +5810,7 @@ export async function launchTuiAgentShell(opts: {
+         ),
+       );
+       input.focus();
++      if (race?.topicWon() === true) return false;
+ 
+       if (choice === "deny") {
+         transcript.add(
+@@ -5881,7 +5924,34 @@ export async function launchTuiAgentShell(opts: {
+       if (decision !== "allow") return false;
+       return approvedAnswer();
+     };
+-    io.requestApproval = trackApproval(requestApprovalLocally);
++    // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
++    // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
++    // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
++    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;
++    // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.
++    const mirrorApprovalToTopic =
++      (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
++      async (tool, inputJson, meta) => {
++        const bridge = remoteBridge;
++        if (bridge === undefined || !bridge.active) {
++          return inner(tool, inputJson, meta);
++        }
++        const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
++        const outcome = await raceApproval({
++          turnSignal: foregroundOperation.signal,
++          dock: (race) => inner(tool, inputJson, meta, race),
++          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
++          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
++        });
++        if (outcome.from === "dock") return outcome.result;
++        const allowed = outcome.answer.decision === "allow";
++        input.focus();
++        setMainAgent("running", allowed ? "approved (telegram)" : "denied");
++        io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
++        if (!allowed) return false;
++        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
++      };
++    io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
+ 
+     /** Host for ask_user — Claude-style options docked above the composer. */
+     const askUserInteractive = async (req: {
+@@ -5899,8 +5969,8 @@ export async function launchTuiAgentShell(opts: {
+           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
+         }),
+       );
+-      // flow 401: a question of a Telegram-started turn is also put in the topic; the first answer wins
+-      const topicBridge = remoteBridge?.telegramTurnActive === true ? remoteBridge : undefined;
++      // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
++      const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;
+       const outcome = await raceAskUser({
+         turnSignal: foregroundOperation.signal,
+         ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
+@@ -10041,6 +10111,7 @@ export async function launchTuiAgentShell(opts: {
+         // the newest answer in `history` unfinished. A queued line or another holder of the lease
+         // makes the shell busy without making that answer incomplete.
+         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
++        sessionState: () => ({ queued: mainQueue.length, mode: formatModeInForce(modeForTurn(true)) }),
+         runLine: (text) => remoteQueue.runTelegramLine(text),
+         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
+         notice: (text) => io.onSystem?.(`${text}\n`),
+@@ -10183,7 +10254,7 @@ export async function launchTuiAgentShell(opts: {
+   } catch {
+     return false;
+   } finally {
+-    // Flow 376: closing the shell deregisters from serve, which deletes the topic.
++    // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
+     // Idempotent: the destroy hook above usually started it already.
+     await remoteBridge?.disable();
+     // review r1 F9: leave the bus before releasing the lease (specification

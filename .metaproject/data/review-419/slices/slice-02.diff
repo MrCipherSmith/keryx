@@ -1,0 +1,479 @@
+--- src/remote/approval-mirror.test.ts
+@@ 1,121 @@
++// AC1 and AC2 (flow 419): an approval the shell raises reaches the topic with its buttons; an answer in the
++// shell takes the buttons away (the topic text says "Answered in the shell"), a stopped turn says "Cancelled",
++// and a press that comes after finds nothing to answer. Real client and serve over loopback, fake Bot API.
++
++import { afterEach, describe, expect, test } from "bun:test";
++import type { RemoteClient } from "./client";
++import type { FakeSentMessage } from "./fake-bot-api";
++import { makeRig, type Rig } from "./remote.http.test-helpers";
++import { OWNER_ID, until } from "./remote.test-helpers";
++
++let rig: Rig;
++afterEach(async () => {
++  await rig.cleanup();
++});
++
++async function session(sessionId: string): Promise<{ client: RemoteClient; threadId: number }> {
++  const client = rig.makeClient({ sessionId, project: "/work/mirror", name: "mirror", onLine: () => undefined });
++  const started = await client.start();
++  if (!started.ok) throw new Error(`session did not start: ${started.message}`);
++  return { client, threadId: started.threadId };
++}
++
++async function untilPrompt(threadId: number): Promise<{ message: FakeSentMessage; allow: string; deny: string }> {
++  const find = (): FakeSentMessage | undefined => rig.api.sentTo(threadId).find((message) => message.inlineKeyboard !== undefined);
++  await until(() => find() !== undefined, "the approval buttons in the topic");
++  const message = find() as FakeSentMessage;
++  const buttons = (message.inlineKeyboard ?? []).flat();
++  const allow = buttons.find((button) => button.text === "Allow")?.callback_data;
++  const deny = buttons.find((button) => button.text === "Deny")?.callback_data;
++  if (allow === undefined || deny === undefined) throw new Error("no Allow and Deny buttons");
++  return { message, allow, deny };
++}
++
++function current(messageId: number): FakeSentMessage {
++  const message = rig.api.message(messageId);
++  if (message === undefined) throw new Error(`message ${messageId} is not in the topic`);
++  return message;
++}
++
++describe("an approval raised in the shell", () => {
++  test("AC1: the prompt reaches the outbound log with Allow and Deny", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0001");
++    const abort = new AbortController();
++    void client.askApproval("Run `bun test`?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++    expect(prompt.message.text).toContain("Run `bun test`?");
++    expect(rig.api.sentTo(threadId).some((message) => message.inlineKeyboard !== undefined)).toBe(true);
++    abort.abort("shell");
++  });
++
++  test("AC2, shell first: the buttons go, the text says it was answered in the shell, a late press changes nothing", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0002");
++    const abort = new AbortController();
++    const asked = client.askApproval("Delete the build directory?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++
++    abort.abort("shell");
++    expect((await asked).decision).toBe("deny");
++    await until(() => current(prompt.message.messageId).inlineKeyboard === undefined, "the buttons to go");
++    expect(current(prompt.message.messageId).text).toContain("Answered in the shell");
++
++    const textAfterShell = current(prompt.message.messageId).text;
++    rig.api.pushCallback({ fromId: OWNER_ID, data: prompt.allow, threadId, messageId: prompt.message.messageId });
++    await until(() => rig.api.answeredCallbacks.length >= 1, "the late press to be answered");
++    expect(current(prompt.message.messageId).text).not.toContain("Allowed by");
++    expect(current(prompt.message.messageId).inlineKeyboard).toBeUndefined();
++    expect(textAfterShell).toContain("Answered in the shell");
++  });
++
++  test("AC2, a stopped turn says the approval is no longer open", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0003");
++    const abort = new AbortController();
++    const asked = client.askApproval("Write the file?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++
++    abort.abort("cancelled");
++    await asked;
++    await until(() => current(prompt.message.messageId).inlineKeyboard === undefined, "the buttons to go");
++    expect(current(prompt.message.messageId).text).toContain("Cancelled at ");
++  });
++
++  test("AC2, topic first: the press resolves the shell exactly once and a shell abort afterwards changes nothing", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0004");
++    const abort = new AbortController();
++    const asked = client.askApproval("Run the migration?", 10_000, { signal: abort.signal });
++    const prompt = await untilPrompt(threadId);
++
++    rig.api.pushCallback({ fromId: OWNER_ID, data: prompt.allow, threadId, messageId: prompt.message.messageId });
++    const answer = await asked;
++    expect(answer.decision).toBe("allow");
++    await until(() => current(prompt.message.messageId).text.includes("Allowed by user"), "the edit");
++
++    // The shell closes its dock after the topic won: that must not rewrite the final state.
++    abort.abort("shell");
++    await new Promise((resolve) => setTimeout(resolve, 50));
++    expect(current(prompt.message.messageId).text).toContain("Allowed by user");
++    expect(current(prompt.message.messageId).text).not.toContain("Answered in the shell");
++  });
++
++  test("a signal that is already aborted never posts a prompt that outlives it", async () => {
++    rig = makeRig();
++    await rig.startServe();
++    const { client, threadId } = await session("sess-mir-0005");
++    const abort = new AbortController();
++    abort.abort("cancelled");
++    const answer = await client.askApproval("Too late", 10_000, { signal: abort.signal });
++    expect(answer.decision).toBe("deny");
++    await new Promise((resolve) => setTimeout(resolve, 30));
++    for (const message of rig.api.sentTo(threadId)) {
++      expect(message.inlineKeyboard).toBeUndefined();
++    }
++  });
++});
+
+--- src/remote/command-busy.test.ts
+@@ 13,19 @@
+     }
+   });
+ 
+-  for (const line of ["/new", "/resume", "/sessions", "/compact", "/model"]) {
++  for (const line of ["/new", "/resume", "/sessions", "/compact"]) {
+     it(`${line} is refused with the shell's reason while a turn runs`, async () => {
+       const h = commandHarness({ busy: true });
+       await h.bridge.enable();
+
+--- src/remote/command-gateway.test.ts
+@@ 22,27 @@
+   ["/setup", "setup"],
+   ["/mcp trust", "mcp"],
+   ["/guard", "guard"],
+-  ["/route", "route"],
+   ["/editguard", "editguard"],
+   ["/schedule", "schedule"],
+   ["/rewind", "rewind"],
+
+--- src/remote/command-gateway.test.ts
+@@ 34,40 @@
+ 
+ /** Refused commands whose reason is written in the gateway's own switch, not in REMOTE_REFUSED. */
+ const INLINE_REASONS: Record<string, string> = {
+-  "remote-control": "it would delete this topic; turn it off in the shell",
++  "remote-control": "it would archive this topic; turn it off in the shell",
+   theme: "bare /theme opens a picker",
+   think: "use /think auto, expand or hide",
+ };
+
+--- src/remote/command-model.test.ts
+@@ 124,130 @@
+     expect(h.client().replies[0]).toContain("no models");
+   });
+ 
+-  it("is not run when the shell is busy", async () => {
+-    const h = commandHarness({ busy: true, listModels: async () => ({ provider: "acme", models: models(2) }), switchModel: async () => ({ output: "", ok: true }) });
+-    await h.bridge.enable();
+-    await h.say("/model");
+-    await h.bridge.idle();
+-    expect(h.client().choices).toEqual([]);
+-    expect(h.client().replies[0]).toContain("/model was not run");
+-  });
+-
+-  it("does not switch if the shell became busy while the picker was open", async () => {
++  it("does not switch while the shell is busy; it says so, and switches once the shell is idle (flow 419)", async () => {
+     const switched: Array<[string, string | undefined]> = [];
+     const h = withModels(3, { switched });
+     await h.bridge.enable();
+
+--- src/remote/command-model.test.ts
+@@ 132,142 @@
+     await waitFor(() => h.client().choices.length === 1, "the picker");
+     h.state.busy = true;
+     h.client().choices[0]?.answer(1);
+-    await h.bridge.idle();
++    await waitFor(() => h.client().replies.length === 1, "the queued notice");
+     expect(switched).toEqual([]);
+-    expect(h.client().replies[0]).toContain("/model was not run");
++    expect(h.client().replies[0]).toContain("is queued: main is busy");
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect(switched).toEqual([["m1", undefined]]);
+   });
+ });
+
+--- src/remote/command-queued.test.ts
+@@ 1,132 @@
++// Flow 419, AC4: /route, /external and /model from the topic take effect when main is idle and are queued, with a
++// notice in the topic, when main is busy. Nothing is refused for being busy, and nothing waits on the command line.
++
++import { describe, expect, it } from "bun:test";
++import { classifyRemoteCommand, QUEUED_WHEN_BUSY_COMMANDS, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from "./command-gateway";
++import { commandHarness, waitFor } from "./command.test-helpers";
++
++describe("the gateway (AC4)", () => {
++  it("no longer refuses /route, and puts it on the menu", () => {
++    expect(REMOTE_REFUSED.route).toBeUndefined();
++    expect(REMOTE_COMMANDS.some((spec) => spec.name === "route")).toBe(true);
++    expect(remoteMenu().some((entry) => entry.command === "route")).toBe(true);
++  });
++
++  it("/route shows at once, /route on and off ask first, anything else is refused", () => {
++    expect(classifyRemoteCommand("/route")).toEqual({ kind: "run", command: "route", line: "/route" });
++    for (const arg of ["on", "off"]) {
++      const decision = classifyRemoteCommand(`/route ${arg}`);
++      expect(decision.kind).toBe("confirm");
++      if (decision.kind === "confirm") expect(decision.line).toBe(`/route ${arg}`);
++    }
++    expect(classifyRemoteCommand("/route sideways").kind).toBe("refuse");
++  });
++
++  it("names the commands that wait for an idle main", () => {
++    expect([...QUEUED_WHEN_BUSY_COMMANDS].sort()).toEqual(["external", "external-agents", "model", "route"]);
++  });
++});
++
++describe("main idle", () => {
++  it("/route on runs after Yes", async () => {
++    const h = commandHarness();
++    await h.bridge.enable();
++    await h.say("/route on");
++    await waitFor(() => h.client().choices.length === 1, "the question");
++    h.client().choices[0]?.answer(0);
++    await h.bridge.idle();
++    expect(h.ran).toEqual(["/route on"]);
++    expect(h.client().replies.some((reply) => reply.includes("queued"))).toBe(false);
++  });
++});
++
++describe("main busy", () => {
++  it("/route on is queued with a notice, then runs when main goes idle", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/route on");
++    await waitFor(() => h.client().choices.length === 1, "the question");
++    h.client().choices[0]?.answer(0);
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("/route on is queued: main is busy")), "the queued notice");
++    expect(h.ran).toEqual([]);
++    expect(h.client().replies.join("\n")).not.toContain("was not run");
++
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect(h.ran).toEqual(["/route on"]);
++    expect(h.client().replies.at(-1)).toContain("ran /route on");
++  });
++
++  it("bare /external and /route are queued too, and both run", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/external");
++    await h.say("/route");
++    await waitFor(() => h.client().replies.filter((reply) => reply.includes("is queued")).length === 2, "both notices");
++    expect(h.ran).toEqual([]);
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect([...h.ran].sort()).toEqual(["/external", "/route"]);
++  });
++
++  it("a status question is not stuck behind a queued command", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/external");
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("is queued")), "the notice");
++    await h.say("/status");
++    await waitFor(() => h.ran.includes("/status"), "the status to run");
++    expect(h.ran).toEqual(["/status"]);
++    h.state.busy = false;
++    await h.bridge.idle();
++  });
++
++  it("/model shows its buttons while busy and the switch waits for an idle main", async () => {
++    const switched: string[] = [];
++    const h = commandHarness({
++      busy: true,
++      listModels: async () => ({
++        provider: "acme",
++        models: [
++          { id: "m0", label: "Model 0", current: true },
++          { id: "m1", label: "Model 1" },
++        ],
++      }),
++      switchModel: async (id) => {
++        switched.push(id);
++        return { output: `Model: ${id}`, ok: true };
++      },
++    });
++    await h.bridge.enable();
++    await h.say("/model");
++    await waitFor(() => h.client().choices.length === 1, "the picker");
++    h.client().choices[0]?.answer(1);
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("is queued: main is busy")), "the queued notice");
++    expect(switched).toEqual([]);
++    h.state.busy = false;
++    await h.bridge.idle();
++    expect(switched).toEqual(["m1"]);
++    expect(h.client().replies.at(-1)).toContain("Model: m1");
++  });
++
++  it("a command held too long is dropped and the topic is told", async () => {
++    const h = commandHarness({ busy: true, queuedCommandLimitMs: 30 });
++    await h.bridge.enable();
++    await h.say("/external");
++    await h.bridge.idle();
++    expect(h.ran).toEqual([]);
++    expect(h.client().replies.at(-1)).toContain("main stayed busy");
++  });
++
++  it("a command held when remote control goes off is dropped quietly", async () => {
++    const h = commandHarness({ busy: true });
++    await h.bridge.enable();
++    await h.say("/external");
++    await waitFor(() => h.client().replies.some((reply) => reply.includes("is queued")), "the notice");
++    await h.bridge.disable();
++    await h.bridge.idle();
++    h.state.busy = false;
++    await new Promise((resolve) => setTimeout(resolve, 30));
++    expect(h.ran).toEqual([]);
++  });
++});
+
+--- src/remote/lifecycle.test.ts
+@@ 1,9 @@
+ // AC1: a session registers, gets a topic, exchanges messages with it, and the
+-// topic is deleted when the session deregisters.
++// topic is archived (a closing note, closed, history kept) when the session deregisters.
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+-import { type Harness, makeHarness, OWNER_ID, until } from "./remote.test-helpers";
++import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
++import { type Harness, makeHarness, OWNER_ID, STALE_MS, until } from "./remote.test-helpers";
+ 
+ let h: Harness;
+ afterEach(async () => {
+
+--- src/remote/lifecycle.test.ts
+@@ 49,55 @@
+     expect(await hub.send("unknown-session", "nobody home")).toBe(false);
+   });
+ 
+-  test("deregister deletes the topic and later messages in it are ignored", async () => {
++  test("deregister archives the topic with a closing note and later messages in it are ignored", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/work/app" });
+
+--- src/remote/lifecycle.test.ts
+@@ 57,66 @@
+     await hub.start();
+ 
+     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: true });
+-    expect(h.api.topics()).toEqual([]);
+-    expect(h.api.deletedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
++    expect(h.api.topics().map((t) => t.messageThreadId)).toEqual([reg.threadId]);
++    expect(h.api.deletedTopics).toEqual([]);
++    expect(h.api.closedTopics.map((t) => t.messageThreadId)).toEqual([reg.threadId]);
++    expect(h.api.sentTo(reg.threadId).map((m) => m.text).some((t) => /history stays here/i.test(t))).toBe(true);
+     expect(hub.list()).toEqual([]);
+ 
+     h.api.pushMessage({ fromId: OWNER_ID, text: "anyone?", threadId: reg.threadId });
+
+--- src/remote/lifecycle.test.ts
+@@ 69,99 @@
+     expect(await hub.deregister("sess-one-0001")).toEqual({ ok: true, existed: false });
+   });
+ 
++  test("flow 419 AC7: topic and history survive a shell that exits and a shell that is killed with Ctrl+C", async () => {
++    h = makeHarness();
++    const hub = h.makeHub();
++    const exits = await hub.register({ sessionId: "sess-exit-0001", project: "/work/app", name: "exits" });
++    const killed = await hub.register({ sessionId: "sess-kill-0002", project: "/work/app", name: "killed" });
++    if (!exits.ok || !killed.ok) throw new Error("register failed");
++    await hub.start();
++    await hub.send("sess-exit-0001", "first reply");
++    await hub.send("sess-kill-0002", "second reply");
++
++    // An orderly exit deregisters. A Ctrl+C sends nothing: serve only notices the silence.
++    await hub.deregister("sess-exit-0001");
++    await h.clock.advance(STALE_MS);
++    await h.clock.advance(10 * 60_000 + SESSION_LEASE_HEARTBEAT_MS);
++    await until(() => h.api.closedTopics.length === 2, "both topics archived");
++
++    expect(h.api.deletedTopics).toEqual([]);
++    for (const thread of [exits.threadId, killed.threadId]) {
++      expect(h.api.topic(thread)).toBeDefined();
++      expect(h.api.sentTo(thread).some((m) => /history stays here/i.test(m.text))).toBe(true);
++    }
++    expect(h.api.sentTo(exits.threadId).map((m) => m.text)).toContain("first reply");
++    expect(h.api.sentTo(killed.threadId).map((m) => m.text)).toContain("second reply");
++  });
++
+   test("a heartbeat from an unregistered session is refused with a reason", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+
+--- src/remote/orphan.test.ts
+@@ 27,33 @@
+ }
+ 
+ describe("orphaned sessions", () => {
+-  test("a silent session is announced, kept for the orphan timeout, then its topic is deleted", async () => {
++  test("a silent session is announced, kept for the orphan timeout, then its topic is archived, not deleted", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
+
+--- src/remote/orphan.test.ts
+@@ 43,53 @@
+     expect(h.api.topic(reg.threadId)).toBeDefined();
+ 
+     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
+-    await until(() => h.api.topic(reg.threadId) === undefined, "topic deleted");
++    await until(() => h.api.closedTopics.length === 1, "topic archived");
++    expect(h.api.topic(reg.threadId)).toBeDefined();
++    expect(h.api.deletedTopics).toEqual([]);
++    expect(texts(reg.threadId).some((t) => /history stays here/i.test(t))).toBe(true);
+     expect(hub.list()).toEqual([]);
+-    expect(h.api.deletedTopics).toHaveLength(1);
+   });
+ 
+   test("the notice says how long the topic is kept", async () => {
+
+--- src/remote/orphan.test.ts
+@@ 68,74 @@
+     if (!reg.ok) throw new Error("register failed");
+     await hub.start();
+     await h.clock.advance(STALE_MS + 30_000);
+-    await until(() => h.api.topic(reg.threadId) === undefined, "topic deleted after 30 s");
++    await until(() => h.api.closedTopics.length === 1, "topic archived after 30 s");
+   });
+ 
+   test("a heartbeat inside the window brings the session back and cancels deletion", async () => {
+
+--- src/remote/orphan.test.ts
+@@ 115,121 @@
+     if (!first.ok) throw new Error("register failed");
+     await hub.start();
+     await h.clock.advance(STALE_MS + ORPHAN_MS + SESSION_LEASE_HEARTBEAT_MS);
+-    await until(() => h.api.topic(first.threadId) === undefined, "topic deleted");
++    await until(() => h.api.closedTopics.length === 1, "topic archived");
+ 
+     const again = await hub.register({ sessionId: "sess-two-0002", project: "/w/app", name: "release" });
+     expect(again.ok).toBe(true);
+
+--- src/remote/orphan.test.ts
+@@ 143,164 @@
+     expect(h.deliveries[0]?.line).toBe("are you there");
+   });
+ 
+-  test("a topic that cannot be deleted right now is retried by the next sweep", async () => {
++  test("a topic that cannot be closed right now is retried by the next sweep, with one closing note", async () => {
+     h = makeHarness();
+     const hub = h.makeHub();
+     const reg = await hub.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
+     if (!reg.ok) throw new Error("register failed");
+     await hub.start();
+-    h.api.failNext("deleteForumTopic", new BotApiError("network", "deleteForumTopic: request failed"));
++    h.api.failNext("closeForumTopic", new BotApiError("network", "closeForumTopic: request failed"));
+ 
+     await h.clock.advance(STALE_MS + ORPHAN_MS);
+-    await until(() => hub.events().some((e) => e.type === "topic-delete-failed"), "failed deletion");
+-    expect(h.api.topic(reg.threadId)).toBeDefined();
++    await until(() => hub.events().some((e) => e.type === "topic-close-failed"), "failed close");
++    expect(h.api.closedTopics).toEqual([]);
+ 
+     await h.clock.advance(SESSION_LEASE_HEARTBEAT_MS);
+-    await until(() => h.api.topic(reg.threadId) === undefined, "retried deletion");
++    await until(() => h.api.closedTopics.length === 1, "retried close");
+     expect(hub.list()).toEqual([]);
++    expect(texts(reg.threadId).filter((t) => /history stays here/i.test(t))).toHaveLength(1);
+   });
+ 
+   test("a clock that jumps back does not orphan a live session, nor keep a dead one forever", async () => {
