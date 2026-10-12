@@ -1538,17 +1538,24 @@ test("readline lease loss aborts recovery without a late request", async () => {
   ]);
   let lose!: () => void;
   let lost = false;
-  const out = await repl(["hello", "/exit"], {
-    deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }),
-    session: { enabled: true, openLeased: (opts) => {
-      const opened = openLeasedSession(opts);
-      return { ...opened, lease: { ...opened.lease,
-        get lost() { return lost; }, checkLost: () => lost,
-        onLost: (callback) => { lose = () => { lost = true; callback(); }; return () => {}; },
-      } };
-    } },
-    recovery: { wait: (ms, signal) => { const waiting = waitForRecovery(ms, signal); lose(); return waiting; } },
-  });
+  const previousExitCode = process.exitCode;
+  let out: string;
+  try {
+    out = await repl(["hello", "/exit"], {
+      deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }),
+      session: { enabled: true, openLeased: (opts) => {
+        const opened = openLeasedSession(opts);
+        return { ...opened, lease: { ...opened.lease,
+          get lost() { return lost; }, checkLost: () => lost,
+          onLost: (callback) => { lose = () => { lost = true; callback(); }; return () => {}; },
+        } };
+      } },
+      recovery: { wait: (ms, signal) => { const waiting = waitForRecovery(ms, signal); lose(); return waiting; } },
+    });
+  } finally {
+    // A lost lease makes the final checkpoint fail by design, which sets the exit status.
+    process.exitCode = previousExitCode ?? 0;
+  }
   expect(requests).toHaveLength(1);
   expect(out).toContain("[stopped]");
 });
