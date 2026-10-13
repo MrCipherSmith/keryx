@@ -1,0 +1,24 @@
+# Decisions
+
+- F-001: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-002: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-003: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-004: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-005: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-006: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-007: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-008: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-009: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-010: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-011: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-012: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-013: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-014: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-015: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-016: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-017: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-018: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-019: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-020: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-021: create follow-up task or learning proposal (valid_followup, standalone_review).
+- F-022: create follow-up task or learning proposal (valid_followup, standalone_review).
