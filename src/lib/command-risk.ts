@@ -639,6 +639,11 @@ function decodeAnsiC(body: string): string {
   });
 }
 
+/** A backslash-newline is removed by the shell before any word is cut, so `--waive-c\<NL>overage` is the flag. */
+function joinContinuations(command: string): string {
+  return command.replace(/\\\r?\n/g, "");
+}
+
 /** Replace each `$'…'` word with its decoded text in single quotes, so the word splitter sees what the shell will. */
 function expandAnsiCQuotes(command: string): string {
   return command.replace(/\$'((?:[^'\\]|\\.)*)'/gs, (_m, body: string) => `'${decodeAnsiC(body).replace(/'/g, "'\\''")}'`);
@@ -647,6 +652,16 @@ function expandAnsiCQuotes(command: string): string {
 /** Text with every quote and backslash removed: the form a split-quote or escaped spelling collapses to. */
 function collapseQuoting(command: string): string {
   return expandAnsiCQuotes(command).replace(/["'\\]/g, "");
+}
+
+/**
+ * Segments of the command as written AND with its `$'…'` words expanded. Inside a double-quoted `bash -c` body the shell
+ * leaves `$'…'` for the inner shell to expand, so only the as-written spelling carries it intact into the recursion.
+ */
+function segmentsOfBothSpellings(raw: string): ReturnType<typeof splitSegments> {
+  const command = joinContinuations(raw);
+  const expanded = expandAnsiCQuotes(command);
+  return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];
 }
 
 /** A word the shell will still rewrite (parameter or command substitution), so its text is not its value. */
@@ -660,7 +675,7 @@ function wordIsOpaque(word: string): boolean {
  * a word the shell has yet to expand?
  */
 function parsedCoverageWaiver(command: string, depth = 0): boolean {
-  for (const seg of splitSegments(expandAnsiCQuotes(command))) {
+  for (const seg of segmentsOfBothSpellings(command)) {
     const words = seg.words.map(unescapeWord);
     if (words.some((w) => w.toLowerCase().includes(COVERAGE_WAIVER_FLAG))) return true;
     const review = words.findIndex((w) => w.toLowerCase() === "review");
@@ -682,7 +697,8 @@ function parsedCoverageWaiver(command: string, depth = 0): boolean {
  * be inside it. The raw text and the quote-collapsed text stay as extra nets. HONEST LIMIT: a script file or an
  * interpreter one-liner is out of reach; `runComplete` therefore also requires a terminal for the waiver. Pure.
  */
-export function touchesCoverageWaiver(command: string): boolean {
+export function touchesCoverageWaiver(raw: string): boolean {
+  const command = joinContinuations(raw);
   if (command.toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;
   if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;
   return parsedCoverageWaiver(command);
@@ -692,16 +708,19 @@ export function touchesCoverageWaiver(command: string): boolean {
  * Flow 431 (R2-16): `keryx review chunks estimate --answer …` lifts the pass ceiling on the operator's word, so it
  * asks like the waiver. Parsed words, so a split or escaped spelling is seen too.
  */
-export function touchesChunkEstimateAnswer(command: string): boolean {
+export function touchesChunkEstimateAnswer(raw: string): boolean {
   const scan = (text: string, depth: number): boolean => {
-    for (const seg of splitSegments(expandAnsiCQuotes(text))) {
-      const words = seg.words.map(unescapeWord).map((w) => w.toLowerCase());
+    for (const seg of segmentsOfBothSpellings(text)) {
+      const plain = seg.words.map(unescapeWord);
+      const words = plain.map((w) => w.toLowerCase());
       const chunks = words.indexOf("chunks");
       const after = chunks >= 0 ? words.slice(chunks + 1) : [];
       if (after.includes("estimate") && after.some((w) => w === "--answer" || w.startsWith("--answer="))) return true;
-      if (depth < 4 && seg.words.some((w) => /\s/.test(w) && scan(w, depth + 1))) return true;
+      if (depth < 4 && plain.some((w) => /\s/.test(w) && scan(w, depth + 1))) return true;
     }
     return false;
   };
-  return scan(command, 0);
+  if (scan(raw, 0)) return true;
+  // Past the recursion limit the quoting of a deeply nested `bash -c` is all that hides the flag.
+  return /chunks\s+estimate\b[^;&|]*--answer/i.test(collapseQuoting(joinContinuations(raw)));
 }
