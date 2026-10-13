@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { isEmptyOutput, isReviewerResult, parseReviewResult, type ParsedResult } from "./ledger";
 import { legacyParseReviewResult } from "./legacy-result-parser";
 
@@ -78,6 +79,8 @@ export interface ReplayParsers {
   next: (raw: string) => ParsedResult | undefined;
 }
 
+export const REPORT_PATH = ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/replay-report.md";
+
 const PARSERS: ReplayParsers = { old: legacyParseReviewResult, next: parseReviewResult };
 
 export function replayRaw(file: string, raw: string, parsers: ReplayParsers = PARSERS): ReplayRow {
@@ -121,22 +124,39 @@ function walkFiles(root: string, relative: string): string[] {
   return files;
 }
 
+const GIT_OPTIONS = { encoding: "utf8" as const, env: withoutGitDiscoveryOverrides(process.env) };
+
+/** Tracked paths under `relative`, or `undefined` when `root` is not the top of a git checkout (or git cannot run). A failing `ls-files` inside a checkout is an error, never a reason to walk. */
 function trackedFiles(root: string, relative: string): string[] | undefined {
-  const top = spawnSync("git", ["-C", root, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+  const top = spawnSync("git", ["-C", root, "rev-parse", "--show-toplevel"], GIT_OPTIONS);
   if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)) return undefined;
-  const listed = spawnSync("git", ["-C", root, "ls-files", "-z", "--", relative], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  if (listed.status !== 0) return undefined;
+  const listed = spawnSync("git", ["-C", root, "ls-files", "-z", "--", relative], { ...GIT_OPTIONS, maxBuffer: 64 * 1024 * 1024 });
+  if (listed.status !== 0) {
+    throw new Error(`git ls-files failed in ${root} (${listed.error?.message ?? `exit ${listed.status}`}): ${listed.stderr.trim()}`);
+  }
   return listed.stdout.split("\0").filter((entry) => entry !== "");
 }
 
+/** True when the file exists and its real location is exactly `relative` under the real root: no symbolic link in the path, a tracked file deleted from the working tree or a symlink loop is skipped. */
+function isPlainFileUnder(realRoot: string, relative: string): boolean {
+  try {
+    return realpathSync(path.join(realRoot, relative)) === path.join(realRoot, relative);
+  } catch {
+    return false;
+  }
+}
+
 export function replayRepository(root: string): ReplayRow[] {
+  const realRoot = realpathSync(root);
   const candidates = trackedFiles(root, ".metaproject/flows") ?? walkFiles(root, ".metaproject/flows");
   return candidates
     .filter(isReplayable)
-    .filter((relative) => !lstatSync(path.join(root, relative)).isSymbolicLink())
+    .filter((relative) => isPlainFileUnder(realRoot, relative))
     .sort()
-    .map((relative) => replayRaw(relative, readFileSync(path.join(root, relative), "utf8")));
+    .map((relative) => replayRaw(relative, readFileSync(path.join(realRoot, relative), "utf8")));
 }
+
+const cell = (value: string): string => value.replaceAll("|", "\\|");
 
 export function renderReplayReport(rows: ReplayRow[], decisions: Record<string, string> = DECISIONS): string {
   const differing = rows.filter((row) => !row.same);
@@ -145,20 +165,20 @@ export function renderReplayReport(rows: ReplayRow[], decisions: Record<string, 
     "",
     "Old parser = `legacyParseReviewResult` (`parseReviewResult` as of 249bc59b). New parser = `parseReviewResult` in `src/review/ledger.ts`.",
     "Outcome format: `reviewer|status|f=<findings>|reviewer-result=<bool>`; `none` = no result, `empty` = empty output.",
-    "Regenerate with `bun src/review/replay.ts --write <path>` (from any directory). The parser was not tuned to remove any row; each difference carries the operator decision recorded for that file and hash in `DECISIONS`, or `undecided`.",
+    `Regenerate with \`bun src/review/replay.ts --write ${REPORT_PATH}\` (from any directory). The parser was not tuned to remove any row; each difference carries the operator decision recorded for that file and hash in \`DECISIONS\`, or \`undecided\`.`,
     "",
-    "Only files that git tracks in a `raw/` directory under `.metaproject/flows` are replayed (outside a git checkout the directory is walked instead; symbolic links are skipped). `.metaproject/data/**/raw/` is gitignored local working state and is not replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.",
+    "Replayed: files named `*.txt` whose parent directory is `raw`, under `.metaproject/flows`, with no `raw`, `drivers`, `research-evidence` or `node_modules` directory above that `raw`. Where the replayed root is the top of a git checkout, only the files git tracks are listed (`git ls-files`; a git failure there is an error, not a reason to walk). Where it is not (a root below the checkout top, or no git), the directory is walked instead. A path that resolves through a symbolic link, and a tracked file missing from the working tree, are skipped. `.metaproject/data/**/raw/` is gitignored local working state and is not replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.",
     "",
     `Files replayed: ${rows.length}. Same: ${rows.length - differing.length}. Differences: ${differing.length}.`,
     "",
     "| File | sha256[:12] | Old | New | Cause | Decision |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...differing.map((row) => `| ${row.file} | ${row.hash} | ${row.old} | ${row.next} | ${row.cause} | ${decisionFor(row, decisions)} |`),
+    ...differing.map((row) => `| ${row.file} | ${row.hash} | ${cell(row.old)} | ${cell(row.next)} | ${row.cause} | ${decisionFor(row, decisions)} |`),
     "",
     "## Causes",
     "",
-    "- `fence-inner-backticks`: the old parser cut a `REVIEW_RESULT` fence at the first triple backtick, even one inside a JSON string, found invalid JSON and returned no result; the new parser reads the whole fence and returns the reviewer result the file holds (F-016).",
-    "- `status-only-fragment`: the old parser accepted any object with a string `status`; the file holds a verifier envelope with no reviewer name, The new parser returns none, so `loadRaws` keeps the file with no result and `ledger build` records one gap for it, \"no parseable REVIEW_RESULT block\". Accepted by the operator in polls 162 and 163.",
+    "- `fence-inner-backticks`: the old parser cut a `REVIEW_RESULT` fence at the first triple backtick, even one inside a JSON string, found invalid JSON and returned no result; the new parser reads the whole fence and returns the reviewer result the file holds (finding F-016 of the PR 997 round 2 package, `2026-10-13-pr-997-round2-d5a8cfdc`).",
+    "- `status-only-fragment`: the old parser accepted any object with a string `status`; the file holds a verifier envelope with no reviewer name; the new parser returns none, so `loadRaws` keeps the file with no result and `ledger build` records one gap for it, \"no parseable REVIEW_RESULT block\". Accepted by the operator in polls 162 and 163.",
     "- `unclassified`: a difference neither cause explains; the repository test fails on it.",
     "- Any difference, whatever its cause, is `undecided` until `DECISIONS` lists its file and hash; the repository test fails on `undecided`.",
     "",
