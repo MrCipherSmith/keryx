@@ -325,13 +325,13 @@ describe("remote control is documented where operators look", () => {
   });
 });
 
-// Flow 397 (AC6): the approval ack and its "not confirmed" ending are told in the CLI reference,
-// the wiki page and the CHANGELOG (the README is a short landing page that links the guide), and
-// the version is above 0.3.64, the release before it.
+// Flow 397 (AC6): the approval ack and its "not confirmed" ending are told in the same four
+// places, and the version is above 0.3.64, the release before it.
 describe("the approval ack is documented where operators look", () => {
   const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
 
   for (const file of [
+    "README.md",
     "docs/docs/cli-reference.md",
     ".metaproject/wiki/architecture/remote-control.md",
     "CHANGELOG.md",
@@ -352,6 +352,7 @@ describe("the approval ack is documented where operators look", () => {
   });
 
   for (const file of [
+    "README.md",
     "docs/docs/cli-reference.md",
     "docs/docs/guides/drive-keryx-remotely.md",
     ".metaproject/wiki/architecture/remote-control.md",

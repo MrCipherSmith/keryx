@@ -143,6 +143,13 @@ describes the workspace.
 | Drive a running session from a chat on your phone (opt-in; connect with `/channels`) | [Drive keryx remotely](https://mrciphersmith.github.io/keryx/guides/drive-keryx-remotely/#remote-control-from-telegram) |
 | Look up a command | [CLI reference](https://mrciphersmith.github.io/keryx/cli-reference/) |
 
+A button press on a Telegram approval is confirmed by the shell through
+`approval-ack`: the message ends "Allowed" or "Denied" when the shell applied the
+answer, "Not applied" when no question was waiting for it, and "not confirmed"
+when the shell did not answer within 5 seconds. The guide
+[Drive keryx remotely](https://mrciphersmith.github.io/keryx/guides/drive-keryx-remotely/#remote-control-from-telegram)
+has the details.
+
 ## Status
 
 Keryx is pre-1.0 and released in the 0.3.x series; the npm badge shows the
