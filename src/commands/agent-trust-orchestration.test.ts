@@ -33,6 +33,7 @@ import { isTrustRoutineCommand } from "../lib/trust-routine-command";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { recordOperatorDenial, refusalFingerprint, resetOperatorDenials, setReviewSystem } from "../review/review-system";
 import type { NormalizedMessage } from "../harness/provider/types";
+import type { HookFireResult, HookRuntime } from "../harness/hooks/runtime";
 
 function readTool(name: string, run: () => void = () => {}, untrusted = false): InteractiveTool {
   return {
@@ -333,6 +334,52 @@ test("Flow 441 F-026: in review-auto a refused command is not asked again, while
   const { approvals, ran } = await afterUntrustedIn("ask", dir, [routine, outside]);
   expect(ran).toEqual([routine]);
   expect(approvals).toEqual([]);
+});
+
+test("Flow 441 ag-gate-hook: in review-auto a hook ask on a routine command after untrusted content goes to the operator as an untrusted ask", async () => {
+  setReviewSystem("review-auto");
+  const dir = await bareProject();
+  const routine = `keryx review slice --out ${dir}/o`;
+  const metas: Array<{ hookAsk?: boolean; untrustedOrigin?: boolean }> = [];
+  const ran: string[] = [];
+  const emptyResult: HookFireResult = { decisions: [], additionalContext: [], records: [], warnings: [], anomalies: [] };
+  const runtime: HookRuntime = {
+    interactive: true,
+    registrations: () => [],
+    inheritedHookIds: () => [],
+    forChild: () => runtime,
+    async fire(event) {
+      return event === "PreToolUse" ? { ...emptyResult, decisions: [{ hookId: "keryx.ask-all", decision: "ask" }] } : emptyResult;
+    },
+  };
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "ask",
+    requestApproval: async (tool, _raw, meta) => {
+      if (tool === "fetch_page") return true;
+      metas.push({
+        ...(meta?.hookAsk === true ? { hookAsk: true } : {}),
+        ...(meta?.untrustedOrigin === true ? { untrustedOrigin: true } : {}),
+      });
+      return false;
+    },
+  };
+  const { provider } = scriptedProvider([
+    callRound("f1", "fetch_page", "{}"),
+    callRound("s0", "shell_exec", JSON.stringify({ command: routine })),
+    [...okReply],
+  ]);
+  await runAgentTurn(
+    io,
+    makeDeps(provider, {
+      tools: [readTool("fetch_page", () => {}, true), shellTool(ran, dir)],
+      hooks: { runtime, sessionId: "s1", runId: "r1" },
+    }),
+    [],
+    "go",
+  );
+  expect(ran).toEqual([]);
+  expect(metas).toEqual([{ hookAsk: true, untrustedOrigin: true }]);
 });
 
 test("Flow 441 F-026: a turn records the baseline of the process directory when the shell tool names no directory", async () => {
