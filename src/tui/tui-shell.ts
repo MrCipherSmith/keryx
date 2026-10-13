@@ -7615,9 +7615,9 @@ export async function launchTuiAgentShell(opts: {
     /** The change itself, after any confirmation: `/mode`'s dialog and `/settings`' second Enter both end here. */
     const commitPermissionMode = (next: PermissionMode): void => {
       permissionMode = next;
-      resetOperatorDenials();
       modeChangedThisSession = true;
       paintModeRow();
+      resetOperatorDenials();
       chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
