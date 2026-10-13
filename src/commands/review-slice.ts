@@ -168,9 +168,17 @@ async function readResult(source: string): Promise<ReviewerResult> {
   } catch (error) {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
-  const parsed = parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no status-bearing JSON object: ${source}`);
+  const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no reviewer result (a JSON object with a status and a reviewer or findings): ${source}`);
   return parsed as ReviewerResult;
+}
+
+/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
+function wholeFileResult(raw: string): ReviewerResult | undefined {
+  try {
+    const whole: unknown = JSON.parse(raw);
+    return whole !== null && typeof whole === "object" && !Array.isArray(whole) && typeof (whole as { status?: unknown }).status === "string" ? whole as ReviewerResult : undefined;
+  } catch { return undefined; }
 }
 
 function failUnreadable(error: unknown): void {

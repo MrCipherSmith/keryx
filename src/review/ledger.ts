@@ -79,7 +79,52 @@ export const sha = (value: string | Uint8Array): string => createHash("sha256").
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
-/** The reviewer's result: the last fenced block that parses to an object carrying `status`. Never guessed from prose. */
+const OBJECT_START = /\{\s*["}]/y;
+
+/** Index of the brace closing the object that opens at `start`, or undefined when it never closes. */
+function objectEnd(raw: string, start: number): number | undefined {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let end = start; end < raw.length; end += 1) {
+    const char = raw[end];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') quoted = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) return end;
+  }
+  return undefined;
+}
+
+/** The objects that stand at the top level of a reply. A candidate that fails to parse is skipped whole, never entered; one that never closes ends the scan. */
+function topLevelObjects(raw: string): { found: Array<{ start: number; value: unknown }>; truncated: boolean } {
+  const found: Array<{ start: number; value: unknown }> = [];
+  for (let start = raw.indexOf("{"); start !== -1; start = raw.indexOf("{", start)) {
+    OBJECT_START.lastIndex = start;
+    if (!OBJECT_START.test(raw)) { start += 1; continue; }
+    const end = objectEnd(raw, start);
+    if (end === undefined) return { found, truncated: true };
+    try { found.push({ start, value: JSON.parse(raw.slice(start, end + 1)) }); } catch { /* not JSON: skipped whole */ }
+    start = end + 1;
+  }
+  return { found, truncated: false };
+}
+
+function isReviewerResult(value: unknown): value is ParsedResult {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const object = value as Record<string, unknown>;
+  return typeof object.status === "string" && (typeof object.reviewer === "string" || Array.isArray(object.findings));
+}
+
+/**
+ * The reviewer's result. A fenced `REVIEW_RESULT` block wins (the last one). Otherwise only a top-level object that
+ * carries `reviewer` or a `findings` array counts: the object right after a bare `REVIEW_RESULT` marker when there is one,
+ * the last fenced block when there are fenced blocks, else the only status the reply holds. Two different statuses with no
+ * marker, or an object that never closes, give no result. Never guessed from prose.
+ */
 export function parseReviewResult(raw: string): ParsedResult | undefined {
   const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
   if (labelled.length > 0) {
@@ -89,31 +134,26 @@ export function parseReviewResult(raw: string): ParsedResult | undefined {
         ? parsed as ParsedResult : undefined;
     } catch { return undefined; }
   }
-  let result: ParsedResult | undefined;
-  for (let start = 0; start < raw.length; start += 1) {
-    if (raw[start] !== "{") continue;
-    let depth = 0;
-    let quoted = false;
-    let escaped = false;
-    for (let end = start; end < raw.length; end += 1) {
-      const char = raw[end];
-      if (quoted) {
-        if (escaped) escaped = false;
-        else if (char === "\\") escaped = true;
-        else if (char === '"') quoted = false;
-      } else if (char === '"') quoted = true;
-      else if (char === "{") depth += 1;
-      else if (char === "}" && --depth === 0) {
-        try {
-          const parsed = JSON.parse(raw.slice(start, end + 1));
-          if (typeof parsed.status === "string") result = parsed as ParsedResult;
-          start = end;
-        } catch { /* prose brace: try the next candidate */ }
-        break;
-      }
-    }
+  const markers = [...raw.matchAll(/REVIEW_RESULT[ \t]*[:=]?\s*(?=\{)/g)];
+  if (markers.length > 0) {
+    const marker = markers[markers.length - 1]!;
+    const start = marker.index! + marker[0].length;
+    const end = objectEnd(raw, start);
+    if (end === undefined) return undefined;
+    try {
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      return isReviewerResult(parsed) ? parsed : undefined;
+    } catch { return undefined; }
   }
-  return result;
+  const { found, truncated } = topLevelObjects(raw);
+  if (truncated) return undefined;
+  const fences = [...raw.matchAll(/```[^\n]*\n[\s\S]*?```/g)].map((m) => [m.index!, m.index! + m[0].length] as const);
+  const fenced = found.filter(({ start }) => fences.some(([from, to]) => start >= from && start < to));
+  const pool = fenced.length > 0 ? fenced : found;
+  const statuses = new Set(pool.map(({ value }) => (value as { status?: unknown } | null)?.status).filter((status) => typeof status === "string"));
+  if (fenced.length === 0 && statuses.size > 1) return undefined;
+  const accepted = pool.map(({ value }) => value).filter(isReviewerResult);
+  return accepted.length === 0 ? undefined : accepted[accepted.length - 1];
 }
 
 export function isEmptyOutput(raw: string): boolean {

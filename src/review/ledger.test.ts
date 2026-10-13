@@ -83,6 +83,56 @@ describe("parseReviewResult", () => {
     expect(parseReviewResult("(subagent produced no text)")).toBeUndefined();
     expect(parseReviewResult('```json\n{"verdict":"ok"}\n```')).toBeUndefined();
   });
+
+  // Flow 441 (D-01, D-03, D-05, D-10): a bare reply gives the reviewer's result or nothing, never a fragment of it.
+  describe("a bare reply (flow 441 AC11-AC15)", () => {
+    const blocked = '{"status":"BLOCKED","reviewer":"r","findings":[]}';
+
+    test("AC11: a reply whose outer object never closes gives nothing, not a nested slice entry", () => {
+      const truncated = 'Result: {"status":"DONE","reviewer":"r","slices":[{"id":"slice-01","status":"DONE"},{"id":"slice-02","status":"DONE"}';
+      expect(parseReviewResult(truncated)).toBeUndefined();
+    });
+
+    test("AC12: a trailing comma in `slices` or before the closing brace gives nothing", () => {
+      expect(parseReviewResult('{"status":"DONE","reviewer":"r","slices":[{"id":"s1","status":"DONE"},],"findings":[]}')).toBeUndefined();
+      expect(parseReviewResult('{"status":"DONE","reviewer":"r","findings":[],}')).toBeUndefined();
+    });
+
+    test("AC13: two different statuses and no marker give nothing; a marker picks the object after it", () => {
+      expect(parseReviewResult(`${blocked}\n{"status":"DONE"}`)).toBeUndefined();
+      expect(parseReviewResult(`${blocked}\n{"status":"DONE","reviewer":"r","findings":[]}`)).toBeUndefined();
+      expect(parseReviewResult(`REVIEW_RESULT: ${blocked}\n{"status":"DONE"}`)?.status).toBe("BLOCKED");
+      expect(parseReviewResult(`${blocked}\nREVIEW_RESULT: {"status":"DONE","reviewer":"r","findings":[]}`)?.status).toBe("DONE");
+    });
+
+    test("AC13: the same status twice is not ambiguous, the last object is the result", () => {
+      const first = '{"status":"DONE","reviewer":"a","findings":[]}';
+      const second = '{"status":"DONE","reviewer":"b","findings":[]}';
+      expect(parseReviewResult(`${first}\n${second}`)?.reviewer).toBe("b");
+    });
+
+    test("AC14: only an object with `reviewer` or a `findings` array counts", () => {
+      expect(parseReviewResult('{"status":"DONE"}')).toBeUndefined();
+      expect(parseReviewResult('{"status":"DONE","findings":"none"}')).toBeUndefined();
+      expect(parseReviewResult('{"status":"DONE","reviewer":"r"}')?.reviewer).toBe("r");
+      expect(parseReviewResult('{"status":"DONE","findings":[]}')?.status).toBe("DONE");
+      expect(parseReviewResult('```REVIEW_RESULT\n{"status":"DONE"}\n```')?.status).toBe("DONE");
+    });
+
+    test("AC15: the object after the marker is the result whatever other objects carry a status", () => {
+      const reply = `{"status":"BLOCKED","reviewer":"a"}\nREVIEW_RESULT: {"status":"DONE","reviewer":"b"}\n{"status":"INCOMPLETE","reviewer":"c"}`;
+      expect(parseReviewResult(reply)?.reviewer).toBe("b");
+      expect(parseReviewResult('REVIEW_RESULT: {"status":"DONE","reviewer":"b"')).toBeUndefined();
+      expect(parseReviewResult('REVIEW_RESULT: {"status":"DONE"}')).toBeUndefined();
+    });
+
+    test("a prose brace before the result does not hide it, and a result with nested objects is read whole", () => {
+      const reply = 'Checked the {config} block.\n{"status":"DONE","reviewer":"r","slices":[{"id":"s1","status":"DONE"}],"findings":[]}';
+      const parsed = parseReviewResult(reply);
+      expect(parsed?.reviewer).toBe("r");
+      expect(Array.isArray(parsed?.slices) && parsed.slices.length).toBe(1);
+    });
+  });
 });
 
 describe("buildLedger", () => {
