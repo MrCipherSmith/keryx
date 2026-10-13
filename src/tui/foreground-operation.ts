@@ -283,6 +283,9 @@ export function createForegroundAgentIoFacade(
     onAutoApproved: (tool, input, meta) => {
       if (accepts()) autoApproved()?.(tool, input, meta);
     },
+    onQuestionSelfAnswered: (question, answerLabel) => {
+      if (accepts()) io.onQuestionSelfAnswered?.(question, answerLabel);
+    },
     permissionMode: () => (accepts() ? modeOf()?.() ?? "ask" : "ask"),
     // Share the session grant set with the shell, but never let a stale turn
     // use it: readOnly denies every mutating tool when ownership is lost.

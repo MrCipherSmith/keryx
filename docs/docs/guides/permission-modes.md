@@ -54,6 +54,33 @@ Subagents keep their own limit (10 by default, at most 24 for a `max_rounds`
 request) in every mode. They never ask a person at their limit, so there is no
 question to remove.
 
+## Who answers a question
+
+The mode also decides who answers an `ask_user` question the model raises.
+`trust` is a statement about actions ("do not interrupt me for a command I would
+have approved"), not about judgement, so it does not change this.
+
+| Mode | Who answers |
+|---|---|
+| `ask` | You. |
+| `trust` | You. |
+| `auto` | The model picks the recommended option, or the first one, and says so. |
+
+In `auto` the model is told `[auto mode] chose this without asking the user`, so
+it cannot present the choice as yours, and the shell prints a
+`◇ answered without asking (auto):` line with the question and the chosen
+label. Such a question uses no tool-call budget and is not remembered as an answer
+of yours.
+
+The question still goes to you when it decides an irreversible action
+(`irreversible` or `action`), when the turn holds untrusted external content, or
+when it asks for permission after you refused an action. An unattended run
+stops at a question as before.
+
+A session with no way to show a question (no dock, no host) now tells the model
+"No one was asked" instead of "User cancelled the question (Esc)", so it does not
+report a cancellation nobody made.
+
 ## Automatic review
 
 An automatic review is a **run mode of one turn**, separate from the permission

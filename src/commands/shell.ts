@@ -2254,6 +2254,11 @@ export async function runAgentRepl(
     const trustedFlag = meta.mcpTrusted === true ? style.yellow(` ${TRUSTED_MARKER}`) : "";
     out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag}${trustedFlag} ${style.dim(preview)}\n`);
   };
+  agentIo.onQuestionSelfAnswered = (question, answerLabel) => {
+    stopSpinner();
+    const shortQuestion = question.length > 100 ? `${question.slice(0, 97)}…` : question;
+    out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(`${shortQuestion} → ${answerLabel}`)}\n`);
+  };
 
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];

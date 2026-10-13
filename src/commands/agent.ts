@@ -27,7 +27,7 @@ import { tracePhase } from "../lib/phase-trace";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand, isTrustRoutineTool } from "../lib/trust-routine-command";
-import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
+import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, resolveQuestionAnswerer, type PermissionMode } from "./permission-mode";
 import { AUTOMATIC_REVIEW_NOTE, AutomaticReviewRun, describeAutomaticReviewTurn, isAutomaticReviewRequest } from "./automatic-review";
 import {
   ENV_AGENT_MAX_ROUNDS,
@@ -61,7 +61,8 @@ import {
   type SubmittedResult,
 } from "../harness/tool/builtin/submit-result-tool";
 import type { McpRuntime } from "../mcp-servers/runtime";
-import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { parseAskUserInput, selfAnswerAskUser, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { askFloor } from "../review/arbiter-floor";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type { BusInbox } from "../bus/inbox";
 import type { RenderedBusEvent } from "../bus/client";
@@ -338,6 +339,11 @@ export interface AgentIO {
   onToolResult?: (name: string, result: InteractiveToolResult) => void;
   /** Non-token system/error text. */
   onSystem?: (text: string) => void;
+  /**
+   * `auto` mode answered an `ask_user` question itself instead of asking the user. Shown so the user can see
+   * that nobody was asked; a host that omits it hides a decision made on their behalf.
+   */
+  onQuestionSelfAnswered?: (question: string, answerLabel: string) => void;
   /**
    * SLATE-11 (AC3): a `TerminalState` was emitted on the unattended path
    * (`deps.unattended === true`) — budget exhaustion or an intercepted
@@ -2488,6 +2494,28 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
   return options.slateSession !== undefined ? slateSessionDir(options.slateSession) : undefined;
 }
 
+/**
+ * Under `auto` the model answers its own `ask_user` question (see `resolveQuestionAnswerer`). Not for a question the
+ * floor keeps for a human: an irreversible or action-tagged one, one shaped by untrusted content, or a permission-style
+ * one after the operator refused something. An invalid call is left to `executeCall`, which reports the error.
+ */
+function selfAnsweredQuestion(
+  call: PendingCall,
+  toolByName: Map<string, InteractiveTool>,
+  mode: PermissionMode,
+  untrustedContentSeen: boolean,
+): { question: string; label: string; result: InteractiveToolResult } | undefined {
+  if (call.name !== "ask_user" || !toolByName.has("ask_user") || resolveQuestionAnswerer(mode) !== "model") {
+    return undefined;
+  }
+  const parsed = parseAskUserInput(parseToolInput(call.input));
+  if (!parsed.ok) return undefined;
+  const request = untrustedContentSeen ? { ...parsed.request, untrustedContent: true } : parsed.request;
+  if (askFloor(request) !== undefined) return undefined;
+  const { question, option, result } = selfAnswerAskUser(request);
+  return { question, label: option.label, result };
+}
+
 function askUserQuestion(call: PendingCall): string | undefined {
   const question = parseToolInput(call.input).question;
   return call.name === "ask_user" && typeof question === "string" ? question : undefined;
@@ -4351,10 +4379,19 @@ async function runAgentTurnCore(
       const precomputedResult = concurrentSpawnResults?.get(call.id);
       let result: InteractiveToolResult;
       const storedAnswer = precomputedResult === undefined ? await storedAskUserAnswer(call, options) : undefined;
+      // Not an invocation: nothing ran, so the budget is untouched, and the hooks and the approval gate (a `read`
+      // tool never reaches the latter) are skipped, as for the automatic review's own answers.
+      const selfAnswered =
+        precomputedResult === undefined && storedAnswer === undefined
+          ? selfAnsweredQuestion(call, toolByName, io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE, untrustedContentSeen)
+          : undefined;
       if (precomputedResult !== undefined) {
         result = precomputedResult;
       } else if (storedAnswer !== undefined) {
         result = { output: storedAnswer, isError: false };
+      } else if (selfAnswered !== undefined) {
+        result = selfAnswered.result;
+        io.onQuestionSelfAnswered?.(selfAnswered.question, selfAnswered.label);
       } else {
         try {
           result = await executeCall(
@@ -4400,7 +4437,7 @@ async function runAgentTurnCore(
           caughtToolErrors.push({ toolName: call.name, message });
         }
       }
-      if (precomputedResult === undefined && storedAnswer === undefined) {
+      if (precomputedResult === undefined && storedAnswer === undefined && selfAnswered === undefined) {
         await rememberAskUserAnswer(call, result, options, now());
       }
       io.onToolResult?.(call.name, result);

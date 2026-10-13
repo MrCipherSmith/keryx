@@ -6170,6 +6170,16 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     io.onAutoApproved = autoApprovedFor(false);
+    // NOT dimmed, for the same reason: `auto` mode answered a question the user never saw, so this line is the record.
+    io.onQuestionSelfAnswered = (question, answerLabel) => {
+      const shortQuestion = question.length > 100 ? `${question.slice(0, 97)}…` : question;
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `qs${uid++}`,
+          content: otui.t`${roleChunk(otui, "attention", "◇ answered without asking (auto):")} ${dimChunk(otui, `${shortQuestion} → ${answerLabel}`)}`,
+        }),
+      );
+    };
     // Flow 396 (finding 9): what a turn that came from Telegram is judged and asked by. Passed to the
     // foreground facade of THAT turn only, so it follows the turn and not a bridge-wide flag: a trust default
     // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
