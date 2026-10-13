@@ -137,6 +137,16 @@ test("a no keeps the run blocked, and an answer does not carry over to a differe
   expect(await chunkRunBlocker(pkg, root)).not.toContain("answered no");
 });
 
+test("an answer recorded for another plan neither unblocks nor blocks a run that changed under it", async () => {
+  dropFiles(1200);
+  await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
+  await answerChunkEstimate(pkg, "yes", "run them");
+  dropFiles(1250);
+  const blocked = await chunkRunBlocker(pkg, root);
+  expect(blocked).toContain("exceed the ceiling");
+  expect(blocked).toContain("--answer yes");
+});
+
 test("a yes covers the whole plan: recording a chunk DONE does not ask again (R1-06)", async () => {
   dropFiles(1200);
   await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");

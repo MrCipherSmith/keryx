@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -82,6 +83,11 @@ describe("layers used by a reviewer run, counted from its tool-call log (AC7)", 
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  });
+
+  test.skipIf(process.platform === "win32")("a driver-named log that is a FIFO is refused without being opened", async () => {
+    execFileSync("mkfifo", [path.join(dir, "pipe.log")]);
+    expect(await readToolLog(dir, "review-logic", "pipe.log")).toBeUndefined();
   });
 
   test("the panel summary counts reviewers without a log as unknown, and skips reviewers that did not run", () => {

@@ -239,7 +239,7 @@ async function writeSelfIgnoringDir(dir: string): Promise<void> {
 }
 
 /** Move a finished staging directory into place; the previous graph is put back if the move fails. */
-async function publishDirectory(staging: string, finalDir: string): Promise<void> {
+export async function publishDirectory(staging: string, finalDir: string): Promise<void> {
   const previous = `${finalDir}.old.${randomUUID()}`;
   let hadPrevious = true;
   try {

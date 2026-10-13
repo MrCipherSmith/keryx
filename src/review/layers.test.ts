@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   PackageGraphError,
   loadPackageGraph,
+  manifestHead,
+  publishDirectory,
   readLayers,
   refreshLayers,
   type LayerDeps,
@@ -16,6 +18,36 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await fixture.cleanup();
+});
+
+describe("guards around the layers file and the head (round 1)", () => {
+  test("a manifest head that is not a commit hash is not used", async () => {
+    const write = (head: unknown) => writeFile(path.join(fixture.packageDir, "manifest.json"), JSON.stringify({ target: { head } }));
+    await write("0123abc");
+    expect(await manifestHead(fixture.packageDir)).toBe("0123abc");
+    await write("--upload-pack=touch /tmp/x");
+    expect(await manifestHead(fixture.packageDir)).toBeNull();
+    await write("abc12");
+    expect(await manifestHead(fixture.packageDir)).toBeNull();
+  });
+
+  test("a layers.json of another version is not read", async () => {
+    await writeFile(path.join(fixture.packageDir, "layers.json"), JSON.stringify({ version: 99, prHead: "x" }));
+    expect(await readLayers(fixture.packageDir)).toBeNull();
+  });
+
+  test("refresh refuses a head or base that looks like an option", async () => {
+    await expect(refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir, prHead: "--upload-pack=x" })).rejects.toThrow();
+    await expect(refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir, base: "--output=x" })).rejects.toThrow();
+  });
+
+  test("a publish that fails puts the previous graph back", async () => {
+    const finalDir = path.join(fixture.packageDir, "published");
+    await mkdir(finalDir, { recursive: true });
+    await writeFile(path.join(finalDir, "old.txt"), "old");
+    await expect(publishDirectory(path.join(fixture.packageDir, "no-such-staging"), finalDir)).rejects.toThrow();
+    expect(await readFile(path.join(finalDir, "old.txt"), "utf8")).toBe("old");
+  });
 });
 
 describe("refreshLayers (AC1)", () => {

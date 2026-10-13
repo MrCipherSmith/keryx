@@ -132,6 +132,26 @@ describe("running the chunks one at a time through the retry plan (AC8b, AC8c)",
     expect(pass?.uncoveredFiles).toEqual([]);
   });
 
+  test("DONE_WITH_CONCERNS finishes the chunk and keeps its findings (round 1)", async () => {
+    await planOf(2, 600, { maxFiles: 2 });
+    const outcome = await recordChunk(packageDir, "chunk-001", {
+      status: "DONE_WITH_CONCERNS",
+      findings: [{ file: "src/dep-000.ts", line: 3, severity: "minor", title: "a concern" }],
+    });
+    expect(outcome.state).toBe("done");
+    expect(outcome.decision).not.toBe("retry");
+    expect((await readChunkState(packageDir)).outcomes["chunk-001"]?.findings).toHaveLength(1);
+  });
+
+  test("a chunk already split is not split again by a second failure (round 1)", async () => {
+    await planOf(4, 600, { maxFiles: 4 });
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    const afterFirst = (await readChunkState(packageDir)).derived.length;
+    expect(afterFirst).toBe(2);
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    expect((await readChunkState(packageDir)).derived).toHaveLength(afterFirst);
+  });
+
   test("a chunk the retry plan gives up on stays pending, never done", async () => {
     await planOf(2, 600, { maxFiles: 2 });
     let last = await recordChunk(packageDir, "chunk-001", { status: "BLOCKED" });
