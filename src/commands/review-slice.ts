@@ -160,7 +160,7 @@ async function readJsonSource<T>(source: string, label: string): Promise<T> {
 
 class UnreadableInput extends Error {}
 
-/** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (a REVIEW_RESULT block, or a bare object carrying a reviewer or findings). A truncated or ambiguous reply is refused. */
+/** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (a REVIEW_RESULT block, or a bare object with a status and a reviewer or findings). A truncated or ambiguous reply is refused. */
 async function readResult(source: string): Promise<ReviewerResult> {
   let raw: string;
   try {
@@ -169,7 +169,7 @@ async function readResult(source: string): Promise<ReviewerResult> {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
   const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (plain JSON with a status, or a reply with a REVIEW_RESULT block or a bare object carrying a reviewer or findings; a truncated or ambiguous reply is refused): ${source}`);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status, or a reply with a REVIEW_RESULT block carrying a reviewer or findings; a truncated or ambiguous reply is refused): ${source}`);
   return parsed as ReviewerResult;
 }
 

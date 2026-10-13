@@ -82,32 +82,58 @@ const text = (v: unknown): v is string => typeof v === "string" && v.trim().leng
 /** A `{` followed by a quote or `}`: where a JSON object with keys, or an empty one, can start. A prose brace such as `{config}` or `{ to` does not match, so it never opens a candidate. */
 const OBJECT_START = /\{\s*["}]/y;
 
-/** Index of the brace closing the object that opens at `start`, or undefined when it never closes. */
-function objectEnd(raw: string, start: number): number | undefined {
+const RESULT_KEYS = new Set(["status", "reviewer", "findings"]);
+const KEY_COLON = /\s*:/y;
+
+/**
+ * The brace closing the object that opens at `start`. When it never closes, `claimsResult` says whether the object
+ * itself (not an object nested in it) carries a key of a reviewer result: only then is the fragment a cut-off result.
+ */
+function objectEnd(raw: string, start: number): { end?: number; claimsResult: boolean } {
   let depth = 0;
   let quoted = false;
   let escaped = false;
+  let keyFrom = 0;
+  let claimsResult = false;
   for (let end = start; end < raw.length; end += 1) {
     const char = raw[end];
     if (quoted) {
       if (escaped) escaped = false;
       else if (char === "\\") escaped = true;
-      else if (char === '"') quoted = false;
-    } else if (char === '"') quoted = true;
+      else if (char === '"') {
+        quoted = false;
+        if (depth === 1 && !claimsResult && RESULT_KEYS.has(raw.slice(keyFrom, end))) {
+          KEY_COLON.lastIndex = end + 1;
+          claimsResult = KEY_COLON.test(raw);
+        }
+      }
+    } else if (char === '"') { quoted = true; keyFrom = end + 1; }
     else if (char === "{") depth += 1;
-    else if (char === "}" && --depth === 0) return end;
+    else if (char === "}" && --depth === 0) return { end, claimsResult };
   }
-  return undefined;
+  return { claimsResult };
 }
 
-/** The objects that stand at the top level of a reply. A candidate that fails to parse is skipped whole, never entered; one that never closes ends the scan. */
+/** How many cut-off-looking fragments are skipped before the reply is read as truncated: every one costs a scan to the end. */
+const MAX_UNCLOSED = 8;
+
+/**
+ * The objects that stand at the top level of a reply. A candidate that fails to parse is skipped whole, never entered.
+ * One that never closes ends the scan when it carries the result keys (a result cut off); otherwise it is prose and only
+ * its brace is skipped, up to MAX_UNCLOSED times.
+ */
 function topLevelObjects(raw: string): { found: Array<{ start: number; value: unknown }>; truncated: boolean } {
   const found: Array<{ start: number; value: unknown }> = [];
+  let unclosed = 0;
   for (let start = raw.indexOf("{"); start !== -1; start = raw.indexOf("{", start)) {
     OBJECT_START.lastIndex = start;
     if (!OBJECT_START.test(raw)) { start += 1; continue; }
-    const end = objectEnd(raw, start);
-    if (end === undefined) return { found, truncated: true };
+    const { end, claimsResult } = objectEnd(raw, start);
+    if (end === undefined) {
+      if (claimsResult || (unclosed += 1) > MAX_UNCLOSED) return { found, truncated: true };
+      start += 1;
+      continue;
+    }
     try { found.push({ start, value: JSON.parse(raw.slice(start, end + 1)) }); } catch { /* not JSON: skipped whole */ }
     start = end + 1;
   }
@@ -144,7 +170,7 @@ type Decision = { result: ParsedResult | undefined };
 
 /** The last ```REVIEW_RESULT block. It keeps the status-only rule: the label already says what the block is. */
 function labelledFence(raw: string): Decision | undefined {
-  const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
+  const labelled = [...raw.matchAll(/```REVIEW_RESULT[ \t]*\r?\n([\s\S]*?)```/gi)];
   if (labelled.length === 0) return undefined;
   try {
     const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
@@ -152,18 +178,26 @@ function labelledFence(raw: string): Decision | undefined {
   } catch { return { result: undefined }; }
 }
 
-/** The object right after the last bare `REVIEW_RESULT` marker. A marker decides: no other object is looked at when it fails. */
-function afterMarker(raw: string): Decision | undefined {
-  const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g)];
-  if (markers.length === 0) return undefined;
-  const marker = markers[markers.length - 1]!;
-  const start = marker.index! + marker[0].length;
-  const end = objectEnd(raw, start);
-  if (end === undefined) return { result: undefined };
-  try {
-    const parsed = JSON.parse(raw.slice(start, end + 1));
-    return { result: isReviewerResult(parsed) ? parsed : undefined };
-  } catch { return { result: undefined }; }
+/** How many of the last markers are tried: each one whose object never closes costs a scan to the end. */
+const MAX_MARKERS = 8;
+
+/**
+ * The reviewer result right after the last bare `REVIEW_RESULT` marker that has one. A marker followed by something that
+ * is not a reviewer result (prose such as `REVIEW_RESULT {contract}`, a cut-off object) is passed over for the one before it.
+ */
+function afterMarker(raw: string): ParsedResult | undefined {
+  const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g)].slice(-MAX_MARKERS);
+  for (let at = markers.length - 1; at >= 0; at -= 1) {
+    const marker = markers[at]!;
+    const start = marker.index! + marker[0].length;
+    const { end } = objectEnd(raw, start);
+    if (end === undefined) continue;
+    try {
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      if (isReviewerResult(parsed)) return parsed;
+    } catch { /* prose after the word: try the marker before */ }
+  }
+  return undefined;
 }
 
 /** No label and no marker: the reviewer-shaped objects at the top level, fenced ones first. */
@@ -189,15 +223,18 @@ function scannedResult(raw: string): ParsedResult | undefined {
 /**
  * The reviewer's result, in this order; the first rule that applies decides.
  * 1. The last ```REVIEW_RESULT fence: any object with a status.
- * 2. The object after the last bare REVIEW_RESULT marker: a status plus a reviewer or a findings array. If it is missing,
- *    unparseable or never closes there is no result, and no other object is tried.
- * 3. Otherwise the top-level objects of the reply: an object that never closes gives no result; the last reviewer-shaped
+ * 2. The object after the last bare REVIEW_RESULT marker whose object is a reviewer result: a status plus a reviewer or a
+ *    findings array. A marker followed by anything else is passed over for the one before it.
+ * 3. Otherwise the top-level objects of the reply: a cut-off object that carries the result keys gives no result (prose
+ *    that merely opens a brace is skipped, a few times); the last reviewer-shaped
  *    object inside a fenced block wins; with none, the last reviewer-shaped bare object, unless the bare objects carry
  *    different statuses (then none; the same status twice is not ambiguous).
  * Never guessed from prose.
  */
 export function parseReviewResult(raw: string): ParsedResult | undefined {
-  return (labelledFence(raw) ?? afterMarker(raw) ?? { result: scannedResult(raw) }).result;
+  const labelled = labelledFence(raw);
+  if (labelled !== undefined) return labelled.result;
+  return afterMarker(raw) ?? scannedResult(raw);
 }
 
 export function isEmptyOutput(raw: string): boolean {

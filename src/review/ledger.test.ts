@@ -90,6 +90,52 @@ describe("parseReviewResult", () => {
     expect(parseReviewResult(raw)).toBeUndefined();
   });
 
+  describe("a complete result is not lost to prose that looks like JSON", () => {
+    const good = { reviewer: "r", status: "DONE", findings: [] };
+    const goodJson = JSON.stringify(good);
+
+    test("an unclosed fragment that does not carry the result keys is skipped, before or after the result", () => {
+      for (const reply of [
+        `I saw {"foo": in the code\n${goodJson}`,
+        `${goodJson}\nnote: the literal {"x is bad`,
+        `${goodJson}\nSee \`foo({"a":1\``,
+        `${goodJson}\n{"`,
+        `\`\`\`json\n${goodJson}\n\`\`\`\ntext {"x`,
+        `He said "{" then\n${goodJson}`,
+      ]) expect(parseReviewResult(reply)).toEqual(good);
+    });
+
+    test("a value that reads like a result key is not a key", () => {
+      expect(parseReviewResult(`${goodJson}\nprose {"note": "status", more`)).toEqual(good);
+    });
+
+    test("an unclosed object that carries the result keys is still a truncated reply", () => {
+      expect(parseReviewResult('{"status":"DONE","reviewer":"r","findings":[{"severity":"major"')).toBeUndefined();
+      expect(parseReviewResult('{\n  "status": "DONE",\n  "reviewer": "r",\n  "findings": [\n')).toBeUndefined();
+      expect(parseReviewResult(`${goodJson}\n{"status":"BLOCKED","reviewer":"x","findings":[`)).toBeUndefined();
+    });
+
+    test("a marker whose object is not a reviewer result falls back to an earlier marker, then to the scan", () => {
+      expect(parseReviewResult(`REVIEW_RESULT: ${goodJson}\nNote the REVIEW_RESULT: {"status":"X"} format is required`)).toEqual(good);
+      expect(parseReviewResult(`REVIEW_RESULT: ${goodJson}\nI follow REVIEW_RESULT: {...}`)).toEqual(good);
+      expect(parseReviewResult(`The REVIEW_RESULT {"a":1} stuff\n${goodJson}`)).toEqual(good);
+      expect(parseReviewResult(`Per the REVIEW_RESULT {contract} I return:\n${goodJson}`)).toEqual(good);
+    });
+
+    test("a fenced non-result object does not hide a bare result", () => {
+      expect(parseReviewResult(`\`\`\`json\n{"name":"x"}\n\`\`\`\n${goodJson}`)).toEqual(good);
+    });
+
+    test("whitespace after a label, and thousands of unclosed candidates, are read in linear time", () => {
+      const started = performance.now();
+      expect(parseReviewResult(`\`\`\`REVIEW_RESULT${" \n".repeat(100_000)}`)).toBeUndefined();
+      expect(parseReviewResult(`\`\`\`REVIEW_RESULT${"\n".repeat(100_000)}`)).toBeUndefined();
+      expect(parseReviewResult('REVIEW_RESULT{"'.repeat(20_000))).toBeUndefined();
+      expect(parseReviewResult('{"'.repeat(20_000))).toBeUndefined();
+      expect(performance.now() - started).toBeLessThan(2000);
+    });
+  });
+
   test("returns nothing for prose, empty output or a block without a status", () => {
     expect(parseReviewResult("looks fine to me")).toBeUndefined();
     expect(parseReviewResult("(subagent produced no text)")).toBeUndefined();
