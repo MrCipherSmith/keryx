@@ -105,7 +105,7 @@ function boundedRedactedAnchorsSnapshot(anchors: SlateAnchors, maxTokens: number
 /**
  * Render `state` as a `KERYX_TERMINAL_STATE`-sentinel text block for human/
  * log visibility — modeled on `KERYX_INSTALLATION_RESULT`
- * (docs/docs/agent-installation-playbook.md:290-309): a sentinel header line
+ * (the "Structured handoff contract" section of docs/docs/agent-installation-playbook.md): a sentinel header line
  * plus `key: value` fields. Pure (same input + same `opts` always renders the
  * same output — no clock/RNG of its own, `occurredAt` is already baked into
  * `state`).

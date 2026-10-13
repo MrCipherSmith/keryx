@@ -46,7 +46,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: MrCipherSmith/keryx@main
+      - uses: MrCipherSmith/keryx@v0.3.46
         with:
           model-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           max-diff-bytes: "200000"
@@ -64,7 +64,7 @@ The action installs keryx from npm, then runs `keryx review bot run` and
   line and never echoed.
 - The job needs `contents: read` and `pull-requests: write` and nothing else.
 - `persist-credentials: false` keeps the checkout token out of the git config.
-- Pin `uses:` to a release tag instead of `@main` once you have picked one.
+- Keep `uses:` pinned to a release tag, as in the example, and move it forward deliberately. `@main` runs unreleased code with your provider key.
 
 ## Same-repository pull requests only
 

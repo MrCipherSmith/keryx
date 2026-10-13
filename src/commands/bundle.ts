@@ -679,7 +679,7 @@ async function handleUninstall(args: readonly string[], cwd: string): Promise<vo
 // ---------------------------------------------------------------------------
 
 export function printBundleHelp(): void {
-  helpTitle("bundle", "Portable bundle export/import of skills, rules, agents, memory and hooks (W4)");
+  helpTitle("bundle", "Portable bundle export/import of skills, rules, agents, memory and hooks");
   helpUsage([
     "keryx bundle export --scope <project|team|user> [--include <glob>]... [--kind <k,...>] [--id <id>] [--target-harness <h,...>] <out> [--json]",
     "keryx bundle import <bundle> [--target-scope <scope>] [--render-for <h,...>] [--force <path>]... [--allow-hooks] [--dry-run] [--json]",

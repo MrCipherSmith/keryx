@@ -22,7 +22,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: MrCipherSmith/keryx@main
+      - uses: MrCipherSmith/keryx@v0.3.46
         with:
           model-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           max-diff-bytes: "200000"

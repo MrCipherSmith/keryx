@@ -44,7 +44,7 @@ describe("retired publisher spellings are not taught to readers", () => {
     // missing the surface that matters — a count alone would not.
     expect(files).toContain("README.md");
     expect(files).toContain("docs/docs/cli-reference.md");
-    expect(files).toContain("docs/docs/onboarding.md");
+    expect(files).toContain("docs/docs/getting-started/install.md");
     expect(files).toContain(".metaproject/modules/mcp.md");
     // `.gitignore` is prose too: it names the command that writes each ignored
     // file and how to regenerate it. It survived the rename teaching

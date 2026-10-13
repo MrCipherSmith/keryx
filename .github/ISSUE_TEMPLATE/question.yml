@@ -1,0 +1,26 @@
+name: Question
+description: Ask how to do something or whether keryx supports it.
+title: "question: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [docs site](https://mrciphersmith.github.io/keryx/) and `keryx help` first. If you hit a defect rather than a question, use the bug report form.
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you trying to do
+      description: The goal, what you tried, and where you got stuck.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Output of `keryx --version`, your OS, and the model provider you use, if it matters.
+      placeholder: |
+        keryx 0.3.46
+        macOS 15
+        provider: ollama

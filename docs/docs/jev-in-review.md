@@ -12,7 +12,7 @@ regardless of whose codebase produced them.
 
 ## PROVEN: CI triage
 
-`keryx review ci-triage` (flow 306/307) sorts a failed CI job's log into `flaky` / `regression` /
+`keryx review ci-triage` sorts a failed CI job's log into `flaky` / `regression` /
 `infra`, scored by Jev over a redacted, bounded log excerpt plus a small block of deterministic
 signals computed first.
 
@@ -58,12 +58,12 @@ review-domain integrations above.
 ## UNMEASURED, MOST PROMISING: reviewer selection (`jev-select`)
 
 `review-orchestrator` dispatches roughly two dozen sub-agent reviewers per round, each a separate
-strong-model run, and nothing before flow 344 asked "does THIS reviewer have anything to say about
+strong-model run, and nothing before reviewer selection asked "does THIS reviewer have anything to say about
 THIS diff" before paying for all of them. Reviewer (sub-agent) *selection* — not risk-ranking within
 a diff, not contract-checking, selection of which reviewers even run — is the cost lever this
 benchmark named as the most promising one, and it is also the one lever nothing above has measured.
 
-`keryx review jev-select` (flow 344) exists to make that lever usable *before* it is measured,
+`keryx review jev-select` exists to make that lever usable *before* it is measured,
 without repeating review-jev-risk's mistake of shipping an unmeasured lever that can silently cost
 coverage:
 
@@ -82,7 +82,7 @@ coverage:
 
 ## Recommended profile — now on by default when Jev is reachable
 
-Flow 346: `ci_triage`, `select`, and `edit_guard` no longer need
+`ci_triage`, `select`, and `edit_guard` no longer need
 `keryx review jev-profile --apply recommended` to turn on. They apply
 automatically whenever [`/external`](./cli-reference.md#external) is on
 (the default) AND a Jev/OpenRouter credential resolves (env or a saved

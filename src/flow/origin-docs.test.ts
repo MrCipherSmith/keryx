@@ -1,5 +1,5 @@
 // Flow 390, AC9 — the docs describe the origin, its three kinds and the evidence
-// rule: the flow guide (docs/docs/complete-setup-and-agent-workflows.md) and the
+// rule: the flow guide (docs/docs/modules/managed-work.md) and the
 // CLI reference (docs/docs/cli-reference.md) each have an "Origin" section.
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
@@ -23,7 +23,7 @@ function originSection(markdown: string): string {
 }
 
 describe.each([
-  ["the flow guide", "complete-setup-and-agent-workflows.md"],
+  ["the flow guide", "modules/managed-work.md"],
   ["the CLI reference", "cli-reference.md"],
 ])("%s", (_label, file) => {
   test("has an Origin section that names the three kinds", async () => {

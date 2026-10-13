@@ -12,16 +12,16 @@ through `workspace_overview` / `workspace_read`.
 
 !!! note "What is still experimental"
     The **learned candidate policy** is disabled by default (`enabled: false`,
-    `killSwitch: true`) and only synthetic fixtures exist. Phase 6b re-ingestion
-    of real receipts/outcomes is not shipped. Core registry, FWK reads,
+    `killSwitch: true`) and only synthetic fixtures exist. Re-ingestion of real
+    receipts and outcomes is not shipped. The core registry, FWK reads,
     propose/review, owner writers, and the access-receipt ledger **are** shipped
-    (phases 0–5 and 6a, on `main` since `v0.2.32`, present in `0.2.35`).
+    (on `main` since `v0.2.32`).
 
 Contracts and schemas:
-[`docs/requirements/shared-agent-context/`](../../requirements/shared-agent-context/).
+[`docs/requirements/shared-agent-context/`](https://github.com/MrCipherSmith/keryx/tree/main/docs/requirements/shared-agent-context/).
 This page describes **current behavior**. Where it disagrees with a
-`future`/`planned` sentence in an older requirements revision or in satellite
-RP-01…RP-12 packages, this page and `src/sac/` win.
+`future` or `planned` sentence in an older requirements revision, this page
+and `src/sac/` win.
 
 ## The FWK model
 
@@ -42,8 +42,11 @@ OS user (`user:local-<uid>`). There is no `--actor` flag; adapters pass
 `request: undefined`. There is **no session↔workspace auto-bind**: every later
 call takes an explicit `workspaceId`.
 
-Discover the **full** surface with `keryx workspace --help`. `keryx commands`
-intentionally omits this verb (Phase 1 local-CLI only).
+`keryx workspace --help` prints every subcommand with its flags. `keryx commands`
+intentionally omits this verb because it is a local-CLI-only surface. The
+`keryx workspace` commands run whether or not the opt-in `sac` module is enabled
+(`keryx modules enable sac`); enabling it records the module in the manifest so
+`keryx serve-mcp` offers the `sac.*` tools.
 
 ```bash
 keryx workspace --help
@@ -104,7 +107,7 @@ tool mints one. That is friction, not proof. The approval prompt is triggered
 by the command's text, so a differently spelled command avoids it. The token
 store is a plain file, so a shell-capable agent can forge it. An agent outside
 keryx supervision is not gated at all. See
-[TM-03](https://github.com/MrCipherSmith/keryx/blob/main/docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md) for the full list. Accepting a `wiki-update` or
+[the confirmation-token decision record](https://github.com/MrCipherSmith/keryx/blob/main/docs/decisions/keryx-harness/TM-03-terminal-confirmation-token.md) for the full list. Accepting a `wiki-update` or
 `memory-entry` proposal also returns a `DedupHint` (duplicates/conflicts
 against already-accepted entries, computed *after* the decision, never
 gating it) and, when the hint is non-empty, an optional model-judge
@@ -233,7 +236,7 @@ are not commands.
 `workspace.json` is the only SAC primary record. Knowledge bodies stay in
 wiki / memory / project-skills.
 
-## Advanced: phase-6 runtime opt-in policy (off by default)
+## Advanced: the learned candidate policy (off by default)
 
 By default SAC uses a **deterministic baseline** policy. An optional learned
 candidate sits behind `resolvePolicySelection`. It activates only when an
@@ -282,9 +285,9 @@ keryx workspace policy-readiness
 This path does not change any public CLI or MCP schema and never enables the
 candidate implicitly. The operator process for **real** (non-synthetic) artifacts
 is in the
-[Phase 6b operator playbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6b-operator-playbook.md);
-runtime re-ingestion of raw receipts/outcomes is still planned — see
-[phase-6-real-opt-in-readiness.md](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6-real-opt-in-readiness.md).
+[operator playbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6b-operator-playbook.md);
+runtime re-ingestion of raw receipts and outcomes is still planned, as described in
+[the readiness note](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/shared-agent-context/phase-6-real-opt-in-readiness.md).
 
 ## Autonomous binding on an action-intent turn (Slate v2)
 
@@ -304,8 +307,8 @@ unaffected: still strictly human, still gated by `confirm-review`.
 - Propose from a Flow wrap-up snapshot.
 - SAC over MCP HTTP or `keryx serve`.
 - Public collaboration writer / member / archive APIs.
-- Phase 6b real-data re-ingestion.
-- Satellite RP-01…RP-12 capabilities.
+- Re-ingestion of real receipts and outcomes into the learned policy.
+- The satellite capabilities listed in older requirements revisions.
 
 Source reads of workspace files require POSIX `openat` + `O_NOFOLLOW` (macOS /
 Linux). There is no Win32 fallback for that path.

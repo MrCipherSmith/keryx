@@ -53,13 +53,17 @@ function captureConsoleError(): { logs: string[]; restore: () => void } {
 // so this pin tracks additions to the *provider* roster (unrelated to W5)
 // without going stale, while still pinning the fixed `fake|anthropic|openai|
 // gemini|ollama` core and the overall usage FORMAT byte-for-byte.
+// De-duplicated, as in harness.ts: `openai` is both native and in the
+// OpenAI-compatible registry, and the usage line names each id once.
 const HARNESS_PROVIDER_OPTIONS = [
-  "fake",
-  "anthropic",
-  "openai",
-  "gemini",
-  "ollama",
-  ...OPENAI_COMPAT_PROVIDERS.map((provider) => provider.name),
+  ...new Set([
+    "fake",
+    "anthropic",
+    "openai",
+    "gemini",
+    "ollama",
+    ...OPENAI_COMPAT_PROVIDERS.map((provider) => provider.name),
+  ]),
 ];
 const EXPECTED_USAGE = [
   `Usage: keryx harness run --provider <${HARNESS_PROVIDER_OPTIONS.join("|")}> --model <m> [--base-url <url>] "<prompt>"`,

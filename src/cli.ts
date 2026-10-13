@@ -61,7 +61,7 @@ import { ensureSafeBunExec } from "./lib/safe-exec";
 // not done here — the shebang (top of this file) is the actual fix for the
 // shipped binary, and is unaffected by import hoisting (a different process
 // entirely never runs the unsafe autoload in the first place). See
-// `./lib/safe-exec.ts` and docs/docs/onboarding.md's "Environment isolation"
+// `./lib/safe-exec.ts` and docs/docs/concepts/security-model.md's "Environment isolation"
 // for the platforms (BusyBox `env`, Windows) where the shebang does not
 // apply and this guard is what actually protects the invocation.
 //

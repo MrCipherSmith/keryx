@@ -1,62 +1,58 @@
-# Agent Installation Playbook
+# Agent installation playbook
 
-**Audience.** An AI coding agent driving keryx's own installation unattended
-— not a human reading step by step. It defines Gherkin scenarios, parameters
-and a structured handoff report an agent follows and verifies against, rather
-than prose instructions. A human wanting to install keryx themselves should
-read [Onboarding](onboarding.md) instead; an operator wanting the exhaustive
-manual reference this playbook's scenarios are built from should read the
-[Complete Installation, Project Setup, and Agent Workflow Guide](./complete-setup-and-agent-workflows.md).
+This page is written for a coding agent that installs and configures Keryx
+unattended. It states the parameters, the rules the agent must follow, the
+scenarios as Gherkin, a runtime compatibility matrix and the report the agent
+returns. An agent matches its steps against these exact commands and checks
+each exit code.
 
-This playbook is the autonomous-agent companion to that guide. It converts the
-installation process into explicit Gherkin scenarios that an AI coding agent
-can execute and verify without requiring the user to remember keryx commands.
-Its restatement here is a different shape than the guide's or Onboarding's,
-not the same one twice: Given/When/Then steps and exact command strings an
-agent matches against and verifies the exit code of, not prose a human reads.
+If you are setting Keryx up yourself, follow
+[Set up a project end to end](guides/set-up-a-project.md) instead; it covers the
+same steps as prose.
 
 ## Minimal invocation prompt
 
-Copy this prompt into an agent session opened at the target repository:
+Paste this into an agent session opened at the target repository:
 
 ```text
 Install and fully configure keryx in this project by executing the "Complete
-recommended installation" scenario from docs/docs/agent-installation-playbook.md.
+recommended installation" scenario from the keryx agent installation playbook
+(docs/docs/agent-installation-playbook.md in the keryx repository).
 
 Parameters:
 - PROJECT_ROOT: <absolute-project-path>
-- RUNTIME: codex
+- RUNTIME: <runtime id from the compatibility matrix>
 - INSTALL_MODE: global
 - ENABLE_MCP: false
 - ENABLE_SYMBOLS: false
 - ENABLE_TIA: false
 
-Read and follow the playbook exactly. Preserve existing user changes. Do not commit,
+Follow the playbook exactly. Preserve existing user changes. Do not commit,
 push, tag, publish, open a PR, or modify global configuration outside the requested
 runtime integration without explicit approval. Return the structured handoff report.
 ```
 
-For a fully enabled setup, change the optional capability values to `true`.
+For a fully enabled setup, set the optional capability values to `true`.
 
 ## Natural-language shortcuts
 
-An agent should map these requests to the corresponding scenarios:
+An agent maps these requests to scenarios:
 
 | User request | Scenario |
 |---|---|
-| “Install keryx in this project.” | Complete recommended installation |
-| “Configure keryx for Codex.” | Configure one agent runtime |
-| “Enable every keryx capability.” | Enable optional capabilities |
-| “Refresh keryx after pulling changes.” | Refresh an existing installation |
-| “Check whether keryx is configured correctly.” | Validate a completed installation |
-| “Repair this broken keryx setup.” | Resume or repair a partial installation |
+| "Install keryx in this project." | Complete recommended installation |
+| "Configure keryx for my agent." | Configure one agent runtime |
+| "Enable every keryx capability." | Enable MCP integration, Enable the symbol layer, Enable coverage-map test selection |
+| "Refresh keryx after pulling changes." | Refresh an existing installation |
+| "Check whether keryx is configured correctly." | Validate a completed installation |
+| "Repair this broken keryx setup." | Resume or repair a partial installation |
 
 ## Parameters
 
 | Parameter | Required | Allowed values | Default |
 |---|---:|---|---|
 | `PROJECT_ROOT` | yes | absolute directory path | none |
-| `RUNTIME` | yes | `codex`, `claude`, `cursor`, `opencode`, `zcode`, `antigravity`, `windsurf`, `generic-mcp` | `codex` |
+| `RUNTIME` | yes | a runtime id from the [compatibility matrix](#runtime-compatibility-matrix) | none |
 | `INSTALL_MODE` | yes | `global`, `project` | `global` |
 | `ENABLE_MCP` | no | `true`, `false` | `false` |
 | `ENABLE_SYMBOLS` | no | `true`, `false` | `false` |
@@ -67,50 +63,53 @@ An agent should map these requests to the corresponding scenarios:
 
 ## Agent execution contract
 
-The following rules apply to every scenario:
+These rules apply to every scenario:
 
-1. Read the nearest `AGENTS.md` and `.metaproject/index.md` before project work
-   when they exist.
-2. Preserve uncommitted and untracked user files. Never reset, clean, delete, or
+1. Read the nearest agent instruction file and `.metaproject/index.md` before
+   project work when they exist.
+2. Preserve uncommitted and untracked user files. Never reset, clean, delete or
    overwrite them to make installation easier.
-3. Discover state before changing it: check prerequisites, current branch,
-   working-tree status, existing runtime, manifest, modules, and hooks.
+3. Discover state before changing it: prerequisites, current branch, working
+   tree, existing runtime, manifest, modules and hooks.
 4. Prefer idempotent keryx commands. Re-running a successful scenario must not
-   duplicate managed blocks or destroy source-of-truth content.
-5. Treat command exit codes as evidence. Do not report a gate as passed because
-   output “looks fine.”
-6. Optional dependencies and assets must be enabled explicitly. Never download
-   model or grammar assets unless the corresponding parameter is `true`.
-7. Global files under `$HOME` may be modified only when `ALLOW_GLOBAL_WRITES=true`
-   or when the user explicitly requested the corresponding runtime integration.
-8. Do not commit, push, tag, publish, create a release, or open a pull request
-   unless the matching authorization is explicit.
-9. Report every skipped step and reason. A skipped required gate makes the final
+   duplicate managed blocks or destroy source content.
+5. Treat exit codes as evidence. Do not report a gate as passed because the
+   output "looks fine".
+6. Enable optional dependencies and assets only when the matching parameter is
+   `true`. Never download grammar or model assets otherwise.
+7. Write files under `$HOME` only when `ALLOW_GLOBAL_WRITES=true` or the user
+   explicitly asked for that runtime integration. Preview every install with
+   `--dry-run` first.
+8. Do not commit, push, tag, publish, create a release or open a pull request
+   unless the matching permission is explicit.
+9. Report every skipped step and its reason. A skipped required gate makes the
    result `BLOCKED`, not `PASS`.
-10. All generated documentation and reports must be English-only.
+10. If live `--help` or `keryx integrations matrix` disagrees with this page,
+    trust the live output, report the difference, and skip the unsupported
+    write.
 
 ## Gherkin specification
 
 ```gherkin
 Feature: Autonomous keryx installation and project configuration
   As a repository owner
-  I want an AI coding agent to install and configure keryx autonomously
-  So that the project receives reproducible context, quality, memory, workflow,
-  and agent-routing infrastructure without requiring manual command knowledge
+  I want a coding agent to install and configure keryx unattended
+  So that the project gets reproducible context, quality, memory, workflow
+  and agent-routing infrastructure without me running each command
 
   Background:
     Given PROJECT_ROOT is an absolute path to an existing project directory
-    And the agent has read the nearest AGENTS.md when present
-    And the agent has captured `git status --short --branch` when PROJECT_ROOT is a Git repository
-    And the agent will preserve all pre-existing tracked, untracked, and stashed work
-    And the agent will use English for every generated artifact
-    And commit, push, tag, publish, release, and PR operations are forbidden by default
+    And the agent has read the nearest agent instruction file when present
+    And the agent has captured `git status --short --branch` when PROJECT_ROOT is a git repository
+    And the agent will preserve all pre-existing tracked, untracked and stashed work
+    And commit, push, tag, publish, release and pull-request operations are forbidden by default
 
   Scenario: Complete recommended installation
     Given INSTALL_MODE is either "global" or "project"
     And RUNTIME identifies the user's primary agent runtime
     When the agent verifies `git --version` and `bun --version`
-    Then the agent must stop with STATUS BLOCKED if Git or Bun is unavailable
+    Then the agent must stop with STATUS BLOCKED if git or Bun is unavailable
+    And the agent must stop with STATUS BLOCKED if Bun is older than 1.3.14
     When the agent checks whether `keryx --version` succeeds
     And keryx is unavailable
     Then the agent installs keryx according to INSTALL_MODE
@@ -120,8 +119,9 @@ Feature: Autonomous keryx installation and project configuration
     When `.metaproject/index.md` already exists
     Then the agent runs `keryx update --skip-runtime`
     And the agent explicitly reads `.metaproject/index.md`
+    And the agent runs `keryx doctor`
     And the agent runs `keryx status`
-    And the agent configures RUNTIME using the compatible runtime scenario
+    And the agent configures RUNTIME using the "Configure one agent runtime" scenario
     And the agent runs `keryx gdgraph build`
     And the agent runs `keryx test analyze`
     And the agent runs `keryx test run --strict`
@@ -135,98 +135,102 @@ Feature: Autonomous keryx installation and project configuration
     And the agent runs `keryx standard validate`
     And the agent runs `keryx security policy validate`
     And the agent runs `keryx flow check`
-    And the agent executes optional capability scenarios whose parameters are true
+    And the agent executes the optional capability scenarios whose parameters are true
     Then the agent returns the structured installation handoff
 
   Scenario: Install the global runtime
     Given INSTALL_MODE is "global"
     And `keryx --version` does not succeed
-    When ALLOW_GLOBAL_WRITES is true or the user explicitly requested global installation
-    Then the agent runs the repository global installer with `--global`
-    And the agent adds `$HOME/.local/bin` to PATH for the current process
-    And the agent reports any shell profile change before making it
+    When ALLOW_GLOBAL_WRITES is true or the user explicitly requested a global installation
+    Then the agent runs `npm install -g @mrciphersmith/keryx`
     And the agent verifies `command -v keryx`
     And the agent verifies `keryx --version`
     But the agent must not modify a shell profile without authorization
+    And the agent must never install the unscoped npm package `keryx`
 
   Scenario: Install a project-local runtime
     Given INSTALL_MODE is "project"
     And `keryx --version` does not succeed
     When the agent changes directory to PROJECT_ROOT
-    Then the agent runs the repository installer with `--project --yes`
+    Then the agent runs the repository installer `scripts/install.sh` with `--project --yes`
     And the runtime must exist under `.metaproject/runtime/keryx`
     And `.metaproject/index.md` must exist
-    And the agent verifies the project-local runtime version
+    And the agent reports that this runtime tracks git main, not a release, unless KERYX_REF was set
 
   Scenario: Refresh an existing installation
     Given `.metaproject/index.md` exists
-    When the agent verifies the current working-tree state
+    When the agent records the current working-tree state
     Then the agent runs `keryx update --skip-runtime`
     And the agent reads the refreshed `.metaproject/index.md`
-    And the agent runs `keryx sync` to report derived-layer drift since each layer was built
-    And the agent runs `keryx sync --apply` to rebuild stale graph/wiki/memory incrementally and prune orphan wiki drafts for removed modules
+    And the agent runs `keryx sync` to report which derived layers are behind the code
+    And the agent runs `keryx sync --apply` to rebuild the stale graph, wiki and memory layers
     And the agent runs `keryx wiki index`
     And the agent runs `keryx wiki check-links`
     And the agent runs `keryx wiki validate`
     And the agent runs `keryx dashboard build`
     And the agent runs `keryx standard validate`
     Then the agent reports changed managed files separately from pre-existing user files
-    But the agent must not delete accepted or human-edited wiki pages when pruning
+    But the agent must not delete accepted or human-edited wiki pages
 
   Scenario Outline: Configure one agent runtime
     Given RUNTIME is "<runtime>"
-    When the runtime supports global bootstrap
-    Then the agent runs `keryx agents bootstrap install --runtime <runtime>` only with global-write authorization
-    And the agent runs `keryx agents bootstrap status --runtime <runtime>`
-    When the runtime supports orientation hooks
-    Then the agent runs `keryx orient install-hook --runtime <runtime>`
-    When the runtime supports gdctx routing guards
-    Then the agent runs `keryx ctx install-hook --runtime <runtime>`
-    When the runtime supports security hooks
-    Then the agent runs `keryx security hooks install --runtime <runtime>`
+    When the matrix lists global bootstrap for the runtime
+    And ALLOW_GLOBAL_WRITES is true or the user requested this runtime's integration
+    Then the agent runs `keryx agents bootstrap install --runtime <bootstrap-id> --dry-run`
+    And the agent runs `keryx agents bootstrap install --runtime <bootstrap-id>`
+    And the agent runs `keryx agents bootstrap status --runtime <bootstrap-id>`
+    When the matrix lists at least one hook for the runtime
+    Then the agent runs `keryx integrations install --runtime <runtime> --dry-run`
+    And the agent runs `keryx integrations install --runtime <runtime>`
+    And the agent runs `keryx integrations doctor --runtime <runtime>`
     And unsupported integrations are reported as skipped rather than forced
 
     Examples:
-      | runtime      |
-      | codex        |
-      | claude       |
-      | cursor       |
-      | opencode     |
-      | zcode        |
-      | antigravity  |
-      | windsurf     |
-      | generic-mcp  |
+      | runtime              | bootstrap-id |
+      | claude               | claude       |
+      | codex                | codex        |
+      | cursor               | none         |
+      | windsurf             | none         |
+      | opencode             | opencode     |
+      | antigravity          | antigravity  |
+      | zed                  | zcode        |
+      | gemini-cli           | none         |
+      | kiro                 | none         |
+      | github-copilot-agent | none         |
+      | generic-mcp          | none         |
 
   Scenario: Enable MCP integration
     Given ENABLE_MCP is true
-    When the selected runtime is "cursor" or "claude"
-    Then the agent previews `keryx integrate <runtime> --dry-run`
+    When the matrix lists an `integrate` target for RUNTIME
+    Then the agent previews `keryx integrate <target> --dry-run`
     And the agent requests approval if the preview modifies project client configuration
-    And after approval the agent runs `keryx integrate <runtime>`
-    And the agent verifies `keryx standard capabilities`
-    And the agent verifies that the selected client configuration contains the managed keryx server
+    And after approval the agent runs `keryx integrate <target>`
+    And the agent verifies that the client configuration contains the managed keryx server
+    When the matrix lists no dedicated target for RUNTIME
+    Then the agent runs `keryx integrate generic` and reports the printed snippet for the user to place
     But the agent must not start a long-running MCP server during setup verification
 
   Scenario: Enable the symbol layer
     Given ENABLE_SYMBOLS is true
     When the agent runs `keryx gdgraph symbols enable`
     Then the agent runs `keryx gdgraph assets list`
-    And the agent explicitly pulls the pinned TypeScript, TSX, and JavaScript grammar assets when missing
+    And the agent explicitly pulls the pinned grammar assets for the project's languages when missing
     And the agent runs `keryx gdgraph build`
     And the agent runs `keryx gdgraph symbols status`
     And the agent records symbol and call counts
-    But absent optional dependencies or assets must preserve the deterministic file graph
+    But a missing grammar must leave the file graph working
 
-  Scenario: Enable coverage-map Test Impact Analysis
+  Scenario: Enable coverage-map test selection
     Given ENABLE_TIA is true
     When the agent runs `keryx test coverage-map build`
     Then the agent runs `keryx test coverage-map status`
     And the agent runs `keryx test run --changed --strict`
-    And the agent reports whether selection used coverage data or deterministic fallback
+    And the agent reports whether selection used coverage data or the heuristic fallback
 
   Scenario: Validate a completed installation
     Given `.metaproject/index.md` exists
-    When the agent runs `keryx status`
+    When the agent runs `keryx doctor`
+    And the agent runs `keryx status`
     And the agent runs `keryx gdgraph build`
     And the agent runs `keryx test analyze`
     And the agent runs `keryx test run --strict`
@@ -237,27 +241,28 @@ Feature: Autonomous keryx installation and project configuration
     And the agent runs `keryx flow check`
     And the agent runs `keryx standard validate`
     And the agent runs `keryx security policy validate`
-    Then the installation status is PASS only when every required command exits successfully
+    Then the installation status is PASS only when every required command exits 0
     And any required failure produces STATUS DONE_WITH_CONCERNS or BLOCKED with evidence
 
   Scenario: Resume or repair a partial installation
-    Given one or more managed files, modules, hooks, or artifacts are missing or stale
+    Given managed files, modules, hooks or artifacts are missing or stale
     When the agent records the current manifest and working-tree state
-    Then the agent runs `keryx standard doctor`
+    Then the agent runs `keryx doctor`
+    And the agent runs `keryx standard doctor`
     And the agent runs `keryx status`
     And the agent runs `keryx modules status`
     And the agent applies only idempotent repair commands suggested by diagnostics
     And the agent runs `keryx update --skip-runtime`
-    And the agent runs `keryx sync --apply` to rebuild only the stale graph/wiki/memory layers and prune orphan wiki drafts
-    And the agent reruns the complete installation validation scenario
-    But the agent must not delete `.metaproject`, accepted or user-authored wiki pages, memory, flows, or project skills
+    And the agent runs `keryx sync --apply`
+    And the agent reruns the "Validate a completed installation" scenario
+    But the agent must not delete `.metaproject`, accepted or user-authored wiki pages, memory, flows or project skills
 
   Scenario: Preserve repository safety boundaries
     Given the setup creates or changes files
     Then the agent separates pre-existing changes from installation changes
     And the agent checks `git diff --check`
     And the agent reports ignored raw logs and generated artifacts separately
-    And the agent does not use `git reset --hard`, destructive checkout, clean, or unapproved deletion
+    And the agent does not use `git reset --hard`, destructive checkout, clean or unapproved deletion
     And the agent does not commit when ALLOW_COMMIT is false
     And the agent does not push when ALLOW_PUSH is false
 
@@ -265,35 +270,51 @@ Feature: Autonomous keryx installation and project configuration
     Given ALLOW_COMMIT is true
     And all required installation gates have been reported
     And the user approved the exact file scope
-    When the agent stages only approved installation and documentation files
-    Then the agent creates an English conventional commit
+    When the agent stages only the approved installation files
+    Then the agent creates a conventional commit
     When ALLOW_PUSH is true
     Then the agent pushes the current feature branch and verifies upstream synchronization
     But the agent must not push directly to a protected main branch
-    And the agent must not create a pull request unless explicitly requested
+    And the agent must not open a pull request unless explicitly requested
 ```
 
 ## Runtime compatibility matrix
 
-The agent must use this matrix instead of forcing unsupported hooks:
+The agent uses this matrix instead of forcing unsupported hooks. It reflects
+`keryx integrations matrix` for this release; run that command for the live
+answer, including each hook's confidence.
 
-| Runtime | Global bootstrap | Orientation | gdctx guard | Security hook | MCP client wiring |
-|---|---:|---:|---:|---:|---:|
-| Codex | yes | yes | yes | no dedicated adapter | generic/manual |
-| Claude Code | yes | yes | yes | yes | yes |
-| Cursor | no global bootstrap command | yes | yes | yes | yes |
-| OpenCode | yes | no orientation hook | yes | no dedicated adapter | generic/manual |
-| Zed/Zcode | yes | no orientation hook | experimental/static rules | no dedicated adapter | generic/manual |
-| Antigravity | yes | no orientation hook | experimental | no dedicated adapter | generic/manual |
-| Windsurf | no global bootstrap command | no orientation hook | yes | yes | generic/manual |
-| Generic MCP | no | no | harness-specific | yes | printed configuration |
+| Runtime id | Agent | Global bootstrap | Orientation hook | Compact-output guard | Security checks | MCP client wiring | Confidence |
+|---|---|---|---|---|---|---|---|
+| `claude` | Claude Code | `claude` | yes | yes | yes | `integrate claude` | verified |
+| `codex` | Codex CLI | `codex` | yes | yes | no | `integrate generic` | verified |
+| `cursor` | Cursor | no | yes | yes | yes | `integrate cursor` | verified |
+| `windsurf` | Windsurf | no | no | yes | yes | `integrate generic` | verified |
+| `opencode` | OpenCode | `opencode` | no | yes | no | `integrate opencode` | experimental |
+| `antigravity` | Antigravity | `antigravity` | no | yes | no | `integrate generic` | experimental |
+| `zed` | Zed | `zcode` | no | no; see note | no | `integrate generic` | experimental |
+| `gemini-cli` | Gemini CLI | no | no | yes | no | `integrate generic` | experimental |
+| `kiro` | Kiro | no | no | yes | no | `integrate generic` | experimental |
+| `github-copilot-agent` | GitHub Copilot coding agent | no | no | yes | no | `integrate generic` | experimental |
+| `generic-mcp` | Any MCP host | no | no | no | yes | `integrate generic` | experimental |
 
-If live command help disagrees with this matrix, the agent must trust live help,
-report the documentation drift, and avoid the unsupported write.
+Notes:
+
+- **Hooks** install with `keryx integrations install --runtime <id>`. The
+  older `keryx orient install-hook`, `keryx ctx install-hook` and
+  `keryx security hooks install` commands install the same hooks for the
+  runtimes they accept.
+- **`zed`** has no scriptable pre-exec hook. When Keryx runs as that editor's
+  agent over ACP, Keryx's own permission gate applies instead;
+  `keryx integrations install --runtime zed` writes instruction files only.
+- **`integrate vscode`** writes the editor's project MCP configuration;
+  `integrate all` writes the `cursor`, `claude` and `opencode` targets.
+- Several runtimes also accept agent definitions, rules or instruction files;
+  `keryx integrations matrix` lists every surface.
 
 ## Structured handoff contract
 
-The autonomous run must end with this shape:
+The run ends with this report:
 
 ```text
 KERYX_INSTALLATION_RESULT
@@ -310,9 +331,7 @@ modules:
 
 integrations:
   global_bootstrap: installed | skipped | failed
-  orientation: installed | skipped | failed
-  gdctx_guard: installed | skipped | failed
-  security_hook: installed | skipped | failed
+  hooks: <installed surfaces, or skipped>
   sync_hooks: installed | skipped | failed
   mcp: installed | disabled | skipped | failed
   symbols: enabled | disabled | fallback | failed
@@ -326,6 +345,7 @@ artifacts:
   dashboard: <path>
 
 verification:
+  doctor: pass | warn | fail
   tests: pass | fail | skipped
   health: pass | warn | fail | skipped
   wiki_links: pass | fail
@@ -352,13 +372,13 @@ publication:
   pull_request: <url or not created>
 ```
 
-## Example user commands
+## Example requests
 
 Recommended setup:
 
 ```text
 Install keryx in this repository using the complete recommended installation
-scenario. Configure it for Codex, keep optional MCP/symbol/TIA capabilities off,
+scenario. RUNTIME is codex. Keep optional MCP, symbol and TIA capabilities off,
 preserve all existing changes, and stop before commit or push.
 ```
 
@@ -366,9 +386,9 @@ Fully enabled setup:
 
 ```text
 Install and fully configure keryx using the agent installation playbook. Use the
-global runtime, configure Claude Code, enable MCP, tree-sitter symbols, and
-coverage-map TIA, run every required validation gate, and return the structured
-handoff. Ask before any global config write, commit, or push.
+global runtime, RUNTIME claude, enable MCP, symbols and coverage-map TIA, run every
+required validation gate, and return the structured handoff. Ask before any global
+config write, commit, or push.
 ```
 
 Repair:

@@ -1,9 +1,10 @@
 name: Docs
 
-# Two jobs with different purposes:
+# Three jobs with different purposes:
 #   * `build` runs on every pull request and is a GATE — `mkdocs build --strict`
 #     fails on a broken internal link, an unresolved reference, or a page missing
 #     from the nav. A site with dead ends should not be publishable.
+#   * `zensical-trial` builds the same config with Zensical; it never blocks.
 #   * `deploy` runs only on `main` and publishes to GitHub Pages.
 on:
   push:
@@ -24,14 +25,37 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install MkDocs Material
-        run: pip install mkdocs-material
+      - name: Install MkDocs Material and plugins (pinned)
+        run: pip install -r requirements-docs.txt
+
+      # `--strict` does not fail on a page that is missing from the nav, so this
+      # check does.
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Check every docs page is in the nav
+        run: bun scripts/check-docs-nav.ts
 
       # `--strict` turns warnings into failures. That is the point: a relative
       # link that resolves on GitHub but not inside the built site is exactly
       # the class of breakage a reader finds and a contributor never does.
       - name: Build the site
         run: mkdocs build --strict
+
+  # Non-blocking trial of Zensical, the successor to Material for MkDocs. A
+  # failure here is information, not a gate.
+  zensical-trial:
+    name: zensical build (trial, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build with Zensical
+        run: pip install zensical && zensical build
 
   deploy:
     name: deploy to GitHub Pages
@@ -52,8 +76,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install MkDocs Material
-        run: pip install mkdocs-material
+      - name: Install MkDocs Material and plugins (pinned)
+        run: pip install -r requirements-docs.txt
 
       - name: Build the site
         run: mkdocs build --strict

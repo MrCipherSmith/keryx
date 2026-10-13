@@ -570,7 +570,7 @@ async function gitRefOf(cwd: string): Promise<string | null> {
   return result.kind === "resolved" ? result.ref : null;
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   console.log(`keryx test
 
 Usage:

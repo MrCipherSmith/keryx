@@ -121,7 +121,7 @@ describe("AC22: registration", () => {
   });
 
   test("the README links the guide", async () => {
-    expect(await read("README.md")).toContain("docs/docs/guides/work-intake.md");
+    expect(await read("README.md")).toContain("keryx/guides/work-intake/");
   });
 
   test("the changelog has an entry for it", async () => {

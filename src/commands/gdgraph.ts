@@ -1200,7 +1200,7 @@ async function delegateToLocalRunner(
   return { delegated: true, exitCode };
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   console.log(`keryx gdgraph
 
 Usage:
