@@ -104,18 +104,31 @@ export function refusalFingerprint(tool: string, rawInput: string, fallback: str
 }
 
 const operatorDenials = new Set<string>();
+let operatorRefused = false;
 
-/** Remember an action the operator refused, so review-auto can neither grant it again nor ask itself to overturn it. */
+/**
+ * Remember an action the operator refused under review-auto, so it can neither grant it again nor ask itself to
+ * overturn it. Only review-auto writes and reads the per-call set. It also marks the question floor, like
+ * `noteOperatorRefusal`, which is what the other modes call on their own.
+ */
 export function recordOperatorDenial(fingerprint: string): void {
   operatorDenials.add(fingerprint);
+  noteOperatorRefusal();
 }
 
 export function operatorDenied(fingerprint: string): boolean {
   return operatorDenials.has(fingerprint);
 }
 
+/** A person at the keyboard said no to an approval, in any mode: the question floor now keeps permission questions for them. */
+export function noteOperatorRefusal(): void {
+  operatorRefused = true;
+}
+
+/** Cleared on `/clear`, `/new`, a resumed session and a permission-mode change, so a refusal does not outlive the conversation or the posture it was made under. */
 export function resetOperatorDenials(): void {
   operatorDenials.clear();
+  operatorRefused = false;
 }
 
 const PERMISSION_WORDS =
@@ -124,7 +137,8 @@ const PERMISSION_WORDS =
 /**
  * Whether review-auto may answer an `ask_user` menu itself. Not for an irreversible question, and not for a
  * permission-style choice once the operator has refused an action in this shell: the agent cannot ask itself
- * to overturn a refusal.
+ * to overturn a refusal. "Permission-style" is decided by the question's wording, so this is a floor for
+ * questions phrased as a permission request, not a guarantee against a differently worded one.
  */
 export function reviewAutoMayAnswer(request: {
   question: string;
@@ -132,7 +146,7 @@ export function reviewAutoMayAnswer(request: {
   irreversible?: boolean;
 }): boolean {
   if (request.irreversible === true) return false;
-  if (operatorDenials.size === 0) return true;
+  if (!operatorRefused) return true;
   const text = [request.question, ...request.options.flatMap((o) => [o.id, o.label, o.description])].join("\n");
   return !PERMISSION_WORDS.test(text);
 }

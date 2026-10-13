@@ -9,6 +9,7 @@ import { assignArm, reasonSubsample, saltFile } from "../decisions/arms";
 import { REASON_SUBSAMPLE_ENV } from "../decisions/journal";
 import { createFlowService } from "../flow/service";
 import { recordOperatorDenial, resetOperatorDenials } from "../review/review-system";
+import { ASK_USER_NO_HOST } from "../harness/tool/builtin/ask-user-tool";
 import { journaledAskUser, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 
 let root: string;
@@ -192,4 +193,9 @@ test("F-001: a composer-dock pick records that its surface never prompts, and a 
     const lines = (await readFile(path.join(root, ".metaproject", "data", "decisions", "journal.jsonl"), "utf8")).trim().split("\n");
     expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ kind: "open", reasonPrompt: false, reasonRequested: false });
   });
+});
+
+test("a question on a surface with no host answers with the no-host sentinel, never with a cancel", async () => {
+  setAskUserHost(undefined);
+  expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe(ASK_USER_NO_HOST);
 });

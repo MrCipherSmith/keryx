@@ -1,0 +1,334 @@
+{
+ "mutants": [
+  {
+   "id": "B2-c-flag-prefix",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "rest === 2 &&",
+   "replacement": "rest >= 2 &&"
+  },
+  {
+   "id": "B16-dot-all-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=-./.test(w)"
+  },
+  {
+   "id": "B17-short-flag-prefix",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^-[^=]+=-./s.test(w)"
+  },
+  {
+   "id": "C13-sync-guard",
+   "file": "src/sync/diff.ts",
+   "anchor": "if (base.startsWith(\"-\")) return null;",
+   "replacement": ""
+  },
+  {
+   "id": "G5-dashvalue-lone-dash-blocked",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=-/s.test(w)"
+  },
+  {
+   "id": "G6-dashvalue-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "words.some((w) => /^--[^=]+=-./s.test(w))",
+   "replacement": "false"
+  },
+  {
+   "id": "G7-dashvalue-call-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "args[0] === \"review\" && hasDashValue(args)",
+   "replacement": "false"
+  },
+  {
+   "id": "G9-eq-chain-dash-gate-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (!word.startsWith(\"-\", at) || eq === -1) return false;",
+   "replacement": "if (eq === -1) return false;"
+  },
+  {
+   "id": "G10-eq-chain-one-level",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "    at = eq + 1;\n  }\n}",
+   "replacement": "    if (at > 0) return false;\n    at = eq + 1;\n  }\n}"
+  },
+  {
+   "id": "G11-c-flag-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (rest === 2 && word.startsWith(\"-c\", at)) return true;",
+   "replacement": ""
+  },
+  {
+   "id": "R1-assert-off",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "if (ref.startsWith(\"-\")) throw",
+   "replacement": "if (false) throw"
+  },
+  {
+   "id": "R2-assert-only-double-dash",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "ref.startsWith(\"-\")) throw",
+   "replacement": "ref.startsWith(\"--\")) throw"
+  },
+  {
+   "id": "R3-operand-no-eoo",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "return [\"--end-of-options\", assertGitRevision(ref)];",
+   "replacement": "return [assertGitRevision(ref)];"
+  },
+  {
+   "id": "R4-no-writing-output-eq",
+   "file": "src/lib/git-revision.ts",
+   "anchor": " || a.startsWith(\"--output=\")",
+   "replacement": ""
+  },
+  {
+   "id": "R5-no-writing-output-bare",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "a === \"--output\" || ",
+   "replacement": ""
+  },
+  {
+   "id": "R6-no-writing-ext-diff",
+   "file": "src/lib/git-revision.ts",
+   "anchor": " || a === \"--ext-diff\"",
+   "replacement": ""
+  },
+  {
+   "id": "S1-ctx-diff-guard-off",
+   "file": "src/commands/ctx.ts",
+   "anchor": "  assertNoWritingDiffOption(args);",
+   "replacement": ""
+  },
+  {
+   "id": "S2-flow-base-unchecked",
+   "file": "src/commands/flow.ts",
+   "anchor": "return value === undefined ? undefined : assertGitRevision(value);",
+   "replacement": "return value;"
+  },
+  {
+   "id": "S3-checkac-mergebase-bare",
+   "file": "src/commands/flow-check-ac.ts",
+   "anchor": "[\"git\", \"merge-base\", \"HEAD\", ...revisionOperand(refName)]",
+   "replacement": "[\"git\", \"merge-base\", \"HEAD\", refName]"
+  },
+  {
+   "id": "S4-checkac-diff-bare",
+   "file": "src/commands/flow-check-ac.ts",
+   "anchor": "\"-U20\", ...revisionOperand(ref)]",
+   "replacement": "\"-U20\", ref]"
+  },
+  {
+   "id": "S7-health-bare",
+   "file": "src/health/run.ts",
+   "anchor": "[\"git\", \"diff\", \"--name-only\", ...revisionOperand(ref)]",
+   "replacement": "[\"git\", \"diff\", \"--name-only\", ref]"
+  },
+  {
+   "id": "S8-testing-bare",
+   "file": "src/testing/service.ts",
+   "anchor": "[\"git\", \"diff\", \"--name-only\", ...revisionOperand(since)]",
+   "replacement": "[\"git\", \"diff\", \"--name-only\", since]"
+  },
+  {
+   "id": "S12-wiki-service-guard-off",
+   "file": "src/wiki/service.ts",
+   "anchor": "if (base.startsWith(\"-\")) return Promise.resolve(null);",
+   "replacement": ""
+  },
+  {
+   "id": "S14-review-changedfiles-bare",
+   "file": "src/commands/review.ts",
+   "anchor": "\"--diff-filter=d\", ...(ref === undefined ? [] : revisionOperand(ref))]",
+   "replacement": "\"--diff-filter=d\", ...(ref === undefined ? [] : [ref])]"
+  },
+  {
+   "id": "S15-review-gitdiff-bare",
+   "file": "src/commands/review.ts",
+   "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+   "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]"
+  },
+  {
+   "id": "S16-review-mergebase-bare",
+   "file": "src/commands/review.ts",
+   "anchor": "[\"merge-base\", \"HEAD\", ...revisionOperand(ref)]",
+   "replacement": "[\"merge-base\", \"HEAD\", ref]"
+  },
+  {
+   "id": "S17-jev-select-bare",
+   "file": "src/commands/review-jev-select.ts",
+   "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+   "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]"
+  },
+  {
+   "id": "N1-c-flag-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (rest === 2 && word.startsWith(\"-c\", at)) return true;",
+   "replacement": ""
+  },
+  {
+   "id": "N2-c-flag-prefix",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "rest === 2 &&",
+   "replacement": "rest >= 2 &&"
+  },
+  {
+   "id": "N3-flag-prefix-match",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "rest === f.length && word.startsWith(f, at)",
+   "replacement": "word.startsWith(f, at)"
+  },
+  {
+   "id": "N4-eq-prefix-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (EXEC_FLAG_PREFIXES.some((prefix) => word.startsWith(prefix, at))) return true;",
+   "replacement": ""
+  },
+  {
+   "id": "N5-dash-gate-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (!word.startsWith(\"-\", at) || eq === -1) return false;",
+   "replacement": "if (eq === -1) return false;"
+  },
+  {
+   "id": "N6-eq-chain-one-level",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "    at = eq + 1;\n  }\n}",
+   "replacement": "    if (at > 0) return false;\n    at = eq + 1;\n  }\n}"
+  },
+  {
+   "id": "N7-dotall-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=-./.test(w)"
+  },
+  {
+   "id": "N8-lone-dash-blocked",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=-/s.test(w)"
+  },
+  {
+   "id": "N9-dashvalue-call-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "args[0] === \"review\" && hasDashValue(args)",
+   "replacement": "false"
+  },
+  {
+   "id": "N10-expansion-gate-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "!(isJudgedByWords(seg.words) && hasUnquotedExpansion(seg.raw)) &&",
+   "replacement": ""
+  },
+  {
+   "id": "N11-judged-no-keryx",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "return words[0] === \"git\" || words[0] === \"keryx\";",
+   "replacement": "return words[0] === \"git\";"
+  },
+  {
+   "id": "N12-judged-no-git",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "return words[0] === \"git\" || words[0] === \"keryx\";",
+   "replacement": "return words[0] === \"keryx\";"
+  },
+  {
+   "id": "N13-keryx-execword-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (hasExecWord(words)) return false;",
+   "replacement": ""
+  },
+  {
+   "id": "N14-git-execword-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words)",
+   "replacement": "GIT_READ_SUBCOMMANDS.has(words[1])"
+  },
+  {
+   "id": "N15-expansion-no-dollar",
+   "file": "src/lib/shell-syntax.ts",
+   "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+   "replacement": "ch === \"\\\\\" || ch === \"{\" || ch === \"}\") return true;"
+  },
+  {
+   "id": "N16-expansion-no-backslash",
+   "file": "src/lib/shell-syntax.ts",
+   "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+   "replacement": "ch === \"$\" || ch === \"{\" || ch === \"}\") return true;"
+  },
+  {
+   "id": "N17-expansion-no-open-brace",
+   "file": "src/lib/shell-syntax.ts",
+   "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+   "replacement": "ch === \"\\\\\" || ch === \"$\" || ch === \"}\") return true;"
+  },
+  {
+   "id": "N18-expansion-no-close-brace",
+   "file": "src/lib/shell-syntax.ts",
+   "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+   "replacement": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\") return true;"
+  },
+  {
+   "id": "N19-expansion-unbalanced-open",
+   "file": "src/lib/shell-syntax.ts",
+   "anchor": "  return quote !== undefined;\n}",
+   "replacement": "  return false;\n}"
+  },
+  {
+   "id": "N21-provenance-hex-off",
+   "file": "src/sync/provenance.ts",
+   "anchor": "typeof commit === \"string\" && /^[0-9a-f]{4,64}$/i.test(commit)",
+   "replacement": "typeof commit === \"string\""
+  },
+  {
+   "id": "N22-provenance-end-anchor",
+   "file": "src/sync/provenance.ts",
+   "anchor": "{4,64}$/i",
+   "replacement": "{4,64}/i"
+  },
+  {
+   "id": "N23-provenance-start-anchor",
+   "file": "src/sync/provenance.ts",
+   "anchor": "/^[0-9a-f]{4,64}$/i",
+   "replacement": "/[0-9a-f]{4,64}$/i"
+  },
+  {
+   "id": "N24-staleness-bare",
+   "file": "src/gdgraph/staleness.ts",
+   "anchor": "...revisionOperand(fromCommit), toCommit]",
+   "replacement": "fromCommit, toCommit]"
+  },
+  {
+   "id": "N25-staleness-catch-rethrow",
+   "file": "src/gdgraph/staleness.ts",
+   "anchor": "this check never throws.\n    return [];",
+   "replacement": "this check never throws.\n    throw new Error(\"x\");"
+  },
+  {
+   "id": "N26-sync-diff-guard-off",
+   "file": "src/sync/diff.ts",
+   "anchor": "if (base.startsWith(\"-\")) return null;",
+   "replacement": ""
+  },
+  {
+   "id": "N27-review-ctx-diff-guard",
+   "file": "src/commands/ctx.ts",
+   "anchor": "  assertNoWritingDiffOption(args);",
+   "replacement": ""
+  },
+  {
+   "id": "N28-writing-ext-diff",
+   "file": "src/lib/git-revision.ts",
+   "anchor": " || a === \"--ext-diff\"",
+   "replacement": ""
+  },
+  {
+   "id": "N20-splitwords-dq-backslash-off",
+   "file": "src/lib/shell-syntax.ts",
+   "anchor": "      if (quote === '\"' && ch === \"\\\\\" && next !== undefined) {\n        buf += ch + next;",
+   "replacement": "      if (false) {\n        buf += ch + next;"
+  }
+ ]
+}

@@ -67,6 +67,20 @@ function isInside(root: string, candidate: string): boolean {
   return relative !== ".." && !relative.startsWith(`..${path.sep}`);
 }
 
+/** The real path of `target`, or its resolved path when it cannot be resolved. */
+export function realOrResolved(target: string): string {
+  try {
+    return realpathSync(target);
+  } catch {
+    return path.resolve(target);
+  }
+}
+
+/** The refusal for a path that really lands outside the project. */
+export function outsideProjectMessage(candidate: string, rootReal: string): string {
+  return `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`;
+}
+
 /**
  * Resolve a caller-supplied path and refuse it unless it stays inside the
  * project.
@@ -101,7 +115,7 @@ export async function resolveContainedPath(
     return {
       ok: false,
       reason: "outside-project",
-      message: `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`,
+      message: outsideProjectMessage(candidate, rootReal),
     };
   }
 
@@ -110,6 +124,51 @@ export async function resolveContainedPath(
   }
 
   return { ok: true, path: real };
+}
+
+export type PlacedPathResult = { ok: true; path: string } | { ok: false; message: string };
+
+/**
+ * Where a path a command is about to create or overwrite would really land, and whether that stays inside
+ * the project root. A target that does not exist yet is judged by the real path of its nearest existing
+ * ancestor, so a symlink inside the project that points out (a `.metaproject` link included) is refused; a
+ * dangling or looping link is refused too. `candidate` is resolved against `cwd`.
+ */
+export function placePathWithinSync(projectRoot: string, candidate: string, cwd: string): PlacedPathResult {
+  const realOf = (target: string): string | null => {
+    try {
+      return realpathSync(target);
+    } catch {
+      return null;
+    }
+  };
+  const rootReal = realOrResolved(projectRoot);
+  const absolute = path.resolve(cwd, candidate);
+
+  let ancestor = absolute;
+  const tail: string[] = [];
+  for (;;) {
+    let present = true;
+    try {
+      lstatSync(ancestor);
+    } catch {
+      present = false;
+    }
+    if (present) break;
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    tail.unshift(path.basename(ancestor));
+    ancestor = parent;
+  }
+  const ancestorReal = realOf(ancestor);
+  if (ancestorReal === null) {
+    return { ok: false, message: `refused: ${candidate} cannot be resolved (dangling or looping symlink).` };
+  }
+  const effective = path.join(ancestorReal, ...tail);
+  if (!isInside(rootReal, effective)) {
+    return { ok: false, message: outsideProjectMessage(candidate, rootReal) };
+  }
+  return { ok: true, path: effective };
 }
 
 /**
@@ -126,12 +185,7 @@ export function resolveContainedPathSync(projectRoot: string, candidate: string)
   } catch {
     return { ok: false, reason: "not-found", message: `no such file or directory: ${candidate}` };
   }
-  let rootReal: string;
-  try {
-    rootReal = realpathSync(projectRoot);
-  } catch {
-    rootReal = path.resolve(projectRoot);
-  }
+  const rootReal = realOrResolved(projectRoot);
   const absolute = path.resolve(rootReal, candidate);
 
   let real: string | null;
@@ -143,11 +197,7 @@ export function resolveContainedPathSync(projectRoot: string, candidate: string)
   const effective = real ?? absolute;
 
   if (!isInside(rootReal, effective)) {
-    return {
-      ok: false,
-      reason: "outside-project",
-      message: `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`,
-    };
+    return { ok: false, reason: "outside-project", message: outsideProjectMessage(candidate, rootReal) };
   }
 
   if (real === null) {

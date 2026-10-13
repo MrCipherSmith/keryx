@@ -1,6 +1,7 @@
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
+import { resetOperatorDenials } from "../review/review-system";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
@@ -125,7 +126,7 @@ import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSi
 import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
-import { classifyBusyDispatch, deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
+import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import {
   createSplashLifecycle,
@@ -317,7 +318,7 @@ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
-import { terminalSafe } from "../lib/terminal-safe";
+import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
 import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
@@ -357,6 +358,7 @@ import {
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
+  withTurnScopedIo,
   type TurnScopedIo,
 } from "./foreground-operation";
 import {
@@ -392,7 +394,7 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import type { AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
+import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
@@ -407,13 +409,11 @@ import type { QueuedMainQuestion, QueueWait } from "./main-queue";
 import {
   describePendingCall,
   formatQueueListing,
-  createMainQueueDrain,
-  drainIdleMainQueue,
   parseQueueCommand,
   removeMainQueueItem,
 } from "./main-queue";
 import { buildMainQueueHelp, buildMainQueueRow } from "./main-queue-view";
-import { createRemoteQueueWiring } from "./remote-queue-wiring";
+import { createTurnLoop } from "./turn-loop";
 import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
 import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
@@ -3704,7 +3704,7 @@ export function describeModeRow(
 const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   ask: "Every mutating action asks first (today's default)",
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
-  auto: "Skips confirmation for everything except credential-touching commands",
+  auto: "Skips confirmation except for credential-touching commands; the agent answers its own questions",
 };
 
 /** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
@@ -3868,7 +3868,7 @@ export async function launchTuiAgentShell(opts: {
   let liveReviewsPanel: ReviewsPanelHandle | undefined;
   // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
   // `busWakeController` below: the bridge's host closes over `runLine` and
-  // `mainQueue`, which do not exist yet, while `onDestroy` and the approval/reply
+  // `turnLoop`, which do not exist yet, while `onDestroy` and the approval/reply
   // wraps near the top of the shell already need to reach it. Off until the
   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
   // topic) on every exit path.
@@ -3912,7 +3912,7 @@ export async function launchTuiAgentShell(opts: {
   // receives a push).
   const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });
   // Flow 274 T7 (review r1 F11: now `createBusWakeController`, from
-  // `./bus-wake.ts`) — the actual bus-wake check needs `runLine`, `mainQueue`
+  // `./bus-wake.ts`) — the actual bus-wake check needs `runLine`, `turnLoop`
   // and `consecutiveAutoWakes`, all declared much further down this
   // function — but `onPeers` (which must trigger it once per poll,
   // specification §5.3) is wired into `joinBus` right below, long before any
@@ -3925,7 +3925,7 @@ export async function launchTuiAgentShell(opts: {
   let busWakeController: BusWakeController | undefined;
   // Flow 275 (agent bus P4, T7; specification §4.3, §5.2): same nullable-ref/
   // TDZ idiom as `busWakeController` right above — the real implementation is
-  // built once `mainQueue`/`runLine`/`forceHandoff` exist, further down; a
+  // built once `turnLoop`/`runLine`/`forceHandoff` exist, further down; a
   // poll landing before that is a safe no-op via optional chaining.
   let leaseHoldController: LeaseHoldController | undefined;
   // review r1 F1: whether the poll CURRENTLY being processed delivered at
@@ -5003,24 +5003,30 @@ export async function launchTuiAgentShell(opts: {
     // Flow 397: the calls between the main queue, the session switches, the turn stream and the
     // bridge live in `remote-queue-wiring.ts`, where a test drives them. Every closure below runs
     // late (a keypress, a settled turn), so the names it reaches exist by then.
-    const remoteQueue = createRemoteQueueWiring({
-      getBridge: () => remoteBridge,
-      getQueue: () => mainQueue,
-      setQueue: (next) => {
-        mainQueue = next;
-      },
-      nextId: () => `mq${mainQueueSeq++}`,
-      summarize: summarizeSubmittedLine,
-      paint: () => paintMainQueue(),
-      composer: {
-        setText: (text) => {
-          input.value = text;
+    // Flow 441 (AC1): the queue, the remote wiring and the drain sites are one `createTurnLoop`.
+    const turnLoop = createTurnLoop({
+      forced: forceHandoff,
+      remote: {
+        getBridge: () => remoteBridge,
+        summarize: summarizeSubmittedLine,
+        composer: {
+          setText: (text) => {
+            input.value = text;
+          },
+          focus: () => input.focus(),
         },
-        focus: () => input.focus(),
       },
+      paint: () => paintMainQueue(),
       say: (text) => io.onSystem?.(text),
       runLine: (line, origin, source) => runLine(line, origin, source),
+      turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
+      onSettle: () => busWakeController?.onSettle(),
+      onDetachedFailure: (error) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        io.onSystem?.(`◇ a slash command failed: ${terminalSafe(reason).text}\n`);
+      },
     });
+    const remoteQueue = turnLoop.remote;
     const baseOnAssistantTextForGuard = io.onAssistantText?.bind(io);
     io.onAssistantText = (text) => {
       guardCollector.onAssistantText(text);
@@ -5367,17 +5373,17 @@ export async function launchTuiAgentShell(opts: {
       async (tool, inputJson, meta) => {
         const before = pendingApprovalCall;
         pendingApprovalCall = describePendingCall(tool, inputJson);
-        if (mainQueue.length > 0) paintMainQueue();
+        if (turnLoop.queue.length > 0) paintMainQueue();
         try {
           return await inner(tool, inputJson, meta);
         } finally {
           pendingApprovalCall = before;
-          if (mainQueue.length > 0) paintMainQueue();
+          if (turnLoop.queue.length > 0) paintMainQueue();
         }
       };
     const queueListingText = (): string =>
       `${formatQueueListing(
-        mainQueue.map((item) => (item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion)),
+        turnLoop.queue.map((item) => (item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion)),
         queueWait(),
       )
         .map((line) => `◇ ${line}`)
@@ -5992,7 +5998,7 @@ export async function launchTuiAgentShell(opts: {
             showComposerChoiceDetailed(otui, r, chrome.dock, {
               title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
               subtitle: "Pick an option, or type your own answer · Esc cancels",
-              cancelId: "__cancel__",
+              cancelId: ASK_USER_CANCEL,
               // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
               ownAnswer: {},
               onOpen: () => chrome.blurComposer(),
@@ -6184,6 +6190,17 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     io.onAutoApproved = autoApprovedFor(false);
+    // NOT dimmed, for the same reason: `auto` mode answered a question the user never saw, so this line is the record.
+    io.onQuestionSelfAnswered = (question, answerLabel) => {
+      // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+      const line = selfAnsweredLine(question, answerLabel);
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `qs${uid++}`,
+          content: otui.t`${roleChunk(otui, "attention", "◇ answered without asking (auto):")} ${dimChunk(otui, line)}`,
+        }),
+      );
+    };
     // Flow 396 (finding 9): what a turn that came from Telegram is judged and asked by. Passed to the
     // foreground facade of THAT turn only, so it follows the turn and not a bridge-wide flag: a trust default
     // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
@@ -6316,6 +6333,7 @@ export async function launchTuiAgentShell(opts: {
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
+      resetOperatorDenials();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
@@ -6914,6 +6932,7 @@ export async function launchTuiAgentShell(opts: {
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
+      resetOperatorDenials();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       sessionResumed = NEW_SESSION_ENTRY.resumed;
@@ -7603,6 +7622,7 @@ export async function launchTuiAgentShell(opts: {
       permissionMode = next;
       modeChangedThisSession = true;
       paintModeRow();
+      resetOperatorDenials();
       chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
@@ -7623,7 +7643,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
+                `Only credential-touching commands still ask. The agent also answers its own questions; irreversible or untrusted ones still ask you. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -7895,8 +7915,6 @@ export async function launchTuiAgentShell(opts: {
     const sideQueue: QueuedSideQuestion[] = [];
 
     // QueuedMainQuestion type imported from ./main-queue (pure helpers).
-    let mainQueue: QueuedMainQuestion[] = [];
-    let mainQueueSeq = 0;
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -7963,9 +7981,9 @@ export async function launchTuiAgentShell(opts: {
       applyQueueNavHighlight();
     };
     const enterQueueNav = (): void => {
-      if (mainQueue.length === 0) return;
+      if (turnLoop.queue.length === 0) return;
       queueNavActive = true;
-      selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, mainQueue.length);
+      selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, turnLoop.queue.length);
       applyQueueNavHighlight();
     };
     // Flow 170 T6, PRD FR-12/AC10: a click on queueDock's own background/item
@@ -7986,19 +8004,8 @@ export async function launchTuiAgentShell(opts: {
       enterQueueNav();
     };
     // Flow 441 (R1): the one drain the operation-complete, turn-settle, lease-release and
-    // detached-slash-command sites share.
-    const drainSites = createMainQueueDrain({
-      forced: forceHandoff,
-      queue: () => mainQueue,
-      paint: () => paintMainQueue(),
-      run: (next) => remoteQueue.runQueued(next),
-      turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
-      onSettle: () => busWakeController?.onSettle(),
-      onDetachedFailure: (error) => {
-        const reason = error instanceof Error ? error.message : String(error);
-        io.onSystem?.(`◇ a slash command failed: ${terminalSafe(reason).text}\n`);
-      },
-    });
+    // detached-slash-command sites share (built in `createTurnLoop`).
+    const drainSites = turnLoop.drain;
     // A slash command whose work outlives its handler (it returns before the work ends) holds the
     // queue until the work ends, then drains what waited behind it.
     const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);
@@ -8020,13 +8027,13 @@ export async function launchTuiAgentShell(opts: {
         }
         mainQueueHelp = undefined;
       }
-      selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, mainQueue.length);
-      if (mainQueue.length === 0) {
+      selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, turnLoop.queue.length);
+      if (turnLoop.queue.length === 0) {
         // Queue-nav only makes sense while there is something to act on.
         exitQueueNav();
       }
-      for (let i = 0; i < mainQueue.length; i++) {
-        const item = mainQueue[i];
+      for (let i = 0; i < turnLoop.queue.length; i++) {
+        const item = turnLoop.queue[i];
         if (item === undefined) continue;
         const index = i;
         const built = buildMainQueueRow(otui, r, {
@@ -8041,15 +8048,15 @@ export async function launchTuiAgentShell(opts: {
         chrome.queueDock.add(built.box);
         mainQueueBlocks.push({ id: item.id, box: built.box, setRowActive: built.setRowActive, buttons: built.buttons });
       }
-      if (mainQueue.length > 0) {
+      if (turnLoop.queue.length > 0) {
         mainQueueHelp = buildMainQueueHelp(otui, r);
         chrome.queueDock.add(mainQueueHelp);
       }
-      chrome.queueDock.visible = mainQueue.length > 0;
+      chrome.queueDock.visible = turnLoop.queue.length > 0;
       applyQueueNavHighlight();
       // Fleet/status counter.
-      if (mainQueue.length > 0) {
-        fleet.upsert({ id: "agent:queue", label: "mainQ", status: "queued", detail: `queued \u00d7${mainQueue.length}` });
+      if (turnLoop.queue.length > 0) {
+        fleet.upsert({ id: "agent:queue", label: "mainQ", status: "queued", detail: `queued \u00d7${turnLoop.queue.length}` });
       } else {
         fleet.remove("agent:queue");
       }
@@ -8059,7 +8066,7 @@ export async function launchTuiAgentShell(opts: {
     const editMainQueue = (index: number): void => remoteQueue.editMainQueue(index);
 
     const forceMainQueue = (index: number): void => {
-      const item = mainQueue[index];
+      const item = turnLoop.queue[index];
       if (item === undefined) return;
       // Flow 275 T7 (specification §4.3, AC4): "/queue force" — and the
       // Ctrl+Q queue-nav force action and the queue-dock force button, which
@@ -8070,7 +8077,7 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(`◇ held — q${index + 1} stays queued until the lease is released (see /bus).\n`);
         return;
       }
-      mainQueue = removeMainQueueItem(mainQueue, index);
+      turnLoop.replaceQueue(removeMainQueueItem(turnLoop.queue, index));
       paintMainQueue();
       // Cancellation is cooperative, and only the press that owns the handoff
       // waits for settlement. Both rules live in `forceForegroundQueueItem`
@@ -8100,7 +8107,7 @@ export async function launchTuiAgentShell(opts: {
         if (
           key.ctrl &&
           key.name === "q" &&
-          mainQueue.length > 0 &&
+          turnLoop.queue.length > 0 &&
           !chrome.overlayActive() &&
           !chrome.menuActive() &&
           !nav.active()
@@ -8118,14 +8125,14 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       if (key.name === "up") {
-        selectedQueueIndex = stepQueueNavIndex(selectedQueueIndex, mainQueue.length, "up");
+        selectedQueueIndex = stepQueueNavIndex(selectedQueueIndex, turnLoop.queue.length, "up");
         applyQueueNavHighlight();
         key.preventDefault();
         key.stopPropagation();
         return;
       }
       if (key.name === "down") {
-        selectedQueueIndex = stepQueueNavIndex(selectedQueueIndex, mainQueue.length, "down");
+        selectedQueueIndex = stepQueueNavIndex(selectedQueueIndex, turnLoop.queue.length, "down");
         applyQueueNavHighlight();
         key.preventDefault();
         key.stopPropagation();
@@ -8454,7 +8461,7 @@ export async function launchTuiAgentShell(opts: {
               return;
             }
             const index = parsed.position - 1;
-            if (index < 0 || index >= mainQueue.length) {
+            if (index < 0 || index >= turnLoop.queue.length) {
               io.onSystem?.(`◇ queue: no item q${parsed.position}.\n`);
               return;
             }
@@ -8598,13 +8605,7 @@ export async function launchTuiAgentShell(opts: {
           case "deferred": {
             // Any other slash line waits for the turn's end and runs from the main queue; only the
             // session-replacing ones (BUSY_REFUSED_COMMANDS) are refused.
-            if (deferredBusyAction(line, command?.name) === "queue") {
-              const id = `mq${mainQueueSeq++}`;
-              mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
-              paintMainQueue();
-              io.onSystem?.(`${queuedCommandNotice(mainQueue.length)}\n`);
-              return;
-            }
+            if (turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)) return;
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `c${uid++}`,
@@ -8637,10 +8638,8 @@ export async function launchTuiAgentShell(opts: {
         // goes straight to the main queue, same as the idle-path hold below,
         // skipping the Main-queue/Side-1 choice entirely.
         if (leaseView()?.held() === true) {
-          const id = `mq${mainQueueSeq++}`;
-          mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
-          paintMainQueue();
-          io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${mainQueue.length} (no side worker while held).\n`);
+          const position = turnLoop.enqueue(line, displayLine, source);
+          io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position} (no side worker while held).\n`);
           return;
         }
         void (async () => {
@@ -8679,25 +8678,18 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           if (chosen === "main") {
-            const id = `mq${mainQueueSeq++}`;
-            mainQueue.push({ id, question: line, displayQuestion: displayLine });
-            paintMainQueue();
+            turnLoop.enqueue(line, displayLine);
             // The recipient choice is asynchronous. The turn may have settled
             // while its dock was open, before the settle handler saw this item.
             // Drain now if idle; otherwise the usual settle/release path owns it.
-            drainIdleMainQueue(mainQueue, {
-              isIdle: () =>
+            turnLoop.drainAfterRecipientChoice(
+              () =>
                 !destroyed &&
                 !chrome.isBusy() &&
                 !foregroundOperation.isActive &&
                 !forceHandoff.isAwaitingSettlement &&
                 leaseView()?.held() !== true,
-              takeForced: () => forceHandoff.takeNext(),
-              dispatch: (next) => {
-                paintMainQueue();
-                remoteQueue.runQueued(next);
-              },
-            });
+            );
           } else {
             appendUserEcho(otui, r, transcript, {
               id: `side-q${uid++}`,
@@ -8814,7 +8806,8 @@ export async function launchTuiAgentShell(opts: {
             await runGoalCommand({
               raw: line.slice(command.name.length).trim(),
               cwd: sessionCwd,
-              io,
+              // A goal typed in the topic starts a model turn Telegram started: it is judged and asked like one.
+              io: source === TG_SOURCE ? withTurnScopedIo(io, telegramTurnIo) : io,
               deps,
               history,
               slateSession,
@@ -9458,10 +9451,8 @@ export async function launchTuiAgentShell(opts: {
       // defensive no-op for either, never an empty-line turn or a queue push.
       if (leaseView()?.held() === true) {
         if (origin === "operator") {
-          const id = `mq${mainQueueSeq++}`;
-          mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
-          paintMainQueue();
-          io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${mainQueue.length}.\n`);
+          const position = turnLoop.enqueue(line, displayLine, source);
+          io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${position}.\n`);
         }
         return;
       }
@@ -9957,7 +9948,7 @@ export async function launchTuiAgentShell(opts: {
         focusComposer(); // never steal focus from an active block-nav mode (R3)
         // Only suggest a next step when nothing is already queued — a queued
         // turn is the real next step and would immediately overwrite the hint.
-        if (!forceHandoff.hasPending && mainQueue.length === 0 && !turnFailed) {
+        if (!forceHandoff.hasPending && turnLoop.queue.length === 0 && !turnFailed) {
           void suggestNextStep();
         }
         // The turn has fully settled (stopBusy/setMainAgent already ran). A forced item (AC6) wins
@@ -9986,7 +9977,7 @@ export async function launchTuiAgentShell(opts: {
     // right below does, via `drainSites.workInFlight()`.
     deps.jobRegistry?.onCompletion(() => {
       const busy = chrome.isBusy() || foregroundOperation.isActive;
-      const idle = !busy && mainQueue.length === 0 && leaseView()?.held() !== true;
+      const idle = !busy && turnLoop.queue.length === 0 && leaseView()?.held() !== true;
       if (!idle) {
         return;
       }
@@ -10005,7 +9996,7 @@ export async function launchTuiAgentShell(opts: {
     // `consecutiveAutoWakes` counter/cap as the task-notification wake
     // immediately above. Assigned here (not inline where `onPeers`/the
     // turn-settle site call it) for the SAME reason that wake is subscribed
-    // here rather than earlier: `runLine`, `mainQueue` and
+    // here rather than earlier: `runLine`, `turnLoop` and
     // `consecutiveAutoWakes` are all declared above this point, in scope now.
     //
     // review r1 F11: the decision/print/wake wiring itself now lives in
@@ -10024,7 +10015,7 @@ export async function launchTuiAgentShell(opts: {
       isIdle: () =>
         !destroyed &&
         !drainSites.workInFlight() &&
-        mainQueue.length === 0 &&
+        turnLoop.queue.length === 0 &&
         leaseView()?.held() !== true,
       inbox: busInbox,
       getWakes: () => consecutiveAutoWakes,
@@ -10134,7 +10125,7 @@ export async function launchTuiAgentShell(opts: {
       return (
         `${formatSessionInfoText(snapshot).trimEnd()}\n\n` +
         `Mode: ${formatModeInForce(modeForTurn(true))}${readOnly ? " (read-only on)" : ""}\n` +
-        `Turn: ${chrome.isBusy() ? "running" : "idle"} · queue: ${mainQueue.length} waiting`
+        `Turn: ${chrome.isBusy() ? "running" : "idle"} · queue: ${turnLoop.queue.length} waiting`
       );
     };
 
@@ -10168,7 +10159,7 @@ export async function launchTuiAgentShell(opts: {
     // --- flow 376: remote control (the Telegram topic) -----------------------
     //
     // Created here, like `busWakeController`, because the host closes over `runLine` and
-    // `mainQueue`, which exist only now. Creating the bridge starts nothing: remote control
+    // `turnLoop`, which exist only now. Creating the bridge starts nothing: remote control
     // is OFF until `/remote-control <name>` (or the modal's `o`) calls `enable()`. A line
     // from Telegram enters the session exactly like a typed one: idle, `runLine`; busy, the
     // ordinary main queue (the same `qN` rows, labelled `[tg]`).
@@ -10180,13 +10171,13 @@ export async function launchTuiAgentShell(opts: {
           chrome.isBusy() ||
           foregroundOperation.isActive ||
           forceHandoff.isAwaitingSettlement ||
-          mainQueue.length > 0 ||
+          turnLoop.queue.length > 0 ||
           leaseView()?.held() === true,
         // The streaming loop writes the assistant message in place while a turn runs: only then is
         // the newest answer in `history` unfinished. A queued line or another holder of the lease
         // makes the shell busy without making that answer incomplete.
         turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
-        sessionState: () => ({ queued: mainQueue.length, mode: formatModeInForce(modeForTurn(true)) }),
+        sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),
         runLine: (text) => remoteQueue.runTelegramLine(text),
         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
         notice: (text) => io.onSystem?.(`${text}\n`),

@@ -1,0 +1,1544 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/review/scope.json",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/blast-radius.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/coverage.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/decisions.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/findings.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/learning.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/manifest.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/report.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutants-after-fix-1.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutants.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutation-1.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutation-1.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutation-after-fix-1.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/scope-files.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/scope.md",
+    "src/tui/bus-wake.ts",
+    "src/tui/busy-dispatch.test.ts",
+    "src/tui/main-queue.test.ts",
+    "src/tui/main-queue.ts",
+    "src/tui/remote-queue-wiring.test.ts",
+    "src/tui/shell-chrome.ts",
+    "src/tui/tui-bus.test.ts",
+    "src/tui/tui-hold.test.ts",
+    "src/tui/tui-shell.test.ts",
+    "src/tui/tui-shell.ts",
+    "src/tui/turn-loop.test.ts",
+    "src/tui/turn-loop.ts"
+  ],
+  "files": [
+    {
+      "file": "src/tui/modal-host.ts",
+      "hop": 1,
+      "fanIn": 64,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/modal-host.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/ops-sidebar.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 30,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/ops-sidebar.test-helpers.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/tui/bus-wake.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/bus-wake.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/addressee-queue.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/addressee-queue.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/background-job-session.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/background-job-session.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/subagent-session.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/subagent-session.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/external-operator.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/filter-list.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/filter-list.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/background-job-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/background-job-inspector.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/boot-animation.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/boot-animation.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/main-queue-view.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/main-queue-view.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/remote-queue-wiring.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/remote-queue-wiring.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/subagent-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/subagent-inspector.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "fixtures/routing-shell-pty.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "path": [
+        "src/bus/delivery.integration.test.ts",
+        "src/tui/bus-wake.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/providers.subscription.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-task-tools.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/addressee-queue.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/addressee-queue.test.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/approvals-sidebar.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/approvals-sidebar.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/ask-user-transcript.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/ask-user-transcript.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/boot-animation.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/bus-wake.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "path": [
+        "src/tui/bus-wake.test.ts",
+        "src/tui/bus-wake.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/channels-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/channels-surface.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/composer-choice.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/connect-provider-buttons.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/custom-provider-wizard.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/decisions-surface.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/digest-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/digest-surface.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/external-diff-sidebar.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/governance-panel.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/governance-panel.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/help-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/help-modal.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/intake-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/intake-surface.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/main-queue-drain.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/main-queue-drain.test.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/modal-host.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/modal-host.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/model-picker-notice.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/model-session-picker-modal.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/ops-sidebar.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/ops-sidebar.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "path": [
+        "src/tui/picker-theme.test.ts",
+        "src/tui/shell-chrome.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/provider-endpoint-retry.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/reviews-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/schedules-sidebar.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 140 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/shell-chrome.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subagent-session.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 140 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/theme-picker.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/triggers-panel.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 140 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 140 at hop 1, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector.ts",
+      "hop": 2,
+      "fanIn": 29,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 140 at hop 2, fan-in 29, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 140 at hop 2, fan-in 12, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ops-sidebar.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 140 at hop 2, fan-in 7, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 140 at hop 2, fan-in 6, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/composer-choice.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 140 at hop 2, fan-in 5, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 140 at hop 2, fan-in 5, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-inspector.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 140 at hop 2, fan-in 5, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/reviews-inspector.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 140 at hop 2, fan-in 5, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-modal.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 140 at hop 2, fan-in 5, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 140 at hop 2, fan-in 4, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-modal.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 140 at hop 2, fan-in 4, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-inspector.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 140 at hop 2, fan-in 4, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/product-open-surface.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 140 at hop 2, fan-in 4, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/schedules-inspector.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 140 at hop 2, fan-in 4, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-info.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 140 at hop 2, fan-in 4, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/channels-surface.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/conform-inspector.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-inspector.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/governance-inspector.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/intake-surface.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-consumer.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/schedules-sidebar.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/theme-picker.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 140 at hop 2, fan-in 3, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 140 at hop 2, fan-in 2, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/approvals-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/approvals-sidebar.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/bus-panel.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/execution-plan-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-delivery.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 140 at hop 2, fan-in 2, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/help-modal.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-edit-guard-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/permissions-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/rewind-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/routing-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/setup-modal.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/triggers-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/workspace-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 140 at hop 2, fan-in 2, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/game-modal.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 140 at hop 2, fan-in 1, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 140 at hop 2, fan-in 1, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/approvals-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-session.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/bus-wake.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 140 at hop 2, fan-in 0, reached via src/tui/bus-wake.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/conform-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 140 at hop 2, fan-in 0, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-delivery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 140 at hop 2, fan-in 0, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 140 at hop 2, fan-in 0, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/game-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/governance-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/permissions-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/rewind-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/routing-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-info.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/setup-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subagent-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/trigger-ledger.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/trigger-run-now.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/triggers-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 139 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/shell-chrome.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 140 of 140 at hop 2, fan-in 0, reached via src/tui/shell-chrome.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/review/scope.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/blast-radius.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/coverage.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/findings.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/learning.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutants-after-fix-1.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutants.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutation-1.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutation-1.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research-evidence/mutation-after-fix-1.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/research.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/scope-files.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-1003-round1-95d3f883/scope.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 32,
+    "changedFilesResolved": 12,
+    "changedFilesUnresolved": 20,
+    "candidates": 140,
+    "retained": 40,
+    "droppedByCap": 100,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 25,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 3040,
+    "edges": 10588
+  }
+}

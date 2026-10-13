@@ -419,6 +419,7 @@ export function shellExecTool(
   options?: { yieldMs?: number },
 ): InteractiveTool {
   return {
+    workingDirectory: root,
     definition: {
       name: "shell_exec",
       description:

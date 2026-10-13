@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import path from "node:path";
+import { revisionOperand } from "../lib/git-revision";
 import { gitCmd, gitHead, readProvenance } from "../sync/provenance";
 
 // W7 AC4 follow-up (flow 304 T8) — a real, previously-latent defect found
@@ -237,7 +238,13 @@ async function committedChangedFiles(
   // "HEAD moved" reason. `--name-only -z` lists only the destination path per
   // entry even for a rename (unlike `git status -z`, which pairs it with an
   // orig-path field), so this stays a plain NUL-split with no pairing logic.
-  const diff = await gitCmd(cwd, ["diff", "--name-only", "-z", fromCommit, toCommit]);
+  let diff: string | null;
+  try {
+    diff = await gitCmd(cwd, ["diff", "--name-only", "-z", ...revisionOperand(fromCommit), toCommit]);
+  } catch {
+    // A provenance commit that reads as an option is refused by revisionOperand; this check never throws.
+    return [];
+  }
   if (diff === null) {
     return [];
   }

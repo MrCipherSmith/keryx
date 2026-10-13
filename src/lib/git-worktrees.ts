@@ -19,6 +19,7 @@
 
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { revisionOperand } from "./git-revision";
 
 /** Resolve `git rev-parse --git-common-dir`, absolute. `undefined` outside a git repo, or if `git` itself is unavailable. */
 export async function resolveGitCommonDir(cwd: string): Promise<string | undefined> {
@@ -221,7 +222,7 @@ export async function hasUncommittedChanges(worktreePath: string): Promise<boole
 export async function commitsAheadOfMain(worktreePath: string, mainBranch = "main"): Promise<number | undefined> {
   try {
     const proc = Bun.spawn(
-      ["git", "rev-list", "--count", `${mainBranch}..HEAD`],
+      ["git", "rev-list", "--count", ...revisionOperand(`${mainBranch}..HEAD`)],
       { cwd: worktreePath, stdout: "pipe", stderr: "ignore" },
     );
     const out = (await new Response(proc.stdout).text()).trim();

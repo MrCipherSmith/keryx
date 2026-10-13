@@ -1,0 +1,16 @@
+[
+  {"id": "R01-decisionfor-same-undecided", "file": "src/review/replay.ts", "anchor": "return row.same ? \"none\" : (decisions", "replacement": "return row.same ? \"undecided\" : (decisions"},
+  {"id": "R02-hash-of-file-name", "file": "src/review/replay.ts", "anchor": ".update(raw).digest", "replacement": ".update(file).digest"},
+  {"id": "R03-same-deepequal-only", "file": "src/review/replay.ts", "anchor": "const same = before === after && isDeepStrictEqual(old, next);", "replacement": "const same = isDeepStrictEqual(old, next);"},
+  {"id": "R04-ancestor-skip-never", "file": "src/review/replay.ts", "anchor": "!ancestors.some((part) => SKIPPED_DIRS.has(part) || part === \"raw\")", "replacement": "true"},
+  {"id": "R05-toplevel-realpath-dropped", "file": "src/review/replay.ts", "anchor": "top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)", "replacement": "top.status !== 0 || false"},
+  {"id": "R06-lsfiles-pathspec-dropped", "file": "src/review/replay.ts", "anchor": "\"ls-files\", \"-z\", \"--\", relative]", "replacement": "\"ls-files\", \"-z\"]"},
+  {"id": "R07-symlink-check-dir-instead", "file": "src/review/replay.ts", "anchor": "path.join(root, relative)).isSymbolicLink())", "replacement": "path.join(root, relative)).isDirectory())"},
+  {"id": "R08-walk-always-empty", "file": "src/review/replay.ts", "anchor": "if (!existsSync(path.join(root, relative))) return files;", "replacement": "return files;"},
+  {"id": "R09-render-same-section-dropped", "file": "src/review/replay.ts", "anchor": "...rows.filter((row) => row.same).map((row) => `- ${row.file} (${row.hash}): ${row.old}`),", "replacement": ""},
+  {"id": "R10-render-counts-swapped", "file": "src/review/replay.ts", "anchor": "Same: ${rows.length - differing.length}. Differences: ${differing.length}.", "replacement": "Same: ${differing.length}. Differences: ${rows.length - differing.length}."},
+  {"id": "R11-render-decision-constant", "file": "src/review/replay.ts", "anchor": "| ${row.cause} | ${decisionFor(row, decisions)} |`", "replacement": "| ${row.cause} | undecided |`"},
+  {"id": "R12-cli-flag-index", "file": "src/review/replay.ts", "anchor": "process.argv[flag + 1]", "replacement": "process.argv[flag]"},
+  {"id": "R13-outcome-reviewer-default", "file": "src/review/replay.ts", "anchor": "${result.reviewer ?? \"-\"}", "replacement": "${result.reviewer ?? \"x\"}"},
+  {"id": "R14-zero-rows-never-throws", "file": "src/review/replay.ts", "anchor": "if (rows.length === 0) throw new Error", "replacement": "if (rows.length < 0) throw new Error"}
+]

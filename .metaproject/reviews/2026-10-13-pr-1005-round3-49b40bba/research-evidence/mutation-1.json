@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f045",
+  "command": "bun test src/lib/trust-routine-command.test.ts src/sync/provenance.test.ts src/sync/diff.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1672
+  },
+  "mutants": [
+    {
+      "id": "B2-c-flag-prefix",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "rest === 2 &&",
+      "replacement": "rest >= 2 &&",
+      "line": 120,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1830
+    },
+    {
+      "id": "B16-dot-all-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^--[^=]+=-./.test(w)",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1421
+    },
+    {
+      "id": "B17-short-flag-prefix",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^-[^=]+=-./s.test(w)",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1383
+    },
+    {
+      "id": "G5-dashvalue-lone-dash-blocked",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^--[^=]+=-/s.test(w)",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1339
+    },
+    {
+      "id": "G6-dashvalue-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "words.some((w) => /^--[^=]+=-./s.test(w))",
+      "replacement": "false",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1180
+    },
+    {
+      "id": "G7-dashvalue-call-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "args[0] === \"review\" && hasDashValue(args)",
+      "replacement": "false",
+      "line": 314,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1183
+    },
+    {
+      "id": "G9-eq-chain-dash-gate-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!word.startsWith(\"-\", at) || eq === -1) return false;",
+      "replacement": "if (eq === -1) return false;",
+      "line": 124,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1356
+    },
+    {
+      "id": "G10-eq-chain-one-level",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "    at = eq + 1;\n  }\n}",
+      "replacement": "    if (at > 0) return false;\n    at = eq + 1;\n  }\n}",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1132
+    },
+    {
+      "id": "G11-c-flag-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (rest === 2 && word.startsWith(\"-c\", at)) return true;",
+      "replacement": "",
+      "line": 120,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1297
+    },
+    {
+      "id": "N1-c-flag-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (rest === 2 && word.startsWith(\"-c\", at)) return true;",
+      "replacement": "",
+      "line": 120,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1238
+    },
+    {
+      "id": "N2-c-flag-prefix",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "rest === 2 &&",
+      "replacement": "rest >= 2 &&",
+      "line": 120,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1278
+    },
+    {
+      "id": "N3-flag-prefix-match",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "rest === f.length && word.startsWith(f, at)",
+      "replacement": "word.startsWith(f, at)",
+      "line": 121,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1289
+    },
+    {
+      "id": "N4-eq-prefix-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (EXEC_FLAG_PREFIXES.some((prefix) => word.startsWith(prefix, at))) return true;",
+      "replacement": "",
+      "line": 122,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1215
+    },
+    {
+      "id": "N5-dash-gate-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!word.startsWith(\"-\", at) || eq === -1) return false;",
+      "replacement": "if (eq === -1) return false;",
+      "line": 124,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1318
+    },
+    {
+      "id": "N6-eq-chain-one-level",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "    at = eq + 1;\n  }\n}",
+      "replacement": "    if (at > 0) return false;\n    at = eq + 1;\n  }\n}",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3107
+    },
+    {
+      "id": "N7-dotall-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^--[^=]+=-./.test(w)",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 4382
+    },
+    {
+      "id": "N8-lone-dash-blocked",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^--[^=]+=-/s.test(w)",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3040
+    },
+    {
+      "id": "N9-dashvalue-call-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "args[0] === \"review\" && hasDashValue(args)",
+      "replacement": "false",
+      "line": 314,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2183
+    },
+    {
+      "id": "N10-expansion-gate-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "!(isJudgedByWords(seg.words) && hasUnquotedExpansion(seg.raw)) &&",
+      "replacement": "",
+      "line": 354,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1499
+    },
+    {
+      "id": "N11-judged-no-keryx",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "return words[0] === \"git\" || words[0] === \"keryx\";",
+      "replacement": "return words[0] === \"git\";",
+      "line": 362,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1704
+    },
+    {
+      "id": "N12-judged-no-git",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "return words[0] === \"git\" || words[0] === \"keryx\";",
+      "replacement": "return words[0] === \"keryx\";",
+      "line": 362,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1643
+    },
+    {
+      "id": "N13-keryx-execword-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (hasExecWord(words)) return false;",
+      "replacement": "",
+      "line": 312,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1622
+    },
+    {
+      "id": "N14-git-execword-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words)",
+      "replacement": "GIT_READ_SUBCOMMANDS.has(words[1])",
+      "line": 334,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1567
+    },
+    {
+      "id": "N15-expansion-no-dollar",
+      "file": "src/lib/shell-syntax.ts",
+      "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+      "replacement": "ch === \"\\\\\" || ch === \"{\" || ch === \"}\") return true;",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1400
+    },
+    {
+      "id": "N16-expansion-no-backslash",
+      "file": "src/lib/shell-syntax.ts",
+      "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+      "replacement": "ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1325
+    },
+    {
+      "id": "N17-expansion-no-open-brace",
+      "file": "src/lib/shell-syntax.ts",
+      "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+      "replacement": "ch === \"\\\\\" || ch === \"$\" || ch === \"}\") return true;",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1399
+    },
+    {
+      "id": "N18-expansion-no-close-brace",
+      "file": "src/lib/shell-syntax.ts",
+      "anchor": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+      "replacement": "ch === \"\\\\\" || ch === \"$\" || ch === \"{\") return true;",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1243
+    },
+    {
+      "id": "N19-expansion-unbalanced-open",
+      "file": "src/lib/shell-syntax.ts",
+      "anchor": "  return quote !== undefined;\n}",
+      "replacement": "  return false;\n}",
+      "line": 127,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1206
+    },
+    {
+      "id": "N21-provenance-hex-off",
+      "file": "src/sync/provenance.ts",
+      "anchor": "typeof commit === \"string\" && /^[0-9a-f]{4,64}$/i.test(commit)",
+      "replacement": "typeof commit === \"string\"",
+      "line": 243,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1317
+    },
+    {
+      "id": "N22-provenance-end-anchor",
+      "file": "src/sync/provenance.ts",
+      "anchor": "{4,64}$/i",
+      "replacement": "{4,64}/i",
+      "line": 243,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1616
+    },
+    {
+      "id": "N23-provenance-start-anchor",
+      "file": "src/sync/provenance.ts",
+      "anchor": "/^[0-9a-f]{4,64}$/i",
+      "replacement": "/[0-9a-f]{4,64}$/i",
+      "line": 243,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1266
+    },
+    {
+      "id": "N20-splitwords-dq-backslash-off",
+      "file": "src/lib/shell-syntax.ts",
+      "anchor": "      if (quote === '\"' && ch === \"\\\\\" && next !== undefined) {\n        buf += ch + next;",
+      "replacement": "      if (false) {\n        buf += ch + next;",
+      "line": 219,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1319
+    }
+  ],
+  "totals": {
+    "killed": 29,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

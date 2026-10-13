@@ -1,0 +1,66 @@
+STATUS: DONE_WITH_CONCERNS
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE_WITH_CONCERNS",
+  "findings": [
+    {
+      "id": "CC-1",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "quote": "if (depth === 1 && !claimsResult && RESULT_KEYS.has(raw.slice(keyFrom, end))) {",
+      "problem": "The objectEnd doc says claimsResult is true only when 'the object itself (not an object nested in it)' carries a result key. topLevelObjects then does `start += 1; continue;` on every unclosed fragment, so the scan re-enters the nested object at its own `{\"`. In that second call the nested object's keys sit at depth 1 and count. The depth === 1 restriction cannot do the job the comment gives it. A cut-off prose fragment such as `{\"meta\":{\"status\":\"ok\"` (outer object has no result key, inner has one) is read as a truncated result.",
+      "impact": "Measured with bun against the worktree sources. `<complete real result>\\nlog: {\"meta\":{\"status\":\"ok\"` returns undefined. The same reply with `{\"meta\":{\"x\":1` returns the real result. A complete genuine result is dropped only because of a nested result key in a later prose fragment. The ledger then records 'no parseable REVIEW_RESULT block' for that raw. This is the round-2 'fail-closed too broad' defect again, reachable through nesting, and the comment hides it.",
+      "suggested_fix": "Either drop the depth test and say 'any result key in the fragment, nested included', or make topLevelObjects skip the content of a prose fragment instead of re-entering it. Pin it with a test for the nested-key case.",
+      "evidence": "scratchpad r2/review-clean-code/t.ts: nestedCut -> undefined; outerCutNoKey -> real result.",
+      "confidence": 0.85,
+      "reviewer": "review-clean-code",
+      "class_scope": "objectEnd line 105 (depth===1 test) and topLevelObjects lines 132-135 (start += 1 re-entry). The other caller of objectEnd, afterMarker, discards claimsResult, so only topLevelObjects is affected."
+    },
+    {
+      "id": "CC-2",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "/** No label and no marker: the reviewer-shaped objects at the top level, fenced ones first. */",
+      "problem": "Four comments say less or something else than the code does. (1) scannedResult says 'No label and no marker', but it also runs when markers exist and none gave a reviewer result. (2) Rule 3 says prose braces are skipped 'a few times' and never says the 9th one gives no result. (3) MAX_MARKERS says markers are 'tried' but not that older ones are ignored and the scan runs, the opposite of MAX_UNCLOSED where passing the cap means no result. (4) 'unless the bare objects carry different statuses' covers every bare object with a status, so a quoted {\"id\":\"S1\",\"status\":\"fixed\"} counts.",
+      "impact": "Measured. `REVIEW_RESULT {\"status\":\"X\"}\\n<real bare result>` -> undefined. `<real>\\nexample {\"id\":\"S1\",\"status\":\"fixed\"}` -> undefined. A real marker result followed by 9 later `REVIEW_RESULT {\"status\":\"x\"}` lines -> undefined, with 7 it parses. A maintainer reading the comments cannot predict these.",
+      "suggested_fix": "Edit the comments only.",
+      "evidence": "t.ts: markerThenScan -> undefined; ambig -> undefined; markerCap9bad -> undefined; markerCap7bad -> real result; nineUnclosed -> undefined; eightUnclosed -> real result.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-3",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "const { end } = objectEnd(raw, start);",
+      "problem": "objectEnd does two jobs: find the closing brace, and detect result keys for the truncation decision. afterMarker discards claimsResult, yet the key detection still runs on every marker candidate. The module-level sticky regexes KEY_COLON and OBJECT_START are shared mutable state callers must reset. The try { JSON.parse } catch {} pair is written three times.",
+      "impact": "Linear and small cost. A half-meaningless return value and a trap for the next editor.",
+      "suggested_fix": "Keep objectEnd a pure brace matcher or give it an optional onKey callback; add a tryParse helper; build the sticky regex locally.",
+      "evidence": "Reading the three call sites; afterMarker call at line 193 ignores claimsResult.",
+      "confidence": 0.7,
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-4",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "type Decision = { result: ParsedResult | undefined };",
+      "problem": "Decision gives the chain two 'not applicable' conventions. hasStatus declares a type guard that checks only status. scannedResult's inFence closure relies on ascending start order that nothing documents.",
+      "impact": "No wrong result today.",
+      "suggested_fix": "One-line comment on parseReviewResult; document ascending start in topLevelObjects.",
+      "evidence": "Reading ledger.ts lines 163-238.",
+      "confidence": 0.6,
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-006", "state": "partial", "evidence": "Doc exact on rule order, same-status-twice, rule 2; remaining gaps in CC-2 and CC-1."},
+    {"id": "F-007", "state": "partial", "evidence": "hasStatus exported and shared; isReviewerResult private; remaining differences are the documented AC13 split."},
+    {"id": "F-008", "state": "partial", "evidence": "parseReviewResult is 4 lines over three strategies; open: shared sticky regexes, try-parse x3, two conventions (CC-3, CC-4)."},
+    {"id": "F-010", "state": "partial", "evidence": "Behaviour unchanged (last wins on same status), now documented."},
+    {"id": "F-005", "state": "closed", "evidence": "readResult message no longer circular."}
+  ]
+}
+```

@@ -19,6 +19,8 @@ import { loadShellPermissions } from "../lib/shell-permissions";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
+import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import { operatorDenied, recordOperatorDenial } from "../review/review-system";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
 
@@ -1649,4 +1651,67 @@ test("readline turn totals include billed failed recovery attempts and reset for
   expect(ends[0]?.type === "turn_end" && ends[0].usage).toEqual({ inputTokens: 30, outputTokens: 6, totalTokens: 36, cacheReadTokens: 8, cacheWriteTokens: 3, exact: true } as import("../harness/provider/types").NormalizedUsage);
   expect(ends[1]?.type === "turn_end" && ends[1].usage).toEqual({ inputTokens: 1, outputTokens: 1, exact: false } as import("../harness/provider/types").NormalizedUsage);
   expect(events.filter(e => e.type === "usage")).toHaveLength(3);
+});
+
+// ---------------------------------------------------------------------------
+// PR 992 round 3 (F-004, F-005) — what `auto` shows for a question it answered itself, and when a remembered
+// refusal is forgotten.
+// ---------------------------------------------------------------------------
+
+describe("PR 992 round 3 — readline refusal memory and self-answer line", () => {
+  test("a question the model wrote is shown escaped, never as raw control characters", async () => {
+    const ask = JSON.stringify({
+      question: "Which scope?\u001b[2K\u001b[1A",
+      options: [
+        { id: "a", label: "Small\u202e", description: "" },
+        { id: "b", label: "Full\u202e", description: "", recommended: true },
+      ],
+    });
+    const deps = fakeDeps({
+      provider: toolCallProvider("ask_user", ask),
+      tools: [createAskUserTool(async () => "a")],
+      idSeq: () => randomUUID(),
+    });
+    const output = await repl(["/mode auto", "yes", "go", "/exit"], { deps });
+    const line = output.split("\n").find((l) => l.includes("answered without asking (auto):")) ?? "";
+    expect(line).toContain("Which scope?\\x1b[2K\\x1b[1A → Full\\u202e");
+    expect(line).not.toContain("\u001b");
+    expect(line).not.toContain("\u202e");
+  });
+
+  const FINGERPRINT = "fingerprint-the-operator-refused";
+
+  test.each<[string, string[]]>([
+    ["a confirmed switch to auto", ["/mode auto", "yes", "/exit"]],
+    ["a switch to trust", ["/mode trust", "/exit"]],
+    ["/clear", ["/clear", "/exit"]],
+    ["/new without sessions", ["/new", "/exit"]],
+  ])("%s forgets a remembered refusal", async (_name, lines) => {
+    recordOperatorDenial(FINGERPRINT);
+    await repl(lines);
+    expect(operatorDenied(FINGERPRINT)).toBe(false);
+  });
+
+  test.each<[string, string[]]>([
+    ["a cancelled switch to auto", ["/mode auto", "no", "/exit"]],
+    ["an unknown mode", ["/mode bogus", "/exit"]],
+    ["a plain status line", ["/mode", "/exit"]],
+  ])("%s keeps it", async (_name, lines) => {
+    recordOperatorDenial(FINGERPRINT);
+    await repl(lines);
+    expect(operatorDenied(FINGERPRINT)).toBe(true);
+  });
+
+  test("/new with a session on disk forgets it too", async () => {
+    const saved = process.env.KERYX_DATA_DIR;
+    process.env.KERYX_DATA_DIR = path.join(root, "data");
+    try {
+      recordOperatorDenial(FINGERPRINT);
+      await repl(["/new", "/exit"], { session: { enabled: true } });
+      expect(operatorDenied(FINGERPRINT)).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.KERYX_DATA_DIR;
+      else process.env.KERYX_DATA_DIR = saved;
+    }
+  });
 });

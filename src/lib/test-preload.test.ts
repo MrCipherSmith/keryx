@@ -18,9 +18,10 @@
 // before this file loaded.
 
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { operatorDenied, recordOperatorDenial, reviewAutoMayAnswer } from "../review/review-system";
 import { keryxConfigDir } from "./config-dir";
 import { projectRegistryPath } from "./project-registry";
 import { shellConfigPath } from "./shell-config";
@@ -100,5 +101,34 @@ describe("the test preload isolates the user-global config directory", () => {
     // the real directory while every assertion above still passed on Linux.
     expect(process.env.XDG_DATA_HOME).toBe(TEST_CONFIG_ROOT);
     expect(process.env.APPDATA).toBe(TEST_CONFIG_ROOT);
+  });
+});
+
+describe("the runner-only preload clears the operator-refusal memory before each test", () => {
+  const PERMISSION = {
+    question: "Allow the agent to read the credentials file?",
+    options: [
+      { id: "yes", label: "Yes", description: "" },
+      { id: "no", label: "No", description: "" },
+    ],
+  };
+
+  test("bunfig.toml lists both preloads", () => {
+    const toml = readFileSync(path.join(import.meta.dir, "..", "..", "bunfig.toml"), "utf8");
+    const preload = /^preload\s*=\s*\[([^\]]*)\]/m.exec(toml)?.[1] ?? "";
+    expect(preload).toContain("./src/lib/test-preload.ts");
+    expect(preload).toContain("./src/lib/test-preload-hooks.ts");
+  });
+
+  // These two run in order: the first leaves a refusal behind, the second must not see it.
+  test("first: a refusal is recorded", () => {
+    recordOperatorDenial("fingerprint-from-the-previous-test");
+    expect(operatorDenied("fingerprint-from-the-previous-test")).toBe(true);
+    expect(reviewAutoMayAnswer(PERMISSION)).toBe(false);
+  });
+
+  test("second: the refusal of the previous test is gone", () => {
+    expect(operatorDenied("fingerprint-from-the-previous-test")).toBe(false);
+    expect(reviewAutoMayAnswer(PERMISSION)).toBe(true);
   });
 });

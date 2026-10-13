@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createAskUserTool } from "./ask-user-tool";
+import { ASK_USER_CANCEL, ASK_USER_NO_HOST, createAskUserTool, selfAnswerAskUser } from "./ask-user-tool";
 
 test("ask_user returns chosen option from host callback", async () => {
   const tool = createAskUserTool(async (req) => {
@@ -72,4 +72,43 @@ test("the ask_user definition describes irreversible and action without telling 
   const properties = (definition.inputSchema as { properties: Record<string, { type: string }> }).properties;
   expect(properties["action"]?.type).toBe("string");
   expect(properties["irreversible"]?.type).toBe("boolean");
+});
+
+test("ask_user tells the model that nobody was asked when the surface has no host, not that the user cancelled", async () => {
+  const tool = createAskUserTool(async () => ASK_USER_NO_HOST);
+  const result = await tool.invoke({
+    question: "Continue?",
+    options: [
+      { id: "y", label: "Yes", description: "" },
+      { id: "n", label: "No", description: "" },
+    ],
+  });
+  expect(result.isError).toBe(true);
+  expect(result.output).toMatch(/no one was asked/i);
+  expect(result.output).not.toMatch(/cancel/i);
+});
+
+test("a dismissal is still reported as one", async () => {
+  const tool = createAskUserTool(async () => ASK_USER_CANCEL);
+  const result = await tool.invoke({
+    question: "Continue?",
+    options: [
+      { id: "y", label: "Yes", description: "" },
+      { id: "n", label: "No", description: "" },
+    ],
+  });
+  expect(result.output).toMatch(/cancelled/i);
+});
+
+test("selfAnswerAskUser picks the recommended option, else the first, and says no one was asked", () => {
+  const recommended = selfAnswerAskUser({ question: "q", options: [{ id: "a", label: "A", description: "" }, { id: "b", label: "B", description: "", recommended: true }] });
+  expect(recommended.option.id).toBe("b");
+  expect(recommended.result.output).toContain("[auto mode] chose this without asking the user");
+  expect(recommended.result.output).toContain('(recommended). The user did not answer this question.');
+  expect(recommended.result.isError).toBe(false);
+  const plain = selfAnswerAskUser({ question: "q", options: [{ id: "a", label: "A", description: "" }, { id: "b", label: "B", description: "" }] });
+  expect(plain.option.id).toBe("a");
+  expect(plain.result.output).toContain("The user did not answer this question.");
+  expect(plain.result.output).not.toContain("(recommended)");
+  expect(plain.result.isError).toBe(false);
 });

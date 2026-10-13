@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
+import { revisionOperand } from "../lib/git-revision";
 import { collectGitProvenance } from "../metrics/provenance";
 import { loadHealthConfig } from "./config";
 import { computeGate } from "./gate";
@@ -618,7 +619,7 @@ async function resolveChanged(
   }
   const ref = selector.since ?? "HEAD";
   const result = await runCommand(
-    ["git", "diff", "--name-only", ref],
+    ["git", "diff", "--name-only", ...revisionOperand(ref)],
     cwd,
   );
   if (result.exitCode !== 0) {

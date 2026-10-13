@@ -22,7 +22,7 @@ when nothing should be reachable at all.
 |---|---|
 | `ask` (default) | Every `shell_exec`, `spawn_subagent`, and destructive-risk tool call asks first — today's behavior, unchanged if you never touch this feature. |
 | `trust` | Safe calls run without asking. A call still asks when it is destructive — either the tool's own static risk, or a command keryx's classifier recognizes as destructive (`rm -rf`, force-push, and similar). |
-| `auto` | Nothing asks, **including destructive commands** — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
+| `auto` | Commands do not ask, **including destructive ones**, apart from the hard floors below (credentials, SAC review confirmation, publish lease) and the question floors in [Who answers a question](#who-answers-a-question) — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
 
 One thing no mode ever changes: a command that touches keryx's own
 credential/permission files (`auth.json`, `permissions.json`,
@@ -40,7 +40,7 @@ A round is one request to the model and may carry several tool calls.
 |---|---|---|
 | `ask` | 40 | Asks "Increase limit and continue / Cancel"; a yes grants 40 more. |
 | `trust` | 200 | Asks the same question; a yes grants 200 more. |
-| `auto` | 200 | Never asks. Below 200 the turn extends itself and prints a `[budget]` line; at 200 it stops with a `[budget]` message. |
+| `auto` | 200 | Never asks to extend the limit. Below 200 the turn extends itself and prints a `[budget]` line; at 200 it stops with a `[budget]` message. |
 | automatic review (any mode) | 200 | Same as `auto`; see [Automatic review](#automatic-review). |
 
 `KERYX_AGENT_MAX_ROUNDS` wins in every mode, and 200 is the ceiling: a larger
@@ -53,6 +53,42 @@ picker show the limit of each mode.
 Subagents keep their own limit (10 by default, at most 24 for a `max_rounds`
 request) in every mode. They never ask a person at their limit, so there is no
 question to remove.
+
+## Who answers a question
+
+The mode also decides who answers an `ask_user` question the model raises.
+`trust` is a statement about actions ("do not interrupt me for a command I would
+have approved"), not about judgement, so it does not change this.
+
+| Mode | Who answers |
+|---|---|
+| `ask` | You. |
+| `trust` | You. |
+| `auto` | The model picks the recommended option, or the first one, and says so. |
+
+In `auto` the model is told `[auto mode] chose this without asking the user`, so
+it cannot present the choice as yours, and the shell prints a
+`◇ answered without asking (auto):` line with the question and the chosen
+label. Such a question uses no tool-call budget and is not remembered as an answer
+of yours. It is not an invocation, so the tool-call budget is untouched and no hook is
+consulted for it; the default cap of 3 identical calls still applies. It is not written to the
+recommendation journal either, because no person answered it. An automatic review does
+not use this path: its own rules decide what is answered and what goes to a person.
+
+The question still goes to you when it decides an irreversible action
+(`irreversible` or `action`), when the turn holds untrusted external content, when
+the turn started in Telegram, including a `/goal` sent from there (the buttons appear in
+the topic, as before), when review-auto is on, `KERYX_REVIEW_AUTO_ANSWER=1` is set or an
+autonomous answers file is set and the question carries a `policy` tag, or when it asks for
+permission after you refused an action in any mode since the last mode change, `/new`,
+`/clear` or resume. "Asks for permission" is decided
+by the question's wording, so this is a floor for questions phrased that way, not a
+guarantee against a differently worded one. An unattended run stops at a question as
+before.
+
+A session with no way to show a question (no dock, no host) tells the model
+"No one was asked" instead of "User cancelled the question (Esc)", so it does not
+report a cancellation nobody made.
 
 ## Automatic review
 
@@ -217,9 +253,12 @@ shell. The same call, in any spelling that normalizes to the same fingerprint
 the agent gets "refused earlier: choose another path" and no modal opens. An `ask_user`
 menu that asks for permission (allow, deny, consent, access, "разрешить", "запретить")
 is no longer answered with its recommended option. It reaches you instead, and the
-transcript says so. An irreversible question was never auto-answered. Restart the
-shell to clear the memory; nothing else does. The memory is scoped to `review-auto`;
-under `inherit` a denied call is asked again.
+transcript says so. An irreversible question was never auto-answered. `/clear`, `/new`,
+resuming a session and changing the permission mode clear the memory. The per-call memory
+is scoped to `review-auto`; under `inherit` a denied call is asked again. Only the
+permission-question floor above is kept after a refusal in every mode (until the next mode
+change, `/new`, `/clear` or resume), and only a person's "no" counts: an unattended run, a
+superseded turn or an interrupted one does not.
 
 ### Routine commands: no prompt after untrusted content
 
@@ -239,6 +278,24 @@ outside the working tree. This table is the single list; the code reads it from
 | `keryx gdgraph find`, `context`, `affected`, `cycles`, `orphans` | |
 | `keryx ctx rg`, `read`, `diff` | |
 | `slate_note`, `slate_trail` (tools) | the session's own notes |
+
+`bun test` is routine only while all of these hold, because a test run executes project
+code: no untrusted content has entered the turn; the command runs in the project root,
+judged after following the chain's `cd`s (a `cd` whose target cannot be known makes it
+ask: an option, `-`, a target the shell may expand, a relative name while `CDPATH` is set,
+or a directory reached through a symlink); its arguments are only `--bail`, `--only`, `--todo`, `--rerun-each N`
+and `--timeout N` with a plain non-negative integer; and the project's `bunfig.toml` is
+byte-for-byte the file the process saw at its first turn for that project, with no
+`preload` anywhere in it. The baseline is per process and first-wins: a later session in
+the same process, on the same project, is judged against the file as the first one saw
+it, not as it is now. A `bunfig.toml` that appears, changes, cannot be read (it is not a
+regular file, or is over 256 KiB) or does not parse makes `bun test` ask again.
+
+The path flags of `keryx review slice` (`--diff`, `--out`), `retry-plan` (`--manifest`,
+`--result`, `--state`) and `dispatch-check` (`--manifest`, `--payload`) are routine only
+when they land inside the project root by their real path, symlinks resolved. `-` is
+standard input for `--diff`, `--payload` and `--result` only. The command refuses an
+outside path itself, too, and opens the path it judged.
 
 A command outside the table still asks. So does a command that chains with `;`, pipes
 to a command that is not listed, redirects outside the working tree, or uses a
@@ -274,7 +331,9 @@ carry one to the end without you typing anything after the task.
 - **No prompt for routine commands.** In `trust` and `review-auto`, a short `&&` chain
   of `cd`, the commands in the [routine table](#routine-commands-no-prompt-after-untrusted-content),
   `keryx ctx run --`, read-only `git` subcommands and `bun test` runs without asking,
-  even after the turn has read untrusted content (web or MCP results). Destructive
+  even after the turn has read untrusted content (web or MCP results), except `bun test`,
+  which is routine only under the conditions in the
+  [routine table](#routine-commands-no-prompt-after-untrusted-content). Destructive
   commands, credential access, SAC and publish gates, and every other command still ask.
 - **Open plans do not end the turn.** In `trust`, a turn that would end with open
   plan items continues on its own, at most 8 times in a row, and stops earlier when

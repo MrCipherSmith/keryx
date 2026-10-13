@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3b",
+  "command": "bun test src/tui/turn-loop.test.ts src/tui/busy-dispatch.test.ts src/tui/main-queue.test.ts src/tui/main-queue-drain.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-hold.test.ts src/tui/tui-bus.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 7557
+  },
+  "mutants": [
+    {
+      "id": "M01-shell-paint-noop",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "paint: () => paintMainQueue(),",
+      "replacement": "paint: () => undefined,",
+      "line": 5017,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6938
+    },
+    {
+      "id": "M02-shell-summarize-identity",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "summarize: summarizeSubmittedLine,",
+      "replacement": "summarize: (l: string) => l,",
+      "line": 5009,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6880
+    },
+    {
+      "id": "M03-shell-composer-setText-noop",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "input.value = text;\n          },\n          focus: () => input.focus(),",
+      "replacement": "void text;\n          },\n          focus: () => input.focus(),",
+      "line": 5012,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6879
+    },
+    {
+      "id": "M04-shell-composer-focus-noop",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "focus: () => input.focus(),\n        },\n      },\n      paint",
+      "replacement": "focus: () => undefined,\n        },\n      },\n      paint",
+      "line": 5014,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6899
+    },
+    {
+      "id": "M05-shell-failure-text",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "◇ a slash command failed: ${terminalSafe(reason).text}",
+      "replacement": "◇ a slash command failed: ${reason}",
+      "line": 5024,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6914
+    },
+    {
+      "id": "M06-shell-failure-reason-always-string",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "const reason = error instanceof Error ? error.message : String(error);\n        io.onSystem?.(`◇ a slash command failed",
+      "replacement": "const reason = String(error);\n        io.onSystem?.(`◇ a slash command failed",
+      "line": 5023,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6888
+    },
+    {
+      "id": "M07-shell-runLine-origin-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "runLine: (line, origin, source) => runLine(line, origin, source),",
+      "replacement": "runLine: (line, _origin, source) => runLine(line, \"operator\", source),",
+      "line": 5019,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6919
+    },
+    {
+      "id": "M08-shell-sessionState-mode",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),",
+      "replacement": "sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(false)) }),",
+      "line": 10163,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6876
+    }
+  ],
+  "totals": {
+    "killed": 7,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

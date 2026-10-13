@@ -1,0 +1,478 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "architecture:review-architecture-1",
+      "source": "raw/architecture.txt#sha256:b2356e16ca0e82f03c168795ddd219b829732edccb7c61cc37bd7083c7500525",
+      "question": "review-architecture-1 as reported by review-architecture",
+      "evidence": "raw/architecture.txt#review-architecture-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-008",
+      "reason": "consolidated into F-008"
+    },
+    {
+      "id": "architecture:review-architecture-2",
+      "source": "raw/architecture.txt#sha256:b2356e16ca0e82f03c168795ddd219b829732edccb7c61cc37bd7083c7500525",
+      "question": "review-architecture-2 as reported by review-architecture",
+      "evidence": "raw/architecture.txt#review-architecture-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-017",
+      "reason": "consolidated into F-017"
+    },
+    {
+      "id": "architecture:review-architecture-3",
+      "source": "raw/architecture.txt#sha256:b2356e16ca0e82f03c168795ddd219b829732edccb7c61cc37bd7083c7500525",
+      "question": "review-architecture-3 as reported by review-architecture",
+      "evidence": "raw/architecture.txt#review-architecture-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-007",
+      "reason": "consolidated into F-007"
+    },
+    {
+      "id": "clean-code:review-clean-code-1",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-1 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-008",
+      "reason": "consolidated into F-008"
+    },
+    {
+      "id": "clean-code:review-clean-code-2",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-2 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-010",
+      "reason": "consolidated into F-010"
+    },
+    {
+      "id": "clean-code:review-clean-code-3",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-3 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-009",
+      "reason": "consolidated into F-009"
+    },
+    {
+      "id": "clean-code:review-clean-code-4",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-4 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-4",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-011",
+      "reason": "consolidated into F-011"
+    },
+    {
+      "id": "clean-code:review-clean-code-5",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-5 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-5",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-007",
+      "reason": "consolidated into F-007"
+    },
+    {
+      "id": "clean-code:review-clean-code-6",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-6 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-6",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-012",
+      "reason": "consolidated into F-012"
+    },
+    {
+      "id": "clean-code:review-clean-code-7",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-7 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-7",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-017",
+      "reason": "consolidated into F-017"
+    },
+    {
+      "id": "clean-code:review-clean-code-8",
+      "source": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+      "question": "review-clean-code-8 as reported by review-clean-code",
+      "evidence": "raw/clean-code.txt#review-clean-code-8",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-022",
+      "reason": "consolidated into F-022"
+    },
+    {
+      "id": "highload:review-highload-1",
+      "source": "raw/highload.txt#sha256:2fa0cc6c58608595475c6d9fff7074b8ebe34fed33cc83f55eeb9a552714af82",
+      "question": "review-highload-1 as reported by review-highload",
+      "evidence": "raw/highload.txt#review-highload-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-007",
+      "reason": "consolidated into F-007"
+    },
+    {
+      "id": "highload:review-highload-2",
+      "source": "raw/highload.txt#sha256:2fa0cc6c58608595475c6d9fff7074b8ebe34fed33cc83f55eeb9a552714af82",
+      "question": "review-highload-2 as reported by review-highload",
+      "evidence": "raw/highload.txt#review-highload-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-018",
+      "reason": "consolidated into F-018"
+    },
+    {
+      "id": "highload:review-highload-3",
+      "source": "raw/highload.txt#sha256:2fa0cc6c58608595475c6d9fff7074b8ebe34fed33cc83f55eeb9a552714af82",
+      "question": "review-highload-3 as reported by review-highload",
+      "evidence": "raw/highload.txt#review-highload-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-018",
+      "reason": "consolidated into F-018"
+    },
+    {
+      "id": "logic:review-logic-1",
+      "source": "raw/logic.txt#sha256:6448be89d39aedf47aa9f760bb74fe35a230b612a4272255c548353588e000df",
+      "question": "review-logic-1 as reported by review-logic",
+      "evidence": "raw/logic.txt#review-logic-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-001",
+      "reason": "consolidated into F-001"
+    },
+    {
+      "id": "logic:review-logic-2",
+      "source": "raw/logic.txt#sha256:6448be89d39aedf47aa9f760bb74fe35a230b612a4272255c548353588e000df",
+      "question": "review-logic-2 as reported by review-logic",
+      "evidence": "raw/logic.txt#review-logic-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-019",
+      "reason": "consolidated into F-019"
+    },
+    {
+      "id": "logic:review-logic-3",
+      "source": "raw/logic.txt#sha256:6448be89d39aedf47aa9f760bb74fe35a230b612a4272255c548353588e000df",
+      "question": "review-logic-3 as reported by review-logic",
+      "evidence": "raw/logic.txt#review-logic-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-018",
+      "reason": "consolidated into F-018"
+    },
+    {
+      "id": "performance:review-performance-1",
+      "source": "raw/performance.txt#sha256:5b1ced9edde5112409c33ced4c6f47873e3f4aa5d52cbb6964ac0b0dbd678ca3",
+      "question": "review-performance-1 as reported by review-performance",
+      "evidence": "raw/performance.txt#review-performance-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-021",
+      "reason": "consolidated into F-021"
+    },
+    {
+      "id": "performance:review-performance-2",
+      "source": "raw/performance.txt#sha256:5b1ced9edde5112409c33ced4c6f47873e3f4aa5d52cbb6964ac0b0dbd678ca3",
+      "question": "review-performance-2 as reported by review-performance",
+      "evidence": "raw/performance.txt#review-performance-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-021",
+      "reason": "consolidated into F-021"
+    },
+    {
+      "id": "security-code:review-security-code-1",
+      "source": "raw/security-code.txt#sha256:18e8baab0b193bcbd95a4f6a212e13c2d4c4ae55db1289790b3c8927bb79f3a9",
+      "question": "review-security-code-1 as reported by review-security-code",
+      "evidence": "raw/security-code.txt#review-security-code-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-001",
+      "reason": "consolidated into F-001"
+    },
+    {
+      "id": "security-code:review-security-code-2",
+      "source": "raw/security-code.txt#sha256:18e8baab0b193bcbd95a4f6a212e13c2d4c4ae55db1289790b3c8927bb79f3a9",
+      "question": "review-security-code-2 as reported by review-security-code",
+      "evidence": "raw/security-code.txt#review-security-code-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-013",
+      "reason": "consolidated into F-013"
+    },
+    {
+      "id": "security-code:review-security-code-3",
+      "source": "raw/security-code.txt#sha256:18e8baab0b193bcbd95a4f6a212e13c2d4c4ae55db1289790b3c8927bb79f3a9",
+      "question": "review-security-code-3 as reported by review-security-code",
+      "evidence": "raw/security-code.txt#review-security-code-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-020",
+      "reason": "consolidated into F-020"
+    },
+    {
+      "id": "security-code:review-security-code-4",
+      "source": "raw/security-code.txt#sha256:18e8baab0b193bcbd95a4f6a212e13c2d4c4ae55db1289790b3c8927bb79f3a9",
+      "question": "review-security-code-4 as reported by review-security-code",
+      "evidence": "raw/security-code.txt#review-security-code-4",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-004",
+      "reason": "consolidated into F-004"
+    },
+    {
+      "id": "style:review-style-1",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-1 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-014",
+      "reason": "consolidated into F-014"
+    },
+    {
+      "id": "style:review-style-2",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-2 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-015",
+      "reason": "consolidated into F-015"
+    },
+    {
+      "id": "style:review-style-3",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-3 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-016",
+      "reason": "consolidated into F-016"
+    },
+    {
+      "id": "style:review-style-4",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-4 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-4",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-013",
+      "reason": "consolidated into F-013"
+    },
+    {
+      "id": "style:review-style-5",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-5 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-5",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-017",
+      "reason": "consolidated into F-017"
+    },
+    {
+      "id": "style:review-style-6",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-6 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-6",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-010",
+      "reason": "consolidated into F-010"
+    },
+    {
+      "id": "style:review-style-7",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-7 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-7",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-004",
+      "reason": "consolidated into F-004"
+    },
+    {
+      "id": "style:review-style-8",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-8 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-8",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-012",
+      "reason": "consolidated into F-012"
+    },
+    {
+      "id": "style:review-style-9",
+      "source": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+      "question": "review-style-9 as reported by review-style",
+      "evidence": "raw/style.txt#review-style-9",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-011",
+      "reason": "consolidated into F-011"
+    },
+    {
+      "id": "testing-practices:review-testing-practices-1",
+      "source": "raw/testing-practices.txt#sha256:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+      "question": "review-testing-practices-1 as reported by review-testing-practices",
+      "evidence": "raw/testing-practices.txt#review-testing-practices-1",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-002",
+      "reason": "consolidated into F-002"
+    },
+    {
+      "id": "testing-practices:review-testing-practices-2",
+      "source": "raw/testing-practices.txt#sha256:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+      "question": "review-testing-practices-2 as reported by review-testing-practices",
+      "evidence": "raw/testing-practices.txt#review-testing-practices-2",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-003",
+      "reason": "consolidated into F-003"
+    },
+    {
+      "id": "testing-practices:review-testing-practices-3",
+      "source": "raw/testing-practices.txt#sha256:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+      "question": "review-testing-practices-3 as reported by review-testing-practices",
+      "evidence": "raw/testing-practices.txt#review-testing-practices-3",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-004",
+      "reason": "consolidated into F-004"
+    },
+    {
+      "id": "testing-practices:review-testing-practices-4",
+      "source": "raw/testing-practices.txt#sha256:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+      "question": "review-testing-practices-4 as reported by review-testing-practices",
+      "evidence": "raw/testing-practices.txt#review-testing-practices-4",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-005",
+      "reason": "consolidated into F-005"
+    },
+    {
+      "id": "testing-practices:review-testing-practices-5",
+      "source": "raw/testing-practices.txt#sha256:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+      "question": "review-testing-practices-5 as reported by review-testing-practices",
+      "evidence": "raw/testing-practices.txt#review-testing-practices-5",
+      "status": "finding",
+      "finding": "2026-10-13-pr-992-round3-d20089aa#F-006",
+      "reason": "consolidated into F-006"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:b2356e16ca0e82f03c168795ddd219b829732edccb7c61cc37bd7083c7500525",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/architecture.txt#sha256:b2356e16ca0e82f03c168795ddd219b829732edccb7c61cc37bd7083c7500525",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the result is DONE with no open needs_context; nothing it was asked to do required running a command"
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/clean-code.txt#sha256:0b82bbc594a858ac7bc88183f74c0685833ba966eddab76f4d6f2dab8a20a85a",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          "bun x eslint on the 18 changed .ts files, clean (raw/clean-code.txt)"
+        ]
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:2fa0cc6c58608595475c6d9fff7074b8ebe34fed33cc83f55eeb9a552714af82",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/highload.txt#sha256:2fa0cc6c58608595475c6d9fff7074b8ebe34fed33cc83f55eeb9a552714af82",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          "scratch repro tests R1-R5 under the scratchpad (raw/highload.txt)"
+        ]
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:6448be89d39aedf47aa9f760bb74fe35a230b612a4272255c548353588e000df",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/logic.txt#sha256:6448be89d39aedf47aa9f760bb74fe35a230b612a4272255c548353588e000df",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the result is DONE with no open needs_context; nothing it was asked to do required running a command"
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:5b1ced9edde5112409c33ced4c6f47873e3f4aa5d52cbb6964ac0b0dbd678ca3",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/performance.txt#sha256:5b1ced9edde5112409c33ced4c6f47873e3f4aa5d52cbb6964ac0b0dbd678ca3",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          "microbenchmarks of terminalSafe, refusalFingerprint and PERMISSION_WORDS; bun test timings (raw/performance.txt)"
+        ]
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:7424b88686bf43d7bfd8967a68ace463bcbc50416813b84337cc0067e8781ec7",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/regression.txt#sha256:7424b88686bf43d7bfd8967a68ace463bcbc50416813b84337cc0067e8781ec7",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          "base-versus-PR differential run and the five TUI test files, 252 pass (raw/regression.txt)"
+        ]
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:18e8baab0b193bcbd95a4f6a212e13c2d4c4ae55db1289790b3c8927bb79f3a9",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/security-code.txt#sha256:18e8baab0b193bcbd95a4f6a212e13c2d4c4ae55db1289790b3c8927bb79f3a9",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          "hostile-label terminalSafe script and slice(0,97) probe (raw/security-code.txt)"
+        ]
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/style.txt#sha256:a21cb272bbfa76cdedd1bfef57153268b2fe7ee99d532dbb5c8dbc07e7aab4c3",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the result is DONE with no open needs_context; nothing it was asked to do required running a command"
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "raw/testing-practices.txt#sha256:e100d6d02e4f601cdefcf9ded1587c7eb68e14fafd42a56478d42e357ecb4d35",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          "14-file suite run, 482 pass; scratch kill-test red 4 of 5 on d9ccfb6c, green at HEAD; local mutants (raw/testing-practices.txt)"
+        ]
+      }
+    ]
+  }
+}

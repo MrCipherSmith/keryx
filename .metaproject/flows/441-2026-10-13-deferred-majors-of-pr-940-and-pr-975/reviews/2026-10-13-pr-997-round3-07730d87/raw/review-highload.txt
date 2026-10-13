@@ -1,0 +1,83 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "parseReviewResult is linear on every hostile input tried (46 shapes x 1/2/4/8 MB, bun, ledger.ts at 44bed779); no quadratic case. Worst constant is about 230 ms per MB. One minor regression of the round-2 fix: an inline ```x``` mention mis-pairs fences, the real marker is then treated as fenced, and a reply with a fenced sample of another status goes from read to no result (fail-closed).",
+  "findings": [
+    {
+      "id": "HL3-1",
+      "severity": "minor",
+      "reviewer": "review-highload",
+      "file": "src/review/ledger.ts",
+      "line": 147,
+      "quote": "const lineEnd = raw.indexOf(\"\\n\", open + 3);",
+      "problem": "fenceRanges pairs an opening ``` with the first ``` after the END OF THE OPENING LINE. A line that holds both ends of an inline mention (```foo```) therefore opens a range that closes at the next real fence opener. afterMarker (new in 44bed779) now depends on that pairing, so a REVIEW_RESULT marker lying between the inline mention and the next fence is dropped as 'fenced'.",
+      "impact": "Reply: prose with an inline ```foo``` mention, then 'REVIEW_RESULT {DONE, reviewer, findings}', then an unlabelled ```json fence holding a reviewer-shaped sample with another status. At d5a8cfdc parseReviewResult returns the DONE result; at 44bed779 it returns undefined (marker ignored, scan sees DONE bare and BLOCKED fenced-as-bare, ambiguous). Fail-closed: the reviewer is re-dispatched, a spent round, never a wrong accept. Needs three coincident features, so narrow.",
+      "evidence": "scratch probe /tmp/claude-1000/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/scratchpad/review-highload/probe.ts, input P1: 'I used ```foo``` inline.\\n\\nREVIEW_RESULT {\"status\":\"DONE\",\"reviewer\":\"r\",\"findings\":[]}\\n\\nExample:\\n```json\\n{\"status\":\"BLOCKED\",\"reviewer\":\"r\",\"findings\":[]}\\n```\\n'. Output at 44bed779: undefined. Same input at d5a8cfdc (probe-old.ts): {\"status\":\"DONE\",...}. The control without the inline mention (P2) returns DONE at both heads. Ranges built: [0..json-fence-opener+3], so the marker is inside and the sample is outside.",
+      "suggested_fix": "Pair fences the CommonMark way, still one forward pass: an opener is a ``` that starts its line (after up to 3 spaces), a closer is the next line-start ``` of at least the same length; an inline ``` is ignored. Or, minimal: when the opener line already contains a second ``` after open+3, treat it as an inline span and skip past it (open = indexOf('```', secondTick + 3)). Pin with P1 as a test.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "HL3-2",
+      "severity": "info",
+      "reviewer": "review-highload",
+      "file": "src/review/ledger.ts",
+      "line": 192,
+      "quote": "const MAX_MARKERS = 64;",
+      "problem": "Cost is linear but the constant is large for a hostile 1 MB+ reply: up to MAX_MARKERS (64) objectEnd scans to the end from afterMarker plus up to MAX_UNCLOSED (64) more from topLevelObjects, about 128 full passes. Memory is linear too: matchAll materialises every marker match, topLevelObjects every object.",
+      "impact": "8 MB of 64 unclosed 'REVIEW_RESULT {\"k\":' lines followed by filler: 1854 ms (252 ms at 1 MB, 492 at 2, 929 at 4). 8 MB of '{}' repeated: 607 ms and 637 MB RSS (4M objects in found[]). Same class as round-2 HL-1/HL-2 (accepted as info, 1 MB+ only); no new reachability from a realistic reply (a 100 KB reply costs under 25 ms).",
+      "evidence": "scratch script hl.ts, cases c_marker_64_then_big and f_many_empty; table below.",
+      "suggested_fix": "None required. If wanted: stop after the first unclosed marker object whose scan reaches the end of input (every later marker is nested in it or also unclosed), and cap the reply size read by readResult/loadRaws.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## High-Load Review, round 3 (PR 997, head 07730d87, code at 44bed779)
+
+Load profile: not provided; severity assumes a reply of normal size, hostile 1-8 MB inputs measured for scaling only.
+
+### Findings
+- HL3-1 minor, src/review/ledger.ts:147, fenceRanges: an inline ```x``` mention mis-pairs fences and hides a real marker (P1 above, fail-closed, regression vs d5a8cfdc).
+- HL3-2 info, src/review/ledger.ts:192, MAX_MARKERS and MAX_UNCLOSED give about 128 end-of-input scans on a hostile reply (linear, 1 MB+ only).
+
+### Measurements (bun, ms / peak RSS MB, size 1 -> 2 -> 4 -> 8 MB; doubling the size doubles the time in every row)
+| Input | ms | RSS at 8 MB |
+|---|---|---|
+| (a) 8 MB spaces, or ' \t>' mix, before marker + result | 2 -> 12 | 59 |
+| (a) marker + 8 MB whitespace then x; 'REVIEW_RESULT' + 200 spaces per line | 4 -> 33; 3 -> 32 | 51 |
+| (b) 100k+ lines '   REVIEW_RESULT' no brace (also ':' and prose forms) | 2 -> 13 | 51 |
+| (c) unclosed 'REVIEW_RESULT {"a":' lines, 8 MB | 124 -> 1170 | 131 |
+| (c) 64 unclosed markers then 8 MB filler (worst) | 252 -> 1854 | 68 |
+| (c) 64 prose unclosed then filler then result (63 and 64 both read) | 127 -> 1031 | 67 |
+| (d) 8 MB of '```\n```\n' small fences; inline ``` per line; odd ``` in prose | 19 -> 132; 10 -> 73; 6 -> 44 | 179 / 126 / 96 |
+| (d) single unclosed fence then marker + result | 2 -> 18 | 55 |
+| (d) 8 MB of fenced 'REVIEW_RESULT {}' lines (cap is applied after the fence filter, no effect on cost) | 19 -> 118 | 167 |
+| (e) CRLF markers / CRLF fences / CRLF-only then marker | 18 -> 129; 23 -> 169; 2 -> 18 | 161 / 192 / 51 |
+| (f) 4M-deep '{"a":' unclosed; same closed; '{"a":[' | 72 -> 536; 26 -> 28; 23 -> 162 | 56 / 77 / 53 |
+| (f) 8 MB string value (closed, unclosed, escape-heavy) | 7 -> 35 | 75 |
+| many objects: '{"a":1}\n'; '{}' x 4M; '{"' x 4M | 35 -> 201; 81 -> 607; 124 -> 992 | 233 / 637 / 59 |
+
+No row grows faster than the size. Pre-existing labelled-fence regex is also linear (many openers, no closer, 3 -> 21 ms).
+
+### Prior findings in my domain, checked against the code
+- F-001 closed: MARKER requires a line start (lookbehind) and afterMarker drops fenced ones; verified P3-P8 (odd ```, 4-backtick outer, ``` in a fenced line, CRLF, unclosed fence). HL3-1 is a side effect of the fence pairing, not of the marker rule.
+- F-002 closed (fenced reviewer-shaped plus bare with a different status gives none, per the operator decision). F-003 closed (caps 64, boundaries measured: 63 and 64 unclosed prose fragments still read the result). F-011, F-012, F-014, F-015: tests, not in my measurement domain; behaviour they pin matched on probes. No regression of the marker prefix class `[ \t>*#-]*` found in cost terms.
+- Round-2 HL-1, HL-2: unchanged, stay info (HL3-2). loadRaws/readResult: the delta touches only a 4-line message and doc edit in review-slice.ts and a 4-line swap to isReviewerResult in loadRaws; no new read path, so no unbounded-read review (the whole-file read is pre-existing).
+
+### Questions
+None.
+
+### Pre-existing
+- readResult/loadRaws read the whole file with no size cap (not in the delta).
+
+### Verified clean
+Concurrency, connection pools, caching, DB, queues, retries, idempotency: not applicable to this pure-function parser change.
+
+Routing audit: graph_used no (not-relevant), wiki_used no (not-relevant), ctx_used yes (diff stat), raw_rg_used no.

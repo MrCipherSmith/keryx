@@ -1,4 +1,4 @@
-import type { AgentIO } from "../commands/agent";
+import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
 
 /**
  * Owns the single cancellable operation that may keep the interactive shell
@@ -228,6 +228,20 @@ export async function forceForegroundQueueItem<T>(
  */
 export type TurnScopedIo = Partial<Pick<AgentIO, "requestApproval" | "permissionMode" | "onAutoApproved" | "mcpGrantsApply">>;
 
+/**
+ * The shell's `io` with one turn's hooks laid over it, for a model turn that does not go through the
+ * foreground facade (a `/goal` from Telegram). Every other hook is read live from `io`, so a hook the shell
+ * installs later still applies.
+ */
+export function withTurnScopedIo(io: AgentIO, turn: TurnScopedIo): AgentIO {
+  const scoped: AgentIO = Object.create(io);
+  for (const key of Object.keys(turn) as Array<keyof TurnScopedIo>) {
+    const hook = turn[key];
+    if (hook !== undefined) Object.defineProperty(scoped, key, { value: hook, writable: true, enumerable: true, configurable: true });
+  }
+  return scoped;
+}
+
 export function createForegroundAgentIoFacade(
   owner: ForegroundOperationOwner,
   token: ForegroundOperationToken,
@@ -279,13 +293,20 @@ export function createForegroundAgentIoFacade(
     onTerminalState: (state) => {
       if (accepts()) io.onTerminalState?.(state);
     },
-    requestApproval: async (tool, input, meta) => {
-      if (!accepts()) return false;
-      const response = await approve()?.(tool, input, meta);
-      return accepts() ? response ?? false : false;
-    },
+    requestApproval: Object.assign(
+      async (tool: string, input: string, meta?: ApprovalMeta): Promise<ApprovalResponse> => {
+        if (!accepts()) return false;
+        const response = await approve()?.(tool, input, meta);
+        return accepts() ? response ?? false : false;
+      },
+      // A displaced turn's `false` is not the operator saying no.
+      { current: accepts },
+    ),
     onAutoApproved: (tool, input, meta) => {
       if (accepts()) autoApproved()?.(tool, input, meta);
+    },
+    onQuestionSelfAnswered: (question, answerLabel) => {
+      if (accepts()) io.onQuestionSelfAnswered?.(question, answerLabel);
     },
     permissionMode: () => (accepts() ? modeOf()?.() ?? "ask" : "ask"),
     // Share the session grant set with the shell, but never let a stale turn

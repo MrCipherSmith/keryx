@@ -17,6 +17,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
+import type { BlastRadiusScreenInput } from "./blast-radius";
 import { completeManagedReview, createManagedReviewPackage, findingDispositionState } from "./managed";
 import { readyResearchFixture } from "./research.test-helpers";
 import type { ManagedReviewInput, StructuredReviewFinding } from "./types";
@@ -373,15 +374,21 @@ describe("legacy markdown reports are not stranded", () => {
   // before it emitted anything structured, and each must still ingest.
   const REVIEWS_DIR = path.join(REPO_ROOT, ".metaproject", "reviews");
 
-  function realReports(): Array<{ id: string; text: string }> {
+  function realReports(): Array<{ id: string; text: string; blastRadius?: BlastRadiusScreenInput }> {
     if (!existsSync(REVIEWS_DIR)) {
       return [];
     }
-    const out: Array<{ id: string; text: string }> = [];
+    const out: Array<{ id: string; text: string; blastRadius?: BlastRadiusScreenInput }> = [];
     for (const entry of readdirSync(REVIEWS_DIR, { withFileTypes: true })) {
       const report = path.join(REVIEWS_DIR, entry.name, "report.md");
       if (entry.isDirectory() && existsSync(report)) {
-        out.push({ id: entry.name, text: readFileSync(report, "utf8") });
+        // A round that ran scope B keeps the set it was dispatched over beside its report; without it the screen refuses.
+        const radius = path.join(REVIEWS_DIR, entry.name, "blast-radius.json");
+        out.push({
+          id: entry.name,
+          text: readFileSync(report, "utf8"),
+          ...(existsSync(radius) ? { blastRadius: JSON.parse(readFileSync(radius, "utf8")) as BlastRadiusScreenInput } : {}),
+        });
       }
     }
     return out;
@@ -452,6 +459,7 @@ describe("legacy markdown reports are not stranded", () => {
           reviewId: `legacy-${index}`,
           target: { kind: "report", ref: report.id },
           reportText: report.text,
+          ...(report.blastRadius === undefined ? {} : { blastRadius: report.blastRadius }),
           now: new Date("2026-08-29T10:00:00Z"),
         });
         const findings = JSON.parse(

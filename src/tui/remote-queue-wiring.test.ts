@@ -396,14 +396,16 @@ function shellOccurrences(source: string, needle: string): number {
 test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-queue call into the wiring", () => {
   const source = readFileSync(SHELL_SOURCE, "utf8");
   const expected: Array<[string, number]> = [
-    ["createRemoteQueueWiring({", 1],
+    ["createTurnLoop({", 1],
+    ["const remoteQueue = turnLoop.remote;", 1],
     ["remoteQueue.assistantText(text);", 1],
     ["remoteQueue.wrapOnToolCall(", 1],
     ["remoteQueue.stopRemoteForSessionSwitch()", 1],
     ["remoteQueue.removeMainQueue(", 1],
     ["remoteQueue.editMainQueue(", 1],
     ["remoteQueue.requeuePendingEdit(", 1],
-    ["remoteQueue.runQueued(", 3],
+    // the other two (the drain and the recipient choice) are in turn-loop.ts, counted below
+    ["remoteQueue.runQueued(", 1],
     ["remoteQueue.turnStarted(source);", 1],
     // Flow 397 review T-2: the whole argument mapping, so constant flags (no failure reply) turn the test red.
     ["void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });", 1],
@@ -413,6 +415,8 @@ test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-que
   ];
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
   expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
+  const loop = readFileSync(new URL("./turn-loop.ts", import.meta.url), "utf8");
+  expect(shellOccurrences(loop, "remote.runQueued(")).toBe(2);
 });
 
 // Flow 399 review (T-2): the topic-history restore is pure logic (`history-host.ts`, `history.ts`,

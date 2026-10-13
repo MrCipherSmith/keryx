@@ -5319,13 +5319,18 @@ jsonl, parquet), lockfiles, snapshots, generated files and oversize json are
 never sliced: they are listed under `omissions` with their reason and byte count.
 `--out` defaults to `.metaproject/data/review/slices`.
 
+The path flags of these three commands (`--out`, `--diff`, `--manifest`, `--state`,
+`--result`, `--payload`) must resolve, symlinks followed, inside the project root; a path
+outside it is refused before anything is read or written. `-` is standard input where a
+flag accepts it (`--diff`, `--payload`, `--result`) and a file name for the others.
+
 | Flag | Description |
 |---|---|
 | `--ref <base>` / `--diff <file\|->` | Where the diff comes from. Default: `git diff`. |
 | `--context <n>` | Context lines kept around a change. |
 | `--max-bytes <n>` | Slice ceiling, at least 200. |
 | `--wave-bytes <n>` | What one reviewer dispatch may total (default **60000**, never below `--max-bytes`). The manifest records it as `waveBytes`. |
-| `--out <dir>` | Where the slices and the manifest are written. |
+| `--out <dir>` | Where the slices and the manifest are written. Must resolve (symlinks followed) inside the project root. |
 | `--json` | Print the manifest plus `dir` and `manifestPath`. |
 
 `review dispatch-check` validates reviewer payloads (one object, an array, or

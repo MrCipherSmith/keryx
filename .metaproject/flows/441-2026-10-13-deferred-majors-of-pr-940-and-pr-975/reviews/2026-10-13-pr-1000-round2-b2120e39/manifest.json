@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-13-pr-1000-round2-b2120e39",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "01e0dbfe",
+    "head": "b2120e39"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-10-13-pr-1000-round2-b2120e39/scope.md",
+    "coverage": ".metaproject/reviews/2026-10-13-pr-1000-round2-b2120e39/coverage.md",
+    "report": ".metaproject/reviews/2026-10-13-pr-1000-round2-b2120e39/report.md",
+    "findings": ".metaproject/reviews/2026-10-13-pr-1000-round2-b2120e39/findings.json",
+    "learning": ".metaproject/reviews/2026-10-13-pr-1000-round2-b2120e39/learning.md",
+    "decisions": ".metaproject/reviews/2026-10-13-pr-1000-round2-b2120e39/decisions.md",
+    "research": "research.json",
+    "reviewerDispatch": "research.json"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 21,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "retained": 21,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "createdAt": "2026-10-13T10:35:04.239Z",
+  "updatedAt": "2026-10-13T10:35:04.239Z"
+}

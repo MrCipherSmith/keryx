@@ -4,7 +4,7 @@
 // real interactive host here, and the tool invokes through this bridge.
 
 import { randomUUID } from "node:crypto";
-import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { ASK_USER_NO_HOST, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
 import { askFloor } from "../review/arbiter-floor";
@@ -21,7 +21,7 @@ export async function invokeAskUserHost(
   request: Parameters<AskUserFn>[0],
 ): ReturnType<AskUserFn> {
   if (host === undefined) {
-    return "__cancel__";
+    return ASK_USER_NO_HOST;
   }
   return host(request);
 }

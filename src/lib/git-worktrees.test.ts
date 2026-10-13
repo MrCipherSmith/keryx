@@ -155,6 +155,14 @@ describe("the safety boundary: commits ahead of main, or uncommitted changes, ar
     expect(stale.map((s) => s.name)).not.toContain("ahead");
   });
 
+  test("R3-04: a main branch spelled as an option is undefined (unsafe to prune), never read by git as an option", async () => {
+    const worktreePath = await addWorktree("optmain", "agent/optmain");
+    expect(await commitsAheadOfMain(worktreePath, "--output=injected")).toBeUndefined();
+    expect(await commitsAheadOfMain(worktreePath, "-n1")).toBeUndefined();
+    // read as an option, `--branches=x..HEAD` is a valid rev-list option that selects nothing and prints 0
+    expect(await commitsAheadOfMain(worktreePath, "--branches=x")).toBeUndefined();
+  });
+
   test("BOUNDARY — a worktree with uncommitted changes is excluded even when old and merged", async () => {
     const worktreePath = await addWorktree("dirty", "agent/dirty");
     await writeFile(path.join(worktreePath, "scratch.txt"), "not committed\n", "utf8");

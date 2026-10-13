@@ -1,6 +1,6 @@
 // Tests for terminalSafe (R1-02, flow 319 review round 1).
 import { describe, expect, test } from "bun:test";
-import { TerminalSafeTracker, terminalSafe, terminalSafeBlock } from "./terminal-safe";
+import { TerminalSafeTracker, selfAnsweredLine, terminalSafe, terminalSafeBlock } from "./terminal-safe";
 
 describe("terminalSafe", () => {
   test("passes plain ASCII through unchanged, unescaped", () => {
@@ -173,5 +173,23 @@ describe("terminalSafeBlock", () => {
     expect(tracker.escaped).toBe(false);
     tracker.renderBlock("x\x1b[H\n");
     expect(tracker.escaped).toBe(true);
+  });
+});
+
+describe("selfAnsweredLine", () => {
+  test("joins question and label, escaping what the model wrote in either", () => {
+    const line = selfAnsweredLine("Which scope?\u001b[2K", "Full\u202e");
+    expect(line).toBe("Which scope?\\x1b[2K → Full\\u202e");
+  });
+
+  test("cuts a long question to 100 code points without splitting a surrogate pair", () => {
+    const question = "🙂".repeat(120);
+    const line = selfAnsweredLine(question, "ok");
+    expect(line).toBe(`${"🙂".repeat(97)}… → ok`);
+    expect(line).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/);
+  });
+
+  test("leaves a question of exactly 100 code points whole", () => {
+    expect(selfAnsweredLine("a".repeat(100), "ok")).toBe(`${"a".repeat(100)} → ok`);
   });
 });

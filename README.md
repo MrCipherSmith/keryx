@@ -40,7 +40,7 @@ the completion itself signed.
 
 ## Quick start
 
-**Requirements:** `git` and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
+**Requirements:** `git` (>= 2.24) and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
 
 ```bash
 npm install -g @mrciphersmith/keryx
@@ -491,7 +491,9 @@ What is in it today:
   inside a running session, decide whether that approval is asked for at all
   — `ask` (default), `trust` (safe calls run, a destructive one still asks),
   `auto` (nothing asks except a credentials-touching command, which no mode
-  ever auto-approves). The mode also sets how many model rounds one turn may
+  ever auto-approves; it also answers the agent's own questions by picking the
+  recommended option and saying so, while questions about irreversible or
+  untrusted actions still ask you). The mode also sets how many model rounds one turn may
   run: 40 in `ask`, 200 in `trust` (asks at the limit) and 200 in `auto`, where
   reaching the limit extends the turn without asking and the turn stops at 200
   (`KERYX_AGENT_MAX_ROUNDS` overrides all three, up to 200). A turn that
@@ -856,7 +858,7 @@ next.
 | Requirement | Status |
 |-------------|--------|
 | Bun | >= 1.3.14 |
-| Git | Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
+| Git | >= 2.24 (`--end-of-options`, used wherever a typed revision reaches git). Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
 | ripgrep | Required only for `keryx ctx rg` and the agent's `search_code` tool |
 | Model provider credential | Required only for the optional AI commands below |
 | macOS | Full support, including the complete policy sandbox |

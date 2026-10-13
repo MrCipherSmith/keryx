@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-pr558new",
+  "command": "bun test src/lib/test-preload.test.ts src/commands/agent-question-axis.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 244
+  },
+  "mutants": [
+    {
+      "id": "M20-second-preload-dropped",
+      "file": "bunfig.toml",
+      "anchor": "preload = [\"./src/lib/test-preload.ts\", \"./src/lib/test-preload-hooks.ts\"]",
+      "replacement": "preload = [\"./src/lib/test-preload.ts\"]",
+      "line": 11,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 231
+    },
+    {
+      "id": "M21-preload-reset-dropped",
+      "file": "src/lib/test-preload-hooks.ts",
+      "anchor": "beforeEach(() => resetOperatorDenials());",
+      "replacement": "beforeEach(() => {});",
+      "line": 12,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 236
+    }
+  ],
+  "totals": {
+    "killed": 2,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

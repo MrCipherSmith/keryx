@@ -13,6 +13,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { optionValue } from "../lib/args";
+import { revisionOperand } from "../lib/git-revision";
 import { metadataList } from "../gdskills/skill-frontmatter";
 import { detectProjectStack, extractStackRequiresField, parseStackRequires } from "../review/stack";
 import { hunkRegionsFromDiff } from "../review/conform-state";
@@ -713,7 +714,7 @@ export async function runJevRules(args: string[]): Promise<void> {
  * that file's export surface for one caller.
  */
 async function gitDiffForJevRules(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (exitCode !== 0) {

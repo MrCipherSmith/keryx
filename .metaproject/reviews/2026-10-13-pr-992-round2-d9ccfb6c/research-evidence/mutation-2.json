@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-pr558new",
+  "command": "bun test src/commands/agent-question-axis.test.ts src/lib/test-preload.test.ts src/harness/tool/builtin/ask-user-tool.test.ts src/decisions/interviewer-path.test.ts src/review/review-system.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 434
+  },
+  "mutants": [
+    {
+      "id": "M01-review-run-stand-aside-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewRun !== undefined || call.name !== \"ask_user\" || resolveQuestionAnswerer(mode) !== \"model\") {",
+      "replacement": "if (call.name !== \"ask_user\" || resolveQuestionAnswerer(mode) !== \"model\") {",
+      "status": "invalid",
+      "ms": 0,
+      "reason": "anchor not found"
+    },
+    {
+      "id": "M02-schema-validation-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (!validateAgainstSchemaObject(tool.definition.inputSchema, input).valid) return undefined;",
+      "replacement": "if (false as boolean) return undefined;",
+      "line": 2532,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 421
+    },
+    {
+      "id": "M03-parse-failure-ignored",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (!parsed.ok) return undefined;",
+      "replacement": "if (false as boolean) return undefined;",
+      "line": 2534,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 426
+    },
+    {
+      "id": "M04-untrusted-latch-ignored",
+      "file": "src/commands/agent.ts",
+      "anchor": "const request = untrustedContentSeen ? { ...parsed.request, untrustedContent: true } : parsed.request;",
+      "replacement": "const request = parsed.request;",
+      "line": 2535,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 415
+    },
+    {
+      "id": "M05-floor-disabled",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (askFloor(request) !== undefined) return undefined;",
+      "replacement": "if (false as boolean) return undefined;",
+      "line": 2536,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 418
+    },
+    {
+      "id": "M06-self-answer-remembered-as-operator-answer",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (precomputedResult === undefined && storedAnswer === undefined && selfAnswered === undefined) {",
+      "replacement": "if (precomputedResult === undefined && storedAnswer === undefined) {",
+      "line": 4476,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 410
+    },
+    {
+      "id": "M07-missing-mode-defaults-to-auto",
+      "file": "src/commands/agent.ts",
+      "anchor": "io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE, untrustedContentSeen, reviewRun)",
+      "replacement": "io.permissionMode?.() ?? \"auto\", untrustedContentSeen, reviewRun)",
+      "status": "invalid",
+      "ms": 0,
+      "reason": "anchor not found"
+    },
+    {
+      "id": "M08-display-callback-swapped-args",
+      "file": "src/commands/agent.ts",
+      "anchor": "io.onQuestionSelfAnswered?.(selfAnswered.question, selfAnswered.label);",
+      "replacement": "io.onQuestionSelfAnswered?.(selfAnswered.label, selfAnswered.question);",
+      "line": 4430,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 425
+    },
+    {
+      "id": "M09-display-callback-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "io.onQuestionSelfAnswered?.(selfAnswered.question, selfAnswered.label);",
+      "replacement": "void selfAnswered;",
+      "line": 4430,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 519
+    },
+    {
+      "id": "M10-denial-fingerprint-not-recorded",
+      "file": "src/commands/agent.ts",
+      "anchor": "recordOperatorDenial(meta.fingerprint);",
+      "replacement": "void 0;",
+      "line": 5617,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 425
+    },
+    {
+      "id": "M11-denial-spelled-not-recorded",
+      "file": "src/commands/agent.ts",
+      "anchor": "recordOperatorDenial(spelled!);",
+      "replacement": "void 0;",
+      "line": 5618,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 400
+    },
+    {
+      "id": "M12-denial-guard-always-records",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {",
+      "replacement": "if (meta !== undefined) {",
+      "status": "invalid",
+      "ms": 0,
+      "reason": "anchor not found"
+    },
+    {
+      "id": "M13-denial-guard-never-records",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {",
+      "replacement": "if (meta !== undefined && (false as boolean)) {",
+      "status": "invalid",
+      "ms": 0,
+      "reason": "anchor not found"
+    },
+    {
+      "id": "M14-refusal-memory-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "replacement": "if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "line": 5608,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 392
+    },
+    {
+      "id": "M15-refusal-memory-never-read",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "replacement": "if (false as boolean) {",
+      "line": 5608,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 397
+    },
+    {
+      "id": "M16-question-axis-trust-answers-as-model",
+      "file": "src/commands/permission-mode.ts",
+      "anchor": "return mode === \"auto\" ? \"model\" : \"human\";",
+      "replacement": "return mode !== \"ask\" ? \"model\" : \"human\";",
+      "line": 161,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 395
+    },
+    {
+      "id": "M17-recommended-ignored",
+      "file": "src/harness/tool/builtin/ask-user-tool.ts",
+      "anchor": "const option = request.options.find((o) => o.recommended === true) ?? request.options[0]!;",
+      "replacement": "const option = request.options[0]!;",
+      "line": 157,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 381
+    },
+    {
+      "id": "M18-self-answer-says-user-answered",
+      "file": "src/harness/tool/builtin/ask-user-tool.ts",
+      "anchor": ". The user did not answer this question.",
+      "replacement": ".",
+      "line": 162,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 394
+    },
+    {
+      "id": "M19-no-host-branch-dead",
+      "file": "src/harness/tool/builtin/ask-user-tool.ts",
+      "anchor": "if (chosen === ASK_USER_NO_HOST) {",
+      "replacement": "if (chosen === ASK_USER_NO_HOST && (false as boolean)) {",
+      "line": 245,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 396
+    },
+    {
+      "id": "M20-no-host-returns-cancel",
+      "file": "src/tui/ask-user-bridge.ts",
+      "anchor": "return ASK_USER_NO_HOST;",
+      "replacement": "return \"__cancel__\";",
+      "line": 24,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 416
+    },
+    {
+      "id": "M21-facade-forwards-stale-turn",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "if (accepts()) io.onQuestionSelfAnswered?.(question, answerLabel);",
+      "replacement": "io.onQuestionSelfAnswered?.(question, answerLabel);",
+      "line": 291,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 419
+    },
+    {
+      "id": "M22-floor-operator-denial-dropped",
+      "file": "src/review/arbiter-floor.ts",
+      "anchor": "if (!reviewAutoMayAnswer(request)) return \"operator-denial\";",
+      "replacement": "",
+      "line": 32,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 450
+    },
+    {
+      "id": "M23-floor-untrusted-dropped",
+      "file": "src/review/arbiter-floor.ts",
+      "anchor": "if (request.untrustedContent === true) return \"untrusted-content\";",
+      "replacement": "",
+      "line": 31,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 407
+    },
+    {
+      "id": "M24-floor-action-dropped",
+      "file": "src/review/arbiter-floor.ts",
+      "anchor": "if (typeof request.action === \"string\" && request.action.trim().length > 0) return \"action\";",
+      "replacement": "",
+      "line": 30,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 405
+    },
+    {
+      "id": "M25-second-preload-dropped",
+      "file": "bunfig.toml",
+      "anchor": "preload = [\"./src/lib/test-preload.ts\", \"./src/lib/test-preload-hooks.ts\"]",
+      "replacement": "preload = [\"./src/lib/test-preload.ts\"]",
+      "line": 11,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 419
+    },
+    {
+      "id": "M26-preload-reset-dropped",
+      "file": "src/lib/test-preload-hooks.ts",
+      "anchor": "beforeEach(() => resetOperatorDenials());",
+      "replacement": "beforeEach(() => {});",
+      "line": 12,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 428
+    }
+  ],
+  "totals": {
+    "killed": 19,
+    "survived": 3,
+    "invalid": 4,
+    "timeout": 0
+  }
+}
