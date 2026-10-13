@@ -1,0 +1,134 @@
+[
+  {
+    "id": "M01-drainNext-budget-without-forced-slot",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "budget = options.pending() + 1;",
+    "replacement": "budget = options.pending();"
+  },
+  {
+    "id": "M02-drainNext-never-stops-on-busy",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "    if (options.isBusy()) return \"started\";\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "M03-drainNext-no-paint",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "    options.paint();\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "M04-drainNext-empty-take-reports-started",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "if (next === undefined) return \"drained\";",
+    "replacement": "if (next === undefined) return \"started\";"
+  },
+  {
+    "id": "M05-drainNext-budget-spent-reports-started",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "    if (options.isBusy()) return \"started\";\n  }\n  return \"drained\";",
+    "replacement": "    if (options.isBusy()) return \"started\";\n  }\n  return \"started\";"
+  },
+  {
+    "id": "M06-settle-wakes-bus-only-never-gated-on-drained",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "if (deps.drain() === \"drained\") deps.onSettle();",
+    "replacement": "deps.drain();\n      deps.onSettle();"
+  },
+  {
+    "id": "M07-settle-never-wakes-bus",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "if (deps.drain() === \"drained\") deps.onSettle();",
+    "replacement": "deps.drain();"
+  },
+  {
+    "id": "M08-settle-ignores-pending-handoff",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "    onTurnSettle() {\n      if (deps.isAwaitingSettlement()) return;\n",
+    "replacement": "    onTurnSettle() {\n"
+  },
+  {
+    "id": "M09-operation-complete-ignores-pending-handoff",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "    onForegroundOperationComplete() {\n      if (deps.isAwaitingSettlement()) return;\n",
+    "replacement": "    onForegroundOperationComplete() {\n"
+  },
+  {
+    "id": "M10-lease-release-guards-only-handoff",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "      if (deps.isBusy()) return;\n      deps.drain();",
+    "replacement": "      if (deps.isAwaitingSettlement()) return;\n      deps.drain();"
+  },
+  {
+    "id": "M11-lease-release-drains-while-busy",
+    "file": "src/tui/main-queue.ts",
+    "anchor": "      if (deps.isBusy()) return;\n      deps.drain();",
+    "replacement": "      deps.drain();"
+  },
+  {
+    "id": "M12-shell-queue-work-ignores-handoff",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+    "replacement": "chrome.isBusy() || foregroundOperation.isActive;"
+  },
+  {
+    "id": "M13-shell-queue-work-ignores-foreground-operation",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+    "replacement": "chrome.isBusy() || forceHandoff.isAwaitingSettlement;"
+  },
+  {
+    "id": "M14-shell-queue-work-ignores-chrome-busy",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+    "replacement": "foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;"
+  },
+  {
+    "id": "M15-shell-take-queue-before-forced",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "take: () => forceHandoff.takeNext() ?? mainQueue.shift(),",
+    "replacement": "take: () => mainQueue.shift() ?? forceHandoff.takeNext(),"
+  },
+  {
+    "id": "M16-shell-pending-always-zero",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "pending: () => mainQueue.length,",
+    "replacement": "pending: () => 0,"
+  },
+  {
+    "id": "M17-shell-drain-does-not-paint",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "paint: paintMainQueue,",
+    "replacement": "paint: () => {},"
+  },
+  {
+    "id": "M18-shell-awaiting-settlement-never",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "isAwaitingSettlement: () => forceHandoff.isAwaitingSettlement,",
+    "replacement": "isAwaitingSettlement: () => false,"
+  },
+  {
+    "id": "M19-shell-bus-wake-dropped",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "onSettle: () => busWakeController?.onSettle(),",
+    "replacement": "onSettle: () => undefined,"
+  },
+  {
+    "id": "M20-shell-turn-settle-site-deleted",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "        drainSites.onTurnSettle();\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "M21-shell-operation-complete-site-deleted",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "                  drainSites.onForegroundOperationComplete();\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "M22-shell-lease-release-site-wired-to-settle",
+    "file": "src/tui/tui-shell.ts",
+    "anchor": "onRelease: () => drainSites.onLeaseRelease(),",
+    "replacement": "onRelease: () => drainSites.onTurnSettle(),"
+  }
+]

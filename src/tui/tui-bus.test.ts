@@ -712,7 +712,7 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
   // now a plain constant comparison in `bus-wake.test.ts`, which no longer
   // reads `tui-shell.ts`'s source text at all.
 
-  test("turn settle reaches the bus-wake controller's onSettle through the shared drain sites (behaviour: main-queue.test.ts)", () => {
+  test("turn settle reaches the bus-wake controller's onSettle through the shared drain sites (behaviour: main-queue-drain.test.ts)", () => {
     expect(source).toContain("onSettle: () => busWakeController?.onSettle(),");
     expect(source).toContain("drainSites.onTurnSettle();");
   });

@@ -112,17 +112,51 @@ describe("held turns: banner (specification §4.3, AC4)", () => {
 });
 
 describe("held turns: release drains the queue (specification §5.2 step 5, AC4)", () => {
-  test("leaseHoldController is built from leaseView().held() and drains through the shared sites on release (behaviour: main-queue.test.ts)", () => {
+  test("leaseHoldController is built from leaseView().held() and drains through the shared sites on release (behaviour: main-queue-drain.test.ts)", () => {
     const start = source.indexOf("leaseHoldController = createLeaseHoldController({");
     expect(start).toBeGreaterThan(0);
     const end = source.indexOf("\n    });", start);
     const block = source.slice(start, end);
     expect(block).toContain("isHeld: () => leaseView()?.held() === true");
     expect(block).toContain("onRelease: () => drainSites.onLeaseRelease()");
+    // Flow 441 (F-002/F-003): the shell builds the same factory the behaviour test builds, from the
+    // real objects, with every field in place. Dropping or swapping one turns this red.
+    const factory = source.indexOf("const drainSites = createMainQueueDrain({");
+    expect(factory).toBeGreaterThan(0);
+    const body = source.slice(factory, source.indexOf("\n    });", factory));
+    for (const field of [
+      "forced: forceHandoff,",
+      "queue: mainQueue,",
+      "paint: () => paintMainQueue(),",
+      "run: (next) => remoteQueue.runQueued(next),",
+      "workInFlight: queueWorkInFlight,",
+      "onSettle: () => busWakeController?.onSettle(),",
+    ]) {
+      expect(body).toContain(field);
+    }
     expect(source).toContain(
-      "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement",
+      "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0",
     );
-    expect(source).toContain("take: () => forceHandoff.takeNext() ?? mainQueue.shift(),");
+  });
+
+  test("every slash command whose work outlives its handler is held in the queue (flow 441 F-001)", () => {
+    const detaching = ["/schedule", "/goal", "/search-provider", "/search-connect", "/model", "/connect"];
+    for (const name of detaching) {
+      const at = source.indexOf(`if (command.name === "${name}"`);
+      expect(at).toBeGreaterThan(0);
+      expect(source.slice(at, at + 400)).toContain("detachSlashWork(");
+    }
+    expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length);
+    const helper = source.indexOf("const detachSlashWork = ");
+    expect(helper).toBeGreaterThan(0);
+    const helperBody = source.slice(helper, source.indexOf("\n    };", helper));
+    expect(helperBody).toContain("detachedSlashWork += 1;");
+    expect(helperBody).toContain("detachedSlashWork -= 1;");
+    expect(helperBody).toContain("drainSites.onDetachedWorkDone();");
+  });
+
+  test("a finished foreground operation drains the queue (flow 441)", () => {
+    expect(source.match(/drainSites\.onForegroundOperationComplete\(\);/g)?.length).toBe(1);
   });
 });
 

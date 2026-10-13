@@ -189,64 +189,92 @@ export function drainIdleMainQueue<T extends QueuedMainQuestion>(
   return true;
 }
 
-/** `started`: a queued line ran and left the shell busy. `drained`: the drain ended with the shell idle. */
-export type DrainOutcome = "started" | "drained";
+/**
+ * How a drain ended. `started`: queue work is in flight (a turn, an operation, a hand-off or a
+ * detached slash command), so its own end drains the rest. `empty`: nothing is left to run.
+ * `exhausted`: lines remain but this drain stopped because a line put itself back, so only a
+ * later settle or release moves them.
+ */
+export type DrainOutcome = "started" | "empty" | "exhausted";
 
 /**
- * Take the next queued line and run it, and keep going while the line started no turn
- * (flow 441, R1). A slash command run inline (`/compact`, `/model`, `/goal`, `/connect`)
- * starts no turn, so no settle would ever drain what is queued behind it.
+ * Take the next queued line and run it, and keep going while the line started no queue work
+ * (flow 441, R1). A slash command that finishes inline (`/compact`) starts no turn, so no settle
+ * would ever drain what is queued behind it.
  *
- * The loop is bounded by the queue length at entry (plus one for a forced item), so a line
- * that puts itself back in the queue cannot hold it.
+ * The loop is bounded by the number of takeable lines at entry, and it stops at the first line
+ * that leaves the count unchanged (a line put back in the queue under a held lease).
  */
 export function drainNext<T extends QueuedMainQuestion>(options: {
-  /** The forced item first, else the head of the queue. */
+  /** The forced items first, else the head of the queue. */
   take: () => T | undefined;
-  /** How many lines are queued now. */
+  /** How many lines `take` can return now: forced items plus queued ones. */
   pending: () => number;
   paint: () => void;
   run: (item: T) => void;
-  /** The busy state after `run` returned: true when the line started a turn. */
+  /** Queue work is in flight after `run` returned. */
   isBusy: () => boolean;
 }): DrainOutcome {
-  for (let budget = options.pending() + 1; budget > 0; budget--) {
+  for (let budget = options.pending(); budget > 0; budget--) {
+    const before = options.pending();
     const next = options.take();
     options.paint();
-    if (next === undefined) return "drained";
+    if (next === undefined) return "empty";
     options.run(next);
     if (options.isBusy()) return "started";
+    if (options.pending() >= before) return "exhausted";
   }
-  return "drained";
+  // every pass lowered the count by at least one (else it returned above), so the count is now zero
+  return "empty";
+}
+
+/** The part of `ForegroundForceHandoff` the drain reads. */
+interface ForcedItems<T> {
+  takeNext(): T | undefined;
+  readonly pendingCount: number;
+  readonly isAwaitingSettlement: boolean;
 }
 
 /**
- * The three places the shell drains the queue, which differ in what surrounds the drain
- * (flow 441, R1): a finished foreground operation and a settled turn wait for a pending
- * force hand-off; a settled turn wakes the bus when the drain ends idle; a released lease
- * stays out while anything is busy, because that work's own settle drains.
+ * The shell's whole queue drain in one place, so the shell and its test build the same wiring
+ * (flow 441, R1). The sites differ in what surrounds the drain: a finished foreground operation
+ * and a settled turn wait for a pending force hand-off; a settled turn wakes the bus when the
+ * drain left nothing; a released lease and the end of a detached slash command stay out while
+ * queue work is in flight, because that work's own end drains.
  */
-export function createDrainSites(deps: {
-  drain: () => DrainOutcome;
-  isAwaitingSettlement: () => boolean;
-  /** A turn, a foreground operation or a pending hand-off is in flight. */
-  isBusy: () => boolean;
-  /** Flow 274 T7: a settled turn that left nothing queued wakes the bus. */
+export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {
+  forced: ForcedItems<T>;
+  queue: T[];
+  paint: () => void;
+  run: (item: T) => void;
+  /** A turn, a foreground operation, a pending hand-off or a detached slash command is in flight. */
+  workInFlight: () => boolean;
+  /** The drain left nothing queued and started nothing, so the bus may wake. */
   onSettle: () => void;
-}): { onForegroundOperationComplete(): void; onTurnSettle(): void; onLeaseRelease(): void } {
+}): { onForegroundOperationComplete(): void; onTurnSettle(): void; onLeaseRelease(): void; onDetachedWorkDone(): void } {
+  const drain = (): DrainOutcome =>
+    drainNext({
+      take: () => deps.forced.takeNext() ?? deps.queue.shift(),
+      pending: () => deps.forced.pendingCount + deps.queue.length,
+      paint: deps.paint,
+      run: deps.run,
+      isBusy: deps.workInFlight,
+    });
+  const drainWhenIdle = (): void => {
+    if (deps.workInFlight()) return;
+    drain();
+  };
   return {
     onForegroundOperationComplete() {
-      if (deps.isAwaitingSettlement()) return;
-      deps.drain();
+      if (deps.forced.isAwaitingSettlement) return;
+      drain();
     },
     onTurnSettle() {
-      if (deps.isAwaitingSettlement()) return;
-      if (deps.drain() === "drained") deps.onSettle();
+      if (deps.forced.isAwaitingSettlement) return;
+      if (drain() === "empty") deps.onSettle();
     },
-    onLeaseRelease() {
-      if (deps.isBusy()) return;
-      deps.drain();
-    },
+    onLeaseRelease: drainWhenIdle,
+    onDetachedWorkDone: drainWhenIdle,
   };
 }
 

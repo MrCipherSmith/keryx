@@ -1,10 +1,13 @@
 // Flow 441 (R1, AC1-AC4): the queue drain. `tui-shell.ts` cannot be mounted by a unit test, so the
-// shell is modelled here with the same two pieces it builds (`drainNext`, `createDrainSites`) around a
-// `runLine` that behaves as the real one does: an inline slash command returns with no turn started,
-// any other line starts a turn and leaves the shell busy until it settles.
+// shell is modelled here with the one factory it builds (`createMainQueueDrain`) around a `runLine`
+// that behaves as the real one does: an inline slash command returns with no turn started, a slash
+// command with detached work (`/model`, `/connect`) holds the queue until that work ends, any other
+// line starts a turn and leaves the shell busy until it settles. The source-text tests in
+// tui-bus.test.ts, tui-hold.test.ts and remote-queue-wiring.test.ts pin that the shell builds the
+// factory with the real objects.
 
 import { describe, expect, test } from "bun:test";
-import { createDrainSites, drainNext, type QueuedMainQuestion } from "./main-queue";
+import { createMainQueueDrain, drainNext, type QueuedMainQuestion } from "./main-queue";
 
 const item = (id: string, question: string): QueuedMainQuestion => ({ id, question, displayQuestion: question });
 
@@ -17,11 +20,14 @@ interface ModelShell {
   settles: number;
   busy: boolean;
   awaitingSettlement: boolean;
+  detached: number;
   /** The turn finished: the shell goes idle and the settle site runs. */
   settleTurn(): void;
   /** The foreground operation finished. */
   completeOperation(): void;
   releaseLease(): void;
+  /** A detached slash command's work ended. */
+  endDetached(): void;
 }
 
 function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelShell {
@@ -34,15 +40,24 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
     settles: 0,
     busy: false,
     awaitingSettlement: false,
+    detached: 0,
     settleTurn: () => {
       shell.busy = false;
       sites.onTurnSettle();
     },
     completeOperation: () => sites.onForegroundOperationComplete(),
     releaseLease: () => sites.onLeaseRelease(),
+    endDetached: () => {
+      shell.detached -= 1;
+      sites.onDetachedWorkDone();
+    },
   };
   const runLine = (line: string): void => {
     shell.ran.push(line);
+    if (line === "/model" || line === "/connect") {
+      shell.detached += 1;
+      return;
+    }
     if (line.startsWith("/")) {
       onSlash?.(line, shell);
       return;
@@ -50,20 +65,23 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
     shell.turns.push(line);
     shell.busy = true;
   };
-  const inFlight = (): boolean => shell.busy || shell.awaitingSettlement;
-  const sites = createDrainSites({
-    drain: () =>
-      drainNext({
-        take: () => shell.forced.shift() ?? shell.queue.shift(),
-        pending: () => shell.queue.length,
-        paint: () => {
-          shell.paints += 1;
-        },
-        run: (next) => runLine(next.question),
-        isBusy: inFlight,
-      }),
-    isAwaitingSettlement: () => shell.awaitingSettlement,
-    isBusy: inFlight,
+  const forced = {
+    takeNext: () => shell.forced.shift(),
+    get pendingCount() {
+      return shell.forced.length;
+    },
+    get isAwaitingSettlement() {
+      return shell.awaitingSettlement;
+    },
+  };
+  const sites = createMainQueueDrain({
+    forced,
+    queue: shell.queue,
+    paint: () => {
+      shell.paints += 1;
+    },
+    run: (next) => runLine(next.question),
+    workInFlight: () => shell.busy || shell.awaitingSettlement || shell.detached > 0,
     onSettle: () => {
       shell.settles += 1;
     },
@@ -72,7 +90,7 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
 }
 
 describe("AC1/AC2: a slash line queued before a question no longer strands it", () => {
-  const slashCommands = ["/compact", "/model", "/goal", "/connect"];
+  const slashCommands = ["/compact", "/queue", "/plan"];
 
   for (const command of slashCommands) {
     test(`${command} then a question: the question is dispatched as a turn when the running turn settles`, () => {
@@ -99,6 +117,50 @@ describe("AC1/AC2: a slash line queued before a question no longer strands it", 
   });
 });
 
+describe("F-001: a slash command whose work outlives its handler holds the queue", () => {
+  for (const command of ["/model", "/connect"]) {
+    test(`${command} then a question: the question waits for the command's work, then runs`, () => {
+      const shell = modelShell();
+      shell.busy = true;
+      shell.queue.push(item("a", command), item("b", "question"));
+
+      shell.settleTurn();
+
+      expect(shell.ran).toEqual([command]);
+      expect(shell.queue.map((i) => i.question)).toEqual(["question"]);
+      expect(shell.turns).toEqual([]);
+
+      shell.endDetached();
+
+      expect(shell.ran).toEqual([command, "question"]);
+      expect(shell.queue).toEqual([]);
+      expect(shell.turns).toEqual(["question"]);
+    });
+  }
+
+  test("the end of the work stays out while a turn is running, and the turn's settle drains", () => {
+    const shell = modelShell();
+    shell.detached = 1;
+    shell.queue.push(item("a", "question"));
+    shell.busy = true;
+    shell.endDetached();
+    expect(shell.ran).toEqual([]);
+    shell.settleTurn();
+    expect(shell.turns).toEqual(["question"]);
+  });
+
+  test("a forced item and a queued slash command with detached work: the forced one runs first, the rest wait", () => {
+    const shell = modelShell();
+    shell.busy = true;
+    shell.forced.push(item("f", "/model"));
+    shell.queue.push(item("a", "question"));
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["/model"]);
+    shell.endDetached();
+    expect(shell.turns).toEqual(["question"]);
+  });
+});
+
 describe("AC3: the three sites share one drain and keep what differs between them", () => {
   test("turn settle: drains one line that starts a turn and stops; onSettle does not fire", () => {
     const shell = modelShell();
@@ -109,7 +171,7 @@ describe("AC3: the three sites share one drain and keep what differs between the
     expect(shell.settles).toBe(0);
   });
 
-  test("turn settle: onSettle fires in the else branch, when nothing was queued", () => {
+  test("turn settle: onSettle fires when the drain finds nothing queued", () => {
     const shell = modelShell();
     shell.settleTurn();
     expect(shell.ran).toEqual([]);
@@ -168,6 +230,50 @@ describe("AC3: the three sites share one drain and keep what differs between the
   });
 });
 
+describe("drainNext outcomes", () => {
+  const line = (id: string): QueuedMainQuestion => item(id, id);
+
+  test("a take that finds nothing reports empty and still paints", () => {
+    let paints = 0;
+    const outcome = drainNext({
+      take: () => undefined,
+      pending: () => 1,
+      paint: () => void (paints += 1),
+      run: () => {},
+      isBusy: () => false,
+    });
+    expect(outcome).toBe("empty");
+    expect(paints).toBe(1);
+  });
+
+  test("a run that leaves work in flight reports started and takes no more", () => {
+    const queue = [line("a"), line("b")];
+    const ran: string[] = [];
+    const outcome = drainNext({
+      take: () => queue.shift(),
+      pending: () => queue.length,
+      paint: () => {},
+      run: (next) => void ran.push(next.id),
+      isBusy: () => true,
+    });
+    expect(outcome).toBe("started");
+    expect(ran).toEqual(["a"]);
+  });
+
+  test("a line that puts itself back reports exhausted, not empty", () => {
+    const queue = [line("a")];
+    const outcome = drainNext({
+      take: () => queue.shift(),
+      pending: () => queue.length,
+      paint: () => {},
+      run: (next) => void queue.push(next),
+      isBusy: () => false,
+    });
+    expect(outcome).toBe("exhausted");
+    expect(queue).toHaveLength(1);
+  });
+});
+
 describe("AC4: slash lines that start no turn drain completely, within a bound", () => {
   test("five slash lines run in order and leave the queue empty", () => {
     const shell = modelShell();
@@ -181,7 +287,7 @@ describe("AC4: slash lines that start no turn drain completely, within a bound",
     expect(shell.queue).toEqual([]);
     expect(shell.turns).toEqual([]);
     expect(shell.busy).toBe(false);
-    // the drain ended idle with nothing queued: the bus wake (the else branch) still gets its turn
+    // the drain ended idle with nothing queued: the bus wake still gets its turn
     expect(shell.settles).toBe(1);
   });
 
@@ -193,15 +299,32 @@ describe("AC4: slash lines that start no turn drain completely, within a bound",
 
     shell.settleTurn();
 
-    // two queued lines + one for a forced item: at most three runs, then the drain gives up
-    expect(shell.ran.length).toBeLessThanOrEqual(3);
-    expect(shell.ran.length).toBeGreaterThan(0);
+    // the first line queues a copy of itself behind the other, so the count never falls: one run, then the drain stops
+    expect(shell.ran).toEqual(["/loop"]);
+    expect(shell.queue).toHaveLength(2);
+    expect(shell.settles).toBe(0);
   });
 
-  test("drainNext paints after every take, including the one that finds nothing", () => {
+  test("drainNext paints after every take", () => {
     const shell = modelShell();
     shell.queue.push(item("a", "/a"), item("b", "/b"));
     shell.settleTurn();
-    expect(shell.paints).toBe(3);
+    expect(shell.paints).toBe(2);
+  });
+
+  test("a drain that finds nothing takes and paints nothing", () => {
+    const shell = modelShell();
+    shell.settleTurn();
+    expect(shell.paints).toBe(0);
+  });
+
+  test("forced items and queued lines are both counted: a forced slash line and two queued ones all run", () => {
+    const shell = modelShell();
+    shell.busy = true;
+    shell.forced.push(item("f", "/f"));
+    shell.queue.push(item("a", "/a"), item("b", "/b"));
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["/f", "/a", "/b"]);
+    expect(shell.settles).toBe(1);
   });
 });
