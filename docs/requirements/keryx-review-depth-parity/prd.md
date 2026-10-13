@@ -1,5 +1,5 @@
 # Keryx Review-Depth Parity PRD
-Version: 0.1.0 (draft, awaiting the operator's AC review and freeze)
+Version: 0.1.0 (frozen as flow 428 and implemented in PR 993, merged 2026-10-13)
 
 ## Origin
 
@@ -137,7 +137,7 @@ Every function above that a person uses has a visible surface (details in the ac
 
 ## Operator answers (poll, 2026-10-12)
 
-Recorded from the operator's poll answers. The PRD and acceptance criteria are still a draft: the operator has not frozen them.
+Recorded from the operator's poll answers. The PRD and acceptance criteria were frozen as flow 428 and implemented in PR 993 (merged 2026-10-13).
 
 - Decision 1 (severity upgrade path): not asked; the recommended separate `severity audit` pass stands.
 - Decision 2 (default mode for a pull request): `all`; `diff` only on an explicit operator quote.

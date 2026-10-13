@@ -1,6 +1,6 @@
 # Acceptance Criteria - Review-Depth Parity
 
-Status: DRAFT. Not frozen. Awaiting the operator's review; no AC is final until the operator freezes the flow.
+Status: frozen as flow 428; implemented in PR 993 (merged 2026-10-13). The frozen copy in the flow directory is authoritative.
 
 Rules:
 

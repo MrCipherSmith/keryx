@@ -1,5 +1,5 @@
 # Keryx Metaproject-in-Review PRD
-Version: 0.1.0 (draft, awaiting the operator's AC review and freeze)
+Version: 0.1.0 (read by the operator on 2026-10-13, no edits; registered and frozen as flow 431)
 
 ## Origin
 
@@ -128,7 +128,7 @@ A sidebar panel, a modal, a slash command and a settings entry (details in the a
 
 ## Operator answers (poll, 2026-10-12)
 
-Recorded from the operator's poll answers. The PRD and acceptance criteria are still a draft: the operator has not frozen them.
+Recorded from the operator's poll answers. The operator read the PRD and acceptance criteria on 2026-10-13 (poll 152) and had no edits; the flow is registered and frozen as flow 431.
 
 - Decision 1 (builder ownership and order): **one flow builds both sections** (see the sibling PRD `keryx-review-depth-parity`, Decision 5). This PRD becomes the metaproject-layer slice of that flow.
 - Decision 2 (default state of each layer): graph, testing and flow default-on; wiki and memory default-on, individually switchable, and reported with their cost.

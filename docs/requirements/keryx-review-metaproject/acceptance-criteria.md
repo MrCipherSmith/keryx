@@ -1,6 +1,6 @@
 # Acceptance Criteria - Metaproject in Review
 
-Status: DRAFT. Not frozen. Awaiting the operator's review; no AC is final until the operator freezes the flow.
+Status: read by the operator on 2026-10-13 with no edits; frozen as flow 431. The frozen copy in the flow directory is authoritative.
 
 Rules:
 
