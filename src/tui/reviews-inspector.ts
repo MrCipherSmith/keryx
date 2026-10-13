@@ -104,6 +104,9 @@ function paint(otui: unknown, renderer: unknown, body: unknown, content: string,
 
 type TabView = { rows: string[]; header: string[]; scroll: number; node: { content: string } | undefined };
 
+// Module level: a modal reopened while its action still runs must not start a second one for the same package.
+const pendingActions = new Set<string>();
+
 export function presentReviews(
   open: OpenModalFn,
   otui: unknown,
@@ -129,7 +132,6 @@ export function presentReviews(
   let width: number | undefined;
   let unsubscribeKey: (() => void) | undefined;
   let active = "reviews";
-  const pendingReviews = new Set<string>();
 
   const content = (view: TabView): string => {
     view.scroll = clampScroll(view.scroll, view.rows.length, windowOf(view));
@@ -161,18 +163,19 @@ export function presentReviews(
       const newest = options.depth?.[0];
       if ((token === "l" || token === "c") && options.actions !== undefined && newest !== undefined && views.depth !== undefined) {
         const depthView = views.depth;
-        if (pendingReviews.has(newest.reviewId)) {
+        const actionKey = newest.layersView?.dir ?? newest.reviewId;
+        if (pendingActions.has(actionKey)) {
           depthView.header = [`${newest.reviewId}: still working, wait for it to finish…`];
           if (depthView.node !== undefined) depthView.node.content = content(depthView);
           return;
         }
-        pendingReviews.add(newest.reviewId);
+        pendingActions.add(actionKey);
         const run = token === "l" ? options.actions.refreshLayers(newest) : options.actions.runMissingChunks(newest);
         depthView.header = [token === "l" ? "refreshing layers…" : "estimating chunks…"];
         void run
           .catch((error: unknown) => `Action failed for ${newest.reviewId}: ${error instanceof Error ? error.message : String(error)}`)
           .then((message) => {
-            pendingReviews.delete(newest.reviewId);
+            pendingActions.delete(actionKey);
             depthView.header = message.split("\n");
             if (depthView.node !== undefined) depthView.node.content = content(depthView);
           });

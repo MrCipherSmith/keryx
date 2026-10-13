@@ -167,3 +167,41 @@ describe("the layers block of a reviewer payload (AC5)", () => {
     await expect(buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: ["src/a.ts"] })).rejects.toBeInstanceOf(PackageGraphError);
   });
 });
+
+describe("the byte cap holds for every list the block carries (R2-04, R2-22)", () => {
+  test("a hundred long file names are cut too, and the cut is recorded", async () => {
+    await refresh();
+    const files = Array.from({ length: MAX_BLOCK_FILES }, (_, index) => `src/${"deeply-nested-directory/".repeat(4)}file-${String(index).padStart(3, "0")}.ts`);
+    const block = await buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files });
+
+    expect(Buffer.byteLength(JSON.stringify(block), "utf8")).toBeLessThanOrEqual(block.maxBytes);
+    expect(block.files.length).toBeLessThan(files.length);
+    const cut = block.truncated.find((entry) => entry.section === "files");
+    expect(cut?.shown).toBe(block.files.length);
+    expect(cut?.total).toBe(files.length);
+  });
+
+  test("still refuses when the fixed overhead alone is over the cap", async () => {
+    await refresh();
+    await expect(
+      buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: ["src/a.ts"], maxBytes: 50 }),
+    ).rejects.toThrow(/every list empty/);
+  });
+
+  test("a long overflow is cut to the cap and no further", async () => {
+    await commitMore(async (root) => {
+      for (let index = 0; index < 150; index += 1) {
+        await writeProjectFile(root, `src/dependent-module-number-${String(index).padStart(3, "0")}.ts`, 'import { a } from "./a";\nexport const x = a;\n');
+      }
+    });
+    await refresh();
+    const maxBytes = 3000;
+    const block = await buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: ["src/a.ts"], maxBytes });
+    const size = Buffer.byteLength(JSON.stringify(block), "utf8");
+
+    expect(size).toBeLessThanOrEqual(maxBytes);
+    expect(size).toBeGreaterThan(maxBytes - 120);
+    const cut = block.truncated.find((entry) => entry.section === "affected");
+    expect(cut?.total).toBeGreaterThanOrEqual(150);
+  });
+});

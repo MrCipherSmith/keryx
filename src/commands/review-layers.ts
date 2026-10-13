@@ -64,9 +64,9 @@ export function resolvePackageDir(args: readonly string[], cwd: string = process
  */
 export async function ensurePackageLayers(
   packageDir: string,
-  options: { projectRoot?: string; prHead?: string; base?: string } = {},
+  options: { projectRoot?: string; prHead?: string; base?: string; waitMs?: number } = {},
 ): Promise<LayersFile> {
-  if (!(await waitForLayersRefresh(packageDir))) {
+  if (!(await waitForLayersRefresh(packageDir, options.waitMs))) {
     throw new Error(`the layers of ${packageDir} are still being refreshed; try again when it finishes`);
   }
   const projectRoot = options.projectRoot ?? resolveProjectRoot(process.cwd());

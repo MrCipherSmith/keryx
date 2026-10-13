@@ -1,7 +1,8 @@
 // Which project layers a reviewer actually consulted, counted from the log of its tool calls.
 // A reviewer with no log is `unknown`, never zero: zero would claim "looked and used nothing".
 
-import { readFile, realpath, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 
 export const LAYER_NAMES = ["graph", "wiki", "memory", "ctx"] as const;
@@ -59,6 +60,9 @@ export function layersUsedFrom(log: string | undefined): LayersUsed {
 
 export const TOOL_LOG_DIR = "tool-calls";
 
+/** A log above this is not read: the layers-used figure is then unknown, not wrong. */
+export const MAX_TOOL_LOG_BYTES = 8 * 1024 * 1024;
+
 /** The reviewer's tool-call log: the path its driver names (`toolLog`), else `<input-dir>/tool-calls/<reviewer>.jsonl`. Absent when neither is a readable file. */
 export async function readToolLog(inputDir: string, reviewer: string, named?: string): Promise<string | undefined> {
   const candidate = named === undefined ? path.join(inputDir, TOOL_LOG_DIR, `${path.basename(reviewer)}.jsonl`) : path.resolve(inputDir, named);
@@ -69,8 +73,15 @@ export async function readToolLog(inputDir: string, reviewer: string, named?: st
     const [real, realInput] = await Promise.all([realpath(candidate), realpath(inputDir)]);
     const realInside = path.relative(realInput, real);
     if (realInside.startsWith("..") || path.isAbsolute(realInside)) return undefined;
-    if (!(await stat(real)).isFile()) return undefined;
-    return await readFile(real, "utf8");
+    // Open without blocking and judge the opened file, so a regular file swapped for a FIFO after the check cannot hang the read.
+    const handle = await open(real, constants.O_RDONLY | constants.O_NONBLOCK);
+    try {
+      const info = await handle.stat();
+      if (!info.isFile() || info.size > MAX_TOOL_LOG_BYTES) return undefined;
+      return await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
   } catch {
     return undefined;
   }

@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLayersFixture, git, type LayersFixture } from "../review/layers.test-helpers";
-import { readLayers } from "../review/layers";
+import { layersLockPath, layersRefreshInFlight, readLayers, refreshLayers } from "../review/layers";
+import { ensurePackageLayers } from "./review-layers";
 import { reviewCommand } from "./review";
 
 let fixture: LayersFixture;
@@ -65,9 +66,11 @@ describe("--package of the layers, chunks and coverage commands stays inside the
   beforeEach(async () => {
     outside = await mkdtemp(path.join(tmpdir(), "keryx-package-outside-"));
     await symlink(outside, path.join(fixture.root, "linked-out"));
+    await mkdir(path.join(path.dirname(fixture.root), "escape"), { recursive: true });
   });
   afterEach(async () => {
     await rm(outside, { recursive: true, force: true });
+    await rm(path.join(path.dirname(fixture.root), "escape"), { recursive: true, force: true });
   });
 
   const commands: Array<[string, string[]]> = [
@@ -83,7 +86,8 @@ describe("--package of the layers, chunks and coverage commands stays inside the
         const target = where === "outside" ? outside : where;
         await reviewCommand([...head, "--package", target]);
         expect(process.exitCode).toBe(1);
-        expect(errors.join("\n")).toMatch(/outside|inside|contain|not a directory|within/i);
+        expect(errors.join("\n")).toMatch(/outside|inside|contain|within/i);
+        expect(errors.join("\n")).not.toMatch(/not a directory/i);
         expect(await readdir(outside)).toEqual([]);
       });
     }
@@ -110,5 +114,55 @@ describe("blast-radius --package reads the package graph", () => {
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toMatch(/graph is failed|not computed from a graph/);
     expect(logs.join("\n")).not.toContain("src/b.ts");
+  });
+});
+
+describe("the refresh lock (R2-10, R2-11)", () => {
+  const holdLock = async (ageMs: number, pid: number): Promise<string> => {
+    const lock = layersLockPath(fixture.packageDir);
+    await mkdir(lock, { recursive: true });
+    await writeFile(path.join(lock, "owner.json"), JSON.stringify({ pid, token: "other" }));
+    const at = new Date(Date.now() - ageMs);
+    await utimes(lock, at, at);
+    return lock;
+  };
+  const deadPid = async (): Promise<number> => {
+    const child = Bun.spawn([process.execPath, "-e", "0"]);
+    await child.exited;
+    return child.pid;
+  };
+
+  test("ensurePackageLayers refuses while a live refresh holds the lock, and goes on once it is released (R2-10)", async () => {
+    const lock = await holdLock(0, process.pid);
+    expect(await layersRefreshInFlight(fixture.packageDir)).toBe(true);
+    await expect(ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, waitMs: 120 })).rejects.toThrow(/still being refreshed/);
+    expect(existsSync(path.join(fixture.packageDir, "layers.json"))).toBe(false);
+
+    await rm(lock, { recursive: true, force: true });
+    const layers = await ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, waitMs: 120 });
+    expect(layers.graph.status).toBe("ok");
+  });
+
+  test("ensurePackageLayers picks the result up when the holder finishes within the wait (R2-10)", async () => {
+    const lock = await holdLock(0, process.pid);
+    setTimeout(() => void rm(lock, { recursive: true, force: true }), 150);
+    const layers = await ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, waitMs: 5000 });
+    expect(layers.graph.status).toBe("ok");
+  });
+
+  test("a lock that is old and whose owner is dead is not in flight, and a refresh takes it over (R2-11)", async () => {
+    await holdLock(10 * 60_000, await deadPid());
+    expect(await layersRefreshInFlight(fixture.packageDir)).toBe(false);
+    const layers = await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir });
+    expect(layers.graph.status).toBe("ok");
+    expect(existsSync(layersLockPath(fixture.packageDir))).toBe(false);
+  });
+
+  test("an old lock whose owner is still alive stays in flight, and a fresh one does too (R2-11)", async () => {
+    await holdLock(10 * 60_000, process.pid);
+    expect(await layersRefreshInFlight(fixture.packageDir)).toBe(true);
+    await rm(layersLockPath(fixture.packageDir), { recursive: true, force: true });
+    await holdLock(1_000, await deadPid());
+    expect(await layersRefreshInFlight(fixture.packageDir)).toBe(true);
   });
 });

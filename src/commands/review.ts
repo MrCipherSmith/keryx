@@ -4211,7 +4211,7 @@ Usage:
                         words naming a narrower review in --operator-quote, and
                         the dispatch records them as operatorQuote.
                         \`review complete\` refuses a smaller dispatch.
-  keryx review dispatch-check --payload <file|-> [--manifest <file>]
+  keryx review dispatch-check --payload <file|-> [--manifest <file>] [--package <dir>]
                               [--max-bytes <n>] [--json]
                               Refuses a reviewer payload with no slice, one over the
                               manifest's wave budget, or a shape the schema rejects.

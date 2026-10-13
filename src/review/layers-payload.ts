@@ -264,25 +264,40 @@ export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<La
     ...block,
     truncated: [
       ...(allFiles.length > files.length
-        ? [{ section: "files" as const, shown: files.length, total: allFiles.length, command: fetchCommand("files", files, input.packageDir, input.projectRoot) }]
+        ? [{ section: "files" as const, shown: files.length, total: allFiles.length, command: fetchCommand("files", allFiles, input.packageDir, input.projectRoot) }]
         : []),
       ...LAYERS_BLOCK_SECTIONS.filter((section) => lists[section].length < totals[section]).map((section) => ({
         section,
         shown: lists[section].length,
         total: totals[section],
-        command: fetchCommand(section, files, input.packageDir, input.projectRoot),
+        command: fetchCommand(section, allFiles, input.packageDir, input.projectRoot),
       })),
     ],
   });
 
-  // The truncation record itself costs bytes, so measure with it included.
-  while (sizeOf(withTruncation()) > maxBytes) {
+  // The truncation record itself costs bytes, so measure with it included. Entries leave one at a time in
+  // effect: a batch takes only as many as are certain to be cut anyway (the victim stays the longest list and
+  // the block stays over the cap after each), so the result is the one-by-one result at a fraction of the cost.
+  for (let size = sizeOf(withTruncation()); size > maxBytes; size = sizeOf(withTruncation())) {
     let victim: LayersBlockSection | null = null;
     for (const section of LAYERS_BLOCK_SECTIONS) {
       if (lists[section].length > 0 && (victim === null || lists[section].length > lists[victim].length)) victim = section;
     }
-    if (victim === null) throw new Error(`The layers block needs ${sizeOf(withTruncation())} bytes with every list empty; maxBytes is ${maxBytes}.`);
-    lists[victim].pop();
+    if (victim === null) {
+      if (files.length === 0) throw new Error(`The layers block needs ${size} bytes with every list empty; maxBytes is ${maxBytes}.`);
+      files.pop();
+      continue;
+    }
+    const list = lists[victim];
+    const runnerUp = Math.max(0, ...LAYERS_BLOCK_SECTIONS.filter((section) => section !== victim).map((section) => lists[section].length));
+    const overshoot = size - maxBytes;
+    let removed = 0;
+    for (let taken = 0; taken < Math.max(1, list.length - runnerUp) && list.length > 0; taken += 1) {
+      const entryBytes = Buffer.byteLength(JSON.stringify(list[list.length - 1]), "utf8");
+      if (taken > 0 && removed + entryBytes >= overshoot) break;
+      removed += entryBytes + 2;
+      list.pop();
+    }
   }
   return withTruncation();
 }

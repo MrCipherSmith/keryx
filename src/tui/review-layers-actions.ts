@@ -1,7 +1,7 @@
 // The `/reviews` menu's two actions (flow 431, AC12): refresh a review's layers, and get its missing chunks ready to run.
 // Neither calls a model. Chunk reviewers are dispatched by the review orchestrator through `keryx review chunks next`.
 
-import { execFile } from "node:child_process";
+import { type ChildProcess, execFile } from "node:child_process";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { shellWord } from "../lib/shell-quote";
@@ -20,22 +20,49 @@ export type RunLayersRefresh = (projectRoot: string, packageDir: string) => Prom
 
 const REFRESH_TIMEOUT_MS = 15 * 60_000;
 
-// A graph build is CPU-bound and synchronous in places; run in this process it would freeze the TUI.
+/** The argument vector of the child that refreshes one package's layers. */
+export function layersRefreshArgv(entry: string, packageDir: string): string[] {
+  return [...SAFE_BUN_SPAWN_ARGS, entry, "review", "layers", "refresh", "--package", packageDir, "--json"];
+}
+
+const liveChildren = new Set<ChildProcess>();
+let exitHookInstalled = false;
+
+function killLiveChildren(): void {
+  for (const child of liveChildren) child.kill("SIGTERM");
+}
+
+/** Runs the refresh in a child process of the given entry script, so a graph build never freezes the TUI. */
+export function makeLayersRefreshRunner(entry: string | undefined, timeoutMs = REFRESH_TIMEOUT_MS): RunLayersRefresh {
+  return (projectRoot, packageDir) =>
+    new Promise((resolve, reject) => {
+      if (entry === undefined || entry === "") {
+        reject(new Error("cannot find the keryx entry script to run the refresh"));
+        return;
+      }
+      if (!exitHookInstalled) {
+        exitHookInstalled = true;
+        process.once("exit", killLiveChildren);
+      }
+      const child = execFile(
+        process.execPath,
+        layersRefreshArgv(entry, packageDir),
+        { cwd: projectRoot, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
+        (error, stdout, stderr) => {
+          liveChildren.delete(child);
+          try {
+            resolve(JSON.parse(stdout) as LayersFile);
+          } catch {
+            reject(new Error((stderr.trim() || (error?.message ?? "no layers output")).split("\n")[0]));
+          }
+        },
+      );
+      liveChildren.add(child);
+    });
+}
+
 export const runLayersRefreshInChild: RunLayersRefresh = (projectRoot, packageDir) =>
-  new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [...SAFE_BUN_SPAWN_ARGS, process.argv[1] ?? "", "review", "layers", "refresh", "--package", packageDir, "--json"],
-      { cwd: projectRoot, timeout: REFRESH_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        try {
-          resolve(JSON.parse(stdout) as LayersFile);
-        } catch {
-          reject(new Error((stderr.trim() || (error?.message ?? "no layers output")).split("\n")[0]));
-        }
-      },
-    );
-  });
+  makeLayersRefreshRunner(process.argv[1])(projectRoot, packageDir);
 
 export function createReviewLayersActions(cwd: string, runRefresh: RunLayersRefresh = runLayersRefreshInChild): ReviewLayersActions {
   const root = resolveProjectRoot(cwd);
@@ -45,6 +72,9 @@ export function createReviewLayersActions(cwd: string, runRefresh: RunLayersRefr
       if (dir === undefined) return "No package to refresh.";
       try {
         const layers = await runRefresh(root, dir);
+        if (layers.graph.status !== "ok") {
+          return `Layers refresh failed for ${row.reviewId}: graph ${layers.graph.status}${layers.graph.error === undefined ? "" : `: ${layers.graph.error}`}`;
+        }
         return `Layers refreshed for ${row.reviewId}: ${layersSummaryLine(layers)}`;
       } catch (error) {
         return `Layers refresh failed for ${row.reviewId}: ${error instanceof Error ? error.message : String(error)}`;
