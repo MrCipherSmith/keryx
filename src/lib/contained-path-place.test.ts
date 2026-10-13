@@ -80,4 +80,17 @@ test("a .metaproject that is a symlink to a directory inside the project stays u
 test("a name that merely begins with two dots is inside the project, and a parent segment is not", () => {
   expect(placePathWithinSync(root, "..data/x", root).ok).toBe(true);
   expect(placePathWithinSync(root, "../x", root).ok).toBe(false);
+  expect(placePathWithinSync(root, "..", root).ok).toBe(false);
+  expect(placePathWithinSync(root, ".", root).ok).toBe(true);
+});
+
+test("a project root handed over as a symlink is judged by its real path", () => {
+  const link = `${base}-root-link`;
+  symlinkSync(root, link);
+  try {
+    expect(placePathWithinSync(link, "sub/x", link)).toEqual({ ok: true, path: path.join(root, "sub", "x") });
+    expect(placePathWithinSync(link, path.join(root, "sub", "x"), link).ok).toBe(true);
+  } finally {
+    rmSync(link, { force: true });
+  }
 });

@@ -1,6 +1,6 @@
 // The flags of the review commands that read or write a file named by the caller, and the one rule for
-// where they may point: inside the project root (a `.metaproject` that links out of it is refused). The commands refuse by this
-// rule and the trust table (trust-routine-command.ts) asks it too, so the two cannot drift apart.
+// where they may point: inside the project root. The commands refuse by this rule and the trust table
+// (trust-routine-command.ts) asks it too, so the two cannot drift apart.
 //
 // Every flag of a command is listed once, as a path flag or as a flag that names no path. The guard test in
 // src/commands/review-slice-paths.test.ts ties both lists to the `*_FLAGS` arrays of review-slice.ts, so a

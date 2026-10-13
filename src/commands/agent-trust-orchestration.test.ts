@@ -50,7 +50,7 @@ function readTool(name: string, run: () => void = () => {}, untrusted = false): 
   };
 }
 
-function shellTool(commands: string[], workingDirectory?: string): InteractiveTool {
+function shellTool(commands: string[], workingDirectory?: string, risk: "shell" | "destructive" = "shell"): InteractiveTool {
   return {
     ...(workingDirectory === undefined ? {} : { workingDirectory }),
     definition: {
@@ -62,7 +62,7 @@ function shellTool(commands: string[], workingDirectory?: string): InteractiveTo
         required: ["command"],
         additionalProperties: false,
       },
-      risk: "shell",
+      risk,
     },
     invoke: async (input) => {
       commands.push(String(input.command));
@@ -334,6 +334,69 @@ test("Flow 441 F-026: in review-auto a refused command is not asked again, while
   const { approvals, ran } = await afterUntrustedIn("ask", dir, [routine, outside]);
   expect(ran).toEqual([routine]);
   expect(approvals).toEqual([]);
+});
+
+test("Flow 441 F-046: in review-auto a refused non-routine command stays refused even in trust mode, which would run it", async () => {
+  setReviewSystem("review-auto");
+  const dir = await bareProject();
+  const command = "echo hi";
+  recordOperatorDenial(refusalFingerprint("shell_exec", JSON.stringify({ command }), "x"));
+  const approvals: string[] = [];
+  const ran: string[] = [];
+  const { provider } = scriptedProvider([callRound("s0", "shell_exec", JSON.stringify({ command })), [...okReply]]);
+  await runAgentTurn(ioWith("trust", approvals), makeDeps(provider, { tools: [shellTool(ran, dir)] }), [], "go");
+  expect(ran).toEqual([]);
+  expect(approvals).toEqual([]);
+});
+
+test("Flow 441 F-046: the refusal memory is consulted for the command as the shell tool's directory judges it, not the process directory's", async () => {
+  setReviewSystem("review-auto");
+  const dir = await bareProject();
+  const elsewhere = await bareProject();
+  const routine = `keryx review slice --out ${dir}/o`;
+  recordOperatorDenial(refusalFingerprint("shell_exec", JSON.stringify({ command: routine }), "x"));
+  process.chdir(elsewhere);
+  const approvals: string[] = [];
+  const ran: string[] = [];
+  const { provider } = scriptedProvider([callRound("s0", "shell_exec", JSON.stringify({ command: routine })), [...okReply]]);
+  await runAgentTurn(ioWith("trust", approvals), makeDeps(provider, { tools: [shellTool(ran, dir)] }), [], "go");
+  expect(ran).toEqual([routine]);
+  expect(approvals).toEqual([]);
+});
+
+test("Flow 441 F-046: after untrusted content a routine command still asks in auto mode, where only trust and review-auto lift the latch", async () => {
+  const dir = await bareProject();
+  const routine = `keryx review slice --out ${dir}/o`;
+  const { approvals, ran } = await afterUntrustedIn("auto", dir, [routine]);
+  expect(approvals).toEqual([JSON.stringify({ command: routine })]);
+  expect(ran).toEqual([]);
+});
+
+test("Flow 441 F-046: a routine command that the mode itself would ask for stays an untrusted ask after untrusted content", async () => {
+  const dir = await bareProject();
+  const metas: Array<{ untrustedOrigin?: boolean }> = [];
+  const ran: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "trust",
+    requestApproval: async (tool, _raw, meta) => {
+      if (tool !== "fetch_page") metas.push({ ...(meta?.untrustedOrigin === true ? { untrustedOrigin: true } : {}) });
+      return tool === "fetch_page";
+    },
+  };
+  const { provider } = scriptedProvider([
+    callRound("f1", "fetch_page", "{}"),
+    callRound("s0", "shell_exec", JSON.stringify({ command: "keryx review status" })),
+    [...okReply],
+  ]);
+  await runAgentTurn(
+    io,
+    makeDeps(provider, { tools: [readTool("fetch_page", () => {}, true), shellTool(ran, dir, "destructive")] }),
+    [],
+    "go",
+  );
+  expect(ran).toEqual([]);
+  expect(metas).toEqual([{ untrustedOrigin: true }]);
 });
 
 test("Flow 441 ag-gate-hook: in review-auto a hook ask on a routine command after untrusted content goes to the operator as an untrusted ask", async () => {

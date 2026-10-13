@@ -1,9 +1,9 @@
 // Flow 426 AC1/AC2 and Flow 441 AC6: the routine-command table is one named list, every row has a command that runs
 // without a prompt, and everything outside it (or joined to it in a risky way) still asks.
 
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -314,6 +314,7 @@ for (const [command, flag] of PATH_FLAG_ROWS) {
   test(`AC10: ${command} ${flag} is routine only when the path stays inside the project`, () => {
     const dir = projectDir();
     const outside = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-out-")));
+    madeDirs.push(outside);
     symlinkSync(outside, path.join(dir, "escape"));
     const run = (value: string, form: "space" | "equals" = "space") =>
       isTrustRoutineCommand(form === "space" ? `${command} ${flag} ${value}` : `${command} ${flag}=${value}`, { cwd: dir });
@@ -385,7 +386,9 @@ test("Flow 441 F-025: a bunfig.toml of exactly 256 KiB is read, one byte more is
   expect(isTrustRoutineCommand("bun test", { cwd: projectDir(comment(cap + 1)) })).toBe(false);
 });
 
-test("Flow 441 F-036: a leading assignment, a backslash or a backtick in a path value is not routine", () => {
+// The backtick and the assignment prefix are refused by earlier guards (the command-wide backtick check and the
+// stripAssignments length check) before the later ones run, so this pins the command lines, not those later guards.
+test("Flow 441 F-036: a command line with an assignment prefix, a backslash or a backtick in a path value is not routine", () => {
   const dir = projectDir();
   expect(isTrustRoutineCommand("keryx review status", { cwd: dir })).toBe(true);
   for (const command of ["FOO=1 bun test", "FOO=1 keryx review status", "keryx review slice --out a\\b", "keryx review slice --out a`x`"]) {
@@ -460,4 +463,105 @@ test("Flow 441 F-039: a project reached through a symlink is the same project, a
   expect(isTrustRoutineCommand("bun test", { cwd: link })).toBe(true);
   expect(isTrustRoutineCommand("keryx review slice --out sub/x", { cwd: link })).toBe(true);
   expect(isTrustRoutineCommand("cd sub && keryx review slice --out x", { cwd: link })).toBe(true);
+});
+
+// Flow 441 round 3 (F-047, F-050, F-051, F-055): one descriptor for the bunfig, the error kinds, the flag-less guard.
+
+test("Flow 441 F-050: a bunfig.toml that cannot be opened (a link to itself) is not routine, and is not taken for an absent one", () => {
+  const dir = projectDir(undefined, { baseline: false });
+  symlinkSync("bunfig.toml", path.join(dir, "bunfig.toml"));
+  recordBunfigBaseline(dir);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-050: a bunfig.toml without read permission is not routine and is not taken for an absent one", () => {
+  if (process.getuid?.() === 0) return;
+  const dir = projectDir(undefined, { baseline: false });
+  const file = path.join(dir, "bunfig.toml");
+  writeFileSync(file, "[test]\ntimeout = 1\n");
+  chmodSync(file, 0o000);
+  recordBunfigBaseline(dir);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+  chmodSync(file, 0o600);
+});
+
+test("Flow 441 F-050: an oversized baseline that is then removed is a changed file, not an unchanged one", () => {
+  const dir = projectDir(`# ${"x".repeat(300 * 1024)}\n`);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+  rmSync(path.join(dir, "bunfig.toml"));
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-047: a bunfig.toml swapped for a FIFO after the baseline is refused without blocking", () => {
+  const dir = projectDir("[test]\ntimeout = 1\n");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+  rmSync(path.join(dir, "bunfig.toml"));
+  execFileSync("mkfifo", [path.join(dir, "bunfig.toml")]);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+}, 5000);
+
+test("Flow 441 F-051: a command with no path flag is routine even when the working directory is unknown", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("cd ~ && keryx review slice", { cwd: dir })).toBe(true);
+  expect(isTrustRoutineCommand("cd ~ && keryx review slice --out x", { cwd: dir })).toBe(false);
+  expect(isTrustRoutineCommand("cd ~ && keryx review retry-plan", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 F-051: the path-flag rule binds the review commands only, not a routine command that happens to carry --out", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("keryx help slice --out /etc/x", { cwd: dir })).toBe(true);
+  expect(isTrustRoutineCommand("keryx review slice --out /etc/x", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-051: an empty cd target is not followed", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("cd '' && keryx review slice --out x", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-055: a starting directory that is a symlink out of the project is judged by where it really is", () => {
+  const dir = projectDir();
+  const outside = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-wd-")));
+  madeDirs.push(outside);
+  symlinkSync(outside, path.join(dir, "wd"));
+  expect(isTrustRoutineCommand("keryx review slice --out ../x", { cwd: path.join(dir, "wd") })).toBe(false);
+});
+
+test("Flow 441 F-048: a bunfig is parsed once per content, however many bun test commands are judged", () => {
+  const parse = spyOn(Bun.TOML, "parse");
+  try {
+    const plain = projectDir(`# ${crypto.randomUUID()}\n[test]\ntimeout = 1\n`);
+    const loaded = projectDir(`# ${crypto.randomUUID()}\n[test]\npreload = ["./x.ts"]\n`);
+    for (let i = 0; i < 4; i += 1) {
+      expect(isTrustRoutineCommand("bun test", { cwd: plain })).toBe(true);
+      expect(isTrustRoutineCommand("bun test", { cwd: loaded })).toBe(false);
+    }
+    expect(parse).toHaveBeenCalledTimes(2);
+  } finally {
+    parse.mockRestore();
+  }
+});
+
+test("Flow 441 F-047: reading the bunfig leaves no descriptor open", () => {
+  if (!existsSync("/proc/self/fd")) return;
+  const dir = projectDir("[test]\ntimeout = 1\n");
+  const open = (): number => readdirSync("/proc/self/fd").length;
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+  const before = open();
+  for (let i = 0; i < 25; i += 1) isTrustRoutineCommand("bun test", { cwd: dir });
+  expect(open()).toBe(before);
+});
+
+test("Flow 441 F-047: a bunfig.toml that grows past the cap after the baseline is not routine", () => {
+  const dir = projectDir("[test]\ntimeout = 1\n");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+  writeFileSync(path.join(dir, "bunfig.toml"), `# ${"x".repeat(300 * 1024)}\n`);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-055: a project root reached through a symlink is its real path even when the starting directory is gone", () => {
+  const dir = projectDir();
+  const link = `${dir}-lnk3`;
+  symlinkSync(dir, link);
+  madeDirs.push(link);
+  expect(isTrustRoutineCommand(`cd ${dir} && bun test`, { cwd: path.join(link, "missing") })).toBe(true);
 });

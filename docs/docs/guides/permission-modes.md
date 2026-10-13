@@ -254,8 +254,7 @@ regular file, or is over 256 KiB) or does not parse makes `bun test` ask again.
 
 The path flags of `keryx review slice` (`--diff`, `--out`), `retry-plan` (`--manifest`,
 `--result`, `--state`) and `dispatch-check` (`--manifest`, `--payload`) are routine only
-when they land inside the project root by their real path, symlinks resolved; a
-`.metaproject` that is itself a link out of the project does not count as inside. `-` is
+when they land inside the project root by their real path, symlinks resolved. `-` is
 standard input for `--diff`, `--payload` and `--result` only. The command refuses an
 outside path itself, too, and opens the path it judged.
 

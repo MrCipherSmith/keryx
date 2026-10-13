@@ -3,8 +3,8 @@
 // only while no untrusted content entered the turn. Escalation floors (destructive, credentials, SAC/flow
 // confirmation, publish) are checked first and are never lifted. String analysis, plus these file-system reads:
 // the walk up from the working directory to the project root, the real path of the cwd, the root and each `cd`
-// target, the project's `bunfig.toml` (a `bun test` is routine only while it is the regular file the session
-// started with), and the real path of a review command's path flags.
+// target, the project's `bunfig.toml` (a `bun test` is routine only while it is the same file, or still absent,
+// as at the session start), and the real path of a review command's path flags.
 //
 // The table is a gate in front of the command, not the command's own check: a review command refuses an
 // out-of-root path itself (review-path-flags.ts) and that refusal is the authoritative one. The project root
@@ -12,7 +12,7 @@
 // judged from, never the root.
 
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import path from "node:path";
 import { optionValues } from "./args";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "./command-risk";
@@ -132,13 +132,19 @@ export type TrustRoutineContext = {
   untrustedContent?: boolean;
 };
 
-/** State one command line is walked with: a `cd` earlier in the chain moves `cwd` for the segments after it. */
+/**
+ * State one command line is walked with: a `cd` earlier in the chain moves `cwd` for the segments after it. Both paths are
+ * real paths (or, where they do not exist, resolved ones, which are their own real path).
+ */
 type Walk = { projectRoot: string; cwd: string | undefined; untrusted: boolean };
 
 // Baselines are per process and per project root; the first one recorded for a root wins. Two sessions of one
 // process that share a root therefore share the baseline of whichever started first, which is the file as it
 // was at that first turn.
 const bunfigBaselines = new Map<string, string>();
+// Whether the bunfig with this fingerprint can load code. The verdict is a function of the text alone, so a parse that
+// costs hundreds of milliseconds on a pathological file is paid once, not on every `bun test`.
+const preloadVerdicts = new Map<string, boolean>();
 
 /**
  * True when a bunfig can load code before the tests: a `preload` key at any depth (the parse normalises quoted and
@@ -160,15 +166,29 @@ const MAX_BUNFIG_BYTES = 256 * 1024;
 
 type BunfigFile = { kind: "absent" } | { kind: "unreadable" } | { kind: "text"; text: string };
 
-// Only a regular file of bounded size is opened: a FIFO, a device or a symlink to one would block the read forever.
+// One descriptor is opened and judged: the type is read from it, and so is the text, so the file cannot change kind between
+// the check and the read; the size is bounded by what is read, so a file that grows meanwhile is bounded too. O_NONBLOCK
+// keeps a FIFO from blocking the open; it is refused as not a regular file.
 function readBunfig(root: string): BunfigFile {
   const file = path.join(root, "bunfig.toml");
+  let fd: number | undefined;
   try {
-    const stat = statSync(file);
-    if (!stat.isFile() || stat.size > MAX_BUNFIG_BYTES) return { kind: "unreadable" };
-    return { kind: "text", text: readFileSync(file, "utf8") };
+    fd = openSync(file, constants.O_RDONLY | constants.O_NONBLOCK);
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return { kind: "unreadable" };
+    const buffer = Buffer.alloc(MAX_BUNFIG_BYTES + 1);
+    let length = 0;
+    for (;;) {
+      const read = readSync(fd, buffer, length, buffer.length - length, null);
+      if (read === 0) break;
+      length += read;
+      if (length > MAX_BUNFIG_BYTES) return { kind: "unreadable" };
+    }
+    return { kind: "text", text: buffer.toString("utf8", 0, length) };
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "unreadable" };
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 
@@ -208,14 +228,21 @@ function hasOnlyAllowedBunTestArgs(args: readonly string[]): boolean {
 
 function isRoutineBunTest(words: readonly string[], walk: Walk): boolean {
   if (walk.untrusted || walk.cwd === undefined) return false;
-  const root = realOrResolved(walk.projectRoot);
-  if (realOrResolved(walk.cwd) !== root) return false;
+  const root = walk.projectRoot;
+  if (walk.cwd !== root) return false;
   if (!hasOnlyAllowedBunTestArgs(words.slice(2))) return false;
   const baseline = bunfigBaselines.get(root);
   const now = readBunfig(root);
   // The fingerprint is compared first, so a changed or oversized file is never parsed.
-  if (baseline === undefined || baseline !== bunfigFingerprint(now) || now.kind === "unreadable") return false;
-  return now.kind === "absent" || !carriesPreload(now.text);
+  const fingerprint = bunfigFingerprint(now);
+  if (baseline === undefined || baseline !== fingerprint || now.kind === "unreadable") return false;
+  if (now.kind === "absent") return true;
+  let carries = preloadVerdicts.get(fingerprint);
+  if (carries === undefined) {
+    carries = carriesPreload(now.text);
+    preloadVerdicts.set(fingerprint, carries);
+  }
+  return !carries;
 }
 
 /** A value the shell would expand (home, variable, glob, brace, escape) before the command sees it cannot be judged here. */
@@ -237,8 +264,9 @@ function movedTo(cwd: string | undefined, target: string): string | undefined {
   }
   const lexical = path.resolve(cwd, target);
   // The shell follows symlinks and the table follows names: where the two disagree (a symlinked directory, or a
-  // `..` after one) the later relative paths would be judged from a directory the shell is not in.
-  return realOrResolved(lexical) === path.resolve(realOrResolved(cwd), target) ? lexical : undefined;
+  // `..` after one) the later relative paths would be judged from a directory the shell is not in. The working
+  // directory handed in is already its own real path (the walk starts from one and only accepts such targets).
+  return realOrResolved(lexical) === lexical ? lexical : undefined;
 }
 
 function areReviewPathFlagsInside(sub: string, args: readonly string[], walk: Walk): boolean {
@@ -290,8 +318,8 @@ export function isTrustRoutineCommand(command: string, context: TrustRoutineCont
   if (touchesHumanConfirmation(command) || isPublishCommand(command)) return false;
   const segments = splitSegments(command);
   if (segments.length === 0 || segments.length > MAX_CHAIN_SEGMENTS) return false;
-  const cwd = path.resolve(context.cwd ?? process.cwd());
-  const walk: Walk = { projectRoot: resolveProjectRoot(cwd), cwd, untrusted: context.untrustedContent === true };
+  const cwd = realOrResolved(path.resolve(context.cwd ?? process.cwd()));
+  const walk: Walk = { projectRoot: realOrResolved(resolveProjectRoot(cwd)), cwd, untrusted: context.untrustedContent === true };
   return segments.every(
     (seg) =>
       (seg.precededBy === undefined || seg.precededBy === "&&") &&
