@@ -22,8 +22,8 @@ Rules:
 
 ### Trust table: `bun test` (F-007)
 
-- AC5: `isTrustRoutineCommand` returns false for `bun test --preload ./x.ts`, for `keryx ctx run -- bun test --preload ./x.ts`, and for `cd /tmp/other && bun test` - red before, green after.
-- AC6: `isTrustRoutineCommand("bun test")` in the project root with an unchanged `bunfig.toml` stays true; the same command after the `bunfig.toml` hash changed, or when the file carries a `preload`, is false - tests for each branch (this AC follows Decision 1 of the PRD; it is rewritten before freeze if the operator picks "never routine").
+- AC5: `isTrustRoutineCommand` returns false for `bun test --preload ./x.ts`, for `keryx ctx run -- bun test --preload ./x.ts`, for `bun test ./some/file.test.ts` (positional path), for `bun test --coverage-dir /tmp/x` (output flag), and for `cd /tmp/other && bun test` - red before, green after.
+- AC6: `isTrustRoutineCommand("bun test")` in the project root with an unchanged `bunfig.toml` stays true, and so does `bun test` with only flags from a named allow-list of flags that take no path or output value; the same command after the `bunfig.toml` hash changed, or when the file carries a `preload`, is false, and so is any positional path or any flag outside the allow-list - tests for each branch (operator decision 1 of poll 137: "only without path and output flags"; the allow-list is fixed in T2 and shown to the operator before freeze).
 - AC7: After untrusted content entered the turn, no `bun test` form is routine - a test over the argument-free and the argument forms.
 
 ### Path flags (F-008)

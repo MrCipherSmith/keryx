@@ -87,6 +87,14 @@ Each defect is closed by a test that is red before and green after the change, a
 2. **F-008 place of the fix.** Recommended: confine the path in the command (works for every caller), and additionally drop the three commands from the routine table when a path flag points outside the project root. Alternative: table only.
 3. **Flow shape.** Recommended: one flow with five tasks (R1 to R5), because each is small and local and they share one release. Alternative: split R1 (TUI) from R2/R3 (trust table) and R4/R5 (ledger) into three flows if they should be reviewed separately.
 
+### Operator answers (poll 137, 2026-10-13)
+
+Confirmed by the operator in message 201365 ("Записывай 137").
+
+1. **F-007 scope:** "Только без флагов пути и вывода". `bun test` stays routine only when it carries no path-valued and no output-valued flag. This is wider than the recommended default (no arguments at all), so AC5 and AC6 now name an allow-list of flags that take no path or output value; every other flag, and every positional path, asks. The allow-list is fixed in T2 and shown to the operator before the criteria are frozen. The `bunfig.toml` check, the `cd` rule and the untrusted-content rule are unchanged.
+2. **F-008 place of the fix:** both. The command refuses an outside path itself, and the routine table treats the three commands as non-routine when a path flag points outside the project root.
+3. **Flow shape:** one flow, five criteria groups (R1 to R5), one pull request chain.
+
 ## Tasks
 
 - T1: R4 and R5 (ledger parser, review-slice tests). Ledger and tests only, no TUI.
