@@ -402,6 +402,12 @@ export class AutomaticReviewRun {
         const test = one("--test");
         return inPackage(one("--package")) && absentOrUnderCwd("--worktree") && test !== undefined && isBunTest(test);
       }
+      case "layers":
+        return inPackage(one("--package")) && !flags.has("--write-wiki");
+      case "chunks":
+        return inPackage(one("--package")) && !flags.has("--answer") && !flags.has("--quote") && absentOrUnderCwd("--result");
+      case "coverage":
+        return inPackage(one("--package"));
       case "retry-plan":
         return inPackage(one("--manifest")) && absentOrInPackage("--state") && absentOrUnderCwd("--result");
       case "scope":

@@ -813,26 +813,33 @@ export async function completeManagedReview(
   // so the next run does not pass the same gate without the flag.
   const researchPath = path.join(packageDir, "research.json");
   const researchBefore = options.waiveCoverage === undefined ? undefined : await readFile(researchPath, "utf8").catch(() => undefined);
-  const coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
-  const researchProblems = await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
-  if (researchProblems.length) {
-    if (coverageWaiver !== undefined && researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore);
-    throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+  let coverageWaiver: CoverageWaiver | undefined;
+  let updated: ManagedReviewManifest;
+  try {
+    coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
+    const researchProblems = await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
+    if (researchProblems.length) {
+      throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+    }
+    const dispositions = options.dispositions ?? [];
+    if (dispositions.length > 0) {
+      await recordDispositions(packageDir, dispositions);
+    }
+    updated = {
+      ...manifest,
+      status: "closed",
+      updatedAt: new Date().toISOString(),
+    };
+    const validation = await validateManagedReviewManifest(cwd, updated);
+    if (!validation.valid) {
+      throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
+    }
+    await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+  } catch (error) {
+    // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
+    if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
+    throw error;
   }
-  const dispositions = options.dispositions ?? [];
-  if (dispositions.length > 0) {
-    await recordDispositions(packageDir, dispositions);
-  }
-  const updated: ManagedReviewManifest = {
-    ...manifest,
-    status: "closed",
-    updatedAt: new Date().toISOString(),
-  };
-  const validation = await validateManagedReviewManifest(cwd, updated);
-  if (!validation.valid) {
-    throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
-  }
-  await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
 
   // Flow 207 AC5, the second of the two places a `dismissed-incorrect` becomes
   // durable. This one is the attended path by construction: somebody ran

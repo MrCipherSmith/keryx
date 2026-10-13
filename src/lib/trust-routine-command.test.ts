@@ -31,6 +31,9 @@ test("AC1: the table names the read-only keryx commands of the frozen criteria",
     "review tier",
     "review retry-plan",
     "review dispatch-check",
+    "review layers",
+    "review chunks",
+    "review coverage",
     "flow status",
     "flow list",
     "flow next",
@@ -63,6 +66,10 @@ test("AC1: the review ledger examples from the criteria are routine", () => {
     "keryx review tier",
     "keryx review retry-plan",
     "keryx review dispatch-check",
+    "keryx review layers status --package p",
+    "keryx review chunks next --package p",
+    "keryx review chunks estimate --package p",
+    "keryx review coverage --package p",
     "keryx flow status",
     "keryx flow list",
     "keryx flow next",
@@ -762,4 +769,24 @@ test("Flow 441 F-055: a project root reached through a symlink is its real path 
   symlinkSync(dir, link);
   madeDirs.push(link);
   expect(isTrustRoutineCommand(`cd ${dir} && bun test`, { cwd: path.join(link, "missing") })).toBe(true);
+});
+
+test("R2-07: the layers, chunks and coverage verbs are routine, the operator-answer and waiver forms still ask", () => {
+  for (const command of [
+    "keryx review layers refresh --package .metaproject/reviews/r1",
+    "keryx review chunks plan --package .metaproject/reviews/r1",
+    "keryx review chunks next --package .metaproject/reviews/r1 --json",
+    "keryx review coverage --package .metaproject/reviews/r1",
+  ]) {
+    expect(isTrustRoutineCommand(command)).toBe(true);
+  }
+  for (const command of [
+    'keryx review chunks estimate --package p --answer yes --quote "operator said go"',
+    'keryx review chunks estimate --package p --ans""wer yes --quote x',
+    'keryx review complete p --waive-""coverage "operator said skip"',
+    "keryx review layers refresh --package /etc",
+    "keryx review chunks next --package ../outside",
+  ]) {
+    expect(isTrustRoutineCommand(command)).toBe(false);
+  }
 });

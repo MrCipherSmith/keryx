@@ -442,7 +442,8 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
     const scopePath = path.join(packageDir, "scope.md");
     const scope = (await pathExists(scopePath)) ? await readScopeMarkdown(scopePath) : null;
 
-    problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings));
+    // A closed round passed the close-time gate of its day; the coverage-completeness gate decides open rounds only.
+    problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings, { completeness: readString(manifest?.["status"]) !== "closed" }));
     rounds.push({
       reviewId,
       dir: path.relative(cwd, packageDir),

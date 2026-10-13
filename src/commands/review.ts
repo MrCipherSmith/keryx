@@ -566,7 +566,12 @@ function rejectUnknownFlags(args: readonly string[], allowed: readonly string[],
   }
 }
 
-export async function reviewCommand(args: string[]): Promise<void> {
+/** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
+export interface ReviewCommandSeams {
+  isTerminal?: () => boolean;
+}
+
+export async function reviewCommand(args: string[], seams: ReviewCommandSeams = {}): Promise<void> {
   const command = args[0];
   if (!command || command === "--help" || command === "-h") {
     printHelp();
@@ -765,7 +770,7 @@ export async function reviewCommand(args: string[]): Promise<void> {
       return;
     }
     if (command === "complete") {
-      await runComplete(args.slice(1));
+      await runComplete(args.slice(1), seams);
       return;
     }
     if (command === "lightweight") {
@@ -3859,7 +3864,7 @@ function reportFilterStatsProblems(stats: unknown, where: string): void {
   process.exitCode = 1;
 }
 
-async function runComplete(args: string[]): Promise<void> {
+async function runComplete(args: string[], seams: ReviewCommandSeams = {}): Promise<void> {
   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
   const ref = args[0];
   if (!ref) {
@@ -3869,6 +3874,12 @@ async function runComplete(args: string[]): Promise<void> {
   const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
   if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
     throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
+  }
+  // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
+  // statement, so a person has to be at the terminal that carries it.
+  const isTerminal = seams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (waiver !== undefined && !isTerminal()) {
+    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
   }
   const {
     manifest,

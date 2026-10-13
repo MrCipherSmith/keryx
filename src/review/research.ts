@@ -32,8 +32,11 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
   }
   return errors;
 }
-/** Absent artifact identifies packages predating this contract, not completed research. */
-export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean } = {}): Promise<string[]> {
+/**
+ * Absent artifact identifies packages predating this contract, not completed research. `completeness: false` skips the
+ * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
+ */
+export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<string[]> {
   const a = artifacts && typeof artifacts === "object" ? artifacts as Record<string, unknown> : {};
   if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : ["dispatch requires a research artifact"];
   if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return ["invalid dispatch artifact locator"];
@@ -49,7 +52,7 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
           blastRadius: await packageHasBlastRadius(packageDir),
           pendingMutants: (await pendingMutants(packageDir)).length,
         });
-    const completeness = a.reviewerDispatch === undefined || options.coverage === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
+    const completeness = a.reviewerDispatch === undefined || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
     return [...researchErrors(ledger, findings), ...dispatch, ...coverage, ...completeness];
   }
   catch { return ["research ledger unreadable or invalid JSON"]; }

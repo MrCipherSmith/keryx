@@ -623,16 +623,85 @@ export function touchesSchedulerControl(command: string): boolean {
  * included; no answer is remembered, and a pattern for any of them is refused.
  */
 export function touchesHumanConfirmation(command: string): boolean {
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || touchesCoverageWaiver(command);
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command);
 }
 
-const COVERAGE_WAIVER_MARKER = /--waive-coverage\b/i;
+const COVERAGE_WAIVER_FLAG = "--waive-coverage";
+const ANSI_C_ESCAPES: Readonly<Record<string, string>> = { n: "\n", t: "\t", r: "\r", a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+
+/** Decode the body of a `$'…'` word the way bash does (`\xHH`, `\uHHHH`, `\UHHHHHHHH`, octal, `\n` …). */
+function decodeAnsiC(body: string): string {
+  return body.replace(/\\(?:x([0-9a-fA-F]{1,2})|u([0-9a-fA-F]{1,4})|U([0-9a-fA-F]{1,8})|([0-7]{1,3})|(.))/gs, (_m, x?: string, u?: string, big?: string, oct?: string, ch?: string) => {
+    const code = x ?? u ?? big;
+    if (code !== undefined) return String.fromCodePoint(Math.min(Number.parseInt(code, 16), 0x10ffff));
+    if (oct !== undefined) return String.fromCharCode(Number.parseInt(oct, 8) & 0xff);
+    return ANSI_C_ESCAPES[ch ?? ""] ?? `\\${ch ?? ""}`;
+  });
+}
+
+/** Replace each `$'…'` word with its decoded text in single quotes, so the word splitter sees what the shell will. */
+function expandAnsiCQuotes(command: string): string {
+  return command.replace(/\$'((?:[^'\\]|\\.)*)'/gs, (_m, body: string) => `'${decodeAnsiC(body).replace(/'/g, "'\\''")}'`);
+}
+
+/** Text with every quote and backslash removed: the form a split-quote or escaped spelling collapses to. */
+function collapseQuoting(command: string): string {
+  return expandAnsiCQuotes(command).replace(/["'\\]/g, "");
+}
+
+/** A word the shell will still rewrite (parameter or command substitution), so its text is not its value. */
+function wordIsOpaque(word: string): boolean {
+  return /[$`]/.test(word);
+}
+
+/**
+ * Parsed check: does any simple command (recursing into `bash -c`, `eval` and any word that is itself a
+ * command line) carry the waiver flag once quoting and escapes are resolved, or run `review complete` with
+ * a word the shell has yet to expand?
+ */
+function parsedCoverageWaiver(command: string, depth = 0): boolean {
+  for (const seg of splitSegments(expandAnsiCQuotes(command))) {
+    const words = seg.words.map(unescapeWord);
+    if (words.some((w) => w.toLowerCase().includes(COVERAGE_WAIVER_FLAG))) return true;
+    const review = words.findIndex((w) => w.toLowerCase() === "review");
+    if (review >= 0 && words.slice(review + 1).some((w) => w.toLowerCase() === "complete")) {
+      if (words.slice(review + 1).some(wordIsOpaque)) return true;
+    }
+    if (depth < 4 && words.some((w) => /\s/.test(w) && parsedCoverageWaiver(w, depth + 1))) return true;
+  }
+  return false;
+}
 
 /**
  * Flow 431 (AC10): `keryx review complete --waive-coverage "<quote>"` is the operator accepting that in-scope files
  * went unreviewed. The quote has to be theirs, so the command asks in every permission mode, like `flow confirm`.
- * Text-matched with the same limit as the other markers. Pure.
+ *
+ * Matched on PARSED words like {@link touchesSchedulerControl}: split quotes (`--waive-""coverage`), `$'\x2d…'`
+ * ANSI-C words, backslash escapes, environment prefixes and `bash -c`/`eval` bodies are resolved first, and a
+ * `review complete` whose words hold an expansion (`$X`, `$(…)`, a backtick, a glob) asks too, because the flag could
+ * be inside it. The raw text and the quote-collapsed text stay as extra nets. HONEST LIMIT: a script file or an
+ * interpreter one-liner is out of reach; `runComplete` therefore also requires a terminal for the waiver. Pure.
  */
 export function touchesCoverageWaiver(command: string): boolean {
-  return COVERAGE_WAIVER_MARKER.test(command);
+  if (command.toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;
+  if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;
+  return parsedCoverageWaiver(command);
+}
+
+/**
+ * Flow 431 (R2-16): `keryx review chunks estimate --answer …` lifts the pass ceiling on the operator's word, so it
+ * asks like the waiver. Parsed words, so a split or escaped spelling is seen too.
+ */
+export function touchesChunkEstimateAnswer(command: string): boolean {
+  const scan = (text: string, depth: number): boolean => {
+    for (const seg of splitSegments(expandAnsiCQuotes(text))) {
+      const words = seg.words.map(unescapeWord).map((w) => w.toLowerCase());
+      const chunks = words.indexOf("chunks");
+      const after = chunks >= 0 ? words.slice(chunks + 1) : [];
+      if (after.includes("estimate") && after.some((w) => w === "--answer" || w.startsWith("--answer="))) return true;
+      if (depth < 4 && seg.words.some((w) => /\s/.test(w) && scan(w, depth + 1))) return true;
+    }
+    return false;
+  };
+  return scan(command, 0);
 }

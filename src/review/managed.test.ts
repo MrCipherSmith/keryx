@@ -1,5 +1,5 @@
 import { READY_DISPATCH } from "./dispatch.test-helpers";
-import { afterEach, test, expect } from "bun:test";
+import { afterEach, describe, test, expect } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1739,11 +1739,11 @@ test("R1-12: through the CLI the waiver flag is not read as a disposition and an
   console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
   try {
     process.exitCode = 0;
-    await reviewCommand(["complete", pkg, "--waive-coverage", ""]);
+    await reviewCommand(["complete", pkg, "--waive-coverage", ""], { isTerminal: () => true });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("operator's own words");
     process.exitCode = 0;
-    await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "acted-on", "--evidence", "closed by 380bf3b0", "--waive-coverage", "skip the far files, generated"]);
+    await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "acted-on", "--evidence", "closed by 380bf3b0", "--waive-coverage", "skip the far files, generated"], { isTerminal: () => true });
     expect(process.exitCode ?? 0).toBe(0);
   } finally {
     console.log = log;
@@ -1767,6 +1767,62 @@ test("R1-10: a close that fails after the waiver was written takes the waiver ba
 
   expect(await readFile(researchPath, "utf8")).toBe(before);
   await expect(completeManagedReview(ROOT, pkg)).rejects.toThrow("uncovered");
+});
+
+test("R2-05: without a terminal the waiver is refused and nothing is written", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-no-tty");
+  const researchPath = path.join(ROOT, pkg, "research.json");
+  const before = await readFile(researchPath, "utf8");
+  process.chdir(ROOT);
+  const logError = console.error;
+  const errors: string[] = [];
+  console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+  try {
+    process.exitCode = 0;
+    await reviewCommand(["complete", pkg, "--waive-coverage", "skip the far files, generated"], { isTerminal: () => false });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("needs a terminal");
+  } finally {
+    console.error = logError;
+    process.exitCode = 0;
+  }
+  expect(await readFile(researchPath, "utf8")).toBe(before);
+});
+
+describe("R2-01: every throw site between the waiver write and the manifest write takes the waiver back", () => {
+  const quote = "skip the far files, they are generated";
+
+  async function expectRolledBack(pkg: string, options: Parameters<typeof completeManagedReview>[2], message: string): Promise<void> {
+    const researchPath = path.join(ROOT, pkg, "research.json");
+    const manifestPath = path.join(ROOT, pkg, "manifest.json");
+    const researchBefore = await readFile(researchPath, "utf8");
+    const manifestBefore = await readFile(manifestPath, "utf8");
+    await expect(completeManagedReview(ROOT, pkg, options)).rejects.toThrow(message);
+    expect(await readFile(researchPath, "utf8")).toBe(researchBefore);
+    expect(await readFile(manifestPath, "utf8")).toBe(manifestBefore);
+    await expect(completeManagedReview(ROOT, pkg)).rejects.toThrow("uncovered");
+  }
+
+  test("an unknown finding id in --finding", async () => {
+    await fresh();
+    const pkg = await packageWithUncoveredFiles("2026-10-13-rollback-unknown-finding");
+    await expectRolledBack(
+      pkg,
+      { waiveCoverage: quote, dispositions: [{ finding: "F-999", state: "dismissed-incorrect", evidence: "x" }] },
+      "F-999",
+    );
+  });
+
+  test("an invalid manifest", async () => {
+    await fresh();
+    const pkg = await packageWithUncoveredFiles("2026-10-13-rollback-bad-manifest");
+    const manifestPath = path.join(ROOT, pkg, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.target = { ...manifest.target, kind: "not-a-kind" };
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+    await expectRolledBack(pkg, { waiveCoverage: quote }, "Invalid managed review manifest");
+  });
 });
 
 test("R1-10: `--waive-coverage` is a human-confirmation command the approval floor asks about", () => {

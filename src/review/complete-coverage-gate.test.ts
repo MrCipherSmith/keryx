@@ -2,11 +2,12 @@
 // the command that runs the missing chunks, and lets the operator past only in their own words.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { coverageGateErrors, recordCoverageWaiver } from "./coverage-complete";
 import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { readReviewRounds } from "../flow/review-gate";
 import { packageResearchErrors } from "./research";
 
 let pkg: string;
@@ -70,4 +71,23 @@ test("a package that tracks nothing is not gated, and an empty uncovered set nee
   writeFileSync(path.join(pkg, "blast-radius.json"), JSON.stringify({ schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped: [] }));
   expect(await packageResearchErrors(pkg, artifacts, [])).toEqual([]);
   expect(await recordCoverageWaiver(pkg, "nothing to waive")).toBeUndefined();
+});
+
+test("R2-06: the flow review gate reads a closed round without the completeness gate and still gates an open one", async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "keryx-gate-flow-"));
+  try {
+    for (const [name, status] of [["closed-round", "closed"], ["open-round", "open"]] as const) {
+      const dir = path.join(cwd, ".metaproject", "flows", "f1", "reviews", name);
+      cpSync(pkg, dir, { recursive: true });
+      writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: name, status, createdAt: name, artifacts, target: { head: "abc" } }));
+      writeFileSync(path.join(dir, "findings.json"), "[]");
+    }
+    const rounds = await readReviewRounds(cwd, "f1");
+    const closed = rounds.find((round) => round.reviewId === "closed-round");
+    const open = rounds.find((round) => round.reviewId === "open-round");
+    expect(closed?.problems.join(" ")).not.toContain("uncovered");
+    expect(open?.problems.join(" ")).toContain("8 in-scope file(s) are uncovered");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
