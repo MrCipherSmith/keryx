@@ -156,6 +156,71 @@ Project-scoped, `.gitignore`d, one file per id. There is no `slate.list` or
 cross-hand isolation above structural rather than a policy check layered on
 top of a shared store.
 
+## Working memory in keryx's own sessions
+
+This part is about the slate keryx's shell, TUI and `harness run` keep for
+themselves, not the external hand above. On a host that keeps the original
+history (`pruneArchive`) with a live session directory, the slate is also what
+the model works from once old rounds have left the request. Other hosts behave
+as before and write no Trail into a slate another holder owns.
+
+- **Trail** — written by the harness, never by the model: one entry per executed
+  tool call (step, tool, argument digest, outcome, path of the saved full
+  output). There is no tool that writes it. It has no entry cap: `slate.json`
+  keeps every step, and what the model is sent of it is bounded by the frame's
+  token budget (about 2,500 tokens of the newest lines), however long it grows.
+  Each call rewrites `slate.json`, so the cost of a call grows with the number
+  of steps (about 340 bytes and 2 ms per call at 1,500 steps, 6.7 MB and 20 ms
+  at 20,000).
+- **Notes** — the model's own working notes, set, replaced or deleted by key with
+  `slate_note`. Redacted for secrets, at most 2,000 characters per note and 8,000
+  tokens for the whole shelf. A note is not a Seed and is never proposed to
+  workspace knowledge.
+- **Bounded request.** Older rounds leave the request in batches; the full
+  history stays in `archive.jsonl`. One slate frame, rebuilt every time rather
+  than appended, stands in for them: the Anchors, the latest Trail entries and
+  every Note. The system instruction says so. While a rewrite is due on the next
+  round, the shell puts a notice at the end of the request on every round, naming
+  the steps about to leave, until a Note written after those steps covers them
+  (the first one in full, the rest as short reminders). A rewrite that the cache
+  gate holds back therefore keeps warning rather than warning once.
+- **Recall.** `slate_trail`, `recall_step` (the full output of a step, paged) and
+  `history_search` are read-only and confined to the live session.
+  `history_search {"query": ...}` finds earlier text (a query with a quote, a
+  backslash or a newline matches the decoded text, not its JSON escape), and
+  `history_search {"row": N}` or `{"ts": "...", "role": "user"}` returns one
+  archived message whole, 6,000 characters a call, with the exact call for the
+  next page. A clipped operator message ends with the call that reads it whole.
+- **Operator messages.** Only the two newest operator messages stay in the
+  request; the Trail lists tool calls, not what you asked. The notice before a
+  batch leaves names the operator messages that stop being sent (count, time,
+  opening words, the recall call), and a line after the rewrite says how to find
+  them.
+- **No readable slate.** If `slate.json` is missing or unreadable, no frame can be
+  built; the shell says so once, to you and to the model, and falls back to the
+  plain prune so the history still cannot grow without bound.
+- **See it yourself.** `/trail [count] [tool=NAME] [file=TEXT] [from=STEP]
+  [to=STEP]` prints the Trail and `/notes [key]` prints the Notes of the live
+  session, in the full-screen shell and the readline REPL. They read the same
+  `slate.json` the model reads and never write it. Both survive `--continue`:
+  when a resumed session opens its slate, the Trail and the Notes (from the live
+  `slate.json`, or from the newest archived one after a clean `/exit`) are carried
+  into it and the step numbers go on from where they stopped; Anchors are
+  recomputed and Course and Seeds start empty, as for any new slate.
+- **Data, not instructions.** Notes and Trail digests sit in a delimited
+  untrusted-data section of the frame: a note that reads like an instruction is
+  delivered as data.
+- **Big results.** A tool result over 10 KiB stays verbatim for two requests,
+  then becomes a fixed pack (size, head, tail, how to read it back). A rewrite of
+  the sent history happens only when its saving beats the cost of re-billing the
+  prefix it invalidates, and each decision is logged.
+- **`shell_exec` output** past its inline cap is saved in full (stdout and
+  stderr) and the model sees the head, the tail, the counts and the path; the end
+  of stderr is always visible.
+
+Seeds are unchanged: never injected, review-bound. `slate_read` only gained
+fields.
+
 ## Not shipped (do not treat as current)
 
 - Sharing an open slate between clients — the pre-existing non-goal this

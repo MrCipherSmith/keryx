@@ -12,6 +12,47 @@ jobs:
   # been run independently on `main` and the two statuses classified, so a
   # pre-existing main defect is not misread as a PR regression.
 
+  # AC8 is a single full-suite run, in addition to the existing split gates.
+  # A clean checkout avoids nested foreign repositories; stdin is non-interactive.
+  ac8-full-suite:
+    name: AC8 full suite (5000 ms, preload)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
+          sudo apt-get install -y ripgrep
+
+      - name: Run complete AC8 suite with configured preload
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/ac8
+          bun --version | tee artifacts/ac8/bun-version.txt
+          bun test --timeout 5000 </dev/null 2>&1 | tee artifacts/ac8/full.log
+
+      - name: Preserve AC8 test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ac8-full-suite-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ac8/
+          if-no-files-found: warn
+          retention-days: 14
+
   typecheck-and-tests:
     name: typecheck-and-tests
     runs-on: ubuntu-latest
@@ -40,9 +81,13 @@ jobs:
       # report and let `install` decide — it exits non-zero on its own if the
       # package cannot be fetched.
       - name: Install ripgrep
+        timeout-minutes: 12
         run: |
-          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
-          sudo apt-get install -y ripgrep
+          # A failed/timed-out update may use cached indexes; install remains mandatory.
+          # Bound both transport waits and total duration (including lock/hook waits).
+          apt_options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60)
+          sudo timeout --kill-after=30s 240s apt-get "${apt_options[@]}" update || echo "apt-get update failed or timed out; the install below is the gate"
+          sudo timeout --kill-after=30s 300s apt-get "${apt_options[@]}" install -y ripgrep
 
       - name: Confirm ripgrep is present
         run: rg --version
@@ -123,9 +168,13 @@ jobs:
       # copy of this step: a broken third-party repository must not be able to
       # fail a job that only needs ripgrep.
       - name: Install ripgrep
+        timeout-minutes: 12
         run: |
-          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
-          sudo apt-get install -y ripgrep
+          # A failed/timed-out update may use cached indexes; install remains mandatory.
+          # Bound both transport waits and total duration (including lock/hook waits).
+          apt_options=(-o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60)
+          sudo timeout --kill-after=30s 240s apt-get "${apt_options[@]}" update || echo "apt-get update failed or timed out; the install below is the gate"
+          sudo timeout --kill-after=30s 300s apt-get "${apt_options[@]}" install -y ripgrep
 
       - name: Confirm ripgrep is present
         run: rg --version

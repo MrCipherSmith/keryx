@@ -167,11 +167,20 @@ and approvals for unattended trigger runs are not built. See
 [Answer a remote approval](guides/answer-remote-approvals.md).
 
 A `keryx shell` session driven from a Telegram topic with `/remote-control` has
-its own Allow and Deny buttons in the topic. That path has been exercised only
-against a fake Bot API, not real Telegram. A topic holds at most 500
+its own Allow, Always and Deny buttons in the topic. That path has been exercised
+only against a fake Bot API, not real Telegram. A topic holds at most 500
 undelivered lines, and a batch whose update ids all collide with ones already
 seen after Telegram renumbers its updates cannot be told from a redelivery and
 is dropped.
+
+A turn from the topic runs in `trust` by default, so a person with an allowed
+Telegram id can run any command the floors do not stop, including network and
+outside-project commands, with no run time limit. Set `permissionMode: "ask"` and
+a `runTimeoutMs` in `remote/config.json` to be stricter. An `Always` rule is
+removed only in the shell or with `keryx permissions remove`, never from a topic.
+The 15-minute approval wait and `/remote-policy` apply to the Telegram path only;
+a running `keryx serve` hands changed values to shells that register after its
+own restart or reload.
 
 What does hold:
 

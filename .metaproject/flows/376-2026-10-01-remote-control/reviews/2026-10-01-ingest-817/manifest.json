@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-10-01-ingest-817",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "817",
@@ -54,7 +54,7 @@
     ]
   },
   "createdAt": "2026-10-01T06:45:51.633Z",
-  "updatedAt": "2026-10-01T06:45:51.633Z",
+  "updatedAt": "2026-10-02T06:13:50.743Z",
   "flow": {
     "id": "376",
     "path": ".metaproject/flows/376-2026-10-01-remote-control"

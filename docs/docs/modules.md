@@ -1232,6 +1232,11 @@ keryx-native session uses.
 module name appears in the manifest's `expose.modules` list, which is what
 governs whether the tools are visible to a client.
 
+Inside keryx's own sessions the same file also holds the model's working memory
+(a harness-written Trail of tool calls and model-written Notes, with read-only
+`slate_trail`, `recall_step` and `history_search`); see the
+[Slate guide](./guides/slate.md#working-memory-in-keryxs-own-sessions).
+
 | Tool | Mutating | Behavior |
 |---|---|---|
 | `slate.open` | yes | Open or return an `externalSessionId`-scoped slate. A second `open` for the same id is a no-op returning the existing slate — never a second file. |
@@ -1592,7 +1597,7 @@ denied at expiry rather than auto-approved; the stock listener registers no tool
 so it raises none.
 
 **Remote control (Telegram).** Also opt-in: when `remote/bot-token` and
-`remote/config.json` exist, `serve` hosts the one Telegram poller and the seven
+`remote/config.json` exist, `serve` hosts the one Telegram poller and the eight
 `/v1/remote/*` routes, which a `keryx shell` reaches with a nonce-bound HMAC of a
 local shell token (not the serve bearer; `serve` proves itself back with a signed
 answer, `src/remote/shell-token.ts`) to mirror a session into a topic via `/remote-control`.

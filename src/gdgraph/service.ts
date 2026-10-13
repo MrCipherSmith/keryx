@@ -25,6 +25,11 @@ export { buildAffectedReport, type AffectedReport, type AffectedReportOptions } 
 // `buildAffectedReport` above already follows).
 export { checkGraphStaleness, type StalenessCheck, type StalenessStatus } from "./staleness";
 
+// Flow 393: the shared token estimator, re-exported so session code that sizes the
+// slate frame goes through this facade instead of a direct edge into
+// `gdgraph/repomap.ts`.
+export { estimateTokens } from "./repomap";
+
 export interface GdgraphService {
   build(cwd: string): Promise<{ nodes: number; edges: number; summaryPath: string }>;
   loadGraph(cwd: string): Promise<GraphData>;

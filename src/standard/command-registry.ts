@@ -1265,6 +1265,63 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: true,
   },
   {
+    module: "intake",
+    command: "intake status",
+    summary: "What the GitHub work intake holds: cards waiting for a decision, cards queued, the next poll, the gh account the project's path selects. The one status object the sidebar line and the /intake modal read.",
+    intent: ["intake status", "статус приёма работы", "what is waiting in intake", "что ждёт в intake"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the status object as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "intake",
+    command: "intake list",
+    summary: "The intake cards, newest first, with their state and the choice made.",
+    intent: ["intake list", "список карточек intake", "list intake cards"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the cards as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "intake",
+    command: "intake pause",
+    summary: "Stop the automatic intake poll. Cards already queued still go out; `intake poll` still runs by hand.",
+    intent: ["intake pause", "поставить intake на паузу", "pause intake"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["sets paused in .metaproject/data/intake/state.json"],
+  },
+  {
+    module: "intake",
+    command: "intake resume",
+    summary: "Start the automatic intake poll again.",
+    intent: ["intake resume", "снять intake с паузы", "resume intake"],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: ["clears paused in .metaproject/data/intake/state.json"],
+  },
+  {
+    module: "intake",
+    command: "intake poll",
+    summary: "Run one intake poll now, even while paused: read tickets assigned to you, review requests, failed CI, PR comments and the board through read-only gh tools, and queue a card for each new event. The first poll only takes a baseline.",
+    intent: ["intake poll", "опросить GitHub сейчас", "poll github now"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the poll result as JSON" }],
+    json: true,
+    read: false,
+    sideEffects: ["writes cards, the ledger, the state and a run report under .metaproject/data/intake/", "runs read-only gh commands (no write to GitHub)"],
+  },
+  {
+    module: "intake",
+    command: "intake report",
+    summary: "What the intake cards were worth, per kind: cards, decisions by action, median answer time, share of choices matching the suggestion, and the card -> flow -> PR chain. Built from the ledger; carries no titles, bodies or assessments.",
+    intent: ["intake report", "отчёт по intake", "intake usefulness report"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
     module: "decisions",
     command: "decisions open",
     summary:
@@ -1290,13 +1347,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions answer",
     summary:
       "Record the human's choice (one of the options) for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether " +
-      "the human should be asked for an optional reason (once; this command does not wait for it). A second answer for the same id is kept as a changed answer.",
+      "the human should be asked for an optional reason (once; this command does not wait for it). A second answer for the same id is kept as a changed answer. " +
+      "With --other the choice is the human's own typed text (kept up to 2000 characters, redacted); in the keryx shell that is the last row \"Свой ответ…\" of the question, and in Telegram the \"✍ Свой ответ\" button and a reply to the box it posts.",
     intent: ["decisions answer", "record the human's choice", "записать выбор человека"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "the decision id printed by `decisions open`" },
       { name: "choice", type: "string", required: true, desc: "the option id the human chose" },
       { name: "other", type: "bool", required: false, desc: "the choice is the human's own words, not an option (a free-form answer)" },
-      { name: "reason", type: "string", required: false, desc: "the human's reason for deviating, if given with the answer" },
+      { name: "reason", type: "string", required: false, desc: "the human's reason for the choice, if given with the answer (a deviation, or a picked option with a typed reason)" },
       { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
     ],
     json: true,
@@ -1322,11 +1380,31 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions report",
     summary:
       "Match share between the human's choice and the agent's recommendation, by mode (ordinary, blind) and by stage, " +
-      "with every deviation and its reason. Deterministic, no model.",
+      "with every deviation and its reason, and the human's own answers and typed reasons in full (also in --json, under `annotated`). Backfilled (imported, historical) decisions are reported in a block of their own and never counted in the live shares or the time to answer. Deterministic, no model.",
     intent: ["decisions report", "отчёт по рекомендациям", "how often does the human follow the recommendation", "blind mode results"],
-    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON" }],
+    args: [
+      { name: "json", type: "bool", required: false, desc: "print the report as JSON (with a `backfilled` section)" },
+      { name: "line", type: "bool", required: false, desc: "print ONE line in Russian for the daily topic message: the total and the match share of the visible, hidden and historical decisions" },
+    ],
     json: true,
     read: true,
+  },
+  {
+    module: "decisions",
+    command: "decisions import",
+    summary:
+      "Import historical decisions from a JSON-lines file as backfilled records: the \"before\" arm of a comparison with the live journal. " +
+      "Each is marked backfilled, is never blind, keeps the time it was asked, and is reported apart from the live ones. " +
+      "A line that is not a decision is skipped, named with its line number and counted as malformed, and the rest is imported; an id already in the journal is skipped, so a second import changes nothing (except that a backfilled decision missing its answer gets just that answer).",
+    intent: ["decisions import", "import historical decisions", "backfill the recommendation journal", "импорт исторических решений", "дозаполнить журнал решений"],
+    args: [
+      { name: "<file>", type: "string", required: true, desc: "a JSON-lines file, one decision per line: id, at, flow, stage, question, options, recommendation, source, answer, reason" },
+      { name: "dry-run", type: "bool", required: false, desc: "check and count without writing" },
+      { name: "json", type: "bool", required: false, desc: "print the counts as JSON (a failure is {\"error\": \"...\"})" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends open, answer and reason records to .metaproject/data/decisions/journal.jsonl (nothing with --dry-run)"],
   },
   {
     module: "product",
@@ -1852,6 +1930,28 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "--apply PERMANENTLY REMOVES eligible files/directories under those same paths",
       "does not touch content already relayed to an agent, exported copies, or git history",
     ],
+  },
+  // ---- remote ---------------------------------------------------------------
+  // Telegram remote control (flows 376, 395). Only the offline preview is a CLI verb; the mode
+  // itself is `/rendering` in the shell.
+  {
+    module: "remote",
+    command: "remote format-sample",
+    summary: "Print the fixed sample reply (a table, lists, a rule) the way each Telegram rendering mode sends it. No network, no token.",
+    intent: [
+      "как выглядит ответ в телеграме",
+      "remote format-sample",
+      "preview telegram rendering",
+      "how are tables rendered in telegram",
+      "show the telegram sample reply",
+    ],
+    args: [
+      { name: "mode", type: "string", required: false, desc: "only this mode: auto, rich, html or plain" },
+      { name: "full", type: "bool", required: false, desc: "print the whole rich message instead of a count of its blocks" },
+      { name: "json", type: "bool", required: false, desc: "structured sample source and per-mode parts" },
+    ],
+    json: true,
+    read: true,
   },
   // ---- bus ------------------------------------------------------------------
   // The agent bus (flow 272; docs/requirements/keryx-agent-bus). It lives in the

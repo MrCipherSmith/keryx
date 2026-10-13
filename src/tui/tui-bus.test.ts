@@ -469,19 +469,21 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
   test("every exit path leaves the bus through the shared helper, so none can release the lease first", () => {
     const sites = source.split("leaveBusThenRelease({").length - 1;
     const sequences = source.split("await performSlateExit({").length - 1;
-    // onDestroy + the outer finally go through the bare ordering helper; the
-    // two command-driven exits go through the full sequence, which calls it.
-    expect({ sites, sequences }).toEqual({ sites: 2, sequences: 2 });
+    // Commands await preservation; the finalizer owns bus/lease release.
+    // The helper remains in renderer fallback, finalizer and outer cleanup.
+    expect({ sites, sequences }).toEqual({ sites: 3, sequences: 2 });
+    expect(source.split("closeSlate: async () => { await finalizeShell?.(); },").length - 1).toBe(2);
+    expect(source.split("leaveBus: () => {},").length - 1).toBe(2);
+    expect(source.split("releaseLease: () => {},").length - 1).toBe(2);
   });
-  test("and each of those four sites hands it this session's own bus and lease", () => {
+  test("each ownership-release site hands it this session's own bus and lease", () => {
     // The helper cannot protect anything if a call site passes something
     // else, and that is not visible from the count above.
-    expect(source.split("leaveBus: () => liveBus?.leave()").length - 1).toBe(4);
-    expect(source.split("releaseLease: () => sessionLease.release()").length - 1).toBe(4);
+    expect(source.split("leaveBus: () => liveBus?.leave()").length - 1).toBe(3);
+    expect(source.split("releaseLease: () => sessionLease.release()").length - 1).toBe(3);
   });
   test("BOUNDARY — no exit path still leaves the bus or releases the lease on its own", () => {
-    // The whole point of routing all four through one helper: a fifth path,
-    // or a regression in one of the four, shows up as a bare call again.
+    // A regression bypassing the ordering helper shows up as a bare call.
     expect(source).not.toContain("liveBus?.leave();");
     expect(source).not.toContain("sessionLease.release();");
   });
@@ -714,10 +716,10 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");
     expect(nextIdx).toBeGreaterThanOrEqual(0);
     const block = source.slice(nextIdx, nextIdx + 700);
-    expect(block).toContain('runLine(next.question, "operator", next.source);');
+    expect(block).toContain('remoteQueue.runQueued(next);');
     expect(block).toContain("busWakeController?.onSettle();");
     // The queued item wins — bus-wake only runs in the `else` branch.
-    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf('runLine(next.question, "operator", next.source);'));
+    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf('remoteQueue.runQueued(next);'));
   });
 
   test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {

@@ -23,6 +23,16 @@ export interface InteractiveToolResult {
   isError: boolean;
   /** External content may be shown, but cannot authorize further tools this turn. */
   untrusted?: boolean;
+  /**
+   * Flow 393 AC11: the whole of an output the tool had to shorten for `output`. The agent loop
+   * writes `full` (redacted) to the session's spill directory and shows the model `render(path)`;
+   * `render(undefined)` is the view when nothing could be saved. `output` is always `render(undefined)`,
+   * so a caller that ignores this field still gets a bounded result.
+   */
+  spill?: {
+    full: string;
+    render: (savedTo: string | undefined) => string;
+  };
 }
 
 /**
@@ -47,6 +57,11 @@ export interface InteractiveToolContext {
    * something on confirmation can refuse an invoke that never went through the card.
    */
   confirmationToken?: string;
+  /**
+   * Flow 425: untrusted external content was read earlier in this turn. `ask_user` copies it onto the question, so
+   * the review arbiter can tell a question that may have been shaped by that content and never decide it.
+   */
+  untrustedContentSeen?: boolean;
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */
@@ -300,7 +315,12 @@ export function builtinReadOnlyTools(
       const target =
         confineToRoot(root, requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
       if (target === null) {
-        return { output: `path escapes the project root: ${requested}`, isError: true };
+        return {
+          output:
+            `path escapes the project root: ${requested}. read_file only reads inside the working directory (${root}); ` +
+            `for a file outside it use shell_exec \`cat <path>\`, or run keryx from a directory that contains it.`,
+          isError: true,
+        };
       }
       try {
         const file = Bun.file(target);

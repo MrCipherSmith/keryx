@@ -11,6 +11,7 @@ import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
 import { mintConfirmToken } from "../sac/review-confirm-token";
 import { buildCatchUp, dismissUnboundByTarget, type CatchUpReport, type CatchUpUnknownItem } from "../sac/catch-up";
+import { retryProjectPreservation } from "../sac/service";
 import { findSession } from "../session/store";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
@@ -259,12 +260,17 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       return;
     }
     if (subcommand === "catch-up") {
-      rejectUnknownOptions(args.slice(1), new Set(["--workspace", "--json", "--include-lifecycle-flags"]));
+      rejectUnknownOptions(args.slice(1), new Set(["--workspace", "--json", "--include-lifecycle-flags", "--retry-preservation"]));
       const workspaceId = optionValue(args, "--workspace");
       const includeLifecycleFlags = booleanFlagDefaultTrue(args, "--include-lifecycle-flags");
+      const retry = booleanFlag(args, "--retry-preservation");
+      const preservationReplay = retry ? await retryProjectPreservation(process.cwd()) : undefined;
       const report = await buildCatchUp({ cwd: process.cwd(), ...(workspaceId ? { workspaceId } : {}) });
-      if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
-      else console.log(renderCatchUp(report, includeLifecycleFlags));
+      if (args.includes("--json")) console.log(JSON.stringify(preservationReplay ? { ...report, preservationReplay } : report, null, 2));
+      else {
+        if (preservationReplay) console.log(`Preservation retry (project-wide bounded pass): ${preservationReplay.proposed} proposed, ${preservationReplay.deferred} deferred, ${preservationReplay.unbound} unbound. Remaining work stays local; repeat to continue. Nothing accepted automatically.`);
+        console.log(renderCatchUp(report, includeLifecycleFlags));
+      }
       return;
     }
     if (subcommand === "list-proposals") {
@@ -356,6 +362,7 @@ export function printWorkspaceHelp(): void {
 }
 
 function printHelp(): void {
+  console.log("catch-up --retry-preservation[=true|false]: explicitly retry project-wide preserved outboxes offline (bounded pass); --workspace filters the report only. Default catch-up is read-only.");
   console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace handoff <workspace-id> --to <subject> --artifact <ref>   (from = the authenticated actor; not settable)\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
 }
 

@@ -85,6 +85,19 @@ describe("AC9: the guide", () => {
     expect(guide).toContain("A digest never runs `gh auth switch` or `gh auth login`.");
   });
 
+  test("the review findings of flow 389 are documented: gh needs the wrapper, a minimal environment, local time, anchoring and the give-up rule", async () => {
+    const guide = (await read("docs/docs/guides/scheduled-digest.md")).replace(/\s+/g, " ");
+    expect(guide).toContain("only the machine's `gh` wrapper honours it");
+    expect(guide).toContain("gh account asked for");
+    expect(guide).toContain("`GH_TOKEN` or `GITHUB_TOKEN`");
+    expect(guide).toContain("scrubbed for secrets after it is built and before it is cut to length");
+    expect(guide).toContain("local time of the machine where `keryx serve` runs");
+    expect(guide).toContain("A time the change skips");
+    expect(guide).toContain("starts counting from the moment you confirmed it");
+    expect(guide).toContain("Pausing and resuming never catches up");
+    expect(guide).toContain("a change in it is not repeated in a later digest");
+  });
+
   test("the limits: dollars, time and memory, and that going over one stops the run and reports it", async () => {
     const guide = await read("docs/docs/guides/scheduled-digest.md");
     const limits = guide.slice(guide.indexOf("## Limits"), guide.indexOf("## See it, pause it, run it now"));

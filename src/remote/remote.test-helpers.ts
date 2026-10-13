@@ -5,7 +5,14 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DEFAULT_ORPHAN_MS, DEFAULT_RUN_TIMEOUT_MS, type RemoteConfig, REMOTE_CONFIG_SCHEMA_VERSION } from "./config";
+import {
+  DEFAULT_APPROVAL_WAIT_MS,
+  DEFAULT_ORPHAN_MS,
+  DEFAULT_REMOTE_PERMISSION_MODE,
+  DEFAULT_RUN_TIMEOUT_MS,
+  type RemoteConfig,
+  REMOTE_CONFIG_SCHEMA_VERSION,
+} from "./config";
 import { FakeBotApi } from "./fake-bot-api";
 import { type DeliverMeta, type HubTimers, RemoteHub, type RemoteHubOptions } from "./hub";
 import { SESSION_LEASE_STALE_MS } from "../session/lease";
@@ -144,6 +151,8 @@ export function testConfig(overrides: Partial<RemoteConfig> = {}): RemoteConfig 
     allowedUserIds: [OWNER_ID],
     orphanMs: DEFAULT_ORPHAN_MS,
     runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
+    permissionMode: DEFAULT_REMOTE_PERMISSION_MODE,
+    approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS,
     ...overrides,
   };
 }

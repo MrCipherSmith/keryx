@@ -1,0 +1,727 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-06-07-08-09:F-001",
+      "source": "raw/review-architecture-06-07-08-09.txt",
+      "question": "Is review-architecture finding F-001 (runRetryPlan, the command layer, assembles the extended manifest itself by spreading the old manifes) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/commands/review-slice.ts runRetryPlan; manifest totals live in src/review/slice.ts:47",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-005). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: move manifest extension into src/review (retry-plan or slice) and recompute totals there."
+    },
+    {
+      "id": "review-architecture-06-07-08-09:F-002",
+      "source": "raw/review-architecture-06-07-08-09.txt",
+      "question": "Is review-architecture finding F-002 (runSlice owns the output directory (default `.metaproject/data/review/slices`, a fixed path) and rew) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+    },
+    {
+      "id": "review-architecture-06-07-08-09:F-003",
+      "source": "raw/review-architecture-06-07-08-09.txt",
+      "question": "Is review-architecture finding F-003 (The PR makes the parent's round budget depend on permission mode (`resolveAgentMaxRounds(env, mode)`) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+    },
+    {
+      "id": "review-architecture-06-07-08-09:F-004",
+      "source": "raw/review-architecture-06-07-08-09.txt",
+      "question": "Is review-architecture finding F-004 (loadReviewerInputSchema is a second, private resolver for a bundled schema file, next to contractPat) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-architecture-10-11:F-001",
+      "source": "raw/review-architecture-10-11.txt",
+      "question": "Is review-architecture finding F-001 (The rule 'a command that swaps the session under the queued questions is refused' is encoded as a li) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-10-11.txt F-1; confirmed present in the post-merge tree at src/tui/busy-dispatch.ts:197 (BUSY_REFUSED_COMMANDS = /new, /clear, /resume); /sessions is dispatched to the same resumeSessionInteractive branch",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-002). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add /sessions to the refused set, or derive the refused set from the handlers that swap the session so an alias cannot drift; add a test for the alias."
+    },
+    {
+      "id": "review-architecture-10-11:F-002",
+      "source": "raw/review-architecture-10-11.txt",
+      "question": "Is review-architecture finding F-002 (The busy 'deferred' case adds another inline copy of the enqueue sequence (mint an `mq${mainQueueSeq) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-10-11.txt F-2; confirmed present in the post-merge tree at src/tui/tui-shell.ts, three copies of the mint-id/push/paintMainQueue sequence (busy deferred case, lease-held busy branch, lease-held idle branch)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-003). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add an enqueue helper to main-queue.ts and call it from the three sites; keep the tests that pin the push text pointing at the helper."
+    },
+    {
+      "id": "review-architecture-10-11:F-003",
+      "source": "raw/review-architecture-10-11.txt",
+      "question": "Is review-architecture finding F-003 (The pure decision (createCtrlCPolicy) is separated well, but the mapping from a CtrlCAction to its e) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-10-11.txt F-3; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-clean-code-01-02-03-04-05:F-001",
+      "source": "raw/review-clean-code-01-02-03-04-05.txt",
+      "question": "Is review-clean-code finding F-001 (The PR raised the subagent round cap from 24 to 200 in the sentence three lines above (`max_rounds`,) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-01-02-03-04-05:F-002",
+      "source": "raw/review-clean-code-01-02-03-04-05.txt",
+      "question": "Is review-clean-code finding F-002 (The JSDoc above DEFAULT_MAX_SUBAGENT_CONCURRENCY justifies a 'conservative' 'low single-digit ceilin) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-01-02-03-04-05:F-003",
+      "source": "raw/review-clean-code-01-02-03-04-05.txt",
+      "question": "Is review-clean-code finding F-003 (okReply is a module constant (`[{ kind: \"text_delta\", text: \"done\" }, { kind: \"model_end\" }]` in age) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-3; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-clean-code-01-02-03-04-05:F-004",
+      "source": "raw/review-clean-code-01-02-03-04-05.txt",
+      "question": "Is review-clean-code finding F-004 (This comment describes the shell renderer as built with `exitOnCtrlC: true`. After the PR the shell ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02-03-04-05.txt F-4; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-001",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-001 (Doc comments describing values this PR changed were not updated. (1) The JSDoc of DEFAULT_MAX_SUBAGE) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-002",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-002 (The PR deleted the maxRounds: resolveAgentMaxRounds() property from the TUI makeAgentDeps object but) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-003",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-003 (notRunLine always states that the reviewer failed after a smaller-slice retry, and it is reused by t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/review/retry-plan.ts:87 (notRunLine text 'after a smaller-slice retry')",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-006). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: make the line depend on the exit (retried or not) and add a test per exit."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-004",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-004 (Several new functions are well over 40 lines and mix abstraction levels. buildSlices (about 95 lines) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-005",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-005 (askUserQuestion does not ask anything: it extracts the question text of an ask_user call and returns) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-006",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-006 (Several new functions take four positional parameters of mixed kinds: rememberAskUserAnswer(call, re) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-6; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-007",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-007 (The new round budget is stated as the literals 40 and 200 in three places in the file: the constants) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-7; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-06-07-08-09:F-008",
+      "source": "raw/review-clean-code-06-07-08-09.txt",
+      "question": "Is review-clean-code finding F-008 (storedAskUserAnswer wraps findStoredAnswer in a bare catch that returns undefined with no comment or) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-06-07-08-09.txt F-8; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+    },
+    {
+      "id": "review-clean-code-10-11:F-001",
+      "source": "raw/review-clean-code-10-11.txt",
+      "question": "Is review-clean-code finding F-001 (Clean Code E1 (DRY): the 3-statement block `const id = mq${mainQueueSeq++}; mainQueue.push({ id, que) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-10-11.txt F-1; confirmed present in the post-merge tree at src/tui/tui-shell.ts, three copies of the mint-id/push/paintMainQueue sequence (busy deferred case, lease-held busy branch, lease-held idle branch)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-003). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add an enqueue helper to main-queue.ts and call it from the three sites; keep the tests that pin the push text pointing at the helper."
+    },
+    {
+      "id": "review-clean-code-10-11:F-002",
+      "source": "raw/review-clean-code-10-11.txt",
+      "question": "Is review-clean-code finding F-002 (Clean Code C1a (documentation drift): this PR rewrote the neighbouring comment to say `onDestroy` no) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-10-11.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-clean-code-10-11:F-003",
+      "source": "raw/review-clean-code-10-11.txt",
+      "question": "Is review-clean-code finding F-003 (Clean Code B3/A1 (readability): the callback builds a throwaway fallback arrow function on every pre) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-10-11.txt F-3; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-highload-06-07-08-09:F-001",
+      "source": "raw/review-highload-06-07-08-09.txt",
+      "question": "Is review-highload finding F-001 (`runRetryPlan` reads manifest.json and retry-state.json, plans, then rewrites both whole files (`wri) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+    },
+    {
+      "id": "review-highload-06-07-08-09:F-002",
+      "source": "raw/review-highload-06-07-08-09.txt",
+      "question": "Is review-highload finding F-002 (`runSlice` clears only `slice-NN.diff` in the output dir before re-slicing. retry-state.json (writte) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+    },
+    {
+      "id": "review-highload-06-07-08-09:F-003",
+      "source": "raw/review-highload-06-07-08-09.txt",
+      "question": "Is review-highload finding F-003 (The default cap on concurrent `spawn_subagent` children for every provider rises from 3 to 10, and t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+    },
+    {
+      "id": "review-logic-01-02-03-04-05:F-001",
+      "source": "raw/review-logic-01-02-03-04-05.txt",
+      "question": "Is review-logic finding F-001 (Docs (permission-modes.md) and CHANGELOG 0.3.87 say plan follow-through continues 'at most 8 times i) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-logic-06-07-08-09:F-001",
+      "source": "raw/review-logic-06-07-08-09.txt",
+      "question": "Is review-logic finding F-001 (Retry state is keyed by reviewer name alone and is never reset. The `accepted` branch returns the un) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-004). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test."
+    },
+    {
+      "id": "review-logic-06-07-08-09:F-002",
+      "source": "raw/review-logic-06-07-08-09.txt",
+      "question": "Is review-logic finding F-002 (When --slices is not given, the default set of slices to re-cut is `result.slices`, which is the lis) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "Real defect in PR 940, fixed after merge: on main src/review/retry-plan.ts:195 reads `input.sliceIds ?? requiredSlices(manifest, reviewer)`, the assigned slices, not the slices the truncated reply reports as covered.",
+      "reason": "fixed after the PR; no open defect in the post-merge tree"
+    },
+    {
+      "id": "review-logic-06-07-08-09:F-003",
+      "source": "raw/review-logic-06-07-08-09.txt",
+      "question": "Is review-logic finding F-003 (The trust allowlist rejects any segment containing an unquoted metacharacter, and `>` and `<` are in) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/lib/trust-routine-command.ts:149 (`!hasUnquotedMetacharacter(seg.raw)`; > and < are metacharacters)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-009). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: either allow a single redirection to a path under the project, or change the SKILL and help text to name an output flag instead of a shell redirection."
+    },
+    {
+      "id": "review-logic-06-07-08-09:F-004",
+      "source": "raw/review-logic-06-07-08-09.txt",
+      "question": "Is review-logic finding F-004 (The untrusted-content lift is applied only to the shell/destructive branch. The delegate (spawn_suba) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+    },
+    {
+      "id": "review-logic-06-07-08-09:F-005",
+      "source": "raw/review-logic-06-07-08-09.txt",
+      "question": "Is review-logic finding F-005 (A stored ask_user answer is keyed by the normalized question text only. The options offered are not ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-06-07-08-09.txt F-5; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+    },
+    {
+      "id": "review-logic-10-11:F-001",
+      "source": "raw/review-logic-10-11.txt",
+      "question": "Is review-logic finding F-001 (The PR queues busy slash lines on mainQueue so they run 'when the turn ends'. The queue is drained o) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-10-11.txt F-1; confirmed present in the post-merge tree at src/tui/tui-shell.ts drain sites at lines 9565, 9874, 9970 (each `forceHandoff.takeNext() ?? mainQueue.shift()` once)",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-001). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: after runQueued runs an item that starts no foreground operation, drain the next item (shared drainNext helper used by the three sites), stopping once an item starts a turn. Add a headless test that queues ['/compact', 'question'] and asserts the question is dispatched."
+    },
+    {
+      "id": "review-logic-10-11:F-002",
+      "source": "raw/review-logic-10-11.txt",
+      "question": "Is review-logic finding F-002 (The stated reason for refusing /new, /clear and /resume while busy is that run later they would repl) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-10-11.txt F-2; confirmed present in the post-merge tree at src/tui/busy-dispatch.ts:197 (BUSY_REFUSED_COMMANDS = /new, /clear, /resume); /sessions is dispatched to the same resumeSessionInteractive branch",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-002). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: add /sessions to the refused set, or derive the refused set from the handlers that swap the session so an alias cannot drift; add a test for the alias."
+    },
+    {
+      "id": "review-logic-10-11:F-003",
+      "source": "raw/review-logic-10-11.txt",
+      "question": "Is review-logic finding F-003 (writeNote redacts the text and cuts it to NOTE_MAX_CHARS (2000). The stored note is 'Q: <up to 300 c) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-10-11.txt F-3; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+    },
+    {
+      "id": "review-logic-10-11:F-004",
+      "source": "raw/review-logic-10-11.txt",
+      "question": "Is review-logic finding F-004 (The test 'busy slash /mode, /remote-control, /status is never refused: it runs at once or queues' on) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-10-11.txt F-4; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-performance-06-07-08-09:F-001",
+      "source": "raw/review-performance-06-07-08-09.txt",
+      "question": "Is review-performance finding F-001 (The default cap on concurrently running sibling spawn_subagent calls goes from 3 to 10 for every pro) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-06-07-08-09.txt F-1; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+    },
+    {
+      "id": "review-performance-06-07-08-09:F-002",
+      "source": "raw/review-performance-06-07-08-09.txt",
+      "question": "Is review-performance finding F-002 (DEFAULT_SUBAGENT_MAX_ROUNDS goes 10 to 40 and MAX_SUBAGENT_MAX_ROUNDS goes 24 to 200 for every spawn) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-014). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice."
+    },
+    {
+      "id": "review-performance-06-07-08-09:F-003",
+      "source": "raw/review-performance-06-07-08-09.txt",
+      "question": "Is review-performance finding F-003 (Packer.place measures the whole open draft again on every placement: it copies draft.sections into a) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw reply review-performance-06-07-08-09.txt F-003: runs once per `keryx review slice` and once per retry-plan reslice, off any server or render path; the reviewer's own impact statement.",
+      "reason": "quadratic repacking is accepted at this scale (a 1.65 MB PR slices in seconds); not worth a change"
+    },
+    {
+      "id": "review-performance-06-07-08-09:F-004",
+      "source": "raw/review-performance-06-07-08-09.txt",
+      "question": "Is review-performance finding F-004 (askUserQuestion JSON-parses the tool input of every tool call and only afterwards checks call.name =) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw reply review-performance-06-07-08-09.txt F-004: JSON.parse of a tool argument string is milliseconds, once per tool call, against a model round trip.",
+      "reason": "negligible by the reviewer's own measurement"
+    },
+    {
+      "id": "review-security-code-01-02-03-04-05:F-001",
+      "source": "raw/review-security-code-01-02-03-04-05.txt",
+      "question": "Is review-security-code finding F-001 (The trust routine allow-list accepts `bun test` with any trailing arguments (and the same inside `ke) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at src/lib/trust-routine-command.ts:129-130 (case \"bun\": return words[1] === \"test\")",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-007). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: drop `bun test` from the routine list for the post-untrusted case or allow it only with no arguments and an unchanged bunfig; add a test with `--preload` and a foreign `cd`."
+    },
+    {
+      "id": "review-security-code-01-02-03-04-05:F-002",
+      "source": "raw/review-security-code-01-02-03-04-05.txt",
+      "question": "Is review-security-code finding F-002 (`keryx ctx run --raw` is documented to skip the redaction that the summarized form applies, and the ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw reply review-security-code-01-02-03-04-05.txt F-002 states that the implementing ctx.ts is not in slices 01-05 and that no concrete leak path is shown.",
+      "reason": "an observation with no attack path established by the reviewer; nothing to fix or track"
+    },
+    {
+      "id": "review-security-code-06-07-08-09:F-001",
+      "source": "raw/review-security-code-06-07-08-09.txt",
+      "question": "Is review-security-code finding F-001 (isTrustRoutineCommand decides that a command is 'routine' with splitSegments + hasUnquotedMetacharac) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "Real defect in PR 940, fixed after merge: isTrustRoutineCommand had no guard for command substitution inside double quotes. Commit bc02c45d (flow 423) added `if (/\\$\\(|\\$\\{|`/.test(command)) return false;` at src/lib/trust-routine-command.ts:141 (absent from the PR 940 version in pr940.diff).",
+      "reason": "fixed by bc02c45d on main; the checked-out tree no longer has the defect, so it is not carried as an open canonical finding"
+    },
+    {
+      "id": "review-security-code-06-07-08-09:F-002",
+      "source": "raw/review-security-code-06-07-08-09.txt",
+      "question": "Is review-security-code finding F-002 ('bun test' with ANY further arguments is classed as routine, and 'cd <path>' with any one argument i) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-06-07-08-09.txt F-2; confirmed present in the post-merge tree at src/lib/trust-routine-command.ts:129-130 (case \"bun\": return words[1] === \"test\")",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-007). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: drop `bun test` from the routine list for the post-untrusted case or allow it only with no arguments and an unchanged bunfig; add a test with `--preload` and a foreign `cd`."
+    },
+    {
+      "id": "review-security-code-06-07-08-09:F-003",
+      "source": "raw/review-security-code-06-07-08-09.txt",
+      "question": "Is review-security-code finding F-003 (slice, dispatch-check and retry-plan are added to the no-prompt routine allowlist (REVIEW_LOCAL_SUBC) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/commands/review-slice.ts:248 (--state resolved verbatim); slice, dispatch-check, retry-plan are rows of TRUST_ROUTINE_KEYRYX (src/lib/trust-routine-command.ts:60-78)",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item F-008). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: confine --out, --state and --manifest to the project root or .metaproject, or leave these verbs out of the routine list when a path flag is given; add tests for an outside path."
+    },
+    {
+      "id": "review-security-code-10-11:F-001",
+      "source": "raw/review-security-code-10-11.txt",
+      "question": "Is review-security-code finding F-001 (normalizeQuestion collapses every non-letter, non-digit character to a space and lowercases, so ques) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-10-11.txt F-1; confirmed present in the post-merge tree at src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-010). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure."
+    },
+    {
+      "id": "review-style-01-02-03-04-05:F-001",
+      "source": "raw/review-style-01-02-03-04-05.txt",
+      "question": "Is review-style finding F-001 (longScript guards `okReply[0] === undefined` and falls back to `[]`, but okReply is the constant `[{) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03-04-05.txt F-1; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-style-01-02-03-04-05:F-002",
+      "source": "raw/review-style-01-02-03-04-05.txt",
+      "question": "Is review-style finding F-002 (planFixture and askFixture are the same setup: mkdtemp in the temp dir, the identical `writeSlate(di) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03-04-05.txt F-2; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-style-01-02-03-04-05:F-003",
+      "source": "raw/review-style-01-02-03-04-05.txt",
+      "question": "Is review-style finding F-003 (The flow 418 plan.md was merged as the untouched scaffold: `Status: draft (flow-init skill fills thi) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03-04-05.txt F-3; confirmed present in the post-merge tree at .metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md:3 (Status: draft); tasks.md lists T1-T4 only",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-012). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fill plan.md with the approach as built and bring tasks.md in line with flow.json."
+    },
+    {
+      "id": "review-style-01-02-03-04-05:F-004",
+      "source": "raw/review-style-01-02-03-04-05.txt",
+      "question": "Is review-style finding F-004 (tasks.md states `Task definitions live here` but lists only the four scaffold tasks T1-T4. flow.json) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03-04-05.txt F-4; confirmed present in the post-merge tree at .metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md:3 (Status: draft); tasks.md lists T1-T4 only",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-012). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fill plan.md with the approach as built and bring tasks.md in line with flow.json."
+    },
+    {
+      "id": "review-style-01-02-03-04-05:F-005",
+      "source": "raw/review-style-01-02-03-04-05.txt",
+      "question": "Is review-style finding F-005 (In the named-import list from \"./agent\" the members are otherwise alphabetical (DEFAULT_MAX_ROUNDS, ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02-03-04-05.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-001",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-001 (The PR removed the `maxRounds: resolveAgentMaxRounds(),` line from both makeAgentDeps call sites but) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-1; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-002",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-002 (Two doc comments no longer match the constants this PR changed. (1) The JSDoc on resolveAgentMaxRoun) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-2; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-003",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-003 (Two new boolean locals lack the is/has/can/should prefix: `followThroughOn` (a boolean from `deps.pl) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-3; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-004",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-004 (`askUserQuestion` reads as a verb phrase that performs the ask, but the function only extracts the q) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-005",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-005 (storedAskUserAnswer and rememberAskUserAnswer each open with the same four-clause guard (question un) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-006",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-006 (A three-deep ternary chain classifies the file kind on one long line.) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-6; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-007",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-007 (The literal `3` is the position the `--` separator must have in `keryx ctx run --` (keryx=0, ctx=1, ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-7; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-008",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-008 (The comment says this else-branch is the 'default-off path'. After this PR the branch also runs when) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-8; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-009",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-009 (TRUST_MODE_MAX_ROUNDS repeats the literal 200 that MAX_AGENT_MAX_ROUNDS (agent.ts) and MAX_SUBAGENT_) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-9; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-06-07-08-09:F-010",
+      "source": "raw/review-style-06-07-08-09.txt",
+      "question": "Is review-style finding F-010 (The new round defaults and ceilings are typed again as prose in the tool description (`default 40, c) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-06-07-08-09.txt F-10; confirmed present in the post-merge tree at docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-011). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'."
+    },
+    {
+      "id": "review-style-10-11:F-001",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-001 (The PR adds a separate named import from \"./shell-chrome\" in a test file that already imports from t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-1; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-10-11:F-002",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-002 (Two new test files define a helper with the same name and purpose, `gitFile`, that builds a syntheti) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-2; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-style-10-11:F-003",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-003 (The string `\"queue\"` now means two different things in one module: `BusyDispatchTarget` has a `\"queu) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-3; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-10-11:F-004",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-004 (The key length `12` is an unnamed literal in the logic and is repeated in prose only in the doc comm) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-4; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-10-11:F-005",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-005 (The handler builds a fallback arrow function only to call it immediately: `(a ?? (() => b))()`. It r) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-5; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-10-11:F-006",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-006 (`queuedCommandNotice` is an exported function with no JSDoc, while the two exports added next to it ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-6; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-style-10-11:F-007",
+      "source": "raw/review-style-10-11.txt",
+      "question": "Is review-style finding F-007 (`ctrlCPress` is an event handler stored in a variable but is named like a noun/event rather than wit) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-10-11.txt F-7; confirmed present in the post-merge tree at src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12)",
+      "reason": "DEFERRED, not fixed and not refuted: real info defect (follow-up item F-015). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: fold into the next change that touches these files; none needs its own change."
+    },
+    {
+      "id": "review-testing-practices-04-05-07-10:F-001",
+      "source": "raw/review-testing-practices-04-05-07-10.txt",
+      "question": "Is review-testing-practices finding F-001 (The test is titled 'control, the same routine command in ask mode still prompts', but its command is) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-07-10.txt F-1; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-testing-practices-04-05-07-10:F-002",
+      "source": "raw/review-testing-practices-04-05-07-10.txt",
+      "question": "Is review-testing-practices finding F-002 (Behaviour is pinned by reading tui-shell.ts as text and asserting on substrings, not by driving the ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-07-10.txt F-2; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-testing-practices-04-05-07-10:F-003",
+      "source": "raw/review-testing-practices-04-05-07-10.txt",
+      "question": "Is review-testing-practices finding F-003 (Several gates added by this PR have no fixture that separates them from the branch beside them. Site) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-07-10.txt F-3; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    },
+    {
+      "id": "review-testing-practices-04-05-07-10:F-004",
+      "source": "raw/review-testing-practices-04-05-07-10.txt",
+      "question": "Is review-testing-practices finding F-004 (planFixture and askFixture create a temp directory per test (about ten per run) and nothing removes ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-04-05-07-10.txt F-4; confirmed present in the post-merge tree at src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item F-013). Outside this round: PR 940 is merged and this change closes the flow without touching code. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures."
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-frontend",
+      "review-frontend-conventions",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:4b0e9001bda2",
+        "rawEvidence": "raw/review-architecture-10-11.txt#sha256:4b0e9001bda2",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:ab0ea00d4f0f",
+        "rawEvidence": "raw/review-backend-10-11.txt#sha256:ab0ea00d4f0f",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:23b5472de883",
+        "rawEvidence": "raw/review-clean-code-10-11.txt#sha256:23b5472de883",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:54df1718a3ee",
+        "rawEvidence": "raw/review-frontend-10-11.txt#sha256:54df1718a3ee",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend-conventions",
+        "executionId": "review-frontend-conventions:024286da8b88",
+        "rawEvidence": "raw/review-frontend-conventions-09-10-11.txt#sha256:024286da8b88",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-frontend-conventions/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:2088e9638c7d",
+        "rawEvidence": "raw/review-highload-10-11.txt#sha256:2088e9638c7d",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:7717c4d0e9ab",
+        "rawEvidence": "raw/review-logic-10-11.txt#sha256:7717c4d0e9ab",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:24805062c965",
+        "rawEvidence": "raw/review-performance-10-11.txt#sha256:24805062c965",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:ca416f46c854",
+        "rawEvidence": "raw/review-security-code-10-11.txt#sha256:ca416f46c854",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:26668cb9281f",
+        "rawEvidence": "raw/review-style-10-11.txt#sha256:26668cb9281f",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:8a6cf86ef211",
+        "rawEvidence": "raw/review-testing-practices-04-05-07-10.txt#sha256:8a6cf86ef211",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  }
+}

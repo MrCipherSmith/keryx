@@ -54,7 +54,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: altsay msg 175893 'Исправляй все 4'"
+      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: operator msg 175893 'Исправляй все 4'"
     }
   },
   {
@@ -121,7 +121,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: altsay msg 175893 'Исправляй все 4'"
+      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: operator msg 175893 'Исправляй все 4'"
     }
   },
   {
@@ -285,7 +285,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: altsay msg 175893 'Исправляй все 4'"
+      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: operator msg 175893 'Исправляй все 4'"
     }
   },
   {
@@ -343,7 +343,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: altsay msg 175893 'Исправляй все 4'"
+      "evidence": "fixed in PR #830 (merge 2e0752a2, 0.3.52); operator decision human: operator msg 175893 'Исправляй все 4'"
     }
   },
   {

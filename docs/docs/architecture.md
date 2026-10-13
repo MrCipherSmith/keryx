@@ -334,7 +334,7 @@ Two properties are easy to get wrong:
   turn is non-interactive by construction, so `ask` becomes `deny` in the
   engine; the transport only reports it.
 - **Two secrets, two route tables.** When Telegram remote control is
-  configured, the same listener also serves seven `/v1/remote/*` routes. They
+  configured, the same listener also serves eight `/v1/remote/*` routes. They
   accept only the local shell token, from loopback; the bearer token does not
   reach them, and the shell token reaches nothing else. Which principal a
   caller is follows from which token verified, still before the URL is read.
@@ -493,6 +493,7 @@ Keryx calls these when present and degrades when they are absent.
 | git | lifecycle, health, testing, flow, sync | hooks, clone refresh, changed files, churn, commit references |
 | gh | flow, review | issue bodies, pull-request checks, completion comments |
 | eslint | health | lint findings |
+| oxlint | health | lint findings in the same shape, from `.oxlintrc.*` or `package.json`; a project needs one linter, not both |
 | tsc | health | type diagnostics |
 | your test runner | testing, health | runs your existing tests; health reuses the report |
 | coverage summary | health, testing | coverage score and the coverage map |
@@ -500,6 +501,7 @@ Keryx calls these when present and degrades when they are absent.
 | SonarQube export | health | imported issues file, off by default |
 | ripgrep | gdctx, shell search | search |
 | bubblewrap | sandbox (Linux) | process containment |
+| codex or claude runtime | gdskills | `export` and `sync` project skills to a runtime's skill folder; explicit target only, never an automatic write to a global directory |
 
 ## Conventions
 

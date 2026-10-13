@@ -11,9 +11,13 @@
 //
 // The directory ignores itself (`.gitignore` with `*`), like the trigger data.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, writeFileAtomic } from "../lib/fs";
+import { digestDataDir, digestScheduleDir, ensureDigestDataIgnored } from "../trigger/digest-state";
+
+// The on-disk locations live in `trigger/digest-state.ts`; re-exported so the scheduler keeps one import.
+export { digestDataDir, digestScheduleDir, ensureDigestDataIgnored };
 
 export type DigestSourceKind = "pr" | "issue" | "review" | "ci" | "board";
 
@@ -102,30 +106,8 @@ export function nextSnapshot(
   return { version: 1, takenAt, entries };
 }
 
-export function digestDataDir(projectRoot: string): string {
-  return path.join(projectRoot, ".metaproject", "data", "digest");
-}
-
-/** `.metaproject/data/digest/<schedule>`. The name is a schedule name, already restricted to a safe charset by the store. */
-export function digestScheduleDir(projectRoot: string, name: string): string {
-  return path.join(digestDataDir(projectRoot), name.replace(/[^A-Za-z0-9._-]/g, "-"));
-}
-
 export function snapshotPath(projectRoot: string, name: string): string {
   return path.join(digestScheduleDir(projectRoot, name), "snapshot.json");
-}
-
-/** Make `.metaproject/data/digest/` ignore everything in it. Idempotent. */
-export async function ensureDigestDataIgnored(projectRoot: string): Promise<void> {
-  const dir = digestDataDir(projectRoot);
-  await mkdir(dir, { recursive: true });
-  const file = path.join(dir, ".gitignore");
-  try {
-    await readFile(file, "utf8");
-  } catch (error) {
-    if (!isNotFound(error)) throw error;
-    await writeFile(file, "# Scheduled digest state: snapshots, delivery queue, fired slots. Never committed.\n*\n!.gitignore\n", "utf8");
-  }
 }
 
 function parseSnapshot(text: string): DigestSnapshot | undefined {

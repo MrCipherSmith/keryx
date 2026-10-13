@@ -195,6 +195,21 @@ export function formatModalFooter(actions: readonly ModalFooterAction[]): string
   return actions.map((action) => `${action.key} ${action.label}`).join(" · ");
 }
 
+// Closed modal nodes remain in choice hand-back chains, but must never take focus.
+const modalHandBack = new WeakMap<object, Renderer["currentFocusedRenderable"]>();
+export function modalFocusFallback(node: object): Renderer["currentFocusedRenderable"] {
+  return modalHandBack.get(node) ?? null;
+}
+function focusIsLive(node: NonNullable<Renderer["currentFocusedRenderable"]>, root: unknown): boolean {
+  let current: typeof node | null = node;
+  while (current !== null) {
+    if (current.isDestroyed || !current.visible) return false;
+    if (current === root) return true;
+    current = current.parent as typeof node | null;
+  }
+  return false;
+}
+
 type HostState = {
   otui: OpenTui;
   chrome: ModalChrome;
@@ -218,6 +233,7 @@ type HostState = {
   releaseOverlay: (() => void) | undefined;
   unsubKeys: (() => void) | undefined;
   savedScrollTop: number | undefined;
+  savedFocus: Renderer["currentFocusedRenderable"];
   unsubTheme: () => void;
 };
 
@@ -250,6 +266,16 @@ export function containsNode(root: { getChildren: () => unknown[] }, node: unkno
     }
   }
   return false;
+}
+
+/**
+ * True while the modal on `renderer` is open and `node` is outside it: focusing `node` then would put the
+ * keyboard on something the opaque backdrop hides. A composer-dock choice asks this before it hands the
+ * keyboard back on close (`composer-choice.ts`), so a modal that opened meanwhile keeps it.
+ */
+export function modalHides(renderer: Renderer, node: unknown): boolean {
+  const state = hosts.get(renderer);
+  return state !== undefined && state.open && !containsNode(state.backdrop, node);
 }
 
 function resolveInitialTab(tabs: readonly ModalTab[], initialTab: string | undefined): string {
@@ -360,7 +386,14 @@ function closeHost(state: HostState, opts: { restoreFocus: boolean; runOnClose: 
     if (state.savedScrollTop !== undefined && scroll !== undefined) {
       scroll.scrollTop = state.savedScrollTop;
     }
-    state.chrome.focusComposer();
+    const r = state.chrome.renderer;
+    const current = r.currentFocusedRenderable;
+    // A newer surface owns its focus; otherwise return to the still-live holder.
+    if (current === null || containsNode(state.backdrop, current)) {
+      const previous = state.savedFocus;
+      if (previous !== null && focusIsLive(previous, r.root)) previous.focus();
+      else state.chrome.focusComposer();
+    }
   }
   if (opts.runOnClose && onClose !== undefined) {
     onClose();
@@ -510,6 +543,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     releaseOverlay: undefined,
     unsubKeys: undefined,
     savedScrollTop: undefined,
+    savedFocus: null,
     unsubTheme: () => {},
   };
 
@@ -677,6 +711,8 @@ export function openModal(
     state.onClose = undefined;
     previousClose?.();
   } else {
+    state.savedFocus = chrome.renderer.currentFocusedRenderable;
+    modalHandBack.set(state.tabStrip, state.savedFocus);
     state.savedScrollTop = chrome.scroll.scrollTop;
     chrome.hideMenu();
     chrome.blurComposer();

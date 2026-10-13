@@ -25,8 +25,13 @@ export const MARKER_VERSION = 1;
 const BEGIN = /^<!--\s*keryx:reference:begin\s+v=(\d+)(?:\s+hash=([0-9a-f]{64}))?\s*-->$/;
 const END = /^<!--\s*keryx:reference:end\s*-->$/;
 
-/** The heading the block wraps. Matched loosely: the suffix has varied. */
-const REFERENCE_HEADING = /^##\s+Reference\b/i;
+/**
+ * The heading the block wraps: `## Reference`, with or without a parenthesised
+ * suffix (the suffix has varied). A hand-written `## Reference categories` is
+ * prose and must not be counted as a second Reference heading, or wrapped as
+ * the block, when the generated section sits beside it.
+ */
+const REFERENCE_HEADING = /^##\s+Reference(?:\s*\([^)]*\))?\s*$/i;
 
 export interface ManagedBlock {
   /** Marker format version from the opening marker. */

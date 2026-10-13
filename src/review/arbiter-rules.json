@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "R-01",
+      "kinds": [
+        "scope"
+      ],
+      "verdict": "allow",
+      "text": "Allow the recommended scope when it does not widen the scope and stays inside the repository under review.",
+      "when": [
+        {
+          "fact": "widensScope",
+          "op": "==",
+          "value": false
+        },
+        {
+          "fact": "outsideRepository",
+          "op": "==",
+          "value": false
+        }
+      ]
+    },
+    {
+      "id": "R-02",
+      "kinds": [
+        "scope"
+      ],
+      "verdict": "deny",
+      "text": "Deny the recommended scope when it reaches outside the repository under review.",
+      "when": [
+        {
+          "fact": "outsideRepository",
+          "op": "==",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "R-03",
+      "kinds": [
+        "scope"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when the recommended scope widens the review inside the repository: widening is the operator's call.",
+      "when": [
+        {
+          "fact": "widensScope",
+          "op": "==",
+          "value": true
+        },
+        {
+          "fact": "outsideRepository",
+          "op": "==",
+          "value": false
+        }
+      ]
+    },
+    {
+      "id": "R-04",
+      "kinds": [
+        "budget"
+      ],
+      "verdict": "allow",
+      "text": "Allow the recommended step when it does not raise the budget and 90 percent or less of the budget is used.",
+      "when": [
+        {
+          "fact": "raisesBudget",
+          "op": "==",
+          "value": false
+        },
+        {
+          "fact": "budgetUsedPercent",
+          "op": "<=",
+          "value": 90
+        }
+      ]
+    },
+    {
+      "id": "R-05",
+      "kinds": [
+        "budget"
+      ],
+      "verdict": "deny",
+      "text": "Deny the recommended step when it raises a budget: the arbiter never raises one.",
+      "when": [
+        {
+          "fact": "raisesBudget",
+          "op": "==",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "R-06",
+      "kinds": [
+        "budget"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when the recommended step does not raise the budget but more than 90 percent of it is used.",
+      "when": [
+        {
+          "fact": "raisesBudget",
+          "op": "==",
+          "value": false
+        },
+        {
+          "fact": "budgetUsedPercent",
+          "op": ">",
+          "value": 90
+        }
+      ]
+    },
+    {
+      "id": "R-07",
+      "kinds": [
+        "option_choice"
+      ],
+      "verdict": "allow",
+      "text": "Allow the recommended option when it changes no files and can be undone.",
+      "when": [
+        {
+          "fact": "changesFiles",
+          "op": "==",
+          "value": false
+        },
+        {
+          "fact": "reversible",
+          "op": "==",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "R-08",
+      "kinds": [
+        "option_choice"
+      ],
+      "verdict": "deny",
+      "text": "Deny the recommended option when it changes files: a review never writes to the code it reviews.",
+      "when": [
+        {
+          "fact": "changesFiles",
+          "op": "==",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "R-09",
+      "kinds": [
+        "option_choice"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when the recommended option changes no files but cannot be undone.",
+      "when": [
+        {
+          "fact": "changesFiles",
+          "op": "==",
+          "value": false
+        },
+        {
+          "fact": "reversible",
+          "op": "==",
+          "value": false
+        }
+      ]
+    },
+    {
+      "id": "R-10",
+      "kinds": [
+        "partial_coverage"
+      ],
+      "verdict": "allow",
+      "text": "Allow continuing with partial coverage when coverage is 80 percent or more and no blocker is open.",
+      "when": [
+        {
+          "fact": "coveragePercent",
+          "op": ">=",
+          "value": 80
+        },
+        {
+          "fact": "blockersOpen",
+          "op": "==",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "R-11",
+      "kinds": [
+        "partial_coverage"
+      ],
+      "verdict": "deny",
+      "text": "Deny continuing with partial coverage when coverage is below 50 percent.",
+      "when": [
+        {
+          "fact": "coveragePercent",
+          "op": "<",
+          "value": 50
+        }
+      ]
+    },
+    {
+      "id": "R-12",
+      "kinds": [
+        "partial_coverage"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when coverage is from 50 percent up to, not including, 80 percent.",
+      "when": [
+        {
+          "fact": "coveragePercent",
+          "op": ">=",
+          "value": 50
+        },
+        {
+          "fact": "coveragePercent",
+          "op": "<",
+          "value": 80
+        }
+      ]
+    },
+    {
+      "id": "R-13",
+      "kinds": [
+        "partial_coverage"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when coverage is 80 percent or more but a blocker is still open.",
+      "when": [
+        {
+          "fact": "coveragePercent",
+          "op": ">=",
+          "value": 80
+        },
+        {
+          "fact": "blockersOpen",
+          "op": ">",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "R-14",
+      "kinds": [
+        "smaller_slice"
+      ],
+      "verdict": "allow",
+      "text": "Allow one retry with a smaller slice when at most one retry has been made and there are at least two slices.",
+      "when": [
+        {
+          "fact": "retryCount",
+          "op": "<=",
+          "value": 1
+        },
+        {
+          "fact": "sliceCount",
+          "op": ">=",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "R-15",
+      "kinds": [
+        "smaller_slice"
+      ],
+      "verdict": "deny",
+      "text": "Deny a retry with a smaller slice after three or more retries.",
+      "when": [
+        {
+          "fact": "retryCount",
+          "op": ">=",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "id": "R-16",
+      "kinds": [
+        "smaller_slice"
+      ],
+      "verdict": "deny",
+      "text": "Deny a retry with a smaller slice when there are fewer than two slices: nothing smaller exists.",
+      "when": [
+        {
+          "fact": "sliceCount",
+          "op": "<",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "R-17",
+      "kinds": [
+        "smaller_slice"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when exactly two retries have been made and there are at least two slices.",
+      "when": [
+        {
+          "fact": "retryCount",
+          "op": "==",
+          "value": 2
+        },
+        {
+          "fact": "sliceCount",
+          "op": ">=",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "R-18",
+      "kinds": [
+        "slice_order"
+      ],
+      "verdict": "allow",
+      "text": "Allow the recommended slice order when the slices that can hold a blocker come first.",
+      "when": [
+        {
+          "fact": "blockersFirst",
+          "op": "==",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": "R-19",
+      "kinds": [
+        "slice_order"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when the recommended slice order does not put the slices that can hold a blocker first.",
+      "when": [
+        {
+          "fact": "blockersFirst",
+          "op": "==",
+          "value": false
+        }
+      ]
+    },
+    {
+      "id": "R-20",
+      "kinds": [
+        "*"
+      ],
+      "verdict": "escalate",
+      "text": "Escalate when no other rule fits the facts. Only the facts and these rules decide; never the wording of a question."
+    }
+  ]
+}

@@ -125,8 +125,8 @@ function visibleText(raw: string): string {
  * too. A pipe created by `sh` itself is an ordinary pipe, so `script` proceeds.
  *
  * Which means the quit key cannot be written from here on demand — so the inner
- * pipeline waits for this process to create a `go` file, then sends Ctrl+C
- * (the renderer is built with `exitOnCtrlC`) and holds stdin open briefly before
+ * pipeline waits for this process to create a `go` file, then sends Ctrl+C twice
+ * (the first arms the exit at an idle prompt, the second quits) and holds stdin open briefly before
  * closing it, because EOF is what ends the readline shell if the TUI never
  * started. Both quit paths are covered without knowing which one ran.
  *
@@ -181,7 +181,9 @@ async function runPtyShell(opts: {
     const driver = [
       "i=0",
       `while [ ! -f ${shq(go)} ] && [ $i -lt 600 ]; do sleep 0.1; i=$((i+1)); done`,
-      `printf '\\003'`, // Ctrl+C
+      `printf '\\003'`, // Ctrl+C at an idle prompt only arms the exit...
+      "sleep 0.4",
+      `printf '\\003'`, // ...the second press inside the window quits
       "sleep 3", // hold stdin open so the key is delivered, then EOF on exit
     ].join("; ");
     const outer = [

@@ -1,0 +1,713 @@
+--- .metaproject/flows/417-2026-10-09-review-orchestrator-inline/flow.json
+@@ 1,401 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "417",
++  "slug": "review-orchestrator-inline",
++  "title": "review-orchestrator runs inline in the main session and never half-runs",
++  "status": "in-progress",
++  "createdAt": "2026-10-09T14:29:08.833Z",
++  "updatedAt": "2026-10-09T15:08:56.912Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:8725ead18a7079a94fc5a35817c811652bcde7ee97dfe2a0d83e9fa4ffd552e8",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "human",
++  "origin": {
++    "kind": "human-request",
++    "quote": "после последнего обновления получилось так, что у меня два агента не смогли нормально запустить ревью оркестратора",
++    "source": "helyx 194482, 2026-10-09T13:03Z"
++  },
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "context gathered in audits (orchestrator-audit.md, review-orchestrator-skill-audit.md)"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [
++        "T1"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T5",
++      "title": "Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T1"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T6",
++      "title": "Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T7",
++      "title": "Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T1"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T8",
++      "title": "Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T1"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "implemented in 867deb58 (feat/flow-417-review-orchestrator-inline)"
++    },
++    {
++      "id": "T9",
++      "title": "Mutation proof, docs, CHANGELOG (AC14 AC15)",
++      "kind": "docs",
++      "status": "done",
++      "dependsOn": [
++        "T5",
++        "T6",
++        "T7",
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "mutation proof in journal; docs, README, CHANGELOG written"
++    },
++    {
++      "id": "T10",
++      "title": "Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)",
++      "kind": "verify",
++      "status": "todo",
++      "dependsOn": [
++        "T9"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-09T14:29:08.833Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-09T14:38:20.854Z",
++      "event": "frozen",
++      "detail": "16 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-09T14:38:21.055Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-09T14:38:51.111Z",
++      "event": "task-added",
++      "detail": "T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)"
++    },
++    {
++      "at": "2026-10-09T14:38:51.540Z",
++      "event": "task-added",
++      "detail": "T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)"
++    },
++    {
++      "at": "2026-10-09T14:38:51.913Z",
++      "event": "task-added",
++      "detail": "T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)"
++    },
++    {
++      "at": "2026-10-09T14:38:52.345Z",
++      "event": "task-added",
++      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
++    },
++    {
++      "at": "2026-10-09T14:38:52.760Z",
++      "event": "task-added",
++      "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
++    },
++    {
++      "at": "2026-10-09T14:38:53.201Z",
++      "event": "task-added",
++      "detail": "T10: Smoke: real round inline and BLOCKED-as-subagent, then repeat from npm after release (AC16)"
++    },
++    {
++      "at": "2026-10-09T14:38:53.631Z",
++      "event": "task-depends-set",
++      "detail": "T5: dependsOn T1, T2, T3, T4 (was empty) — docs and mutation proof need the final behaviour"
++    },
++    {
++      "at": "2026-10-09T14:38:54.042Z",
++      "event": "task-depends-set",
++      "detail": "T6: dependsOn T5 (was empty) — smoke runs on the finished change"
++    },
++    {
++      "at": "2026-10-09T14:40:21.845Z",
++      "event": "task-depends-set",
++      "detail": "T5: dependsOn T1 (was T1, T2, T3, T4) — correct numbering: default scaffold tasks T1-T4 exist"
++    },
++    {
++      "at": "2026-10-09T14:40:22.048Z",
++      "event": "task-depends-set",
++      "detail": "T7: dependsOn T1 (was empty) — after context"
++    },
++    {
++      "at": "2026-10-09T14:40:22.253Z",
++      "event": "task-depends-set",
++      "detail": "T8: dependsOn T1 (was empty) — after context"
++    },
++    {
++      "at": "2026-10-09T14:40:22.456Z",
++      "event": "task-depends-set",
++      "detail": "T9: dependsOn T5, T6, T7, T8 (was empty) — docs and mutation proof need final behaviour"
++    },
++    {
++      "at": "2026-10-09T14:40:22.664Z",
++      "event": "task-depends-set",
++      "detail": "T10: dependsOn T9 (was empty) — smoke runs on the finished change"
++    },
++    {
++      "at": "2026-10-09T14:40:22.868Z",
++      "event": "task-depends-set",
++      "detail": "T2: dependsOn T1 (was empty) — scaffold"
++    },
++    {
++      "at": "2026-10-09T14:40:29.905Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-09T15:00:15.648Z",
++      "event": "ac-updated",
++      "detail": "AC8: \"The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the ceiling of 3, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`. After the third round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.\" -> \"The default profile is read-only: one round, no edits. A `--fix` profile is defined: the orchestrator changes no code itself, hands findings to `flow-orchestrator` or `task-implementer`, takes the new head and runs the next round; each re-review counts toward the round ceiling, which equals `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts` (5 today; the earlier text said 3 by mistake). After the last round it stops and reports to the human. A test asserts the skill's ceiling equals the code constant.\" (AC8 named 3 but the code constant REVIEW_ROUND_CAP is 5 (flow 391); the criterion's real content is equality with the constant. Agent error in the original text, found by the implementing fork. No confirmations existed yet.)"
++    },
++    {
++      "at": "2026-10-09T15:08:01.161Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-09T15:08:01.571Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-10-09T15:08:01.938Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-10-09T15:08:02.302Z",
++      "event": "task-done",
++      "detail": "T5: Review-orchestrator head: preflight, inline statement, spawn recipe, round-not-needed, profiles, unattended defaults, hygiene (AC1 AC2 AC5 AC7 AC8 AC10 AC11)"
++    },
++    {
++      "at": "2026-10-09T15:08:02.673Z",
++      "event": "task-done",
++      "detail": "T6: Preflight in flow-orchestrator and job-orchestrator, remove SUBAGENT-STOP (AC3)"
++    },
++    {
++      "at": "2026-10-09T15:08:03.048Z",
++      "event": "task-done",
++      "detail": "T7: Wave planner: domain split, 10 ceiling, setting, RATE_LIMITED halving; agent vocabulary spawn tool (AC4 AC6 AC9)"
++    },
++    {
++      "at": "2026-10-09T15:08:03.417Z",
++      "event": "task-done",
++      "detail": "T8: Facades and routing text: catalog, routing, managed block, vantage facades (AC12 AC13)"
++    },
++    {
++      "at": "2026-10-09T15:08:56.912Z",
++      "event": "task-done",
++      "detail": "T9: Mutation proof, docs, CHANGELOG (AC14 AC15)"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "unclassified"
++    },
++    "AC2": {
++      "kind": "unclassified"
++    },
++    "AC3": {
++      "kind": "unclassified"
++    },
++    "AC4": {
++      "kind": "unclassified"
++    },
++    "AC5": {
++      "kind": "unclassified"
++    },
++    "AC6": {
++      "kind": "unclassified"
++    },
++    "AC7": {
++      "kind": "unclassified"
++    },
++    "AC8": {
++      "kind": "unclassified"
++    },
++    "AC9": {
++      "kind": "unclassified"
++    },
++    "AC10": {
++      "kind": "unclassified"
++    },
++    "AC11": {
++      "kind": "unclassified"
++    },
++    "AC12": {
++      "kind": "unclassified"
++    },
++    "AC13": {
++      "kind": "unclassified"
++    },
++    "AC14": {
++      "kind": "unclassified"
++    },
++    "AC15": {
++      "kind": "unclassified"
++    },
++    "AC16": {
++      "kind": "unclassified"
++    }
++  }
++}
+
+--- CHANGELOG.md
+@@ 1,15 @@
+ # Changelog
+ 
++## [0.3.86] - 2026-10-09
++
++### Review Process
++
++- `review-orchestrator`, `flow-orchestrator` and `job-orchestrator` open with a preflight: the agent that loads the skill is the orchestrator and runs inline in the main session; without the `Agent` tool or with the nesting depth spent, the output is the single line `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`. The `SUBAGENT-STOP` block is gone (flow 417).
++- A diff that only touches docs, lockfiles or generated files ends in `round not needed: <reason>` and launches no reviewer; `--all` forces a round. The default profile is read-only; `--fix` hands findings to `flow-orchestrator` or `task-implementer` and each re-review counts toward `REVIEW_ROUND_CAP`.
++- Reviewer waves are split by diff domain, at most 10 reviewers per wave for `--all`; `DEFAULT_MAX_PARALLEL_REVIEWERS` (4) is replaced by that rule. `STATUS: RATE_LIMITED` halves the wave at most twice, then `BLOCKED rate_limited`. `keryx review budget` gains `--full`.
++- The exported agent vocabulary can express the spawn tool, and an orchestrating agent keeps it. The managed block, `catalog.md` and `routing.md` say the orchestrators run in the main session.
++- Skill hygiene: dead schema reference, double step numbering and a raw `find` fixed; the `review-orchestrator` ceiling drops from 1712 to 1615 lines.
++
+ ## [0.3.85] - 2026-10-09
+ 
+ Range: `v0.3.84..3c4d68f6` plus the release version and notes.
+
+--- README.md
+@@ 600,608 @@
+   trends.
+ - **review** — managed review packages, standalone under `.metaproject/reviews/`
+   or inside the flow package when attached to a flow, so review findings become
+-  durable project artifacts. A finding points at the code it **quotes**: the
++  durable project artifacts. `review-orchestrator` is the default way a review is
++  done: the main session runs it inline, and a session that cannot spawn the
++  reviewers stops with one `STATUS: BLOCKED` line instead of reviewing alone. A finding points at the code it **quotes**: the
+   line is derived by locating that quote at the commit the round records, not
+   taken on the reviewer's word, and a quote that cannot be found is marked
+   unlocatable rather than carrying a number nobody checked. Each round also
+
+--- docs/docs/cli-reference.md
+@@ 4637,4643 @@
+                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                     [--parallel <n>] [--outstanding <n>]
+ keryx review budget [--spent <usd>] [--ceiling <usd>]
+-                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
++                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+ keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                   [--findings <n>] [--diff-lines <n>]
+                   [--verifier execution|site-check|reasoning] [--security]
+
+--- docs/docs/cli-reference.md
+@@ 5195,5201 @@
+ |---|---|---|---|
+ | Findings | **10 per reviewer**, blockers exempt | `--max-findings <n>` | Truncates a reviewer's ordinary findings. `blocker` and `blocking_merge` findings are exempt and do not consume the budget. |
+ | Spend | **3.00 USD** per round | `--spent <usd>`, `--spend-ceiling <usd>` | Stops and asks rather than proceeding. |
+-| Concurrency | **4** reviewers in flight | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. |
++| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after`; after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
+ 
+ **Every cap records what it dropped**, in the package's `scope.md` under
+ `## Caps` and on the terminal — a count, and for the findings cap the id of every
+
+--- docs/docs/cli-reference.md
+@@ 6103,6109 @@
+ | `--spent <usd>` | Spend so far. Omitted, the record reads `not recorded` — which is **not** `under`: staying inside the ceiling was never demonstrated. |
+ | `--ceiling <usd>` | Override the 3.00 USD default. |
+ | `--reviewers a,b` | The reviewer set to plan into waves. |
+-| `--parallel <n>` | Override the wave size (default 4). |
++| `--parallel <n>` | Override the wave size (default 10, split by diff domain). |
+ | `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+ 
+ ### `review bot` and `review metrics`
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 37,43 @@
+                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                             [--json | --brief] [--out <file>]
+   keryx review budget [--spent <usd>] [--ceiling <usd>]
+-                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
++                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                 [--self <login>] [--round <n>]
+                                 [--out <findings.json>] [--json] [--fixtures <dir>]
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 81,119 @@
+ what the record says happened, and it is the safe direction — reusing the
+ directory would delete exactly the signal a genuinely stuck round produces.
+ 
++## Who runs the round
++
++The agent that loads the `review-orchestrator` skill is the orchestrator: it runs
++the round inline, in the main session, and does not hand the round to one subagent.
++Before step 0 it checks three things:
++
++1. **It can spawn.** The `Agent` tool is present and the nesting depth is not spent
++   (Claude Code nests at most 3 deep). If not, the whole output is
++   `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`,
++   and nothing else runs. It never reviews alone.
++2. **A round is needed.** A diff that only touches docs, lockfiles or generated files
++   gets `round not needed: <reason>` and launches no reviewer. `--all` forces a round.
++3. **A round is left.** The ceiling is `REVIEW_ROUND_CAP` rounds on one
++   `merge-base..HEAD` (5 today); after the last one it stops and reports to you.
++
++The default profile is read-only: one round, no edits. `--fix` is a separate
++profile: the orchestrator still changes no code itself, it hands the findings to
++`flow-orchestrator` or `task-implementer`, takes the new head and runs the next
++round, and each re-review counts toward the ceiling.
++
++Reviewers are dispatched in waves split by diff domain: `core` (logic, security,
++architecture) first, then `domain` (frontend, backend, conventions), then `support`
++(style, tests); the verifier runs last and only
++removes findings. For `--all` and a full review a wave holds at most 10 reviewers
++(`keryx review budget --full` prints the plan). A reviewer that answers
++`STATUS: RATE_LIMITED` is requeued with the wave halved and `retry-after`
++honoured; after two halvings the round stops with
++`STATUS: BLOCKED rate_limited`, naming the reviewers still queued.
++
++What the skill does not do: it does not run as a subagent of another orchestrator
++by default, it does not fix code, and it does not shrink the reviewer set to fit a
++budget.
++
+ ## Narrow the scope before anyone reads it
+ 
+ ```bash
+
+--- package.json
+@@ 1,6 @@
+ {
+   "name": "@mrciphersmith/keryx",
+-  "version": "0.3.85",
++  "version": "0.3.86",
+   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
+   "private": false,
+   "publishConfig": {
+
+--- src/agents/tools.test.ts
+@@ 7,23 @@
+ import { readFileSync } from "node:fs";
+ import path from "node:path";
+ import { describe, expect, test } from "bun:test";
+-import { AGENT_TOOL_VOCABULARY, isAgentToolName, mapToolsForTarget } from "./tools";
++import { readdirSync } from "node:fs";
++import {
++  AGENT_TOOL_VOCABULARY,
++  HOSTS_WITH_NESTED_SPAWN,
++  ORCHESTRATOR_AGENT_NAMES,
++  SPAWN_TOOL,
++  isAgentToolName,
++  isOrchestratorAgent,
++  mapToolsForTarget,
++  orchestratorToolProblems,
++} from "./tools";
+ 
+ const BUILTIN_DIR = path.join(import.meta.dir, "..", "harness", "tool", "builtin");
+ 
+
+--- src/agents/tools.test.ts
+@@ 28,34 @@
+   "shell-exec-tool.ts",
+   "web-fetch-tool.ts",
+   "web-search-tool.ts",
++  "spawn-subagent-tool.ts",
+ ];
+ 
+ function realBuiltinToolNames(): Set<string> {
+
+--- src/agents/tools.test.ts
+@@ 96,156 @@
+     expect(droppedTools).toEqual([]);
+   });
+ });
++
++describe("spawn tool in the agent vocabulary (flow 417 AC4)", () => {
++  test("the vocabulary can express the spawn tool, and it is the real tool name", () => {
++    expect(SPAWN_TOOL).toBe("spawn_subagent");
++    expect(isAgentToolName(SPAWN_TOOL)).toBe(true);
++  });
++
++  test("hosts have no spawn analogue to map onto: it is reported dropped, never silently lost", () => {
++    for (const host of ["claude", "opencode", "codex", "kiro"] as const) {
++      const { mappedTools, droppedTools } = mapToolsForTarget([SPAWN_TOOL], host);
++      expect(mappedTools).toEqual([]);
++      expect(droppedTools).toEqual([SPAWN_TOOL]);
++    }
++  });
++
++  test("an orchestrator that keeps spawn_subagent in tools passes on the harness", () => {
++    expect(orchestratorToolProblems({ name: "review-orchestrator", tools: ["read_file", SPAWN_TOOL] })).toEqual([]);
++  });
++
++  test("an orchestrating agent file that lacks spawn_subagent fails", () => {
++    const problems = orchestratorToolProblems({ name: "review-orchestrator", tools: ["read_file", "search_code"] });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toContain("review-orchestrator");
++    expect(problems[0]).toContain(SPAWN_TOOL);
++  });
++
++  test("an agent naming spawn_subagent where the host has no nested spawn fails", () => {
++    for (const host of ["claude", "opencode", "codex", "kiro"] as const) {
++      expect(HOSTS_WITH_NESTED_SPAWN.includes(host)).toBe(false);
++      const problems = orchestratorToolProblems({ name: "review-orchestrator", tools: [SPAWN_TOOL] }, host);
++      expect(problems).toHaveLength(1);
++      expect(problems[0]).toContain(host);
++    }
++  });
++
++  test("a plain agent with no spawn tool is clean on every host", () => {
++    for (const host of ["keryx-shell", "claude", "opencode", "codex", "kiro"] as const) {
++      expect(orchestratorToolProblems({ name: "codebase-navigator", tools: ["read_file"] }, host)).toEqual([]);
++    }
++  });
++
++  test("orchestrators are declared by name", () => {
++    expect([...ORCHESTRATOR_AGENT_NAMES]).toEqual(["review-orchestrator", "flow-orchestrator", "job-orchestrator"]);
++    expect(isOrchestratorAgent("job-orchestrator")).toBe(true);
++    expect(isOrchestratorAgent("codebase-navigator")).toBe(false);
++  });
++
++  test("every bundled agent file passes the orchestrator check", () => {
++    const dir = path.join(import.meta.dir, "..", "gdskills", "bundled", "agents");
++    for (const file of readdirSync(dir).filter((f) => f.endsWith(".md"))) {
++      const text = readFileSync(path.join(dir, file), "utf8");
++      const name = /^name:\s*"?([\w-]+)"?\s*$/m.exec(text)?.[1] ?? file.replace(/\.md$/, "");
++      const toolsBlock = /^tools:\s*\n((?:\s+-\s+.*\n)+)/m.exec(text)?.[1] ?? "";
++      const tools = [...toolsBlock.matchAll(/-\s+"?([\w]+)"?/g)].map((m) => m[1] as string);
++      expect(orchestratorToolProblems({ name, tools })).toEqual([]);
++    }
++  });
++});
+
+--- src/agents/tools.ts
+@@ 2,8 @@
+ // per-target mapping from that vocabulary onto each host harness's own tool
+ // names (W2 §Design, `src/agents/tools.ts` in plan.md's module layout).
+ //
+-// The vocabulary is exactly the ten interactive tools keryx-shell's builtin
++// The vocabulary is exactly the eleven interactive tools keryx-shell's builtin
+ // registry defines under `src/harness/tool/builtin/` — never re-derived, and
+ // checked against the real `name: "..."` literals by `tools.test.ts` rather
+ // than trusted by inspection:
+
+--- src/agents/tools.ts
+@@ 12,18 @@
+ //   shell_exec                         (shell-exec-tool.ts)
+ //   web_fetch                          (web-fetch-tool.ts)
+ //   web_search                         (web-search-tool.ts)
++//   spawn_subagent                     (spawn-subagent-tool.ts)
+ //
+ // A tool with no mapping entry for a target is DROPPED from that target's
+ // export and reported in `droppedTools` — never silently. codex/kiro ship
+
+--- src/agents/tools.ts
+@@ 31,37 @@
+   "shell_exec",
+   "web_fetch",
+   "web_search",
++  "spawn_subagent",
+ ] as const;
+ 
+ export type AgentToolName = (typeof AGENT_TOOL_VOCABULARY)[number];
+
+--- src/agents/tools.ts
+@@ 128,159 @@
+   }
+   return { mappedTools: [...mapped], droppedTools: dropped };
+ }
++
++/** The tool an orchestrating agent uses to start a sub-agent. No host harness exposes an analogue it can be mapped onto, so it drops (reported) everywhere but keryx-shell. */
++export const SPAWN_TOOL: AgentToolName = "spawn_subagent";
++
++/** Agents that coordinate other agents. The main agent runs them inline; an exported agent file for one must keep SPAWN_TOOL in `tools`. */
++export const ORCHESTRATOR_AGENT_NAMES = ["review-orchestrator", "flow-orchestrator", "job-orchestrator"] as const;
++
++export function isOrchestratorAgent(name: string): boolean {
++  return (ORCHESTRATOR_AGENT_NAMES as readonly string[]).includes(name);
++}
++
++/** Targets where an agent that is itself a sub-agent may spawn another. Claude Code, OpenCode, Codex and Kiro sub-agents cannot. */
++export const HOSTS_WITH_NESTED_SPAWN: readonly (HostToolTarget | "keryx-shell")[] = ["keryx-shell"];
++
++/** Violations of the orchestrator contract for `agent` exported to `host`; empty when it holds. */
++export function orchestratorToolProblems(
++  agent: { readonly name: string; readonly tools: readonly string[] },
++  host: HostToolTarget | "keryx-shell" = "keryx-shell",
++): string[] {
++  const problems: string[] = [];
++  const spawns = agent.tools.includes(SPAWN_TOOL);
++  if (isOrchestratorAgent(agent.name) && !spawns) {
++    problems.push(`orchestrator ${agent.name} must keep ${SPAWN_TOOL} in tools`);
++  }
++  if (spawns && !HOSTS_WITH_NESTED_SPAWN.includes(host)) {
++    problems.push(`${agent.name} names ${SPAWN_TOOL} but host ${host} does not support nested spawn`);
++  }
++  return problems;
++}
+
+--- src/commands/review.test.ts
+@@ 522,528 @@
+ });
+ 
+ test("AC7/AC10: `review budget` plans waves and says whether the cap holds across nesting", async () => {
+-  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f"]);
++  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f", "--parallel", "4"]);
+   const output = logs.join("\n");
+ 
+   expect(output).toContain("concurrency_cap: 4");
+
+--- src/commands/review.test.ts
+@@ 532,538 @@
+ });
+ 
+ test("AC7: a declared outstanding count is the only thing that reaches the nesting", async () => {
+-  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--outstanding", "2"]);
++  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--parallel", "4", "--outstanding", "2"]);
+   const output = logs.join("\n");
+ 
+   expect(output).toContain("effective_wave_size: 2");

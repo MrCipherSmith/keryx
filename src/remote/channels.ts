@@ -18,7 +18,8 @@ import { fail, ok } from "./http-surface";
 import type { RemoteHub } from "./hub";
 import { type OpenPairingResult, Pairing, type PairingOptions } from "./pairing";
 import { remoteConfigPath } from "./paths";
-import type { ChannelsRoute, TelegramChannelState } from "./protocol";
+import type { ChannelsRendering, ChannelsRoute, TelegramChannelState } from "./protocol";
+import { DEFAULT_RENDER_MODE } from "./rendering-mode";
 
 export interface ChannelsHost {
   dir?: string | undefined;
@@ -109,11 +110,28 @@ export class ChannelsController {
     return { state: "not-connected" };
   }
 
+  /** Flow 395: from the running hub when there is one, else the mode saved in the config; nothing when no config exists. */
+  private rendering(): ChannelsRendering | undefined {
+    const hub = this.host.hub();
+    // A hub stand-in without the method (a test double) reports the saved mode like no hub does.
+    if (hub !== undefined && typeof hub.renderingStatus === "function") {
+      return hub.renderingStatus();
+    }
+    const config = loadRemoteConfig(this.host.dir);
+    return config.ok ? { mode: config.value.rendering ?? DEFAULT_RENDER_MODE } : undefined;
+  }
+
   private status(): Response {
     const { state, reason } = this.state();
+    const rendering = this.rendering();
     return ok({
       machine: this.host.machine,
-      telegram: { state, ...(reason === undefined ? {} : { reason }), sessions: this.host.hub()?.list().length ?? 0 },
+      telegram: {
+        state,
+        ...(reason === undefined ? {} : { reason }),
+        sessions: this.host.hub()?.list().length ?? 0,
+        ...(rendering === undefined ? {} : { rendering }),
+      },
     });
   }
 

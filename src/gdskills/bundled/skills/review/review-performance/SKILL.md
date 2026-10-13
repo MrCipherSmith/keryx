@@ -66,25 +66,10 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
 Run the script from that file to determine `MERGE_BASE` (`BASE_SHA`) and `SCOPE` before proceeding.
 
-### Commands to collect the review slice
-
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
 ```bash
-git status
-git log --oneline "${BASE_SHA}..HEAD"
-git diff --stat --name-status "${BASE_SHA}..HEAD"
-git diff "${BASE_SHA}..HEAD"
-
-# Include uncommitted changes (default mode):
-git diff --stat --name-status "${BASE_SHA}"
-git diff "${BASE_SHA}"
-git ls-files --others --exclude-standard
-```
-
-For explicit hash/range mode:
-
-```bash
-git diff --stat --name-status <FROM_SHA>..<TO_SHA>
-git diff <FROM_SHA>..<TO_SHA>
+git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+# explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
 ```
 
 ---

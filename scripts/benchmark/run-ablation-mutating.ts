@@ -34,8 +34,10 @@ import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port
 import { builtinMetaprojectTools } from "../../src/harness/tool/builtin/metaproject-tools";
 import { builtinReadOnlyTools, type InteractiveTool } from "../../src/harness/tool/builtin/interactive-tools";
 import { shellExecTool } from "../../src/harness/tool/builtin/shell-exec-tool";
+import { workingMemoryTools } from "../../src/harness/tool/builtin/slate-memory-tools";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
+import { assertWorkingMemoryPath, createRunnerArchive, openLongTurnOptions } from "./long-runner-shared";
 import { MUTATING_GOLD_ARTIFACT_PATH, MUTATING_TASKS, type MutatingTask } from "./mutating-tasks";
 import { KeryxUsageAccumulator, RepeatedReadTracker, fixtureFilename, type InstrumentedSeedSample } from "./token-metrics";
 
@@ -98,9 +100,10 @@ const LEGACY_FILENAME =
   PROVIDER_NAME === "deepseek" ? "ablation-mutating-results.json" : `ablation-mutating-results-${PROVIDER_NAME}.json`;
 const RESULTS_FILENAME = fixtureFilename(LEGACY_FILENAME, PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown", MODEL);
 
-function buildTools(root: string, variant: AblationVariant): InteractiveTool[] {
-  const basic = builtinReadOnlyTools(root);
-  const withShell = [...basic, shellExecTool(root)];
+function buildTools(root: string, variant: AblationVariant, getSessionDir: () => string): InteractiveTool[] {
+  const basic = builtinReadOnlyTools(root, { getSessionDir });
+  // Flow 393: a real session is a working-memory host, so the roster carries the four memory tools.
+  const withShell = [...basic, shellExecTool(root), ...workingMemoryTools(getSessionDir, () => new Date().toISOString())];
   if (variant === "context-off") return withShell;
   return [...withShell, ...builtinMetaprojectTools(root)];
 }
@@ -109,8 +112,8 @@ function buildSystemInstruction(variant: AblationVariant): string {
   const toolList =
     variant === "context-on"
       ? "get_cwd, list_dir, read_file, shell_exec, search_code (ripgrep over the project), " +
-        "graph_affected (dependency graph), memory_search (project memory)"
-      : "get_cwd, list_dir, read_file, shell_exec";
+        "graph_affected (dependency graph), memory_search (project memory), slate_note, slate_trail, recall_step, history_search"
+      : "get_cwd, list_dir, read_file, shell_exec, slate_note, slate_trail, recall_step, history_search";
   return (
     "You are making a real, small code change in a real TypeScript codebase to make a " +
     `failing test pass. You have these tools: ${toolList}. Ground every claim in what ` +
@@ -135,6 +138,8 @@ async function runSeed(
 ): Promise<InstrumentedSeedSample> {
   const created = await port.create(worktreeId);
   const root = created.path;
+  // Flow 393: the live session dir (slate, spills, archive) lives OUTSIDE the worktree.
+  const sessionDir = await mkdtemp(join(tmpdir(), "keryx-mutating-session-"));
   try {
     // AC-5: strip this repo's own gold artifact (mutating-tasks.ts, which contains
     // every task's exact solution spec) before the agent ever sees this worktree, then
@@ -149,12 +154,18 @@ async function runSeed(
 
     const provider = makeProvider(PROVIDER_NAME, MODEL, { fetch });
     const tracker = new RepeatedReadTracker(PRUNE_HOOK);
+    const history: NormalizedMessage[] = [];
+    const archive = createRunnerArchive(sessionDir, history);
+    const tools = buildTools(root, variant, () => sessionDir);
     const deps: AgentDeps = {
-      onContextCompaction: () => tracker.onCompaction(),
+      onContextCompaction: () => {
+        archive.rebase();
+        tracker.onCompaction();
+      },
       provider,
       providerId: PROVIDER_NAME,
       modelId: MODEL,
-      tools: buildTools(root, variant),
+      tools,
       systemInstruction: buildSystemInstruction(variant),
       idSeq,
       maxToolCalls: 20,
@@ -170,6 +181,7 @@ async function runSeed(
       // established this pattern) — shell_exec is risk:"shell" and would otherwise
       // block forever waiting on a TTY approval prompt that never comes headlessly.
       requestApproval: async () => true,
+      onHistoryChange: () => archive.sync(),
       onUsage: (usage) => {
         sawUsage = true;
         usageAcc.addUsage(usage);
@@ -180,8 +192,12 @@ async function runSeed(
         tracker.onToolCall(name, input);
       },
     };
-    const history: NormalizedMessage[] = [];
-    await runAgentTurn(io, deps, history, task.prompt);
+    // Flow 393: run as the shell does, a working-memory host with a REAL open slate; refuse the run when
+    // it would measure the degraded mode (no slate, empty frame, a memory tool missing).
+    const turnOptions = await openLongTurnOptions(sessionDir, root, { provider: PROVIDER_NAME, model: MODEL });
+    await assertWorkingMemoryPath(turnOptions, tools);
+    await runAgentTurn(io, deps, history, task.prompt, turnOptions as Parameters<typeof runAgentTurn>[4]);
+    archive.sync();
 
     // Independent verification: a real `bun test` run against the seeded test, in the
     // SAME worktree the agent edited — never the agent's own "DONE" claim.
@@ -196,6 +212,7 @@ async function runSeed(
       repeatedReads: tracker.result(),
     };
   } finally {
+    await rm(sessionDir, { recursive: true, force: true }).catch(() => undefined);
     await port.remove(worktreeId).catch((cause) => {
       console.error(`worktree[${worktreeId}] cleanup failed: ${(cause as Error).message}`);
     });

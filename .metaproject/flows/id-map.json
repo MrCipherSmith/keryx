@@ -438,5 +438,21 @@
     "toDir": "395-2026-10-01-publication-grade-documentation-showcase",
     "at": "2026-10-02T16:35:23.074Z",
     "reason": "main now has its own 367 (renumbered w2-rewind); 395 is the first id free on every remote branch after fetch --all"
+  },
+  {
+    "from": "420",
+    "to": "421",
+    "fromDir": "420-2026-10-10-review-completion-gate",
+    "toDir": "421-2026-10-10-review-completion-gate",
+    "at": "2026-10-10T07:54:40.108Z",
+    "reason": "420 is the id the 0.3.91-0.3.93 changelog entries cite for the review-start/help work, which lives in another clone"
+  },
+  {
+    "from": "395",
+    "to": "440",
+    "fromDir": "395-2026-10-01-publication-grade-documentation-showcase",
+    "toDir": "440-2026-10-01-publication-grade-documentation-showcase",
+    "at": "2026-10-13T05:54:04.916Z",
+    "reason": "395 was taken by main (telegram-rendering-bot-api) while this branch waited; 440 is free on every remote branch and every local worktree"
   }
 ]

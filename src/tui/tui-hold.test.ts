@@ -41,7 +41,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
   test("the busy-branch side-worker dispatch is gated before the Main-queue/Side-1 composer choice, with no choice offered while held", () => {
     const choiceIdx = source.indexOf('title: "Main agent is busy"');
     expect(choiceIdx).toBeGreaterThan(0);
-    const pendingEditIdx = source.indexOf("if (pendingQueueEdit !== undefined)");
+    const pendingEditIdx = source.indexOf("if (remoteQueue.requeuePendingEdit(line, displayLine))");
     expect(pendingEditIdx).toBeGreaterThan(0);
     expect(pendingEditIdx).toBeLessThan(choiceIdx);
     const block = source.slice(pendingEditIdx, choiceIdx);
@@ -121,7 +121,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     expect(block).toContain("chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement");
     expect(block).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
     expect(block).toContain("paintMainQueue();");
-    expect(block).toContain('runLine(drained.question, "operator", drained.source);');
+    expect(block).toContain("remoteQueue.runQueued(drained);");
   });
 });
 

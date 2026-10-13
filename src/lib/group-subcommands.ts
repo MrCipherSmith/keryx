@@ -54,6 +54,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ["auth", ["list", "login", "logout", "status"]],
   // commands/approvals.ts (flow 369): list (also the bare default), allow, deny
   ["approvals", ["list", "allow", "deny"]],
+  // commands/permissions-command.ts (flow 396): list (also the bare default), remove
+  ["permissions", ["list", "remove"]],
   // commands/version.ts:19 (`args[0] !== "check"` is refused)
   ["version", ["check"]],
   // commands/gdgraph.ts:81-206
@@ -135,6 +137,11 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "scope",
       "floor",
       "blast-radius",
+      "slice",
+      "dispatch-check",
+      "retry-plan",
+      "run",
+      "ledger",
       "budget",
       "tier",
       "comments",
@@ -156,6 +163,11 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "loop",
       "stack",
       "reviewers",
+      "required",
+      "compare-reference",
+      "mutate",
+      "severity-audit",
+      "context-collect",
       "import",
       "status",
       "complete",
@@ -228,7 +240,11 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   // commands/governance.ts:86-90
   ["governance", ["report", "show"]],
   // commands/decisions.ts (decisionsCommand dispatch)
-  ["decisions", ["open", "answer", "reason", "report"]],
+  ["decisions", ["open", "answer", "reason", "report", "import", "rate", "export"]],
+  // commands/intake.ts (intakeCommand dispatch)
+  ["intake", ["status", "list", "pause", "resume", "poll", "report"]],
+  // commands/research-sync.ts (researchCommand dispatch)
+  ["research", ["sync"]],
   // commands/product.ts (productCommand dispatch)
   ["product", ["index", "open"]],
   // commands/hooks.ts:1247-1271 (excludes the unrelated hook-event-name switch earlier in the same file)

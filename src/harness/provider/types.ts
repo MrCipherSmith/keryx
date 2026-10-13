@@ -78,12 +78,13 @@ export interface NormalizedError {
   /** Optional bounded backoff hint (ms) for retryable rows. */
   retryAfterMs?: number;
   /**
-   * Structured, kind-specific extra data. Today only `pendingToolCallId`
+   * Structured, kind-specific extra data. `incompleteStream` marks an empty/truncated
+   * transport response for interactive recovery without changing adapter retry disposition. `pendingToolCallId`
    * (flow 354, L-1): the id of the tool call still accumulating when the
    * stream ended mid tool-call — a `malformed` EOF, never a completed
    * `tool_call_end`. Absent for every other error.
    */
-  detail?: { pendingToolCallId?: string };
+  detail?: { pendingToolCallId?: string; incompleteStream?: boolean };
 }
 
 /**
@@ -280,6 +281,24 @@ export interface NormalizedMessage {
    * header is not one, so nothing (compaction, the /goal verifier) may read it as evidence.
    */
   collapsed?: true;
+  /**
+   * Flow 393: tool only; the Trail step (`slate.json#trail[].step`) this result was
+   * recorded under. Store-only like `spillPath`: lets an observation pack and the
+   * recall tools name the step. Never sent to a provider.
+   */
+  trailStep?: number;
+  /**
+   * Flow 393: tool only; `true` on a result the harness replaced with a fixed
+   * observation pack (size, first and last line, a reference to the saved full
+   * output). Store-only; marks it so it is never packed twice.
+   */
+  packed?: true;
+  /**
+   * Flow 393: user only; `true` on the harness-built working-memory frame (the
+   * rebuilt Anchors block and the Notes/Trail section). The next rebuild REPLACES
+   * every message carrying it instead of appending another. Store-only.
+   */
+  slateFrame?: true;
   /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes

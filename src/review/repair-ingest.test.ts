@@ -5,7 +5,7 @@
 // to fill that in was in the report. These drive the REAL ingest, so a repair
 // that exists but is never called fails here rather than passing review.
 
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,28 +13,42 @@ import { createManagedReviewPackage, type ManagedReviewIngestInput } from "./man
 import type { ManagedReviewManifest, StructuredReviewFinding } from "./types";
 
 const ORIGINAL_CWD = process.cwd();
-let ROOT = "";
+const pendingTests = new Set<Promise<void>>();
 
-beforeEach(async () => {
-  ROOT = await mkdtemp(path.join(tmpdir(), "gd-repair-ingest-"));
-  await mkdir(path.join(ROOT, ".metaproject"), { recursive: true });
-  await mkdir(path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
-  await writeFile(
-    path.join(ROOT, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
-    await readFile(
-      path.join(ORIGINAL_CWD, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
-      "utf8",
-    ),
-    "utf8",
-  );
-});
+function workspaceTest(name: string, fn: (root: string) => Promise<void>): void {
+  test(name, () => {
+    const run = (async () => {
+      // Setup belongs to the callback too: a timed-out hook must not outlive cleanup.
+      const root = await mkdtemp(path.join(tmpdir(), "gd-repair-ingest-"));
+      try {
+        await mkdir(path.join(root, ".metaproject"), { recursive: true });
+        const schemaDir = path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas");
+        await mkdir(schemaDir, { recursive: true });
+        await writeFile(
+          path.join(schemaDir, "managed-review-package.schema.json"),
+          await readFile(
+            path.join(ORIGINAL_CWD, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"),
+            "utf8",
+          ),
+          "utf8",
+        );
+        await fn(root);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    })();
+    pendingTests.add(run);
+    // Return the original promise so ordinary failures still fail the test, while
+    // handling late rejections when Bun has already reported a timeout.
+    void run.then(() => pendingTests.delete(run), () => pendingTests.delete(run));
+    return run;
+  });
+}
 
 afterEach(async () => {
-  if (ROOT) {
-    await rm(ROOT, { recursive: true, force: true });
-    ROOT = "";
-  }
-});
+  // Bun does not cancel callbacks on timeout. Include setup, assertions and cleanup.
+  await Promise.allSettled([...pendingTests]);
+}, 60_000);
 
 /** A finding as a reviewer actually emits one: a title, and no `id`. */
 function untitledFinding(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -50,12 +64,12 @@ function untitledFinding(over: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
-async function ingest(findings: unknown[], over: Partial<ManagedReviewIngestInput> = {}): Promise<{
+async function ingest(root: string, findings: unknown[], over: Partial<ManagedReviewIngestInput> = {}): Promise<{
   findings: StructuredReviewFinding[];
   manifest: ManagedReviewManifest;
 }> {
   const result = await createManagedReviewPackage({
-    cwd: ROOT,
+    cwd: root,
     mode: "ingest",
     reviewId: "2026-09-15-repair",
     target: { kind: "report", ref: "review.md" },
@@ -65,13 +79,13 @@ async function ingest(findings: unknown[], over: Partial<ManagedReviewIngestInpu
     ...over,
   });
   return {
-    findings: JSON.parse(await readFile(path.join(ROOT, result.path, "findings.json"), "utf8")) as StructuredReviewFinding[],
-    manifest: JSON.parse(await readFile(path.join(ROOT, result.path, "manifest.json"), "utf8")) as ManagedReviewManifest,
+    findings: JSON.parse(await readFile(path.join(root, result.path, "findings.json"), "utf8")) as StructuredReviewFinding[],
+    manifest: JSON.parse(await readFile(path.join(root, result.path, "manifest.json"), "utf8")) as ManagedReviewManifest,
   };
 }
 
-test("AC3: five findings with no id ingest cleanly, numbered by report order", async () => {
-  const { findings, manifest } = await ingest([
+workspaceTest("AC3: five findings with no id ingest cleanly, numbered by report order", async (root) => {
+  const { findings, manifest } = await ingest(root, [
     untitledFinding(),
     untitledFinding({ title: "the scan is unbounded" }),
     untitledFinding({ title: "the branch is unreachable" }),
@@ -84,8 +98,8 @@ test("AC3: five findings with no id ingest cleanly, numbered by report order", a
   expect(manifest.repairs?.filter((repair) => repair.field === "id")).toHaveLength(5);
 });
 
-test("AC3: `problem` is carried across from the reviewer's own title, and the record says so", async () => {
-  const { findings, manifest } = await ingest([untitledFinding()]);
+workspaceTest("AC3: `problem` is carried across from the reviewer's own title, and the record says so", async (root) => {
+  const { findings, manifest } = await ingest(root, [untitledFinding()]);
   expect(findings[0]?.problem).toBe("the guard drops a real phone number");
   expect(manifest.repairs).toEqual([
     { finding: "F-001", field: "id", source: "position 1 in the report" },
@@ -93,19 +107,19 @@ test("AC3: `problem` is carried across from the reviewer's own title, and the re
   ]);
 });
 
-test("AC4: a blocker with no class_scope is still refused — repair does not reach judgement", async () => {
+workspaceTest("AC4: a blocker with no class_scope is still refused — repair does not reach judgement", async (root) => {
   await expect(
-    ingest([untitledFinding({ severity: "blocker" })]),
+    ingest(root, [untitledFinding({ severity: "blocker" })]),
   ).rejects.toThrow(/class_scope/);
 });
 
-test("AC4: a finding with neither problem nor title is still refused", async () => {
+workspaceTest("AC4: a finding with neither problem nor title is still refused", async (root) => {
   const { title: _dropped, ...noTitle } = untitledFinding();
-  await expect(ingest([noTitle])).rejects.toThrow(/review-finding\.schema\.json/);
+  await expect(ingest(root, [noTitle])).rejects.toThrow(/review-finding\.schema\.json/);
 });
 
-test("BOUNDARY: a complete report records no repairs at all", async () => {
-  const { manifest } = await ingest([
+workspaceTest("BOUNDARY: a complete report records no repairs at all", async (root) => {
+  const { manifest } = await ingest(root, [
     untitledFinding({ id: "F-042", problem: "stated by the reviewer" }),
   ]);
   expect(manifest.repairs).toBeUndefined();

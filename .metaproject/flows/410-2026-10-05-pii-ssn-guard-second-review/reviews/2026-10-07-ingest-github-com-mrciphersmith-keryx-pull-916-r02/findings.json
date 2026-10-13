@@ -1,0 +1,86 @@
+[
+  {
+    "id": "r7-S2",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "A hyphen- or dot-joined phone followed by more digits is not reported (\"415-555-0199-123456\", \"415.555.0199.415.555.0199\").",
+    "impact": "The number stays readable in redacted output. Pre-existing in baseline 6f6d8898.",
+    "suggested_fix": "Split over-long runs on hyphen and dot, not only whitespace.",
+    "evidence": "Carried forward from 2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916#r6-S2 so the disposition can record who decided. No new review ran. Reported in round 6 against 9d4cbc36 (PR 916). Deferred to flow 412 by operator poll 113.",
+    "confidence": "medium",
+    "global_id": "2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02#r7-S2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Checked at 05ce88515a820cd6e185d320fef74cd3b34f6611. At 05ce8851 \"415-555-0199-123456\" and \"415.555.0199.415.555.0199\" return no spans and redact to themselves; baseline 6f6d8898 also returned none, so it is pre-existing and unfixed (deferred to flow 412).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "decided-by: MrCipherSmith (operator), polls 113 (2026-10-07T03:33Z, 'Завести их отдельным flow, не терять') and 116 (2026-10-07T04:32Z); pre-existing in baseline 6f6d8898, tracked in flow 412; confirmed by review-verifier at 05ce8851"
+    }
+  },
+  {
+    "id": "r7-S3",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "PII glued to word characters is not matched (\"id4111111111111111\", \"tel415-555-0199\", \"GB82WEST12345698765432dolor\", \"192.168.1.10abc\").",
+    "impact": "The value stays readable in redacted output. Pre-existing.",
+    "suggested_fix": "Relax the boundary and keep the Luhn and mod-97 checks as the guard.",
+    "evidence": "Carried forward from 2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916#r6-S3 so the disposition can record who decided. No new review ran. Reported in round 6 against 9d4cbc36 (PR 916). Deferred to flow 412 by operator poll 113.",
+    "confidence": "medium",
+    "global_id": "2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02#r7-S3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Checked at 05ce88515a820cd6e185d320fef74cd3b34f6611. At 05ce8851 \"id4111111111111111\", \"tel415-555-0199\", \"GB82WEST12345698765432dolor\" and \"192.168.1.10abc\" all return no spans, unchanged from baseline 6f6d8898 (deferred to flow 412).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "decided-by: MrCipherSmith (operator), polls 113 (2026-10-07T03:33Z, 'Завести их отдельным flow, не терять') and 116 (2026-10-07T04:32Z); pre-existing in baseline 6f6d8898, tracked in flow 412; confirmed by review-verifier at 05ce8851"
+    }
+  },
+  {
+    "id": "r7-S4",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Separators outside the fold set evade SSN, card, phone and IP rules (U+200B, U+200D, U+2060, U+00AD, U+058A, U+30FC, U+2043, newline or tab inside, and card separators . / _).",
+    "impact": "The value stays readable in redacted output. Pre-existing.",
+    "suggested_fix": "Extend the fold set and the card separators.",
+    "evidence": "Carried forward from 2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916#r6-S4 so the disposition can record who decided. No new review ran. Reported in round 6 against 9d4cbc36 (PR 916). Deferred to flow 412 by operator poll 113.",
+    "confidence": "medium",
+    "global_id": "2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02#r7-S4",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Checked at 05ce88515a820cd6e185d320fef74cd3b34f6611. At 05ce8851 no span for 4111 with U+200B groups, 415 with U+200D groups, SSNs with U+00AD/U+058A/U+30FC/U+2043, \"123-45-\\n6789\", \"4111\\t1111\\t1111\\t1111\", \"4111.1111.1111.1111\", \"4111/1111/1111/1111\", \"4111_1111_1111_1111\", \"192.168.<U+200B>1.10\", \"123<U+200B>-45-6789\" or U+2060. Only \"415\\n555\\n0199\" is caught, as in baseline (deferred to flow 412).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "decided-by: MrCipherSmith (operator), polls 113 (2026-10-07T03:33Z, 'Завести их отдельным flow, не терять') and 116 (2026-10-07T04:32Z); pre-existing in baseline 6f6d8898, tracked in flow 412; confirmed by review-verifier at 05ce8851"
+    }
+  },
+  {
+    "id": "r7-S5",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "A fullwidth-letter IBAN is not detected; only the trailing digits are masked as a phone.",
+    "impact": "The country code, check digits and bank code stay readable.",
+    "suggested_fix": "Fold fullwidth Latin letters in the normaliser.",
+    "evidence": "Carried forward from 2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916#r6-S5 so the disposition can record who decided. No new review ran. Reported in round 6 against 9d4cbc36 (PR 916). Deferred to flow 412 by operator poll 113.",
+    "confidence": "medium",
+    "global_id": "2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02#r7-S5",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Checked at 05ce88515a820cd6e185d320fef74cd3b34f6611. At 05ce8851 the fullwidth IBAN yields no pii.iban span, only phone[8,22) on the trailing fullwidth digits, so the country code, check digits and bank code stay readable; the ASCII IBAN is detected (deferred to flow 412).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "decided-by: MrCipherSmith (operator), polls 113 (2026-10-07T03:33Z, 'Завести их отдельным flow, не терять') and 116 (2026-10-07T04:32Z); pre-existing in baseline 6f6d8898, tracked in flow 412; confirmed by review-verifier at 05ce8851"
+    }
+  }
+]

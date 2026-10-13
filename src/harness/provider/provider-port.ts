@@ -8,7 +8,7 @@
 // this module adds no new dependency and imports no provider SDK.
 
 import { type ValidationResult, validateAgainstSchema } from "../../contracts/validator";
-import type { NormalizedEvent, NormalizedRequest, ProviderErrorKind, ProviderPort } from "./types";
+import type { NormalizedError, NormalizedEvent, NormalizedRequest, ProviderErrorKind, ProviderPort } from "./types";
 
 export type { ProviderPort };
 
@@ -98,4 +98,23 @@ export function defaultRetryable(kind: ProviderErrorKind): boolean | undefined {
 export function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
   const concrete = defaultRetryable(kind);
   return concrete === undefined ? fallback : concrete;
+}
+
+/** Preserve a server's retry hint (delta seconds or HTTP date) without deciding whether to retry. */
+export function withRetryAfter(error: NormalizedError, headers: Headers, clock: () => number = Date.now): NormalizedError {
+  if (!error.retryable) return error;
+  const value = headers.get("retry-after")?.trim();
+  if (!value) return error;
+  const ms = /^\d+(?:\.\d+)?$/.test(value) ? Number(value) * 1000 : Date.parse(value) - clock();
+  if (Number.isFinite(ms)) error.retryAfterMs = Math.max(0, ms);
+  return error;
+}
+
+/** Recognized network failures only; parser and programming errors stay permanent. */
+export function isTransportFailure(cause: unknown): boolean {
+  if (!(cause instanceof Error)) return false;
+  const code = (cause as Error & { code?: string; cause?: { code?: string } }).code
+    ?? (cause as Error & { cause?: { code?: string } }).cause?.code;
+  return /^(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|UND_ERR_SOCKET|UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_BODY_TIMEOUT)$/.test(code ?? "")
+    || /fetch failed|network (error|connection)|socket (closed|hang up)|connection (reset|closed)|timed? ?out/i.test(cause.message);
 }

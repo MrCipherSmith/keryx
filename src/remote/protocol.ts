@@ -11,7 +11,19 @@
 export const REMOTE_API_PREFIX = "/v1/remote";
 export const REMOTE_SCHEMA_VERSION = "1.0.0";
 
-export type RemoteRoute = "register" | "deregister" | "heartbeat" | "reply" | "approval" | "prompt" | "state" | "ack" | "stream";
+export type RemoteRoute =
+  | "register"
+  | "deregister"
+  | "heartbeat"
+  | "reply"
+  | "approval"
+  | "approval-result"
+  | "approval-ack"
+  | "prompt"
+  | "prompt-close"
+  | "state"
+  | "ack"
+  | "stream";
 
 export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">> = {
   register: "POST",
@@ -19,9 +31,12 @@ export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">>
   heartbeat: "POST",
   reply: "POST",
   approval: "POST",
+  "approval-result": "POST",
   prompt: "POST",
+  "prompt-close": "POST",
   state: "POST",
   ack: "POST",
+  "approval-ack": "POST",
   stream: "GET",
 };
 
@@ -70,6 +85,20 @@ export type TelegramChannelState =
   /** Configured, but the hub is not running (another poller owns the token, a bad config ...). `reason` says why. */
   | "off";
 
+/** The rendering mode in effect and the last fallback (flow 395), as `/channels` shows them. */
+export interface ChannelsRendering {
+  mode: "auto" | "rich" | "html" | "plain";
+  lastFallback?: {
+    step: "rich-to-html" | "html-to-plain";
+    /** Redacted, never message text. */
+    reason: string;
+    /** Epoch ms. */
+    at: number;
+  };
+  /** Epoch ms until which rich messages are skipped because the bot or server refused them. */
+  richPausedUntil?: number;
+}
+
 export interface ChannelsStatusResponse {
   schemaVersion: string;
   /** This machine's name (the hostname), as it appears in the Test message and in topic names. */
@@ -79,6 +108,8 @@ export interface ChannelsStatusResponse {
     reason?: string;
     /** Registered sessions, i.e. open topics. */
     sessions: number;
+    /** Absent when nothing is configured on this machine. */
+    rendering?: ChannelsRendering;
   };
 }
 
@@ -137,6 +168,18 @@ export const MAX_CALLBACK_DATA_BYTES = 64;
 export const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
 export const MAX_APPROVAL_TIMEOUT_MS = 60 * 60_000;
 export const MIN_APPROVAL_TIMEOUT_MS = 100;
+/**
+ * Flow 419, AC3: an approval or question nobody has answered gets a reminder in the topic after this long,
+ * and again at the same interval, at most {@link MAX_PROMPT_REMINDERS} times in all.
+ */
+export const DEFAULT_PROMPT_REMINDER_MS = 2 * 60_000;
+export const MAX_PROMPT_REMINDERS = 3;
+/**
+ * How long serve waits, after it wrote an approval decision to the shell's stream, for the shell
+ * to say it received it (flow 397). Without that word the approval is shown as "not confirmed",
+ * never as granted: a write that went into a stalled socket proves nothing.
+ */
+export const DEFAULT_APPROVAL_ACK_MS = 5_000;
 
 /** Server comment line on an otherwise idle stream; keeps proxies and the client's own watchdog honest. */
 export const DEFAULT_KEEPALIVE_MS = 15_000;
@@ -161,8 +204,8 @@ export function isApprovalId(value: unknown): value is string {
   return typeof value === "string" && APPROVAL_ID_PATTERN.test(value);
 }
 
-/** `ap:<id>:allow` / `ap:<id>:deny`: 20 bytes at most, inside Telegram's 64. */
-const APPROVAL_CALLBACK_PATTERN = /^ap:(ap[0-9a-f]{12}):(allow|deny)$/;
+/** `ap:<id>:allow` / `ap:<id>:deny` / `ap:<id>:always`: 21 bytes at most, inside Telegram's 64. */
+const APPROVAL_CALLBACK_PATTERN = /^ap:(ap[0-9a-f]{12}):(allow|deny|always)$/;
 
 export function approvalCallbackData(approvalId: string, decision: ApprovalDecision): string {
   return `ap:${approvalId}:${decision}`;
@@ -208,12 +251,75 @@ export function parseChoiceCallback(data: string): { promptId: string; index: nu
   return { promptId: match[1] as string, index: Number(match[2]) };
 }
 
+// ---- own answers (flow 401) ---------------------------------------------------------------
+//
+// A prompt asked with `own: true` carries one more button, "✍ Свой ответ", whose callback is
+// `pk:<id>:own`. Pressing it (same message, same person, before the prompt expires) makes serve send
+// a ForceReply message and remember its message id. Only a reply TO THAT MESSAGE, from the person who
+// pressed, before the window closes, is the answer: it is never "the next message in the topic", and
+// it never starts a turn. Approvals have no such path.
+
+/** The label of the own-answer button. */
+export const OWN_ANSWER_BUTTON_LABEL = "✍ Свой ответ";
+/** How long an own answer may take after the button is pressed. At least five minutes, whatever the options' own timeout. */
+export const OWN_ANSWER_WINDOW_MS = 5 * 60_000;
+/**
+ * The text of the ForceReply message. A reply whose replied-to text opens with it is a reply to a reply box,
+ * so one this serve no longer knows (a restart, a box resent from the durable queue) is told it is late
+ * instead of starting a turn.
+ */
+export const OWN_REPLY_PROMPT = "Reply to this message with your own answer. It is open for 5 minutes.";
+/** The most characters of an own answer a reply may carry through the stream (Telegram's own message limit). */
+export const MAX_OWN_ANSWER_CHARS = 4_096;
+
+const OWN_CALLBACK_PATTERN = /^pk:(pk[0-9a-f]{12}):own$/;
+
+/** `pk:<id>:own`: 20 bytes. */
+export function ownCallbackData(promptId: string): string {
+  return `pk:${promptId}:own`;
+}
+
+export function parseOwnCallback(data: string): { promptId: string } | undefined {
+  const match = OWN_CALLBACK_PATTERN.exec(data);
+  return match === null ? undefined : { promptId: match[1] as string };
+}
+
 /** Buttons a shell may attach to a reply may not collide with the picker namespace either. */
 export const RESERVED_CHOICE_PREFIX = "pk:";
 /** The most buttons one prompt may carry in total. */
 export const MAX_PROMPT_BUTTONS = 24;
 
-export type ApprovalDecision = "allow" | "deny";
+// ---- work intake cards (flow 403) ---------------------------------------------------------
+//
+// Intake cards live in the service topic "Intake", not in a session topic. Their buttons carry
+// `in:<card id>:<action code>`; the hub hands such a press to the intake handler only when it came
+// from an allowlisted user, in this chat, on a message of that topic. What the press does is read
+// from the intake registry, never from the data.
+
+/** The service topic the intake cards are written into. */
+export const INTAKE_SERVICE_TOPIC = "Intake";
+/** Button data of an intake card starts with this; shells may not use it and the hub routes it to intake. */
+export const RESERVED_INTAKE_PREFIX = "in:";
+
+/** True when `data` is within Telegram's limit and in the intake namespace. */
+export function isIntakeCallbackData(data: unknown): data is string {
+  return typeof data === "string" && data.startsWith(RESERVED_INTAKE_PREFIX) && Buffer.byteLength(data, "utf8") <= MAX_CALLBACK_DATA_BYTES;
+}
+
+/**
+ * `always` (flow 396) is "allow this call and remember the offered pattern". It can only be the
+ * answer to an approval that carried a `remember` offer; serve ignores it otherwise.
+ */
+export type ApprovalDecision = "allow" | "deny" | "always";
+
+/** The longest pattern a `remember` offer may carry. */
+export const MAX_REMEMBER_PATTERN_CHARS = 300;
+
+/**
+ * How much of a tool's command or input an approval prompt shows (flow 396). A longer call is cut and
+ * the prompt says so; and no "Always" is offered for a call whose tail the operator could not see.
+ */
+export const APPROVAL_INPUT_PREVIEW_CHARS = 1_500;
 
 // ---- request bodies -----------------------------------------------------------
 
@@ -242,6 +348,18 @@ export interface ApprovalBody {
   sessionId: string;
   prompt: string;
   timeoutMs?: number;
+  /**
+   * The shell pattern the shell is willing to store if the operator presses "Always" (flow 396).
+   * Chosen by the shell from its own classification of the command, never from model text.
+   */
+  remember?: string;
+}
+
+/** The shell's report of what became of an "Always" press (flow 396): serve edits the message once. */
+export interface ApprovalResultBody {
+  sessionId: string;
+  approvalId: string;
+  remembered: boolean;
 }
 
 export interface PromptBody {
@@ -252,11 +370,36 @@ export interface PromptBody {
   timeoutMs?: number;
   /** Only this Telegram user may answer. */
   forUserId?: number;
+  /**
+   * Flow 401: add the "✍ Свой ответ" button after the rows. Serve builds it (the shell sends no label)
+   * and counts it against the button limit. Absent: the prompt is exactly what it was.
+   */
+  own?: boolean;
+}
+
+/** The shell closes a prompt it no longer needs (flow 401): the answer came from the dock, or the turn stopped. */
+export interface PromptCloseBody {
+  sessionId: string;
+  promptId: string;
+  /** What the topic message says: "shell" for an answer given in the shell, otherwise "cancelled". */
+  by?: "shell" | "cancelled";
 }
 
 export interface AckBody {
   sessionId: string;
   updateId: number;
+}
+
+/**
+ * The shell's word on the decision frame for this approval (flow 397). One per frame, repeats allowed.
+ * `applied` says whether the decision reached a live question in the shell. A shell that sends no
+ * `applied` (one older than this field) is read as received-only and treated as applied, which is all
+ * it ever claimed; a present `applied: false` ends the topic message as "not applied", never "Allowed".
+ */
+export interface ApprovalAckBody {
+  sessionId: string;
+  approvalId: string;
+  applied?: boolean;
 }
 
 /**
@@ -283,8 +426,12 @@ export interface RegisterResponse {
   name: string;
   threadId: number;
   reused: boolean;
-  /** How long a run started from Telegram may take before the shell interrupts it. */
+  /** How long a run started from Telegram may take before the shell interrupts it; 0 means no limit. */
   runTimeoutMs: number;
+  /** The mode a Telegram-started turn starts with until `/mode` changes the shell's (flow 396). Absent from an older serve. */
+  permissionMode?: "ask" | "trust";
+  /** How long an approval prompt waits for a tap before it is denied (flow 396). Absent from an older serve. */
+  approvalTimeoutMs?: number;
 }
 
 export interface HeartbeatResponse {
@@ -333,14 +480,21 @@ export interface ApprovalEvent {
   updateId: number;
   approvalId: string;
   decision: ApprovalDecision;
+  /** The Telegram user who pressed the button (flow 396), for the shell's audit line. */
+  fromId?: number;
 }
 
 /** A press on a choice prompt: the position of the button, in reading order across the rows. */
 export interface ChoiceEvent {
   updateId: number;
   promptId: string;
+  /** The pressed button; -1 for an own answer or a close, which carry `own` or `closed` instead. */
   index: number;
   fromId: number;
+  /** Flow 401: the person's own answer, from a reply to the armed prompt. Never set for a press. */
+  own?: string;
+  /** Flow 401: serve ended the prompt without an answer, so the shell stops waiting. */
+  closed?: "expired";
 }
 
 export interface CallbackEvent {

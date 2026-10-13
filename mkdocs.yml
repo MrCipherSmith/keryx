@@ -154,6 +154,8 @@ nav:
           - Copy-ready agent prompts: guides/agent-prompts.md
       - Work in the shell:
           - Choose an approval mode: guides/permission-modes.md
+          - Recover from a provider outage: shell-recovery.md
+          - Keep a session when the shell exits: shell-preservation.md
           - "Undo a turn with /rewind": guides/rewind.md
           - Keep a recommendation journal: guides/recommendation-journal.md
           - "/goal": guides/goal.md
@@ -170,12 +172,15 @@ nav:
       - Review and quality:
           - Review with a durable record: guides/review-with-a-record.md
           - Review as a pull request bot: guides/review-as-a-pr-bot.md
+          - Review a pull request with nobody at the keyboard: guides/autonomous-review.md
+          - Let the review arbiter answer policy questions: guides/review-arbiter.md
           - Review service in the delivery loop: guides/jev-in-the-delivery-loop.md
           - Write a rubric eval scenario: guides/write-a-rubric-scenario.md
           - Keep the wiki current: guides/keep-the-wiki-current.md
       - Automation and remote:
           - Run keryx in CI: guides/run-in-ci.md
           - Get a scheduled digest: guides/scheduled-digest.md
+          - Take work in from GitHub as cards in Telegram: guides/work-intake.md
           - Drive keryx from a bot: guides/drive-keryx-remotely.md
           - Answer a remote approval: guides/answer-remote-approvals.md
           - Move skills, rules, memory: guides/portability.md

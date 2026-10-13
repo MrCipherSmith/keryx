@@ -5,11 +5,15 @@
 // `AgentIO` (createTuiAgentIo), then the captured frame is asserted to contain the
 // streamed assistant text and a tool line. `@opentui/core` is optional + loaded
 // via dynamic import; the tests skip when it is absent.
+import { APPROVAL_CAUSES, approvalCauseLine } from "../commands/approval-cause";
+import { buildMainQueueHelp, buildMainQueueRow } from "./main-queue-view";
+import { QUEUE_FORCE_HELP } from "./main-queue";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import packageJson from "../../package.json" with { type: "json" };
 import {
   composerHeightForLines,
@@ -24,6 +28,7 @@ import {
   freshSlateSessionRef,
   attachUsageIo,
   createTuiAgentIo,
+  describeModePickerOption,
   describeModeRow,
   estimateContextTokens,
   fmtTokens,
@@ -1479,6 +1484,34 @@ otuiTest("entering nav mode and moving focus repaint the highlight WITHOUT rebui
   h.destroy();
 });
 
+otuiTest("flow406: collapsed help previews eight commands and expands the full list", async () => {
+  const otui = requireOtui();
+  const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 80, height: 30 });
+  const transcript = new otui.core.BoxRenderable(renderer, { id: "help-transcript", flexGrow: 1, flexDirection: "column" });
+  renderer.root.add(transcript);
+  const commands = Array.from({ length: 12 }, (_, i) => `/command-${i + 1}`);
+  const state: BlockState = {
+    id: "help-preview", kind: "output", summary: "Available commands",
+    fullText: commands.join("\n"), lineCount: 12, collapsed: true,
+    retained: true, truncated: false,
+  };
+  const view = createBlockView(otui.core, renderer, transcript, state, {
+    collapsedPreview: commands.slice(0, 8).join("\n"), maxLines: 500,
+  });
+  view.render(state);
+  await flush();
+  expect(captureCharFrame()).toContain("/command-8");
+  expect(captureCharFrame()).not.toContain("/command-9");
+  view.render({ ...state, collapsed: false });
+  await flush();
+  expect(captureCharFrame()).toContain("/command-12");
+  view.render(state);
+  await flush();
+  expect(captureCharFrame()).not.toContain("/command-9");
+  view.destroy();
+  renderer.destroy();
+});
+
 otuiTest("a repaint whose body text CHANGED (an eviction) repaints in place, keeping the mounted renderables", async () => {
   const otui = requireOtui();
   const { core, counts } = countingCore(otui);
@@ -2206,6 +2239,84 @@ otuiTest("the flow-041 approval context reaches the TUI approval dock (headless)
   h.renderer.destroy();
 });
 
+// Flow 426 AC6: the queue panel says what each queued message waits for.
+otuiTest("AC6: the queue panel renders its state and the approval it waits for (headless)", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui, { width: 160 });
+  const wait = { kind: "approval", call: "keryx harness wave --spec tier.json" } as const;
+  for (const [index, text] of ["review the next slice", "then run the ledger"].entries()) {
+    const built = buildMainQueueRow(otui.core, h.renderer, {
+      id: `q${index}`,
+      index,
+      text,
+      wait,
+      onForce: () => {},
+      onEdit: () => {},
+      onDelete: () => {},
+    });
+    h.dock.add(built.box);
+  }
+  h.dock.add(buildMainQueueHelp(otui.core, h.renderer));
+  h.dock.visible = true;
+  await h.flush();
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("> q1 (1) review the next slice");
+  expect(frame).toContain("queued · waits for approval of: keryx harness wave --spec tier.json");
+  expect(frame).toContain("> q2 (2) then run the ledger");
+  expect(frame).toContain("[Force]");
+  expect(frame).toContain(QUEUE_FORCE_HELP);
+  h.renderer.destroy();
+});
+
+otuiTest("AC6: without an approval pending the queue panel says it waits for the current turn (headless)", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui, { width: 160 });
+  const built = buildMainQueueRow(otui.core, h.renderer, {
+    id: "q0",
+    index: 0,
+    text: "one more thing",
+    wait: { kind: "turn" },
+    onForce: () => {},
+    onEdit: () => {},
+    onDelete: () => {},
+  });
+  h.dock.add(built.box);
+  h.dock.visible = true;
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("queued · waits for the current turn");
+  h.renderer.destroy();
+});
+
+// Flow 426 AC5: the modal shows the one-line cause, one test per cause.
+for (const cause of APPROVAL_CAUSES) {
+  otuiTest(`AC5: the shell approval modal shows the ${cause} cause line (headless)`, async () => {
+    const otui = requireOtui();
+    const h = await mountApprovalDock(otui, { width: 160 });
+    const command = "keryx harness wave --spec tier.json";
+    const choice = pickShellApproval(
+      otui.core,
+      h.renderer,
+      h.dock,
+      command,
+      async () => "",
+      false,
+      false,
+      {},
+      false,
+      undefined,
+      false,
+      cause,
+    );
+    await h.flush();
+    const frame = h.captureCharFrame();
+    expect(frame).toContain(approvalCauseLine(cause));
+    expect(frame).toContain(command);
+    await pressEscapeAndSettle(h);
+    expect(await choice).toBe("deny");
+    h.renderer.destroy();
+  });
+}
+
 otuiTest("a failing approval-context loader still renders a default-deny approval (headless)", async () => {
   const otui = requireOtui();
   const command = "rm -rf build";
@@ -2809,7 +2920,26 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
 
   test("io.readOnly is wired to the closure, mirroring io.permissionMode", () => {
     expect(fnBodyPlan).toContain("io.readOnly = () => readOnly;");
-    expect(fnBodyPlan).toContain("io.permissionMode = () => permissionMode;");
+    // Flow 396: the shell's own getter is the typed-turn mode; a Telegram turn's getter is handed to that turn alone.
+    expect(fnBodyPlan).toContain("io.permissionMode = () => modeForTurn(false).mode;");
+    expect(fnBodyPlan).toContain("permissionMode: () => modeForTurn(true).mode,");
+  });
+
+  test("flow 396: only the facade of a turn the bridge took as a Telegram turn carries the Telegram hooks", () => {
+    expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
+    expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
+    // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
+    // Flow 419: the shell's io still decides locally (`requestApprovalLocally` is the inner call, the dock is the
+    // decider); the wrapper only also posts the question to the topic, and must not read the bridge-wide flag.
+    expect(fnBodyPlan).toContain("io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));");
+    const mirrorStart = fnBodyPlan.indexOf("const mirrorApprovalToTopic =");
+    const mirrorEnd = fnBodyPlan.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic", mirrorStart);
+    expect(mirrorStart).toBeGreaterThanOrEqual(0);
+    expect(mirrorEnd).toBeGreaterThan(mirrorStart);
+    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).not.toContain("telegramTurnActive");
+    expect(fnBodyPlan.slice(mirrorStart, mirrorEnd)).toContain("inner(tool, inputJson, meta, race)");
+    expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
+    expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
   });
 
   test("runPlanCommand exists and has no confirmation dialog / picker overlay (TUI cosmetics out of scope)", () => {
@@ -2845,10 +2975,37 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(caseBlock).toContain("runPlanCommand(line);");
   });
 
+  test("flow 429 AC7: the /mode picker names the round limit of each mode", () => {
+    const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+    delete process.env.KERYX_AGENT_MAX_ROUNDS;
+    try {
+      expect(describeModePickerOption("ask")).toContain("40 rounds per turn, asks before extending");
+      expect(describeModePickerOption("trust")).toContain("200 rounds per turn, asks before extending");
+      expect(describeModePickerOption("auto")).toContain("200 rounds per turn, extends without asking");
+    } finally {
+      if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+    }
+  });
+
   // Flow 270 AC9: the state is on screen, not only in a toast.
-  test("describeModeRow: the mode alone, and a separate read-only part while /plan is on", () => {
+  test("describeModeRow: the mode alone, a separate read-only part while /plan is on, and an automatic-review part during such a turn", () => {
     expect(describeModeRow("ask", false)).toEqual({ mode: "ask" });
     expect(describeModeRow("auto", true)).toEqual({ mode: "auto", readOnly: "· read-only" });
+    expect(describeModeRow("ask", false, true)).toEqual({ mode: "ask", automaticReview: "· automatic review" });
+    expect(describeModeRow("trust", true, true)).toEqual({
+      mode: "trust",
+      readOnly: "· read-only",
+      automaticReview: "· automatic review",
+    });
+  });
+
+  test("flow 429 AC16: /mode names automatic review, its limit and its emergencies; the sidebar row follows the turn", () => {
+    const text = describeAutomaticReviewMode({});
+    expect(text).toContain("200 rounds per turn, extends without asking");
+    expect(text).toContain("a destructive action");
+    expect(text).toContain("a reduced reviewer set");
+    expect(fnBodyPlan).toContain("io.onAutomaticReview = (active) => {\n      automaticReview = active;\n      paintModeRow();");
+    expect(fnBodyPlan).toContain("describeAutomaticReviewMode()");
   });
 
   test("the sidebar Mode row is repainted by /plan on, /plan off and every /mode change", () => {
@@ -2858,7 +3015,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd);
     expect(fnBlock).toContain("readOnly = true;\n        paintModeRow();");
     expect(fnBlock).toContain("readOnly = false;\n        paintModeRow();");
-    expect(fnBodyPlan).toContain("permissionMode = next;\n      paintModeRow();");
+    expect(fnBodyPlan).toContain("permissionMode = next;\n      modeChangedThisSession = true;\n      paintModeRow();");
     // Painted once at startup too, so the row is never blank.
     expect(fnBodyPlan).toMatch(/const paintModeRow = [\s\S]*?\n {4}paintModeRow\(\);/);
   });
@@ -2973,56 +3130,29 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     }
   });
 
-  // Flow 277 (P2): the ORDER these two branches run their steps in used to be
-  // asserted here by comparing character offsets inside a 500-character
-  // window. Both branches now call the extracted `performSlateExit`
-  // (`src/tui/shell-exit.ts`), and `shell-exit.test.ts` asserts the order
-  // against the real function — including that each async step is AWAITED,
-  // which no offset comparison could express. What is left here is the
-  // wiring: that both exit paths go through it, with this session's own
-  // slate, jobs, bus and lease.
-  test("the non-busy /exit branch exits through performSlateExit, with this session's slate, jobs, bus and lease", () => {
-    const exitIdx = tuiSourceAc7.indexOf('if (command.name === "/exit") {');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
-    expect(exitBlock).toContain("await performSlateExit({");
-    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
-    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
-    expect(exitBlock).toContain("jobs.removeAll()");
-    expect(exitBlock).toContain("liveBus?.leave()");
-    expect(exitBlock).toContain("sessionLease.release()");
-  });
-  test("F-002: the busy-dispatch /exit branch (classifyBusyDispatch === 'exit') exits through the SAME helper — the second real exit path, once missing the sweep entirely", () => {
-    const exitIdx = tuiSourceAc7.indexOf('case "exit": {');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
-    expect(exitBlock).toContain("await performSlateExit({");
-    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
-    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
-    expect(exitBlock).toContain("jobs.removeAll()");
-  });
-  test("BOUNDARY — performSlateExit is wired at exactly those two paths, not sprinkled", () => {
-    // The point of the helper is that the two command-driven exits share ONE
-    // sequence. A third call site would be a third exit path nobody reviewed;
-    // zero would mean the two tests above are asserting nothing.
+  // Flow 415: wiring audits only. Executable barrier/failure/timeout checks
+  // live in session/shell-finalizer.test.ts; exit sequencing in shell-exit.test.ts.
+  test("both command exits await the shared preservation barrier", () => {
+    for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
+      const idx = tuiSourceAc7.indexOf(marker);
+      expect(idx).toBeGreaterThanOrEqual(0);
+      const block = tuiSourceAc7.slice(idx, idx + 900);
+      expect(block).toContain("await performSlateExit({");
+      expect(block).toContain("await finalizeShell?.();");
+      expect(block).not.toContain("closeSlateSession(");
+      expect(block).not.toContain("sessionLease.release()");
+    }
     expect(tuiSourceAc7.split("await performSlateExit({").length - 1).toBe(2);
   });
-  test("F-002: onDestroy (Ctrl+C) ALSO sweeps AND purges background jobs, and defers resolveDone() until the sweep settles — the THIRD real exit path that was previously missing it entirely", () => {
-    const onDestroyIdx = tuiSourceAc7.indexOf("onDestroy: () => {");
-    expect(onDestroyIdx).toBeGreaterThanOrEqual(0);
-    const nextTopLevelMarker = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", onDestroyIdx);
-    expect(nextTopLevelMarker).toBeGreaterThan(onDestroyIdx);
-    const onDestroyBlock = tuiSourceAc7.slice(onDestroyIdx, nextTopLevelMarker);
-    const removeIdx = onDestroyBlock.indexOf(onDestroyRemoveAllCall);
-    const sweepIdx = onDestroyBlock.indexOf(onDestroySweepCall);
-    const resolveIdx = onDestroyBlock.indexOf("resolveDone();");
-    expect(removeIdx).toBeGreaterThanOrEqual(0);
-    expect(sweepIdx).toBeGreaterThan(removeIdx);
-    // resolveDone() is called from INSIDE the deferred async IIFE (a
-    // `finally`), after the sweep — never synchronously alongside it — so
-    // nothing downstream of `launchTuiAgentShell()` can observe `done`
-    // resolving before the sweep has actually run.
-    expect(resolveIdx).toBeGreaterThan(sweepIdx);
+  test("renderer destruction waits for preservation before resolving done", () => {
+    const start = tuiSourceAc7.indexOf("onDestroy: () => {");
+    const end = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const block = tuiSourceAc7.slice(start, end);
+    const finalize = block.indexOf("await finalizeShell()");
+    expect(finalize).toBeGreaterThanOrEqual(0);
+    expect(block.indexOf("resolveDone();")).toBeGreaterThan(finalize);
   });
 
   test("AC9: /clear|/new does NOT sweep or purge background jobs — a running job must survive it", () => {
@@ -3036,23 +3166,24 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     expect(newBlock).not.toContain("removeAll");
   });
 
-  test("sweepBackgroundJobs (OS-level) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    const plainOccurrences = tuiSourceAc7.split(sweepCall).length - 1;
-    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
-    const onDestroyOccurrences = tuiSourceAc7.split(onDestroySweepCall).length - 1;
-    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveDeps` ref, not `deps` directly)
-  });
-
-  test("jobs.removeAll() (store-level purge) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    // Flow 277: the two command-driven purges are now `purgeJobList: () =>
-    // jobs.removeAll()` inside the `performSlateExit` steps, so they carry no
-    // trailing semicolon. onDestroy's own `liveJobs?.removeAll()` does not
-    // contain this substring (capital J, optional chaining), so it is counted
-    // separately below rather than subtracted here.
-    const plainOccurrences = tuiSourceAc7.split("jobs.removeAll()").length - 1;
-    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
-    const onDestroyOccurrences = tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1;
-    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveJobs` ref, not `jobs` directly)
+  test("cleanup and ownership release belong to the single finalizer", () => {
+    expect(tuiSourceAc7.split(sweepCall).length - 1).toBe(0);
+    expect(tuiSourceAc7.split("jobs.removeAll()").length - 1).toBe(0);
+    // Second site: startup destruction before the live finalizer exists.
+    // Command exits must not contain their own cleanup or release.
+    expect(tuiSourceAc7.split(onDestroySweepCall).length - 1).toBe(2);
+    expect(tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1).toBe(2);
+    const start = tuiSourceAc7.indexOf("finalizeShell = createShellFinalizer({");
+    const end = tuiSourceAc7.indexOf("io.onHistoryChange =", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = tuiSourceAc7.slice(start, end);
+    // The renderer is already destroyed on the exit path, so the final checkpoint must not repaint.
+    expect(block).toContain("flushSessionCheckpoint(false);");
+    expect(block).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
+    expect(block).toContain(onDestroySweepCall);
+    expect(block).toContain(onDestroyRemoveAllCall);
+    expect(block).toContain('hooks.runtime.fire("SessionEnd"');
+    expect(block).toContain("releaseLease: () => sessionLease.release()");
   });
 });
 
@@ -3770,7 +3901,13 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     // rather than reading `foregroundOperation.signal` inline at the call
     // site. Assert both halves: the capture is `foregroundOperation.signal`,
     // and the call site passes that same binding.
-    expect(source).toMatch(/const turnSignal = foregroundOperation\.signal;[\s\S]{0,250}runAgentTurn\([\s\S]{0,250}signal:\s*turnSignal/);
+    const start = source.indexOf("const turnSignal = foregroundOperation.signal;");
+    const end = source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const turn = source.slice(start, end);
+    expect(turn).toContain("signal: turnSignal,");
+    expect(turn).toMatch(/turnSignal\.aborted \? Promise\.resolve\(\) : runAgentTurn\([\s\S]{0,250}signal:\s*turnSignal/);
     expect(source).toMatch(/wikiEnrich\([\s\S]{0,500}signal:\s*foregroundOperation\.signal/);
   });
 
@@ -4315,4 +4452,55 @@ otuiTest("/theme switch remaps tone-painted feed text to the new palette's slots
   } finally {
     applyThemeId(previous);
   }
+});
+
+
+otuiTest("interactive recovery renders interrupted output and a fresh answer through real OpenTUI IO", async () => {
+  const otui = requireOtui();
+  const { renderer, flush, captureCharFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+  try {
+    const transcript = new otui.core.BoxRenderable(renderer, { id: "recovery-transcript", flexGrow: 1, flexDirection: "column" });
+    renderer.root.add(transcript);
+    const io = createTuiAgentIo(otui.core, renderer, transcript);
+    const retained: { kind: string; fullText: string }[] = [];
+    attachBlockIo(io, (block) => { retained.push(block); return `block${retained.length}`; }, {});
+    const provider = scriptedProvider([
+      [{ kind: "reasoning_delta", text: "discarded reasoning" }, { kind: "text_delta", text: "Partial output." },
+        { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+      [{ kind: "reasoning_delta", text: "complete reasoning" }, { kind: "text_delta", text: "Recovered TUI answer." }, { kind: "model_end" }],
+    ]);
+    const history: NormalizedMessage[] = [];
+    const deps: AgentDeps = { provider, providerId: "scripted", modelId: "m", tools: [], systemInstruction: "sys", idSeq: fixedIdSeq(), maxRounds: 1 };
+    await runAgentTurn(io, deps, history, "hello", { recovery: { random: () => 0, wait: async () => {
+      await flush();
+      expect(captureCharFrame()).toContain("[recovering]");
+      expect(retained).toHaveLength(0);
+    } } });
+    await flush();
+    const frame = captureCharFrame();
+    expect(frame).toContain("[interrupted output]");
+    expect(frame).toContain("Recovered TUI answer.");
+    expect(retained.filter((block) => block.kind === "thought").map((block) => block.fullText)).toEqual(["complete reasoning"]);
+    expect(history.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(history.at(-1)?.content).toBe("Recovered TUI answer.");
+  } finally { renderer.destroy(); }
+});
+
+
+test("session replacement paths revoke foreground callbacks before replacing the global session", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  for (const anchor of ["const applyOpened =", "const startNewSession ="]) {
+    const start = source.indexOf(anchor);
+    const replace = source.indexOf("liveSession = opened.handle;", start);
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, replace);
+    expect(body).toContain("invalidateForegroundSession();");
+  }
+  const invalidation = source.slice(source.indexOf("const invalidateForegroundSession ="), source.indexOf("const applyOpened ="));
+  expect(invalidation).toContain("foregroundOperation.invalidateSession();");
+  expect(invalidation).toContain("forceHandoff.clear();");
+  expect(invalidation).toContain("clearTimeout(sessionPersistTimer)");
+  const finalizer = source.slice(source.indexOf("const accepted = settleForegroundOperation(foregroundOperation, operation);"));
+  expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("remoteQueue.turnSettled"));
+  expect(finalizer.indexOf("if (!accepted)")).toBeLessThan(finalizer.indexOf("flushSessionCheckpoint()"));
 });

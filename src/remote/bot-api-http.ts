@@ -152,8 +152,31 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
       }
       if (params.inlineKeyboard !== undefined) {
         body.reply_markup = { inline_keyboard: params.inlineKeyboard };
+      } else if (params.forceReply !== undefined) {
+        body.reply_markup = {
+          force_reply: true,
+          ...(params.forceReply.placeholder === undefined ? {} : { input_field_placeholder: params.forceReply.placeholder.slice(0, 64) }),
+        };
       }
       return call<{ message_id: number }>("sendMessage", body);
+    },
+    async sendRichMessage(params) {
+      const body: Record<string, unknown> = { chat_id: params.chatId, rich_message: params.richMessage };
+      if (params.messageThreadId !== undefined) {
+        body.message_thread_id = params.messageThreadId;
+      }
+      if (params.inlineKeyboard !== undefined) {
+        body.reply_markup = { inline_keyboard: params.inlineKeyboard };
+      }
+      return call<{ message_id: number }>("sendRichMessage", body);
+    },
+    async editRichMessage(params) {
+      await call<unknown>("editMessageText", {
+        chat_id: params.chatId,
+        message_id: params.messageId,
+        rich_message: params.richMessage,
+        reply_markup: { inline_keyboard: params.inlineKeyboard ?? [] },
+      });
     },
     async editMessageReplyMarkup(params) {
       await call<unknown>("editMessageReplyMarkup", {
@@ -200,6 +223,12 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
     },
     async deleteForumTopic(params) {
       await call<boolean>("deleteForumTopic", {
+        chat_id: params.chatId,
+        message_thread_id: params.messageThreadId,
+      });
+    },
+    async closeForumTopic(params) {
+      await call<boolean>("closeForumTopic", {
         chat_id: params.chatId,
         message_thread_id: params.messageThreadId,
       });

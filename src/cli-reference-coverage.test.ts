@@ -247,13 +247,19 @@ async function captureAll(run: () => Promise<void> | void): Promise<string> {
   const sink = (...args: unknown[]): void => {
     lines.push(args.map((a) => String(a)).join(" "));
   };
+  const write = process.stdout.write;
   console.log = sink;
   console.error = sink;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    lines.push(String(chunk));
+    return true;
+  }) as typeof process.stdout.write;
   try {
     await run();
   } finally {
     console.log = log;
     console.error = error;
+    process.stdout.write = write;
   }
   return lines.join("\n");
 }

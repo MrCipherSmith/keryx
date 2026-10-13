@@ -114,6 +114,7 @@ continues with the wiki, a recorded decision and the shell.
 | Repeatable procedures instead of improvised ones | Versioned skills, synced agent rules and reviewed learning | [Skills, rules and learning](https://mrciphersmith.github.io/keryx/modules/skills-and-learning/) |
 | A record of what an agent recommended and what you chose | A recommendation journal with blind questions and a match report | [Recommendation journal](https://mrciphersmith.github.io/keryx/guides/recommendation-journal/) |
 | Upkeep without you at the keyboard | Triggers, scheduled agent tasks and an HTTP entry that binds to loopback by default | [Automation](https://mrciphersmith.github.io/keryx/modules/automation/) |
+| Work arriving from GitHub without watching it | Assigned tickets, review requests, failed CI and PR comments as Telegram cards with buttons, read-only toward GitHub | [Work intake](https://mrciphersmith.github.io/keryx/guides/work-intake/) |
 
 ## How it works
 

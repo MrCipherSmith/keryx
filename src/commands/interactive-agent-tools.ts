@@ -20,6 +20,7 @@ import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
 import { withSpillSearch } from "../harness/tool/builtin/spill-search";
 import { executionPlanTools } from "../harness/tool/builtin/execution-plan-tool";
 import { slateReadTool, slateWriteSeedTool } from "../harness/tool/builtin/slate-tool";
+import { historySearchTool, recallStepTool, slateNoteTool, slateTrailTool } from "../harness/tool/builtin/slate-memory-tools";
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
 import { webSearchTool } from "../harness/tool/builtin/web-search-tool";
 import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builtin/workspace-context-tool";
@@ -241,6 +242,12 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     createAskUserTool(journaledAskUser(input.cwd)),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
+    // Flow 393: working-memory tools. Offered to the model only by hosts that keep working
+    // memory (`runAgentTurn` filters them out of every other host's request).
+    slateNoteTool(getSessionDir, clock),
+    slateTrailTool(getSessionDir),
+    recallStepTool(getSessionDir),
+    historySearchTool(getSessionDir),
     ...executionPlanTools(getSessionDir),
     ...(input.schedules === undefined ? [] : scheduleTools(input.schedules)),
     // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never

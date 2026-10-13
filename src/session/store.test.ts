@@ -1,3 +1,4 @@
+import { renameSession, recordRemoteOn, recordRemoteOff } from "./store";
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -158,6 +159,9 @@ test("a transcript line with malformed tool-call fields drops them instead of re
         toolCallId: 42,
       }),
     ];
+    // Legacy-parser fixture: no authoritative generation exists. Modern
+    // checkpoint readers intentionally ignore modified compatibility mirrors.
+    rmSync(path.join(created.handle.dir, "preservation"), { recursive: true, force: true });
     writeFileSync(contextFile, `${lines.join("\n")}\n`);
 
     const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
@@ -639,6 +643,9 @@ test("flow 268 T11: a transcript line with malformed reasoning is ignored while 
         },
       }),
     ];
+    // Legacy-parser fixture: no authoritative generation exists. Modern
+    // checkpoint readers intentionally ignore modified compatibility mirrors.
+    rmSync(path.join(created.handle.dir, "preservation"), { recursive: true, force: true });
     writeFileSync(contextFile, `${lines.join("\n")}\n`);
 
     const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
@@ -704,6 +711,47 @@ test("flow 268 T11: persisted reasoning.text is redacted like content; reasoning
     // provider signature, so `redactHistory` deliberately excludes it.
     const raw = readFileSync(path.join(handle.dir, "context.jsonl"), "utf8");
     expect(raw).toContain(secret);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+
+test("checkpoint retains metadata mutations across stale-handle saves", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-checkpoint-metadata-"));
+  try {
+    const saved = persistHistory(createSession({ cwd: proj, dataDir }), [{ role: "user", content: "checkpoint" }]);
+    renameSession(saved, "renamed checkpoint");
+    expect(findSession(proj, saved.summary.id, dataDir)?.title).toBe("renamed checkpoint");
+    recordRemoteOn(saved, "topic", "2026-10-08T10:00:00.000Z");
+    recordRemoteOff(saved, "2026-10-08T10:01:00.000Z");
+    persistCompacted(saved, [], []);
+    persistHistory(saved, []);
+    const resumed = openSession({ cwd: proj, dataDir, resumeId: saved.summary.id });
+    expect(resumed.handle.summary.title).toBe("renamed checkpoint");
+    expect(resumed.handle.summary.compactCount).toBe(1);
+    expect(resumed.handle.summary.remote).toEqual({ name: "topic", intervals: [{ on: "2026-10-08T10:00:00.000Z", off: "2026-10-08T10:01:00.000Z" }] });
+    expect(listSessions(proj, dataDir)[0]?.compactCount).toBe(1);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("listSessions survives a session whose history generation is gone", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-pd-"));
+  try {
+    const good = createSession({ cwd: proj, dataDir });
+    persistHistory(good, [{ role: "user", content: "good one", provenance: "project" }]);
+    const damaged = createSession({ cwd: proj, dataDir });
+    persistHistory(damaged, [{ role: "user", content: "damaged one", provenance: "project" }]);
+    const marker = readFileSync(path.join(damaged.dir, "preservation", "HISTORY"), "utf8").trim();
+    rmSync(path.join(damaged.dir, "preservation", "generations", `${marker}.json`));
+    const listed = listSessions(proj, dataDir);
+    expect(listed.map((s) => s.id)).toContain(good.summary.id);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(proj, { recursive: true, force: true });

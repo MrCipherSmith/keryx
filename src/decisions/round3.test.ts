@@ -73,14 +73,14 @@ describe("F-001: the real synonyms of releasing are strong terms", () => {
 });
 
 describe("F-001: ask_user can say it outright", () => {
-  const draw = (): number => 0;
+  const draw = "D" as const;
 
   test("irreversible: true, or any action tag, is never blind", async () => {
     for (const extra of [{ irreversible: true }, { action: "release" }, { action: "cut-the-thing" }]) {
       const shown: Array<{ ids: string[]; marked: boolean }> = [];
       const ask = journalAsk(
         async (request) => (shown.push({ ids: request.options.map((o) => o.id), marked: request.options.some((o) => o.recommended === true) }), "a"),
-        { cwd: root, random: draw },
+        { cwd: root, arm: draw },
       );
       await ask({ question: "Which colour is nicer?", options: withRec(), ...extra });
       expect(shown[0]).toEqual({ ids: ["a", "b"], marked: true });
@@ -92,14 +92,14 @@ describe("F-001: ask_user can say it outright", () => {
   });
 
   test("the same question without either can be blind", async () => {
-    const ask = journalAsk(async () => "a", { cwd: root, random: draw });
+    const ask = journalAsk(async () => "a", { cwd: root, arm: draw });
     await ask({ question: "Which colour is nicer?", options: withRec() });
     expect((await readRecords(root)).find((r) => r.kind === "open")).toMatchObject({ mode: "blind", irreversible: false });
   });
 
   test("the CLI path: openDecision with irreversible or any action tag is never blind", async () => {
     for (const extra of [{ irreversible: true }, { action: "whatever" }]) {
-      const opened = await openDecision({ cwd: root, question: "Pick a colour?", options: OPTIONS, recommendation: rec, random: draw, ...extra });
+      const opened = await openDecision({ cwd: root, question: "Pick a colour?", options: OPTIONS, recommendation: rec, arm: draw, ...extra });
       expect(opened).toMatchObject({ mode: "ordinary", irreversible: true, blindRefused: true });
     }
   });
@@ -181,7 +181,7 @@ describe("F-003: code identifiers are not actions, and refused-blind is counted"
 
   test("the report counts the questions asked non-blind because they looked irreversible, per stage", async () => {
     const open = (question: string, stage: string): Promise<unknown> =>
-      openDecision({ cwd: root, question, options: OPTIONS, recommendation: rec, stage, random: () => 0 });
+      openDecision({ cwd: root, question, options: OPTIONS, recommendation: rec, stage, arm: "D", random: () => 0 });
     await open("Release 1.4?", "release");
     await open("Deploy the build?", "release");
     await open("Delete the old backups?", "cleanup");
@@ -242,7 +242,7 @@ describe("F-004: /decisions change without an id stays inside this session", () 
   }
 
   async function askedBy(session: string | undefined, id: string, flow: string): Promise<void> {
-    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: rec, flow, session, id, random: () => 0.9 });
+    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: rec, flow, session, id, arm: "A" });
     await answerDecision({ cwd: root, id, choice: "b" });
   }
 
@@ -273,7 +273,7 @@ describe("F-004: /decisions change without an id stays inside this session", () 
   });
 
   test("the journal records the session on the open record", async () => {
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, session: "s-123" });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "A", session: "s-123" });
     await ask({ question: "Pick", options: withRec() });
     expect((await readRecords(root)).find((r) => r.kind === "open")).toMatchObject({ session: "s-123" });
   });

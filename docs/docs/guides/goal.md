@@ -48,7 +48,7 @@ mid-sentence — so ordinary goal text that happens to contain the word
 1. **Durable "is this done" record, reused, not reinvented.** If the Slate's
    Course has no Flow bound yet, `--auto` provisions one — `flow init` →
    `freeze` → `start`, with one acceptance criterion tied directly to the
-   goal text — and binds it. An already-bound Flow is reused as-is.
+   goal text, marked `[verify: judged]` — and binds it. An already-bound Flow is reused as-is.
 2. **The loop.** After the first turn, while the Flow isn't done and rounds
    remain, `/goal` synthesizes a continuation message naming the Flow's
    live remaining tasks and re-drives the turn. The stop signal is the

@@ -1,8 +1,10 @@
 // Flow 387, AC11: no secret reaches the topic. Output is redacted, picker labels are redacted, and
 // nothing in the topic ever asks for a credential.
 
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { commandHarness, SECRET, waitFor } from "./command.test-helpers";
+import { makeRig, type Rig } from "./remote.http.test-helpers";
+import { until } from "./remote.test-helpers";
 
 const KEY_BODY = "AbCdEfGhIjKlMnOp";
 
@@ -98,6 +100,68 @@ describe("no secret reaches the topic (AC11)", () => {
     await h.bridge.idle();
     expect(h.client().replies.length).toBe(1);
     expect(everything(h)).not.toContain(KEY_BODY);
+  });
+});
+
+// The router-level tests above stand in a fake client, so they only prove the shell side redacts.
+// These go through the real serve surface and a real client, and hand serve the raw secret
+// directly (as a client that forgot to redact would), so each serve-side site is held on its own
+// (review of flow 387, T-4).
+describe("serve redacts what it sends to the topic, whatever the shell sent (AC11)", () => {
+  let rig: Rig;
+  afterEach(async () => {
+    await rig.cleanup();
+  });
+
+  async function open(sessionId: string) {
+    rig = makeRig();
+    await rig.startServe();
+    const client = rig.makeClient({ sessionId, project: "/work/release", name: "release", onLine: () => undefined });
+    const started = await client.start();
+    if (!started.ok) {
+      throw new Error(`session did not start: ${started.message}`);
+    }
+    return { client, threadId: started.threadId };
+  }
+
+  const topic = (threadId: number): string => JSON.stringify(rig.api.sentTo(threadId));
+
+  it("redacts a reply's text", async () => {
+    const { client, threadId } = await open("sess-sec-0001");
+    expect(await client.reply(`output: ${SECRET}`)).toBe(true);
+    await until(() => rig.api.sentTo(threadId).some((message) => message.text.includes("output:")), "the reply");
+    expect(topic(threadId)).not.toContain(KEY_BODY);
+  });
+
+  it("redacts the label of a reply button", async () => {
+    const { client, threadId } = await open("sess-sec-0002");
+    expect(await client.reply("choose", { keyboard: [[{ text: `k ${SECRET.slice(0, 50)}`, data: "x:1" }]] })).toBe(true);
+    await until(() => rig.api.sentTo(threadId).some((message) => message.inlineKeyboard !== undefined), "the keyboard");
+    expect(topic(threadId)).not.toContain(KEY_BODY);
+  });
+
+  it("redacts the text of a question", async () => {
+    const { client, threadId } = await open("sess-sec-0003");
+    const pending = client.requestChoice(`Run with ${SECRET}?`, [["Yes"], ["No"]], 200);
+    await until(() => rig.api.sentTo(threadId).some((message) => message.text.includes("Run with")), "the question");
+    expect(topic(threadId)).not.toContain(KEY_BODY);
+    expect(await pending).toBeUndefined();
+  });
+
+  it("redacts the label of a question's button", async () => {
+    const { client, threadId } = await open("sess-sec-0004");
+    const pending = client.requestChoice("Pick one", [[`k ${SECRET.slice(0, 50)}`], ["plain"]], 200);
+    await until(() => rig.api.sentTo(threadId).some((message) => message.inlineKeyboard !== undefined), "the picker");
+    expect(topic(threadId)).not.toContain(KEY_BODY);
+    expect(await pending).toBeUndefined();
+  });
+
+  it("redacts the prompt of an approval", async () => {
+    const { client, threadId } = await open("sess-sec-0005");
+    const pending = client.requestApproval(`run curl with ${SECRET}`, 200);
+    await until(() => rig.api.sentTo(threadId).some((message) => message.text.includes("Approval needed")), "the approval");
+    expect(topic(threadId)).not.toContain(KEY_BODY);
+    await pending;
   });
 });
 

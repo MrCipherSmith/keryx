@@ -266,12 +266,12 @@
     {
       "at": "2026-09-28T12:19:59.988Z",
       "event": "ac-confirmed",
-      "detail": "AC1: security eval baseline and after in the journal for every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds, all findings terminal; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC1: security eval baseline and after in the journal for every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds, all findings terminal; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:01.555Z",
       "event": "ac-confirmed",
-      "detail": "AC8: tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds, all findings terminal; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC8: tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds, all findings terminal; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:01.706Z",
@@ -300,42 +300,42 @@
     {
       "at": "2026-09-28T12:20:36.341Z",
       "event": "ac-confirmed",
-      "detail": "AC1: security eval baseline and after in the journal every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC1: security eval baseline and after in the journal every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:36.490Z",
       "event": "ac-confirmed",
-      "detail": "AC2: entropy redaction with allow-shapes; 204-output fixture 0 FP; real-file sweeps 0 FP (bun.lock, CHANGELOG, git log -p, docs). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC2: entropy redaction with allow-shapes; 204-output fixture 0 FP; real-file sweeps 0 FP (bun.lock, CHANGELOG, git log -p, docs). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:36.639Z",
       "event": "ac-confirmed",
-      "detail": "AC3: injection folding: newline and Cyrillic confusable cases in the corpus, detected. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC3: injection folding: newline and Cyrillic confusable cases in the corpus, detected. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:36.787Z",
       "event": "ac-confirmed",
-      "detail": "AC4: web_fetch/web_search outbound check, egress.outbound-secret; ordinary-URL fixture 0 refusals; crafted recall intact; public-id allowlist. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC4: web_fetch/web_search outbound check, egress.outbound-secret; ordinary-URL fixture 0 refusals; crafted recall intact; public-id allowlist. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:36.940Z",
       "event": "ac-confirmed",
-      "detail": "AC5: displayUrl masks token-shaped path segments; numeric ids visible. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC5: displayUrl masks token-shaped path segments; numeric ids visible. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:37.088Z",
       "event": "ac-confirmed",
-      "detail": "AC6: win32 open via rundll32 with validated URL, no cmd. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC6: win32 open via rundll32 with validated URL, no cmd. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:37.235Z",
       "event": "ac-confirmed",
-      "detail": "AC7: credential-shape.ts via the security facade; case-insensitive names; suffix-anchored glued regex; import-policy ceiling 150. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC7: credential-shape.ts via the security facade; case-insensitive names; suffix-anchored glued regex; import-policy ceiling 150. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:20:37.386Z",
       "event": "ac-confirmed",
-      "detail": "AC8: tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+      "detail": "AC8: tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T12:34:00.916Z",
@@ -373,7 +373,7 @@
       "at": "2026-09-28T12:19:59.988Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -384,7 +384,7 @@
       "at": "2026-09-28T12:20:01.555Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -395,7 +395,7 @@
       "at": "2026-09-28T12:20:36.341Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -406,7 +406,7 @@
       "at": "2026-09-28T12:20:36.490Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -417,7 +417,7 @@
       "at": "2026-09-28T12:20:36.639Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -428,7 +428,7 @@
       "at": "2026-09-28T12:20:36.787Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -439,7 +439,7 @@
       "at": "2026-09-28T12:20:36.940Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -450,7 +450,7 @@
       "at": "2026-09-28T12:20:37.088Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -461,7 +461,7 @@
       "at": "2026-09-28T12:20:37.235Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -472,7 +472,7 @@
       "at": "2026-09-28T12:20:37.386Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -483,7 +483,7 @@
       "at": "2026-09-28T12:40:58.379Z",
       "kind": "complete",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },

@@ -1,0 +1,19 @@
+$ bun ./src/cli.ts review comments collect --repo MrCipherSmith/keryx --pr "917" --sha "212f55f14707bf30498939d47084ebcd6c72d126" --round "1" --out ".metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/comments.json"
+## External comments
+
+- pull request: MrCipherSmith/keryx#917
+- round: 1
+- sources read: inline=0 reviews=0 pr_discussion=0
+- collected: 0 (reopened=0, bot_authors=0, unclassified_severity=0)
+
+No unhandled comments this round.
+
+### Filtered (0)
+
+Nothing was filtered.
+
+
+findings: 0 (written to .metaproject/flows/411-2026-10-06-routing-model-independence/review/final-212f55f/comments.json)
+collected against: 212f55f14707bf30498939d47084ebcd6c72d126 (round 1)
+pull request: open, head 212f55f14707bf30498939d47084ebcd6c72d126
+unanswered so far: 0 — replies are posted ONCE, after the final round.

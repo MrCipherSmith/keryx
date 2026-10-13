@@ -25,6 +25,7 @@ const STATE: SettingsSnapshot = {
   theme: "auto",
   jevProfile: { on: 0, total: 9 },
   externalAgents: { on: false, reason: "not enabled" },
+  rendering: { mode: "auto", saveable: true },
 };
 
 /** Applies the few commands these tests press to a snapshot — standing in for the shell's own handlers. */

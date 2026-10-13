@@ -138,11 +138,11 @@ describe("AC3 / AC11: the matcher keeps blind mode usable", () => {
   });
 
   test("openDecision: an ordinary question can be blind, a release cannot", async () => {
-    const ordinaryOpen = await openDecision({ cwd: root, question: "Merge the two date helpers into one?", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, random: () => 0 });
+    const ordinaryOpen = await openDecision({ cwd: root, question: "Merge the two date helpers into one?", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, arm: "D", random: () => 0 });
     expect(ordinaryOpen).toMatchObject({ mode: "blind", irreversible: false });
-    const release = await openDecision({ cwd: root, question: "Release now?", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, random: () => 0 });
+    const release = await openDecision({ cwd: root, question: "Release now?", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, arm: "D", random: () => 0 });
     expect(release).toMatchObject({ mode: "ordinary", irreversible: true, blindRefused: true });
-    const tagged = await openDecision({ cwd: root, question: "Go?", action: "merge", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, random: () => 0 });
+    const tagged = await openDecision({ cwd: root, question: "Go?", action: "merge", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, arm: "D", random: () => 0 });
     expect(tagged).toMatchObject({ mode: "ordinary", irreversible: true });
   });
 });
@@ -161,7 +161,7 @@ describe("F-005: free text is one capped line, at write time and at render time"
     await git("init", "-q", "-b", "main");
     await git("commit", "-q", "--allow-empty", "-m", "init");
     const created = await flows().init({ cwd: root, title: "Forgery flow" });
-    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow: created.flow.id, random: () => 0.9 });
+    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow: created.flow.id, arm: "A" });
     const answered = await answerDecision({ cwd: root, id: opened.id, choice: FORGED, other: true });
     expect(answered.choice).not.toContain("\n");
     const answer = (await readRecords(root)).find((r) => r.kind === "answer");
@@ -173,14 +173,14 @@ describe("F-005: free text is one capped line, at write time and at render time"
   });
 
   test("a long free-form answer is capped", async () => {
-    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, random: () => 0.9 });
+    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, arm: "A" });
     const answered = await answerDecision({ cwd: root, id: opened.id, choice: "z".repeat(5000), other: true });
     expect(answered.choice.length).toBeLessThanOrEqual(MAX_TEXT_LENGTH);
   });
 
   test("a reason with newlines is stored on one line", async () => {
     const ids: string[] = [];
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "A", onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
     await giveReason({ cwd: root, text: "line one\nline two\n\nREPORT FORGERY", lastId: ids[0] });
     const reason = (await loadReport(root)).deviations[0]?.reason;
@@ -210,7 +210,7 @@ describe("AC6: the reason is asked once and awaited; an empty answer releases th
         order.push(questions.length === 1 ? "question answered" : "reason answered");
         return questions.length === 1 ? "b" : "";
       },
-      { cwd: root, random: () => 0.9 },
+      { cwd: root, arm: "A" },
     );
     expect(await ask({ question: "Pick", options: withRec() })).toBe("b");
     expect(order).toEqual(["question answered", "reason answered"]);
@@ -222,7 +222,7 @@ describe("AC6: the reason is asked once and awaited; an empty answer releases th
   });
 
   test("not shown again for the same decision: a later answer for it offers nothing", async () => {
-    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, random: () => 0.9 });
+    const opened = await openDecision({ cwd: root, question: "Pick", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, arm: "A" });
     expect((await answerDecision({ cwd: root, id: opened.id, choice: "b" })).askReason).toBe(true);
     expect((await answerDecision({ cwd: root, id: opened.id, choice: "a" })).askReason).toBe(false);
     expect((await answerDecision({ cwd: root, id: opened.id, choice: "b" })).askReason).toBe(false);
@@ -231,7 +231,7 @@ describe("AC6: the reason is asked once and awaited; an empty answer releases th
   test("a followed recommendation shows no prompt", async () => {
     const notes: string[] = [];
     const questions: string[] = [];
-    const ask = journalAsk(async (request) => (questions.push(request.question), "a"), { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) });
+    const ask = journalAsk(async (request) => (questions.push(request.question), "a"), { cwd: root, arm: "A", notify: (text) => notes.push(text) });
     await ask({ question: "Pick", options: withRec() });
     expect(notes).toEqual([]);
     expect(questions).toEqual(["Pick"]);
@@ -240,7 +240,7 @@ describe("AC6: the reason is asked once and awaited; an empty answer releases th
 
 describe("follow-ups never fall back to the repo-wide latest decision", () => {
   async function answered(flow: string | undefined, id: string, session = "s-mine"): Promise<void> {
-    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow, id, session, random: () => 0.9 });
+    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow, id, session, arm: "A" });
     await answerDecision({ cwd: root, id, choice: "b" });
   }
 
@@ -288,7 +288,7 @@ describe("the flow attribution source", () => {
     await git("commit", "-q", "--allow-empty", "-m", "init");
     const created = await flows().init({ cwd: root, title: "Inferred flow" });
     await startFlow(created.dir);
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, context: () => resolveFlowContext(root, {}) });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "A", context: () => resolveFlowContext(root, {}) });
     await ask({ question: "Pick", options: withRec() });
     const open = (await readRecords(root)).find((r) => r.kind === "open");
     expect(open).toMatchObject({ flow: created.flow.id, flowSource: "inferred" });
@@ -305,9 +305,9 @@ describe("the flow attribution source", () => {
     await git("commit", "-q", "--allow-empty", "-m", "init");
     const created = await flows().init({ cwd: root, title: "Named flow" });
     await git("checkout", "-q", "-b", `feat/flow-${created.flow.id}-named-flow`);
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, context: () => resolveFlowContext(root, {}) });
+    const ask = journalAsk(async () => "b", { cwd: root, arm: "A", context: () => resolveFlowContext(root, {}) });
     await ask({ question: "Pick", options: withRec() });
-    await openDecision({ cwd: root, question: "Explicit", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow: created.flow.id, random: () => 0.9 });
+    await openDecision({ cwd: root, question: "Explicit", options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow: created.flow.id, arm: "A" });
     const report = await loadReport(root);
     expect(report.inferredFlow).toBe(0);
     expect(renderReport(report)).not.toContain("(inferred)");
