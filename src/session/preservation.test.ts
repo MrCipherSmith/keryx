@@ -111,3 +111,25 @@ test("history checkpoints prune old generations but keep current, previous and o
   expect(left).not.toContain(ids[1]!);
   expect(readPendingHistory(dir)?.files["transcript.jsonl"]).toBe("t5");
 });
+
+// Failure after HISTORY selection must not downgrade evidence to compatibility mirrors.
+test("wrap-up capture and immutable replay evidence select committed HISTORY after mirror failure", async () => {
+  const { commitHistoryCheckpoint } = await import("./preservation");
+  const dir = temp();
+  const old = { "context.jsonl": "A", "archive.jsonl": "A", "transcript.jsonl": "A", "summary.json": "A" };
+  commitHistoryCheckpoint(dir, old);
+  const next = Object.fromEntries(Object.keys(old).map(name => [name, "B"]));
+  expect(() => commitHistoryCheckpoint(dir, next, () => { throw new Error("mirror failed"); })).toThrow("mirror failed");
+  expect(readFileSync(path.join(dir, "archive.jsonl"), "utf8")).toBe("A");
+  const receipt = queuePreservedWrapUp(dir, JSON.stringify({ seeds: [], notes: {} }));
+  expect(readPreservation(dir, receipt.snapshot)?.files["archive.jsonl"]).toBe("B");
+  for (const name of Object.keys(old)) writeFileSync(path.join(dir, name), "later corrupt mirror");
+  expect(readPreservation(dir, receipt.snapshot)?.files["context.jsonl"]).toBe("B");
+});
+test("wrap-up refuses corrupted authoritative HISTORY instead of silently using mirrors", async () => {
+  const { commitHistoryCheckpoint } = await import("./preservation");
+  const dir = temp();
+  const id = commitHistoryCheckpoint(dir, { "context.jsonl": "B", "archive.jsonl": "B", "transcript.jsonl": "B", "summary.json": "B" });
+  writeFileSync(path.join(dir, "preservation", "generations", `${id}.json`), "{}");
+  expect(() => queuePreservedWrapUp(dir, "{}" )).toThrow("hash mismatch");
+});
