@@ -7,7 +7,7 @@ sometimes do not. The report is plain counting: no model is involved.
 
 ## What is recorded
 
-Every question with options writes one record:
+Every question with options that a person answers writes one record:
 
 - the flow and the stage it was asked in (or no flow);
 - the question and the options, with the order they were shown in;
@@ -344,7 +344,7 @@ A bridge that shows polls must pass `--channel telegram`: that is what lets the 
 treat arms A and B as one condition there. A failure here is
 reported on one line and never has to stop the question.
 
-keryx's own `ask_user` tool does all of this for you.
+keryx's own `ask_user` tool does all of this for you for every question a person answers. A question that `/mode auto` answers on the model's own authority never reached a person and is not recorded.
 
 ## Rating the recommendation
 

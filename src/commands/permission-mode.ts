@@ -147,3 +147,16 @@ export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateD
 
   return "ask";
 }
+
+/** Who answers an `ask_user` question: the person at the keyboard, or the model itself. */
+export type QuestionAnswerer = "human" | "model";
+
+/**
+ * The second axis, beside {@link resolveApprovalDecision}: not "may this action run" but "who answers a question".
+ * `trust` is a statement about actions (do not interrupt me for a command I would have approved), never about
+ * judgement, so only `auto` hands a question to the model. The caller still keeps a question with an irreversible
+ * action, or one shaped by untrusted content, for the human (see `agent.ts`).
+ */
+export function resolveQuestionAnswerer(mode: PermissionMode): QuestionAnswerer {
+  return mode === "auto" ? "model" : "human";
+}

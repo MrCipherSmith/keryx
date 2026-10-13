@@ -491,7 +491,9 @@ What is in it today:
   inside a running session, decide whether that approval is asked for at all
   — `ask` (default), `trust` (safe calls run, a destructive one still asks),
   `auto` (nothing asks except a credentials-touching command, which no mode
-  ever auto-approves). The mode also sets how many model rounds one turn may
+  ever auto-approves; it also answers the agent's own questions by picking the
+  recommended option and saying so, while questions about irreversible or
+  untrusted actions still ask you). The mode also sets how many model rounds one turn may
   run: 40 in `ask`, 200 in `trust` (asks at the limit) and 200 in `auto`, where
   reaching the limit extends the turn without asking and the turn stops at 200
   (`KERYX_AGENT_MAX_ROUNDS` overrides all three, up to 200). A turn that

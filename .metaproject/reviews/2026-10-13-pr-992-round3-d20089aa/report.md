@@ -1,0 +1,501 @@
+# PR 992 — review round 3
+
+Verdict: request-changes
+
+Head reviewed: d20089aabf94441cf931dec95166ecd5685c1a41.
+
+## Summary
+
+Round 3 (final under the three-round cap) found two blocking majors and a set of test-debt majors raised by the severity audit. A `/goal` sent from the Telegram topic starts a model turn that does not carry the Telegram mark, so under `/mode auto` the goal's `ask_user` question is self-answered with nobody asked (F-001; the round-2 fix for the Telegram turn covered only the main-turn path). The round-2 regression tests for the refusal memory exercise only `shell_exec`, so the delegate and write branches the fix actually changed are unpinned (F-002, mutants M24/M25 survive). The audit raised five further majors on surviving mutants: the wrapper's review-auto read (F-003), the visible self-answer line and its `terminalSafe` (F-004), the refusal-memory resets on /clear, /new, resume and mode change (F-005) and the real approver markers for unattended and displaced turns (F-006). The minor findings cover the unattended-marker contract for child approvers (F-007), the stand-aside predicate (F-008), the repeated review-auto gate (F-009), a sixth positional boolean (F-010), stale comments (F-011), a duplicate cancel constant (F-012), documentation claims about refusals, `auto`, the journal and the PR body (F-013 to F-017) and process-global refusal state (F-018); four info items close the list.
+
+## Findings
+
+```json keryx:findings
+[
+  {
+    "id": "F-001",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "file": "src/tui/tui-shell.ts",
+    "line": 8830,
+    "symbol": "runLine /goal branch -> runGoalCommand({ io, ... })",
+    "problem": "A /goal <text> sent from the Telegram topic is a Telegram-started model turn, but it does not carry the Telegram mark. /goal is on the remote allowlist (src/remote/command-gateway.ts:51), so runRemoteCommand reaches runLine(line, 'operator', TG_SOURCE) (tui-shell.ts:10181) and the slash branch at 8827, which returns at 8840 before remoteQueue.turnStarted(source) (9697), before telegramTurn is computed (9699) and before the Telegram facade is built (9873). runGoalCommand hands the shell's raw io to runAgentTurn (goal-command.ts:830, 867, 974). That io has no mcpGrantsApply, so agent.ts:4421 reads io.mcpGrantsApply?.() === false as false, telegramTurn is false in selfAnsweredQuestion (agent.ts:2526), and under /mode auto the goal's ask_user question is self-answered with the recommended or first option with nobody asked. Operator poll 153 says a Telegram-started turn must stay on the human. Also raised by review-security-code as review-security-code-1 (rated minor there).",
+    "impact": "With remote control on, /mode auto and /goal <text> typed in the topic, the model answers its own questions while the person is away from the shell. The round-2 fix for R2-F-005 covers only the main-turn path (runLine at 9694+), not this second turn-starting path, so R2-F-005 is partial, not closed.",
+    "suggested_fix": "In the /goal branch, when source === TG_SOURCE, run the goal's turns under the same marking as a normal Telegram turn: build the io for runGoalCommand with createForegroundAgentIoFacade(owner, token, io, telegramTurnIo), or at minimum spread mcpGrantsApply: () => false over io for a TG-sourced /goal. Add a test that a /goal from Telegram under auto does not self-answer. Alternatively drop goal from REMOTE_COMMANDS until it is wired, or state in permission-modes.md that goal turns from the topic are self-answered (an operator decision).",
+    "evidence": "Static read chain at HEAD d20089aa: command-gateway.ts:51 (goal on the allowlist); tui-shell.ts:10181 (runLine with TG_SOURCE); 8827-8841 (slash branch, raw io, return before 9697/9699/9873); goal-command.ts:830/867/974 (runAgentTurn(io, ...)); agent.ts:2526 and 4421/4450 (the mark is only io.mcpGrantsApply?.() === false). Enumeration: keryx ctx rg 'runAgentTurn\\(|runGoalCommand\\(|runAgentTurnCore\\(' src/tui src/remote src/commands/goal-command.ts --glob '!*.test.ts' gives 9 matches; the only model-turn starts from tui-shell are 9879 (marked facade), 8830 (this finding) and 8314 (side worker, no permissionMode, never self-answered). Of the allowlisted commands only goal starts a model turn. No runtime repro: launchTuiAgentShell has no headless seam. Verifier execution (scratch test v-f001.test.ts, runGoalCommand, permissionMode auto, scripted ask_user): raw io gave asked 0 and a self-answer; the same call with mcpGrantsApply:()=>false gave asked 1 and no self-answer. The tui-shell wiring is established by reading only.",
+    "confidence": "high",
+    "dedupe_key": "tg-goal-turn-unmarked-self-answer",
+    "blocking_merge": true,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:8830 (/goal -> runGoalCommand with raw io; the only Telegram-reachable model-turn start that bypasses the facade)",
+        "src/tui/tui-shell.ts:9879 (main turn, marked: correct)",
+        "src/tui/tui-shell.ts:8314 (side worker, never self-answered: correct)",
+        "src/tui/main-queue.ts / bus-wake / task-notification turns (local by design: correct)"
+      ],
+      "enumeration_method": "keryx ctx rg 'runAgentTurn\\(|runGoalCommand\\(|runAgentTurnCore\\(' src/tui src/remote src/commands/goal-command.ts --glob '!*.test.ts'; REMOTE_COMMANDS read in full (command-gateway.ts:36-67)"
+    }
+  },
+  {
+    "id": "F-002",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-002",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/commands/agent-question-axis.test.ts",
+    "line": 385,
+    "symbol": "R2-F-007 regression tests (asked again in ask/trust/auto; outside review-auto a remembered fingerprint is never read)",
+    "problem": "The R2-F-007 tests exercise only shell_exec. The shell branch already guarded its refusal-memory read with reviewAutoActive() before the round-2 fix (agent.ts:5725). The two branches the fix actually changed, delegate (agent.ts:5860) and write (agent.ts:5907), have no test. Run against the pre-fix source d9ccfb6c, the three 'asked again' shell tests and the 'never read' shell test are green, so they could not have failed on the original defect.",
+    "impact": "The fix for a round-2 major has no regression test at the sites it changed. Someone can delete 'reviewAutoActive() &&' from the delegate or write read and the whole 14-file suite stays green. A refusal remembered under one mode would then silently answer 'refused earlier' for apply_patch, bus_pause or spawn_subagent in another mode with no human asked.",
+    "suggested_fix": "Add the delegate and write variants next to the shell ones, for a write-risk and a delegate-risk tool: (a) in mode ask, refuse the same call in two runs and assert the approver was asked twice and the second output does not contain REFUSED_EARLIER; (b) call recordOperatorDenial(toolCallHash(name, JSON.stringify(input))) with review-auto off, run in mode ask and assert the approver is asked once. About 25 lines with describe.each over [name, risk].",
+    "evidence": "mutant:M24-delegate-branch-refusal-read-in-every-mode mutant:M25-write-branch-refusal-read-in-every-mode (both drop 'reviewAutoActive() &&' at agent.ts:5860 and :5907) SURVIVE the 14-file suite. Pre-fix source d9ccfb6c in a scratch copy: prefix-axis.xml shows 6 of 38 axis tests red, none of them an R2-F-007 test. A scratch test file (not in the repo) with the write and delegate tests is green at HEAD, red 4 of 5 on d9ccfb6c, and kills both mutants.",
+    "confidence": "high",
+    "dedupe_key": "testing:f007-delegate-write-read-unpinned",
+    "blocking_merge": true,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/commands/agent.ts:5725 (shell read, guarded before the fix, pinned)",
+        "src/commands/agent.ts:5860 (delegate read, changed by the fix, unpinned)",
+        "src/commands/agent.ts:5907 (write read, changed by the fix, unpinned)"
+      ],
+      "enumeration_method": "keryx ctx rg 'reviewAutoActive\\(\\)|operatorDenied\\(' src/commands/agent.ts"
+    }
+  },
+  {
+    "id": "F-003",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-003",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/commands/agent.ts",
+    "line": 5608,
+    "symbol": "approval wrapper refusal-memory read (round-2 mutant M15, re-expressed as M08)",
+    "problem": "The wrapper's review-auto read 'operatorDenied(meta.fingerprint) || operatorDenied(spelled)' is not covered. Replacing the condition with false changes no test result. For shell, delegate and write the branch pre-checks (agent.ts:5725, 5860, 5907) answer first and shadow the wrapper; only read-risk calls with an untrusted origin or a hook ask, and routine-trust shell calls, reach the wrapper read alone (agent.ts:6027-6041), and no test sends them there.",
+    "impact": "Round-2 M15 is a real gap, but narrow: a regression there would re-ask the operator for a call they already refused during a review-auto run, for read-risk or routine-trust calls only.",
+    "suggested_fix": "One test: setReviewSystem('review-auto'), recordOperatorDenial(toolCallHash(name, raw)) for a read-risk tool whose call reaches the approver (untrusted origin), run it and assert the approver is not asked and the output is REFUSED_EARLIER. Optionally the same for a routine-trust shell command.",
+    "evidence": "mutant:M08-refusal-memory-never-read (wrapper condition at agent.ts:5608 replaced with false) SURVIVED. A scratch review-auto test with an always-ask write tool also leaves the wrapper-only mutant alive, confirming the branch pre-checks shadow the wrapper.",
+    "confidence": "high",
+    "dedupe_key": "testing:wrapper-refusal-read-unpinned",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#M08-refusal-memory-never-read"
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/agent.ts:5608 (wrapper review-auto read, unpinned)",
+        "src/commands/agent.ts:5725 (shell branch read, pinned)",
+        "src/commands/agent.ts:5860 (delegate branch read, F-002)",
+        "src/commands/agent.ts:5907 (write branch read, F-002)"
+      ],
+      "enumeration_method": "keryx ctx rg -n 'operatorDenied\\(' src/commands/agent.ts --glob '!*.test.ts' at d20089aa; the four reads are the exhaustive set; only the wrapper read has no test that reaches it alone"
+    }
+  },
+  {
+    "id": "F-004",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-004",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/commands/shell.ts",
+    "line": 2263,
+    "symbol": "onQuestionSelfAnswered handlers (shell.ts:2258-2263, tui-shell.ts:6189-6196) and terminalSafe on the self-answer line (R2-F-017)",
+    "problem": "Neither handler has a test. The string 'answered without asking' appears in no test file, so the user-visible half of the PR contract (a visible line) and the terminalSafe fix for R2-F-017 are unpinned. The axis tests assert only the onQuestionSelfAnswered callback payload. Separately (review-security-code-4), the question is cut with slice(0, 97) before terminalSafe, which can leave a lone surrogate that terminalSafe does not escape; the effect is a replacement glyph, not an injection.",
+    "impact": "Removing terminalSafe from the line, or dropping the line entirely, passes the suite. The model-chosen option label, which can carry escape sequences, would reach the terminal unsanitised again. The surrogate case is cosmetic.",
+    "suggested_fix": "Extract a pure helper, for example selfAnsweredLine(question, label), used by both shells (this also removes the duplicated formatting), and test it with a hostile label (ESC, CR, LF, U+2028, bidi). Cut the question code-point-safe (Array.from). In shell-agent-repl.test.ts the existing repl() with scriptedProvider and mode auto can cover the readline side.",
+    "evidence": "mutant:M17-readline-self-answer-line-not-terminal-safe (readline, terminalSafe removed) and mutant:M18-tui-self-answer-line-not-terminal-safe (TUI, terminalSafe removed) both SURVIVE the 14-file suite, which includes shell-agent-repl.test.ts and tui-shell.test.ts. keryx ctx rg 'answered without asking' src returns only tui-shell.ts:6196 and shell.ts:2263. The security reviewer's hostile-label script shows both print sites do escape every control and bidi code point today; a slice(0,97) probe on an emoji left a lone high surrogate.",
+    "confidence": "high",
+    "dedupe_key": "testing:self-answer-line-unpinned",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#M17-readline-self-answer-line-not-terminal-safe"
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:2263 (readline self-answer line)",
+        "src/tui/tui-shell.ts:6196 (TUI self-answer line)"
+      ],
+      "enumeration_method": "keryx ctx rg 'answered without asking' src returns exactly these two sites and no test file"
+    }
+  },
+  {
+    "id": "F-005",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-005",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/tui/tui-shell.ts",
+    "line": 6332,
+    "symbol": "resetOperatorDenials() lifecycle calls (shell.ts 2375/2950/3063, tui-shell.ts 6332/6931/7621)",
+    "problem": "The round-2 fix resets the refusal memory on /clear, /new, resume and a permission-mode change. No test asserts any of these resets; only the test preload resets it between tests.",
+    "impact": "A refusal remembered in one review-auto session survives into the next session or after a mode change and silently answers 'refused earlier' for an unrelated task. A quiet behavioural regression that no test would flag.",
+    "suggested_fix": "One readline-shell test (shell-agent-repl.test.ts): record a denial, run /mode ask (or /clear) and assert operatorDenied(...) is false. A matching TUI assertion if there is a seam.",
+    "evidence": "mutant:M22-mode-change-keeps-refusals-readline (readline mode change keeps refusals) and mutant:M23-new-session-keeps-refusals-tui (TUI new session keeps refusals) SURVIVE the 14-file suite. keryx ctx rg 'resetOperatorDenials' src shows test callers only in agent tests, the preload hooks and arbiter/bridge tests, none in shell or tui-shell tests.",
+    "confidence": "medium",
+    "dedupe_key": "testing:lifecycle-reset-unpinned",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#M22-mode-change-keeps-refusals-readline"
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:2375",
+        "src/commands/shell.ts:2950",
+        "src/commands/shell.ts:3063",
+        "src/tui/tui-shell.ts:6332",
+        "src/tui/tui-shell.ts:6931",
+        "src/tui/tui-shell.ts:7621"
+      ],
+      "enumeration_method": "keryx ctx rg 'resetOperatorDenials' src --glob '!*.test.ts': six reset calls in the two shells plus the test preload; none has a test"
+    }
+  },
+  {
+    "id": "F-006",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-006",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "file": "src/commands/agent.ts",
+    "line": 5551,
+    "symbol": "personRefused glue: ApproverProvenance.attended (trigger-dispatch), .current (foreground facade), signal.aborted",
+    "problem": "The tests for 'not a person's refusal' hand-build the approver with Object.assign(async () => false, { attended: false }) or { current: () => false }. The production code that sets those properties (trigger-dispatch.ts deniedUnattendedApproval; foreground-operation.ts:289 { current: accepts }) is not exercised. The aborted-signal branch has no test.",
+    "impact": "Dropping the production marker restores R2-F-007's silent-refusal learning for unattended triggers and displaced turns, and the suite stays green. The unit test proves personRefused works, not that the real approvers are marked.",
+    "suggested_fix": "In trigger-dispatch.test.ts assert the approver it builds has attended === false. In foreground-operation.test.ts assert facade.requestApproval.current?.() is true while the token is current and false after settle or invalidateSession. In the axis test add a run with an aborted AbortSignal and a refusing approver and assert nothing is remembered.",
+    "evidence": "mutant:M14-trigger-approver-not-marked-unattended (trigger approver not marked unattended) and mutant:M15-facade-approver-not-marked-current (facade approver not marked current) SURVIVE the 14-file suite. The reviewer's own M12 (remove 'signal?.aborted !== true' at agent.ts:5551) also survived in a local run.",
+    "confidence": "high",
+    "dedupe_key": "testing:person-refused-glue-unpinned",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#M14-trigger-approver-not-marked-unattended"
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/trigger-dispatch.ts deniedUnattendedApproval (attended:false marker)",
+        "src/tui/foreground-operation.ts:289 ({ current: accepts } marker)",
+        "src/commands/agent.ts:5551 personRefused (signal.aborted branch)"
+      ],
+      "enumeration_method": "keryx ctx rg 'attended|\\.current' on personRefused and its two producers; these three are the whole ApproverProvenance contract"
+    }
+  },
+  {
+    "id": "F-007",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-007",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "line": 1877,
+    "symbol": "child io.requestApproval (also src/tui/tui-shell.ts:8312 side worker, src/wiki/deep-enrich.ts:348); personRefused / ApproverProvenance (agent.ts:5551)",
+    "problem": "personRefused treats any approver without attended:false as a person. Only deniedUnattendedApproval is marked. The subagent child approver, the TUI side-worker approver and the deep-enrich approver (each `async () => false`) are unmarked, so their automatic denials would be recorded as a person's refusal: the wrapper at agent.ts:5617-5620 calls noteOperatorRefusal() in any mode and recordOperatorDenial() twice under review-auto. The contract is opt-out and type-erased: the marker is read through an `as ApproverProvenance` cast on an `object` parameter and the facade re-spells the signature by hand (review-architecture-3, review-clean-code-5), so the next approver wrapper that does not copy the properties loses them with no compile error.",
+    "impact": "Scratch repro: an unmarked `async () => false` approver in ask mode leaves reviewAutoMayAnswer(permission-worded question) === false, so in /mode auto permission-worded ask_user questions go to the human instead of being self-answered; under review-auto the same denial writes the per-call set and the operator's own later identical call is answered REFUSED_EARLIER. Both fail closed; no unsafe grant. Reachability is unproven: policy denies shell, write and delegate for children first, the side worker is read-only, so no approvable tool was shown to reach any of the three approvers.",
+    "suggested_fix": "Mark the three approvers like deniedUnattendedApproval: Object.assign(async () => false, { attended: false }). Preferably type the contract: `type Approver = NonNullable<AgentIO['requestApproval']> & ApproverProvenance`, use it in personRefused, the facade and trigger-dispatch so no cast is needed, and optionally invert the default so an approver is a person only when it says attended: true.",
+    "evidence": "Scratch test hl3.test.ts (R2 prints true; control R1b shows an attended refusal also sets the floor, so the check can fail). keryx ctx rg 'requestApproval: async \\(\\) => false' src finds spawn-subagent-tool.ts:1877, tui-shell.ts:8312, wiki/deep-enrich.ts:348. Mark logic agent.ts:287-292, 5551-5560, recording 5612-5621. The regression reviewer's differential run against base found no path from these approvers to the wrapper.",
+    "confidence": "medium",
+    "dedupe_key": "highload:unmarked-auto-deny-approver-counts-as-refusal",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/harness/tool/builtin/spawn-subagent-tool.ts:1877",
+        "src/tui/tui-shell.ts:8312",
+        "src/wiki/deep-enrich.ts:348",
+        "src/commands/trigger-dispatch.ts (deniedUnattendedApproval, the only marked approver)"
+      ],
+      "enumeration_method": "keryx ctx rg 'requestApproval: async \\(\\) => false' src; keryx ctx rg 'personRefused|ApproverProvenance|attended' src/commands/agent.ts"
+    }
+  },
+  {
+    "id": "F-008",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-008",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "file": "src/commands/agent.ts",
+    "line": 2539,
+    "symbol": "selfAnsweredQuestion stand-aside predicate",
+    "problem": "The predicate 'the arbiter and decision journal own this question' (reviewAutoActive() || KERYX_REVIEW_AUTO_ANSWER === \"1\" || a non-empty ENV_AUTONOMOUS_ANSWERS_FILE) is written inline in the commands layer by the round-2 fix, and a near-identical form is spelled three more times in src/tui/ask-user-bridge.ts (63-68, 80, 95). Four sites in total, with the raw env-name literal and no ENV_ constant. A helper, autonomousAnswersEnabled() (src/review/autonomous-answers.ts:16), exists and neither side uses it. Raised by review-architecture-1 and review-clean-code-1.",
+    "impact": "The answerer order (R2-F-008) depends on two files agreeing on one condition, and nothing enforces that. A future change to one spelling, such as a new env switch for review-auto, silently reopens R2-F-008 for policy-tagged questions. Behaviour is equivalent today. Round obligation 7 (one rule, one implementation) makes a duplicated check a finding even while both copies agree.",
+    "suggested_fix": "Export one predicate in the review layer, e.g. askJournalOwnsQuestions(env = process.env) = reviewAutoActive() || env.KERYX_REVIEW_AUTO_ANSWER === \"1\" || autonomousAnswersEnabled(env), with an ENV_REVIEW_AUTO_ANSWER constant. Use it in selfAnsweredQuestion and in the three bridge sites. This is the stand-aside predicate only, not the R2-F-020 default-option rule.",
+    "evidence": "keryx ctx rg 'KERYX_REVIEW_AUTO_ANSWER|ENV_AUTONOMOUS_ANSWERS_FILE' src --glob '!*.test.ts' gives 15 matches; the predicate appears at agent.ts:2539 and ask-user-bridge.ts:63, 68, 80, 95. autonomous-answers.ts:16 holds the unused helper.",
+    "confidence": "high",
+    "dedupe_key": "arch:journal-owned-predicate-duplicated",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/commands/agent.ts:2539",
+        "src/tui/ask-user-bridge.ts:63",
+        "src/tui/ask-user-bridge.ts:68",
+        "src/tui/ask-user-bridge.ts:80",
+        "src/tui/ask-user-bridge.ts:95"
+      ],
+      "enumeration_method": "keryx ctx rg 'KERYX_REVIEW_AUTO_ANSWER|ENV_AUTONOMOUS_ANSWERS_FILE' src --glob '!*.test.ts'"
+    }
+  },
+  {
+    "id": "F-009",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-009",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "file": "src/commands/agent.ts",
+    "line": 5608,
+    "symbol": "executeCallUnbounded review-auto gate on the refusal memory",
+    "problem": "After the round-2 fix the rule 'the refusal memory is read only under review-auto' is enforced by separate checks read in two ways: a snapshot `reviewAuto` (agent.ts:5605) tested at 5608, 5612 and 5616 in the wrapper, and a live reviewAutoActive() call at 5725 (shell), 5860 (delegate) and 5907 (write). The delegate and write lines are character-identical. The fix added the gate to two of the three copies. R2-F-022 (wrapper responsibilities) is settled and not re-raised; this is only the gate repeated by the fix.",
+    "impact": "R2-F-007 happened because one read site lacked the gate. The fix keeps correctness spread across several copies, and a further site added later can reintroduce it. The snapshot versus live split allows a mid-turn disagreement if setReviewSystem is called while a call is executing; no such sequence was demonstrated.",
+    "suggested_fix": "Add a helper next to personRefused, e.g. rememberedRefusal(call): boolean wrapping `reviewAutoActive() && operatorDenied(refusalFingerprint(...))`, and use it in the delegate, write and shell branches. Capture `const reviewAuto = reviewAutoActive()` once at the top of executeCallUnbounded.",
+    "evidence": "keryx ctx rg 'reviewAutoActive\\(\\)|operatorDenied\\(' src/commands/agent.ts lists 5605, 5608, 5725, 5727, 5860, 5907. fix-round2.diff lines 437-449 show the gate added to two of the three copies.",
+    "confidence": "medium",
+    "dedupe_key": "review-auto-gate-spread",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-010",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-010",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "file": "src/commands/agent.ts",
+    "line": 4421,
+    "symbol": "selfAnsweredQuestion(telegramTurn) / io.mcpGrantsApply",
+    "problem": "The round-2 fix added a sixth positional boolean parameter, telegramTurn, to selfAnsweredQuestion (agent.ts:2524) fed by `io.mcpGrantsApply?.() === false` (4421). AgentIO.mcpGrantsApply is documented (429-434) as 'whether trustedMcpTools grants may skip the prompt'; the same expression at 4450 means exactly that. At 4421 it is a proxy for 'the person is not at the shell', and the correspondence rests only on tui-shell.ts:6208 returning false for a Telegram turn. The predicate has no name (review-style-6).",
+    "impact": "Anyone who later makes mcpGrantsApply false for another reason silently turns off model self-answers; anyone who adds a non-Telegram remote turn that leaves it true gets them wrongly. This proxy is also why F-001 is easy to miss: any turn path that does not go through telegramTurnIo is unmarked.",
+    "suggested_fix": "Add an explicit AgentIO hook, e.g. answersFromHuman?: () => boolean or turnOrigin?: () => 'terminal' | 'telegram', set next to mcpGrantsApply by tui-shell and the facade, and test it. Or move the check into the caller's condition so the flag parameter disappears. At minimum add a note to the mcpGrantsApply doc.",
+    "evidence": "agent.ts:2518-2526 (6 parameters), 4413-4423 (call site), 4450 (same expression, other meaning), 429-434 (field doc), tui-shell.ts:6208. The test comment 'A turn that started in Telegram answers false here (flow 396)' confirms the proxy is intentional. The regression reviewer notes foreground-operation.ts:242 resolves it once at facade creation (pre-existing, harmless today).",
+    "confidence": "medium",
+    "dedupe_key": "telegram-turn-proxy-flag",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-011",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-011",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "file": "src/review/review-system.ts",
+    "line": 111,
+    "symbol": "recordOperatorDenial / resetOperatorDenials doc comments",
+    "problem": "The comment on recordOperatorDenial says 'Only review-auto writes and reads the per-call set; the question floor has its own flag.' The body also sets that flag (`operatorRefused = true`, line 116), so the two are coupled. The comment on resetOperatorDenials (127) says 'Cleared on /clear, /new and a permission-mode change', but the fix also calls it on resume (shell.ts:2375, tui-shell.ts:6332); the bunfig.toml comment undercounts the same way (review-style-9).",
+    "impact": "The coupling is load-bearing: review-arbiter.test.ts:197 calls recordOperatorDenial and expects askFloor to return 'operator-denial'. A reader who trusts the comment and removes the flag write, believing it separate, breaks that floor.",
+    "suggested_fix": "Reword to 'Remember an action the operator refused under review-auto. Also marks the question floor (see noteOperatorRefusal)', implement it as operatorDenials.add(fp); noteOperatorRefusal();, and add 'resume' to the reset comments in review-system.ts and bunfig.toml.",
+    "evidence": "review-system.ts:111-130 at HEAD; review-arbiter.test.ts:197-200; reset call sites shell.ts:2375/2950/3063 and tui-shell.ts:6332/6931/7621.",
+    "confidence": "high",
+    "dedupe_key": "operator-denial-comment-coupling",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-012",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-012",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "file": "src/harness/tool/builtin/ask-user-tool.ts",
+    "line": 95,
+    "symbol": "ASK_USER_CANCEL",
+    "problem": "The PR adds an exported constant ASK_USER_CANCEL = \"__cancel__\". The same value already has a name, CANCEL_ANSWER (src/decisions/ask.ts:92), and two raw literals (tui-shell.ts:5996, ask-user-transcript.ts:26). The dismissal sentinel now has four spellings, and the tool and the bridge agree on the string only by coincidence. Also review-style-8.",
+    "impact": "If someone changes the sentinel in one place, the tool stops recognising a dismissal and treats it as freeform text ('User answered (freeform): __cancel__'). No current divergence.",
+    "suggested_fix": "Define the sentinel once (in the tool module or decisions/ask.ts), re-export or import it under both names, and replace the raw literals as far as layering allows.",
+    "evidence": "keryx ctx rg '__cancel__|ASK_USER_CANCEL|CANCEL_ANSWER' src --glob '!*.test.ts' lists the sites.",
+    "confidence": "high",
+    "dedupe_key": "cancel-sentinel-duplicated",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "src/harness/tool/builtin/ask-user-tool.ts:95 (ASK_USER_CANCEL)",
+        "src/decisions/ask.ts:92 (CANCEL_ANSWER)",
+        "src/tui/tui-shell.ts:5996 (raw literal)",
+        "src/tui/ask-user-transcript.ts:26 (raw literal)"
+      ],
+      "enumeration_method": "keryx ctx rg '__cancel__|ASK_USER_CANCEL|CANCEL_ANSWER' src --glob '!*.test.ts'"
+    }
+  },
+  {
+    "id": "F-013",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-013",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "file": "docs/docs/guides/permission-modes.md",
+    "line": 82,
+    "symbol": "refusal floor wording; stand-aside list; commitPermissionMode",
+    "problem": "Line 82 says the question stays with you when it asks for permission 'after you refused an action in any mode', lines 255-257 say the floor 'is kept after a refusal in every mode', and the PR comment says 'a person's refusal in any mode still holds permission-style questions'. But resetOperatorDenials() clears the flag on every permission-mode change (tui-shell.ts:7621 in commitPermissionMode, which is also the Telegram /mode path at 10177; shell.ts:3063), and on /new, /clear and resume. A refusal made in ask or trust therefore does not survive the switch to auto, which is the switch that creates the self-answer axis. The test 'a refusal in any mode still keeps a permission-style question for the human' (agent-question-axis.test.ts:400) passes only because run() never commits a mode change between the refusal and the question. Line 255 does list the reset, so the page contradicts itself. Related (review-style-4): the list at lines 78-85 omits the stand-aside for a policy-tagged question while KERYX_REVIEW_AUTO_ANSWER=1 or an answers file is set (agent.ts:2537-2542), line 74 states the cap of 3 identical calls without saying it is a default (MAX_ATTEMPTS_PER_HASH, agent.ts:1312), and line 73 uses the internal identifier maxToolCalls.",
+    "impact": "A reader expects 'refused in trust, then /mode auto' to keep 'Allow X?' with the human; it does not, and the model's self-answer picks the recommended option. The practical exposure is small (the floor is wording-dependent anyway, R2-F-016, documented, and a mode change is deliberate), but the overclaim and the incomplete enumeration are real.",
+    "suggested_fix": "Reword line 82, line 257 and the PR comment to 'after you refused an action since the last mode change, /new, /clear or resume'; add the env and answers-file case to the list; say 'the default cap of 3 identical calls'; replace maxToolCalls with 'the tool-call budget'. Alternatively keep the flag (not the per-call set) across an ask/trust to auto change by splitting the reset.",
+    "evidence": "review-system.ts:106-165; tui-shell.ts:6332, 6931, 7621, 10177; shell.ts:2375, 2950, 3063; permission-modes.md:73-85 and 255-257; agent.ts:2537-2542 and 1312. keryx ctx rg 'resetOperatorDenials' src --glob '!*.test.ts' shows the same call sites.",
+    "confidence": "high",
+    "dedupe_key": "f007-refusal-cleared-on-mode-change-docs",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-014",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-014",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "file": "docs/docs/guides/permission-modes.md",
+    "line": 25,
+    "symbol": "auto row of the modes table",
+    "problem": "The auto row says 'No command asks, including destructive ones (the credential floor below still does)'. It names one floor. permission-mode.ts:135-137 also asks in auto for sacReviewConfirmation and publishLease, and the agent-level floors (hookAsk, untrusted-origin, the irreversible and action question floors) still ask. 'No command asks' is a quantified claim the code does not back (round obligation 2).",
+    "impact": "A reader of the mode table takes /mode auto to be fully unattended. The 'Who answers a question' section a few lines below lists floors the row does not.",
+    "suggested_fix": "Say 'Commands do not ask, with the hard floors below (credentials, SAC review confirmation, publish lease) and the question floors in Who answers a question', or link to the floors list.",
+    "evidence": "permission-mode.ts:124-149 (resolveApprovalDecision floors at 135-137); permission-modes.md:25 and 78-85; keryx ctx rg 'nothing asks|No command asks|Never asks' README.md docs/docs.",
+    "confidence": "high",
+    "dedupe_key": "docs-overclaim-auto-row-floors",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-015",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-015",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "file": "README.md",
+    "line": 493,
+    "symbol": "/mode auto description (README.md:493, docs/docs/harness.md:100, docs/docs/onboarding.md:500, /mode picker and confirm copy)",
+    "problem": "README.md:493, docs/docs/harness.md:100 and docs/docs/onboarding.md:500 still say 'nothing asks except a credentials-touching command'. The PR adds a behaviour the user must know about: in /mode auto the model answers its own ask_user questions. The /mode auto picker copy (tui-shell.ts:3708) and the confirm text (tui-shell.ts:7641, shell.ts:3045-3055) do not mention it either. The sentence is also false for the floors that still ask. CONTRIBUTING.md:92-94 puts user-facing behaviour in README.md and docs/docs/; only the permission-modes guide documents the new axis.",
+    "impact": "A user who picks auto from the picker or reads the README is not told the model will answer its own questions, and is told something false about what still asks. The sentence is pre-existing, but the PR makes it more wrong by changing what auto does.",
+    "suggested_fix": "Add one sentence to the three docs and to the picker and confirm copy: 'auto also answers the agent's own questions (it picks the recommended option and says so); questions about irreversible or untrusted actions still ask you', linking guides/permission-modes.md#who-answers-a-question.",
+    "evidence": "keryx ctx rg 'except a credentials|nothing asks' README.md docs/docs -> README.md:493, harness.md:100, onboarding.md:500. Read tui-shell.ts:3708, 7641 and shell.ts:3045-3055; CONTRIBUTING.md:92-94.",
+    "confidence": "high",
+    "dedupe_key": "docs-auto-question-axis-undisclosed",
+    "blocking_merge": false,
+    "location_class": "in-diff",
+    "class_scope": {
+      "sites": [
+        "README.md:493",
+        "docs/docs/harness.md:100",
+        "docs/docs/onboarding.md:500",
+        "src/tui/tui-shell.ts:3708 (picker copy)",
+        "src/tui/tui-shell.ts:7641 (confirm text)",
+        "src/commands/shell.ts:3045-3055 (confirm text)"
+      ],
+      "enumeration_method": "keryx ctx rg 'except a credentials|nothing asks' README.md docs/docs, then reading the picker and confirm strings"
+    }
+  },
+  {
+    "id": "F-016",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-016",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "file": "docs/docs/guides/recommendation-journal.md",
+    "line": 10,
+    "symbol": "'Every question with options writes one record'",
+    "problem": "Line 10 says 'Every question with options writes one record:'. Line 347, which the R2-F-013 fix amended, now says an auto self-answer 'never reached a person and is not recorded'. The two lines contradict each other and the line-10 claim is an over-claim.",
+    "impact": "The R2-F-013 fix landed at line 347 and in the interviewer SKILL.md, but the opening definition of the journal still states the unqualified rule.",
+    "suggested_fix": "Change line 10 to 'Every question with options that a person answers writes one record:'.",
+    "evidence": "recommendation-journal.md:10 and :347; keryx ctx rg 'Every question' docs/docs/guides/recommendation-journal.md.",
+    "confidence": "high",
+    "dedupe_key": "docs-journal-every-question",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-017",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-017",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "file": null,
+    "line": null,
+    "symbol": "PR 992 body",
+    "problem": "The PR body does not match the diff at HEAD. It says 'New src/commands/agent-question-axis.test.ts (10 tests)'; the file now runs 38 tests. Its floors list names four classes and its first bullet says 'ask and trust leave the question to the human' and 'auto picks the recommended option' without qualifier, but the round-2 fix added stand-asides: a Telegram-started turn stays on the human, a policy-tagged question stays with the arbiter and journal while review-auto, KERYX_REVIEW_AUTO_ANSWER=1 or an answers file is set, and the refusal memory is scoped to review-auto while a refusal in any mode still holds permission-style questions (and is cleared on /clear, /new, resume and a mode change). It also omits ApproverProvenance/personRefused, test-preload-hooks.ts and the bunfig.toml change. Raised by review-architecture-2, review-clean-code-7 and review-style-5; the reviewers counted the test declarations differently (22, 23 and 28), the executed count is 38.",
+    "impact": "The operator approves the merge from the body. The body undersells the stand-asides, which are what poll 153 asked for, so the stated behaviour differs from the shipped one. A quantified claim (round obligation 2) is stale.",
+    "suggested_fix": "Update the PR body: the test count (or drop the number), a line on the Telegram and review-auto stand-asides, the refusal-memory scoping and reset points, and the preload hook. No code change.",
+    "evidence": "gh pr view 992 --json body; bun test src/commands/agent-question-axis.test.ts executes 38 tests (performance and testing reviewers); agent.ts:2509-2516 and 2526 document the stand-asides.",
+    "confidence": "high",
+    "dedupe_key": "pr-process:body-stale-r3",
+    "blocking_merge": false,
+    "location_class": "pr-process"
+  },
+  {
+    "id": "F-018",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-018",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "file": "src/review/review-system.ts",
+    "line": 123,
+    "symbol": "operatorRefused / operatorDenials (process-global refusal memory)",
+    "problem": "The any-mode question-floor flag (operatorRefused) and the per-call set (operatorDenials) are process-wide singletons with no session key and no cap. Resets exist only in the two shells (tui-shell.ts:6332/6931/7621; shell.ts:2375/2950/3063). src/acp/server.ts (multi-session in one process), scheduler and trigger turns and subagents have no reset. Raised by review-highload-2 and -3 and review-logic-3. The architecture reviewer found that ACP has no permissionMode, onQuestionSelfAnswered or mcpGrantsApply, so the flag has no self-answer consumer there; the remaining exposure is review-auto, which is process-wide by an existing design (pre-existing, setReviewSystem at agent.ts:2267).",
+    "impact": "In a multi-session host, one client's refusal keeps permission-worded ask_user questions on the human for every other session in that process. It fails closed (more questions to the human, none fewer) and growth is human-paced (100k records measured at 64 MB), so there is no unsafe grant and no realistic memory risk.",
+    "suggested_fix": "Key the memory by session or turn (carry it on the io or ApproverProvenance), or call resetOperatorDenials() on session/new in src/acp/server.ts and document the per-process scope. Optionally cap the set at about 1k entries.",
+    "evidence": "keryx ctx rg 'resetOperatorDenials\\(\\)|noteOperatorRefusal\\(\\)|recordOperatorDenial\\(' src (non-test) shows no hit in src/acp or the scheduler. Scratch repro R3 (cross-session) confirms the per-call set is shared. review-system.ts:106-131 is a plain Set with no size check.",
+    "confidence": "medium",
+    "dedupe_key": "highload:operator-refusal-flag-process-global-no-acp-reset",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-019",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-019",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "file": "src/commands/agent.ts",
+    "line": 2537,
+    "symbol": "selfAnsweredQuestion",
+    "problem": "Under /mode auto with KERYX_AUTONOMOUS_ANSWERS_FILE set, an untagged question is self-answered in agent.ts and never reaches journaledAskUser -> answerAutonomously, so it is not appended to answers.ndjson, which autonomous-run.ts reads for lastAnswer and stall detection. Only policy-tagged questions are excluded by the new stand-aside.",
+    "impact": "Reachable only by hand-setting the env var with auto. The autonomous review profile runs in trust mode, where resolveQuestionAnswerer(trust) is 'human'. No observable defect in a shipped profile.",
+    "suggested_fix": "Optional: make the stand-aside unconditional on a non-empty ENV_AUTONOMOUS_ANSWERS_FILE, not only for tagged questions (fold into the predicate of F-008).",
+    "evidence": "agent.ts:2537-2542 with ask-user-bridge.ts:63-67; autonomous-profile.ts:13 sets trust.",
+    "confidence": "medium",
+    "dedupe_key": "auto-answers-file-untagged-bypass",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-020",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-020",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "file": "src/commands/agent.ts",
+    "line": 2986,
+    "symbol": "origin === 'bus-message' branch / untrustedContentSeen",
+    "problem": "A bus-woken turn puts the peer's message into history as a user message with provenance 'tool' (agent.ts:2994), but the untrusted-content latch is set only from a tool result with untrusted === true (4553-4555). Under /mode auto a peer-steered ask_user is therefore self-answered with the recommended option the model itself chose. Peers are local sessions, not the open web.",
+    "impact": "Defence in depth only: in auto the model can already run commands without approval except behind the credential floor, so the self-answer adds no capability. No attack path was demonstrated.",
+    "suggested_fix": "Consider treating a bus-message or task-notification turn as untrustedContentSeen = true for the question floor, or document that the latch does not cover peer messages.",
+    "evidence": "agent.ts:2979-2996, 3270, 4535-4555; keryx ctx rg 'untrustedContentSeen|untrusted: true|untrusted === true' src --glob '!*.test.ts' (32 matches); bus-wake call site tui-shell.ts:10051.",
+    "confidence": "medium",
+    "dedupe_key": "f005-bus-wake-not-latched-untrusted",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-021",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-021",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "file": "src/tui/tui-shell.ts",
+    "line": 6189,
+    "symbol": "onQuestionSelfAnswered label length; approval wrapper `spelled`",
+    "problem": "The 100-character cap is applied to the question only; the model-written answerLabel has no length cap here or in the ask_user input schema, so terminalSafe runs over the whole label (linear: 1.3 ms per 10 KB, 52 ms per 1 MB). Separately, the round-2 approval wrapper computes spelled = refusalFingerprint(...) for every approval request in every mode but uses it only under review-auto (11 us for a typical command, 27 ms for 100 KB); the fix also removed an unconditional fingerprint at the write and delegate sites, so the net is about neutral.",
+    "impact": "Both costs are once per self-answered question or once per human-gated approval prompt and negligible in practice. A very long label would also become one very long transcript row.",
+    "suggested_fix": "Optional: cap the label like the question before terminalSafe, and compute `spelled` only when reviewAuto is true.",
+    "evidence": "Microbenchmarks of terminalSafe (ts.ts) and refusalFingerprint (fp.ts) with bun 1.4.2; keryx ctx rg -c maxLength src/harness/tool/builtin/ask-user-tool.ts finds no file; agent.ts:5603-5630.",
+    "confidence": "high",
+    "dedupe_key": "perf:self-answer-label-uncapped",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  },
+  {
+    "id": "F-022",
+    "global_id": "2026-10-13-pr-992-round3-d20089aa#F-022",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "file": "src/commands/permission-mode.ts",
+    "line": 152,
+    "symbol": "QuestionAnswerer, ParsedAskUser, MIN_ASK_USER_OPTIONS, ApproverProvenance",
+    "problem": "Four exports the PR adds are referenced only inside their own file: QuestionAnswerer (permission-mode.ts:152), ParsedAskUser and MIN_ASK_USER_OPTIONS (ask-user-tool.ts:92, 100) and ApproverProvenance (agent.ts:291). The repo has no knip, ts-prune or unused-exports tooling, so nothing fails.",
+    "impact": "None at runtime. The public surface is slightly larger than needed. (If F-007 is taken, ApproverProvenance becomes a used cross-file type.)",
+    "suggested_fix": "Optional: drop `export` from the four names, or keep them as the module contract.",
+    "evidence": "keryx ctx rg '\\b(MIN_ASK_USER_OPTIONS|ParsedAskUser|QuestionAnswerer|ApproverProvenance|ASK_USER_CANCEL)\\b' src lists 16 matches in 4 files; the first four have no match outside the defining file. bun x eslint on the 18 changed .ts files is clean.",
+    "confidence": "high",
+    "dedupe_key": "new-exports-unreferenced",
+    "blocking_merge": false,
+    "location_class": "in-diff"
+  }
+]
+```

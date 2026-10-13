@@ -2895,10 +2895,39 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
 
   test("the /goal branch passes cwd, io, deps, history, slateSession, and mintAttemptId", () => {
     const branchIndex = fnBody2.indexOf('command.name === "/goal"');
-    const branchBlock = fnBody2.slice(branchIndex, branchIndex + 500);
+    const branchBlock = fnBody2.slice(branchIndex, branchIndex + 800);
     expect(branchBlock).toContain("sessionCwd");
     expect(branchBlock).toContain("slateSession");
     expect(branchBlock).toContain("mintTimestampAttemptId");
+  });
+
+  // Flow 441 / PR 992 round 3 F-001: a /goal typed in the Telegram topic starts a model turn Telegram started, so it
+  // runs under the hooks of a Telegram turn, like the main turn does through the foreground facade. Without them
+  // /mode auto lets the model answer the goal's own questions with nobody asked.
+  test("a /goal that came from Telegram runs under the hooks of a Telegram turn", () => {
+    const branchIndex = fnBody2.indexOf('command.name === "/goal"');
+    const branchBlock = fnBody2.slice(branchIndex, branchIndex + 800);
+    expect(branchBlock).toContain("io: source === TG_SOURCE ? withTurnScopedIo(io, telegramTurnIo) : io,");
+  });
+});
+
+// PR 992 round 3 F-005 / F-004: the TUI shell has no headless seam (see below), so what it does about a remembered
+// refusal and about a model-written line is pinned in its source; the readline shell is driven for real in
+// shell-agent-repl.test.ts.
+describe("PR 992 round 3 — tui-shell.ts refusal memory and self-answer line (source-text audit)", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test.each([
+    ["resuming or opening a session (applyOpened)", "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      history = previewHistory"],
+    ["/new (startNewSession)", "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();"],
+    ["a permission-mode change (commitPermissionMode)", "paintModeRow();\n      resetOperatorDenials();\n      chrome.showToast(`Permission mode:"],
+  ])("%s clears the remembered refusals", (_site, snippet) => {
+    expect(source).toContain(snippet);
+    expect(source.split("resetOperatorDenials();").length - 1).toBe(3);
+  });
+
+  test("the self-answer line is the escaped one, built by the shared helper", () => {
+    expect(source).toContain("const line = selfAnsweredLine(question, answerLabel);");
   });
 });
 
