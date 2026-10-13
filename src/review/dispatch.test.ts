@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { coverageErrors, requiredReviewers } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { packageResearchErrors } from "./research";
 import { READY_DISPATCH } from "./dispatch.test-helpers";
@@ -58,4 +59,51 @@ test("package gate rereads dispatch; legacy absence is compatible only", async (
     expect((await packageResearchErrors(dir, { reviewerDispatch: "research.json" }, [])).length).toBeGreaterThan(0);
     expect((await packageResearchErrors(dir, { ...artifacts, reviewerDispatch: "../x" }, [])).join(" ")).toContain("locator");
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+// Flow 428 AC1 and AC3: the reviewer set a dispatch must cover, and the ways it is refused.
+async function reviewRoot(skills: string[]): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "keryx-dispatch-set-"));
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await writeFile(path.join(root, ".metaproject", "metaproject.json"), `${JSON.stringify({ modules: { gdskills: {} } })}\n`, "utf8");
+  for (const name of skills) {
+    const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`, "utf8");
+  }
+  return root;
+}
+
+const SET = ["review-orchestrator", "review-verifier", "review-logic", "review-architecture", "review-clean-code", "review-regression"];
+const FILES = ["src/app/page.tsx"];
+
+test("a pull request's reviewer set defaults to every applicable reviewer, and a diff-only dispatch needs the operator's words", async () => {
+  const root = await reviewRoot(SET);
+  try {
+    const all = await requiredReviewers(root, "all", FILES);
+    expect(all.mode).toBe("all");
+    expect(all.required).toEqual(["review-architecture", "review-clean-code", "review-logic"]);
+    const narrowed = ["review-logic"];
+    expect((await coverageErrors({ mode: "diff", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("needs operatorQuote");
+    expect((await coverageErrors({ mode: "diff", selected: narrowed, operatorQuote: "   " }, { root, files: FILES })).join(" ")).toContain("needs operatorQuote");
+    const quoted = await coverageErrors({ mode: "diff", selected: narrowed, operatorQuote: "only the logic reviewer, please" }, { root, files: FILES });
+    expect(quoted.join(" ")).not.toContain("operatorQuote");
+    expect((await coverageErrors({ mode: "all", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("missing: review-architecture, review-clean-code");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("review-regression is required exactly when a blast radius was computed, and the exclusion carries the reason", async () => {
+  const root = await reviewRoot(SET);
+  try {
+    for (const mode of ["all", "diff"] as const) {
+      expect((await requiredReviewers(root, mode, FILES, { blastRadius: true })).required).toContain("review-regression");
+      const none = await requiredReviewers(root, mode, FILES, { blastRadius: false });
+      expect(none.required).not.toContain("review-regression");
+      expect(none.excluded.find((e) => e.reviewer === "review-regression")?.reason).toContain("no blast radius computed");
+    }
+    const without = (await requiredReviewers(root, "all", FILES)).required;
+    const refused = await coverageErrors({ mode: "all", selected: without }, { root, files: FILES, blastRadius: true });
+    expect(refused.join(" ")).toContain("missing: review-regression");
+    expect(await coverageErrors({ mode: "all", selected: without }, { root, files: FILES, blastRadius: false })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

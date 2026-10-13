@@ -62,6 +62,32 @@ describe("runMutation", () => {
     expect(await readdir(scratch)).toEqual([]);
   });
 
+  test("every row names the test command and the exit code it was judged by, in the record and in the table", async () => {
+    const record = await runMutation({
+      worktree: tree,
+      command: command(),
+      scratchRoot: scratch,
+      mutants: parseMutantSpec([
+        { id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" },
+        { id: "B", file: "calc.js", anchor: "n > 0", replacement: "n >= 0" },
+        { id: "C", file: "calc.js", anchor: "no such text", replacement: "x" },
+      ]),
+    });
+    expect(record.mutants.map((m) => [m.id, m.command, m.exitCode])).toEqual([
+      ["A", command(), 1],
+      ["B", command(), 0],
+      ["C", command(), undefined],
+    ]);
+    const rows = renderMutationTable(record).split("\n").filter((line) => /^\| [ABC] \|/.test(line));
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toContain("killed");
+    expect(rows[0]).toContain("| 1 |");
+    expect(rows[1]).toContain("survived");
+    expect(rows[1]).toContain("| 0 |");
+    expect(rows[2]).toContain("anchor not found");
+    for (const row of rows) expect(row).toContain("check.js");
+  });
+
   test("an anchor that is missing, ambiguous, outside the tree or behind a link is invalid and never run", async () => {
     await writeFile(path.join(base, "outside.js"), "x\n");
     await symlink(path.join(base, "outside.js"), path.join(tree, "link.js"));

@@ -7,6 +7,7 @@ import {
   reviewerFlags,
   reviewerPathGate,
 } from "./reviewer-triggers";
+import { globToRegExp } from "../review/coverage";
 import * as viaReview from "../review/reviewers";
 import * as here from "./reviewer-triggers";
 
@@ -175,6 +176,23 @@ describe("description triggers and flags (round 3, H-008)", () => {
   test("a flag is found only at a word start, never inside a word (T18)", () => {
     expect(descriptionFlags("Dispatched by acme-review--acme, x=--house or a/--ui")).toEqual([]);
     expect(descriptionFlags("--lead, then (--paren), x,--comma and --spaced")).toEqual(["--lead", "--paren", "--comma", "--spaced"]);
+  });
+});
+
+describe("a project reviewer's description gate selects the files it names (flow 428 AC2)", () => {
+  const gateMatches = (description: string, file: string): boolean =>
+    reviewerPathGate(skill(`description: ${description}\n`)).paths.some((glob) => globToRegExp(glob).test(file));
+
+  test("a trailing `/**` reaches a file directly under the directory, not only a nested one", () => {
+    const domains = "Use when reviewing analytics. Dispatched by vantage-review for --vantage-domains, src/analytics/** or src/pipelines/** changes.";
+    const core = "Use when reviewing shared infrastructure. Dispatched by vantage-review for --vantage-core, src/core/** changes.";
+    expect(reviewerPathGate(skill(`description: ${domains}\n`))).toEqual({ paths: ["src/analytics/**", "src/pipelines/**"], pathsSource: "description" });
+    for (const file of ["src/pipelines/index.ts", "src/pipelines/a/b/c.ts", "src/analytics/store.ts"]) expect(gateMatches(domains, file)).toBe(true);
+    for (const file of ["src/core/x.ts", "src/core/flow/graph.ts"]) expect(gateMatches(core, file)).toBe(true);
+    for (const file of ["src/pipelinesx/a.ts", "src/other/pipelines/a.ts", "src/core.ts"]) {
+      expect(gateMatches(domains, file)).toBe(false);
+      expect(gateMatches(core, file)).toBe(false);
+    }
   });
 });
 
