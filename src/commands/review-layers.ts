@@ -3,6 +3,7 @@ import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { type LayersFile, readLayers, refreshLayers } from "../review/layers";
+import { buildLayersBlock, layersBlockLines } from "../review/layers-payload";
 import { layersDetailLines } from "../review/layers-view";
 
 export type LayersDeps = {
@@ -12,11 +13,19 @@ export type LayersDeps = {
 export const LAYERS_REFRESH_FLAGS = ["--package", "--head", "--base", "--write-wiki", "--json", "--help", "-h"] as const;
 export const LAYERS_STATUS_FLAGS = ["--package", "--json", "--help", "-h"] as const;
 
+export const LAYERS_BLOCK_FLAGS = ["--package", "--files", "--max-bytes", "--json", "--help", "-h"] as const;
+
 export function printLayersHelp(): void {
   console.log(`keryx review layers — usage:
 
   keryx review layers refresh --package <dir> [--head <sha>] [--base <ref>] [--write-wiki] [--json]
   keryx review layers status  --package <dir> [--json]
+  keryx review layers block   --package <dir> --files <a,b,...> [--max-bytes <n>] [--json]
+
+\`block\` prints the bounded \`layers\` block a reviewer payload carries for those files: files
+the graph says are affected (depth 1, then 2 while under the cap), symbol neighbours, related
+tests, wiki pages that describe the files and memory entries for their module. Anything cut
+is listed with the command that fetches the rest.
 
 Brings the graph, the wiki and the memory index up to date for one review and writes
 <dir>/layers.json. No model is called: it runs the graph build, \`wiki refresh\` and
@@ -100,5 +109,19 @@ export async function runLayers(args: string[], deps: LayersDeps): Promise<void>
     print(layers, rest.includes("--json"));
     return;
   }
-  throw new Error(`Unknown layers command "${sub}". Use refresh or status.`);
+  if (sub === "block") {
+    deps.rejectUnknownFlags(rest, LAYERS_BLOCK_FLAGS, "layers block");
+    const packageDir = resolvePackageDir(rest);
+    const files = (optionValue(rest, "--files") ?? "").split(",").map((file) => file.trim()).filter(Boolean);
+    if (files.length === 0) throw new Error("Missing --files <a,b,...>. See `keryx review layers --help`.");
+    const rawMax = optionValue(rest, "--max-bytes");
+    const maxBytes = rawMax === undefined ? undefined : Number(rawMax);
+    if (maxBytes !== undefined && (!Number.isInteger(maxBytes) || maxBytes < 256)) throw new Error("--max-bytes must be an integer of at least 256.");
+    const projectRoot = resolveProjectRoot(process.cwd());
+    await ensurePackageLayers(packageDir, { projectRoot });
+    const block = await buildLayersBlock({ projectRoot, packageDir, files, ...(maxBytes === undefined ? {} : { maxBytes }) });
+    console.log(rest.includes("--json") ? JSON.stringify(block, null, 2) : layersBlockLines(block).join("\n"));
+    return;
+  }
+  throw new Error(`Unknown layers command "${sub}". Use refresh, status or block.`);
 }

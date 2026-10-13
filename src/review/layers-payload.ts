@@ -1,0 +1,284 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { computeAffected } from "../gdgraph/affected";
+import type { GraphData } from "../gdgraph/types";
+import { collectEntries } from "../memory/store";
+import { relatedByNamingAndDirectory, TEST_FILE_RE, normalizePath } from "../testing/selection";
+import { collectPages, computeModuleKeyFiles } from "../wiki/collect";
+import { resolveDescribeSet } from "../wiki/describes";
+import { moduleNameFromProjectPath } from "../wiki/service";
+import { loadPackageGraph, packageGraphDir } from "./layers";
+
+export const LAYERS_BLOCK_VERSION = 1;
+export const DEFAULT_LAYERS_BLOCK_MAX_BYTES = 8192;
+const MAX_SYMBOLS_PER_FILE = 6;
+const MAX_NEIGHBOURS_PER_SYMBOL = 4;
+
+export const LAYERS_BLOCK_SECTIONS = ["affected", "symbols", "relatedTests", "wiki", "memory"] as const;
+export type LayersBlockSection = (typeof LAYERS_BLOCK_SECTIONS)[number];
+
+export interface LayersBlockSymbol {
+  file: string;
+  name: string;
+  kind: string;
+  line: number;
+  callers: string[];
+  callees: string[];
+}
+
+export interface LayersBlockTruncation {
+  section: LayersBlockSection;
+  shown: number;
+  total: number;
+  /** The command that fetches the rest. */
+  command: string;
+}
+
+export interface LayersBlock {
+  version: typeof LAYERS_BLOCK_VERSION;
+  files: string[];
+  prHead: string | null;
+  graphCommit: string | null;
+  maxBytes: number;
+  affected: { depth: 1 | 2; files: string[] };
+  symbols: LayersBlockSymbol[];
+  relatedTests: string[];
+  wiki: Array<{ page: string; title: string }>;
+  memory: Array<{ path: string; title: string; status: string; module: string }>;
+  truncated: LayersBlockTruncation[];
+}
+
+export interface BuildLayersBlockInput {
+  /** The operator's project: wiki and memory are read from its working copy. */
+  projectRoot: string;
+  packageDir: string;
+  /** The reviewer's files, repository-relative. */
+  files: readonly string[];
+  maxBytes?: number;
+}
+
+function sizeOf(block: LayersBlock): number {
+  return Buffer.byteLength(JSON.stringify(block), "utf8");
+}
+
+function unique(values: Iterable<string>): string[] {
+  return [...new Set(values)].sort();
+}
+
+function affectedFor(graph: GraphData, files: readonly string[], depth: 1 | 2): string[] {
+  const own = new Set(files);
+  const found = new Set<string>();
+  for (const file of files) {
+    let result;
+    try {
+      result = computeAffected(graph, file, { depth });
+    } catch {
+      continue;
+    }
+    for (const dependent of result.dependents) if (!own.has(dependent)) found.add(dependent);
+  }
+  return [...found].sort();
+}
+
+function symbolsFor(graph: GraphData, files: readonly string[]): LayersBlockSymbol[] {
+  const symbols = graph.symbols ?? [];
+  if (symbols.length === 0) return [];
+  const byId = new Map(symbols.map((symbol) => [symbol.id, symbol]));
+  const label = (id: string): string => {
+    const symbol = byId.get(id);
+    return symbol === undefined ? id : `${symbol.name} (${symbol.path}:${symbol.startLine})`;
+  };
+  const callers = new Map<string, Set<string>>();
+  const callees = new Map<string, Set<string>>();
+  for (const edge of graph.calls ?? []) {
+    if (edge.kind !== "calls") continue;
+    (callers.get(edge.to) ?? callers.set(edge.to, new Set()).get(edge.to)!).add(label(edge.from));
+    (callees.get(edge.from) ?? callees.set(edge.from, new Set()).get(edge.from)!).add(label(edge.to));
+  }
+  const out: LayersBlockSymbol[] = [];
+  for (const file of files) {
+    const own = symbols
+      .filter((symbol) => symbol.path === file)
+      .sort((a, b) => a.startLine - b.startLine || a.name.localeCompare(b.name))
+      .slice(0, MAX_SYMBOLS_PER_FILE);
+    for (const symbol of own) {
+      out.push({
+        file,
+        name: symbol.name,
+        kind: symbol.kind,
+        line: symbol.startLine,
+        callers: [...(callers.get(symbol.id) ?? [])].sort().slice(0, MAX_NEIGHBOURS_PER_SYMBOL),
+        callees: [...(callees.get(symbol.id) ?? [])].sort().slice(0, MAX_NEIGHBOURS_PER_SYMBOL),
+      });
+    }
+  }
+  return out;
+}
+
+function relatedTestsFor(graph: GraphData, files: readonly string[], affected: readonly string[]): string[] {
+  const testFiles = graph.nodes.map((node) => node.path).filter((file) => TEST_FILE_RE.test(file));
+  const found = new Set<string>();
+  for (const file of files) {
+    if (TEST_FILE_RE.test(file)) found.add(file);
+    else for (const test of relatedByNamingAndDirectory(file, testFiles)) found.add(test);
+  }
+  for (const dependent of affected) if (TEST_FILE_RE.test(dependent)) found.add(dependent);
+  return [...found].sort();
+}
+
+async function wikiFor(projectRoot: string, graph: GraphData, files: readonly string[]): Promise<Array<{ page: string; title: string }>> {
+  let pages;
+  try {
+    pages = await collectPages(projectRoot);
+  } catch {
+    return [];
+  }
+  const knownPaths = new Set(graph.nodes.map((node) => node.path));
+  const keyFilesIndex = computeModuleKeyFiles(graph);
+  const wanted = new Set(files);
+  const out: Array<{ page: string; title: string }> = [];
+  for (const page of pages) {
+    let content: string;
+    try {
+      content = await readFile(page.absolutePath, "utf8");
+    } catch {
+      continue;
+    }
+    const set = resolveDescribeSet({ page, content, knownPaths, keyFilesIndex });
+    if (set.paths.some((candidate) => wanted.has(candidate))) out.push({ page: page.relativePath, title: page.title });
+  }
+  return out.sort((a, b) => a.page.localeCompare(b.page));
+}
+
+function modulesOf(file: string): string[] {
+  const parts = file.split("/").filter(Boolean);
+  const modules: string[] = [];
+  for (let end = parts.length - 1; end >= 1; end -= 1) modules.push(parts.slice(0, end).join("/").toLowerCase());
+  modules.push(moduleNameFromProjectPath(file).toLowerCase());
+  return unique(modules);
+}
+
+async function memoryFor(
+  projectRoot: string,
+  files: readonly string[],
+): Promise<Array<{ path: string; title: string; status: string; module: string }>> {
+  let entries;
+  try {
+    entries = await collectEntries(projectRoot);
+  } catch {
+    return [];
+  }
+  const modules = new Set(files.flatMap(modulesOf));
+  const wanted = new Set(files);
+  const out: Array<{ path: string; title: string; status: string; module: string }> = [];
+  for (const entry of entries) {
+    if (entry.status === "deprecated" || entry.status === "superseded") continue;
+    const module = entry.scopes.module?.toLowerCase() ?? null;
+    const byModule = module !== null && modules.has(module);
+    const byFile = entry.scopes.files.some((file) => wanted.has(normalizePath(file)));
+    if (byModule || byFile) out.push({ path: entry.relativePath, title: entry.title, status: entry.status, module: module ?? "" });
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function fetchCommand(section: LayersBlockSection, files: readonly string[], packageDir: string, projectRoot: string): string {
+  const first = files[0] ?? "<file>";
+  switch (section) {
+    case "affected":
+      return `keryx gdgraph affected ${first} --depth 2 --data-dir ${path.relative(projectRoot, packageGraphDir(packageDir))}`;
+    case "symbols":
+      return `keryx gdgraph symbol "<name>" --data-dir ${path.relative(projectRoot, packageGraphDir(packageDir))}`;
+    case "relatedTests":
+      return `keryx test related ${first}`;
+    case "wiki":
+      return `keryx wiki ask "what describes ${first}?"`;
+    case "memory":
+      return `keryx memory search "${moduleNameFromProjectPath(first)}"`;
+  }
+}
+
+/**
+ * The bounded `layers` block of one reviewer payload: what the graph, the tests,
+ * the wiki and the memory know about that reviewer's files.
+ *
+ * Deterministic for a given package and working copy: every list is sorted, depth 2
+ * is used only when the result still fits, and an over-cap block is cut by removing
+ * the last item of the longest section (ties in section order) until it fits. Every
+ * cut is recorded with the command that fetches the rest.
+ */
+export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<LayersBlock> {
+  const maxBytes = input.maxBytes ?? DEFAULT_LAYERS_BLOCK_MAX_BYTES;
+  const files = unique(input.files.map(normalizePath).filter((file) => file.length > 0));
+  const { graph, layers } = await loadPackageGraph(input.packageDir);
+
+  const base = async (depth: 1 | 2): Promise<LayersBlock> => {
+    const affected = affectedFor(graph, files, depth);
+    return {
+      version: LAYERS_BLOCK_VERSION,
+      files,
+      prHead: layers.prHead,
+      graphCommit: layers.graphCommit,
+      maxBytes,
+      affected: { depth, files: affected },
+      symbols: symbolsFor(graph, files),
+      relatedTests: relatedTestsFor(graph, files, affected),
+      wiki: await wikiFor(input.projectRoot, graph, files),
+      memory: await memoryFor(input.projectRoot, files),
+      truncated: [],
+    };
+  };
+
+  let block = await base(1);
+  if (sizeOf(block) < maxBytes) {
+    const deeper = await base(2);
+    if (sizeOf(deeper) <= maxBytes) block = deeper;
+  }
+
+  const totals: Record<LayersBlockSection, number> = {
+    affected: block.affected.files.length,
+    symbols: block.symbols.length,
+    relatedTests: block.relatedTests.length,
+    wiki: block.wiki.length,
+    memory: block.memory.length,
+  };
+  const lists: Record<LayersBlockSection, unknown[]> = {
+    affected: block.affected.files,
+    symbols: block.symbols,
+    relatedTests: block.relatedTests,
+    wiki: block.wiki,
+    memory: block.memory,
+  };
+  const withTruncation = (): LayersBlock => ({
+    ...block,
+    truncated: LAYERS_BLOCK_SECTIONS.filter((section) => lists[section].length < totals[section]).map((section) => ({
+      section,
+      shown: lists[section].length,
+      total: totals[section],
+      command: fetchCommand(section, files, input.packageDir, input.projectRoot),
+    })),
+  });
+
+  // The truncation record itself costs bytes, so measure with it included.
+  while (sizeOf(withTruncation()) > maxBytes) {
+    let victim: LayersBlockSection | null = null;
+    for (const section of LAYERS_BLOCK_SECTIONS) {
+      if (lists[section].length > 0 && (victim === null || lists[section].length > lists[victim].length)) victim = section;
+    }
+    if (victim === null) break;
+    lists[victim].pop();
+  }
+  return withTruncation();
+}
+
+export function layersBlockLines(block: LayersBlock): string[] {
+  const lines = [
+    `layers block for ${block.files.join(", ")} (graph@${(block.graphCommit ?? "none").slice(0, 7)})`,
+    `  affected (depth ${block.affected.depth}): ${block.affected.files.length}`,
+    `  symbols: ${block.symbols.length}`,
+    `  related tests: ${block.relatedTests.length}`,
+    `  wiki pages: ${block.wiki.length}`,
+    `  memory entries: ${block.memory.length}`,
+  ];
+  for (const cut of block.truncated) lines.push(`  truncated ${cut.section}: ${cut.shown}/${cut.total} — ${cut.command}`);
+  return lines;
+}
