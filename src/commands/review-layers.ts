@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { placeReviewPath } from "../lib/review-path-flags";
+import { computeCoverage, coverageLine } from "../review/coverage-complete";
 import { type LayersFile, readLayers, refreshLayers } from "../review/layers";
 import { buildLayersBlock, layersBlockLines } from "../review/layers-payload";
 import { layersDetailLines } from "../review/layers-view";
@@ -106,7 +107,9 @@ export async function runLayers(args: string[], deps: LayersDeps): Promise<void>
       process.exitCode = 1;
       return;
     }
-    print(layers, rest.includes("--json"));
+    const coverage = await computeCoverage(packageDir);
+    if (rest.includes("--json")) console.log(JSON.stringify({ ...layers, coverage }, null, 2));
+    else console.log([...layersDetailLines(layers), coverageLine(coverage)].join("\n"));
     return;
   }
   if (sub === "block") {

@@ -48,7 +48,8 @@ import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
-import { ensurePackageLayers, resolvePackageDir, runLayers } from "./review-layers";
+import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
+import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
 import { PackageGraphError, loadPackageGraph } from "../review/layers";
 import { layersSummaryLine } from "../review/layers-view";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
@@ -510,7 +511,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -614,6 +615,14 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "layers") {
       await runLayers(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "chunks") {
+      await runChunks(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "coverage") {
+      await runCoverage(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "budget") {
@@ -3856,11 +3865,20 @@ async function runComplete(args: string[]): Promise<void> {
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
+  const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
+  if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
+    throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
+  }
   const {
     manifest,
     reviewNotes,
     dispositions: tally,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions });
+    coverageWaiver,
+  } = await completeManagedReview(process.cwd(), ref, { dispositions, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }) });
+  if (coverageWaiver !== undefined) {
+    const shown = coverageWaiver.files.slice(0, 5).join(", ");
+    console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > 5 ? ", …" : ""}`);
+  }
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   console.log(`dispositions recorded: ${dispositions.length}`);
@@ -3936,6 +3954,9 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     }
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
+    }
+    if (token.name === "--waive-coverage") {
+      continue;
     }
     if (token.name === "--finding") {
       flush();
@@ -4090,6 +4111,9 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
   ["ledger", printLedgerHelp],
+  ["layers", printLayersHelp],
+  ["chunks", printChunksHelp],
+  ["coverage", printCoverageHelp],
   ["tier", printTierHelp],
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],

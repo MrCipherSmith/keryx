@@ -380,6 +380,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       for (const id of known?.covered ?? []) claimed.add(id);
     }
     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+    if (manifest !== undefined) run.coveredSlices = [...seen].sort();
     const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
     const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
     if (!finished) {

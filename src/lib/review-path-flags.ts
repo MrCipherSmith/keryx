@@ -14,6 +14,8 @@ export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string
   "retry-plan": ["--manifest", "--result", "--state"],
   "dispatch-check": ["--manifest", "--payload", "--package"],
   layers: ["--package"],
+  chunks: ["--package", "--result"],
+  coverage: ["--package"],
 };
 
 /** The flags of the same commands that name no path (ids, numbers, switches). Not confined by design. */
@@ -22,6 +24,8 @@ export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> 
   "retry-plan": ["--reviewer", "--slices", "--covered", "--next-wave", "--dry-run", "--json", "--help", "-h"],
   "dispatch-check": ["--max-bytes", "--pr-context", "--json", "--help", "-h"],
   layers: ["--head", "--base", "--write-wiki", "--files", "--max-bytes", "--json", "--help", "-h"],
+  chunks: ["--chunk", "--status", "--mode", "--answer", "--quote", "--json", "--help", "-h"],
+  coverage: ["--json", "--help", "-h"],
 };
 
 /** `-` means standard input for these flags and names no file. */

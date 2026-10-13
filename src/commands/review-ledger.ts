@@ -5,6 +5,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
@@ -250,7 +251,10 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (setAside.length > 0) ledger.setAside = setAside;
   const blockers = await ledgerBlockers(ledger, canonical, { root, files, blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
   const ready = blockers.length === 0;
-  if (!rest.includes("--dry-run")) await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
+  if (!rest.includes("--dry-run")) {
+    await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
+    if (manifest !== undefined && path.resolve(packageDir) !== inputDir) await writeFileAtomic(path.join(packageDir, SLICE_MANIFEST_COPY), `${JSON.stringify(manifest, null, 2)}\n`);
+  }
   console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run")));
   if (!ready) process.exitCode = 1;
 }

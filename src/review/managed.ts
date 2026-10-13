@@ -1,3 +1,4 @@
+import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -755,6 +756,8 @@ export type CompleteManagedReviewOptions = {
   dispositions?: readonly FindingDispositionRecord[] | undefined;
   /** Injectable clock, so a note's `Created:` date is deterministic in a test. */
   now?: Date | undefined;
+  /** The operator's own words waiving every file the coverage gate finds uncovered (`--waive-coverage`). */
+  waiveCoverage?: string | undefined;
 };
 
 export type CompleteManagedReviewResult = {
@@ -773,6 +776,8 @@ export type CompleteManagedReviewResult = {
    * earlier are just as recorded.
    */
   dispositions: FindingDispositionTally;
+  /** The waiver this close recorded for files no reviewer covered; absent when none was passed or nothing was uncovered. */
+  coverageWaiver?: CoverageWaiver;
 };
 
 /**
@@ -804,6 +809,7 @@ export async function completeManagedReview(
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+  const coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
   const researchProblems = await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
   if (researchProblems.length) throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
   const dispositions = options.dispositions ?? [];
@@ -840,7 +846,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded) };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), ...(coverageWaiver === undefined ? {} : { coverageWaiver }) };
 }
 
 export async function validateManagedReviewManifest(

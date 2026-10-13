@@ -1,6 +1,7 @@
 import { dispatchErrors } from "./dispatch";
 import { pendingMutants } from "./mutate";
 import { coverageErrors, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage } from "./coverage";
+import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
@@ -48,7 +49,8 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
           blastRadius: await packageHasBlastRadius(packageDir),
           pendingMutants: (await pendingMutants(packageDir)).length,
         });
-    return [...researchErrors(ledger, findings), ...dispatch, ...coverage];
+    const completeness = a.reviewerDispatch === undefined || options.coverage === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
+    return [...researchErrors(ledger, findings), ...dispatch, ...coverage, ...completeness];
   }
   catch { return ["research ledger unreadable or invalid JSON"]; }
 }
