@@ -1,6 +1,6 @@
 {
-  "commit": "f0ad228a6",
-  "generated_at": "2026-10-13T12:51Z",
+  "commit": "ee6cbd44",
+  "generated_at": "2026-10-13T21:36Z",
   "flows": 413,
   "flows_by_status": {
     "done": 347,
@@ -32,19 +32,19 @@
     "agent-proposal": 1
   },
   "reviewed_flows": 173,
-  "review_rounds": 404,
-  "findings": 2732,
+  "review_rounds": 414,
+  "findings": 2868,
   "findings_by_severity": {
-    "major": 858,
-    "minor": 1320,
-    "blocker": 176,
-    "info": 378
+    "major": 894,
+    "minor": 1402,
+    "info": 396,
+    "blocker": 176
   },
   "findings_blocking": 176,
   "verdicts": {
     "refuted": 1668,
-    "no-verdict": 661,
-    "confirmed": 384,
+    "confirmed": 459,
+    "no-verdict": 722,
     "unverifiable": 19
   },
   "refuted_by_disposition": {
