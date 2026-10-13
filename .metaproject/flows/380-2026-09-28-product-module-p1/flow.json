@@ -55,7 +55,7 @@
     },
     "AC10": {
       "at": "2026-09-29T00:57:05.101Z",
-      "note": "gate G1: the journal entry holds the number 309 of 309 (0 criterion stated, 0 observed) and the operator was told on the helyx channel before anything beyond P1; honest kind none"
+      "note": "gate G1: the journal entry holds the number 309 of 309 (0 criterion stated, 0 observed) and the operator was told on the operator chat channel before anything beyond P1; honest kind none"
     },
     "AC11": {
       "at": "2026-09-29T00:57:05.264Z",
@@ -198,7 +198,7 @@
     {
       "at": "2026-09-29T00:57:05.101Z",
       "event": "ac-confirmed",
-      "detail": "AC10: gate G1: the journal entry holds the number 309 of 309 (0 criterion stated, 0 observed) and the operator was told on the helyx channel before anything beyond P1; honest kind none (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC10: gate G1: the journal entry holds the number 309 of 309 (0 criterion stated, 0 observed) and the operator was told on the operator chat channel before anything beyond P1; honest kind none (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-29T00:57:05.265Z",

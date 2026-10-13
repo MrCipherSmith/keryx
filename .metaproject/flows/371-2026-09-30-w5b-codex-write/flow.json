@@ -55,7 +55,7 @@
     },
     "AC10": {
       "at": "2026-09-30T19:38:21.310Z",
-      "note": "operator report sent via helyx with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28)"
+      "note": "operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28)"
     }
   },
   "pr": {
@@ -234,7 +234,7 @@
     {
       "at": "2026-09-30T19:38:21.311Z",
       "event": "ac-confirmed",
-      "detail": "AC10: operator report sent via helyx with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC10: operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-30T19:38:23.191Z",

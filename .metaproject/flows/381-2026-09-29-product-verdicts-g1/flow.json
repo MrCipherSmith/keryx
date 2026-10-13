@@ -63,7 +63,7 @@
     },
     "AC12": {
       "at": "2026-09-29T07:46:47.571Z",
-      "note": "journal entry STOP BEFORE G1a written; operator told on the helyx channel; nothing beyond index and open built"
+      "note": "journal entry STOP BEFORE G1a written; operator told on the operator chat channel; nothing beyond index and open built"
     }
   },
   "pr": {
@@ -212,7 +212,7 @@
     {
       "at": "2026-09-29T07:46:47.571Z",
       "event": "ac-confirmed",
-      "detail": "AC12: journal entry STOP BEFORE G1a written; operator told on the helyx channel; nothing beyond index and open built (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC12: journal entry STOP BEFORE G1a written; operator told on the operator chat channel; nothing beyond index and open built (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-29T07:46:47.727Z",

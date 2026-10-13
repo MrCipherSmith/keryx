@@ -1,6 +1,6 @@
 # Re-measurement — progress log
 
-Branch: `docs/benchmark-run-report` · Target: `helyx` at `bfad745b` ·
+Branch: `docs/benchmark-run-report` · Target: `<target-project>` at `bfad745b` ·
 keryx under measurement: **0.2.16** (via `harness/bin/keryx`)
 
 Written so the run can be picked up in a new session without reconstructing
@@ -75,7 +75,7 @@ they survive a session restart and a worktree cleanup.
 
 `evidence/status.tsv` records `A1 DONE keryx-deepseek 18:21:19 220.9s` and
 `A1 DONE keryx-gemma 18:25:07 220.9s`, and those two rows are the **only**
-trace of those runs: there is no bundle under `harness/runs/helyx/A1/` newer
+trace of those runs: there is no bundle under `harness/runs/<target-project>/A1/` newer
 than the pre-fix 18:07 run, no JSON in `harness/logs/`, and no leftover
 worktree. Whatever path those two runs used did not persist evidence, so they
 count as unmeasured.

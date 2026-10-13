@@ -200,8 +200,8 @@ export type ProjectResolution =
  * exactly; there is no fallback. Not to the only registered project, not to the
  * most recently used one, not to the one whose session is idle.
  *
- * helyx shipped timing-based pairing first and had to replace it after
- * transports cross-linked between projects under concurrent sessions — a bug
+ * An earlier transport implementation shipped timing-based pairing first and
+ * had to replace it after transports cross-linked between projects under concurrent sessions — a bug
  * whose symptom is one project's prompt running under another project's profile.
  * That is the whole reason this function refuses rather than guesses.
  *

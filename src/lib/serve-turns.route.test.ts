@@ -645,7 +645,7 @@ describe("identity-first session binding (AC4)", () => {
   });
 
   test("with two registered projects, the declared one is the one that runs", async () => {
-    // The failure this rule exists for: helyx cross-linked transports between
+    // The failure this rule exists for: an earlier transport implementation cross-linked transports between
     // projects under concurrent sessions, so one project's prompt ran under
     // another project's profile.
     const second = path.join(path.dirname(configDir), "project-two");

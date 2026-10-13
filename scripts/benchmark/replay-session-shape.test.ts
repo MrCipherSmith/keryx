@@ -1,5 +1,5 @@
 // Flow 387 T12 (AC9): the deterministic replay of a session shaped like the 2026-10-01
-// vantage-frontend session. Fast (no network, no provider): well under 10 s.
+// acme-frontend session. Fast (no network, no provider): well under 10 s.
 
 import { describe, expect, test } from "bun:test";
 import {

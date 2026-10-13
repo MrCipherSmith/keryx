@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "076",
   "slug": "opentui-copy-select",
-  "title": "OpenTUI copy-on-select — mouse selection copies to system clipboard via OSC52 (grok/opencode style)",
+  "title": "OpenTUI copy-on-select — mouse selection copies to system clipboard via OSC52",
   "status": "done",
   "createdAt": "2026-07-20T13:42:16.625Z",
   "updatedAt": "2026-08-31T10:39:09.431Z",

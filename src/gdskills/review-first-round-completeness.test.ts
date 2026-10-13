@@ -1,6 +1,6 @@
 // Flow 405: a review finds every defect of a change in the fewest rounds.
 //
-// Two orchestrated rounds approved vantage-frontend PR #7357 with two cosmetic
+// Two orchestrated rounds approved a work project PR #7357 with two cosmetic
 // minors; the next human round filed six real findings, every one reachable from
 // the diff and the backend at a pinned SHA. The rounds lost them step by step: one
 // subagent with no dispatch tool reviewed alone, the fan-out was cut by diff size,
@@ -132,7 +132,7 @@ function contextWith(crossRepo: unknown[]): Record<string, unknown> {
 }
 
 const INPUT_RULE = {
-  repo: "vantage-backend",
+  repo: "work-backend",
   reason: "what the backend accepts for a reference data name",
   facts: ["validateName refuses anything outside [A-Za-z0-9_-]+"],
   state: "merged",

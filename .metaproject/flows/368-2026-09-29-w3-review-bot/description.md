@@ -1,7 +1,7 @@
 # P0 W3 review as a PR bot: headless run, verifier, inline comments, resolved-before-merge metric
 
 Status: draft
-Source: operator "по порядку" (helyx 172447), competitive review P0 item 3
+Source: operator "по порядку" (operator chat channel 172447), competitive review P0 item 3
 
 ## Problem
 

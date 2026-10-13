@@ -33,7 +33,7 @@ observable and measurable product contract.
 - [Artifact lifecycle](artifact-lifecycle.md) — source of truth, retention and
   supersession of artifacts.
 - [Metrics and validation](metrics-and-validation.md) — evals, SLOs and gates.
-- [Research and positioning](research-and-positioning.md) — competitive landscape
+- [Research and positioning](research-and-positioning.md) — product position
   and architectural decisions.
 - [Schemas](schemas/) — machine-readable contracts:
   [manifest](schemas/context-assembly-manifest.schema.json),
@@ -71,7 +71,7 @@ lets the views and the acceptance criteria be checked against each other.
 ## Non-goals
 
 - Not to build a mandatory cloud or multi-tenant memory database.
-- Not to replace Graphiti, Cognee, Mem0, Letta or OpenViking with a runtime core
+- Not to replace external memory or graph engines with a runtime core
   of our own.
 - Not to introduce a new LLM agent runtime — that is the
   [Keryx Project Agent Harness](../../keryx-project-agent-harness/README.md).

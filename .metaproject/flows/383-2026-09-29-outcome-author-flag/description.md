@@ -1,7 +1,7 @@
 # Outcome author flag: agent or human wrote the outcome criterion
 
 Status: ready
-Source: operator decision, helyx channel 2026-09-29 (relayed by arena-83, confirmed by the operator in message 171919)
+Source: operator decision, operator chat channel 2026-09-29 (relayed by arena-83, confirmed by the operator in message 171919)
 
 ## Problem
 

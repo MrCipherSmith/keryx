@@ -1,5 +1,5 @@
 // Line-based differential terminal renderer for live-streaming markdown in agent
-// mode (flow 051, inspired by the Pi coding agent's retained-mode line renderer).
+// mode (flow 051, a retained-mode line renderer).
 //
 // The problem: repainting a growing block of styled text on every streamed token
 // without the fragile "count logical lines, jump the cursor up" math that broke

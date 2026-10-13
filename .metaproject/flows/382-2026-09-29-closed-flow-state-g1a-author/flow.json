@@ -47,7 +47,7 @@
     },
     "AC8": {
       "at": "2026-09-29T09:08:06.227Z",
-      "note": "journal entry STOP written; the operator told on the helyx channel; W1 waits for his word"
+      "note": "journal entry STOP written; the operator told on the operator chat channel; W1 waits for his word"
     }
   },
   "pr": {
@@ -176,7 +176,7 @@
     {
       "at": "2026-09-29T09:08:06.227Z",
       "event": "ac-confirmed",
-      "detail": "AC8: journal entry STOP written; the operator told on the helyx channel; W1 waits for his word (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC8: journal entry STOP written; the operator told on the operator chat channel; W1 waits for his word (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-29T09:08:06.380Z",

@@ -67,6 +67,7 @@
     "src/gdskills/contracts",
     "!src/**/*.test.ts",
     "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
     "README.md",
     "package.json"
   ],

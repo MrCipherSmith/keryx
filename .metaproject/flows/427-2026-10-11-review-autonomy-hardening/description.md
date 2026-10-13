@@ -14,4 +14,4 @@ Model: openai-codex/gpt-6.1-sol
 - CI результаты отделены от локальных; Flow закрывается только с подтверждением MrCipherSmith.
 
 ## Out of Scope
-Vantage review, реальные review-прогоны, dispatch-wave, релиз, merge и публикация без отдельного разрешения.
+a work project review, реальные review-прогоны, dispatch-wave, релиз, merge и публикация без отдельного разрешения.

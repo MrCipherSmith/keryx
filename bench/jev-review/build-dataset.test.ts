@@ -227,7 +227,7 @@ describe("buildDataset: evidence text is scrubbed of personal identity before it
           id: "F-001",
           reviewer: "r",
           severity: "major",
-          disposition: { state: "acted-on", evidence: "decided-by: altsay (operator, 2026-09-03, via helyx-channel), reach at altsay@example.com" },
+          disposition: { state: "acted-on", evidence: "decided-by: altsay (operator, 2026-09-03, via chat-channel), reach at altsay@example.com" },
         },
       ],
     );

@@ -1,7 +1,7 @@
 import path from "node:path";
 
-// Backlinks — the missing half of the wiki knowledge graph (the Karpathy LLM-wiki
-// pattern: knowledge compounds when links are bidirectional). Wiki pages already
+// Backlinks — the missing half of the wiki knowledge graph (knowledge
+// compounds when links are bidirectional). Wiki pages already
 // link OUT (to other pages + to code via the graph-generated `Related Code`
 // section); this inverts those edges so any page or code file can answer "what
 // references me". Pure over an in-memory page set; the command layer does IO and

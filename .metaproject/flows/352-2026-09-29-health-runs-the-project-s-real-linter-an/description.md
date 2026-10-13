@@ -2,7 +2,7 @@
 
 ## Problem
 
-`keryx health run --strict` treats ESLint and a PATH-visible `tsc` as the only way a project can be linted and type-checked. On vantage-frontend (pnpm, TypeScript 7.0.2, oxlint 1.81.0) both required sources came back not-run:
+`keryx health run --strict` treats ESLint and a PATH-visible `tsc` as the only way a project can be linted and type-checked. On a work project (pnpm, TypeScript 7.0.2, oxlint 1.81.0) both required sources came back not-run:
 
 - eslint: skipped, because there is no ESLint config and no `node_modules/.bin/eslint`
 - typescript: missing, even though `tsconfig.json` and `node_modules/.bin/tsc` exist and `tsc --version` prints `Version 7.0.2`
@@ -21,7 +21,7 @@ Health runs the linter and the TypeScript compiler the project actually has.
 
 ## Out of scope
 
-- Fixing vantage-frontend.
+- Fixing a work project.
 - Scanning or executing arbitrary `package.json` scripts.
 - SonarQube and coverage.
 - Weakening the gate so a missing required source becomes a pass.

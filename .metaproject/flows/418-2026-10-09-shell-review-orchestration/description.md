@@ -1,7 +1,7 @@
 # Keryx Shell: review orchestration completes a round (follow-through, trust mode, 200 rounds)
 
-Status: approved by operator (helyx 195233), frozen
-Source: live run of the review of Presight-AI/vantage-frontend PR 7435 on a keryx shell, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section A (A1-A21).
+Status: approved by operator (operator chat channel 195233), frozen
+Source: live run of the review of Presight-AI/a work project PR 7435 on a keryx shell, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section A (A1-A21).
 
 ## Problem
 
@@ -23,7 +23,7 @@ INCOMPLETE handling with an automatic retry on a smaller slice, and a final repo
 
 ## Outcome criteria
 
-- Запрос (дословно): «Заводи, так же нужно починить режим trust, и для него увеличить количество раундов. Например с 40 до 200» (source: helyx 195221, 2026-10-09T19:42Z)
+- Запрос (дословно): «Заводи, так же нужно починить режим trust, и для него увеличить количество раундов. Например с 40 до 200» (source: the chat bot 195221, 2026-10-09T19:42Z)
 - Эффект (формализация агента): in `trust` mode the main agent's tool-round limit is 200 instead of 40, no approval prompt appears for commands trust is meant to allow, and a review of a large PR runs to its report without the operator typing anything.
 - Как наблюдать (предложение агента): repeat the PR 7435 review in a keryx shell in `trust` mode, issuing no input after the task; it ends with a `review complete` and a report, no turn ends with open plan items.
 

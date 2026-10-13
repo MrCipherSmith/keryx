@@ -95,7 +95,7 @@ mode cannot recur by construction.
 |---|---|---|
 | [prd.md](prd.md) | anyone | You want the problem, goals, users, requirements, success criteria and risks. |
 | [specification.md](specification.md) | implementer | You need the exact task model, tool surface, config, data contracts, integration points and acceptance criteria. |
-| [brainstorm.md](brainstorm.md) | reviewer | You want the competitor prior art and the recorded decisions (D-01…D-08 design, D-09…D-18 implementation) behind the design. |
+| [brainstorm.md](brainstorm.md) | reviewer | You want the prior art from other harnesses and the recorded decisions (D-01…D-08 design, D-09…D-18 implementation) behind the design. |
 | [metrics-and-validation.md](metrics-and-validation.md) | anyone | You want to know which invariants are measurable and how each is to be proven. |
 | [schemas/shell-task.schema.json](schemas/shell-task.schema.json) | implementer | You are implementing the task handle/state record. |
 | [schemas/shell-task-event.schema.json](schemas/shell-task-event.schema.json) | implementer | You are implementing the task lifecycle event stream (start/output/exit). |

@@ -107,7 +107,7 @@ export type ProjectReviewer = {
   paths: string[];
   pathsSource: PathTriggerSource;
   /**
-   * Selection flags (`--vantage-core`), `--all` excluded: `metadata.flags`
+   * Selection flags (`--acme-core`), `--all` excluded: `metadata.flags`
    * when declared, otherwise the flags its description names. Normalised —
    * lower-case, `--` prefixed — so one flag has one spelling across reviewers.
    */

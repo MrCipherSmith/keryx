@@ -7,7 +7,7 @@
 // `existsSync(".metaproject")` and stopped there — so a session opened in such a project
 // was handed the graph/wiki/memory/health/flow/skills tools, every call came back
 // `index-incomplete`, and an empty answer read like an empty project instead of an
-// unusable workspace. Measured on a `vantage-specs` checkout holding only
+// unusable workspace. Measured on a `acme-specs` checkout holding only
 // `.metaproject/workspaces/`: eighteen index tools offered, all of them unusable.
 //
 // This module is the ONE place that answers the question, for both the CLI report and the

@@ -12,8 +12,8 @@ import type { PermissionMode } from "./permission-mode";
  * bounds runaway ROUNDS rather than the number of distinct legitimate tool calls
  * a big task needs (see ADR-0010's "shape problem" — counting unique tool-call
  * signatures conflated task volume with actual repetition; this replaces
- * that axis rather than re-tuning its numbers, matching how grok-build,
- * Codex, and opencode all gate on rounds/tokens instead of call-signature
+ * that axis rather than re-tuning its numbers, matching how another agent harness,
+ * Codex, and others all gate on rounds/tokens instead of call-signature
  * count). Real repetition is still caught independently by
  * `MAX_ATTEMPTS_PER_HASH`. Still a finite loop-safety guard — not
  * unlimited.

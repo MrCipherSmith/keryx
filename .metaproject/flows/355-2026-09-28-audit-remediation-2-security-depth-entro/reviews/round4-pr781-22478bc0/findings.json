@@ -34,7 +34,7 @@
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "accepted residual: the exempted request can only reach gist.github.com, no attacker-controlled destination; recorded as ledger row S-12 in docs/requirements/keryx-audit-remediation/findings.md (flow 356 PR); decided-by: operator (operator, helyx 2026-09-28 12:19Z)"
+      "evidence": "accepted residual: the exempted request can only reach gist.github.com, no attacker-controlled destination; recorded as ledger row S-12 in docs/requirements/keryx-audit-remediation/findings.md (flow 356 PR); decided-by: operator (operator, operator chat channel 2026-09-28 12:19Z)"
     }
   },
   {
@@ -73,7 +73,7 @@
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "accepted residual: over-redaction of a SHA-shaped value after 'key is now', fail-safe direction, 0 instances in the repo; recorded as ledger row S-13 in docs/requirements/keryx-audit-remediation/findings.md (flow 356 PR); decided-by: operator (operator, helyx 2026-09-28 12:19Z)"
+      "evidence": "accepted residual: over-redaction of a SHA-shaped value after 'key is now', fail-safe direction, 0 instances in the repo; recorded as ledger row S-13 in docs/requirements/keryx-audit-remediation/findings.md (flow 356 PR); decided-by: operator (operator, operator chat channel 2026-09-28 12:19Z)"
     }
   }
 ]

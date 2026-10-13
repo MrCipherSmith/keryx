@@ -35,7 +35,7 @@ that job's live output** — reusing the existing Subagent Inspector pattern
   (default 3, `KERYX_MAX_BACKGROUND_JOBS` override) — exceeding it is a
   visible tool error listing current jobs, never a silent queue. Kill is by
   **process group**, not bare PID (closes the exact bug class hit live by
-  opencode's FD-inheritance hangs and Codex's sandboxed-`pgrep` blindness —
+  another agent tool's FD-inheritance hangs and Codex's sandboxed-`pgrep` blindness —
   see this flow's `context.md` research notes). Every tracked job is
   SIGTERM→SIGKILL'd on `keryx shell`/TUI session exit — no orphaned
   processes survive the session.

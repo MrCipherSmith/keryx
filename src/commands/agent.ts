@@ -1030,7 +1030,7 @@ export const MAX_PLAN_FOLLOW_THROUGHS = 8;
  * Conservative default cap on how many sibling `spawn_subagent` calls in ONE
  * turn's tool-call batch run CONCURRENTLY (flow 171, Phase D / D1c). The
  * reference study (`docs/requirements/keryx-multi-agent-engine/brainstorm.md`)
- * found grok-build defaults to 32 — NOT copied here, deliberately: that
+ * found a default of 32 elsewhere — NOT adopted here, deliberately: that
  * default assumes provider-side rate-limit headroom Keryx cannot assume for
  * every configured provider/local-model combination (a lightly-provisioned
  * local Ollama endpoint, for instance, has none of it, and a burst of
@@ -3201,10 +3201,8 @@ async function runAgentTurnCore(
       if (!visible.has(h)) hashByCallId.delete(id);
     }
   };
-  // Scoped to THIS turn only (this one `runAgentTurnCore` call) — matches how
-  // every competitor harness we compared against (Codex's Guardian, grok-build's
-  // Auto Mode classifier) re-evaluates untrusted-content risk per turn/action
-  // rather than latching a flag across the whole session. A prior turn's
+  // Scoped to THIS turn only (this one `runAgentTurnCore` call) — untrusted-content
+  // risk is re-evaluated per turn/action rather than latching a flag across the whole session. A prior turn's
   // untrusted content does NOT carry forward here (session bffc5c57: an
   // unrelated `shell_exec` several turns later must not be refused for
   // something that happened turns ago) — only a `result.untrusted === true`

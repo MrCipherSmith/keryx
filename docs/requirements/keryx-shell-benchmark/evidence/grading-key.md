@@ -1,4 +1,4 @@
-# Grading key — group A, `helyx` at `bfad745b`
+# Grading key — group A, `<target-project>` at `bfad745b`
 
 The oracle each group-A answer is graded against. Computed **from a worktree of
 the pinned commit** with the same 267-node, 656-edge graph every leg is handed —

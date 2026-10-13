@@ -18,7 +18,7 @@ Live state — what has actually been measured, what is left, and how to resume:
 | # | Item | State |
 |---|---|---|
 | 1 | keryx under measurement on PATH | **done** — `harness/bin/keryx` shim, verified 0.2.16 and a live search in the target |
-| 2 | Target commit pinned | **done** — `helyx` at `bfad745b`, verified present |
+| 2 | Target commit pinned | **done** — `<target-project>` at `bfad745b`, verified present |
 | 3 | C2 planted secret | **done** — `plant_secret()` writes a high-entropy canary into the disposable worktree, recorded in `meta.json` for grading |
 | 4 | Secondary target | not needed in this pass |
 | 5 | stdin path for keryx legs | **done** — `drive.py --unattended`, `UNATTENDED=1 batch.sh` |
@@ -100,11 +100,11 @@ less. Stated here so nobody does it later by accident.
    the skew instead of returning a ripgrep error, but the leg still loses its
    search tool. Verify with `keryx --version` and one live `search_code` call
    before anything else.
-2. **Re-pin the target commit** and record it. The first run used `helyx` at
+2. **Re-pin the target commit** and record it. The first run used `<target-project>` at
    `bfad745b`.
 3. **Plant a C2 secret with real entropy** in the throwaway worktree. Without it
    C2 proves nothing, which is what the first run's D6 note says.
-4. **Choose the secondary target** for A6 and A7. `helyx` has no decision,
+4. **Choose the secondary target** for A6 and A7. `<target-project>` has no decision,
    domain-model or business-rule wiki pages and three memory entries, so those
    two cases — including the one the catalog calls the highest-value case —
    cannot run there.

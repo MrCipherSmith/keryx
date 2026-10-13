@@ -1,7 +1,7 @@
 # Keryx Shell: fewer approval prompts in trust and review-auto
 
 Status: draft, awaiting operator approval of the criteria
-Source: live run 19 of the PR 7435 review (flow 417 AC16), 2026-10-11; operator question helyx 197414.
+Source: live run 19 of the PR 7435 review (flow 417 AC16), 2026-10-11; operator question the chat bot 197414.
 
 ## Problem
 
@@ -17,7 +17,7 @@ A review in `trust` + `review-auto` asks the operator only for the floors no mod
 
 ## Outcome criteria
 
-- Запрос (дословно): «А почему вообще возникают вопросы? разве мы не ввели моды? То есть где то внутри должно быть так что бы вопрос даже не появлялся?» (source: helyx 197414, 2026-10-11T06:57Z)
+- Запрос (дословно): «А почему вообще возникают вопросы? разве мы не ввели моды? То есть где то внутри должно быть так что бы вопрос даже не появлялся?» (source: the chat bot 197414, 2026-10-11T06:57Z)
 - Эффект (формализация агента): in `trust`/`review-auto`, read-only keryx commands run without a prompt even after untrusted content; a refused call, in any argument spelling, is answered with an immediate refusal to the model and not shown again; each prompt and each queued message states its cause.
 - Как наблюдать (предложение агента): replay the approval log of runs 17-19 (`~/notes/evidence/run17/approvals.log`) through the classifier and count the prompts left; repeat the PR 7435 review and watch for modals.
 

@@ -37,9 +37,8 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-**Source research:** `docs/requirements/goal-continuation/competitor-survey.md`
-(13-clone survey; see that file's "Conclusions carried into flow 186" for
-the summary this flow's plan is built from). Two published Artifacts present
+**Source research:** a survey of comparable mechanisms (not kept in the
+repository; its conclusions are summarized in `description.md`). Two published Artifacts present
 the same findings as a formatted report — English:
 `https://claude.ai/code/artifact/b1990fec-64c4-4465-bf92-c1171535531b`,
 Russian: `https://claude.ai/code/artifact/217b6f1d-c1de-4712-9cf7-f45a114e67d8`

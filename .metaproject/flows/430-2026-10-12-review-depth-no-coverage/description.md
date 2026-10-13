@@ -40,7 +40,7 @@ settled by counts before any depth lever (tier, blast-radius cap, probes) is cha
 
 ## Outcome criteria
 
-- Запрос (дословно): «Зафиксировать AC9 как не достигнут, открыть флоу на разбор причин (рекомендую)» (source: helyx poll 131, 2026-10-12T14:27Z)
+- Запрос (дословно): «Зафиксировать AC9 как не достигнут, открыть флоу на разбор причин (рекомендую)» (source: the chat bot poll 131, 2026-10-12T14:27Z)
 - Эффект (формализация агента): a reviewer that reports its slice coverage in either shape (ids, or objects with an id) is not retired for a stall it did not have; a driver payload written by the documented dispatch step resolves its rule file; a file in the raw directory that is not a reviewer reply is named and set aside instead of blocking reconciliation; and the 4-of-19 gap is attributed to model, driver or product with counts.
 - Как наблюдать (предложение агента): `keryx review ledger build` on the rerun package lists no blocker for a role that ran, and `keryx review compare-reference` on it reports reproduced ≥ 12 of 19 with class A = 0, or the attribution table says which lever is still open.
 

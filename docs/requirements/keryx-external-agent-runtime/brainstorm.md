@@ -44,25 +44,6 @@ Enforced consequences:
 
 ## Reference designs studied
 
-### helyx (`~/bots/helyx`) — two distinct patterns
-
-**Pattern 1 — inverted MCP channel (`channel/`).** A human (or a tmux
-supervisor) starts Claude Code; helyx attaches as a stdio MCP server
-(`helyx-channel`). Inbound work queues in Postgres `message_queue`; delivery
-uses MCP notifications `notifications/claude/channel`; the return path is MCP
-tools (`reply`, `react`, `edit_message`). Permission requests are forwarded
-outward via the experimental `notifications/claude/channel/permission_request`
-so a human approves from Telegram. The server's `instructions` capability lands
-in the client's system prompt — behaviour rules arrive before the session has
-read any `CLAUDE.md`. Sessions are long-lived: `pg_advisory_lock`, heartbeat,
-lease, hard exit on lease loss.
-
-**Pattern 2 — one-shot headless reviewer (`services/reviewer-service.ts`).**
-`ReviewerKind = "codex" | "provider" | "claude"`. Concurrent `Bun.spawn` of
-`claude -p` and `npx @openai/codex exec`, 600s timeout, kill;
-`mode: "external" | "self"` where a total external failure falls back to
-self-review.
-
 ### keryx's own precedent
 
 `scripts/benchmark/run-ablation-codex.ts` already spawns
@@ -94,7 +75,7 @@ delegate a task, watch the event stream, and inject a correcting message
 mid-run — without falling back to interactive mode and thereby losing
 `--max-budget-usd`, `--json-schema` and the structured result.
 
-## Lessons taken from helyx's Pattern 2 (each prevents a measured failure)
+## Lessons from an earlier headless-reviewer implementation (each prevents a measured failure)
 
 1. **`--allowed-tools` does not restrict.** A CLI started with
    `--allowed-tools Read Grep Glob`, asked directly, reports Bash, Write, Task,
@@ -106,8 +87,8 @@ mid-run — without falling back to interactive mode and thereby losing
    workflow into the system prompt; the agent answers with a plan-approval
    request, exits 0 with non-empty stdout, and is filed as a successful run.
 3. **Repository settings undermine read-only.** The subprocess inherits cwd, so
-   the project's `.claude/settings.local.json` applies — in helyx's repo that is
-   379 allowed `Bash(...)` patterns. An allowlisted tool does not prompt, and
+   the project's `.claude/settings.local.json` applies — in the repository
+   studied that is 379 allowed `Bash(...)` patterns. An allowlisted tool does not prompt, and
    under `-p` there is nobody to prompt.
 4. **`--settings` adds a layer, it does not replace one**, and there is no
    `--strict-settings`. Only `--bare` fully isolates, and `--bare` forces
@@ -130,8 +111,8 @@ mid-run — without falling back to interactive mode and thereby losing
    codex answered a review request with a *menu* of review modes — exit 0,
    non-empty, recorded as a successful review. keryx's case is sharper, since
    `.metaproject/index.md` explicitly orders routing through metaproject-router.
-8. **argv is a pure function with its own test.** helyx passed
-   `--no-interactive` for months after the CLI stopped accepting it — every
+8. **argv is a pure function with its own test.** The earlier implementation
+   passed `--no-interactive` for months after the CLI stopped accepting it — every
    review failed on the command line, before codex was asked anything. Separate
    scar: `--disallowed-tools` and `--mcp-config` are variadic, so the prompt
    must never sit directly behind one; `--model` is last precisely as a
@@ -148,10 +129,10 @@ mid-run — without falling back to interactive mode and thereby losing
     the login, and a real probe spends the operator's quota. "Available" is not
     "checked".
 11. **Timeout and kill must be raced.** `proc.kill()` reaches the `npx` wrapper
-    while the real process outlives it holding the pipes; helyx races the reads
+    while the real process outlives it holding the pipes; the earlier implementation races the reads
     against a separate deadline. `stdin: "ignore"` too, or the CLI waits on
     stdin.
-12. **The prompt is one argv element**, so it hits `ARG_MAX`; helyx caps the
+12. **The prompt is one argv element**, so it hits `ARG_MAX`; the earlier implementation caps the
     carried diff at a measured 66 KB.
 
 ## Resolved forks
@@ -162,12 +143,12 @@ contract carries `read-only | worktree-write` so the mutating mode later needs
 no breaking schema change. Rejected: read-only forever (would need a contract
 and ADR rewrite within a month); mutating worker in v1 (three times the work,
 and every error in the audit boundary is a hole in keryx's invariants).
-helyx's Pattern 2 removed the main argument against this: a read-only external
-reviewer is not a hypothesis, it is production, and its argv, env hygiene,
+The earlier headless-reviewer implementation removed the main argument against
+this: a read-only external reviewer is not a hypothesis, it is production, and its argv, env hygiene,
 classifiers and directives transfer nearly verbatim.
 
 **F2 — Who launches whom.** → **Push: keryx spawns the CLI.** Pull (keryx as an
-MCP server that a live session drives, helyx Pattern 1) has no env or auth
+MCP server that a live session drives — the inverted-channel pattern) has no env or auth
 problems at all, but keryx stops being the orchestrator — no on-demand fan-out,
 no fail-closed, and the "parent owns completion" invariant breaks. The useful
 part of Pull is already covered by `src/mcp/`.
@@ -199,8 +180,8 @@ abort controller for a subprocess, so it becomes **kill + `--resume
 <session-id>`** — lossless because keryx assigns the session id.
 
 **F6 — How read-only is actually held.** → **Disposable worktree + deny-list +
-env strip.** Defence in depth: even with a hole in the deny-list — and helyx
-proved deny-lists have holes, found only by interrogating the agent — the write
+env strip.** Defence in depth: even with a hole in the deny-list — and the earlier
+implementation proved deny-lists have holes, found only by interrogating the agent — the write
 lands in a throwaway directory. Note `git worktree add --detach <path> HEAD`
 does **not** carry uncommitted changes, so the working diff must be passed in
 the prompt; that is a treatment, not the absence of the disease. Rejected:
@@ -242,7 +223,7 @@ status; no substitution.** `SubagentCompletionStatus` already distinguishes
 classifiers supply a human-readable cause ("limit until Aug 11th", "not logged
 in", "argv not understood by this CLI version"). Fallback is a *policy*, not a
 mechanism: the parent holding the status can implement any of them as a visible
-decision. Rejected: helyx's `mode: "self"` auto-fallback (justified for a review
+decision. Rejected: a `mode: "self"` auto-fallback (justified for a review
 bot where degraded output beats none; here the parent owns completion and a
 silent substitution corrupts its account of what happened) and auto-failover to
 another CLI (same silent substitution, and it doubles spend at the worst
@@ -278,8 +259,8 @@ is correlated, not independent — it looks like a quorum and is not one).
    is neither deterministic nor offline. Adapters are tested offline against
    recorded JSONL transcripts (the `fake-provider.ts` pattern); the live path is
    a fenced optional capability.
-5. **Permission forwarding as a route to F1's mutating mode.** helyx forwards
-   `permission_request` outward so a human approves remotely. The same shape
+5. **Permission forwarding as a route to F1's mutating mode.** The inverted-channel
+   pattern forwards `permission_request` outward so a human approves remotely. The same shape
    could route an external agent's write requests into keryx's own `decide()` in
    real time — which would resolve the audit-boundary objection to the mutating
    worker. It rests on an **experimental** MCP capability

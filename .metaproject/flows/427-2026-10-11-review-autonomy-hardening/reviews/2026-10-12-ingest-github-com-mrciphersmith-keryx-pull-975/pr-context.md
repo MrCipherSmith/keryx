@@ -16,7 +16,7 @@ Head 8190719d533a51be7de953f4be8942a0ee3f258d, collection round 1, collected 202
 - Local lint and typecheck passed.
 - 1,639 focused tests passed across 76 files; zero failures.
 - Whitespace verification passed.
-- No live review runs or Vantage restart.
+- No live review runs or a work project restart.
 
 Flow 427 remains subject to explicit outcome confirmation.
 

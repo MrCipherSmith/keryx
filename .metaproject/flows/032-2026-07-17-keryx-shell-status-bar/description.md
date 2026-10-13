@@ -1,7 +1,7 @@
 # Flow 032 — keryx shell persistent status bar
 
 Status: formalized
-Source: user request (compare vs grok/opencode TUI: "почему keryx не умеет
+Source: user request (compare vs other terminal-agent TUIs: "почему keryx не умеет
 показать в какой он папке"). Follow-on to flow 031 (rich-inline rendering);
 stacked on branch `feature/031-keryx-shell-rich-inline-ui`. Approved approach
 (user): **hand-rolled ANSI scroll-region — no new dependencies**
@@ -9,7 +9,7 @@ stacked on branch `feature/031-keryx-shell-rich-inline-ui`. Approved approach
 
 ## Problem
 
-The `keryx` shell shows no persistent context: unlike grok/opencode — which pin a
+The `keryx` shell shows no persistent context: unlike other terminal agents — which pin a
 status bar with the working directory, provider/model, and key hints — keryx never
 displays its cwd (it *knows* `process.cwd()`; it just doesn't render it). A one-off
 header line scrolls away after the first turn, so there is no always-visible

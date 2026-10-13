@@ -3,16 +3,16 @@ Version: 0.1.0
 
 ## Purpose
 
-Give `keryx shell` the same **outbound** MCP-server capability Grok Build
-ships: the operator configures third-party MCP servers (stdio processes and
+Give `keryx shell` the **outbound** MCP-server capability other agent CLIs
+ship: the operator configures third-party MCP servers (stdio processes and
 remote HTTP endpoints); keryx connects to them; the model discovers and
 calls their tools during a session.
 
 This is the gap `keryx-mcp-client` explicitly deferred. That package built a
 stdio MCP client and used it for one keryx-spawned child (`codex mcp-server`
 elicitation). It named "arbitrary user-added servers" as a non-goal. This
-package is that deferred surface, specified to Grok Build parity — not to
-OpenCode's "register every MCP tool on the model" shape.
+package is that deferred surface, specified as a two-tool model bridge — not
+the "register every MCP tool on the model" shape some other harnesses use.
 
 ## Status
 
@@ -139,7 +139,7 @@ Verified against current code:
 | [prd.md](prd.md) | Problem, goal, users, requirements, success criteria, risks, recommendation. |
 | [specification.md](specification.md) | Identity, config, CLI/TUI, data contracts, integrations, acceptance criteria. |
 | [decisions.md](decisions.md) | Adopted decisions and explicit refusals. |
-| [brainstorm.md](brainstorm.md) | Grok Build reference (source of parity) and other harnesses studied. |
+| [brainstorm.md](brainstorm.md) | Adopted behaviours and other harnesses studied. |
 | [implementation-plan.md](implementation-plan.md) | Phased implementation order mapped to acceptance criteria. |
 | [schemas/mcp-servers-config.schema.json](schemas/mcp-servers-config.schema.json) | Native user/project MCP-servers JSON config. |
 
@@ -148,11 +148,11 @@ Verified against current code:
 - User- and project-scoped MCP **server** configuration that keryx's own
   agent loop consumes.
 - Transports: stdio (local process) and streamable HTTP (remote). SSE is a
-  config alias for the HTTP transport, matching Grok Build's runtime, not a
+  config alias for the HTTP transport, not a
   second client stack.
 - Internal tool catalog namespaced `server__tool`.
-- Model-facing discovery/dispatch via `search_tool` and `use_tool` (Grok
-  Build's stable-tool-list design), not by dumping every MCP tool into the
+- Model-facing discovery/dispatch via `search_tool` and `use_tool` (a
+  stable-tool-list design), not by dumping every MCP tool into the
   provider tool list.
 - CLI: `keryx mcp add|list|remove|enable|disable|doctor` alongside the
   existing `serve|install|uninstall`.
@@ -173,13 +173,11 @@ Verified against current code:
   does not reroute `codex-cli`.
 - Becoming a full MCP spec client: sampling, elicitation from *user* MCP
   servers, roots, resource subscriptions, MCP Apps UI, and prompt
-  registries are deferred. Grok Build itself does not ship those to the
-  model; parity does not invent them.
+  registries are deferred.
 - A marketplace / plugin catalog. Config + CLI + TUI + compat import is the
   surface.
-- Docker as a first-class transport. Stdio `command = "docker"` is enough,
-  as in Grok Build.
-- OpenCode-style native registration of every MCP tool on the model.
+- Docker as a first-class transport. Stdio `command = "docker"` is enough.
+- Native registration of every MCP tool on the model.
 - Changing `keryx-provider-auth` D-01. MCP OAuth tokens are keryx-owned
   credentials for MCP servers the operator added, stored like search
   credentials — not vendor coding-CLI subscription tokens.

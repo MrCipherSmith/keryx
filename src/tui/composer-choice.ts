@@ -1,4 +1,4 @@
-// Composer-anchored choice menus (Claude Code / OpenCode style).
+// Composer-anchored choice menus.
 //
 // Permissions, wiki-enrich plans, and agent `ask_user` questions share one UI:
 // a mouse+keyboard option list with label + description, docked above the

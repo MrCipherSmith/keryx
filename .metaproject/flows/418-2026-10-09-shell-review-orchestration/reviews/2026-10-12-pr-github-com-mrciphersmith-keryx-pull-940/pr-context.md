@@ -8,7 +8,7 @@ Head 489d410fa0a01c78ed42e6c96580245c65486d8a, collection round 1, collected 202
 
 ## Summary
 
-Flow 418. A keryx shell in `trust` mode should carry a large PR review to `review complete` with no input after the task (live comparison on Vantage PR 7435: Claude 17m58s, shell did not finish in 2h20m).
+Flow 418. A keryx shell in `trust` mode should carry a large PR review to `review complete` with no input after the task (live comparison on a work project PR 7435: Claude 17m58s, shell did not finish in 2h20m).
 
 - Trust mode: 200 tool rounds (40 in ask/auto), no prompt for routine local review commands after untrusted content (allowlist of local verbs), bounded plan follow-through, operator answers kept in the slate, waves of 10 subagents, subagent rounds 40 (max 200).
 - TUI: slash commands typed while busy are queued; Ctrl+C cancels the turn, second press at idle exits.

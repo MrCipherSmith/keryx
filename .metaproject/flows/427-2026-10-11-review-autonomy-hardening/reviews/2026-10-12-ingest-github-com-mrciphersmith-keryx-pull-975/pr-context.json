@@ -8,7 +8,7 @@
   "intent": {
     "round": 1,
     "title": "fix(review): harden autonomous coverage, retry and safety gates",
-    "body": "## Summary\n- Bind ledger coverage to dispatch identity and invalidate stale retry coverage.\n- Preserve safety/denial gates and contextual retry requirements.\n- Harden result parsing, arbiter cache identity and recursive completion watchdog.\n- Add regression tests and deterministic lifecycle fixture; include Flow 427 implementation report.\n\n## Validation\n- Local lint and typecheck passed.\n- 1,639 focused tests passed across 76 files; zero failures.\n- Whitespace verification passed.\n- No live review runs or Vantage restart.\n\nFlow 427 remains subject to explicit outcome confirmation."
+    "body": "## Summary\n- Bind ledger coverage to dispatch identity and invalidate stale retry coverage.\n- Preserve safety/denial gates and contextual retry requirements.\n- Harden result parsing, arbiter cache identity and recursive completion watchdog.\n- Add regression tests and deterministic lifecycle fixture; include Flow 427 implementation report.\n\n## Validation\n- Local lint and typecheck passed.\n- 1,639 focused tests passed across 76 files; zero failures.\n- Whitespace verification passed.\n- No live review runs or a work project restart.\n\nFlow 427 remains subject to explicit outcome confirmation."
   },
   "ci": {
     "state": "passing",
