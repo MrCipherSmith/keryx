@@ -3927,7 +3927,7 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     const start = source.indexOf("const forceMainQueue =");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = source.slice(start, start + 1_400);
-    expect(block).toContain("mainQueue = removeMainQueueItem(mainQueue, index)");
+    expect(block).toContain("turnLoop.replaceQueue(removeMainQueueItem(turnLoop.queue, index))");
     expect(block).toContain("forceForegroundQueueItem(foregroundOperation, forceHandoff, item");
     // The reimplementation guard: these belong to the seam now, and their
     // reappearance here means the logic was copied back.
@@ -3993,7 +3993,7 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
     const block = wakeSource.slice(start, start + 1_600);
     // Idle means both: nothing running in the foreground, nothing queued.
     expect(block).toMatch(/chrome\.isBusy\(\)|foregroundOperation/);
-    expect(block).toContain("mainQueue.length === 0");
+    expect(block).toContain("turnLoop.queue.length === 0");
   });
 
   test("a notification-started turn is marked with origin: 'task-notification'", () => {
@@ -4013,7 +4013,6 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
     // The existing operator-first drain must survive: a queued message is the
     // real next step and beats a pending notification.
     expect(wakeSource).toContain("forced: forceHandoff,");
-    expect(wakeSource).toContain("queue: () => mainQueue,");
     const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
     expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   });

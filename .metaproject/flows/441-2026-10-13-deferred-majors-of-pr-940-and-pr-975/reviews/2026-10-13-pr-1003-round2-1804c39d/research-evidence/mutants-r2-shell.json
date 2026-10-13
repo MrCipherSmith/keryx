@@ -1,0 +1,10 @@
+{"mutants":[
+{"id":"M01-shell-paint-noop","file":"src/tui/tui-shell.ts","anchor":"paint: () => paintMainQueue(),","replacement":"paint: () => undefined,"},
+{"id":"M02-shell-summarize-identity","file":"src/tui/tui-shell.ts","anchor":"summarize: summarizeSubmittedLine,","replacement":"summarize: (l: string) => l,"},
+{"id":"M03-shell-composer-setText-noop","file":"src/tui/tui-shell.ts","anchor":"input.value = text;\n          },\n          focus: () => input.focus(),","replacement":"void text;\n          },\n          focus: () => input.focus(),"},
+{"id":"M04-shell-composer-focus-noop","file":"src/tui/tui-shell.ts","anchor":"focus: () => input.focus(),\n        },\n      },\n      paint","replacement":"focus: () => undefined,\n        },\n      },\n      paint"},
+{"id":"M05-shell-failure-text","file":"src/tui/tui-shell.ts","anchor":"◇ a slash command failed: ${terminalSafe(reason).text}","replacement":"◇ a slash command failed: ${reason}"},
+{"id":"M06-shell-failure-reason-always-string","file":"src/tui/tui-shell.ts","anchor":"const reason = error instanceof Error ? error.message : String(error);\n        io.onSystem?.(`◇ a slash command failed","replacement":"const reason = String(error);\n        io.onSystem?.(`◇ a slash command failed"},
+{"id":"M07-shell-runLine-origin-dropped","file":"src/tui/tui-shell.ts","anchor":"runLine: (line, origin, source) => runLine(line, origin, source),","replacement":"runLine: (line, _origin, source) => runLine(line, \"operator\", source),"},
+{"id":"M08-shell-sessionState-mode","file":"src/tui/tui-shell.ts","anchor":"sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),","replacement":"sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(false)) }),"}
+]}

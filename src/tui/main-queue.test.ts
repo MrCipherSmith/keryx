@@ -157,13 +157,18 @@ test("a late choice honours forced priority, FIFO, hold, and disposed guards", (
 
 test("the busy recipient choice wires the idle drain after adding to the main queue", () => {
   const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
-  const choice = source.slice(source.indexOf('if (chosen === "main")'), source.indexOf('} else {', source.indexOf('if (chosen === "main")')));
-  expect(choice).toContain("mainQueue.push(");
-  expect(choice).toContain("drainIdleMainQueue(mainQueue, {");
-  expect(choice.indexOf("mainQueue.push(")).toBeLessThan(choice.indexOf("drainIdleMainQueue(mainQueue, {"));
-  for (const guard of ["!destroyed", "!chrome.isBusy()", "!foregroundOperation.isActive", "!forceHandoff.isAwaitingSettlement", "leaseView()?.held() !== true"]) {
-    expect(choice).toContain(guard);
-  }
+  const chosenIdx = source.indexOf('if (chosen === "main")');
+  const choiceEnd = source.indexOf("} else {", chosenIdx);
+  expect(chosenIdx).toBeGreaterThan(-1);
+  expect(choiceEnd).toBeGreaterThan(chosenIdx);
+  const choice = source.slice(chosenIdx, choiceEnd).replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ");
+  expect(choice).toContain("turnLoop.enqueue(line, displayLine);");
+  expect(choice).toContain("turnLoop.drainAfterRecipientChoice(");
+  expect(choice.indexOf("turnLoop.enqueue(")).toBeLessThan(choice.indexOf("turnLoop.drainAfterRecipientChoice("));
+  // One needle for the whole predicate, operators included: five separate substrings let `&&` become `||`.
+  expect(choice).toContain(
+    "() => !destroyed && !chrome.isBusy() && !foregroundOperation.isActive && !forceHandoff.isAwaitingSettlement && leaseView()?.held() !== true,",
+  );
 });
 
 // Flow 376 review (M2): `/queue edit` of a Telegram line must keep its source, or the

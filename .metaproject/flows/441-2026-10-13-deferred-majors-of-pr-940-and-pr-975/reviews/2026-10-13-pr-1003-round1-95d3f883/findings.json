@@ -1,0 +1,416 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The PR deleted `let mainQueue` and `mainQueueSeq` from the shell, but comments still name `mainQueue` as a closure variable: tui-shell.ts 3869, 3913, 3926, 9982 and 10145 (the four before 10145 are the declaration-order notes that explain the TDZ ordering of the remote bridge and the bus wake), main-queue.ts 4, bus-wake.ts 12 and 76, shell-chrome.ts 409 and 922. The queue is now `turnLoop.queue` and `turnLoop` is built near line 5005, so the 'declared further down / above this point' claims also changed. Reported independently by five reviewers (clean-code, style, architecture, logic, highload).",
+    "impact": "Trigger: a maintainer follows a TDZ comment to learn what the bridge host and the bus wake wait for. Outcome: a grep for `mainQueue` finds only comments, the real owner (`turnLoop`) is not named, and the declaration-order reasoning points at a binding that no longer exists. Maintenance cost only; no runtime effect.",
+    "suggested_fix": "Replace `mainQueue` with `turnLoop` (or `turnLoop.queue`) in the five tui-shell.ts comments and recheck the 'exists only now / declared above' claims against the position of `createTurnLoop` (~5005). Say 'the main queue' in prose in the other four files, and reword main-queue.ts:4 to name turn-loop.ts as the owner.",
+    "evidence": "keryx ctx rg --all 'mainQueue\\b' over src/tui, non-test: only comment hits, no code identifier left (clean-code, style, architecture, logic and regression each ran it).",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "`mainQueue`, which do not exist yet, while `onDestroy` and the approval/reply",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 3869
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "mainQueue comments confirmed at tui-shell.ts 3869,3913,3926,9982,10145, bus-wake.ts 12,76, main-queue.ts:4; turnLoop created at tui-shell.ts:5005.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The AC1 test drives a fake turn runner against `createTurnLoop`, not the shell. It fails for a break inside turn-loop.ts, but not for a break in the shell's `createTurnLoop({...})` call or in `runLine`'s busy branch. In that call `runLine` (which forwards `source`), `getBridge`, `say`, the `onDetachedFailure` body and the `remote.composer` block have no test and no source-text needle (the base had none either). The fake also models only the happy busy branch: `line.startsWith(\"/\")` picks `enqueueWhileBusy` or `enqueue`, where the real `runLine` first runs `classifyBusyDispatch`, `requeuePendingEdit`, the lease-held branch and an asynchronous recipient dock. The describe title 'AC1: a slash command queued behind a turn does not strand ...' therefore reads as end-to-end coverage that it is not; the header of turn-loop.test.ts admits the limit, the module header and the PR description do not.",
+    "impact": "Trigger: an edit drops `source` from the shell's `runLine` lambda, points `getBridge` at nothing, or silences `say`. Outcome: a drained Telegram line runs without its source and loses its reply path, or the queued-as-q<N> notices vanish, while all 372 queue/hold/bus/shell tests stay green. Not a regression of this PR (the same lambdas were unpinned in the shell before), but the PR's stated gain, 'AC1 is testable without the shell', does not extend to them.",
+    "suggested_fix": "Add source-text needles in tui-hold.test.ts for `runLine: (line, origin, source) => runLine(line, origin, source),`, `getBridge: () => remoteBridge,` and `say: (text) => io.onSystem?.(text),` inside the createTurnLoop block; or build the dep object in a small exported factory a test can call with spies. Word the describe title and the PR body as 'the turn-loop module under a modelled runLine'.",
+    "evidence": "mutant:S06-shell-runLine-source-dropped, mutant:S07-shell-getBridge-undefined, mutant:S08-shell-say-noop, mutant:S05-shell-onDetachedFailure-silent (mutation pass, research-evidence/mutation-1.json). Reading: turn-loop.test.ts lines 51-73 against the tui-shell.ts runLine busy branch (8589-8670, 9434). Reported by testing-practices (F-001, F-010), logic (F-004), architecture (F-001) and security (info).",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": 5019,
+    "quote": "runLine: (line, origin, source) => runLine(line, origin, source),",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 5019
+    },
+    "class_scope": {
+      "sites": [
+        "tui-shell.ts createTurnLoop call: runLine/source forwarding (S06)",
+        "tui-shell.ts createTurnLoop call: getBridge (S07)",
+        "tui-shell.ts createTurnLoop call: say (S08)",
+        "tui-shell.ts createTurnLoop call: onDetachedFailure (S05)"
+      ],
+      "enumeration_method": "mutation pass: the four shell-call mutants S05-S08 survived; the other 13 shell mutants were killed (mutation-1.json)."
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "turn-loop.test.ts has no test of the shell's createTurnLoop call; harness runLine is a fake (line 51).",
+      "verifier": "review-verifier"
+    },
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#S06-shell-runLine-source-dropped"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "`replaceQueue` is the entry point of the PR 999 stale-queue class for `/queue remove`, `/queue edit` and Force, and `remote.getQueue` is how Telegram lines reach the same array. turn-loop.test.ts has no test for either on the real loop: the stale-queue case goes through `removeMainQueue` (the `setQueue` path), the Telegram case uses `enqueueWhileBusy(..., TG_SOURCE)` instead of `enqueueTelegramLine`, and `replaceQueue` is pinned in the shell only by a text needle in tui-shell.test.ts.",
+    "impact": "Trigger: `replaceQueue` becomes a no-op, or `getQueue` returns a copy. Outcome: `/queue remove` and Force appear to succeed while the line still runs, or Telegram lines are pushed onto an array the drain no longer reads and are stranded. All ten turn-loop tests stay green.",
+    "suggested_fix": "Add two tests: enqueue two lines while busy, `replaceQueue([second])`, settle, and assert only the second runs; call `loop.remote.enqueueTelegramLine(...)` while busy, then `replaceQueue(...)` and settle, and assert the Telegram line still runs with its source.",
+    "evidence": "mutant:T14-replaceQueue-noop, mutant:T16-remote-getQueue-copy (mutation pass, research-evidence/mutation-1.json). Reported by logic (F-001) and testing-practices (F-003, F-007).",
+    "confidence": "high",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "replaceQueue(next) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 90
+    },
+    "class_scope": {
+      "sites": [
+        "turn-loop.ts replaceQueue (T14)",
+        "turn-loop.ts remote getQueue (T16)"
+      ],
+      "enumeration_method": "mutation pass: T14 and T16 survived while T15 (setQueue) and S13 (shell Force replaceQueue call) were killed (mutation-1.json)."
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "replaceQueue, enqueueTelegramLine and getQueue have no match in turn-loop.test.ts; replaceQueue at turn-loop.ts:90.",
+      "verifier": "review-verifier"
+    },
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#T14-replaceQueue-noop"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The harness `paint` is a no-op and the base's `paintMainQueue();` text pins at the held gate and the push sites were removed by this PR, so nothing asserts that `enqueue` repaints after the push or that the idle dispatch repaints before it runs the head. `drainWhenIdle` is tested only with an idle runner and an empty force hand-off: neither the forced branch (`takeForced`) nor the guard (`isIdle` false must dispatch nothing) has a test.",
+    "impact": "Trigger: an edit removes either `deps.paint()` call, drops `takeForced`, or hard-wires `isIdle`. Outcome: a stale queue panel, a forced line skipped at the recipient choice, or a recipient-choice answer dispatched into a running turn, with a green suite.",
+    "suggested_fix": "Make the harness `paint` a counter that records the queue length at call time and assert it after `enqueue`, `enqueueWhileBusy` and the idle dispatch; add two cases: `drainWhenIdle` while busy dispatches nothing, and with a forced item pending it runs the forced line first.",
+    "evidence": "mutant:T08-enqueue-no-paint, mutant:T13-idle-dispatch-no-paint, mutant:T11-idle-takeForced-undefined, mutant:T12-idle-isIdle-always-true (mutation pass). Reported by logic (F-001) and testing-practices (F-002, F-006).",
+    "confidence": "high",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "takeForced: () => deps.forced.takeNext(),",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 103
+    },
+    "class_scope": {
+      "sites": [
+        "turn-loop.ts enqueue paint (T08)",
+        "turn-loop.ts idle dispatch paint (T13)",
+        "turn-loop.ts idle takeForced (T11)",
+        "turn-loop.ts idle isIdle guard (T12)"
+      ],
+      "enumeration_method": "mutation pass: T08, T11, T12, T13 survived (mutation-1.json)."
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "harness paint is a no-op (test line 87); the only drainWhenIdle call uses () => !h.busy (line 211); takeForced at turn-loop.ts:103.",
+      "verifier": "review-verifier"
+    },
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#T08-enqueue-no-paint"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "Item ids, positions beyond q1, the question/display split and the detach failure path are not asserted. Every harness call passes `line === displayLine`, ids are never read, the 'queued as q<N>' position is checked only for N=1, `failures` is recorded by the harness but never asserted, and no test makes a detached run reject.",
+    "impact": "Trigger: a constant id, a constant return of 1, a question/display swap (also of the `line`/`displayLine` arguments of `enqueueWhileBusy`), or a no-op `onDetachedFailure`. Outcome: duplicate ids break `/queue remove|edit` targeting, a wrong number misleads the operator, the display text reaches the model, or a failed `/model` goes unreported, all with a green suite.",
+    "suggested_fix": "Give the harness distinct display strings and assert the item fields and the line the runner receives; enqueue three lines while busy and assert q1, q2, q3 and distinct ids; make the fake `/model` detach reject once and assert `h.failures`, or delete the field.",
+    "evidence": "mutant:T07-remote-nextId-constant, mutant:T07b-enqueue-id-constant, mutant:T21-enqueue-returns-1, mutant:T17-enqueue-question-display-swapped, mutant:T20-whileBusy-line-display-swapped, mutant:T05-drain-onDetachedFailure-noop (mutation pass). Reported by logic (F-001) and testing-practices (F-004, F-005, F-008).",
+    "confidence": "high",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "queue.push({ id: `mq${seq++}`, question: line, displayQuestion: displayLine,",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 59
+    },
+    "class_scope": {
+      "sites": [
+        "turn-loop.ts remote nextId (T07)",
+        "turn-loop.ts enqueue id (T07b)",
+        "turn-loop.ts enqueue return position (T21)",
+        "turn-loop.ts enqueue question/display (T17)",
+        "turn-loop.ts enqueueWhileBusy line/display (T20)",
+        "turn-loop.ts drain onDetachedFailure (T05)"
+      ],
+      "enumeration_method": "mutation pass: T05, T07, T07b, T17, T20, T21 survived (mutation-1.json)."
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "`.id` is never read in the test; failures is only pushed to (line 94); id expression at turn-loop.ts:59.",
+      "verifier": "review-verifier"
+    },
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#T07-remote-nextId-constant"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The same two-line turn-loop.ts needle (`readFileSync(turn-loop.ts)` and `remote.runQueued(` counted twice) is pasted into three tests, at the end of the one it belongs to (AC4) and at the end of the flow 399 T-2 (topic-history restore) and flow 397 L-1 (modal change subscription) tests, which are about neither the queue nor the drain. busy-dispatch.test.ts also pins the module's internal text `queue: () => queue,`, which turn-loop.test.ts now covers by behaviour (the stale-queue case). Reported by style, architecture, regression and testing-practices.",
+    "impact": "Trigger: moving or renaming one `remote.runQueued(` call in turn-loop.ts. Outcome: three tests fail, two of them with a title about something else, and the failure points the reader at the wrong subject. Source-text pins on a module that now has behavioural tests are the pattern this PR set out to remove.",
+    "suggested_fix": "Keep the count once, in the AC4 test the comment refers to, and delete the other two. Drop the `queue: () => queue,` needle from busy-dispatch.test.ts if the behavioural stale-queue case is judged enough.",
+    "evidence": "git diff of remote-queue-wiring.test.ts: three hunks add the same two lines (about lines 419, 446 and 476); `keryx ctx rg -F 'remote.runQueued(' src/tui/remote-queue-wiring.test.ts` returns 3 matches.",
+    "confidence": "high",
+    "file": "src/tui/remote-queue-wiring.test.ts",
+    "line": null,
+    "quote": "expect(shellOccurrences(loop, \"remote.runQueued(\")).toBe(2);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 419, 446, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 419
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/remote-queue-wiring.test.ts: AC4 test (kept)",
+        "src/tui/remote-queue-wiring.test.ts: flow 399 T-2 test",
+        "src/tui/remote-queue-wiring.test.ts: flow 397 L-1 test"
+      ],
+      "enumeration_method": "keryx ctx rg -F 'remote.runQueued(' over src/tui/remote-queue-wiring.test.ts."
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "remote.runQueued( with toBe(2) appears at remote-queue-wiring.test.ts 419, 446, 476; 446 and 476 sit in unrelated tests; busy-dispatch.test.ts:278 pins `queue: () => queue,`.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The module header misstates what moved and does not say where the seam stops. The drain was already one `createMainQueueDrain` (PR 999), so its sites were not loose closures; what moved here is the queue array, the id counter, the busy-time enqueue step and the composition of remote wiring and drain. 'Four' counts the factory's methods (including `detach`), while the sibling test header says 'the three drain sites'. The header reads as if AC1 is now covered, but it does not name what stays outside the seam: the busy branch of `runLine` in tui-shell.ts (the `classifyBusyDispatch` cases, `requeuePendingEdit`, the lease-held enqueue, the async recipient dock), which the test replaces with a fake. The `say` dep is documented as 'One line' although callers add their own trailing newline.",
+    "impact": "Trigger: a maintainer edits the real busy branch (a new `classifyBusyDispatch` case, a reordered lease check). Outcome: they read 'AC1 ... here now', assume the shell's busy routing is under test, and turn-loop.test.ts stays green. The 113 lines against the 250-400 the operator asked for are not explained where the next maintainer looks.",
+    "suggested_fix": "Rewrite the header: say that the queue, the counter, the busy-time enqueue step and the remote/drain composition live here; add a 'Not covered' paragraph naming `runLine`'s busy routing and the source-text tests that pin its calls (busy-dispatch, tui-bus, tui-hold, remote-queue-wiring); use one count and name the drain methods; document `say` as 'text with its own trailing newline'.",
+    "evidence": "turn-loop.ts lines 1-8 and 25-26; turn-loop.test.ts lines 1-11; main-queue.ts createMainQueueDrain (PR 999) and its methods; tui-shell.ts base diff (the old code already built `drainSites = createMainQueueDrain({`).",
+    "confidence": "high",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "four drain sites used to be loose closures inside `launchTuiAgentShell`, where the OpenTUI renderer",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 4
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "At cf7d4e69 tui-shell.ts already had `const drainSites = createMainQueueDrain({`; turn-loop.ts:4 says four drain sites, turn-loop.test.ts:11 says three.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The PR description makes claims the diff does not support. (a) It cites a mutation table 'in turn-loop.ts'; neither turn-loop.ts nor turn-loop.test.ts contains one, and the commit message has none. (b) The counts it gives for three mutants (6, 6, 5 failing tests) differ from a re-run (7, 6, 6). (c) It says `enqueueWhileBusy` replaces 'four push sites of runLine': it replaces one, the other three use `enqueue`, and counting the remote wiring's `nextId` there are five id producers, not four or six. (d) 'mainQueue ... are gone from the shell' holds for identifiers only (see F-001).",
+    "impact": "Trigger: a reviewer tries to re-check the mutation evidence that justifies the thin seam. Outcome: it cannot be found in the repository, and the wording overstates how much the extraction centralised. No runtime effect.",
+    "suggested_fix": "Put the mutation table in the PR body or the turn-loop.test.ts header with the exact mutations, or drop the claim; correct the push-site wording.",
+    "evidence": "grep -i 'mutation|survived' over turn-loop.ts and turn-loop.test.ts returns nothing (logic, architecture); 17 mutations re-run by logic on a scratch copy; git diff of the five push sites. The mutation pass of this round (research-evidence/mutation-1.md) is the table the PR could carry.",
+    "confidence": "medium",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "// The main turn loop's queue, built once (flow 441, AC1).",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 1
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-008",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "No mutation, survived or mutant text in turn-loop.ts or turn-loop.test.ts (claim a). Claims b to d not re-checked by the verifier.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The shell still holds a second copy of the idle predicate: `turnWorkInFlight` in the `createTurnLoop({...})` call and the `isIdle` lambda passed to `turnLoop.drainWhenIdle` at the recipient choice repeat the same three terms (`chrome.isBusy()`, `foregroundOperation.isActive`, `forceHandoff.isAwaitingSettlement`), the lambda adding `!destroyed` and the lease. The module's `drainWhenIdle(isIdle)` also shares its name with the unrelated `drainWhenIdle` inside `createMainQueueDrain` (main-queue.ts ~282), which checks `workInFlight()` (detached slash work included) and loops through `drainNext`; the loop's method takes a caller predicate, dispatches one item and does not consult detached work. The name hides that difference, and the module claims the shell keeps no second copy.",
+    "impact": "Trigger: someone edits the idle predicate in one place, or applies the PR 999 F-025/F-026 fix to the wrong `drainWhenIdle`. Outcome: the two copies drift, or the recipient-choice drain keeps ignoring detached work while every other site honours it (see F-014). Maintenance cost; behaviour equals the merge-base.",
+    "suggested_fix": "Let `TurnLoop.drainWhenIdle` take only the extra terms (`!destroyed`, lease not held) and AND them with `drain.workInFlight()` inside turn-loop.ts, so the three base terms and detached work live once; rename one of the two methods (for example `drainAfterRecipientChoice`) and say in its doc comment what it does not consult.",
+    "evidence": "tui-shell.ts 5018 (`turnWorkInFlight`) and 8669-8677 (`isIdle` lambda); main-queue.ts 270 and 282-285; turn-loop.ts 100-109; turn-loop.test.ts 207 uses `() => !h.busy`. Reported by architecture (F-003), highload (F-001) and style (F-004).",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": 8669,
+    "quote": "turnLoop.drainWhenIdle(",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 8669
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-009",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "turnWorkInFlight at tui-shell.ts:5020 and the isIdle lambda at 8669-8677 repeat the same three terms; the lambda does not read workInFlight().",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "`enqueueWhileBusy` reads as an unconditional push like `enqueue`, but it first consults `deferredBusyAction(line, commandName)` and returns false without queuing for a session-replacing command; the meaning of the boolean ('false: the caller must refuse') lives only in the doc comment. `enqueue(line, displayLine, source?)` and `enqueueWhileBusy(line, displayLine, commandName, source?)` take two adjacent same-typed strings, so a swapped `line`/`displayLine` type-checks.",
+    "impact": "Trigger: a reader of `if (turnLoop.enqueueWhileBusy(...)) return;` at a call site. Outcome: they must open the interface to learn that false means 'not queued, fall through to the refusal'. No wrong behaviour today (argument order matches the former code at every site).",
+    "suggested_fix": "Rename for what it does (for example `tryQueueBehindTurn`), or pass `{ line, displayLine, source }` as one object so the two strings are named at the call site.",
+    "evidence": "turn-loop.ts interface lines 41-49 and body lines 94-99; the four `turnLoop.enqueue*` call sites in tui-shell.ts (8592 `enqueueWhileBusy`; 8625, 8665 and 9437 `enqueue`).",
+    "confidence": "medium",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "enqueueWhileBusy(line: string, displayLine: string, commandName: string | undefined, source?: QueuedMainQuestion[\"source\"]): boolean;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 47
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-010",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "enqueueWhileBusy at turn-loop.ts:47, deferredBusyAction early return at line 95; the shell has four turnLoop.enqueue* call sites (8592, 8625, 8665, 9437).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The `queue` getter hands out the live array typed as mutable, next to a `replaceQueue` that exists so the array can be swapped. Every shell caller only reads it (`.length`, an index, `.map`, and the pure `removeMainQueueItem(turnLoop.queue, index)`), so nothing needs write access, yet a future `turnLoop.queue.push(...)` would skip the id counter and the paint that `enqueue` owns. `drain` is typed `ReturnType<typeof createMainQueueDrain<QueuedMainQuestion>>` (an instantiation expression inside `ReturnType`, where main-queue.ts exports no named type), and the shell immediately aliases `remote` and `drain` (`const remoteQueue = turnLoop.remote;`, `const drainSites = turnLoop.drain;`), keeping a second vocabulary for the same objects.",
+    "impact": "Trigger: a caller pushes to `turnLoop.queue` directly. Outcome: an item without a counter id or a repaint, the duplication this change removes. The alias form ties turn-loop.ts to the factory's inferred shape and makes the drain's method set invisible from the interface. Readability and a latent footgun; not a defect today.",
+    "suggested_fix": "Type the getter `readonly queue: readonly QueuedMainQuestion[]` (the shell never mutates it; `drainIdleMainQueue` keeps the internal mutable reference), export a named `MainQueueDrain` type from main-queue.ts and use it for `drain`, and either keep the shell aliases deliberately for the source-text needles and say so, or call `turnLoop.drain.*` directly.",
+    "evidence": "turn-loop.ts lines 37-52; tui-shell.ts has about 25 `turnLoop.queue` references and none mutates the array (a regex for push/splice/shift/pop/unshift/sort/reverse/`length =`/indexed assignment over src/tui returns 0 matches; the verifier re-ran it). Reported by architecture (F-002), clean-code (F-004, F-006) and style (F-006).",
+    "confidence": "medium",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "readonly queue: QueuedMainQuestion[];",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 39
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-011",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "queue typed mutable at turn-loop.ts:39, drain via ReturnType at :51; a mutation regex over src/tui for turnLoop.queue returns 0 matches; aliases at tui-shell.ts 5027 and 7992.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The id scheme `mq${seq++}` is written twice inside `createTurnLoop`: in `enqueue` and as `nextId` for the remote wiring. The PR's stated purpose is that the counter has one owner, yet the format lives in two places.",
+    "impact": "Trigger: the id format changes (prefix, padding). Outcome: one site is updated and the other missed, giving two id shapes in one queue and breaking `/queue edit|remove` matching. Cheap to prevent now.",
+    "suggested_fix": "Add `const nextId = (): string => `mq${seq++}`;` next to `let seq` and use it in `enqueue` and in `createRemoteQueueWiring({ nextId, ... })`.",
+    "evidence": "turn-loop.ts line 59 (`id: `mq${seq++}``) and line 70. Reported by clean-code (F-002) and style (F-005).",
+    "confidence": "high",
+    "file": "src/tui/turn-loop.ts",
+    "line": null,
+    "quote": "nextId: () => `mq${seq++}`,",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.ts",
+      "reported_line": 70
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "mq${seq++} appears twice in turn-loop.ts (lines 59 and 70).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "The harness is a mutable bag built in two passes: `loop` is cast in as `undefined as unknown as TurnLoop` and assigned after `createTurnLoop` because `settleTurn` and the fake `runLine` close over `h`. The fake `runLine` has an unused `_origin` parameter, a non-null `detachedWork.shift()!`, and re-implements the shell's slash-name extraction inline (`line.split(/\\s+/)[0]`). Test 8 flushes a detached run with one bare `await new Promise((done) => setTimeout(done, 0))` macrotask, which is deterministic today (the detached work resolves in microtasks).",
+    "impact": "No demonstrated harm: eslint is clean and the suite is deterministic (166 ms). If the shell's slash-name parsing changes, the model silently diverges (the header already says so).",
+    "suggested_fix": "Declare `let loop!: TurnLoop` inside the harness builder or build the state first; drop `_origin`; await the detached promise the harness already holds instead of a timer.",
+    "evidence": "turn-loop.test.ts lines 36, 51-60, 203; `bunx eslint` on both new files exits 0 (style). Reported by clean-code (F-005), style (F-007) and testing-practices (F-012).",
+    "confidence": "medium",
+    "file": "src/tui/turn-loop.test.ts",
+    "line": null,
+    "quote": "loop: undefined as unknown as TurnLoop,",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/tui/turn-loop.test.ts",
+      "reported_line": 36
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-013",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "loop cast at test line 36, unused _origin at 51, shift()! at 202, setTimeout(done, 0) at 203.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "The recipient-choice idle drain dispatches one item with a predicate that does not read `drainSites.workInFlight()`, so a late 'main' recipient answer that lands while detached slash work (for example `/model`) is still running and the turn is idle starts the queue head beside that work; an inline slash line dispatched there also leaves the lines behind it stranded. The merge-base `drainIdleMainQueue(mainQueue, {isIdle, takeForced, dispatch})` call had the same predicate, and turn-loop.ts reproduces it. This is the known PR 999 F-025 and F-026 gap, carried unchanged by this PR; reading only, not run in the shell.",
+    "impact": "Pre-existing: no change in behaviour at this site, and the operator can already type a line beside detached work. It never blocks. Recorded so the F-025/F-026 fix is applied to this site as well (see F-009).",
+    "suggested_fix": "Close it with the F-025/F-026 follow-up (flow 441 deferred items), together with F-009's single predicate.",
+    "evidence": "Merge-base tui-shell.ts call of `drainIdleMainQueue` with the same predicate; turn-loop.ts 100-109; main-queue.ts 270 and 282-285; PR 999 round-3 findings F-025 and F-026. Reported by highload (F-001) and architecture (F-003).",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": 8669,
+    "quote": "turnLoop.drainWhenIdle(",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 8669
+    },
+    "global_id": "2026-10-13-pr-1003-round1-95d3f883#F-014",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "The drain call at tui-shell.ts:8669 uses the same predicate with no workInFlight(); the merge-base comparison was not re-checked by the verifier.",
+      "verifier": "review-verifier"
+    }
+  }
+]

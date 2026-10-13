@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3b",
+  "command": "bun test src/tui/turn-loop.test.ts src/tui/busy-dispatch.test.ts src/tui/main-queue.test.ts src/tui/main-queue-drain.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-hold.test.ts src/tui/tui-bus.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 6902
+  },
+  "mutants": [
+    {
+      "id": "N16b-remote-paint-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "nextId,\n    paint: deps.paint,",
+      "replacement": "nextId,\n    paint: () => {},",
+      "line": 80,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6911
+    },
+    {
+      "id": "N21-held-notice-banner-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "${leaseView()?.banner() ?? \"held\"} — queued as q${position} (no side worker while held).",
+      "replacement": "held — queued as q${position} (no side worker while held).",
+      "line": 8626,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6864
+    },
+    {
+      "id": "N22-held-busy-enqueue-no-return",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "(no side worker while held).\\n`);\n          return;",
+      "replacement": "(no side worker while held).\\n`);",
+      "line": 8626,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6889
+    },
+    {
+      "id": "N23-held-idle-enqueue-only-operator-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "if (origin === \"operator\") {\n          const position = turnLoop.enqueue(line, displayLine, source);",
+      "replacement": "if (true) {\n          const position = turnLoop.enqueue(line, displayLine, source);",
+      "line": 9436,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6882
+    }
+  ],
+  "totals": {
+    "killed": 2,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

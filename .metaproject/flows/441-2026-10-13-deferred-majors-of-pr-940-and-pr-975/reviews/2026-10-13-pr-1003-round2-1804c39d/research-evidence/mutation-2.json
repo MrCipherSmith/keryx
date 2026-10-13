@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3b",
+  "command": "bun test src/tui/turn-loop.test.ts src/tui/busy-dispatch.test.ts src/tui/main-queue.test.ts src/tui/main-queue-drain.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-hold.test.ts src/tui/tui-bus.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 6963
+  },
+  "mutants": [
+    {
+      "id": "N01-whileBusy-no-return",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "if (turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)) return;",
+      "replacement": "turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source);",
+      "line": 8592,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6934
+    },
+    {
+      "id": "N02-held-busy-notice-q1",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queued as q${position} (no side worker while held).",
+      "replacement": "queued as q1 (no side worker while held).",
+      "line": 8626,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6939
+    },
+    {
+      "id": "N03-held-idle-notice-q1",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queued as q${position}.\\n`);",
+      "replacement": "queued as q1.\\n`);",
+      "line": 9438,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6928
+    },
+    {
+      "id": "N04-idle-no-destroyed",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!destroyed &&\n                !chrome.isBusy() &&",
+      "replacement": "!chrome.isBusy() &&",
+      "line": 8671,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6903
+    },
+    {
+      "id": "N05-idle-no-busy",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!chrome.isBusy() &&\n                !foregroundOperation.isActive &&\n                !forceHandoff",
+      "replacement": "!foregroundOperation.isActive &&\n                !forceHandoff",
+      "line": 8672,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6885
+    },
+    {
+      "id": "N06-idle-no-foreground",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!foregroundOperation.isActive &&\n                !forceHandoff.isAwaitingSettlement &&\n                leaseView",
+      "replacement": "!forceHandoff.isAwaitingSettlement &&\n                leaseView",
+      "line": 8673,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7036
+    },
+    {
+      "id": "N07-idle-no-awaiting",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,",
+      "replacement": "leaseView()?.held() !== true,",
+      "line": 8674,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6899
+    },
+    {
+      "id": "N08-idle-no-lease",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,",
+      "replacement": "!forceHandoff.isAwaitingSettlement,",
+      "line": 8674,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6890
+    },
+    {
+      "id": "N09-enqueue-returns-len-minus-1",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.paint();\n    return queue.length;",
+      "replacement": "deps.paint();\n    return queue.length - 1;",
+      "line": 70,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6895
+    },
+    {
+      "id": "N10-sessionState-queued-zero",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queued: turnLoop.queue.length,",
+      "replacement": "queued: 0,",
+      "line": 10163,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6875
+    },
+    {
+      "id": "N11-idle-dispatch-run-before-paint",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.paint();\n          remote.runQueued(next);",
+      "replacement": "remote.runQueued(next);\n          deps.paint();",
+      "line": 115,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6903
+    },
+    {
+      "id": "N12-enqueue-source-undefined-key",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "...(source !== undefined ? { source } : {})",
+      "replacement": "source",
+      "line": 69,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6959
+    },
+    {
+      "id": "N13-seq-starts-1",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "let seq = 0;",
+      "replacement": "let seq = 1;",
+      "line": 65,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7019
+    },
+    {
+      "id": "N14-queue-getter-copy",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "get queue() {\n      return queue;",
+      "replacement": "get queue() {\n      return [...queue];",
+      "line": 97,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6890
+    },
+    {
+      "id": "N15-recipient-enqueue-gains-source",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "turnLoop.enqueue(line, displayLine);\n            // The recipient choice",
+      "replacement": "turnLoop.enqueue(line, displayLine, source);\n            // The recipient choice",
+      "line": 8665,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6881
+    },
+    {
+      "id": "N16-remote-paint-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "paint: deps.paint,\n    runLine",
+      "replacement": "paint: () => {},\n    runLine",
+      "status": "invalid",
+      "ms": 0,
+      "reason": "anchor not found"
+    },
+    {
+      "id": "N17-remote-say-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "say: deps.say,",
+      "replacement": "say: () => {},",
+      "line": 82,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6880
+    },
+    {
+      "id": "N18-remote-runLine-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "runLine: deps.runLine,",
+      "replacement": "runLine: (() => undefined) as never,",
+      "line": 83,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6907
+    },
+    {
+      "id": "N19-drain-paint-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "queue: () => queue,\n    paint: deps.paint,",
+      "replacement": "queue: () => queue,\n    paint: () => {},",
+      "line": 88,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6879
+    },
+    {
+      "id": "N20-whileBusy-notice-position-plus-1",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.say(`${queuedCommandNotice(position)}\\n`);",
+      "replacement": "deps.say(`${queuedCommandNotice(position + 1)}\\n`);",
+      "line": 107,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6900
+    }
+  ],
+  "totals": {
+    "killed": 13,
+    "survived": 6,
+    "invalid": 1,
+    "timeout": 0
+  }
+}
