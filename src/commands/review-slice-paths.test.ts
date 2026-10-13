@@ -1,12 +1,20 @@
 // Flow 441 AC8/AC9: the path flags of the review commands that name a file refuse a path outside the project
-// root and `.metaproject/`, before anything is read or written.
+// root and `.metaproject/`, before anything is read or written, and the path they open is the one that was judged.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { reviewPathFlagRefusal } from "../lib/review-path-flags";
-import { type SliceDeps, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
+import { REVIEW_CONFINED_PATH_FLAGS, REVIEW_NON_PATH_FLAGS, confinedPathFlags, reviewPathFlagRefusal } from "../lib/review-path-flags";
+import {
+  DISPATCH_CHECK_FLAGS,
+  RETRY_PLAN_FLAGS,
+  SLICE_FLAGS,
+  type SliceDeps,
+  runDispatchCheck,
+  runRetryPlan,
+  runSlice,
+} from "./review-slice";
 
 const DIFF = ["diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1 +1 @@", "-old", "+new", ""].join("\n");
 
@@ -17,10 +25,25 @@ const deps: SliceDeps = {
   rejectUnknownFlags: () => {},
 };
 
+const PAYLOAD = {
+  review_context: {
+    request: { raw: "review the change" },
+    scope: { mode: "diff", files: ["src/a.ts"] },
+    routing: { selected_reviewers: ["review-logic"] },
+    token_policy: { context_mode: "light", omissions: [] },
+  },
+  reviewer: "review-logic",
+  scope_mode: "diff",
+  model: { tier: "standard", tier_reasons: ["base"], tier_resolution: "session-fallback", model_discovery: {}, inherit: true },
+  budget: { max_findings: 10 },
+  slices: ["slice-01"],
+};
+
 let originalCwd: string;
 let originalExitCode: typeof process.exitCode;
 let dir: string;
 let outside: string;
+let escaped: string;
 
 function real(prefix: string): string {
   return realpathSync(mkdtempSync(path.join(tmpdir(), prefix)));
@@ -31,6 +54,7 @@ beforeEach(() => {
   originalExitCode = process.exitCode;
   dir = real("keryx-slice-paths-");
   outside = real("keryx-slice-outside-");
+  escaped = path.join(path.dirname(dir), `${path.basename(dir)}-escaped`);
   mkdirSync(path.join(dir, ".git"));
   mkdirSync(path.join(dir, ".metaproject"));
   process.chdir(dir);
@@ -38,17 +62,22 @@ beforeEach(() => {
 
 afterEach(() => {
   process.chdir(originalCwd);
-  process.exitCode = originalExitCode;
+  process.exitCode = originalExitCode ?? 0;
+  for (const tmp of [dir, outside, escaped]) rmSync(tmp, { recursive: true, force: true });
 });
 
-const quietly = async (run: () => Promise<void>): Promise<void> => {
+const quietly = async (run: () => Promise<void>): Promise<string> => {
   const log = console.log;
-  console.log = () => {};
+  const lines: string[] = [];
+  console.log = (...parts: unknown[]) => {
+    lines.push(parts.join(" "));
+  };
   try {
     await run();
   } finally {
     console.log = log;
   }
+  return lines.join("\n");
 };
 
 test("AC8: review slice --out outside the project exits with a named reason and writes nothing", async () => {
@@ -59,6 +88,8 @@ test("AC8: review slice --out outside the project exits with a named reason and 
 
   await expect(runSlice(["--out", "../escaped"], deps)).rejects.toThrow(/outside the project root/);
   expect(existsSync(path.join(dir, "..", "escaped"))).toBe(false);
+  await expect(runSlice(["--out", `../${path.basename(escaped)}`], deps)).rejects.toThrow(/outside the project root/);
+  expect(existsSync(escaped)).toBe(false);
 });
 
 test("AC8: review slice --out inside the project, under .metaproject/reviews/ and the default directory still work", async () => {
@@ -77,6 +108,61 @@ test("AC8: review slice --out through a symlink inside the project that points o
   await expect(runSlice(["--out", "escape/slices"], deps)).rejects.toThrow(/outside the project root/);
   await expect(runSlice(["--out=escape"], deps)).rejects.toThrow(/outside the project root/);
   expect(readdirSync(outside)).toEqual([]);
+});
+
+test("F-002: a .metaproject that is a symlink to outside the project is not an allowed root", async () => {
+  rmSync(path.join(dir, ".metaproject"), { recursive: true });
+  symlinkSync(outside, path.join(dir, ".metaproject"));
+  await expect(runSlice(["--out", ".metaproject/reviews/r1"], deps)).rejects.toThrow(/outside the project root/);
+  await expect(runSlice([], deps)).rejects.toThrow(/outside the project root/);
+  expect(readdirSync(outside)).toEqual([]);
+});
+
+test("F-011: a directory swapped for a symlink to outside while the diff is fetched is not written through", async () => {
+  const swapping: SliceDeps = {
+    ...deps,
+    gitDiff: async () => {
+      symlinkSync(outside, path.join(dir, "swap"));
+      return DIFF;
+    },
+  };
+  await expect(runSlice(["--out", "swap/slices"], swapping)).rejects.toThrow(/outside the project root/);
+  expect(readdirSync(outside)).toEqual([]);
+});
+
+test("F-013: a command run from a subdirectory resolves its flags against that directory, and the default state lands beside the manifest", async () => {
+  mkdirSync(path.join(dir, "sub"));
+  process.chdir(path.join(dir, "sub"));
+  await quietly(() => runSlice(["--out", "../out/slices"], deps));
+  const manifest = path.join(dir, "out", "slices", "manifest.json");
+  expect(existsSync(manifest)).toBe(true);
+  await expect(runSlice(["--out", "../../elsewhere"], deps)).rejects.toThrow(/outside the project root/);
+
+  await quietly(() => runRetryPlan(["--manifest", "../out/slices/manifest.json", "--next-wave", "--reviewer", "review-logic"], deps));
+  expect(existsSync(path.join(dir, "out", "slices", "retry-state.json"))).toBe(true);
+  expect(existsSync(path.join(dir, "sub", "retry-state.json"))).toBe(false);
+});
+
+test("F-005: dispatch-check and retry-plan, given paths inside the project, run and report", async () => {
+  await quietly(() => runSlice(["--out", "slices"], deps));
+  const payload = path.join(dir, "payload.json");
+  writeFileSync(payload, JSON.stringify(PAYLOAD));
+
+  const checked = await quietly(() => runDispatchCheck(["--payload", payload, "--manifest", "slices/manifest.json", "--json"], deps));
+  expect(JSON.parse(checked).ok).toBe(true);
+  expect(process.exitCode ?? 0).toBe(0);
+
+  const planned = await quietly(() =>
+    runRetryPlan(["--manifest", "slices/manifest.json", "--next-wave", "--reviewer", "review-logic", "--json"], deps),
+  );
+  expect(JSON.parse(planned).reviewer).toBe("review-logic");
+  expect(existsSync(path.join(dir, "slices", "retry-state.json"))).toBe(true);
+
+  const state = path.join(dir, ".metaproject", "retry.json");
+  await quietly(() =>
+    runRetryPlan(["--manifest", "slices/manifest.json", "--next-wave", "--reviewer", "review-logic", "--state", state], deps),
+  );
+  expect(existsSync(state)).toBe(true);
 });
 
 test("AC9: review retry-plan --manifest outside the project is refused", async () => {
@@ -108,14 +194,80 @@ test("AC9: a manifest that is a symlink to a file outside the project is refused
   await expect(runRetryPlan(["--manifest", "manifest.json", "--next-wave"], deps)).rejects.toThrow(/outside the project root/);
 });
 
+test("F-010: the diff source is opened by the path that was judged, and standard input stays standard input", async () => {
+  mkdirSync(path.join(dir, "real"));
+  symlinkSync(path.join(dir, "real"), path.join(dir, "inside-link"));
+  writeFileSync(path.join(dir, "real", "d.diff"), DIFF);
+  const sources: string[] = [];
+  const spying: SliceDeps = {
+    ...deps,
+    readDiffSource: async (source) => {
+      sources.push(source);
+      return DIFF;
+    },
+  };
+  await quietly(() => runSlice(["--diff", "inside-link/d.diff", "--out", "o1"], spying));
+  await quietly(() => runSlice(["--diff", "-", "--out", "o2"], spying));
+  expect(sources).toEqual([path.join(dir, "real", "d.diff"), "-"]);
+});
+
+test("F-010: --diff, --result and --payload outside the project are refused, and a model-bound diff is never read", async () => {
+  const secret = path.join(outside, "secret.txt");
+  writeFileSync(secret, "secret");
+  const manifest = path.join(dir, "manifest.json");
+  writeFileSync(manifest, "{}");
+  let read = false;
+  const spying: SliceDeps = {
+    ...deps,
+    readDiffSource: async () => {
+      read = true;
+      return DIFF;
+    },
+  };
+  await expect(runSlice(["--diff", secret], spying)).rejects.toThrow(/slice --diff: .*outside the project root/);
+  expect(read).toBe(false);
+  await expect(runRetryPlan(["--manifest", manifest, "--result", secret], deps)).rejects.toThrow(/retry-plan --result: .*outside the project root/);
+  await expect(runDispatchCheck(["--payload", secret], deps)).rejects.toThrow(/dispatch-check --payload: .*outside the project root/);
+});
+
+test("F-003: a path that goes through a symlink and back (link/../m.json) is read where it was judged, not where the kernel would take it", async () => {
+  await quietly(() => runSlice(["--out", "slices"], deps));
+  symlinkSync(outside, path.join(dir, "link"));
+  mkdirSync(path.join(outside, "slices"));
+  writeFileSync(path.join(outside, "slices", "manifest.json"), "not json");
+  const payload = path.join(dir, "payload.json");
+  writeFileSync(payload, JSON.stringify(PAYLOAD));
+
+  const checked = await quietly(() => runDispatchCheck(["--payload", payload, "--manifest", "link/../slices/manifest.json", "--json"], deps));
+  expect(JSON.parse(checked).ok).toBe(true);
+});
+
+test("guard: every flag of a review command is sorted into confined or non-path, and the two lists name no flag the command lacks", () => {
+  const commands: Record<string, readonly string[]> = {
+    slice: SLICE_FLAGS,
+    "dispatch-check": DISPATCH_CHECK_FLAGS,
+    "retry-plan": RETRY_PLAN_FLAGS,
+  };
+  expect(Object.keys(REVIEW_CONFINED_PATH_FLAGS).sort()).toEqual(Object.keys(commands).sort());
+  expect(Object.keys(REVIEW_NON_PATH_FLAGS).sort()).toEqual(Object.keys(commands).sort());
+  for (const [command, flags] of Object.entries(commands)) {
+    const confined = confinedPathFlags(command);
+    const nonPath = REVIEW_NON_PATH_FLAGS[command] as readonly string[];
+    expect({ command, unsorted: flags.filter((flag) => !confined.includes(flag) && !nonPath.includes(flag)) }).toEqual({ command, unsorted: [] });
+    expect({ command, both: confined.filter((flag) => nonPath.includes(flag)) }).toEqual({ command, both: [] });
+    expect({ command, unknown: [...confined, ...nonPath].filter((flag) => !flags.includes(flag)) }).toEqual({ command, unknown: [] });
+  }
+});
+
 test("AC9: the same flags stay usable inside the project", async () => {
   const payload = path.join(dir, "payload.json");
   writeFileSync(payload, "{}");
   const manifest = path.join(dir, ".metaproject", "reviews", "manifest.json");
   mkdirSync(path.dirname(manifest), { recursive: true });
-  writeFileSync(manifest, "{}");
-  // The check may fail on its payload; what matters is that it is not refused for the path.
-  await quietly(() => runDispatchCheck(["--payload", payload, "--manifest", manifest], deps).catch(() => {}));
+  writeFileSync(manifest, JSON.stringify({ slices: [] }));
+  const out = await quietly(() => runDispatchCheck(["--payload", payload, "--manifest", manifest, "--json"], deps));
+  expect(JSON.parse(out).ok).toBe(false);
+  expect(process.exitCode).toBe(1);
 });
 
 test("reviewPathFlagRefusal: the rule the commands and the trust table share", () => {
@@ -125,7 +277,13 @@ test("reviewPathFlagRefusal: the rule the commands and the trust table share", (
   expect(reviewPathFlagRefusal("slice", [], where)).toBeUndefined();
   expect(reviewPathFlagRefusal("slice", ["--out", outside], where)).toMatch(/outside the project root/);
   expect(reviewPathFlagRefusal("slice", [`--out=${outside}`], where)).toMatch(/outside the project root/);
+  expect(reviewPathFlagRefusal("slice", ["--diff", outside], where)).toMatch(/--diff/);
+  expect(reviewPathFlagRefusal("slice", ["--diff", "-"], where)).toBeUndefined();
   expect(reviewPathFlagRefusal("retry-plan", ["--manifest", "m.json", "--state", outside], where)).toMatch(/--state/);
+  expect(reviewPathFlagRefusal("retry-plan", ["--result", outside], where)).toMatch(/--result/);
   expect(reviewPathFlagRefusal("dispatch-check", ["--manifest", outside], where)).toMatch(/--manifest/);
+  expect(reviewPathFlagRefusal("dispatch-check", ["--payload", outside], where)).toMatch(/--payload/);
   expect(reviewPathFlagRefusal("status", ["--out", outside], where)).toBeUndefined();
+  expect(reviewPathFlagRefusal("constructor", ["--out", outside], where)).toBeUndefined();
+  expect(reviewPathFlagRefusal("__proto__", ["--out", outside], where)).toBeUndefined();
 });

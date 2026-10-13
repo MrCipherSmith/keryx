@@ -1,0 +1,340 @@
+{
+  "mutants": [
+    {
+      "id": "isTrustRoutineCommand-chain-cap",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "segments.length > MAX_CHAIN_SEGMENTS",
+      "replacement": "segments.length > 400",
+      "note": "isTrustRoutineCommand: chain cap lifted"
+    },
+    {
+      "id": "isTrustRoutineCommand-separator",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "(seg.precededBy === undefined || seg.precededBy === \"&&\") &&",
+      "replacement": "",
+      "note": "isTrustRoutineCommand: any separator accepted"
+    },
+    {
+      "id": "isTrustRoutineCommand-metachar",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "!hasUnquotedMetacharacter(seg.raw) &&",
+      "replacement": "",
+      "note": "isTrustRoutineCommand: metacharacter check dropped"
+    },
+    {
+      "id": "isTrustRoutineCommand-substitution",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (/\\$\\(|\\$\\{|`/.test(command)) return false;",
+      "replacement": "",
+      "note": "isTrustRoutineCommand: substitution guard dropped"
+    },
+    {
+      "id": "isRoutineSegment-assignments",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "stripAssignments(words).length !== words.length",
+      "replacement": "false",
+      "note": "isRoutineSegment: env assignments accepted"
+    },
+    {
+      "id": "isRoutineSegment-cd-arity",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (words.length !== 2) return false;",
+      "replacement": "",
+      "note": "isRoutineSegment: cd with extra words accepted"
+    },
+    {
+      "id": "isRoutineSegment-cd-ignored",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "walk.cwd = movedTo(walk.cwd, words[1] as string);",
+      "replacement": "",
+      "note": "isRoutineSegment: cd does not move cwd"
+    },
+    {
+      "id": "movedTo-expandable",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (cwd === undefined || target === \"-\" || isExpandable(target)) return undefined;",
+      "replacement": "if (cwd === undefined) return undefined;",
+      "note": "movedTo: cd - and cd ~ / cd $X resolved lexically"
+    },
+    {
+      "id": "isRoutineKeryx-ctxrun-dashes",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "dashes >= 3",
+      "replacement": "dashes >= 0",
+      "note": "isRoutineKeryx: ctx run without a command after -- accepted"
+    },
+    {
+      "id": "isRoutineKeryx-execflag",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (hasExecFlag(words)) return false;",
+      "replacement": "",
+      "note": "isRoutineKeryx: exec flags accepted"
+    },
+    {
+      "id": "isRoutineKeryx-ctxrun-walk-copy",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "isRoutineSegment(words.slice(dashes + 1), { ...walk })",
+      "replacement": "isRoutineSegment(words.slice(dashes + 1), walk)",
+      "note": "isRoutineKeryx: cd inside ctx run leaks into the outer walk"
+    },
+    {
+      "id": "isRoutineKeryx-confined-table",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "Object.hasOwn(REVIEW_CONFINED_PATH_FLAGS, sub)",
+      "replacement": "false",
+      "note": "isRoutineKeryx: path flags never consulted"
+    },
+    {
+      "id": "isRoutineKeryx-requireFlag",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "entry.requireFlag === undefined || args.includes(entry.requireFlag)",
+      "replacement": "true",
+      "note": "matchesEntry: requireFlag ignored"
+    },
+    {
+      "id": "reviewPathFlagsStayInside-empty",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (values.length === 0) return true;",
+      "replacement": "",
+      "note": "reviewPathFlagsStayInside: no-flag fast path dropped"
+    },
+    {
+      "id": "reviewPathFlagsStayInside-expandable",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (walk.cwd === undefined || values.some(isExpandable)) return false;",
+      "replacement": "if (walk.cwd === undefined) return false;",
+      "note": "reviewPathFlagsStayInside: ~ and $ values judged lexically"
+    },
+    {
+      "id": "reviewPathFlagsStayInside-verdict",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "return reviewPathFlagRefusal(sub, args, { projectRoot: walk.projectRoot, cwd: walk.cwd }) === undefined;",
+      "replacement": "return true;",
+      "note": "reviewPathFlagsStayInside: refusal ignored"
+    },
+    {
+      "id": "isRoutineBunTest-untrusted",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (walk.untrusted || walk.cwd === undefined) return false;",
+      "replacement": "if (walk.cwd === undefined) return false;",
+      "note": "isRoutineBunTest: untrusted turn not refused"
+    },
+    {
+      "id": "isRoutineBunTest-cwd",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (realOrResolved(walk.cwd) !== root) return false;",
+      "replacement": "",
+      "note": "isRoutineBunTest: cwd outside project root accepted"
+    },
+    {
+      "id": "isRoutineBunTest-args",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!bunTestArgsAllowed(words.slice(2))) return false;",
+      "replacement": "",
+      "note": "isRoutineBunTest: argument allow-list dropped"
+    },
+    {
+      "id": "isRoutineBunTest-preload-verdict",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": " && !now.preload;",
+      "replacement": ";",
+      "note": "isRoutineBunTest: preload verdict dropped"
+    },
+    {
+      "id": "isRoutineBunTest-fingerprint",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "baseline === now.fingerprint &&",
+      "replacement": "",
+      "note": "isRoutineBunTest: fingerprint comparison dropped"
+    },
+    {
+      "id": "bunTestArgsAllowed-eq-count",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "BUN_TEST_COUNT_FLAGS.has(arg.slice(0, eq)) && isCount(arg.slice(eq + 1))",
+      "replacement": "BUN_TEST_COUNT_FLAGS.has(arg.slice(0, eq))",
+      "note": "bunTestArgsAllowed: --timeout=abc accepted"
+    },
+    {
+      "id": "bunTestArgsAllowed-sep-count",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (BUN_TEST_COUNT_FLAGS.has(arg) && isCount(args[i + 1])) {",
+      "replacement": "if (BUN_TEST_COUNT_FLAGS.has(arg)) {",
+      "note": "bunTestArgsAllowed: --timeout abc accepted"
+    },
+    {
+      "id": "bunTestArgsAllowed-isCount-regex",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^\\d+$/.test(value)",
+      "replacement": "/\\d+/.test(value)",
+      "note": "isCount: 12abc accepted"
+    },
+    {
+      "id": "bunfigState-preload-regex",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "preload: /(?:^|[\\s.[,{])\"?preload\"?\\s*=/m.test(text)",
+      "replacement": "preload: false",
+      "note": "bunfigState: preload never detected"
+    },
+    {
+      "id": "bunfigState-unreadable",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "return { fingerprint: \"unreadable\", preload: true };",
+      "replacement": "return { fingerprint: \"unreadable\", preload: false };",
+      "note": "bunfigState: unreadable file read as clean"
+    },
+    {
+      "id": "bunfigState-enoent",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "code === \"ENOENT\") return { fingerprint: \"absent\", preload: false };",
+      "replacement": "code === \"ENOENTX\") return { fingerprint: \"absent\", preload: false };",
+      "note": "bunfigState: missing bunfig read as unreadable"
+    },
+    {
+      "id": "recordBunfigBaseline-first-wins",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!bunfigBaselines.has(root)) bunfigBaselines.set(root, bunfigState(root).fingerprint);",
+      "replacement": "bunfigBaselines.set(root, bunfigState(root).fingerprint);",
+      "note": "recordBunfigBaseline: last call wins"
+    },
+    {
+      "id": "recordBunfigBaseline-root",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "const root = realOrResolved(resolveProjectRoot(cwd));",
+      "replacement": "const root = realOrResolved(cwd);",
+      "note": "recordBunfigBaseline: keyed by cwd, not project root"
+    },
+    {
+      "id": "agent-baseline-call",
+      "file": "src/commands/agent.ts",
+      "anchor": "recordBunfigBaseline();",
+      "replacement": "",
+      "note": "runAgentTurn: baseline never recorded"
+    },
+    {
+      "id": "reviewPathFlagRefusal-verdict",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "if (!placed.ok) return `keryx review ${command} ${flag}: ${placed.message}`;",
+      "replacement": "",
+      "note": "reviewPathFlagRefusal: refusal never returned"
+    },
+    {
+      "id": "reviewPathFlagRefusal-metaproject-root",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "[\".metaproject\"]",
+      "replacement": "[]",
+      "note": "reviewPathFlagRefusal: .metaproject no longer an allowed root"
+    },
+    {
+      "id": "reviewPathFlagRefusal-first-value-only",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "for (const value of optionValues(args, flag)) {",
+      "replacement": "for (const value of optionValues(args, flag).slice(0, 1)) {",
+      "note": "reviewPathFlagRefusal: only the first occurrence checked"
+    },
+    {
+      "id": "flags-table-slice",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "slice: [\"--out\"],",
+      "replacement": "slice: [],",
+      "note": "REVIEW_CONFINED_PATH_FLAGS: slice unconfined"
+    },
+    {
+      "id": "flags-table-retry-state",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "\"retry-plan\": [\"--manifest\", \"--state\"],",
+      "replacement": "\"retry-plan\": [\"--manifest\"],",
+      "note": "REVIEW_CONFINED_PATH_FLAGS: retry-plan --state unconfined"
+    },
+    {
+      "id": "flags-table-dispatch",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "\"dispatch-check\": [\"--manifest\"],",
+      "replacement": "\"dispatch-check\": [],",
+      "note": "REVIEW_CONFINED_PATH_FLAGS: dispatch-check unconfined"
+    },
+    {
+      "id": "placePathWithinSync-extra-roots",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "const allowed = [rootReal, ...extraRoots.map((extra) => realOf(path.resolve(rootReal, extra))).filter((real): real is string => real !== null)];",
+      "replacement": "const allowed = [rootReal];",
+      "note": "placePathWithinSync: extra roots ignored"
+    },
+    {
+      "id": "placePathWithinSync-cwd",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "const absolute = path.resolve(cwd, candidate);",
+      "replacement": "const absolute = path.resolve(rootReal, candidate);",
+      "note": "placePathWithinSync: relative path resolved against root, not cwd"
+    },
+    {
+      "id": "placePathWithinSync-null-effective",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "effective === null || !allowed.some",
+      "replacement": "!allowed.some",
+      "note": "placePathWithinSync: dangling link guard dropped"
+    },
+    {
+      "id": "placePathWithinSync-tail",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "path.join(ancestorReal, ...tail)",
+      "replacement": "ancestorReal",
+      "note": "placePathWithinSync: not-yet-existing tail dropped"
+    },
+    {
+      "id": "placePathWithinSync-lstat",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "lstatSync(ancestor);",
+      "replacement": "void ancestor;",
+      "note": "placePathWithinSync: ancestor walk never climbs"
+    },
+    {
+      "id": "refuseOutsidePaths-throw",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "throw new Error(refusal);",
+      "replacement": "console.error(refusal);",
+      "note": "refuseOutsidePaths: refusal not thrown"
+    },
+    {
+      "id": "refuseOutsidePaths-root",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "projectRoot: resolveProjectRoot(cwd), cwd",
+      "replacement": "projectRoot: cwd, cwd",
+      "note": "refuseOutsidePaths: root is cwd, not project root"
+    },
+    {
+      "id": "runSlice-refuse",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "refuseOutsidePaths(\"slice\", args);",
+      "replacement": "",
+      "note": "runSlice: confinement dropped"
+    },
+    {
+      "id": "runDispatchCheck-refuse",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "refuseOutsidePaths(\"dispatch-check\", args);",
+      "replacement": "",
+      "note": "runDispatchCheck: confinement dropped"
+    },
+    {
+      "id": "runRetryPlan-refuse",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "refuseOutsidePaths(\"retry-plan\", args);",
+      "replacement": "",
+      "note": "runRetryPlan: confinement dropped"
+    },
+    {
+      "id": "runSlice-out-default",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "path.resolve(optionValue(args, \"--out\") ?? DEFAULT_SLICE_DIR)",
+      "replacement": "path.resolve(optionValue(args, \"--out\") ?? \".\")",
+      "note": "runSlice: default dir changed"
+    },
+    {
+      "id": "runRetryPlan-state-default",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "path.resolve(optionValue(args, \"--state\") ?? path.join(manifestDir, RETRY_STATE_NAME))",
+      "replacement": "path.resolve(optionValue(args, \"--state\") ?? RETRY_STATE_NAME)",
+      "note": "runRetryPlan: default state beside cwd instead of manifest"
+    }
+  ]
+}

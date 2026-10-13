@@ -229,11 +229,73 @@ test("AC7: after untrusted content no bun test form is routine", () => {
   expect(isTrustRoutineCommand("keryx flow status", { cwd: dir, untrustedContent: true })).toBe(true);
 });
 
+test("Flow 441 F-012: a count flag with a value that is not a plain non-negative integer still prompts", () => {
+  const dir = projectDir();
+  for (const command of ["bun test --timeout=5s", "bun test --timeout=1.5", "bun test --timeout=-1", "bun test --rerun-each=x"]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+  }
+  for (const command of ["bun test --rerun-each=3", "bun test --timeout=5"]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: true });
+  }
+});
+
+test("Flow 441 F-008: a preload spelled as an inline table, with single quotes or with an escaped key still prompts", () => {
+  for (const bunfig of ['test = {preload = ["./x.ts"]}\n', "[test]\n'preload' = ['./x.ts']\n", '[test]\n"pre\\u006coad" = ["./x.ts"]\n', "[test\n"]) {
+    const dir = projectDir(bunfig);
+    expect({ bunfig, routine: isTrustRoutineCommand("bun test", { cwd: dir }) }).toEqual({ bunfig, routine: false });
+  }
+});
+
+test("Flow 441 F-012: a bunfig.toml that is a directory, and a second baseline after a rewrite", () => {
+  const unreadable = projectDir(undefined, { baseline: false });
+  mkdirSync(path.join(unreadable, "bunfig.toml"));
+  recordBunfigBaseline(unreadable);
+  expect(isTrustRoutineCommand("bun test", { cwd: unreadable })).toBe(false);
+
+  const dir = projectDir("[test]\ntimeout = 1000\n");
+  writeFileSync(path.join(dir, "bunfig.toml"), "[test]\ntimeout = 2000\n");
+  recordBunfigBaseline(dir);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-018: a cd inside keryx ctx run does not move the segments after it", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("keryx ctx run -- cd /tmp && bun test", { cwd: dir })).toBe(true);
+  expect(isTrustRoutineCommand("cd /tmp && bun test", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-001: a cd whose target the shell may read as an option, or resolve elsewhere, is not followed", () => {
+  const dir = projectDir();
+  for (const target of ["--", "-P", "-L", "-", "\\.\\.", ".?", "~", "$HOME", "*", "{a,b}"]) {
+    for (const tail of ["keryx review slice --out x.json", "keryx review retry-plan --manifest m.json", "bun test"]) {
+      const command = `cd ${target} && ${tail}`;
+      expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+    }
+  }
+  expect(isTrustRoutineCommand("cd sub && keryx review slice --out x.json", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 F-001: a cd to a relative name is not followed while CDPATH is set", () => {
+  const dir = projectDir();
+  const before = process.env.CDPATH;
+  process.env.CDPATH = "/tmp";
+  try {
+    expect(isTrustRoutineCommand("cd sub && keryx review slice --out x.json", { cwd: dir })).toBe(false);
+    expect(isTrustRoutineCommand("cd ./sub && keryx review slice --out x.json", { cwd: dir })).toBe(true);
+  } finally {
+    if (before === undefined) delete process.env.CDPATH;
+    else process.env.CDPATH = before;
+  }
+});
+
 const PATH_FLAG_ROWS: ReadonlyArray<readonly [string, string]> = [
   ["keryx review slice", "--out"],
+  ["keryx review slice", "--diff"],
   ["keryx review retry-plan", "--manifest"],
   ["keryx review retry-plan", "--state"],
+  ["keryx review retry-plan", "--result"],
   ["keryx review dispatch-check", "--manifest"],
+  ["keryx review dispatch-check", "--payload"],
 ];
 
 for (const [command, flag] of PATH_FLAG_ROWS) {
@@ -248,7 +310,7 @@ for (const [command, flag] of PATH_FLAG_ROWS) {
       expect({ inside, routine: run(inside) }).toEqual({ inside, routine: true });
       expect({ inside, routine: run(inside, "equals") }).toEqual({ inside, routine: true });
     }
-    for (const out of ["/tmp/x.json", "../x.json", path.join(outside, "x.json"), "escape/x.json", "~/x.json", "$HOME/x.json"]) {
+    for (const out of ["/tmp/x.json", "../x.json", path.join(outside, "x.json"), "escape/x.json", "~/x.json", "$HOME/x.json", "x*", ".?/x", "a[0]/x"]) {
       expect({ out, routine: run(out) }).toEqual({ out, routine: false });
       expect({ out, routine: run(out, "equals") }).toEqual({ out, routine: false });
     }
@@ -257,5 +319,8 @@ for (const [command, flag] of PATH_FLAG_ROWS) {
     expect(isTrustRoutineCommand(`${command} ${flag} out/a.json ${flag} /tmp/b.json`, { cwd: dir })).toBe(false);
     expect(isTrustRoutineCommand(`cd .. && ${command} ${flag} x.json`, { cwd: dir })).toBe(false);
     expect(isTrustRoutineCommand(`cd sub && ${command} ${flag} x.json`, { cwd: dir })).toBe(true);
+    if (["--diff", "--payload", "--result"].includes(flag)) {
+      expect(isTrustRoutineCommand(`${command} ${flag} -`, { cwd: dir })).toBe(true);
+    }
   });
 }

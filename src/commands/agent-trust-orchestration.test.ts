@@ -3,7 +3,8 @@
 // remembered ask_user answers, and the subagent concurrency constant.
 
 import { expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
+import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -46,8 +47,9 @@ function readTool(name: string, run: () => void = () => {}, untrusted = false): 
   };
 }
 
-function shellTool(commands: string[]): InteractiveTool {
+function shellTool(commands: string[], workingDirectory?: string): InteractiveTool {
   return {
+    ...(workingDirectory === undefined ? {} : { workingDirectory }),
     definition: {
       name: "shell_exec",
       description: "test shell",
@@ -222,6 +224,42 @@ test("AC2: without untrusted content a routine command is never prompted in trus
   await runAgentTurn(ioWith("trust", approvals), makeDeps(provider, { tools: [shellTool(ran)] }), [], "go");
   expect(approvals).toEqual([]);
   expect(ran).toEqual(["keryx review scope"]);
+});
+
+// Flow 441 AC6/AC7 (F-006): `bun test` through the agent loop. The routine table keys on the shell tool's own
+// directory, not on the process working directory (which here is the repository, not the project under test).
+
+async function bareProject(): Promise<string> {
+  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-trust-bun-")));
+  mkdirSync(path.join(dir, ".git"));
+  return dir;
+}
+
+test("Flow 441 AC6: a turn records the bunfig baseline of the directory its shell tool runs in", async () => {
+  const dir = await bareProject();
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+  const { provider } = scriptedProvider([callRound("s0", "shell_exec", '{"command":"git status"}'), [...okReply]]);
+  await runAgentTurn(ioWith("trust"), makeDeps(provider, { tools: [shellTool([], dir)] }), [], "go");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 AC7: after untrusted content every bun test form asks in trust and does not run", async () => {
+  const dir = await bareProject();
+  const approvals: string[] = [];
+  const ran: string[] = [];
+  const commands = ["bun test", "bun test --bail"];
+  const rounds: Script[] = [callRound("f1", "fetch_page", "{}")];
+  commands.forEach((command, i) => rounds.push(callRound(`s${i}`, "shell_exec", JSON.stringify({ command }))));
+  rounds.push([...okReply]);
+  const { provider } = scriptedProvider(rounds);
+  await runAgentTurn(
+    ioWith("trust", approvals),
+    makeDeps(provider, { tools: [readTool("fetch_page", () => {}, true), shellTool(ran, dir)] }),
+    [],
+    "go",
+  );
+  expect(approvals).toEqual(commands.map((command) => JSON.stringify({ command })));
+  expect(ran).toEqual([]);
 });
 
 // AC3

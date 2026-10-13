@@ -69,6 +69,12 @@ export interface InteractiveTool {
   definition: NormalizedToolDefinition;
   invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<InteractiveToolResult>;
   /**
+   * Flow 441 (F-007): the directory a shell tool runs its commands in. The trust routine table judges a command
+   * (`bun test`, a review command's path flags) from here, not from the process working directory; absent, the
+   * process working directory stands in.
+   */
+  workingDirectory?: string;
+  /**
    * Flow 295 (AC7): a tool whose every call needs the OPERATOR's explicit yes, whatever
    * the permission mode. `auto` included, it is never auto-approved, never remembered,
    * and never offered "always". The driver awaits this before asking. A `card` becomes

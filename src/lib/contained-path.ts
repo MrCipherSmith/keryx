@@ -67,6 +67,20 @@ function isInside(root: string, candidate: string): boolean {
   return relative !== ".." && !relative.startsWith(`..${path.sep}`);
 }
 
+/** The real path of `target`, or its resolved path when it cannot be resolved. */
+export function realOrResolved(target: string): string {
+  try {
+    return realpathSync(target);
+  } catch {
+    return path.resolve(target);
+  }
+}
+
+/** The refusal for a path that really lands outside the project. */
+export function outsideProjectMessage(candidate: string, rootReal: string): string {
+  return `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`;
+}
+
 /**
  * Resolve a caller-supplied path and refuse it unless it stays inside the
  * project.
@@ -101,7 +115,7 @@ export async function resolveContainedPath(
     return {
       ok: false,
       reason: "outside-project",
-      message: `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`,
+      message: outsideProjectMessage(candidate, rootReal),
     };
   }
 
@@ -133,8 +147,15 @@ export function placePathWithinSync(
       return null;
     }
   };
-  const rootReal = realOf(projectRoot) ?? path.resolve(projectRoot);
-  const allowed = [rootReal, ...extraRoots.map((extra) => realOf(path.resolve(rootReal, extra))).filter((real): real is string => real !== null)];
+  const rootReal = realOrResolved(projectRoot);
+  // An extra root counts by where it really is, and only when that is inside the project: a symlinked
+  // `.metaproject` must not widen the allowed set to wherever the link points.
+  const allowed = [
+    rootReal,
+    ...extraRoots
+      .map((extra) => realOf(path.resolve(rootReal, extra)))
+      .filter((real): real is string => real !== null && isInside(rootReal, real)),
+  ];
   const absolute = path.resolve(cwd, candidate);
 
   let ancestor = absolute;
@@ -153,12 +174,12 @@ export function placePathWithinSync(
     ancestor = parent;
   }
   const ancestorReal = realOf(ancestor);
-  const effective = ancestorReal === null ? null : path.join(ancestorReal, ...tail);
-  if (effective === null || !allowed.some((root) => isInside(root, effective))) {
-    return {
-      ok: false,
-      message: `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`,
-    };
+  if (ancestorReal === null) {
+    return { ok: false, message: `refused: ${candidate} cannot be resolved (dangling or looping symlink).` };
+  }
+  const effective = path.join(ancestorReal, ...tail);
+  if (!allowed.some((root) => isInside(root, effective))) {
+    return { ok: false, message: outsideProjectMessage(candidate, rootReal) };
   }
   return { ok: true, path: effective };
 }
@@ -177,12 +198,7 @@ export function resolveContainedPathSync(projectRoot: string, candidate: string)
   } catch {
     return { ok: false, reason: "not-found", message: `no such file or directory: ${candidate}` };
   }
-  let rootReal: string;
-  try {
-    rootReal = realpathSync(projectRoot);
-  } catch {
-    rootReal = path.resolve(projectRoot);
-  }
+  const rootReal = realOrResolved(projectRoot);
   const absolute = path.resolve(rootReal, candidate);
 
   let real: string | null;
@@ -194,11 +210,7 @@ export function resolveContainedPathSync(projectRoot: string, candidate: string)
   const effective = real ?? absolute;
 
   if (!isInside(rootReal, effective)) {
-    return {
-      ok: false,
-      reason: "outside-project",
-      message: `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`,
-    };
+    return { ok: false, reason: "outside-project", message: outsideProjectMessage(candidate, rootReal) };
   }
 
   if (real === null) {
