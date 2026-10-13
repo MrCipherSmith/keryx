@@ -171,6 +171,14 @@ describe("renderMutationTable", () => {
     expect(row.replace(/\\\|/g, "").split("|").length).toBe(8);
   });
 
+  test("a backtick or a carriage return in a cell cannot end the code span or the row", () => {
+    const row = renderMutationTable(record([mutant({ command: "echo `id`\rbun test", anchor: "a`b" })])).split("\n").find((line) => line.startsWith("| A |"))!;
+    expect(row).toContain("`echo 'id' bun test`");
+    expect(row).toContain("`a'b`");
+    expect(row).not.toContain("\r");
+    expect(row.split("`").length - 1).toBe(6);
+  });
+
   test("a record written before rows carried a command falls back to the record's command", () => {
     const old = mutant({});
     delete old.command;

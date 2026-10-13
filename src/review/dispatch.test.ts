@@ -87,7 +87,7 @@ test("a pull request's reviewer set defaults to every applicable reviewer, and a
     expect((await coverageErrors({ mode: "diff", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("needs operatorQuote");
     expect((await coverageErrors({ mode: "diff", selected: narrowed, operatorQuote: "   " }, { root, files: FILES })).join(" ")).toContain("needs operatorQuote");
     const quoted = await coverageErrors({ mode: "diff", selected: narrowed, operatorQuote: "only the logic reviewer, please" }, { root, files: FILES });
-    expect(quoted.join(" ")).not.toContain("operatorQuote");
+    expect(quoted).toEqual([]);
     expect((await coverageErrors({ mode: "all", selected: narrowed }, { root, files: FILES })).join(" ")).toContain("missing: review-architecture, review-clean-code");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

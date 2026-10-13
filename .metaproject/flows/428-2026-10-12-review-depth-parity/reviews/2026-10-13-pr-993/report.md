@@ -119,3 +119,7 @@ Clean: review-performance, review-highload, review-regression returned no findin
   }
 ]
 ```
+
+## Addressed after the round
+
+F-005 (paragraph re-flowed), F-006 (row built from a named column list, header and separator derived from it, output unchanged), F-007 (`expect(quoted).toEqual([])`) and F-008 (`cell()` replaces carriage returns and backticks, with a test that fails without it) are fixed on the branch after head f8d5eb3f. F-001 to F-004 were fixed earlier.
