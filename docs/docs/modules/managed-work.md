@@ -63,11 +63,13 @@ Each attempt, pass or fail, is recorded with its gate outcomes. A flow left in `
 
 **Signatures.** `flow ac confirm` and `flow complete` record who signed: `--signed-by`, else `KERYX_ACTOR`, else the local git identity, else `unknown`. Each is labelled stated or derived. None proves a person signed, because a flag, an environment variable or a git identity can be set by an agent. `--owner` is never inferred.
 
-**Origin.** Every new flow records where it came from: `human-request` (a person gave the idea and confirmed the flow), `agent-finding` (the agent found it in a check, review or test) or `agent-proposal` (the agent proposed it). The origin needs evidence: `human-request` takes a verbatim `--quote` of the request and a `--source` (channel, message id or time); the agent kinds take a `--source`. Without evidence the origin stays `unknown` and the command says why. The origin never blocks anything. `flow status` shows it, and `flow origin set <id> <kind> --reason "<why>"` changes it with a journal entry.
-
 **Job packages.** `keryx job` keeps a step list under `.metaproject/jobs/<name>` for an `implement`, `analyze`, `review` or `custom` intent: `init`, `status` (names the next open step), `step` to set a step's status, `document` to attach an analysis, report, review or verification file, and `complete`.
 
 **Review packages and the PR bot.** `keryx review` creates a package with scope, findings, decisions and learning candidates, standalone or attached to a flow. `keryx review bot` and the repository's GitHub Action review each same-repository pull request, drop findings a second turn refutes, and post one review. See [Review with a durable record](../guides/review-with-a-record.md) and [Review as a pull request bot](../guides/review-as-a-pr-bot.md).
+
+### Origin
+
+Every new flow records where it came from: `human-request` (a person gave the idea and confirmed the flow), `agent-finding` (the agent found it in a check, review or test) or `agent-proposal` (the agent proposed it). The origin needs evidence: `human-request` takes a verbatim `--quote` of the request and a `--source` (channel, message id or time); the agent kinds take a `--source`. Without evidence the origin stays `unknown` and the command says why. The origin never blocks anything. `flow status` shows it, and `flow origin set <id> <kind> --reason "<why>"` changes it with a journal entry.
 
 ## Common tasks
 

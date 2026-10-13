@@ -29,17 +29,11 @@ function changelogEntry(): string {
   return text.slice(start, text.indexOf("\n## [", start + 1));
 }
 
-function readmeRemote(): string {
-  const text = read("README.md");
-  const start = text.indexOf("### Remote control from Telegram");
-  expect(start).toBeGreaterThanOrEqual(0);
-  return text.slice(start, text.indexOf("\n## ", start));
-}
-
 describe("the guide section", () => {
   test("the heading the README and the CLI reference link to exists", () => {
     expect(guideSection()).toContain("### How replies look in Telegram");
-    expect(readmeRemote()).toContain(`drive-keryx-remotely.md#${ANCHOR}`);
+    // the README is a short landing page: it links the remote guide, which holds the rendering detail
+    expect(read("README.md")).toContain("keryx/guides/drive-keryx-remotely/");
     expect(read("docs/docs/cli-reference.md")).toContain(`drive-keryx-remotely.md#${ANCHOR}`);
     expect(read(GUIDE)).toContain(`(#${ANCHOR})`);
   });
@@ -89,9 +83,9 @@ describe("the guide section", () => {
   });
 });
 
-describe("the README remote section", () => {
+describe("the remote guide", () => {
   test("it names the setting, the modes, the fallback and the sample command", () => {
-    const text = readmeRemote().replace(/\s+/g, " ");
+    const text = read(GUIDE).replace(/\s+/g, " ");
     expect(text).toContain("`remote.rendering`");
     for (const mode of RENDER_MODES) {
       expect(text).toContain(mode);

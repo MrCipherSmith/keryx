@@ -107,15 +107,16 @@ describe("the CLI reference and the README (AC15)", () => {
     expect(entry).toContain("guides/drive-keryx-remotely.md#commands-from-the-topic");
   });
 
-  it("the README's remote control section mentions the commands, the confirmation rule and links the guide", () => {
-    const start = README.indexOf("### Remote control from Telegram");
+  it("the guide's commands section mentions the commands and the confirmation rule, and the README links the guide", () => {
+    const start = GUIDE.indexOf("### Commands from the topic");
     expect(start).toBeGreaterThan(-1);
-    const part = README.slice(start, README.indexOf("## CI integration", start));
+    const next = GUIDE.indexOf("\n### ", start + 1);
+    const part = GUIDE.slice(start, next === -1 ? undefined : next);
     expect(part).toContain("/model");
     expect(part).toContain("Yes press");
     expect(part).toContain("/mcp");
     expect(part).toMatch(/reaction/);
-    expect(part).toContain("drive-keryx-remotely.md#commands-from-the-topic");
+    expect(README).toContain("keryx/guides/drive-keryx-remotely/");
   });
 
   it("every link into the guide points at a heading that exists", () => {

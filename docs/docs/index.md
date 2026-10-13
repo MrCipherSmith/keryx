@@ -82,6 +82,8 @@ npm i -g @mrciphersmith/keryx
 | New to Keryx | [Quickstart](getting-started/quickstart.md) |
 | Evaluating it | [Keryx in five minutes](getting-started/concepts.md) and [Project status](project/status.md) |
 | Wiring up an agent | [Connect your agents](modules/integrations.md), and [llms.txt](https://mrciphersmith.github.io/keryx/llms.txt) for the machine-readable index |
+| Taking work in without watching GitHub | [Take work in from GitHub as cards in Telegram](guides/work-intake.md) |
+| Getting a morning summary of GitHub and the board | [Get a GitHub and board digest on a schedule](guides/scheduled-digest.md) |
 | Contributing | [Built with Keryx](project/built-with-keryx.md) and [Contributing and support](project/contributing.md) |
 
 ---

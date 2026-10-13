@@ -179,7 +179,7 @@ nav:
           - Keep the wiki current: guides/keep-the-wiki-current.md
       - Automation and remote:
           - Run keryx in CI: guides/run-in-ci.md
-          - Get a scheduled digest: guides/scheduled-digest.md
+          - Get a GitHub and board digest on a schedule: guides/scheduled-digest.md
           - Take work in from GitHub as cards in Telegram: guides/work-intake.md
           - Drive keryx from a bot: guides/drive-keryx-remotely.md
           - Answer a remote approval: guides/answer-remote-approvals.md
