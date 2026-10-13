@@ -1,9 +1,10 @@
-// Narrow allowlist of local, non-publishing commands a `trust`-mode turn may run
-// without a prompt even after untrusted content (an MCP or web result) entered the
-// turn. Escalation floors (destructive, credentials, SAC/flow confirmation,
-// publish) are checked first and are never lifted. String analysis, plus two reads of the file system:
-// the project's `bunfig.toml` (a `bun test` is routine only while it is the file the session started with)
-// and the real path of a review command's path flags.
+// Narrow allowlist of local, non-publishing commands a `trust` or `review-auto` turn may run without a prompt,
+// even after untrusted content (an MCP or web result) entered the turn, with one exception: `bun test` is routine
+// only while no untrusted content entered the turn. Escalation floors (destructive, credentials, SAC/flow
+// confirmation, publish) are checked first and are never lifted. String analysis, plus these file-system reads:
+// the walk up from the working directory to the project root, the real path of the cwd, the root and each `cd`
+// target, the project's `bunfig.toml` (a `bun test` is routine only while it is the regular file the session
+// started with), and the real path of a review command's path flags.
 //
 // The table is a gate in front of the command, not the command's own check: a review command refuses an
 // out-of-root path itself (review-path-flags.ts) and that refusal is the authoritative one. The project root
@@ -11,7 +12,7 @@
 // judged from, never the root.
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { optionValues } from "./args";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "./command-risk";
@@ -154,23 +155,35 @@ function carriesPreload(text: string): boolean {
   }
 }
 
-function bunfigState(root: string): { fingerprint: string; preload: boolean } {
+// A bunfig.toml above this size is treated as one that can load code: parsing it is quadratic and a real one is tiny.
+const MAX_BUNFIG_BYTES = 256 * 1024;
+
+type BunfigFile = { kind: "absent" } | { kind: "unreadable" } | { kind: "text"; text: string };
+
+// Only a regular file of bounded size is opened: a FIFO, a device or a symlink to one would block the read forever.
+function readBunfig(root: string): BunfigFile {
+  const file = path.join(root, "bunfig.toml");
   try {
-    const text = readFileSync(path.join(root, "bunfig.toml"), "utf8");
-    return { fingerprint: createHash("sha256").update(text).digest("hex"), preload: carriesPreload(text) };
+    const stat = statSync(file);
+    if (!stat.isFile() || stat.size > MAX_BUNFIG_BYTES) return { kind: "unreadable" };
+    return { kind: "text", text: readFileSync(file, "utf8") };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { fingerprint: "absent", preload: false };
-    return { fingerprint: "unreadable", preload: true };
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "unreadable" };
   }
 }
 
+function bunfigFingerprint(file: BunfigFile): string {
+  return file.kind === "text" ? createHash("sha256").update(file.text).digest("hex") : file.kind;
+}
+
 /**
- * Remember the `bunfig.toml` of the project that contains `cwd`, as it is now. The first call for a project root
- * wins for the life of the process; call it when a session starts, for each directory a shell tool runs in.
+ * Remember the `bunfig.toml` of the project that contains `cwd`, as it is now (its fingerprint only; nothing is parsed).
+ * The first call for a project root wins for the life of the process; call it at the start of each turn, for each
+ * directory a shell tool runs in.
  */
 export function recordBunfigBaseline(cwd: string = process.cwd()): void {
   const root = realOrResolved(resolveProjectRoot(cwd));
-  if (!bunfigBaselines.has(root)) bunfigBaselines.set(root, bunfigState(root).fingerprint);
+  if (!bunfigBaselines.has(root)) bunfigBaselines.set(root, bunfigFingerprint(readBunfig(root)));
 }
 
 function isNonNegativeInteger(value: string | undefined): boolean {
@@ -199,8 +212,10 @@ function isRoutineBunTest(words: readonly string[], walk: Walk): boolean {
   if (realOrResolved(walk.cwd) !== root) return false;
   if (!hasOnlyAllowedBunTestArgs(words.slice(2))) return false;
   const baseline = bunfigBaselines.get(root);
-  const now = bunfigState(root);
-  return baseline !== undefined && baseline === now.fingerprint && !now.preload;
+  const now = readBunfig(root);
+  // The fingerprint is compared first, so a changed or oversized file is never parsed.
+  if (baseline === undefined || baseline !== bunfigFingerprint(now) || now.kind === "unreadable") return false;
+  return now.kind === "absent" || !carriesPreload(now.text);
 }
 
 /** A value the shell would expand (home, variable, glob, brace, escape) before the command sees it cannot be judged here. */
@@ -210,7 +225,8 @@ function isExpandable(value: string): boolean {
 
 /**
  * Where a `cd` leaves the shell, or undefined when that cannot be known: an option (`cd -P`, `cd --`), an empty or
- * expandable target, `-`, or a relative target while `CDPATH` is set (the shell may then look elsewhere first).
+ * expandable target, `-`, a relative target while `CDPATH` is set (the shell may then look elsewhere first), or a
+ * target whose real path differs from its name (a symlinked directory).
  * Every check that needs the working directory fails closed on undefined.
  */
 function movedTo(cwd: string | undefined, target: string): string | undefined {
@@ -219,7 +235,10 @@ function movedTo(cwd: string | undefined, target: string): string | undefined {
   if (cdpath !== undefined && cdpath !== "" && !path.isAbsolute(target) && !target.startsWith("./") && !target.startsWith("../")) {
     return undefined;
   }
-  return path.resolve(cwd, target);
+  const lexical = path.resolve(cwd, target);
+  // The shell follows symlinks and the table follows names: where the two disagree (a symlinked directory, or a
+  // `..` after one) the later relative paths would be judged from a directory the shell is not in.
+  return realOrResolved(lexical) === path.resolve(realOrResolved(cwd), target) ? lexical : undefined;
 }
 
 function areReviewPathFlagsInside(sub: string, args: readonly string[], walk: Walk): boolean {

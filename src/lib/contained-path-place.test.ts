@@ -56,23 +56,28 @@ test("a dangling symlink and a looping pair are refused, and the message says wh
   }
 });
 
-test("an extra root is allowed, and a symlinked extra root is not widened to wherever the link points", () => {
-  expect(placePathWithinSync(root, ".metaproject/reviews/r1", root, [".metaproject"]).ok).toBe(true);
+test(".metaproject inside the project is allowed, and a .metaproject that is a symlink out of the project is refused", () => {
+  expect(placePathWithinSync(root, ".metaproject/reviews/r1", root).ok).toBe(true);
 
   rmSync(path.join(root, ".metaproject"), { recursive: true });
   symlinkSync(outside, path.join(root, ".metaproject"));
-  const viaLink = placePathWithinSync(root, ".metaproject/reviews/r1", root, [".metaproject"]);
+  const viaLink = placePathWithinSync(root, ".metaproject/reviews/r1", root);
   expect(viaLink.ok).toBe(false);
-  const direct = placePathWithinSync(root, path.join(outside, "x.json"), root, [".metaproject"]);
+  const direct = placePathWithinSync(root, path.join(outside, "x.json"), root);
   expect(direct.ok).toBe(false);
 });
 
-test("an extra root that is a symlink to a directory inside the project stays usable", () => {
+test("a .metaproject that is a symlink to a directory inside the project stays usable", () => {
   rmSync(path.join(root, ".metaproject"), { recursive: true });
   mkdirSync(path.join(root, "shared-meta"));
   symlinkSync(path.join(root, "shared-meta"), path.join(root, ".metaproject"));
-  expect(placePathWithinSync(root, ".metaproject/reviews/r1", root, [".metaproject"])).toEqual({
+  expect(placePathWithinSync(root, ".metaproject/reviews/r1", root)).toEqual({
     ok: true,
     path: path.join(root, "shared-meta", "reviews", "r1"),
   });
+});
+
+test("a name that merely begins with two dots is inside the project, and a parent segment is not", () => {
+  expect(placePathWithinSync(root, "..data/x", root).ok).toBe(true);
+  expect(placePathWithinSync(root, "../x", root).ok).toBe(false);
 });

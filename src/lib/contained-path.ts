@@ -130,16 +130,11 @@ export type PlacedPathResult = { ok: true; path: string } | { ok: false; message
 
 /**
  * Where a path a command is about to create or overwrite would really land, and whether that stays inside
- * the project root or one of `extraRoots`. A target that does not exist yet is judged by the real path of its
- * nearest existing ancestor, so a symlink inside the project that points out is refused; a dangling or looping
- * link is refused too. `candidate` is resolved against `cwd`.
+ * the project root. A target that does not exist yet is judged by the real path of its nearest existing
+ * ancestor, so a symlink inside the project that points out (a `.metaproject` link included) is refused; a
+ * dangling or looping link is refused too. `candidate` is resolved against `cwd`.
  */
-export function placePathWithinSync(
-  projectRoot: string,
-  candidate: string,
-  cwd: string,
-  extraRoots: readonly string[] = [],
-): PlacedPathResult {
+export function placePathWithinSync(projectRoot: string, candidate: string, cwd: string): PlacedPathResult {
   const realOf = (target: string): string | null => {
     try {
       return realpathSync(target);
@@ -148,14 +143,6 @@ export function placePathWithinSync(
     }
   };
   const rootReal = realOrResolved(projectRoot);
-  // An extra root counts by where it really is, and only when that is inside the project: a symlinked
-  // `.metaproject` must not widen the allowed set to wherever the link points.
-  const allowed = [
-    rootReal,
-    ...extraRoots
-      .map((extra) => realOf(path.resolve(rootReal, extra)))
-      .filter((real): real is string => real !== null && isInside(rootReal, real)),
-  ];
   const absolute = path.resolve(cwd, candidate);
 
   let ancestor = absolute;
@@ -178,7 +165,7 @@ export function placePathWithinSync(
     return { ok: false, message: `refused: ${candidate} cannot be resolved (dangling or looping symlink).` };
   }
   const effective = path.join(ancestorReal, ...tail);
-  if (!allowed.some((root) => isInside(root, effective))) {
+  if (!isInside(rootReal, effective)) {
     return { ok: false, message: outsideProjectMessage(candidate, rootReal) };
   }
   return { ok: true, path: effective };

@@ -5646,8 +5646,10 @@ async function executeCallUnbounded(
       untrustedContent: untrustedOrigin,
       ...(tool.workingDirectory === undefined ? {} : { cwd: tool.workingDirectory }),
     };
+    let routineVerdict: boolean | undefined;
+    const isRoutine = (): boolean => (routineVerdict ??= isTrustRoutineCommand(command, routineContext));
     // Flow 426 AC4: what the operator refused stays refused in any spelling, even where the mode would run it.
-    if (reviewAutoActive() && command.length > 0 && !isTrustRoutineCommand(command, routineContext)) {
+    if (reviewAutoActive() && command.length > 0 && !isRoutine()) {
       const key = refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input));
       if (operatorDenied(key)) return { output: REFUSED_EARLIER, isError: true };
     }
@@ -5679,7 +5681,7 @@ async function executeCallUnbounded(
       untrustedOrigin &&
       !(
         !gated.hookAsked &&
-        isTrustRoutineCommand(command, routineContext) &&
+        isRoutine() &&
         ((mode === "trust" && gated.decision === "auto") || reviewAutoActive())
       );
     // Automatic review: the review's own CLI against its own package is the one

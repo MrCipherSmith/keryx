@@ -241,21 +241,23 @@ outside the working tree. This table is the single list; the code reads it from
 | `slate_note`, `slate_trail` (tools) | the session's own notes |
 
 `bun test` is routine only while all of these hold, because a test run executes project
-code: no untrusted content has entered the turn; the command runs in the project root of
-the shell's own working directory (a `cd` elsewhere, or to a target the shell may expand,
-is not followed); its arguments are only `--bail`, `--only`, `--todo`, `--rerun-each N`
+code: no untrusted content has entered the turn; the command runs in the project root,
+judged after following the chain's `cd`s (a `cd` whose target cannot be known makes it
+ask: an option, `-`, a target the shell may expand, a relative name while `CDPATH` is set,
+or a directory reached through a symlink); its arguments are only `--bail`, `--only`, `--todo`, `--rerun-each N`
 and `--timeout N` with a plain non-negative integer; and the project's `bunfig.toml` is
 byte-for-byte the file the process saw at its first turn for that project, with no
 `preload` anywhere in it. The baseline is per process and first-wins: a later session in
 the same process, on the same project, is judged against the file as the first one saw
-it, not as it is now. A `bunfig.toml` that appears, changes or cannot be read makes
-`bun test` ask again.
+it, not as it is now. A `bunfig.toml` that appears, changes, cannot be read (it is not a
+regular file, or is over 256 KiB) or does not parse makes `bun test` ask again.
 
 The path flags of `keryx review slice` (`--diff`, `--out`), `retry-plan` (`--manifest`,
 `--result`, `--state`) and `dispatch-check` (`--manifest`, `--payload`) are routine only
-when they land inside the project root or `.metaproject/` by their real path, symlinks
-resolved; a `.metaproject` that is itself a link out of the project is not a root. The
-command refuses such a path itself, too, and opens the path it judged.
+when they land inside the project root by their real path, symlinks resolved; a
+`.metaproject` that is itself a link out of the project does not count as inside. `-` is
+standard input for `--diff`, `--payload` and `--result` only. The command refuses an
+outside path itself, too, and opens the path it judged.
 
 A command outside the table still asks. So does a command that chains with `;`, pipes
 to a command that is not listed, redirects outside the working tree, or uses a

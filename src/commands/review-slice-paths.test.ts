@@ -1,5 +1,5 @@
 // Flow 441 AC8/AC9: the path flags of the review commands that name a file refuse a path outside the project
-// root and `.metaproject/`, before anything is read or written, and the path they open is the one that was judged.
+// root, before anything is read or written, and the path they open is the one that was judged.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -60,7 +60,13 @@ beforeEach(() => {
   process.chdir(dir);
 });
 
+const originalStdin = Bun.stdin;
+const feedStdin = (text: () => Promise<string>): void => {
+  (Bun as unknown as { stdin: unknown }).stdin = { text };
+};
+
 afterEach(() => {
+  (Bun as unknown as { stdin: unknown }).stdin = originalStdin;
   process.chdir(originalCwd);
   process.exitCode = originalExitCode ?? 0;
   for (const tmp of [dir, outside, escaped]) rmSync(tmp, { recursive: true, force: true });
@@ -286,4 +292,48 @@ test("reviewPathFlagRefusal: the rule the commands and the trust table share", (
   expect(reviewPathFlagRefusal("status", ["--out", outside], where)).toBeUndefined();
   expect(reviewPathFlagRefusal("constructor", ["--out", outside], where)).toBeUndefined();
   expect(reviewPathFlagRefusal("__proto__", ["--out", outside], where)).toBeUndefined();
+});
+
+test("Flow 441 F-036: a --state directory swapped for a symlink to outside while --result is read from stdin is not written through", async () => {
+  await quietly(() => runSlice(["--out", "slices"], deps));
+  feedStdin(async () => {
+    symlinkSync(outside, path.join(dir, "swap"));
+    return JSON.stringify({ reviewer: "review-logic", status: "complete", summary: "s", findings: [] });
+  });
+  await expect(
+    runRetryPlan(["--manifest", "slices/manifest.json", "--result", "-", "--next-wave", "--state", "swap/state.json"], deps),
+  ).rejects.toThrow(/outside the project root/);
+  expect(readdirSync(outside)).toEqual([]);
+});
+
+test("Flow 441 F-037: --payload - and --result - read standard input", async () => {
+  await quietly(() => runSlice(["--out", "slices"], deps));
+  feedStdin(async () => JSON.stringify(PAYLOAD));
+  const checked = await quietly(() => runDispatchCheck(["--payload", "-", "--manifest", "slices/manifest.json", "--json"], deps));
+  expect(JSON.parse(checked).ok).toBe(true);
+  expect(existsSync(path.join(dir, "-"))).toBe(false);
+
+  feedStdin(async () => JSON.stringify({ reviewer: "review-logic", status: "complete", summary: "s", findings: [] }));
+  const planned = await quietly(() => runRetryPlan(["--manifest", "slices/manifest.json", "--result", "-", "--next-wave", "--json"], deps));
+  expect(JSON.parse(planned).reviewer).toBe("review-logic");
+});
+
+test("Flow 441 F-037: an --out given twice, the second time outside the project, is refused even though the first is inside", async () => {
+  await expect(runSlice(["--out", "ok", `--out=${path.join(outside, "x")}`], deps)).rejects.toThrow(/outside the project root/);
+  expect(readdirSync(outside)).toEqual([]);
+});
+
+test("Flow 441 F-038: link/../x is read where it was judged for --payload, --result and a retry-plan --manifest", async () => {
+  await quietly(() => runSlice(["--out", "slices"], deps));
+  symlinkSync(outside, path.join(dir, "link"));
+  writeFileSync(path.join(dir, "payload.json"), JSON.stringify(PAYLOAD));
+  writeFileSync(path.join(dir, "result.json"), JSON.stringify({ reviewer: "review-logic", status: "complete", summary: "s", findings: [] }));
+  writeFileSync(path.join(outside, "payload.json"), "not json");
+  writeFileSync(path.join(outside, "result.json"), "not json");
+  const checked = await quietly(() => runDispatchCheck(["--payload", "link/../payload.json", "--manifest", "slices/manifest.json", "--json"], deps));
+  expect(JSON.parse(checked).ok).toBe(true);
+  const planned = await quietly(() =>
+    runRetryPlan(["--manifest", "link/../slices/manifest.json", "--result", "link/../result.json", "--next-wave", "--json"], deps),
+  );
+  expect(JSON.parse(planned).reviewer).toBe("review-logic");
 });

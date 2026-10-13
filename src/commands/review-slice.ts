@@ -31,7 +31,7 @@ function wantsHelp(args: readonly string[]): boolean {
 }
 
 /**
- * Refuse, before anything is read or written, a path flag that lands outside the project root and `.metaproject/`,
+ * Refuse, before anything is read or written, a path flag that lands outside the project root,
  * and hand back `placed(flag, fallback?)`: the real path a flag (or its default) lands on, judged again at the
  * moment of use. The early check alone leaves a window between it and the read or write in which a directory can
  * become a symlink; a command that opens the placed path, not the string it was given, closes it.
@@ -270,9 +270,8 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
   }
 
   try {
-    const manifestPath = manifestSource;
-    const manifestDir = path.dirname(manifestPath);
-    const manifest = await readJsonSource<SliceManifest>(manifestPath, "manifest");
+    const manifestDir = path.dirname(manifestSource);
+    const manifest = await readJsonSource<SliceManifest>(manifestSource, "manifest");
     const result = resultSource === undefined ? {} : await readResult(resultSource);
     const statePath = placed("--state", path.join(manifestDir, RETRY_STATE_NAME)) as string;
     const state = existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState();
@@ -303,7 +302,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       if (plan.newSlices.length > 0) {
         await writeSliceFiles(manifestDir, plan.newSlices);
         const added = plan.newSlices.map(({ text: _text, ...entry }) => entry);
-        await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, slices: [...manifest.slices, ...added] }, null, 2)}\n`);
+        await writeFileAtomic(manifestSource, `${JSON.stringify({ ...manifest, slices: [...manifest.slices, ...added] }, null, 2)}\n`);
       }
       await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
     }

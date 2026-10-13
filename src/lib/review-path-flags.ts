@@ -1,5 +1,5 @@
 // The flags of the review commands that read or write a file named by the caller, and the one rule for
-// where they may point: inside the project root, or inside `.metaproject/`. The commands refuse by this
+// where they may point: inside the project root (a `.metaproject` that links out of it is refused). The commands refuse by this
 // rule and the trust table (trust-routine-command.ts) asks it too, so the two cannot drift apart.
 //
 // Every flag of a command is listed once, as a path flag or as a flag that names no path. The guard test in
@@ -38,11 +38,11 @@ export function placeReviewPath(
   where: { projectRoot: string; cwd: string },
 ): PlacedPathResult {
   if (value === "-" && STDIN_FLAGS.has(flag)) return { ok: true, path: "-" };
-  const placed = placePathWithinSync(where.projectRoot, value, where.cwd, [".metaproject"]);
+  const placed = placePathWithinSync(where.projectRoot, value, where.cwd);
   return placed.ok ? placed : { ok: false, message: `keryx review ${command} ${flag}: ${placed.message}` };
 }
 
-/** The first confined path flag of `command` (a `keryx review` subcommand) whose value lands outside the allowed roots, as a refusal message. */
+/** The first confined path flag of `command` (a `keryx review` subcommand) whose value lands outside the project root, as a refusal message. */
 export function reviewPathFlagRefusal(
   command: string,
   args: readonly string[],

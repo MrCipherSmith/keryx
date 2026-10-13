@@ -2,8 +2,8 @@
 // Round budget, the untrusted-content latch for routine review commands, bounded plan follow-through,
 // remembered ask_user answers, and the subagent concurrency constant.
 
-import { expect, test } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { afterEach, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
 import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -30,6 +30,8 @@ import type { ExecutionPlanItem } from "../session/execution-plan";
 import { readSlate, writeSlate } from "../session/slate";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { isTrustRoutineCommand } from "../lib/trust-routine-command";
+import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { recordOperatorDenial, refusalFingerprint, resetOperatorDenials, setReviewSystem } from "../review/review-system";
 import type { NormalizedMessage } from "../harness/provider/types";
 
 function readTool(name: string, run: () => void = () => {}, untrusted = false): InteractiveTool {
@@ -229,10 +231,40 @@ test("AC2: without untrusted content a routine command is never prompted in trus
 // Flow 441 AC6/AC7 (F-006): `bun test` through the agent loop. The routine table keys on the shell tool's own
 // directory, not on the process working directory (which here is the repository, not the project under test).
 
+const madeDirs: string[] = [];
+const originalCwd = process.cwd();
+afterEach(() => {
+  process.chdir(originalCwd);
+  setReviewSystem("inherit");
+  resetOperatorDenials();
+  for (const dir of madeDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 async function bareProject(): Promise<string> {
   const dir = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-trust-bun-")));
+  madeDirs.push(dir);
   mkdirSync(path.join(dir, ".git"));
   return dir;
+}
+
+async function afterUntrustedIn(
+  mode: PermissionMode,
+  dir: string | undefined,
+  commands: readonly string[],
+): Promise<{ approvals: string[]; ran: string[] }> {
+  const approvals: string[] = [];
+  const ran: string[] = [];
+  const rounds: Script[] = [callRound("f1", "fetch_page", "{}")];
+  commands.forEach((command, i) => rounds.push(callRound(`s${i}`, "shell_exec", JSON.stringify({ command }))));
+  rounds.push([...okReply]);
+  const { provider } = scriptedProvider(rounds);
+  await runAgentTurn(
+    ioWith(mode, approvals),
+    makeDeps(provider, { tools: [readTool("fetch_page", () => {}, true), shellTool(ran, dir)] }),
+    [],
+    "go",
+  );
+  return { approvals, ran };
 }
 
 test("Flow 441 AC6: a turn records the bunfig baseline of the directory its shell tool runs in", async () => {
@@ -260,6 +292,60 @@ test("Flow 441 AC7: after untrusted content every bun test form asks in trust an
   );
   expect(approvals).toEqual(commands.map((command) => JSON.stringify({ command })));
   expect(ran).toEqual([]);
+});
+
+test("Flow 441 AC7: with the process directory a clean project, bun test still asks after untrusted content", async () => {
+  const dir = await bareProject();
+  process.chdir(dir);
+  const { approvals, ran } = await afterUntrustedIn("trust", dir, ["bun test"]);
+  expect(approvals).toEqual([JSON.stringify({ command: "bun test" })]);
+  expect(ran).toEqual([]);
+});
+
+test("Flow 441 F-026: after untrusted content a review command is judged from the shell tool's directory", async () => {
+  const dir = await bareProject();
+  const other = await bareProject();
+  const inside = `keryx review slice --out ${dir}/o`;
+  const outside = `keryx review slice --out ${other}/o`;
+  const { approvals, ran } = await afterUntrustedIn("trust", dir, [inside, outside]);
+  expect(ran).toEqual([inside]);
+  expect(approvals).toEqual([JSON.stringify({ command: outside })]);
+});
+
+test("Flow 441 F-026: in review-auto the same command is judged from the shell tool's directory", async () => {
+  setReviewSystem("review-auto");
+  const dir = await bareProject();
+  const other = await bareProject();
+  const inside = `keryx review slice --out ${dir}/o`;
+  const outside = `keryx review slice --out ${other}/o`;
+  const { approvals, ran } = await afterUntrustedIn("ask", dir, [inside, outside]);
+  expect(ran).toEqual([inside]);
+  expect(approvals).toEqual([JSON.stringify({ command: outside })]);
+});
+
+test("Flow 441 F-026: in review-auto a refused command is not asked again, while the routine one beside it runs", async () => {
+  setReviewSystem("review-auto");
+  const dir = await bareProject();
+  const other = await bareProject();
+  const routine = `keryx review slice --out ${dir}/o`;
+  const outside = `keryx review slice --out ${other}/o`;
+  recordOperatorDenial(refusalFingerprint("shell_exec", JSON.stringify({ command: outside }), "x"));
+  const { approvals, ran } = await afterUntrustedIn("ask", dir, [routine, outside]);
+  expect(ran).toEqual([routine]);
+  expect(approvals).toEqual([]);
+});
+
+test("Flow 441 F-026: a turn records the baseline of the process directory when the shell tool names no directory", async () => {
+  const dir = await bareProject();
+  process.chdir(dir);
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+  const { provider } = scriptedProvider([callRound("s0", "shell_exec", '{"command":"git status"}'), [...okReply]]);
+  await runAgentTurn(ioWith("trust"), makeDeps(provider, { tools: [shellTool([])] }), [], "go");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 F-026: shell_exec exposes the directory it runs in", () => {
+  expect(shellExecTool("/some/project").workingDirectory).toBe("/some/project");
 });
 
 // AC3

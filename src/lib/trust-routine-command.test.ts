@@ -1,8 +1,9 @@
-// Flow 426 AC1/AC2: the routine-command table is one named list, every row has a command that runs
+// Flow 426 AC1/AC2 and Flow 441 AC6: the routine-command table is one named list, every row has a command that runs
 // without a prompt, and everything outside it (or joined to it in a risky way) still asks.
 
-import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { afterEach, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -129,8 +130,19 @@ test("AC2: an exec flag on a listed command still prompts", () => {
 
 // Flow 441 (F-007, F-008): `bun test` and the review path flags.
 
+const madeDirs: string[] = [];
+const originalCwd = process.cwd();
+const originalCdpath = process.env.CDPATH;
+afterEach(() => {
+  process.chdir(originalCwd);
+  if (originalCdpath === undefined) delete process.env.CDPATH;
+  else process.env.CDPATH = originalCdpath;
+  for (const dir of madeDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 function projectDir(bunfig?: string, options: { baseline?: boolean } = {}): string {
   const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-")));
+  madeDirs.push(dir);
   mkdirSync(path.join(dir, ".git"));
   mkdirSync(path.join(dir, ".metaproject"));
   mkdirSync(path.join(dir, "sub"));
@@ -324,3 +336,128 @@ for (const [command, flag] of PATH_FLAG_ROWS) {
     }
   });
 }
+
+// Flow 441 round 2 (F-024..F-028, F-036..F-039): symlinked directories, non-regular bunfig, subcommands, keying.
+
+test("Flow 441 F-024: a cd into a symlink that points into another repository is not followed", () => {
+  const dir = projectDir();
+  const elsewhere = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-elsewhere-")));
+  madeDirs.push(elsewhere);
+  mkdirSync(path.join(elsewhere, ".git"));
+  symlinkSync(elsewhere, path.join(dir, "link"));
+  for (const tail of [
+    "keryx review slice --diff - --out ../x",
+    "keryx review retry-plan --manifest ../m.json --state ../s.json",
+    "bun test",
+  ]) {
+    const command = `cd link && ${tail}`;
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+  }
+  expect(isTrustRoutineCommand("cd sub && keryx review slice --diff - --out ../x", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 F-024: a cd into a symlink to a directory inside the project is not followed either", () => {
+  const dir = projectDir();
+  symlinkSync(path.join(dir, "sub"), path.join(dir, "inner"));
+  expect(isTrustRoutineCommand("cd inner && keryx review slice --out ../x", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-025: a bunfig.toml that is a FIFO, a link to one, or larger than the cap never blocks and is not routine", () => {
+  const fifo = projectDir(undefined, { baseline: false });
+  execFileSync("mkfifo", [path.join(fifo, "bunfig.toml")]);
+  recordBunfigBaseline(fifo);
+  expect(isTrustRoutineCommand("bun test", { cwd: fifo })).toBe(false);
+
+  const linked = projectDir(undefined, { baseline: false });
+  execFileSync("mkfifo", [path.join(linked, "pipe")]);
+  symlinkSync(path.join(linked, "pipe"), path.join(linked, "bunfig.toml"));
+  recordBunfigBaseline(linked);
+  expect(isTrustRoutineCommand("bun test", { cwd: linked })).toBe(false);
+
+  const big = projectDir(`# ${"x".repeat(300 * 1024)}\n[test]\ntimeout = 1\n`);
+  expect(isTrustRoutineCommand("bun test", { cwd: big })).toBe(false);
+}, 5000);
+
+test("Flow 441 F-025: a bunfig.toml of exactly 256 KiB is read, one byte more is not", () => {
+  const cap = 256 * 1024;
+  const comment = (bytes: number): string => `#${"x".repeat(bytes - 2)}\n`;
+  expect(isTrustRoutineCommand("bun test", { cwd: projectDir(comment(cap)) })).toBe(true);
+  expect(isTrustRoutineCommand("bun test", { cwd: projectDir(comment(cap + 1)) })).toBe(false);
+});
+
+test("Flow 441 F-036: a leading assignment, a backslash or a backtick in a path value is not routine", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("keryx review status", { cwd: dir })).toBe(true);
+  for (const command of ["FOO=1 bun test", "FOO=1 keryx review status", "keryx review slice --out a\\b", "keryx review slice --out a`x`"]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+  }
+});
+
+test("Flow 441 F-027: only the test subcommand of bun is routine", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+  for (const command of ["bun", "bun install", "bun run", "bun upgrade", "bun update", "bun x", "bun add left-pad"]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+  }
+});
+
+test("Flow 441 F-036: bare cd and cd with two operands are not routine, and neither throws", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("cd && bun test", { cwd: dir })).toBe(false);
+  expect(isTrustRoutineCommand("cd sub sub && keryx review status", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-036: a bunfig with ordinary string values and no preload stays routine", () => {
+  const dir = projectDir('[install]\nregistry = "https://example.invalid"\n');
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 F-037: the baseline is keyed by the project root, through symlinks, and the default directory is the process one", () => {
+  const fromSub = projectDir(undefined, { baseline: false });
+  recordBunfigBaseline(path.join(fromSub, "sub"));
+  expect(isTrustRoutineCommand("bun test", { cwd: fromSub })).toBe(true);
+
+  const viaLink = projectDir(undefined, { baseline: false });
+  const link = `${viaLink}-lnk`;
+  symlinkSync(viaLink, link);
+  madeDirs.push(link);
+  recordBunfigBaseline(link);
+  expect(isTrustRoutineCommand("bun test", { cwd: viaLink })).toBe(true);
+  expect(isTrustRoutineCommand("bun test", { cwd: link })).toBe(true);
+
+  const inProcessDir = projectDir(undefined, { baseline: false });
+  process.chdir(inProcessDir);
+  recordBunfigBaseline();
+  expect(isTrustRoutineCommand("bun test")).toBe(true);
+});
+
+test("Flow 441 F-038: a repeated path flag is judged on every occurrence, an expandable one included", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("keryx review slice --out=ok --out $X", { cwd: dir })).toBe(false);
+  expect(isTrustRoutineCommand("keryx review slice --out ok --out=$X", { cwd: dir })).toBe(false);
+});
+
+test("Flow 441 F-038: a command run from a subdirectory is judged against the project root, not the subdirectory", () => {
+  const dir = projectDir();
+  expect(isTrustRoutineCommand("keryx review slice --out ../out", { cwd: path.join(dir, "sub") })).toBe(true);
+});
+
+test("Flow 441 F-039: under CDPATH an absolute, ./ or ../ target is still followed and a bare name is not", () => {
+  const dir = projectDir();
+  process.env.CDPATH = "/tmp";
+  expect(isTrustRoutineCommand(`cd ${dir}/sub && keryx review slice --out x`, { cwd: dir })).toBe(true);
+  expect(isTrustRoutineCommand("cd ../ && keryx review slice --out x", { cwd: path.join(dir, "sub") })).toBe(true);
+  expect(isTrustRoutineCommand("cd sub && keryx review slice --out x", { cwd: dir })).toBe(false);
+  process.env.CDPATH = "";
+  expect(isTrustRoutineCommand("cd sub && keryx review slice --out x", { cwd: dir })).toBe(true);
+});
+
+test("Flow 441 F-039: a project reached through a symlink is the same project, and a cd inside it is still followed", () => {
+  const dir = projectDir();
+  const link = `${dir}-lnk2`;
+  symlinkSync(dir, link);
+  madeDirs.push(link);
+  expect(isTrustRoutineCommand("bun test", { cwd: link })).toBe(true);
+  expect(isTrustRoutineCommand("keryx review slice --out sub/x", { cwd: link })).toBe(true);
+  expect(isTrustRoutineCommand("cd sub && keryx review slice --out x", { cwd: link })).toBe(true);
+});

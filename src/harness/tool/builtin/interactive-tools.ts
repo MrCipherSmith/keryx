@@ -69,7 +69,7 @@ export interface InteractiveTool {
   definition: NormalizedToolDefinition;
   invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<InteractiveToolResult>;
   /**
-   * Flow 441 (F-007): the directory a shell tool runs its commands in. The trust routine table judges a command
+   * Flow 441 AC6: the directory a shell tool runs its commands in. The trust routine table judges a command
    * (`bun test`, a review command's path flags) from here, not from the process working directory; absent, the
    * process working directory stands in.
    */
