@@ -364,3 +364,16 @@ If absent, proceed normally — context is optional and non-blocking.
 | "The controller has some logic but it's minor" | The line is binary — logic in controller = untestable without HTTP stack |
 | "Stack trace in response only shows in dev" | Config can be wrong in prod; treat it as blocker always |
 | "I'll skip the migration check — it's just a column rename" | Column renames without fallback break zero-downtime deploys |
+
+<!-- keryx:layers-block:start -->
+## Project layers: graph, tests, wiki, memory
+
+Your payload may carry a `layers` block for your files: the files the graph says are affected, symbol neighbours, related tests, the wiki pages that describe the files and the memory entries for their module. It is bounded, and `truncated` names what was cut and the command that fetches the rest. When the diff alone does not settle a question, ask the project. Each command below is read-only and calls no model.
+
+- `keryx gdgraph affected <file>`: who depends on the file. Use it before you call a change contained, and whenever a changed export, signature or behaviour may have callers outside your files.
+- `keryx test related <file>`: the tests that cover the file. Use it before you say a behaviour is untested, and to judge whether a test would fail if the code broke.
+- `keryx wiki ask "<q>"`: what the project wiki says a module is for and which rules bind it. Use it when the intent of the code is unclear and the diff does not state it.
+- `keryx memory search "<q>"`: recorded lessons, decisions and known mistakes. Use it before you report a pattern the project may already have decided on, and when a failure looks like one it has seen.
+
+In a review package, `keryx gdgraph affected <file> --data-dir <package>/layers/graph` reads the graph built at the PR head; the tracked graph may be from another commit. A finding still rests on the code you read: what a layer says is a lead, not evidence. If a layer is empty or a command fails, say so in the report instead of guessing.
+<!-- keryx:layers-block:end -->
