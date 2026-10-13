@@ -9,14 +9,14 @@
   "id": "441",
   "slug": "deferred-majors-of-pr-940-and-pr-975",
   "title": "Deferred majors of PR 940 and PR 975",
-  "status": "initializing",
+  "status": "ready",
   "createdAt": "2026-10-13T07:31:12.803Z",
-  "updatedAt": "2026-10-13T07:32:04.035Z",
+  "updatedAt": "2026-10-13T08:22:15.329Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:83f19a8dcf8adf6d2efcd48a395528e823e747699b8c6b87e45485a3d975a0c3",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -187,6 +187,81 @@
       "at": "2026-10-13T07:32:04.035Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-13T07:50:52.556Z",
+      "event": "frozen",
+      "detail": "21 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-13T08:22:15.329Z",
+      "event": "ac-updated",
+      "detail": "AC13: \"`parseReviewResult` on `{\"status\":\"BLOCKED\",\"reviewer\":\"r\",\"findings\":[]}` followed by a trailing `{\"status\":\"DONE\"}`, with no `REVIEW_RESULT` marker, returns `undefined` (the two-status case is ambiguous and raises the existing \"no parseable REVIEW_RESULT block\" gap), never either object; the same two objects with a `REVIEW_RESULT` marker before one of them return the object after the marker (poll 142, 2026-10-13). [verify: judged]\" -> \"`parseReviewResult` on `{\"status\":\"BLOCKED\",\"reviewer\":\"r\",\"findings\":[]}` followed by a trailing `{\"status\":\"DONE\"}`, with no `REVIEW_RESULT` marker, returns `undefined` (the two-status case is ambiguous and raises the existing \"no parseable REVIEW_RESULT block\" gap), never either object; the same two objects with a `REVIEW_RESULT` marker before one of them return the object after the marker when it passes the AC14 check; a status-only object after a bare marker is rejected under AC14 and is a gap, while the fenced `REVIEW_RESULT` block keeps accepting it (polls 142 and 151, 2026-10-13). [verify: judged]\" (Operator poll 151: code follows AC14; AC13 wording clarified so the marker case does not contradict it)"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "judged"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "judged"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "judged"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
+      "kind": "judged"
+    },
+    "AC13": {
+      "kind": "judged"
+    },
+    "AC14": {
+      "kind": "judged"
+    },
+    "AC15": {
+      "kind": "judged"
+    },
+    "AC16": {
+      "kind": "judged"
+    },
+    "AC17": {
+      "kind": "judged"
+    },
+    "AC18": {
+      "kind": "judged"
+    },
+    "AC19": {
+      "kind": "judged"
+    },
+    "AC20": {
+      "kind": "judged"
+    },
+    "AC21": {
+      "kind": "judged"
+    }
+  }
 }
