@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CAUSE_DECISIONS, classify, outcome, renderReplayReport, replayRaw, replayRepository } from "./replay";
+import { legacyParseReviewResult } from "./legacy-result-parser";
+import { classify, decisionKey, outcome, renderReplayReport, replayRaw, replayReport, replayRepository } from "./replay";
 
 const T = "`".repeat(3);
 const result = (extra = "") =>
@@ -37,6 +39,16 @@ describe("replayRaw", () => {
     const first = result();
     const second = first.replace('"DONE"', '"BLOCKED"');
     const row = replayRaw("c.txt", `${first}\n\nand then\n\n${second}\n`);
+    expect(row.same).toBe(false);
+    expect(row.cause).toBe("unclassified");
+  });
+
+  test("the same outcome string with different content is still a difference", () => {
+    const row = replayRaw("d.txt", "x", {
+      old: () => ({ status: "DONE", reviewer: "r", findings: [{ id: "F-1" }] }),
+      next: () => ({ status: "DONE", reviewer: "r", findings: [{ id: "F-2" }] }),
+    });
+    expect(row.old).toBe(row.next);
     expect(row.same).toBe(false);
     expect(row.cause).toBe("unclassified");
   });
@@ -96,19 +108,26 @@ describe("renderReplayReport", () => {
       replayRaw("diff.txt", `${T}REVIEW_RESULT\n${result(`x ${T}y`)}\n${T}\n`),
       replayRaw("v.txt", `${T}json\n{"status":"DONE","verifier":"review-verifier"}\n${T}\n`),
     ];
-    const report = renderReplayReport(rows);
+    const decisions = { [decisionKey(rows[1]!)]: "accepted (test one)", [decisionKey(rows[2]!)]: "accepted (test two)" };
+    const report = renderReplayReport(rows, decisions);
     expect(report).toContain("Files replayed: 3. Same: 1. Differences: 2.");
-    expect(report).toMatch(/\| diff\.txt \| [0-9a-f]{12} \| none \| review-logic\|DONE\|f=1\|reviewer-result=true \| fence-inner-backticks \| accepted \(operator, poll 161, 2026-10-13\) \|/);
-    expect(report).toMatch(/\| v\.txt \| [0-9a-f]{12} \| -\|DONE\|f=-\|reviewer-result=false \| none \| status-only-fragment \| accepted \(operator, poll 162, 2026-10-13\) \|/);
+    expect(report).toMatch(/\| diff\.txt \| [0-9a-f]{12} \| none \| review-logic\|DONE\|f=1\|reviewer-result=true \| fence-inner-backticks \| accepted \(test one\) \|/);
+    expect(report).toMatch(/\| v\.txt \| [0-9a-f]{12} \| -\|DONE\|f=-\|reviewer-result=false \| none \| status-only-fragment \| accepted \(test two\) \|/);
     expect(report).toContain("- same.txt (");
     expect(report).not.toMatch(/\| same\.txt \|/);
+  });
+
+  test("a difference whose file and hash are not in the decision table stays undecided, whatever its cause", () => {
+    const rows = [replayRaw("diff.txt", `${T}REVIEW_RESULT\n${result(`x ${T}y`)}\n${T}\n`)];
+    expect(rows[0]!.cause).toBe("fence-inner-backticks");
+    expect(renderReplayReport(rows, {})).toMatch(/\| diff\.txt \| [0-9a-f]{12} \| .* \| fence-inner-backticks \| undecided \|/);
+    expect(renderReplayReport(rows, { "diff.txt@000000000000": "accepted (other hash)" })).toContain("| undecided |");
   });
 
   test("a difference the classifier does not explain stays undecided", () => {
     const first = result();
     const rows = [replayRaw("c.txt", `${first}\n\nand then\n\n${first.replace('"DONE"', '"BLOCKED"')}\n`)];
     expect(renderReplayReport(rows)).toMatch(/\| c\.txt \| [0-9a-f]{12} \| .* \| unclassified \| undecided \|/);
-    expect(CAUSE_DECISIONS.unclassified).toBe("undecided");
   });
 
   test("names the package whose raws are not on main", () => {
@@ -134,18 +153,114 @@ describe("replayRepository", () => {
     expect(replayRepository(tmp)).toEqual([]);
   });
 
-  test("walks flows and data/review, keeps only .txt replies, orders by path, and skips drivers and research-evidence", () => {
+  const lay = () => {
     for (const name of ["m", "c", "x", "a", "q", "f"]) put(`.metaproject/flows/${name}/reviews/r1/raw/review-${name}.txt`, reply);
     put(".metaproject/flows/a/reviews/r1/raw/notes.md", reply);
     put(".metaproject/flows/a/reviews/r1/drivers/raw/review-driver.txt", reply);
     put(".metaproject/flows/a/reviews/r1/research-evidence/raw/review-evidence.txt", reply);
+    put(".metaproject/flows/a/node_modules/raw/review-module.txt", reply);
+    put(".metaproject/flows/a/reviews/r1/raw/nested/raw/review-nested.txt", reply);
+    put(".metaproject/flows/a/reviews/r1/raw/nested/review-below.txt", reply);
     put(".metaproject/data/review/r3/raw/architecture.txt", reply);
     put("src/raw/review-outside.txt", reply);
+  };
+  const expectedFlowFiles = ["a", "c", "f", "m", "q", "x"].map((name) => `.metaproject/flows/${name}/reviews/r1/raw/review-${name}.txt`);
+
+  test("outside a git checkout it walks the flows, keeps only .txt replies in a raw directory, orders by path, and skips drivers, research-evidence and node_modules", () => {
+    lay();
+    expect(replayRepository(tmp).map((row) => row.file)).toEqual(expectedFlowFiles);
+  });
+
+  test("does not follow a symbolic link to a directory or replay a symbolic link to a file", () => {
+    lay();
+    symlinkSync(path.join(tmp, ".metaproject/flows"), path.join(tmp, ".metaproject/flows/a/loop"));
+    symlinkSync(path.join(tmp, ".metaproject/flows/a/reviews/r1/raw/review-a.txt"), path.join(tmp, ".metaproject/flows/a/reviews/r1/raw/link.txt"));
+    expect(replayRepository(tmp).map((row) => row.file)).toEqual(expectedFlowFiles);
+  });
+
+  test("inside a git checkout it replays tracked files only and leaves out untracked and ignored ones", () => {
+    lay();
+    put(".gitignore", ".metaproject/flows/q/\n");
+    const git = (...args: string[]) => {
+      const run = spawnSync("git", ["-C", tmp, "-c", "user.name=t", "-c", "user.email=t@example.com", ...args], { encoding: "utf8" });
+      expect(run.status).toBe(0);
+    };
+    symlinkSync("review-a.txt", path.join(tmp, ".metaproject/flows/a/reviews/r1/raw/tracked-link.txt"));
+    git("init", "-q");
+    git("add", "-A");
+    git("commit", "-q", "-m", "tracked");
+    put(".metaproject/flows/z/reviews/r1/raw/review-z.txt", reply);
+    put(".metaproject/data/review/r4/raw/local.txt", reply);
     const files = replayRepository(tmp).map((row) => row.file);
-    expect(files).toEqual([
-      ".metaproject/data/review/r3/raw/architecture.txt",
-      ...["a", "c", "f", "m", "q", "x"].map((name) => `.metaproject/flows/${name}/reviews/r1/raw/review-${name}.txt`),
-    ]);
+    expect(files).not.toContain(".metaproject/flows/z/reviews/r1/raw/review-z.txt");
+    expect(files).not.toContain(".metaproject/data/review/r3/raw/architecture.txt");
+    expect(files).not.toContain(".metaproject/data/review/r4/raw/local.txt");
+    expect(files).toEqual(expectedFlowFiles.filter((file) => !file.includes("/q/")));
+  });
+
+  test("a root below the top of a git checkout is walked, not read from the checkout's index", () => {
+    const run = spawnSync("git", ["-C", tmp, "init", "-q"], { encoding: "utf8" });
+    expect(run.status).toBe(0);
+    const sub = path.join(tmp, "sub");
+    mkdirSync(path.join(sub, ".metaproject/flows/a/reviews/r1/raw"), { recursive: true });
+    writeFileSync(path.join(sub, ".metaproject/flows/a/reviews/r1/raw/review-a.txt"), reply, "utf8");
+    expect(replayRepository(sub).map((row) => row.file)).toEqual([".metaproject/flows/a/reviews/r1/raw/review-a.txt"]);
+  });
+
+  test("replayReport refuses a root with nothing to replay", () => {
+    expect(() => replayReport(tmp)).toThrow("no tracked raw reviewer replies");
+  });
+});
+
+describe("the replay command", () => {
+  test("run from another directory it replays this repository, not the working directory, and writes the report", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "keryx-replay-cwd-"));
+    try {
+      const script = path.resolve(import.meta.dir, "replay.ts");
+      const out = path.join(cwd, "out.md");
+      const run = spawnSync(process.execPath, [script, "--write", out], { cwd, encoding: "utf8" });
+      expect(run.status).toBe(0);
+      const written = readFileSync(out, "utf8");
+      expect(written).toContain("Files replayed: 19.");
+      expect(written).toBe(replayReport(path.resolve(import.meta.dir, "..", "..")));
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("--write without a target is an error", () => {
+    const run = spawnSync(process.execPath, [path.resolve(import.meta.dir, "replay.ts"), "--write"], { encoding: "utf8" });
+    expect(run.status).not.toBe(0);
+    expect(run.stderr).toContain("--write needs a target path");
+  });
+});
+
+describe("legacyParseReviewResult", () => {
+  test("a status-bearing object nested in a result is read as part of it, not as a later result", () => {
+    const outer = { status: "DONE", reviewer: "review-logic", findings: [{ id: "F-1", status: "open" }] };
+    expect(legacyParseReviewResult(`text ${JSON.stringify(outer)} tail`)).toEqual(outer);
+  });
+
+  test("reads the last labelled fence when there are two", () => {
+    const first = { status: "DONE", reviewer: "first", findings: [] };
+    const last = { status: "DONE", reviewer: "last", findings: [] };
+    const text = `${T}REVIEW_RESULT\n${JSON.stringify(first)}\n${T}\n\n${T}REVIEW_RESULT\n${JSON.stringify(last)}\n${T}\n`;
+    expect(legacyParseReviewResult(text)).toEqual(last);
+  });
+
+  test("takes the last of two sibling objects with a string status", () => {
+    const text = `${JSON.stringify({ status: "A" })} and ${JSON.stringify({ status: "B" })}`;
+    expect(legacyParseReviewResult(text)).toEqual({ status: "B" });
+  });
+
+  test("is only imported by the replay and its test", () => {
+    const src = path.resolve(import.meta.dir, "..");
+    const importers = (readdirSync(src, { recursive: true }) as string[])
+      .filter((file) => /\.(ts|tsx)$/.test(file) && !file.includes("node_modules"))
+      .filter((file) => readFileSync(path.join(src, file), "utf8").includes("legacy-result-parser"))
+      .map((file) => file.split(path.sep).join("/"))
+      .sort();
+    expect(importers).toEqual(["review/replay.test.ts", "review/replay.ts"]);
   });
 });
 
@@ -163,5 +278,10 @@ describe("closed review rounds of this repository", () => {
   test("no difference is left unexplained by the classifier", () => {
     const unexplained = replayRepository(root).filter((row) => !row.same && row.cause === "unclassified");
     expect(unexplained.map((row) => row.file)).toEqual([]);
+  });
+
+  test("no difference is undecided: every one has an operator decision for its file and hash", () => {
+    const report = renderReplayReport(replayRepository(root));
+    expect(report.split("\n").filter((line) => line.startsWith("| .metaproject") && line.endsWith("| undecided |"))).toEqual([]);
   });
 });
