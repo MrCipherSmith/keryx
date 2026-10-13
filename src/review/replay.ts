@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
@@ -18,7 +18,8 @@ export interface ReplayRow {
   cause: ReplayCause;
 }
 
-const FLOW = ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews";
+const FLOW_DIR = ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975";
+const FLOW = `${FLOW_DIR}/reviews`;
 const ROUND2 = `${FLOW}/2026-10-13-pr-997-round2-d5a8cfdc/raw`;
 const ROUND3 = `${FLOW}/2026-10-13-pr-997-round3-07730d87/raw`;
 const POLL_161 = "accepted (operator, poll 161, 2026-10-13)";
@@ -79,7 +80,7 @@ export interface ReplayParsers {
   next: (raw: string) => ParsedResult | undefined;
 }
 
-export const REPORT_PATH = ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/replay-report.md";
+export const REPORT_PATH = `${FLOW_DIR}/replay-report.md`;
 
 const PARSERS: ReplayParsers = { old: legacyParseReviewResult, next: parseReviewResult };
 
@@ -117,8 +118,9 @@ function walkFiles(root: string, relative: string): string[] {
     const dir = stack.pop()!;
     for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
       const child = `${dir}/${entry.name}`;
-      if (entry.isDirectory()) stack.push(child);
-      else if (entry.isFile()) files.push(child);
+      if (entry.isDirectory()) {
+        if (!SKIPPED_DIRS.has(entry.name)) stack.push(child);
+      } else if (entry.isFile()) files.push(child);
     }
   }
   return files;
@@ -126,10 +128,9 @@ function walkFiles(root: string, relative: string): string[] {
 
 const GIT_OPTIONS = { encoding: "utf8" as const, env: withoutGitDiscoveryOverrides(process.env) };
 
-/** Tracked paths under `relative`, or `undefined` when `root` is not the top of a git checkout (or git cannot run). A failing `ls-files` inside a checkout is an error, never a reason to walk. */
+/** Tracked paths under `relative` when `root` holds a `.git` entry, else `undefined` (the caller walks). A git failure in a root that has a `.git` is an error, never a reason to walk: the walk would list untracked and ignored files. */
 function trackedFiles(root: string, relative: string): string[] | undefined {
-  const top = spawnSync("git", ["-C", root, "rev-parse", "--show-toplevel"], GIT_OPTIONS);
-  if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)) return undefined;
+  if (!existsSync(path.join(root, ".git"))) return undefined;
   const listed = spawnSync("git", ["-C", root, "ls-files", "-z", "--", relative], { ...GIT_OPTIONS, maxBuffer: 64 * 1024 * 1024 });
   if (listed.status !== 0) {
     throw new Error(`git ls-files failed in ${root} (${listed.error?.message ?? `exit ${listed.status}`}): ${listed.stderr.trim()}`);
@@ -137,10 +138,11 @@ function trackedFiles(root: string, relative: string): string[] | undefined {
   return listed.stdout.split("\0").filter((entry) => entry !== "");
 }
 
-/** True when the file exists and its real location is exactly `relative` under the real root: no symbolic link in the path, a tracked file deleted from the working tree or a symlink loop is skipped. */
+/** True only for a regular file whose real location is exactly `relative` under the real root. False for a path that resolves through a symbolic link, a missing file (a tracked file deleted from the working tree, a link loop) and anything that is not a regular file (a directory, a FIFO). */
 function isPlainFileUnder(realRoot: string, relative: string): boolean {
   try {
-    return realpathSync(path.join(realRoot, relative)) === path.join(realRoot, relative);
+    const absolute = path.join(realRoot, relative);
+    return realpathSync(absolute) === absolute && lstatSync(absolute).isFile();
   } catch {
     return false;
   }
@@ -156,7 +158,7 @@ export function replayRepository(root: string): ReplayRow[] {
     .map((relative) => replayRaw(relative, readFileSync(path.join(realRoot, relative), "utf8")));
 }
 
-const cell = (value: string): string => value.replaceAll("|", "\\|");
+const cell = (value: string): string => value.replaceAll("\\", "\\\\").replaceAll("|", "\\|").replace(/\r\n|[\r\n]/g, " ");
 
 export function renderReplayReport(rows: ReplayRow[], decisions: Record<string, string> = DECISIONS): string {
   const differing = rows.filter((row) => !row.same);
@@ -165,15 +167,15 @@ export function renderReplayReport(rows: ReplayRow[], decisions: Record<string, 
     "",
     "Old parser = `legacyParseReviewResult` (`parseReviewResult` as of 249bc59b). New parser = `parseReviewResult` in `src/review/ledger.ts`.",
     "Outcome format: `reviewer|status|f=<findings>|reviewer-result=<bool>`; `none` = no result, `empty` = empty output.",
-    `Regenerate with \`bun src/review/replay.ts --write ${REPORT_PATH}\` (from any directory). The parser was not tuned to remove any row; each difference carries the operator decision recorded for that file and hash in \`DECISIONS\`, or \`undecided\`.`,
+    `Regenerate with \`bun src/review/replay.ts --write ${REPORT_PATH}\` (from the repository root). The parser was not tuned to remove any row; each difference carries the operator decision recorded for that file and hash in \`DECISIONS\`, or \`undecided\`.`,
     "",
-    "Replayed: files named `*.txt` whose parent directory is `raw`, under `.metaproject/flows`, with no `raw`, `drivers`, `research-evidence` or `node_modules` directory above that `raw`. Where the replayed root is the top of a git checkout, only the files git tracks are listed (`git ls-files`; a git failure there is an error, not a reason to walk). Where it is not (a root below the checkout top, or no git), the directory is walked instead. A path that resolves through a symbolic link, and a tracked file missing from the working tree, are skipped. `.metaproject/data/**/raw/` is gitignored local working state and is not replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.",
+    "Replayed: files named `*.txt` whose parent directory is `raw`, under `.metaproject/flows`, with no `raw`, `drivers`, `research-evidence` or `node_modules` directory above that `raw`. Where the replayed root holds a `.git` entry, only the files git tracks are listed (`git ls-files`; a git failure there is an error, not a reason to walk). Where it does not, the directory is walked instead. Only regular files are read. A path that resolves through a symbolic link, a tracked file missing from the working tree and a tracked path that is no longer a regular file are skipped. `.metaproject/data/**/raw/` is gitignored local working state and is not replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.",
     "",
     `Files replayed: ${rows.length}. Same: ${rows.length - differing.length}. Differences: ${differing.length}.`,
     "",
     "| File | sha256[:12] | Old | New | Cause | Decision |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...differing.map((row) => `| ${row.file} | ${row.hash} | ${cell(row.old)} | ${cell(row.next)} | ${row.cause} | ${decisionFor(row, decisions)} |`),
+    ...differing.map((row) => `| ${cell(row.file)} | ${row.hash} | ${cell(row.old)} | ${cell(row.next)} | ${row.cause} | ${cell(decisionFor(row, decisions))} |`),
     "",
     "## Causes",
     "",
@@ -184,7 +186,7 @@ export function renderReplayReport(rows: ReplayRow[], decisions: Record<string, 
     "",
     "## Files with the same outcome",
     "",
-    ...rows.filter((row) => row.same).map((row) => `- ${row.file} (${row.hash}): ${row.old}`),
+    ...rows.filter((row) => row.same).map((row) => `- ${cell(row.file)} (${row.hash}): ${cell(row.old)}`),
     "",
   ];
   return lines.join("\n");
@@ -192,7 +194,7 @@ export function renderReplayReport(rows: ReplayRow[], decisions: Record<string, 
 
 export function replayReport(root: string): string {
   const rows = replayRepository(root);
-  if (rows.length === 0) throw new Error(`no tracked raw reviewer replies found under ${root}/.metaproject/flows`);
+  if (rows.length === 0) throw new Error(`no raw reviewer replies to replay found under ${root}/.metaproject/flows`);
   return renderReplayReport(rows);
 }
 

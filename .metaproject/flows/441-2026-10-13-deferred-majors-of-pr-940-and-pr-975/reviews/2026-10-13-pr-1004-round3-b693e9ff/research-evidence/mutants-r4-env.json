@@ -1,0 +1,20 @@
+[
+{
+"id": "T1-global-config-pin-removed",
+"file": "src/review/replay.test.ts",
+"anchor": ", GIT_CONFIG_GLOBAL: \"/dev/null\", GIT_CONFIG_NOSYSTEM: \"1\"",
+"replacement": ""
+},
+{
+"id": "T2-excludesfile-pin-removed",
+"file": "src/review/replay.test.ts",
+"anchor": "\"-c\", \"core.excludesFile=/dev/null\", ",
+"replacement": ""
+},
+{
+"id": "T3-both-pins-removed",
+"file": "src/review/replay.test.ts",
+"anchor": "const gitEnv = { ...withoutGitDiscoveryOverrides(process.env), GIT_CONFIG_GLOBAL: \"/dev/null\", GIT_CONFIG_NOSYSTEM: \"1\" };\nconst git = (dir: string, ...args: string[]) => {\n  const run = spawnSync(\n    \"git\",\n    [\"-C\", dir, \"-c\", \"user.name=t\", \"-c\", \"user.email=t@example.com\", \"-c\", \"commit.gpgsign=false\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.excludesFile=/dev/null\", ",
+"replacement": "const gitEnv = { ...withoutGitDiscoveryOverrides(process.env) };\nconst git = (dir: string, ...args: string[]) => {\n  const run = spawnSync(\n    \"git\",\n    [\"-C\", dir, \"-c\", \"user.name=t\", \"-c\", \"user.email=t@example.com\", \"-c\", \"commit.gpgsign=false\", \"-c\", \"core.hooksPath=/dev/null\", "
+}
+]

@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t4",
+  "command": "bun test src/review/replay.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1190
+  },
+  "mutants": [
+    {
+      "id": "M01-no-git-guard-removed",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!existsSync(path.join(root, \".git\"))) return undefined;",
+      "replacement": "",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 967
+    },
+    {
+      "id": "M02-never-git-mode",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!existsSync(path.join(root, \".git\"))) return undefined;",
+      "replacement": "return undefined;",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1188
+    },
+    {
+      "id": "M03-ls-files-throw-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (listed.status !== 0) {",
+      "replacement": "if (false) {",
+      "line": 135,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1189
+    },
+    {
+      "id": "M04-backslash-escape-off",
+      "file": "src/review/replay.ts",
+      "anchor": "value.replaceAll(\"\\\\\", \"\\\\\\\\\").",
+      "replacement": "value.",
+      "line": 161,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1173
+    },
+    {
+      "id": "M05-pipe-escape-off",
+      "file": "src/review/replay.ts",
+      "anchor": ".replaceAll(\"|\", \"\\\\|\")",
+      "replacement": "",
+      "line": 161,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1182
+    },
+    {
+      "id": "M06-linebreak-collapse-off",
+      "file": "src/review/replay.ts",
+      "anchor": ".replace(/\\r\\n|[\\r\\n]/g, \" \")",
+      "replacement": "",
+      "line": 161,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1176
+    },
+    {
+      "id": "M07-cr-not-collapsed",
+      "file": "src/review/replay.ts",
+      "anchor": "/\\r\\n|[\\r\\n]/g",
+      "replacement": "/\\n/g",
+      "line": 161,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1138
+    },
+    {
+      "id": "M08-table-file-unescaped",
+      "file": "src/review/replay.ts",
+      "anchor": "| ${cell(row.file)} | ${row.hash}",
+      "replacement": "| ${row.file} | ${row.hash}",
+      "line": 178,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1177
+    },
+    {
+      "id": "M09-table-old-unescaped",
+      "file": "src/review/replay.ts",
+      "anchor": "| ${cell(row.old)} | ${cell(row.next)}",
+      "replacement": "| ${row.old} | ${cell(row.next)}",
+      "line": 178,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1184
+    },
+    {
+      "id": "M10-table-next-unescaped",
+      "file": "src/review/replay.ts",
+      "anchor": "| ${cell(row.next)} | ${row.cause}",
+      "replacement": "| ${row.next} | ${row.cause}",
+      "line": 178,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1180
+    },
+    {
+      "id": "M11-table-decision-unescaped",
+      "file": "src/review/replay.ts",
+      "anchor": "${cell(decisionFor(row, decisions))}",
+      "replacement": "${decisionFor(row, decisions)}",
+      "line": 178,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1192
+    },
+    {
+      "id": "M12-bullet-file-unescaped",
+      "file": "src/review/replay.ts",
+      "anchor": "- ${cell(row.file)} (",
+      "replacement": "- ${row.file} (",
+      "line": 189,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1229
+    },
+    {
+      "id": "M13-bullet-old-unescaped",
+      "file": "src/review/replay.ts",
+      "anchor": ": ${cell(row.old)}`",
+      "replacement": ": ${row.old}`",
+      "line": 189,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1225
+    },
+    {
+      "id": "M14-isfile-removed",
+      "file": "src/review/replay.ts",
+      "anchor": " && lstatSync(absolute).isFile()",
+      "replacement": "",
+      "line": 145,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6321
+    },
+    {
+      "id": "M15-isfile-weakened",
+      "file": "src/review/replay.ts",
+      "anchor": "lstatSync(absolute).isFile()",
+      "replacement": "!lstatSync(absolute).isSymbolicLink()",
+      "line": 145,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6112
+    },
+    {
+      "id": "M16-realpath-equality-off",
+      "file": "src/review/replay.ts",
+      "anchor": "realpathSync(absolute) === absolute &&",
+      "replacement": "realpathSync(absolute).length > 0 &&",
+      "line": 145,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1186
+    },
+    {
+      "id": "M17-walk-prune-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!SKIPPED_DIRS.has(entry.name)) stack.push(child);",
+      "replacement": "stack.push(child);",
+      "line": 122,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1190
+    },
+    {
+      "id": "M18-walk-prune-node-modules-only",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!SKIPPED_DIRS.has(entry.name)) stack.push(child);",
+      "replacement": "if (entry.name !== \"node_modules\") stack.push(child);",
+      "line": 122,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1166
+    },
+    {
+      "id": "S15-realroot-unresolved",
+      "file": "src/review/replay.ts",
+      "anchor": "const realRoot = realpathSync(root);",
+      "replacement": "const realRoot = root;",
+      "line": 152,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1189
+    },
+    {
+      "id": "S07-maxbuffer-tiny",
+      "file": "src/review/replay.ts",
+      "anchor": "maxBuffer: 64 * 1024 * 1024",
+      "replacement": "maxBuffer: 1000",
+      "line": 134,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1181
+    },
+    {
+      "id": "M19-error-text-changed",
+      "file": "src/review/replay.ts",
+      "anchor": "no raw reviewer replies to replay found under",
+      "replacement": "no replies",
+      "line": 197,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1168
+    },
+    {
+      "id": "M20-env-scrub-off",
+      "file": "src/review/replay.ts",
+      "anchor": "env: withoutGitDiscoveryOverrides(process.env)",
+      "replacement": "env: process.env",
+      "line": 129,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1193
+    },
+    {
+      "id": "M21-scrub-drops-git-dir",
+      "file": "src/lib/git-env.ts",
+      "anchor": "  \"GIT_DIR\",\n",
+      "replacement": "",
+      "line": 16,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1203
+    },
+    {
+      "id": "M22-scrub-drops-index-file",
+      "file": "src/lib/git-env.ts",
+      "anchor": "  \"GIT_INDEX_FILE\",\n",
+      "replacement": "",
+      "line": 18,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1174
+    },
+    {
+      "id": "M23-scrub-drops-work-tree",
+      "file": "src/lib/git-env.ts",
+      "anchor": "  \"GIT_WORK_TREE\",\n",
+      "replacement": "",
+      "line": 17,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1324
+    }
+  ],
+  "totals": {
+    "killed": 19,
+    "survived": 6,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

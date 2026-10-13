@@ -1,0 +1,1 @@
+[{"id": "S07-maxbuffer-tiny", "file": "src/review/replay.ts", "anchor": "maxBuffer: 64 * 1024 * 1024", "replacement": "maxBuffer: 1000"}]

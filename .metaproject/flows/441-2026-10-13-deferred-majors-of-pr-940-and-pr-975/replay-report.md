@@ -2,9 +2,9 @@
 
 Old parser = `legacyParseReviewResult` (`parseReviewResult` as of 249bc59b). New parser = `parseReviewResult` in `src/review/ledger.ts`.
 Outcome format: `reviewer|status|f=<findings>|reviewer-result=<bool>`; `none` = no result, `empty` = empty output.
-Regenerate with `bun src/review/replay.ts --write .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/replay-report.md` (from any directory). The parser was not tuned to remove any row; each difference carries the operator decision recorded for that file and hash in `DECISIONS`, or `undecided`.
+Regenerate with `bun src/review/replay.ts --write .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/replay-report.md` (from the repository root). The parser was not tuned to remove any row; each difference carries the operator decision recorded for that file and hash in `DECISIONS`, or `undecided`.
 
-Replayed: files named `*.txt` whose parent directory is `raw`, under `.metaproject/flows`, with no `raw`, `drivers`, `research-evidence` or `node_modules` directory above that `raw`. Where the replayed root is the top of a git checkout, only the files git tracks are listed (`git ls-files`; a git failure there is an error, not a reason to walk). Where it is not (a root below the checkout top, or no git), the directory is walked instead. A path that resolves through a symbolic link, and a tracked file missing from the working tree, are skipped. `.metaproject/data/**/raw/` is gitignored local working state and is not replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.
+Replayed: files named `*.txt` whose parent directory is `raw`, under `.metaproject/flows`, with no `raw`, `drivers`, `research-evidence` or `node_modules` directory above that `raw`. Where the replayed root holds a `.git` entry, only the files git tracks are listed (`git ls-files`; a git failure there is an error, not a reason to walk). Where it does not, the directory is walked instead. Only regular files are read. A path that resolves through a symbolic link, a tracked file missing from the working tree and a tracked path that is no longer a regular file are skipped. `.metaproject/data/**/raw/` is gitignored local working state and is not replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.
 
 Files replayed: 19. Same: 7. Differences: 12.
 
@@ -32,10 +32,10 @@ Files replayed: 19. Same: 7. Differences: 12.
 
 ## Files with the same outcome
 
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-architecture.txt (234bce95337c): review-architecture|DONE|f=3|reviewer-result=true
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-clean-code.txt (407aee9bc19e): review-clean-code|DONE_WITH_CONCERNS|f=4|reviewer-result=true
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-highload.txt (113522086253): review-highload|DONE|f=3|reviewer-result=true
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-logic.txt (5eb349c3aa76): review-logic|DONE_WITH_CONCERNS|f=5|reviewer-result=true
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-performance.txt (2dd31526abc7): review-performance|DONE_WITH_CONCERNS|f=1|reviewer-result=true
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-regression.txt (9bbb7dcb3ac9): review-regression|DONE_WITH_CONCERNS|f=1|reviewer-result=true
-- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-regression.txt (b7a7e1ac6093): review-regression|DONE|f=0|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-architecture.txt (234bce95337c): review-architecture\|DONE\|f=3\|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-clean-code.txt (407aee9bc19e): review-clean-code\|DONE_WITH_CONCERNS\|f=4\|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-highload.txt (113522086253): review-highload\|DONE\|f=3\|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-logic.txt (5eb349c3aa76): review-logic\|DONE_WITH_CONCERNS\|f=5\|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-performance.txt (2dd31526abc7): review-performance\|DONE_WITH_CONCERNS\|f=1\|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-regression.txt (9bbb7dcb3ac9): review-regression\|DONE_WITH_CONCERNS\|f=1\|reviewer-result=true
+- .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-regression.txt (b7a7e1ac6093): review-regression\|DONE\|f=0\|reviewer-result=true

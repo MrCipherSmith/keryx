@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t4",
+  "command": "env GIT_CONFIG_GLOBAL=/tmp/claude-1000/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/scratchpad/t4fix/gitconfig bun test src/review/replay.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1166
+  },
+  "mutants": [
+    {
+      "id": "T1-global-config-pin-removed",
+      "file": "src/review/replay.test.ts",
+      "anchor": ", GIT_CONFIG_GLOBAL: \"/dev/null\", GIT_CONFIG_NOSYSTEM: \"1\"",
+      "replacement": "",
+      "line": 11,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1174
+    },
+    {
+      "id": "T2-excludesfile-pin-removed",
+      "file": "src/review/replay.test.ts",
+      "anchor": "\"-c\", \"core.excludesFile=/dev/null\", ",
+      "replacement": "",
+      "line": 15,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1177
+    },
+    {
+      "id": "T3-both-pins-removed",
+      "file": "src/review/replay.test.ts",
+      "anchor": "const gitEnv = { ...withoutGitDiscoveryOverrides(process.env), GIT_CONFIG_GLOBAL: \"/dev/null\", GIT_CONFIG_NOSYSTEM: \"1\" };\nconst git = (dir: string, ...args: string[]) => {\n  const run = spawnSync(\n    \"git\",\n    [\"-C\", dir, \"-c\", \"user.name=t\", \"-c\", \"user.email=t@example.com\", \"-c\", \"commit.gpgsign=false\", \"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.excludesFile=/dev/null\", ",
+      "replacement": "const gitEnv = { ...withoutGitDiscoveryOverrides(process.env) };\nconst git = (dir: string, ...args: string[]) => {\n  const run = spawnSync(\n    \"git\",\n    [\"-C\", dir, \"-c\", \"user.name=t\", \"-c\", \"user.email=t@example.com\", \"-c\", \"commit.gpgsign=false\", \"-c\", \"core.hooksPath=/dev/null\", ",
+      "line": 11,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 656
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

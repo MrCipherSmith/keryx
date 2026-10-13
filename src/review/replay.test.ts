@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
@@ -8,14 +8,19 @@ import { legacyParseReviewResult } from "./legacy-result-parser";
 import { classify, DECISIONS, decisionFor, decisionKey, outcome, renderReplayReport, REPORT_PATH, replayRaw, replayReport, replayRepository } from "./replay";
 
 const T = "`".repeat(3);
-const gitEnv = withoutGitDiscoveryOverrides(process.env);
+const gitEnv = { ...withoutGitDiscoveryOverrides(process.env), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
 const git = (dir: string, ...args: string[]) => {
   const run = spawnSync(
     "git",
-    ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args],
+    ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "-c", "core.excludesFile=/dev/null", ...args],
     { encoding: "utf8", env: gitEnv },
   );
   expect(run.status).toBe(0);
+};
+const commitAll = (dir: string) => {
+  git(dir, "init", "-q");
+  git(dir, "add", "-A");
+  git(dir, "commit", "-q", "-m", "tracked");
 };
 const result = (extra = "") =>
   `{"status":"DONE","reviewer":"review-logic","findings":[{"id":"F-1","note":${JSON.stringify(extra)}}]}`;
@@ -112,7 +117,7 @@ describe("outcome", () => {
 });
 
 describe("renderReplayReport", () => {
-  test("lists differences with the decision recorded for their cause and counts both groups", () => {
+  test("lists differences with the decision recorded for their file and hash and counts both groups", () => {
     const rows = [
       replayRaw("same.txt", `${T}REVIEW_RESULT\n${result()}\n${T}\n`),
       replayRaw("diff.txt", `${T}REVIEW_RESULT\n${result(`x ${T}y`)}\n${T}\n`),
@@ -138,6 +143,32 @@ describe("renderReplayReport", () => {
     const first = result();
     const rows = [replayRaw("c.txt", `${first}\n\nand then\n\n${first.replace('"DONE"', '"BLOCKED"')}\n`)];
     expect(renderReplayReport(rows)).toMatch(/\| c\.txt \| [0-9a-f]{12} \| .* \| unclassified \| undecided \|/);
+  });
+
+  const sameParsed = { status: "DONE", findings: [] };
+  const hostile = (file: string, oldReviewer: string, nextReviewer: string) =>
+    replayRaw(file, "x", { old: () => ({ ...sameParsed, reviewer: oldReviewer }), next: () => ({ ...sameParsed, reviewer: nextReviewer }) });
+
+  test("a pipe, a backslash or a line break in the file, old or new column stays inside its cell and its row", () => {
+    const rows = [hostile("x|y\nz\\.txt", "a\r\nb|c", "d\\|e")];
+    const lines = renderReplayReport(rows, {}).split("\n").filter((line) => line.startsWith("| x"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toBe(
+      `| x\\|y z\\\\.txt | ${rows[0]!.hash} | a b\\|c\\|DONE\\|f=0\\|reviewer-result=true | d\\\\\\|e\\|DONE\\|f=0\\|reviewer-result=true | unclassified | undecided |`,
+    );
+  });
+
+  test("the same escaping applies to the file and outcome in the same-outcome list", () => {
+    const rows = [replayRaw("x|y\nz\\.txt", "x", { old: () => ({ ...sameParsed, reviewer: "a|b\nc" }), next: () => ({ ...sameParsed, reviewer: "a|b\nc" }) })];
+    const lines = renderReplayReport(rows, {}).split("\n").filter((line) => line.startsWith("- x"));
+    expect(lines).toEqual([`- x\\|y z\\\\.txt (${rows[0]!.hash}): a\\|b c\\|DONE\\|f=0\\|reviewer-result=true`]);
+  });
+
+  test("a decision text with a pipe or a line break stays inside its cell", () => {
+    const rows = [hostile("x.txt", "a", "b")];
+    const lines = renderReplayReport(rows, { [decisionKey(rows[0]!)]: "accepted | by\nhand" }).split("\n").filter((line) => line.startsWith("| x.txt"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.endsWith("| unclassified | accepted \\| by hand |")).toBe(true);
   });
 
   test("names the package whose raws are not on main", () => {
@@ -176,7 +207,7 @@ describe("replayRepository", () => {
   };
   const expectedFlowFiles = ["a", "c", "f", "m", "q", "x"].map((name) => `.metaproject/flows/${name}/reviews/r1/raw/review-${name}.txt`);
 
-  test("outside a git checkout it walks the flows, keeps only .txt replies in a raw directory, orders by path, and skips drivers, research-evidence and node_modules", () => {
+  test("in a root with no .git it walks the flows, keeps only .txt replies in a raw directory, orders by path, and skips drivers, research-evidence and node_modules", () => {
     lay();
     expect(replayRepository(tmp).map((row) => row.file)).toEqual(expectedFlowFiles);
   });
@@ -192,9 +223,7 @@ describe("replayRepository", () => {
     lay();
     put(".gitignore", ".metaproject/flows/q/\n");
     symlinkSync("review-a.txt", path.join(tmp, ".metaproject/flows/a/reviews/r1/raw/tracked-link.txt"));
-    git(tmp, "init", "-q");
-    git(tmp, "add", "-A");
-    git(tmp, "commit", "-q", "-m", "tracked");
+    commitAll(tmp);
     put(".metaproject/flows/z/reviews/r1/raw/review-z.txt", reply);
     put(".metaproject/data/review/r4/raw/local.txt", reply);
     const files = replayRepository(tmp).map((row) => row.file);
@@ -203,7 +232,7 @@ describe("replayRepository", () => {
     expect(files).toEqual(expectedFlowFiles.filter((file) => !file.includes("/q/")));
   });
 
-  test("a root below the top of a git checkout is walked, not read from the checkout's index", () => {
+  test("a root with no .git of its own, below a checkout's top, is walked, not read from the checkout's index", () => {
     git(tmp, "init", "-q");
     const sub = path.join(tmp, "sub");
     mkdirSync(path.join(sub, ".metaproject/flows/a/reviews/r1/raw"), { recursive: true });
@@ -213,9 +242,15 @@ describe("replayRepository", () => {
 
   const commitLaid = () => {
     lay();
-    git(tmp, "init", "-q");
-    git(tmp, "add", "-A");
-    git(tmp, "commit", "-q", "-m", "tracked");
+    commitAll(tmp);
+  };
+  const withOutsideDir = (body: (outside: string) => void) => {
+    const outside = mkdtempSync(path.join(tmpdir(), "keryx-replay-outside-"));
+    try {
+      body(outside);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   };
 
   test("a tracked reply deleted from the working tree but not staged is skipped, not an error", () => {
@@ -231,35 +266,111 @@ describe("replayRepository", () => {
     expect(() => replayRepository(tmp)).toThrow("git ls-files failed");
   });
 
+  test("a failing git in a root that has a .git is an error, not a walk that lists untracked files", () => {
+    commitLaid();
+    put(".metaproject/flows/z/reviews/r1/raw/review-z.txt", reply);
+    writeFileSync(path.join(tmp, ".git", "HEAD"), "garbage", "utf8");
+    expect(() => replayRepository(tmp)).toThrow("git ls-files failed");
+  });
+
   test("a directory replaced by a symbolic link to a place outside the root is not read, in git mode", () => {
     commitLaid();
-    const outside = mkdtempSync(path.join(tmpdir(), "keryx-replay-outside-"));
-    try {
+    withOutsideDir((outside) => {
       mkdirSync(path.join(outside, "reviews/r1/raw"), { recursive: true });
       writeFileSync(path.join(outside, "reviews/r1/raw/review-m.txt"), reply, "utf8");
       rmSync(path.join(tmp, ".metaproject/flows/m"), { recursive: true });
       symlinkSync(outside, path.join(tmp, ".metaproject/flows/m"));
       expect(replayRepository(tmp).map((row) => row.file)).toEqual(expectedFlowFiles.filter((file) => !file.includes("/m/")));
-    } finally {
-      rmSync(outside, { recursive: true, force: true });
-    }
+    });
   });
 
   test("a flows directory that is itself a symbolic link to a place outside the root is not read, in walk mode", () => {
-    const outside = mkdtempSync(path.join(tmpdir(), "keryx-replay-outside-"));
-    try {
+    withOutsideDir((outside) => {
       mkdirSync(path.join(outside, "a/reviews/r1/raw"), { recursive: true });
       writeFileSync(path.join(outside, "a/reviews/r1/raw/review-a.txt"), reply, "utf8");
       mkdirSync(path.join(tmp, ".metaproject"), { recursive: true });
       symlinkSync(outside, path.join(tmp, ".metaproject/flows"));
       expect(replayRepository(tmp)).toEqual([]);
+    });
+  });
+
+  test("a root that is itself a symbolic link replays the same files as its target, in git mode", () => {
+    commitLaid();
+    withOutsideDir((outside) => {
+      symlinkSync(tmp, path.join(outside, "link"));
+      expect(replayRepository(path.join(outside, "link")).map((row) => row.file)).toEqual(expectedFlowFiles);
+    });
+  });
+
+  test("a root that is itself a symbolic link replays the same files as its target, in walk mode", () => {
+    lay();
+    withOutsideDir((outside) => {
+      symlinkSync(tmp, path.join(outside, "link"));
+      expect(replayRepository(path.join(outside, "link")).map((row) => row.file)).toEqual(expectedFlowFiles);
+    });
+  });
+
+  test("a tracked reply replaced by a directory is skipped, not an error", () => {
+    commitLaid();
+    const replaced = path.join(tmp, ".metaproject/flows/m/reviews/r1/raw/review-m.txt");
+    rmSync(replaced);
+    mkdirSync(replaced);
+    expect(replayRepository(tmp).map((row) => row.file)).toEqual(expectedFlowFiles.filter((file) => !file.includes("/m/")));
+  });
+
+  const replayInChild = (root: string, env: Record<string, string | undefined>) =>
+    spawnSync(
+      process.execPath,
+      ["-e", `import { replayRepository } from ${JSON.stringify(path.resolve(import.meta.dir, "replay.ts"))}; console.log(JSON.stringify(replayRepository(${JSON.stringify(root)}).map((row) => row.file)));`],
+      { encoding: "utf8", timeout: 15000, env },
+    );
+
+  test.each(["GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE"])("%s exported by a hook does not redirect which files git lists", (variable) => {
+    commitLaid();
+    withOutsideDir((outside) => {
+      git(outside, "init", "-q");
+      writeFileSync(path.join(outside, "empty-index"), "", "utf8");
+      const redirect = { GIT_DIR: path.join(outside, ".git"), GIT_INDEX_FILE: path.join(outside, "empty-index"), GIT_WORK_TREE: outside }[variable]!;
+      const run = replayInChild(tmp, { ...process.env, [variable]: redirect });
+      expect(run.error).toBeUndefined();
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout)).toEqual(expectedFlowFiles);
+    });
+  });
+
+  test("a checkout whose tracked paths list is longer than one pipe read is read whole", () => {
+    lay();
+    const count = 600;
+    for (let i = 0; i < count; i += 1) put(`.metaproject/flows/${"n".repeat(60)}${i}/reviews/r1/raw/review-${i}.txt`, reply);
+    commitAll(tmp);
+    expect(replayRepository(tmp)).toHaveLength(expectedFlowFiles.length + count);
+  });
+
+  test("a tracked reply replaced by a FIFO is skipped and never read (a read would block)", () => {
+    commitLaid();
+    const replaced = path.join(tmp, ".metaproject/flows/m/reviews/r1/raw/review-m.txt");
+    rmSync(replaced);
+    expect(spawnSync("mkfifo", [replaced]).status).toBe(0);
+    const run = replayInChild(tmp, process.env);
+    expect(run.error).toBeUndefined();
+    expect(run.status).toBe(0);
+    expect(JSON.parse(run.stdout)).toEqual(expectedFlowFiles.filter((file) => !file.includes("/m/")));
+  });
+
+  test.skipIf(process.getuid?.() === 0)("the walk does not enter node_modules, research-evidence or drivers", () => {
+    lay();
+    const closed = ["node_modules", "research-evidence", "drivers"].map((name) => path.join(tmp, ".metaproject/flows/a/closed", name));
+    for (const dir of closed) mkdirSync(path.join(dir, "raw"), { recursive: true });
+    try {
+      for (const dir of closed) chmodSync(dir, 0);
+      expect(replayRepository(tmp).map((row) => row.file)).toEqual(expectedFlowFiles);
     } finally {
-      rmSync(outside, { recursive: true, force: true });
+      for (const dir of closed) chmodSync(dir, 0o755);
     }
   });
 
   test("replayReport refuses a root with nothing to replay", () => {
-    expect(() => replayReport(tmp)).toThrow("no tracked raw reviewer replies");
+    expect(() => replayReport(tmp)).toThrow("no raw reviewer replies to replay");
   });
 });
 
@@ -276,25 +387,6 @@ describe("the replay command", () => {
       expect(written).toContain(`Files replayed: ${replayRepository(root).length}.`);
       expect(written).toBe(replayReport(root));
     } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
-  });
-
-  test("a GIT_DIR exported by a hook does not redirect which files git lists", () => {
-    const other = mkdtempSync(path.join(tmpdir(), "keryx-replay-other-"));
-    const cwd = mkdtempSync(path.join(tmpdir(), "keryx-replay-cwd-"));
-    try {
-      git(other, "init", "-q");
-      const out = path.join(cwd, "out.md");
-      const run = spawnSync(process.execPath, [path.resolve(import.meta.dir, "replay.ts"), "--write", out], {
-        cwd,
-        encoding: "utf8",
-        env: { ...process.env, GIT_DIR: path.join(other, ".git") },
-      });
-      expect(run.status).toBe(0);
-      expect(readFileSync(out, "utf8")).toBe(replayReport(path.resolve(import.meta.dir, "..", "..")));
-    } finally {
-      rmSync(other, { recursive: true, force: true });
       rmSync(cwd, { recursive: true, force: true });
     }
   });
@@ -352,15 +444,15 @@ describe("decisionFor", () => {
 
 describe("closed review rounds of this repository", () => {
   const root = path.resolve(import.meta.dir, "..", "..");
-  const reportPath = path.join(root, ".metaproject", "flows", "441-2026-10-13-deferred-majors-of-pr-940-and-pr-975", "replay-report.md");
+  const reportPath = path.join(root, REPORT_PATH);
 
-  test("every tracked raw reply is replayed and the checked-in report lists exactly the differences", () => {
+  test("the checked-in report is byte-identical to a fresh replay of every tracked raw reply", () => {
     const rows = replayRepository(root);
     expect(rows.length).toBeGreaterThan(0);
     expect(existsSync(reportPath)).toBe(true);
     const rendered = renderReplayReport(rows);
     if (readFileSync(reportPath, "utf8") !== rendered) {
-      throw new Error(`replay-report.md is stale: regenerate it with \`bun src/review/replay.ts --write ${REPORT_PATH}\``);
+      throw new Error(`replay-report.md is stale: regenerate it from the repository root with \`bun src/review/replay.ts --write ${REPORT_PATH}\``);
     }
   });
 
