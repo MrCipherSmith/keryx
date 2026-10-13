@@ -206,7 +206,7 @@ const ALLOWED: Readonly<Record<string, readonly [sites: number, reason: string]>
   "harness/external/write-run.ts": [3, "baseCommit is a sha the harness recorded"],
   "health/metrics/churn.ts": [1, "--since=<days> ago, a number"],
   "lib/git-head.ts": [7, "operands are HEAD:<path> or follow --"],
-  "lib/git-worktrees.ts": [2, "mainBranch comes from git itself"],
+  "lib/git-worktrees.ts": [1, "the remaining call reads the git common dir; no operand came from a person"],
   "lib/shell-permissions.ts": [1, "a word list of network commands, not git"],
   "metrics/provenance.ts": [1, "answerCommit is a recorded sha followed by ^{commit}, not typed"],
   "review/bot/run.ts": [1, "baseSha is the PR's base sha from the API"],

@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f045",
+  "command": "bun test src/lib/trust-routine-command.test.ts src/commands/review-revision-operand.test.ts src/sync/provenance.test.ts src/sync/diff.test.ts src/gdgraph/staleness.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 28437
+  },
+  "mutants": [
+    {
+      "id": "C13-sync-guard",
+      "file": "src/sync/diff.ts",
+      "anchor": "if (base.startsWith(\"-\")) return null;",
+      "replacement": "",
+      "line": 79,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 24207
+    },
+    {
+      "id": "R1-assert-off",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "if (ref.startsWith(\"-\")) throw",
+      "replacement": "if (false) throw",
+      "line": 7,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22364
+    },
+    {
+      "id": "R2-assert-only-double-dash",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "ref.startsWith(\"-\")) throw",
+      "replacement": "ref.startsWith(\"--\")) throw",
+      "line": 7,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21508
+    },
+    {
+      "id": "R3-operand-no-eoo",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "return [\"--end-of-options\", assertGitRevision(ref)];",
+      "replacement": "return [assertGitRevision(ref)];",
+      "line": 23,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 15274
+    },
+    {
+      "id": "R4-no-writing-output-eq",
+      "file": "src/lib/git-revision.ts",
+      "anchor": " || a.startsWith(\"--output=\")",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11407
+    },
+    {
+      "id": "R5-no-writing-output-bare",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "a === \"--output\" || ",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11586
+    },
+    {
+      "id": "R6-no-writing-ext-diff",
+      "file": "src/lib/git-revision.ts",
+      "anchor": " || a === \"--ext-diff\"",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11785
+    },
+    {
+      "id": "S1-ctx-diff-guard-off",
+      "file": "src/commands/ctx.ts",
+      "anchor": "  assertNoWritingDiffOption(args);",
+      "replacement": "",
+      "line": 203,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11455
+    },
+    {
+      "id": "S2-flow-base-unchecked",
+      "file": "src/commands/flow.ts",
+      "anchor": "return value === undefined ? undefined : assertGitRevision(value);",
+      "replacement": "return value;",
+      "line": 401,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11339
+    },
+    {
+      "id": "S3-checkac-mergebase-bare",
+      "file": "src/commands/flow-check-ac.ts",
+      "anchor": "[\"git\", \"merge-base\", \"HEAD\", ...revisionOperand(refName)]",
+      "replacement": "[\"git\", \"merge-base\", \"HEAD\", refName]",
+      "line": 168,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11328
+    },
+    {
+      "id": "S4-checkac-diff-bare",
+      "file": "src/commands/flow-check-ac.ts",
+      "anchor": "\"-U20\", ...revisionOperand(ref)]",
+      "replacement": "\"-U20\", ref]",
+      "line": 171,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10949
+    },
+    {
+      "id": "S7-health-bare",
+      "file": "src/health/run.ts",
+      "anchor": "[\"git\", \"diff\", \"--name-only\", ...revisionOperand(ref)]",
+      "replacement": "[\"git\", \"diff\", \"--name-only\", ref]",
+      "line": 622,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10959
+    },
+    {
+      "id": "S8-testing-bare",
+      "file": "src/testing/service.ts",
+      "anchor": "[\"git\", \"diff\", \"--name-only\", ...revisionOperand(since)]",
+      "replacement": "[\"git\", \"diff\", \"--name-only\", since]",
+      "line": 760,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11045
+    },
+    {
+      "id": "S12-wiki-service-guard-off",
+      "file": "src/wiki/service.ts",
+      "anchor": "if (base.startsWith(\"-\")) return Promise.resolve(null);",
+      "replacement": "",
+      "line": 1622,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 11012
+    },
+    {
+      "id": "S14-review-changedfiles-bare",
+      "file": "src/commands/review.ts",
+      "anchor": "\"--diff-filter=d\", ...(ref === undefined ? [] : revisionOperand(ref))]",
+      "replacement": "\"--diff-filter=d\", ...(ref === undefined ? [] : [ref])]",
+      "line": 3545,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10929
+    },
+    {
+      "id": "S15-review-gitdiff-bare",
+      "file": "src/commands/review.ts",
+      "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+      "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]",
+      "line": 3598,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11159
+    },
+    {
+      "id": "S16-review-mergebase-bare",
+      "file": "src/commands/review.ts",
+      "anchor": "[\"merge-base\", \"HEAD\", ...revisionOperand(ref)]",
+      "replacement": "[\"merge-base\", \"HEAD\", ref]",
+      "line": 3674,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11517
+    },
+    {
+      "id": "S17-jev-select-bare",
+      "file": "src/commands/review-jev-select.ts",
+      "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+      "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]",
+      "line": 121,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11302
+    },
+    {
+      "id": "N24-staleness-bare",
+      "file": "src/gdgraph/staleness.ts",
+      "anchor": "...revisionOperand(fromCommit), toCommit]",
+      "replacement": "fromCommit, toCommit]",
+      "line": 243,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10986
+    },
+    {
+      "id": "N25-staleness-catch-rethrow",
+      "file": "src/gdgraph/staleness.ts",
+      "anchor": "this check never throws.\n    return [];",
+      "replacement": "this check never throws.\n    throw new Error(\"x\");",
+      "line": 245,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10871
+    },
+    {
+      "id": "N26-sync-diff-guard-off",
+      "file": "src/sync/diff.ts",
+      "anchor": "if (base.startsWith(\"-\")) return null;",
+      "replacement": "",
+      "line": 79,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11085
+    },
+    {
+      "id": "N27-review-ctx-diff-guard",
+      "file": "src/commands/ctx.ts",
+      "anchor": "  assertNoWritingDiffOption(args);",
+      "replacement": "",
+      "line": 203,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11126
+    },
+    {
+      "id": "N28-writing-ext-diff",
+      "file": "src/lib/git-revision.ts",
+      "anchor": " || a === \"--ext-diff\"",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11234
+    }
+  ],
+  "totals": {
+    "killed": 21,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

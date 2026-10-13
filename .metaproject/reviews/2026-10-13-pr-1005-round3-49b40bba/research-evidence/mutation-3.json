@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f045",
+  "command": "bun test src/commands/review-revision-operand.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 17278
+  },
+  "mutants": [
+    {
+      "id": "N21-provenance-hex-off",
+      "file": "src/sync/provenance.ts",
+      "anchor": "typeof commit === \"string\" && /^[0-9a-f]{4,64}$/i.test(commit)",
+      "replacement": "typeof commit === \"string\"",
+      "line": 243,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10567
+    },
+    {
+      "id": "N22-provenance-end-anchor",
+      "file": "src/sync/provenance.ts",
+      "anchor": "{4,64}$/i",
+      "replacement": "{4,64}/i",
+      "line": 243,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10415
+    },
+    {
+      "id": "N23-provenance-start-anchor",
+      "file": "src/sync/provenance.ts",
+      "anchor": "/^[0-9a-f]{4,64}$/i",
+      "replacement": "/[0-9a-f]{4,64}$/i",
+      "line": 243,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10441
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

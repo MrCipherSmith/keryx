@@ -16,8 +16,8 @@ export function assertNoWritingDiffOption(args: readonly string[]): void {
 
 /**
  * The argv tail for a typed revision: `--end-of-options` and then the revision, so git reads it as a revision whatever its
- * spelling. Every git call that takes a ref a person, a model or a repository file supplied puts this where the revision
- * goes, never the bare ref.
+ * spelling. The git calls that take a ref a person, a model or a repository file supplied (review, sync, wiki, gdgraph
+ * staleness, the worktree ahead-count) put this where the revision goes, never the bare ref; a new such call must too.
  */
 export function revisionOperand(ref: string): string[] {
   return ["--end-of-options", assertGitRevision(ref)];

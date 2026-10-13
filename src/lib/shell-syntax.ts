@@ -107,9 +107,10 @@ export function hasUnquotedMetacharacter(command: string): boolean {
 }
 
 /**
- * True when `command` has a backslash, `$`, `{` or `}` OUTSIDE quotes, or cannot be analysed (unbalanced quotes). The
- * shell rewrites such a word (`$IFS`, a brace list, `$'..'`, an escape) into words this module does not compute, so a
- * caller that judges the words by their text must not approve the command.
+ * True when `command` has a backslash, `$`, `{`, `}`, a glob character (`*`, `?`, `[`) or a word-initial `~` OUTSIDE
+ * quotes, or cannot be analysed (unbalanced quotes). The shell rewrites such a word (`$IFS`, a brace list, `$'..'`, an
+ * escape, a glob that matches a file named like an option, a home directory) into words this module does not compute,
+ * so a caller that judges the words by their text must not approve the command.
  */
 export function hasUnquotedExpansion(command: string): boolean {
   let quote: '"' | "'" | undefined;
@@ -123,6 +124,8 @@ export function hasUnquotedExpansion(command: string): boolean {
     }
     if (ch === "'" || ch === '"') quote = ch;
     else if (ch === "\\" || ch === "$" || ch === "{" || ch === "}") return true;
+    else if (ch === "*" || ch === "?" || ch === "[") return true;
+    else if (ch === "~" && (i === 0 || /\s/.test(command[i - 1]!))) return true;
   }
   return quote !== undefined;
 }

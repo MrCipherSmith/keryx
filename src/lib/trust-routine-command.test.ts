@@ -219,6 +219,62 @@ test("F-066: an unquoted backslash, brace or $ in a git or keryx segment prompts
   }
 });
 
+test("R3-01: an unquoted glob character or a word-initial ~ in a git or keryx segment prompts, a quoted or mid-word one does not", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "git log --o*",
+    "git log --o?tput=x",
+    "git log --[o]utput=x",
+    "git log *",
+    "keryx ctx diff *",
+    "keryx ctx diff --o*",
+    "keryx review slice --ref=--o*",
+    "keryx review slice --ref ~/x",
+    "git diff ~root",
+    "keryx ctx rg foo ~/src",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+  for (const command of [
+    "git log '--o*'",
+    'git log "--o*"',
+    "keryx ctx diff '*'",
+    "keryx ctx rg --glob '*.ts' foo",
+    "keryx ctx rg 'a?b' src",
+    "keryx ctx rg '[a-z]+' src",
+    "git log '~root'",
+    "git log HEAD~1",
+    "keryx review slice --ref=HEAD~2",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("R3-01: the glob in `git log --o*` never reaches git, so the planted --output=injected file is not written", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "r3-01-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"], { cwd: dir });
+    writeFileSync(path.join(dir, "--output=injected"), "");
+    expect(isTrustRoutineCommand("git log --o*", { cwd: dir })).toBe(false);
+    expect(hasUnquotedExpansion("git log --o*")).toBe(true);
+    expect(existsSync(path.join(dir, "injected"))).toBe(false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("R3-01: glob characters and ~ are refused unquoted and allowed quoted, one per character", () => {
+  for (const ch of ["*", "?", "["]) {
+    expect(hasUnquotedExpansion(`git log a${ch}b`), ch).toBe(true);
+    expect(hasUnquotedExpansion(`git log 'a${ch}b'`), ch).toBe(false);
+  }
+  expect(hasUnquotedExpansion("git log ~x")).toBe(true);
+  expect(hasUnquotedExpansion("~x")).toBe(true);
+  expect(hasUnquotedExpansion("git log a~x")).toBe(false);
+  expect(hasUnquotedExpansion("git log '~x'")).toBe(false);
+});
+
 test("F-066: an unterminated quote counts as an expansion, a balanced one does not", () => {
   expect(hasUnquotedExpansion("git log 'abc")).toBe(true);
   expect(hasUnquotedExpansion('git log "abc')).toBe(true);
@@ -256,7 +312,7 @@ test("F-045: a glued value that is a plain revision, a path or a count stays rou
     "keryx ctx rg -cn foo src",
     "keryx ctx rg -e=-foo src",
     "keryx review slice -x=-1",
-    "keryx ctx rg --pre-glob *.gz foo src",
+    "keryx ctx rg --pre-glob '*.gz' foo src",
     "git diff --output-indicator-new=+",
   ]) {
     expect(isTrustRoutineCommand(command, { cwd })).toBe(true);
