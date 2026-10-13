@@ -559,6 +559,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
   let paintedKey: string | undefined;
   let paints = 0;
   let disposed = false;
+  let refreshGeneration = 0;
 
   const paint = (force = false): void => {
     if (disposed) return;
@@ -614,6 +615,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
 
   const refresh = async (): Promise<void> => {
     if (disposed) return;
+    const generation = ++refreshGeneration;
     let n: number;
     try {
       n = await count();
@@ -632,14 +634,18 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     } catch {
       marked = 0;
     }
+    if (disposed || generation !== refreshGeneration) return;
     projected = projectDecisionsPanel(n, options.width, before, marked);
     paint();
     // the arm row reads the report once per poll, and only when the journal holds anything; a failing read hides the row
+    let nextArms: ArmsPanelProjection;
     try {
-      armsProjected = n > 0 ? projectArmsPanel(summarizeArms(await armsReport()), options.width) : { visible: false, text: "" };
+      nextArms = n > 0 ? projectArmsPanel(summarizeArms(await armsReport()), options.width) : { visible: false, text: "" };
     } catch {
-      armsProjected = { visible: false, text: "" };
+      nextArms = { visible: false, text: "" };
     }
+    if (disposed || generation !== refreshGeneration) return;
+    armsProjected = nextArms;
     paintArms();
   };
 
