@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "files": [
+    "src/tui/busy-dispatch.test.ts",
+    "src/tui/foreground-operation.test.ts",
+    "src/tui/foreground-operation.ts",
+    "src/tui/main-queue-drain.test.ts",
+    "src/tui/main-queue.ts",
+    "src/tui/remote-queue-wiring.test.ts",
+    "src/tui/tui-bus.test.ts",
+    "src/tui/tui-hold.test.ts",
+    "src/tui/tui-shell.test.ts",
+    "src/tui/tui-shell.ts"
+  ]
+}

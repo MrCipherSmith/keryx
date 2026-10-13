@@ -346,3 +346,13 @@ test("session switch clears old Force selections and permits a fresh settlement 
   expect(handoff.hasPending).toBe(false);
   expect(handoff.isAwaitingSettlement).toBe(false);
 });
+
+test("flow 441: pendingCount is the number of deferred forced items, and falls as they are taken", () => {
+  const handoff = createForegroundForceHandoff<string>();
+  expect(handoff.pendingCount).toBe(0);
+  handoff.enqueue("q1");
+  handoff.enqueue("q2");
+  expect(handoff.pendingCount).toBe(2);
+  expect(handoff.takeNext()).toBe("q1");
+  expect(handoff.pendingCount).toBe(1);
+});

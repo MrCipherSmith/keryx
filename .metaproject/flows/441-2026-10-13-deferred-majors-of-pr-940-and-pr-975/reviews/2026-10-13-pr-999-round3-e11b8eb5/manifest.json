@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-13-pr-999-round3-e11b8eb5",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/999",
+    "head": "e11b8eb538e66afe4a490d70622a4e9b8d1158a7"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/scope.md",
+    "coverage": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/coverage.md",
+    "report": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/report.md",
+    "findings": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/findings.json",
+    "learning": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/learning.md",
+    "decisions": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-999-round3-e11b8eb5/decisions.md",
+    "research": "research.json",
+    "reviewerDispatch": "research.json"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 9,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "retained": 9,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "createdAt": "2026-10-13T10:33:03.457Z",
+  "updatedAt": "2026-10-13T10:33:03.457Z",
+  "flow": {
+    "id": "441",
+    "path": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975"
+  }
+}

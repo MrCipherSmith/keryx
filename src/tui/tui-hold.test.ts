@@ -112,16 +112,56 @@ describe("held turns: banner (specification §4.3, AC4)", () => {
 });
 
 describe("held turns: release drains the queue (specification §5.2 step 5, AC4)", () => {
-  test("leaseHoldController is built from leaseView().held() and drains the FIFO queue (forced item first) on release, skipped while a turn is busy", () => {
+  test("leaseHoldController is built from leaseView().held() and drains through the shared sites on release (behaviour: main-queue-drain.test.ts)", () => {
     const start = source.indexOf("leaseHoldController = createLeaseHoldController({");
     expect(start).toBeGreaterThan(0);
     const end = source.indexOf("\n    });", start);
     const block = source.slice(start, end);
     expect(block).toContain("isHeld: () => leaseView()?.held() === true");
-    expect(block).toContain("chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement");
-    expect(block).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
-    expect(block).toContain("paintMainQueue();");
-    expect(block).toContain("remoteQueue.runQueued(drained);");
+    expect(block).toContain("onRelease: () => drainSites.onLeaseRelease()");
+    // Flow 441 (F-002/F-003): the shell builds the same factory the behaviour test builds, from the
+    // real objects, with every field in place. Dropping or swapping one turns this red.
+    const factory = source.indexOf("const drainSites = createMainQueueDrain({");
+    expect(factory).toBeGreaterThan(0);
+    const body = source.slice(factory, source.indexOf("\n    });", factory));
+    for (const field of [
+      "forced: forceHandoff,",
+      // a getter: the shell replaces its queue array, so a reference taken once drains a dead queue (F-016)
+      "queue: () => mainQueue,",
+      "paint: () => paintMainQueue(),",
+      "run: (next) => remoteQueue.runQueued(next),",
+      "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "onSettle: () => busWakeController?.onSettle(),",
+    ]) {
+      expect(body).toContain(field);
+    }
+    expect(body).not.toContain("queue: mainQueue,");
+  });
+
+  test("the bus wake is idle only when the shared in-flight predicate is clear (flow 441 F-019)", () => {
+    const start = source.indexOf("busWakeController = createBusWakeController({");
+    expect(start).toBeGreaterThan(0);
+    const isIdle = source.slice(start, source.indexOf("inbox: busInbox,", start));
+    expect(isIdle).toContain("!drainSites.workInFlight() &&");
+    expect(isIdle).toContain("mainQueue.length === 0 &&");
+    expect(isIdle).toContain("leaseView()?.held() !== true");
+  });
+
+  test("every slash command whose work outlives its handler is held in the queue (flow 441 F-001)", () => {
+    const detaching = ["/schedule", "/goal", "/search-provider", "/search-connect", "/model", "/connect"];
+    for (const name of detaching) {
+      const at = source.indexOf(`if (command.name === "${name}"`);
+      expect(at).toBeGreaterThan(0);
+      expect(source.slice(at, at + 400)).toContain("detachSlashWork(");
+    }
+    expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length);
+    // the counter and the end-of-work drain live in the factory (behaviour: main-queue-drain.test.ts)
+    expect(source).toContain("const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);");
+    expect(source).not.toContain("detachedSlashWork");
+  });
+
+  test("a finished foreground operation drains the queue (flow 441)", () => {
+    expect(source.match(/drainSites\.onForegroundOperationComplete\(\);/g)?.length).toBe(1);
   });
 });
 

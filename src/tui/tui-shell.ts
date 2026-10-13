@@ -317,6 +317,7 @@ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
+import { terminalSafe } from "../lib/terminal-safe";
 import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
@@ -406,6 +407,7 @@ import type { QueuedMainQuestion, QueueWait } from "./main-queue";
 import {
   describePendingCall,
   formatQueueListing,
+  createMainQueueDrain,
   drainIdleMainQueue,
   parseQueueCommand,
   removeMainQueueItem,
@@ -7983,6 +7985,23 @@ export async function launchTuiAgentShell(opts: {
       if (chrome.overlayActive()) return;
       enterQueueNav();
     };
+    // Flow 441 (R1): the one drain the operation-complete, turn-settle, lease-release and
+    // detached-slash-command sites share.
+    const drainSites = createMainQueueDrain({
+      forced: forceHandoff,
+      queue: () => mainQueue,
+      paint: () => paintMainQueue(),
+      run: (next) => remoteQueue.runQueued(next),
+      turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
+      onSettle: () => busWakeController?.onSettle(),
+      onDetachedFailure: (error) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        io.onSystem?.(`◇ a slash command failed: ${terminalSafe(reason).text}\n`);
+      },
+    });
+    // A slash command whose work outlives its handler (it returns before the work ends) holds the
+    // queue until the work ends, then drains what waited behind it.
+    const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);
     const paintMainQueue = (): void => {
       // Remove stale blocks (same "remove stale, rebuild all" strategy as before).
       for (const entry of mainQueueBlocks) {
@@ -8777,7 +8796,7 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/schedule") {
           // Flow 295 (AC6): create a scheduled background task — the same draft,
           // card and confirmation as `keryx schedule add` and `schedule_create`.
-          void runScheduleSlashCommand(line.slice(command.name.length).trim(), {
+          detachSlashWork(runScheduleSlashCommand(line.slice(command.name.length).trim(), {
             cwd: sessionCwd,
             defaults: () => ({ provider: deps.providerId ?? "", model: deps.modelId ?? "" }),
             print: (text, tone) => {
@@ -8786,12 +8805,12 @@ export async function launchTuiAgentShell(opts: {
               transcript.add(new otui.TextRenderable(r, { id: `sch${uid++}`, content: otui.t`${chunk}` }));
             },
             confirm: (card) => confirmScheduleCard(card),
-          });
+          }));
           return;
         }
         if (command.name === "/goal") {
           // SLATE-15 (flow 161, AC1/AC2): deterministic slate-open entry point.
-          void (async () => {
+          detachSlashWork((async () => {
             await runGoalCommand({
               raw: line.slice(command.name.length).trim(),
               cwd: sessionCwd,
@@ -8801,7 +8820,7 @@ export async function launchTuiAgentShell(opts: {
               slateSession,
               mintAttemptId: mintTimestampAttemptId,
             });
-          })();
+          })());
           return;
         }
         if (command.name === "/resume" || command.name === "/sessions") {
@@ -8834,7 +8853,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/search-provider") {
-          void (async () => {
+          detachSlashWork((async () => {
             const args = parseSearchProviderArgs(line.slice(16));
             const all = searchProviderController.configurable();
             if (args.providerId === undefined) {
@@ -8864,11 +8883,11 @@ export async function launchTuiAgentShell(opts: {
             io.onSystem?.(
               `Configured and tested '${providerId}' successfully. Use /search-connect ${providerId} to make it active.\n`,
             );
-          })();
+          })());
           return;
         }
         if (command.name === "/search-connect") {
-          void (async () => {
+          detachSlashWork((async () => {
             const args = parseSearchProviderArgs(line.slice(15));
             const providerId = args.providerId;
             if (providerId === undefined) {
@@ -8898,7 +8917,7 @@ export async function launchTuiAgentShell(opts: {
               return;
             }
             await selectSearchProviderAndReport(searchProviderController, io.onSystem, normalizedProviderId);
-          })();
+          })());
           return;
         }
         // `/think` and `/expand` TOGGLE the newest matching block in place
@@ -9307,7 +9326,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/model") {
-          void (async () => {
+          detachSlashWork((async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const prov = detected.find((d) => d.name === currentSel.provider);
             // Registered providers fetch their live, filterable list; others use detected.
@@ -9348,7 +9367,7 @@ export async function launchTuiAgentShell(opts: {
             } else {
               input.focus();
             }
-          })();
+          })());
           return;
         }
         if (command.name === "/interrupt") {
@@ -9366,7 +9385,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/connect" || command.name === "/provider") {
-          void (async () => {
+          detachSlashWork((async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const ns = await chrome.withOverlay(() =>
               command.name === "/connect"
@@ -9410,7 +9429,7 @@ export async function launchTuiAgentShell(opts: {
             // Wizard steps close without refocusing the composer (flow 270), so
             // it comes back here, once, whichever way the wizard ended.
             input.focus();
-          })();
+          })());
           return;
         }
         openHelp(); // /help
@@ -9640,11 +9659,7 @@ export async function launchTuiAgentShell(opts: {
                     }),
                   );
                   focusComposer(); // never steal focus from an active block-nav mode (R3)
-                  if (!forceHandoff.isAwaitingSettlement) {
-                    const next = forceHandoff.takeNext() ?? mainQueue.shift();
-                    paintMainQueue();
-                    if (next !== undefined) remoteQueue.runQueued(next);
-                  }
+                  drainSites.onForegroundOperationComplete();
                 },
               },
             );
@@ -9945,23 +9960,11 @@ export async function launchTuiAgentShell(opts: {
         if (!forceHandoff.hasPending && mainQueue.length === 0 && !turnFailed) {
           void suggestNextStep();
         }
-        // A forced item (AC6) wins over FIFO order — it is the reason the
-        // turn just settled. Otherwise FIFO-drain the head of the main queue
-        // (AC7), once the current one has fully settled (stopBusy/setMainAgent
-        // already ran).
-        if (!forceHandoff.isAwaitingSettlement) {
-          const next = forceHandoff.takeNext() ?? mainQueue.shift();
-          paintMainQueue();
-          if (next !== undefined) {
-            remoteQueue.runQueued(next);
-          } else {
-            // Flow 274 T7 (specification §5.3): "on turn settle, when
-            // busInbox still holds wake-eligible messages" — only once there
-            // is no queued operator item to run instead (same FIFO-first
-            // rule as the task-notification wake below).
-            busWakeController?.onSettle();
-          }
-        }
+        // The turn has fully settled (stopBusy/setMainAgent already ran). A forced item (AC6) wins
+        // over FIFO order, then the queue drains (AC7); the bus wakes only when the drain found
+        // nothing queued to run instead (flow 274 T7, specification §5.3: FIFO-first, like the
+        // task-notification wake below).
+        drainSites.onTurnSettle();
       });
       })();
     };
@@ -9975,11 +9978,12 @@ export async function launchTuiAgentShell(opts: {
     //
     // Idle means both halves — nothing running in the foreground AND nothing
     // the operator queued. A queued message is the real next step and the
-    // settle handlers keep draining it first; a notification that jumped that
-    // queue would answer a question nobody asked yet. Flow 275 T7
+    // drain sites (`drainSites`) keep draining it first; a notification that
+    // jumped that queue would answer a question nobody asked yet. Flow 275 T7
     // (specification §4.3, AC4): a `turns` lease holding this instance is a
-    // third reason to stay "not idle" — same rule the bus-wake controller's
-    // own `isIdle` enforces right below.
+    // third reason to stay "not idle". This test does not look at detached
+    // slash work (flow 441, F-025); the bus-wake controller's own `isIdle`
+    // right below does, via `drainSites.workInFlight()`.
     deps.jobRegistry?.onCompletion(() => {
       const busy = chrome.isBusy() || foregroundOperation.isActive;
       const idle = !busy && mainQueue.length === 0 && leaseView()?.held() !== true;
@@ -10019,8 +10023,7 @@ export async function launchTuiAgentShell(opts: {
       // blocks every other route into a new main-agent turn.
       isIdle: () =>
         !destroyed &&
-        !chrome.isBusy() &&
-        !foregroundOperation.isActive &&
+        !drainSites.workInFlight() &&
         mainQueue.length === 0 &&
         leaseView()?.held() !== true,
       inbox: busInbox,
@@ -10037,19 +10040,12 @@ export async function launchTuiAgentShell(opts: {
     });
 
     // Flow 275 (agent bus P4, T7; specification §5.2 step 5, AC4): drains the
-    // queue the moment a `turns` lease releases this instance — the SAME
-    // "forced item first, else FIFO head" rule the turn-settle handler above
-    // uses (`forceHandoff.takeNext() ?? mainQueue.shift()`), and skipped
-    // outright while a turn is still busy (that turn's own settle drains the
-    // queue once it finishes; draining here too would double-dispatch).
+    // queue the moment a `turns` lease releases this instance, and skipped
+    // while any queue work is in flight (a turn, an operation, a hand-off or a detached slash
+    // command: that work's own end drains, and draining here too would double-dispatch).
     leaseHoldController = createLeaseHoldController({
       isHeld: () => leaseView()?.held() === true,
-      onRelease: () => {
-        if (chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement) return;
-        const drained = forceHandoff.takeNext() ?? mainQueue.shift();
-        paintMainQueue();
-        if (drained !== undefined) remoteQueue.runQueued(drained);
-      },
+      onRelease: () => drainSites.onLeaseRelease(),
     });
 
     // --- flow 387: run a command for the Telegram topic and collect what it printed -------------
