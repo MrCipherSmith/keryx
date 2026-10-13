@@ -405,7 +405,9 @@ import type { QueuedMainQuestion, QueueWait } from "./main-queue";
 import {
   describePendingCall,
   formatQueueListing,
+  createDrainSites,
   drainIdleMainQueue,
+  drainNext,
   parseQueueCommand,
   removeMainQueueItem,
 } from "./main-queue";
@@ -7955,6 +7957,22 @@ export async function launchTuiAgentShell(opts: {
       if (chrome.overlayActive()) return;
       enterQueueNav();
     };
+    // Flow 441 (R1): the one drain the turn-complete, turn-settle and lease-release sites share.
+    const queueWorkInFlight = (): boolean =>
+      chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;
+    const drainSites = createDrainSites({
+      drain: () =>
+        drainNext({
+          take: () => forceHandoff.takeNext() ?? mainQueue.shift(),
+          pending: () => mainQueue.length,
+          paint: paintMainQueue,
+          run: (next) => remoteQueue.runQueued(next),
+          isBusy: queueWorkInFlight,
+        }),
+      isAwaitingSettlement: () => forceHandoff.isAwaitingSettlement,
+      isBusy: queueWorkInFlight,
+      onSettle: () => busWakeController?.onSettle(),
+    });
     const paintMainQueue = (): void => {
       // Remove stale blocks (same "remove stale, rebuild all" strategy as before).
       for (const entry of mainQueueBlocks) {
@@ -9613,11 +9631,7 @@ export async function launchTuiAgentShell(opts: {
                     }),
                   );
                   focusComposer(); // never steal focus from an active block-nav mode (R3)
-                  if (!forceHandoff.isAwaitingSettlement) {
-                    const next = forceHandoff.takeNext() ?? mainQueue.shift();
-                    paintMainQueue();
-                    if (next !== undefined) remoteQueue.runQueued(next);
-                  }
+                  drainSites.onForegroundOperationComplete();
                 },
               },
             );
@@ -9922,19 +9936,10 @@ export async function launchTuiAgentShell(opts: {
         // turn just settled. Otherwise FIFO-drain the head of the main queue
         // (AC7), once the current one has fully settled (stopBusy/setMainAgent
         // already ran).
-        if (!forceHandoff.isAwaitingSettlement) {
-          const next = forceHandoff.takeNext() ?? mainQueue.shift();
-          paintMainQueue();
-          if (next !== undefined) {
-            remoteQueue.runQueued(next);
-          } else {
-            // Flow 274 T7 (specification §5.3): "on turn settle, when
-            // busInbox still holds wake-eligible messages" — only once there
-            // is no queued operator item to run instead (same FIFO-first
-            // rule as the task-notification wake below).
-            busWakeController?.onSettle();
-          }
-        }
+        // Flow 274 T7 (specification §5.3): the bus wakes on settle only once no
+        // queued operator item is left to run instead (FIFO-first, like the
+        // task-notification wake below).
+        drainSites.onTurnSettle();
       });
       })();
     };
@@ -10010,19 +10015,12 @@ export async function launchTuiAgentShell(opts: {
     });
 
     // Flow 275 (agent bus P4, T7; specification §5.2 step 5, AC4): drains the
-    // queue the moment a `turns` lease releases this instance — the SAME
-    // "forced item first, else FIFO head" rule the turn-settle handler above
-    // uses (`forceHandoff.takeNext() ?? mainQueue.shift()`), and skipped
+    // queue the moment a `turns` lease releases this instance, and skipped
     // outright while a turn is still busy (that turn's own settle drains the
     // queue once it finishes; draining here too would double-dispatch).
     leaseHoldController = createLeaseHoldController({
       isHeld: () => leaseView()?.held() === true,
-      onRelease: () => {
-        if (chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement) return;
-        const drained = forceHandoff.takeNext() ?? mainQueue.shift();
-        paintMainQueue();
-        if (drained !== undefined) remoteQueue.runQueued(drained);
-      },
+      onRelease: () => drainSites.onLeaseRelease(),
     });
 
     // --- flow 387: run a command for the Telegram topic and collect what it printed -------------

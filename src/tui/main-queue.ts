@@ -189,6 +189,67 @@ export function drainIdleMainQueue<T extends QueuedMainQuestion>(
   return true;
 }
 
+/** `started`: a queued line ran and left the shell busy. `drained`: the drain ended with the shell idle. */
+export type DrainOutcome = "started" | "drained";
+
+/**
+ * Take the next queued line and run it, and keep going while the line started no turn
+ * (flow 441, R1). A slash command run inline (`/compact`, `/model`, `/goal`, `/connect`)
+ * starts no turn, so no settle would ever drain what is queued behind it.
+ *
+ * The loop is bounded by the queue length at entry (plus one for a forced item), so a line
+ * that puts itself back in the queue cannot hold it.
+ */
+export function drainNext<T extends QueuedMainQuestion>(options: {
+  /** The forced item first, else the head of the queue. */
+  take: () => T | undefined;
+  /** How many lines are queued now. */
+  pending: () => number;
+  paint: () => void;
+  run: (item: T) => void;
+  /** The busy state after `run` returned: true when the line started a turn. */
+  isBusy: () => boolean;
+}): DrainOutcome {
+  for (let budget = options.pending() + 1; budget > 0; budget--) {
+    const next = options.take();
+    options.paint();
+    if (next === undefined) return "drained";
+    options.run(next);
+    if (options.isBusy()) return "started";
+  }
+  return "drained";
+}
+
+/**
+ * The three places the shell drains the queue, which differ in what surrounds the drain
+ * (flow 441, R1): a finished foreground operation and a settled turn wait for a pending
+ * force hand-off; a settled turn wakes the bus when the drain ends idle; a released lease
+ * stays out while anything is busy, because that work's own settle drains.
+ */
+export function createDrainSites(deps: {
+  drain: () => DrainOutcome;
+  isAwaitingSettlement: () => boolean;
+  /** A turn, a foreground operation or a pending hand-off is in flight. */
+  isBusy: () => boolean;
+  /** Flow 274 T7: a settled turn that left nothing queued wakes the bus. */
+  onSettle: () => void;
+}): { onForegroundOperationComplete(): void; onTurnSettle(): void; onLeaseRelease(): void } {
+  return {
+    onForegroundOperationComplete() {
+      if (deps.isAwaitingSettlement()) return;
+      deps.drain();
+    },
+    onTurnSettle() {
+      if (deps.isAwaitingSettlement()) return;
+      if (deps.drain() === "drained") deps.onSettle();
+    },
+    onLeaseRelease() {
+      if (deps.isBusy()) return;
+      deps.drain();
+    },
+  };
+}
+
 /** What a queued message waits for (flow 426, AC6). */
 export type QueueWait = { kind: "turn" } | { kind: "approval"; call: string };
 

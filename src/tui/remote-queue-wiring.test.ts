@@ -403,7 +403,7 @@ test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-que
     ["remoteQueue.removeMainQueue(", 1],
     ["remoteQueue.editMainQueue(", 1],
     ["remoteQueue.requeuePendingEdit(", 1],
-    ["remoteQueue.runQueued(", 5],
+    ["remoteQueue.runQueued(", 3],
     ["remoteQueue.turnStarted(source);", 1],
     // Flow 397 review T-2: the whole argument mapping, so constant flags (no failure reply) turn the test red.
     ["void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });", 1],

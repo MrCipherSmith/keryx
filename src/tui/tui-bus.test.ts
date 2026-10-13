@@ -712,14 +712,9 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
   // now a plain constant comparison in `bus-wake.test.ts`, which no longer
   // reads `tui-shell.ts`'s source text at all.
 
-  test("turn settle also triggers the bus-wake controller's onSettle, only when no queued operator item ran instead", () => {
-    const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");
-    expect(nextIdx).toBeGreaterThanOrEqual(0);
-    const block = source.slice(nextIdx, nextIdx + 700);
-    expect(block).toContain('remoteQueue.runQueued(next);');
-    expect(block).toContain("busWakeController?.onSettle();");
-    // The queued item wins — bus-wake only runs in the `else` branch.
-    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf('remoteQueue.runQueued(next);'));
+  test("turn settle reaches the bus-wake controller's onSettle through the shared drain sites (behaviour: main-queue.test.ts)", () => {
+    expect(source).toContain("onSettle: () => busWakeController?.onSettle(),");
+    expect(source).toContain("drainSites.onTurnSettle();");
   });
 
   test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {

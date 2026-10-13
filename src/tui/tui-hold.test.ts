@@ -112,16 +112,17 @@ describe("held turns: banner (specification §4.3, AC4)", () => {
 });
 
 describe("held turns: release drains the queue (specification §5.2 step 5, AC4)", () => {
-  test("leaseHoldController is built from leaseView().held() and drains the FIFO queue (forced item first) on release, skipped while a turn is busy", () => {
+  test("leaseHoldController is built from leaseView().held() and drains through the shared sites on release (behaviour: main-queue.test.ts)", () => {
     const start = source.indexOf("leaseHoldController = createLeaseHoldController({");
     expect(start).toBeGreaterThan(0);
     const end = source.indexOf("\n    });", start);
     const block = source.slice(start, end);
     expect(block).toContain("isHeld: () => leaseView()?.held() === true");
-    expect(block).toContain("chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement");
-    expect(block).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
-    expect(block).toContain("paintMainQueue();");
-    expect(block).toContain("remoteQueue.runQueued(drained);");
+    expect(block).toContain("onRelease: () => drainSites.onLeaseRelease()");
+    expect(source).toContain(
+      "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement",
+    );
+    expect(source).toContain("take: () => forceHandoff.takeNext() ?? mainQueue.shift(),");
   });
 });
 
