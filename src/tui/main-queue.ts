@@ -252,20 +252,22 @@ export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {
   paint: () => void;
   run: (item: T) => void;
   /** A turn, a foreground operation or a pending hand-off is in flight. Detached slash work is counted by `detach`. */
-  workInFlight: () => boolean;
+  turnWorkInFlight: () => boolean;
   /** The drain left nothing queued and started nothing, so the bus may wake. */
   onSettle: () => void;
+  /** Detached slash work rejected: say why. The queue is released afterwards either way. */
+  onDetachedFailure: (error: unknown) => void;
 }): {
   onForegroundOperationComplete(): void;
   onTurnSettle(): void;
   onLeaseRelease(): void;
   /** Hold the queue until `work` settles (either way), then drain what waited behind it. */
   detach(work: Promise<unknown>): void;
-  /** Everything the drain waits on: `deps.workInFlight` plus detached slash work. */
+  /** Everything the drain waits on: `deps.turnWorkInFlight` plus detached slash work. */
   workInFlight(): boolean;
 } {
   let detached = 0;
-  const workInFlight = (): boolean => deps.workInFlight() || detached > 0;
+  const workInFlight = (): boolean => deps.turnWorkInFlight() || detached > 0;
   const drain = (): DrainOutcome => {
     const outcome = drainNext({
       take: () => deps.forced.takeNext() ?? deps.queue().shift(),
@@ -297,7 +299,14 @@ export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {
         detached -= 1;
         drainWhenIdle();
       };
-      work.then(end, end);
+      work.then(end, (error: unknown) => {
+        try {
+          deps.onDetachedFailure(error);
+        } catch {
+          // a failing report must not strand the queue
+        }
+        end();
+      });
     },
     workInFlight,
   };

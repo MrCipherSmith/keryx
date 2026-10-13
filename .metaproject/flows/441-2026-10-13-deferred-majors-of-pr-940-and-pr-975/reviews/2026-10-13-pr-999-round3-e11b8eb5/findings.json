@@ -1,0 +1,212 @@
+[
+  {
+    "id": "F-021",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "detach() releases the hold on a rejection and discards the reason: `end` ignores its argument and is the second argument of then(). The six detachSlashWork call sites in tui-shell.ts (/schedule, /goal, /search-provider, /search-connect, /model, /connect and /provider) hand it bare async IIFEs, and the /model and /connect IIFEs await opts.redetect(), modelsForPicker() and switchTo() with no try/catch around them. At f6b16a38 the same rejection surfaced as an unhandled rejection of the derived `.finally` promise; now nothing reports it. Five reviewers (clean-code, logic, highload, architecture, security) filed this independently.",
+    "impact": "Trigger: /model (or /connect) while opts.redetect() or switchTo() rejects, for example a network failure while re-detecting providers. Outcome: the picker does not open, nothing is printed and nothing is logged (src has no unhandledRejection handler), so the operator sees a command that did nothing. The queue behind it does run, which is the fix. The cost is a lost error message at six call sites; the harm is diagnostics only.",
+    "suggested_fix": "Give the factory an optional `onDetachedError?: (cause: unknown) => void` dep, call it in the rejection branch before `end`, and wire it in the shell to the system-notice path (`slash command failed: <message>`). Add a model case in main-queue-drain.test.ts that rejects a detached promise and asserts the reporter is called as well as the drain.",
+    "evidence": "main-queue.ts 294-301; research-evidence/highload-wake-repro.ts P8 (rejecting detach gives 0 unhandled rejections) and P8b (the old `.finally` shape gives 1); research-evidence/logic-probe.ts; mutation M20 (`work.then(end, () => undefined)`) is killed, so the drain behaviour is pinned and only the report is not.",
+    "confidence": "high",
+    "file": "src/tui/main-queue.ts",
+    "line": 300,
+    "quote": "work.then(end, end);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 300
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:8767 (/schedule or /goal)",
+        "src/tui/tui-shell.ts:8781",
+        "src/tui/tui-shell.ts:8824",
+        "src/tui/tui-shell.ts:8858",
+        "src/tui/tui-shell.ts:9297 (/model)",
+        "src/tui/tui-shell.ts:9356 (/connect, /provider)"
+      ],
+      "enumeration_method": "keryx ctx rg for `detachSlashWork(` in tui-shell.ts: the definition at 7971 and six call sites, then read each IIFE for its own catch."
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-021"
+  },
+  {
+    "id": "F-022",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The detached counter is exercised only one work at a time. Mutant M01 replaces `detached -= 1;` with `detached = 0;` and passes all 31 tests of main-queue-drain.test.ts and the other eight TUI test files, because no test holds two detached works at once and ends only one of them.",
+    "impact": "Trigger: an edit turns the decrement into a reset (or an equivalent bug), and two slash commands with detached work overlap, for example /goal running while a /model picker is open. Outcome: when the first one ends the counter drops to zero, `workInFlight()` reports idle while the second is still running, and the settle sites drain a queued line beside the open picker or the running /goal. Today's code is correct; only the pin is missing. Mutant M01 survived.",
+    "suggested_fix": "Add a model case: call `detach` twice with two pending promises, resolve one, assert `workInFlight()` is still true and a queued line has not run, then resolve the second and assert the line runs once.",
+    "evidence": "mutant:M01-detach-counter-reset-to-zero (src/tui/main-queue.ts:297, survived; 35 of 36 mutants killed, see the mutation pass).",
+    "confidence": "high",
+    "file": "src/tui/main-queue.ts",
+    "line": 297,
+    "quote": "detached -= 1;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 297
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-022",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#M01-detach-counter-reset-to-zero"
+    }
+  },
+  {
+    "id": "F-023",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The fix moved the bus wake out of the turn-settle block and into every drain that ends empty (turn settle, operation complete, lease release, detach end), and made `isIdle` read the factory's combined predicate. The comments in bus-wake.ts still describe the old shape: the `onSettle` doc here (turn settles only), the `isIdle` doc at line 75 (`!chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0`, no detached work, hand-off or lease) and the F4 note at lines 65-67. The comment above the task-notification wake in tui-shell.ts (9947-9953) says it uses 'the same rule the bus-wake controller's own isIdle enforces', which is no longer true.",
+    "impact": "Trigger: a maintainer reads bus-wake.ts to learn when the wake can fire. Outcome: they learn a three-term predicate and a single call site that the code no longer has, and may edit the wrong place. Maintenance cost only.",
+    "suggested_fix": "Update the three bus-wake.ts comments to name the factory's `workInFlight()` plus the queue length, the lease and `destroyed`, and to list the four sites that reach `onSettle`; correct the tui-shell.ts 9947-9953 comment or fix F-025 so it becomes true.",
+    "evidence": "bus-wake.ts 65-67, 75, 108; tui-shell.ts 9947-9953 against 9991-9995 and main-queue.ts 277.",
+    "confidence": "high",
+    "file": "src/tui/bus-wake.ts",
+    "line": null,
+    "quote": "Call when a turn settles and no queued operator item ran instead.",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 108
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-023"
+  },
+  {
+    "id": "F-024",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The factory has a dep named `workInFlight` (the shell's predicate: chrome busy, foreground operation, hand-off) and returns a method of the same name (that predicate OR the detached counter). They are different predicates under one name, and both sit within fifteen lines of each other. A caller of `drainSites.workInFlight()` in the shell cannot tell from the name which one it gets, and `deps.workInFlight` inside the factory is easy to confuse with the local `workInFlight`. Mutants M04, M05, M11 and M12 show the two are already mixed up by one-word edits.",
+    "impact": "Trigger: a maintainer wires a new reader to the dep or to the returned method. Outcome: the wrong one is chosen without a type error. Maintenance cost only.",
+    "suggested_fix": "Rename the dep to `shellBusy` (or `foregroundBusy`) and keep `workInFlight` for the combined predicate the factory returns.",
+    "evidence": "main-queue.ts 255, 265, 268; tui-shell.ts 7966, 9993.",
+    "confidence": "high",
+    "file": "src/tui/main-queue.ts",
+    "line": 255,
+    "quote": "workInFlight: () => boolean;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 255
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-024"
+  },
+  {
+    "id": "F-025",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "F-019 was fixed for the bus wake only. Three more readers of 'may a new turn start now' still re-derive the predicate and ignore detached slash work: the task-notification wake (this line; it also ignores the hand-off), drainIdleMainQueue's isIdle (8656-8661) and the bridge host's isBusy (10147-10150). The PR defines 'queue work in flight' once in the factory and four readers now disagree about it.",
+    "impact": "Trigger: /goal or a /model picker is running detached and a background shell task finishes, a late 'main' recipient choice lands, or a Telegram line arrives. Outcome: a task-notification turn or an immediate runLine starts beside the detached work on the same history instead of waiting. The operator can already do this by typing, so this is not new harm; no wrong output was demonstrated. The cost is that the next edit of the predicate has to find the four sites by hand.",
+    "suggested_fix": "Read `drainSites.workInFlight()` at 9955, in drainIdleMainQueue's isIdle and in the bridge host's isBusy (`drainSites.workInFlight() || mainQueue.length > 0 || leaseView()?.held() === true`), and add a source audit for each in the style of tui-bus.test.ts.",
+    "evidence": "keryx ctx rg for `foregroundOperation\\.isActive|chrome\\.isBusy\\(\\)` in tui-shell.ts: readers at 7290, 7966, 8658, 9955, 10147, 10155; 7966 is the factory's own definition and 7290 and 10155 are settings and turn-running checks. Regression, highload and logic reached the same sites and judged them info.",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": 9955,
+    "quote": "const busy = chrome.isBusy() || foregroundOperation.isActive;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 9955
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:9955 task-notification wake",
+        "src/tui/tui-shell.ts:8656 drainIdleMainQueue isIdle",
+        "src/tui/tui-shell.ts:10147 bridge host isBusy",
+        "src/tui/tui-shell.ts:9993 bus-wake isIdle (fixed)"
+      ],
+      "enumeration_method": "keryx ctx rg on `foregroundOperation.isActive|chrome.isBusy()` over tui-shell.ts, keeping the readers that decide whether a new turn may start."
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-025"
+  },
+  {
+    "id": "F-026",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The factory does not own every drain. A Forced line is dispatched by forceMainQueue -> forceForegroundQueueItem -> runAfterForegroundSettlement -> remoteQueue.runQueued(next), and that path never calls the drain or onSettle after the line has run. The settle sites are blind to it: onTurnSettle and onForegroundOperationComplete return while forced.isAwaitingSettlement, and drainWhenIdle returns on workInFlight, which includes the hand-off. If the forced line is a slash command that ends inline (/compact, /new and similar start no turn), nothing drains the lines behind it and nothing wakes the bus. Verified as pre-existing: the same stranding exists at the merge-base 01e0dbfe, at f6b16a38 and at e11b8eb5, and it extends round-1 F-011 (the idle path and Force are single-item drains).",
+    "impact": "Trigger: the main queue holds a deferred slash command and a question behind a running turn, and the operator presses Force (Ctrl+Q, the button or /queue force) on the slash command. Outcome: the cancelled turn settles, the hand-off runs the slash command inline and stops, and the question stays shown as queued until the operator types another line or another turn settles; a pending bus message is not woken either. Repro against the real createMainQueueDrain, ForegroundForceHandoff and forceForegroundQueueItem prints {\"ran\":[\"/compact\"],\"queueLeft\":[\"question\"],\"settles\":0,\"workInFlight\":false}. Not introduced by this PR, so it never blocks; the round-3 isIdle change only changes which flag is read during a microtask window no poll can observe.",
+    "suggested_fix": "Route the hand-off's run through the factory: add `afterDirectRun(): void { drainWhenIdle(); }` to the returned object and in forceMainQueue pass `run: (next) => { remoteQueue.runQueued(next); drainSites.afterDirectRun(); }`; do the same for the drainIdleMainQueue dispatch at 8663. A forced question makes the shell busy, so the call is a no-op there. Add a model case: the hand-off runs an inline slash line with a line queued behind it, and the line runs. Best done with F-011 in a follow-up flow.",
+    "evidence": "research-evidence/wt/force-inline-slash-repro.ts; verifier (Wave C) CONFIRMED_PRE_EXISTING by execution at e11b8eb5 and f6b16a38 (research-evidence/verify/repro-head.ts, verify/r2/repro.ts) and by reading the base (verify/shell-base.ts); foreground-operation.ts 194-216 is unchanged since f6b16a38; main-queue.ts 285-293.",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": 8047,
+    "quote": "void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 8047
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:7965 drainSites run (inside the factory, covered)",
+        "src/tui/tui-shell.ts:8049 forceMainQueue hand-off run (not covered)",
+        "src/tui/tui-shell.ts:8663-8666 drainIdleMainQueue dispatch (not covered: runs one line, nothing drains if it ended inline)"
+      ],
+      "enumeration_method": "keryx ctx rg for `runQueued(` in src/tui (three call sites in tui-shell.ts), then checked per site whether a drain or onSettle follows the run."
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-026",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Repro faithful: forceMainQueue (tui-shell.ts:8028-8051) -> forceForegroundQueueItem (foreground-operation.ts:194-216) -> runAfterForegroundSettlement -> remoteQueue.runQueued(next) (tui-shell.ts:8049). runQueued is only deps.runLine(item.question,'operator',item.source) (remote-queue-wiring.ts:158-160). The /compact branch of runLine (tui-shell.ts:8798-8822) runs compactSession, prints and returns; it never calls foregroundOperation.begin/settle, stopBusy, onForegroundOperationComplete, drainSites.* or busWakeController.onSettle. Executed: repro-head.ts against the e11b8eb5 worktree sources printed {\"ran\":[\"/compact\"],\"queueLeft\":[\"question\"],\"settles\":0,\"workInFlight\":false}; the same model against f6b16a38 printed the same. PRE-EXISTING: the stranding exists at 01e0dbfe (no factory; the turn-settle block skips both the drain and the bus wake during a hand-off), at f6b16a38 and at e11b8eb5. forceMainQueue and forceForegroundQueueItem are unchanged (git diff f6b16a38 e11b8eb5 on foreground-operation.ts is empty). The round-3 isIdle change did not cause the missed wake: onSettle is never called after a forced inline line at any of the three commits. Method: execution at head and round 2; read-only trace of the base (no execution, the factory does not exist there).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-027",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "drainWhenIdle (lease release and detach end) and onForegroundOperationComplete have no `destroyed` guard; carried from round-2 F-020 point 2. If `run` throws synchronously inside a late detach-end drain (runLine -> foregroundOperation.begin() on a disposed owner), the exception escapes `end` as an unhandled rejection of the derived promise and the line already taken from the queue is lost.",
+    "impact": "No outcome reproduced in a real shell. Needs detached work (a /model picker) still pending when the shell is torn down while lines are queued behind a running turn. The bus wake is safe because isIdle checks !destroyed. The shape is the same as before the fix, so it is not a regression.",
+    "suggested_fix": "Optional: a `shouldDrain: () => boolean` dep (shell passes `() => !destroyed && !foregroundOperation.isDisposed`) checked in drainWhenIdle.",
+    "evidence": "research-evidence/logic-probe.ts probe 1; research-evidence/highload-wake-repro.ts P7 and P10; tui-shell.ts 3983-3985.",
+    "confidence": "low",
+    "file": "src/tui/main-queue.ts",
+    "line": 280,
+    "quote": "const drainWhenIdle = (): void => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 280
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-027"
+  },
+  {
+    "id": "F-028",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "Three small points on the new factory. (1) The returned `onTurnSettle` and `onForegroundOperationComplete` have identical bodies (both return on the hand-off, then drain); a shared local would state the intent once. (2) `drain` returns a DrainOutcome that no caller reads once the onSettle call moved inside it. (3) `detachSlashWork` in tui-shell.ts is a pass-through to `drainSites.detach`.",
+    "impact": "No observable outcome; reading cost only.",
+    "suggested_fix": "None required; fold into the next edit of the file.",
+    "evidence": "main-queue.ts 269-301; tui-shell.ts 7971.",
+    "confidence": "high",
+    "file": "src/tui/main-queue.ts",
+    "line": 269,
+    "quote": "const drain = (): DrainOutcome => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 269
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-028"
+  },
+  {
+    "id": "F-029",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "Test hygiene in the round-3 delta. This line is missing its semicolon. Several new test titles carry bare finding ids as their only description. The shell wiring (`queue: () => mainQueue,`, the bus `isIdle` term `!drainSites.workInFlight() &&`) is pinned by source text only in tui-hold, busy-dispatch, tui-bus and tui-shell tests; the shell cannot be mounted headless, so that is the available seam, and the behaviour behind each pin is covered in main-queue-drain.test.ts.",
+    "impact": "No observable outcome. A formatting nit, a naming nit, and a reminder that the shell binding is guarded by text rather than by behaviour (round-1 Q1 is still with the operator).",
+    "suggested_fix": "Add the semicolon; name the cases by behaviour rather than by finding id.",
+    "evidence": "src/tui/tui-hold.test.ts:160; main-queue-drain.test.ts 256 onward; mutants S01 and S02 are killed by the text pins.",
+    "confidence": "high",
+    "file": "src/tui/tui-hold.test.ts",
+    "line": 160,
+    "quote": "expect(source).not.toContain(\"detachedSlashWork\")",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 160
+    },
+    "global_id": "2026-10-13-pr-999-round3-e11b8eb5#F-029"
+  }
+]

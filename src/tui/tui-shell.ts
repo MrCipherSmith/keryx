@@ -317,6 +317,7 @@ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
+import { terminalSafe } from "../lib/terminal-safe";
 import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
@@ -7963,8 +7964,12 @@ export async function launchTuiAgentShell(opts: {
       queue: () => mainQueue,
       paint: () => paintMainQueue(),
       run: (next) => remoteQueue.runQueued(next),
-      workInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
+      turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
       onSettle: () => busWakeController?.onSettle(),
+      onDetachedFailure: (error) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        io.onSystem?.(`◇ a slash command failed: ${terminalSafe(reason).text}\n`);
+      },
     });
     // A slash command whose work outlives its handler (it returns before the work ends) holds the
     // queue until the work ends, then drains what waited behind it.
@@ -9946,11 +9951,12 @@ export async function launchTuiAgentShell(opts: {
     //
     // Idle means both halves — nothing running in the foreground AND nothing
     // the operator queued. A queued message is the real next step and the
-    // settle handlers keep draining it first; a notification that jumped that
-    // queue would answer a question nobody asked yet. Flow 275 T7
+    // drain sites (`drainSites`) keep draining it first; a notification that
+    // jumped that queue would answer a question nobody asked yet. Flow 275 T7
     // (specification §4.3, AC4): a `turns` lease holding this instance is a
-    // third reason to stay "not idle" — same rule the bus-wake controller's
-    // own `isIdle` enforces right below.
+    // third reason to stay "not idle". This test does not look at detached
+    // slash work (flow 441, F-025); the bus-wake controller's own `isIdle`
+    // right below does, via `drainSites.workInFlight()`.
     deps.jobRegistry?.onCompletion(() => {
       const busy = chrome.isBusy() || foregroundOperation.isActive;
       const idle = !busy && mainQueue.length === 0 && leaseView()?.held() !== true;

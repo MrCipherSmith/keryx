@@ -130,7 +130,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
       "queue: () => mainQueue,",
       "paint: () => paintMainQueue(),",
       "run: (next) => remoteQueue.runQueued(next),",
-      "workInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
       "onSettle: () => busWakeController?.onSettle(),",
     ]) {
       expect(body).toContain(field);
@@ -157,7 +157,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length);
     // the counter and the end-of-work drain live in the factory (behaviour: main-queue-drain.test.ts)
     expect(source).toContain("const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);");
-    expect(source).not.toContain("detachedSlashWork")
+    expect(source).not.toContain("detachedSlashWork");
   });
 
   test("a finished foreground operation drains the queue (flow 441)", () => {

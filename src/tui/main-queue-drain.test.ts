@@ -18,6 +18,8 @@ interface ModelShell {
   turns: string[];
   paints: number;
   settles: number;
+  /** The reasons reported for rejected detached work. */
+  failures: string[];
   busy: boolean;
   awaitingSettlement: boolean;
   /** The work of the detached slash commands still running, oldest first. */
@@ -43,6 +45,7 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
     turns: [],
     paints: 0,
     settles: 0,
+    failures: [],
     busy: false,
     awaitingSettlement: false,
     detachedWork: [],
@@ -97,9 +100,12 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
       shell.paints += 1;
     },
     run: (next) => runLine(next.question),
-    workInFlight: () => shell.busy || shell.awaitingSettlement,
+    turnWorkInFlight: () => shell.busy || shell.awaitingSettlement,
     onSettle: () => {
       shell.settles += 1;
+    },
+    onDetachedFailure: (error) => {
+      shell.failures.push(error instanceof Error ? error.message : String(error));
     },
   });
   return shell;
@@ -341,14 +347,61 @@ describe("F-017: detached work that rejects still releases the queue", () => {
     expect(shell.turns).toEqual(["question"]);
   });
 
+  test("the rejection reason is reported before the queue is released, and the release happens even if the report throws", async () => {
+    const shell = modelShell();
+    shell.queue.push(item("a", "question"));
+    shell.startDetached();
+    await shell.failDetached();
+    expect(shell.failures).toEqual(["detached work failed"]);
+    expect(shell.ran).toEqual(["question"]);
+
+    let ran = 0;
+    const sites = createMainQueueDrain({
+      forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
+      queue: () => [item("a", "question")],
+      paint: () => {},
+      run: () => void (ran += 1),
+      turnWorkInFlight: () => false,
+      onSettle: () => {},
+      onDetachedFailure: () => {
+        throw new Error("report failed");
+      },
+    });
+    const caught: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => void caught.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      sites.detach(Promise.reject(new Error("work failed")));
+      await new Promise((done) => setTimeout(done, 5));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    expect(sites.workInFlight()).toBe(false);
+    expect(ran).toBe(1);
+  });
+
+  test("two detached works overlap: the first end leaves the queue held, the second end drains", async () => {
+    const shell = modelShell();
+    shell.queue.push(item("a", "question"));
+    shell.startDetached();
+    shell.startDetached();
+    await shell.endDetached();
+    expect(shell.ran).toEqual([]);
+    expect(shell.queue).toHaveLength(1);
+    await shell.endDetached();
+    expect(shell.ran).toEqual(["question"]);
+    expect(shell.queue).toEqual([]);
+  });
+
   test("workInFlight counts the detached work until it ends, whichever way", async () => {
     const sites = createMainQueueDrain({
       forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
       queue: () => [],
       paint: () => {},
       run: () => {},
-      workInFlight: () => false,
+      turnWorkInFlight: () => false,
       onSettle: () => {},
+      onDetachedFailure: () => {},
     });
     expect(sites.workInFlight()).toBe(false);
     let resolve!: () => void;
