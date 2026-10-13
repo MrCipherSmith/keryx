@@ -13,8 +13,10 @@ import { findById, loadOpenTui, mountChrome, settle, textOf } from "./ops-sideba
 import {
   formatReviewRowLines,
   formatReviewsHeaderLines,
+  isReviewLayersCommand,
   isReviewsCommand,
   mountReviewsPanel,
+  projectReviewsLayerLines,
   presentReviews,
   projectReviewsRow,
   renderReviewsText,
@@ -273,5 +275,69 @@ describe("sidebar row", () => {
     } finally {
       h.destroy();
     }
+  });
+});
+
+// Flow 431 AC12: the layers line per review in the sidebar, and the menu actions.
+describe("layers in /reviews", () => {
+  const depthRow = (over: object = {}) =>
+    ({
+      reviewId: "r1",
+      pull: "acme/app#7",
+      mode: "all",
+      selected: [],
+      required: [],
+      excluded: [],
+      missing: [],
+      filesKnown: true,
+      mutation: { passes: 0, totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 }, pending: 0 },
+      mutationWaived: false,
+      layersView: {
+        dir: "/p/r1",
+        layers: null,
+        usage: { withLog: 1, usedAny: 1, unknown: 1, total: 2, perLayer: { graph: 1, wiki: 0, memory: 0, ctx: 0 } },
+        chunks: { schemaVersion: 1, reviewer: "review-regression", tier: "middle", totals: { chunks: 4, files: 4, done: 2, failed: 0, pending: 2 }, chunks: [], uncoveredFiles: [], findings: [] },
+        coverageTracked: true,
+        uncovered: 3,
+        coverage: "coverage: in scope 5, covered 2, omitted 0, uncovered 3",
+        waiver: undefined,
+      },
+      ...over,
+    }) as never;
+
+  test("`/review layers` is its own command and the bare /review is not it", () => {
+    expect(isReviewLayersCommand("/review layers")).toBe(true);
+    expect(isReviewLayersCommand("  /review   layers  ")).toBe(true);
+    expect(isReviewLayersCommand("/review")).toBe(false);
+    expect(isReviewLayersCommand("/reviews layers")).toBe(false);
+  });
+
+  test("the sidebar carries one entry per review with the layers used, the unknown count and the chunk pass, within the width", () => {
+    const lines = projectReviewsLayerLines([depthRow(), depthRow({ reviewId: "r2" })], SIDEBAR_TEXT_WIDTH);
+    expect(lines).toHaveLength(2);
+    const joined = lines[0]!.replace(/\n/g, " ");
+    expect(joined).toContain("layers used 1/2");
+    expect(joined).toContain("unknown 1");
+    expect(joined).toContain("chunks 2/4, uncovered 3");
+    for (const line of lines[0]!.split("\n")) expect(line.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+    expect(projectReviewsLayerLines(undefined, SIDEBAR_TEXT_WIDTH)).toEqual([]);
+  });
+
+  test("`l` refreshes the newest review's layers and `c` prepares its missing chunks, through the menu actions", async () => {
+    const called: string[] = [];
+    const actions = {
+      refreshLayers: async (r: { reviewId: string }) => (called.push(`layers:${r.reviewId}`), "refreshed"),
+      runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+    };
+    const view = open(metrics(), { depth: [depthRow(), depthRow({ reviewId: "r2" })], actions });
+    view.press("l");
+    view.press("c");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(called).toEqual(["layers:r1", "chunks:r1"]);
+  });
+
+  test("without actions the keys do nothing", async () => {
+    const view = open(metrics(), { depth: [depthRow()] });
+    expect(() => view.press("l")).not.toThrow();
   });
 });
