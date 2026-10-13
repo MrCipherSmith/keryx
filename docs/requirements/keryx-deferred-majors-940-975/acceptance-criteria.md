@@ -23,7 +23,7 @@ Rules:
 ### Trust table: `bun test` (F-007)
 
 - AC5: `isTrustRoutineCommand` returns false for `bun test --preload ./x.ts`, for `keryx ctx run -- bun test --preload ./x.ts`, for `bun test ./some/file.test.ts` (positional path), for `bun test --coverage-dir /tmp/x` (output flag), and for `cd /tmp/other && bun test` - red before, green after.
-- AC6: `isTrustRoutineCommand("bun test")` in the project root with an unchanged `bunfig.toml` stays true, and so does `bun test` with only flags from a named allow-list of flags that take no path or output value; the same command after the `bunfig.toml` hash changed, or when the file carries a `preload`, is false, and so is any positional path or any flag outside the allow-list - tests for each branch (operator decision 1 of poll 137: "only without path and output flags"; the allow-list is fixed in T2 and shown to the operator before freeze).
+- AC6: `isTrustRoutineCommand("bun test")` in the project root with an unchanged `bunfig.toml` stays true, and so does `bun test` with only flags from this closed allow-list: `--bail`, `--only`, `--todo`, `--rerun-each N` and `--timeout N` (N is a plain non-negative integer); the same command after the `bunfig.toml` hash changed, or when the file carries a `preload`, is false, and so is any positional path, any other flag, and `--rerun-each` or `--timeout` with a non-integer value - tests for each branch (operator decision 1 of poll 137: "only without path and output flags"; allow-list fixed by poll 142, 2026-10-13).
 - AC7: After untrusted content entered the turn, no `bun test` form is routine - a test over the argument-free and the argument forms.
 
 ### Path flags (F-008)
@@ -36,10 +36,10 @@ Rules:
 
 - AC11: `parseReviewResult` on a truncated reply whose outer object does not close (a `slices[]` array with nested `{"status": ...}` entries) returns `undefined`, not a nested entry - red before, green after.
 - AC12: `parseReviewResult` on a reply whose `slices` array has a trailing comma returns `undefined`, and so does a reply with a trailing comma before the closing brace.
-- AC13: `parseReviewResult` on `{"status":"BLOCKED","reviewer":"r","findings":[]}` followed by a trailing `{"status":"DONE"}` returns the BLOCKED object or `undefined` (the two-status case is ambiguous), never the DONE object - the test pins the chosen outcome.
+- AC13: `parseReviewResult` on `{"status":"BLOCKED","reviewer":"r","findings":[]}` followed by a trailing `{"status":"DONE"}`, with no `REVIEW_RESULT` marker, returns `undefined` (the two-status case is ambiguous and raises the existing "no parseable REVIEW_RESULT block" gap), never either object; the same two objects with a `REVIEW_RESULT` marker before one of them return the object after the marker (poll 142, 2026-10-13).
 - AC14: `parseReviewResult` accepts only a top-level object with `reviewer` or a `findings` array; an object with only a string `status` is rejected. The fenced `REVIEW_RESULT` branch and its existing tests are unchanged and stay green.
 - AC15: When a `REVIEW_RESULT` marker is present with a bare object after it, the object after the marker is the result even when an earlier or later object has a `status`.
-- AC16: The parser run over every `raw/` reviewer file of every closed review round in the repository returns the same result as before the change, or a documented gap for a file that parsed by luck; the replay report is checked in with the change and lists no unexplained difference.
+- AC16: The parser run over every `raw/` reviewer file of every closed review round in the repository returns the same result as before the change, or differs and is listed in a checked-in replay report; every listed difference (a file that parsed by luck and now gives a gap) is shown to the operator and decided file by file before the change merges, and the report has no undecided row (poll 142, 2026-10-13). The parser is not tuned to keep a lucky file parsing.
 
 ### Verify commands (D-02)
 

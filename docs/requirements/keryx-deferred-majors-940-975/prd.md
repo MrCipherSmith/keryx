@@ -95,12 +95,19 @@ Confirmed by the operator in message 201365 ("Записывай 137").
 2. **F-008 place of the fix:** both. The command refuses an outside path itself, and the routine table treats the three commands as non-routine when a path flag points outside the project root.
 3. **Flow shape:** one flow, five criteria groups (R1 to R5), one pull request chain.
 
+### Operator answers (poll 142, 2026-10-13)
+
+1. **AC6 allow-list:** `--bail`, `--only`, `--todo`, `--rerun-each N`, `--timeout N` (flags without a path or output value). Closed list; everything else asks. Now written into AC6.
+2. **AC13 two different `status` objects:** take the object after the `REVIEW_RESULT` marker; without a marker, no result (gap). Written into AC13.
+3. **AC16 files that parsed by luck:** decided file by file together with the operator, not by tuning the parser. Written into AC16 and T4.
+4. **AC19:** flow 427 AC2 and AC5 are not edited; the missing `review-slice.test.ts` is added (AC17).
+
 ## Tasks
 
 - T1: R4 and R5 (ledger parser, review-slice tests). Ledger and tests only, no TUI.
 - T2: R2 and R3 (trust table and the confinement of path flags).
 - T3: R1 (queue drain helper and three-site tests).
-- T4: replay of the closed review rounds' `raw/` files through the new parser; a no-op report is the pass condition.
+- T4: replay of the closed review rounds' `raw/` files through the new parser; a no-op report is the pass condition, and every difference is decided file by file with the operator.
 
 ## Out of scope for this draft
 
