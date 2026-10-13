@@ -1,6 +1,6 @@
 # Acceptance Criteria - Metaproject in Review
 
-Status: read by the operator on 2026-10-13 with no edits; frozen as flow 431. The frozen copy in the flow directory is authoritative.
+Status: read by the operator on 2026-10-13 with no edits; not yet frozen: the flow 431 directory still holds a different draft, and these criteria become the flow only when it is replaced and frozen.
 
 Rules:
 
