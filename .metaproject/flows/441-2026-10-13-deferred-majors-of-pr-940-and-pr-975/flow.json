@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "441",
+  "slug": "deferred-majors-of-pr-940-and-pr-975",
+  "title": "Deferred majors of PR 940 and PR 975",
+  "status": "initializing",
+  "createdAt": "2026-10-13T07:31:12.803Z",
+  "updatedAt": "2026-10-13T07:32:04.035Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Долги и 2 фло, последнее про использование metaproject в ревью.",
+    "source": "helyx channel message 200493, 2026-10-12; polls 135, 137, 138, 142, 145"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7 (one implement task per PRD task)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each implement task T5-T7 and the replay task T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "R4+R5: parseReviewResult in src/review/ledger.ts, review-slice.test.ts, verify-command repo check (PRD T1)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "R2+R3: bun test trust rule and path confinement of review slice, retry-plan, dispatch-check (PRD T2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "R1: shared drainNext helper for the three queue drain sites in the TUI shell (PRD T3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Replay of closed review rounds' raw files through the new parser; decide differences file by file with the operator (PRD T4)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-13T07:31:12.803Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-13T07:31:57.991Z",
+      "event": "task-added",
+      "detail": "T5: R4+R5: parseReviewResult in src/review/ledger.ts, review-slice.test.ts, verify-command repo check (PRD T1)"
+    },
+    {
+      "at": "2026-10-13T07:31:58.448Z",
+      "event": "task-added",
+      "detail": "T6: R2+R3: bun test trust rule and path confinement of review slice, retry-plan, dispatch-check (PRD T2)"
+    },
+    {
+      "at": "2026-10-13T07:31:58.951Z",
+      "event": "task-added",
+      "detail": "T7: R1: shared drainNext helper for the three queue drain sites in the TUI shell (PRD T3)"
+    },
+    {
+      "at": "2026-10-13T07:31:59.424Z",
+      "event": "task-added",
+      "detail": "T8: Replay of closed review rounds' raw files through the new parser; decide differences file by file with the operator (PRD T4)"
+    },
+    {
+      "at": "2026-10-13T07:32:03.560Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-13T07:32:04.035Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ]
+}
