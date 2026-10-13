@@ -2,7 +2,9 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { resolveProjectRoot } from "../lib/contained-path";
 import { writeFileAtomic } from "../lib/fs";
+import { reviewPathFlagRefusal } from "../lib/review-path-flags";
 import { parseReviewResult } from "../review/ledger";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
@@ -26,6 +28,15 @@ const RETRY_STATE_NAME = "retry-state.json";
 
 function wantsHelp(args: readonly string[]): boolean {
   return args.includes("--help") || args.includes("-h");
+}
+
+/** Refuse, before anything is read or written, a path flag that lands outside the project root and `.metaproject/`. */
+function refuseOutsidePaths(command: string, args: readonly string[]): void {
+  const cwd = process.cwd();
+  const refusal = reviewPathFlagRefusal(command, args, { projectRoot: resolveProjectRoot(cwd), cwd });
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
 }
 
 export function printSliceHelp(): void {
@@ -114,6 +125,7 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     return;
   }
   deps.rejectUnknownFlags(args, SLICE_FLAGS, "slice");
+  refuseOutsidePaths("slice", args);
   const contextLines = deps.parseContextLines(optionValue(args, "--context"));
   const rawMax = optionValue(args, "--max-bytes");
   const maxBytes = validateSliceMaxBytes(rawMax === undefined ? DEFAULT_SLICE_MAX_BYTES : Number(rawMax));
@@ -198,6 +210,7 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
     return;
   }
   deps.rejectUnknownFlags(args, DISPATCH_CHECK_FLAGS, "dispatch-check");
+  refuseOutsidePaths("dispatch-check", args);
   const payloadSource = optionValue(args, "--payload");
   if (payloadSource === undefined) {
     throw new Error("Missing --payload <file|->. See `keryx review dispatch-check --help`.");
@@ -233,6 +246,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     return;
   }
   deps.rejectUnknownFlags(args, RETRY_PLAN_FLAGS, "retry-plan");
+  refuseOutsidePaths("retry-plan", args);
   const manifestSource = optionValue(args, "--manifest");
   const resultSource = optionValue(args, "--result");
   const nextWave = args.includes("--next-wave");

@@ -112,6 +112,57 @@ export async function resolveContainedPath(
   return { ok: true, path: real };
 }
 
+export type PlacedPathResult = { ok: true; path: string } | { ok: false; message: string };
+
+/**
+ * Where a path a command is about to create or overwrite would really land, and whether that stays inside
+ * the project root or one of `extraRoots`. A target that does not exist yet is judged by the real path of its
+ * nearest existing ancestor, so a symlink inside the project that points out is refused; a dangling or looping
+ * link is refused too. `candidate` is resolved against `cwd`.
+ */
+export function placePathWithinSync(
+  projectRoot: string,
+  candidate: string,
+  cwd: string,
+  extraRoots: readonly string[] = [],
+): PlacedPathResult {
+  const realOf = (target: string): string | null => {
+    try {
+      return realpathSync(target);
+    } catch {
+      return null;
+    }
+  };
+  const rootReal = realOf(projectRoot) ?? path.resolve(projectRoot);
+  const allowed = [rootReal, ...extraRoots.map((extra) => realOf(path.resolve(rootReal, extra))).filter((real): real is string => real !== null)];
+  const absolute = path.resolve(cwd, candidate);
+
+  let ancestor = absolute;
+  const tail: string[] = [];
+  for (;;) {
+    let present = true;
+    try {
+      lstatSync(ancestor);
+    } catch {
+      present = false;
+    }
+    if (present) break;
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) break;
+    tail.unshift(path.basename(ancestor));
+    ancestor = parent;
+  }
+  const ancestorReal = realOf(ancestor);
+  const effective = ancestorReal === null ? null : path.join(ancestorReal, ...tail);
+  if (effective === null || !allowed.some((root) => isInside(root, effective))) {
+    return {
+      ok: false,
+      message: `refused: ${candidate} resolves outside the project root. Paths must stay inside ${rootReal}.`,
+    };
+  }
+  return { ok: true, path: effective };
+}
+
 /**
  * Synchronous twin of {@link resolveContainedPath}, for the command paths that
  * are synchronous end to end (`agents monitor`). Same rules, same order: real

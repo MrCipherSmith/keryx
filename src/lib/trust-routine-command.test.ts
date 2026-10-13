@@ -2,11 +2,15 @@
 // without a prompt, and everything outside it (or joined to it in a risky way) still asks.
 
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   TRUST_ROUTINE_KEYRYX,
   TRUST_ROUTINE_TOOLS,
   isTrustRoutineCommand,
   isTrustRoutineTool,
+  recordBunfigBaseline,
 } from "./trust-routine-command";
 
 test("AC1: the table names the read-only keryx commands of the frozen criteria", () => {
@@ -122,3 +126,136 @@ test("AC2: an exec flag on a listed command still prompts", () => {
   expect(isTrustRoutineCommand("keryx review ledger build --exec ./evil")).toBe(false);
   expect(isTrustRoutineCommand("keryx help -c x")).toBe(false);
 });
+
+// Flow 441 (F-007, F-008): `bun test` and the review path flags.
+
+function projectDir(bunfig?: string, options: { baseline?: boolean } = {}): string {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-")));
+  mkdirSync(path.join(dir, ".git"));
+  mkdirSync(path.join(dir, ".metaproject"));
+  mkdirSync(path.join(dir, "sub"));
+  if (bunfig !== undefined) writeFileSync(path.join(dir, "bunfig.toml"), bunfig);
+  if (options.baseline !== false) recordBunfigBaseline(dir);
+  return dir;
+}
+
+test("AC5: bun test with a preload, a path, an output flag or another directory still prompts", () => {
+  const dir = projectDir();
+  for (const command of [
+    "bun test --preload ./x.ts",
+    "keryx ctx run -- bun test --preload ./x.ts",
+    "bun test ./some/file.test.ts",
+    "bun test --coverage-dir /tmp/x",
+    "cd /tmp/other && bun test",
+    "cd sub && bun test",
+    "cd ~ && bun test",
+    "cd $HOME && bun test",
+    "FOO=1 bun test",
+  ]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+  }
+});
+
+test("AC6: plain bun test and the closed allow-list are routine in the project root", () => {
+  const dir = projectDir();
+  for (const command of [
+    "bun test",
+    "bun test --bail",
+    "bun test --only",
+    "bun test --todo",
+    "bun test --rerun-each 3",
+    "bun test --timeout 5000",
+    "bun test --timeout=5000 --bail",
+    "keryx ctx run -- bun test",
+    "cd . && bun test",
+    "cd sub && cd .. && bun test",
+    `cd ${dir} && bun test`,
+  ]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: true });
+  }
+});
+
+test("AC6: any other flag or value still prompts", () => {
+  const dir = projectDir();
+  for (const command of [
+    "bun test --rerun-each",
+    "bun test --rerun-each x",
+    "bun test --rerun-each -1",
+    "bun test --rerun-each 1.5",
+    "bun test --timeout 5s",
+    "bun test --timeout=",
+    "bun test --timeout 5 extra",
+    "bun test --bail=3",
+    "bun test --watch",
+    "bun test --update-snapshots",
+    "bun test src/a.test.ts",
+    "bun test --timeout 5 --coverage",
+  ]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir }) }).toEqual({ command, routine: false });
+  }
+});
+
+test("AC6: bun test prompts once bunfig.toml changed after the session recorded it", () => {
+  const dir = projectDir("[test]\ntimeout = 1000\n");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(true);
+  writeFileSync(path.join(dir, "bunfig.toml"), "[test]\ntimeout = 2000\n");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+  expect(isTrustRoutineCommand("bun test --bail", { cwd: dir })).toBe(false);
+});
+
+test("AC6: bun test prompts when bunfig.toml appears after the baseline", () => {
+  const dir = projectDir();
+  writeFileSync(path.join(dir, "bunfig.toml"), "[test]\ntimeout = 1000\n");
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+});
+
+test("AC6: bun test prompts when bunfig.toml carries a preload, even an unchanged one", () => {
+  for (const bunfig of ['[test]\npreload = ["./x.ts"]\n', 'preload = ["./x.ts"]\n', '[run]\n  "preload" = "./x.ts"\n', "test.preload = ['./x.ts']\n"]) {
+    const dir = projectDir(bunfig);
+    expect({ bunfig, routine: isTrustRoutineCommand("bun test", { cwd: dir }) }).toEqual({ bunfig, routine: false });
+  }
+});
+
+test("AC6: bun test prompts when the session never recorded a bunfig.toml baseline", () => {
+  const dir = projectDir(undefined, { baseline: false });
+  expect(isTrustRoutineCommand("bun test", { cwd: dir })).toBe(false);
+});
+
+test("AC7: after untrusted content no bun test form is routine", () => {
+  const dir = projectDir();
+  for (const command of ["bun test", "bun test --bail", "bun test --timeout 5", "keryx ctx run -- bun test", "cd . && bun test", "bun test x.test.ts"]) {
+    expect({ command, routine: isTrustRoutineCommand(command, { cwd: dir, untrustedContent: true }) }).toEqual({ command, routine: false });
+  }
+  expect(isTrustRoutineCommand("keryx flow status", { cwd: dir, untrustedContent: true })).toBe(true);
+});
+
+const PATH_FLAG_ROWS: ReadonlyArray<readonly [string, string]> = [
+  ["keryx review slice", "--out"],
+  ["keryx review retry-plan", "--manifest"],
+  ["keryx review retry-plan", "--state"],
+  ["keryx review dispatch-check", "--manifest"],
+];
+
+for (const [command, flag] of PATH_FLAG_ROWS) {
+  test(`AC10: ${command} ${flag} is routine only when the path stays inside the project`, () => {
+    const dir = projectDir();
+    const outside = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-trust-out-")));
+    symlinkSync(outside, path.join(dir, "escape"));
+    const run = (value: string, form: "space" | "equals" = "space") =>
+      isTrustRoutineCommand(form === "space" ? `${command} ${flag} ${value}` : `${command} ${flag}=${value}`, { cwd: dir });
+    expect(isTrustRoutineCommand(command, { cwd: dir })).toBe(true);
+    for (const inside of ["out/x.json", ".metaproject/reviews/r1/x.json", "./x.json", path.join(dir, "x.json")]) {
+      expect({ inside, routine: run(inside) }).toEqual({ inside, routine: true });
+      expect({ inside, routine: run(inside, "equals") }).toEqual({ inside, routine: true });
+    }
+    for (const out of ["/tmp/x.json", "../x.json", path.join(outside, "x.json"), "escape/x.json", "~/x.json", "$HOME/x.json"]) {
+      expect({ out, routine: run(out) }).toEqual({ out, routine: false });
+      expect({ out, routine: run(out, "equals") }).toEqual({ out, routine: false });
+    }
+    expect(isTrustRoutineCommand(`keryx ctx run -- ${command} ${flag} /tmp/x.json`, { cwd: dir })).toBe(false);
+    expect(isTrustRoutineCommand(`keryx ctx run -- ${command} ${flag} out/x.json`, { cwd: dir })).toBe(true);
+    expect(isTrustRoutineCommand(`${command} ${flag} out/a.json ${flag} /tmp/b.json`, { cwd: dir })).toBe(false);
+    expect(isTrustRoutineCommand(`cd .. && ${command} ${flag} x.json`, { cwd: dir })).toBe(false);
+    expect(isTrustRoutineCommand(`cd sub && ${command} ${flag} x.json`, { cwd: dir })).toBe(true);
+  });
+}

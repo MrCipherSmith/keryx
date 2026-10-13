@@ -135,7 +135,7 @@ test("AC2: isTrustRoutineCommand allows review/context chains and refuses everyt
     "cd ../dir && keryx ctx run -- keryx review scope --help",
     "keryx review scope --base main",
     "keryx review status",
-    "keryx ctx run -- bun test src/foo.test.ts",
+    "keryx ctx run -- git status",
     "keryx ctx rg foo src",
     "keryx flow status",
     "cd /tmp/x && keryx review complete --round 1",
@@ -190,7 +190,7 @@ test("AC2: routine review commands raise zero approval prompts in trust, even af
   const commands = [
     "cd ../dir && keryx ctx run -- keryx review scope --help",
     "keryx review status",
-    "keryx ctx run -- bun test src/foo.test.ts",
+    "keryx ctx run -- git status",
   ];
   const { approvals, ran } = await runAfterUntrusted("trust", commands);
   expect(approvals).toEqual([]);
