@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f428",
+  "command": "bun test src/review/mutate.test.ts src/review/dispatch.test.ts src/gdskills/reviewer-triggers.test.ts src/review/coverage.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 3630
+  },
+  "mutants": [
+    {
+      "id": "G1",
+      "file": "src/review/coverage.ts",
+      "anchor": "offset + match.length === whole.length ? \"\\uE001\" : \"\\uE000\"",
+      "replacement": "\"\\uE000\"",
+      "note": "a trailing ** is never rewritten to .*; src/pipelines/** no longer reaches src/pipelines/index.ts. AC2 test in reviewer-triggers.test.ts",
+      "line": 46,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3725
+    },
+    {
+      "id": "G2",
+      "file": "src/review/coverage.ts",
+      "anchor": ".replace(/\\uE001/g, \".*\")",
+      "replacement": ".replace(/\\uE001/g, \"[^/]*\")",
+      "note": "a trailing ** stops at one path segment; src/pipelines/a/b/c.ts no longer matches. AC2 test",
+      "line": 48,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3677
+    },
+    {
+      "id": "G3",
+      "file": "src/review/coverage.ts",
+      "anchor": ".replace(/\\uE000/g, \"(?:.*/)?\")",
+      "replacement": ".replace(/\\uE000/g, \"(?:.*/)\")",
+      "note": "a mid-pattern **/ must match zero directories; not in the AC2 inputs, expect coverage.test.ts or a survivor",
+      "line": 49,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3661
+    },
+    {
+      "id": "G4",
+      "file": "src/review/coverage.ts",
+      "anchor": "return new RegExp(`^${body}$`);",
+      "replacement": "return new RegExp(`${body}$`);",
+      "note": "start anchor dropped: x/src/pipelines/a.ts would match src/pipelines/**; the AC2 negatives do not probe a prefixed path, expect a survivor",
+      "line": 50,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3628
+    },
+    {
+      "id": "G5",
+      "file": "src/review/coverage.ts",
+      "anchor": ".replace(/\\*/g, \"[^/]*\")",
+      "replacement": ".replace(/\\*/g, \".*\")",
+      "note": "single * crosses a slash; AC2 globs use only **, expect coverage.test.ts or a survivor",
+      "line": 47,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3720
+    },
+    {
+      "id": "R1",
+      "file": "src/review/coverage.ts",
+      "anchor": "if (options.blastRadius === true) required.push(REGRESSION);",
+      "replacement": "if (options.blastRadius !== false) required.push(REGRESSION);",
+      "note": "regression becomes required when blastRadius is undefined. dispatch.test.ts first test (all.required toEqual three reviewers)",
+      "line": 123,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3677
+    },
+    {
+      "id": "R2",
+      "file": "src/review/coverage.ts",
+      "anchor": "if (inventory.bundled.some((r) => r.name === REGRESSION)) {",
+      "replacement": "if (false) {",
+      "note": "review-regression is never required nor excluded. dispatch.test.ts second test",
+      "line": 122,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3676
+    },
+    {
+      "id": "R3",
+      "file": "src/review/coverage.ts",
+      "anchor": "no blast radius computed for the package: there is no scope B to review",
+      "replacement": "blast radius absent",
+      "note": "the exclusion reason loses its stated cause. dispatch.test.ts second test (reason toContain)",
+      "line": 124,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3690
+    },
+    {
+      "id": "R4",
+      "file": "src/review/coverage.ts",
+      "anchor": "  \"review-regression\",\n  \"review-pr-feedback\",",
+      "replacement": "  \"review-pr-feedback\",",
+      "note": "review-regression leaves NOT_ROSTER, so it enters the roster without a blast radius. dispatch.test.ts second test (none.required not.toContain)",
+      "line": 22,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3660
+    },
+    {
+      "id": "R5",
+      "file": "src/review/coverage.ts",
+      "anchor": "if (derived.has(name) || project.has(name)) return true;",
+      "replacement": "return true;",
+      "note": "diff mode stops narrowing to the derived set. dispatch.test.ts first test (quoted diff dispatch must produce no error)",
+      "line": 117,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3613
+    },
+    {
+      "id": "R6",
+      "file": "src/review/coverage.ts",
+      "anchor": "record.mode === \"diff\" && !text(record.operatorQuote)",
+      "replacement": "false",
+      "note": "diff mode no longer needs the operator's words. dispatch.test.ts first test",
+      "line": 180,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3636
+    },
+    {
+      "id": "R7",
+      "file": "src/review/coverage.ts",
+      "anchor": "(v: unknown): v is string => typeof v === \"string\" && v.trim().length > 0",
+      "replacement": "(v: unknown): v is string => typeof v === \"string\" && v.length > 0",
+      "note": "a whitespace-only operatorQuote is accepted. dispatch.test.ts first test (operatorQuote \"   \")",
+      "line": 177,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3638
+    },
+    {
+      "id": "R8",
+      "file": "src/review/coverage.ts",
+      "anchor": "need.required.filter((name) => !selected.has(name))",
+      "replacement": "[]",
+      "note": "an incomplete selection is never refused. dispatch.test.ts both tests",
+      "line": 193,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3634
+    },
+    {
+      "id": "R9",
+      "file": "src/review/coverage.ts",
+      "anchor": "{ blastRadius: options.blastRadius }",
+      "replacement": "{}",
+      "note": "coverageErrors ignores the package's blast radius. dispatch.test.ts second test (refused toContain missing: review-regression)",
+      "line": 191,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3510
+    },
+    {
+      "id": "R10",
+      "file": "src/review/coverage.ts",
+      "anchor": "missing: ${missing.join(\", \")}",
+      "replacement": "lacking: ${missing.join(\", \")}",
+      "note": "the refusal message wording the tests assert on. dispatch.test.ts",
+      "line": 196,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3548
+    },
+    {
+      "id": "R11",
+      "file": "src/review/coverage.ts",
+      "anchor": "required: required.sort()",
+      "replacement": "required: required",
+      "note": "required set order; the AC1 toEqual depends on it only if collectReviewers is not already sorted, expect a survivor or dispatch.test.ts",
+      "line": 126,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3523
+    },
+    {
+      "id": "R12",
+      "file": "src/review/coverage.ts",
+      "anchor": "reviewer.pathsSource !== \"none\" && reviewer.paths.length",
+      "replacement": "false",
+      "note": "project reviewers lose their path gates. No new test builds a project reviewer; expect coverage.test.ts or a survivor",
+      "line": 99,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3528
+    },
+    {
+      "id": "R13",
+      "file": "src/review/coverage.ts",
+      "anchor": "if (mode === \"diff\") {",
+      "replacement": "if (false) {",
+      "note": "mode diff behaves as mode all. dispatch.test.ts first test",
+      "line": 113,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3523
+    },
+    {
+      "id": "T1",
+      "file": "src/gdskills/reviewer-triggers.ts",
+      "anchor": "const isGlob = token.includes(\"*\") && (token.includes(\"/\") || token.startsWith(\"*.\"));",
+      "replacement": "const isGlob = false;",
+      "note": "no description glob is recognised. reviewer-triggers.test.ts AC2 test (paths toEqual)",
+      "line": 124,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3516
+    },
+    {
+      "id": "T2",
+      "file": "src/gdskills/reviewer-triggers.ts",
+      "anchor": "return hasGlob ? [...triggers] : [];",
+      "replacement": "return [];",
+      "note": "description triggers dropped. reviewer-triggers.test.ts AC2 test",
+      "line": 129,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3535
+    },
+    {
+      "id": "T3",
+      "file": "src/gdskills/reviewer-triggers.ts",
+      "anchor": "pathsSource: described.length > 0 ? \"description\" : \"none\"",
+      "replacement": "pathsSource: \"description\"",
+      "note": "an empty description gate reports description instead of none; AC2 test only asserts non-empty gates, expect an existing test or a survivor",
+      "line": 154,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3526
+    },
+    {
+      "id": "T4",
+      "file": "src/gdskills/reviewer-triggers.ts",
+      "anchor": "if (declared.length > 0) return { paths: declared, pathsSource: \"metadata\" };",
+      "replacement": "",
+      "note": "metadata.paths precedence removed; AC2 uses descriptions only, expect an existing reviewer-triggers test",
+      "line": 151,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3497
+    },
+    {
+      "id": "M1",
+      "file": "src/review/mutate.ts",
+      "anchor": "note: mutant.note, command: options.command }",
+      "replacement": "note: mutant.note, command: \"\" }",
+      "note": "rows no longer carry the command. mutate.test.ts new row test (command() toEqual)",
+      "line": 130,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3504
+    },
+    {
+      "id": "M2",
+      "file": "src/review/mutate.ts",
+      "anchor": "exitCode: run.exitCode, ms: run.ms",
+      "replacement": "ms: run.ms",
+      "note": "exit code dropped from the record. mutate.test.ts new row test and its table assertions | 1 | / | 0 |",
+      "line": 149,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3546
+    },
+    {
+      "id": "M3",
+      "file": "src/review/mutate.ts",
+      "anchor": "run.exitCode === 0 ? \"survived\" : \"killed\"",
+      "replacement": "run.exitCode === 0 ? \"killed\" : \"survived\"",
+      "note": "killed and survived swapped. mutate.test.ts",
+      "line": 149,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3553
+    },
+    {
+      "id": "M4",
+      "file": "src/review/mutate.ts",
+      "anchor": "${m.exitCode ?? \"-\"}",
+      "replacement": "${m.exitCode ?? 0}",
+      "note": "an invalid row shows exit 0 instead of -; the new test checks row C only for the reason text, expect a survivor",
+      "line": 166,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3524
+    },
+    {
+      "id": "M5",
+      "file": "src/review/mutate.ts",
+      "anchor": "| Result | Test command | Exit |",
+      "replacement": "| Result |",
+      "note": "table header loses the two new columns; no test reads the header, expect a survivor",
+      "line": 176,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3505
+    },
+    {
+      "id": "M6",
+      "file": "src/review/mutate.ts",
+      "anchor": "${cell(m.command)}",
+      "replacement": "${m.command}",
+      "note": "a command containing | is no longer escaped in the table; the test command has no pipe, expect a survivor",
+      "line": 166,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3501
+    },
+    {
+      "id": "M7",
+      "file": "src/review/mutate.ts",
+      "anchor": "\"anchor not found\"",
+      "replacement": "\"anchor missing\"",
+      "note": "invalid reason text. mutate.test.ts new row test (row C toContain) and the existing invalid-anchor test",
+      "line": 143,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3449
+    },
+    {
+      "id": "M8",
+      "file": "src/review/mutate.ts",
+      "anchor": "${m.status}${m.reason ? ` (${cell(m.reason)})` : \"\"}",
+      "replacement": "${m.status}",
+      "note": "the reason is dropped from the table row. mutate.test.ts new row test (row C anchor not found)",
+      "line": 166,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3525
+    }
+  ],
+  "totals": {
+    "killed": 24,
+    "survived": 6,
+    "invalid": 0,
+    "timeout": 0
+  }
+}
