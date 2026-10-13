@@ -268,7 +268,7 @@
     "reviewer": "flow392-pr856-review",
     "severity": "minor",
     "problem": "The project-wide journal is a git-ignored file under the working directory (cwd/.metaproject/data/decisions), so each checkout and each git worktree has its own, and removing a worktree deletes it. With F-003 the flow's journal.md line, the only tracked copy, is also not written on the ask_user path.",
-    "impact": "The operator runs flows in worktrees such as /home/altsay/keryx-wF. Questions answered there are written to that worktree's journal; `git worktree remove` after the merge deletes it, and `keryx decisions report` in the main checkout never sees them. The 'at least 20 decisions after two weeks' of AC11 can only be met if everything is asked in one long-lived checkout.",
+    "impact": "The operator runs flows in worktrees such as ~/keryx-wF. Questions answered there are written to that worktree's journal; `git worktree remove` after the merge deletes it, and `keryx decisions report` in the main checkout never sees them. The 'at least 20 decisions after two weeks' of AC11 can only be met if everything is asked in one long-lived checkout.",
     "suggested_fix": "Resolve the journal under the common project root (the main worktree) or a user-level data dir, or document the limit in the guide next to the .gitignore line.",
     "evidence": "Read src/decisions/store.ts decisionsDir(cwd) = join(cwd, '.metaproject', 'data', 'decisions') and the .gitignore entry added in this PR; callers pass opts.session?.cwd ?? process.cwd().",
     "confidence": "medium",
@@ -284,7 +284,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "site-check",
-      "evidence": "At 15c52808: src/decisions/store.ts journalRoot resolves the main checkout from git's common dir (via resolveGitCommonDir) and keeps .metaproject/data/decisions git-ignored (.gitignore line 90). Probe: from the linked worktree /home/altsay/keryx-wF the root is /home/altsay/keryx; a worktree of a bare repo, the bare dir and a detached-HEAD subdirectory fall back to a sane root; outside git it is cwd. Test 'a record written from a linked worktree is read from the main checkout' passes. Fixed in 15c52808.",
+      "evidence": "At 15c52808: src/decisions/store.ts journalRoot resolves the main checkout from git's common dir (via resolveGitCommonDir) and keeps .metaproject/data/decisions git-ignored (.gitignore line 90). Probe: from the linked worktree ~/keryx-wF the root is ~/keryx; a worktree of a bare repo, the bare dir and a detached-HEAD subdirectory fall back to a sane root; outside git it is cwd. Test 'a record written from a linked worktree is read from the main checkout' passes. Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
     },
     "disposition": {

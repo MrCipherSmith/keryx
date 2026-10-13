@@ -6,5 +6,5 @@
   "slice-06"
  ],
  "result": "raw/review-security-code-04-05-06.txt",
- "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-security-code/SKILL.md"
 }

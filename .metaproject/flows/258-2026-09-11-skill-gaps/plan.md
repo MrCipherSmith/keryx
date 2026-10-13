@@ -2,7 +2,7 @@
 
 Branch `skills/skill-gaps`, cut from `main` at `ea569c92` (the squash merge of
 flow 257). Worktree
-`/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`.
+`~/goodea/keryx/.claude/worktrees/skills-quality`.
 
 Read `context-map.md` before anything else — it corrects `description.md`,
 which was written before the gate existed.

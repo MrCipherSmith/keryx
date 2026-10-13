@@ -18,7 +18,7 @@ gate says "the graph is behind HEAD", and no command moves the record.
 
 ## Observed (2026-09-21, keryx 0.2.131)
 
-`/home/altsay/olimpyx`, after two commits that touched only `.metaproject/`:
+`~/olimpyx`, after two commits that touched only `.metaproject/`:
 
 - `.provenance.json` commit `dd188942`, written 06:25:45; HEAD `811cc79`.
 - `keryx gdgraph build` at 06:27:51 rewrote `artifacts/summary.md` (188 nodes,
@@ -26,7 +26,7 @@ gate says "the graph is behind HEAD", and no command moves the record.
 - `keryx sync --apply` printed `gdgraph: up to date (built at dd188942)` and the
   wiki baseline refusal above.
 
-`/home/altsay/bots/helyx` did not hit it: its commit also changed source files, so
+`~/bots/helyx` did not hit it: its commit also changed source files, so
 the diff stage rebuilt the graph and advanced provenance to the new HEAD.
 
 ## Expected

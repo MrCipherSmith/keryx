@@ -50,7 +50,7 @@
     },
     "AC9": {
       "at": "2026-09-22T23:18:55.634Z",
-      "note": "CI 18/18 green on PR MrCipherSmith/keryx#648 at head a559059d84ae10c20d92bc3f1366cfa0a530ff6e, merged 2026-09-22 as squash commit 4aba62bc into main. Local 'keryx health run' in /home/altsay/keryx: PASS, project score 94 (stable trend), 320 findings, no gate conditions triggered."
+      "note": "CI 18/18 green on PR MrCipherSmith/keryx#648 at head a559059d84ae10c20d92bc3f1366cfa0a530ff6e, merged 2026-09-22 as squash commit 4aba62bc into main. Local 'keryx health run' in ~/keryx: PASS, project score 94 (stable trend), 320 findings, no gate conditions triggered."
     }
   },
   "pr": {
@@ -459,7 +459,7 @@
     {
       "at": "2026-09-22T23:18:55.634Z",
       "event": "ac-confirmed",
-      "detail": "AC9: CI 18/18 green on PR MrCipherSmith/keryx#648 at head a559059d84ae10c20d92bc3f1366cfa0a530ff6e, merged 2026-09-22 as squash commit 4aba62bc into main. Local 'keryx health run' in /home/altsay/keryx: PASS, project score 94 (stable trend), 320 findings, no gate conditions triggered."
+      "detail": "AC9: CI 18/18 green on PR MrCipherSmith/keryx#648 at head a559059d84ae10c20d92bc3f1366cfa0a530ff6e, merged 2026-09-22 as squash commit 4aba62bc into main. Local 'keryx health run' in ~/keryx: PASS, project score 94 (stable trend), 320 findings, no gate conditions triggered."
     },
     {
       "at": "2026-09-22T23:19:00.337Z",

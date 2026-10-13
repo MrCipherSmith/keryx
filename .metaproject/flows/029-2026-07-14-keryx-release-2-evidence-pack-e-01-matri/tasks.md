@@ -1,7 +1,7 @@
 # Tasks — Flow 029 (Release 2 evidence pack)
 
 Statuses via `keryx flow task done 029 <taskId>`. DOCS-ONLY. Every claim cites a real artifact
-(commit/PR/test-count/scenario-tag/runbook-row) — no fabrication. Root `/Users/Goodea/goodea/keryx`
+(commit/PR/test-count/scenario-tag/runbook-row) — no fabrication. Root `~/goodea/keryx`
 (branch feature/keryx-release2-evidence). Worktree-guard. Commits/PR: NO co-authorship. Mirror the R1
 pack format. Sequential T5 → T6 → T7 → T8.
 

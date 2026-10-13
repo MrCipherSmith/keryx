@@ -1,6 +1,6 @@
 # Review round 2 — PR #690 (flow 313, W4 portability)
 
-**Scope.** Worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `cb09b7b2` (verified). This round covers the round-1 fixes (`8d6638b9..cb09b7b2`, `pr-690-r2-fixes.diff`) and re-checks against the full PR diff (`pr-690-r2.diff`) and the frozen ACs.
+**Scope.** Worktree `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `cb09b7b2` (verified). This round covers the round-1 fixes (`8d6638b9..cb09b7b2`, `pr-690-r2-fixes.diff`) and re-checks against the full PR diff (`pr-690-r2.diff`) and the frozen ACs.
 
 - **How findings were confirmed:**
   - Every blocker and major finding was reproduced against the real modules, or against `bun src/cli.ts` in a fresh `git init` project with `KERYX_HOME` pointed at a scratch home.

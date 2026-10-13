@@ -24,14 +24,14 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent Stage 1 recheck closing the original call-cap defect and reporting the remaining strict round-cap blocker, compatibility tradeoff, focused evidence, and routing audit.",
       "hash": "0016f4856805e3a1b2bdc05e2ecd1c6cc4514eaf2b480b481859319509fd59b2"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Exact offline reproduction showing max_rounds=1 permits two tool-bearing model rounds, two tool invocations, and a third wrap-up request.",

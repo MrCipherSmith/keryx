@@ -37,5 +37,5 @@ Collected by `keryx flow init` and enriched for W5. (T1 context.)
 ## Operational
 - keryx = `bun ./src/cli.ts`; new worktree needs `bun install`. Never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker must `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it (W4 incident). Verify file locations after each worker.
+- WORKTREE-GUARD: every writing worker must `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it (W4 incident). Verify file locations after each worker.
 - TDD order: P-01 (T5 RED → T6 GREEN), P-02 (T7 RED → T8 GREEN), then T9 review.

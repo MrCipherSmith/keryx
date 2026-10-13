@@ -11,7 +11,7 @@
 - 2026-09-27T18:31:51.014Z - task-done: T2: Implement per plan
 - 2026-09-27T18:31:51.339Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-27T18:31:51.731Z - task-done: T4: Self-review and prepare draft PR
-- 2026-09-27T18:31:52.063Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-w5
+- 2026-09-27T18:31:52.063Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in ~/keryx-w5
 - 2026-09-27T19:59:56.148Z - task-done: T5: keryx doctor + /doctor (AC1, AC2)
 - 2026-09-27T19:59:56.303Z - task-done: T6: did-you-mean and mcp list exit codes (AC3, AC4)
 - 2026-09-27T19:59:56.455Z - task-done: T7: memory search stemming/hint, health tests detection, bare providers (AC5, AC6, AC7)

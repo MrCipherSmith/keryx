@@ -1,13 +1,13 @@
 # T50 implementation — close `src/health/service.ts`'s `gate()` exit-code denylist
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files only: `src/health/service.ts`, new `src/health/service-gate-exit.test.ts`.
 `src/health/types.ts`, `src/health/gate.ts`, and `src/commands/health.ts`
 were read only (for the sibling style and the vocabulary), never edited.
 Nothing under `src/security/` or `src/flow/` was touched. Spec written
 before coding: `T50-spec.md` (same directory).
 
-All raw logs below are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs below are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## My own verification of the reported site (not taken on trust)
 

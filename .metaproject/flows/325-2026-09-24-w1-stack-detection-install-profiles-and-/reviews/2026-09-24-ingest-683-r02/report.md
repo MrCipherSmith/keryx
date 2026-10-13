@@ -1,6 +1,6 @@
 # PR #683 review round 4 (narrow verification): flow 309 W1
 
-Root: /Users/Goodea/goodea/keryx-ape-309-w1 (branch flow/309-w1, HEAD 88753c5e). This was a read-only review. It covered two things only: the fix commit 88753c5e, and the merge bff0a030 (parents 490a4c2b and 368ee495). Repro scripts are in `scratchpad/r4/`: `integ.ts`, the `stk/` fixture, `pre/` (a `git archive` of bff0a030, the tree before the fix), and `disc/` (the HEAD tree with the pre-R2 eval.ts and detect.ts swapped back in).
+Root: ~/goodea/keryx-ape-309-w1 (branch flow/309-w1, HEAD 88753c5e). This was a read-only review. It covered two things only: the fix commit 88753c5e, and the merge bff0a030 (parents 490a4c2b and 368ee495). Repro scripts are in `scratchpad/r4/`: `integ.ts`, the `stk/` fixture, `pre/` (a `git archive` of bff0a030, the tree before the fix), and `disc/` (the HEAD tree with the pre-R2 eval.ts and detect.ts swapped back in).
 
 **Verdict: no blockers, no majors, 2 minor, 2 info.** All six round-3 findings are fixed. The merge resolution is correct.
 

@@ -116,7 +116,7 @@ whose duplicate member was dropped, or from one the guard redacted.
 ## 4. Evidence — exact counts, before and after
 
 All commands ran through `bun src/cli.ts ctx run`. Raw logs under
-`/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+`~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ### Reviewer's repository JSON sweep (`T24-recheck2-repojson.ts`, unmodified)
 

@@ -507,11 +507,11 @@ describe("exit guard: decision log discipline (AC11)", () => {
       const record = makeRecord();
       await writePattern(root, record, { env });
 
-      await acceptPattern(root, record.id, { isTerminal: true, actor: "aleks.zeitler@gmail.com", env, now: () => NOW });
+      await acceptPattern(root, record.id, { isTerminal: true, actor: "operator@example.com", env, now: () => NOW });
 
       const decisions = await readDecisions(root, "project", { env });
       expect(decisions).toEqual([
-        { schemaVersion: 1, action: "accept", id: record.id, scope: "project", actor: "aleks.zeitler@gmail.com", tty: true, at: NOW.toISOString() },
+        { schemaVersion: 1, action: "accept", id: record.id, scope: "project", actor: "operator@example.com", tty: true, at: NOW.toISOString() },
       ]);
 
       expect(await auditAcceptedRecords(root, { env })).toEqual([]);

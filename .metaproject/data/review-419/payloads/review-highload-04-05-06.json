@@ -79,12 +79,12 @@
   "max_findings": 10
  },
  "base_sha": "cbb38e27a8ed23254914177836b6865a2c7a8824",
- "pr_context": "/home/altsay/keryx-fcomplete/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/reviews/2026-10-12-ingest-github-com-mrciphersmith-keryx-pull-978/pr-context.md",
+ "pr_context": "~/keryx-fcomplete/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/reviews/2026-10-12-ingest-github-com-mrciphersmith-keryx-pull-978/pr-context.md",
  "round": 1,
  "is_fix_round": false,
  "prior_findings": [],
  "reviewer": "review-highload",
- "skill_path": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md",
+ "skill_path": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md",
  "slices": [
   "slice-04",
   "slice-05",

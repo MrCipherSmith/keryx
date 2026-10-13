@@ -1306,7 +1306,7 @@
         {
           "name": "owner",
           "status": "pass",
-          "detail": "owner: Aleksandr Tsaitler"
+          "detail": "owner: operator"
         },
         {
           "name": "folder-committed",

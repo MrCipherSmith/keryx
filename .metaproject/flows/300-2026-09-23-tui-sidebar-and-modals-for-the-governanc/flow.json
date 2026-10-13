@@ -63,7 +63,7 @@
     },
     "AC12": {
       "at": "2026-09-23T07:30:15.550Z",
-      "note": "CI: PR MrCipherSmith/keryx#662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69 18/18 check runs success (Pages deploy skipped), squash-merged as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff; PR #663 (N7/N8 follow-up) at head f4ded686 18/18 success (Pages deploy skipped), squash-merged as e92b2b8d666b807e6f63cbee92692dc8665b8f71. 272/272 flow-300 tests pass on an extracted e92b2b8d666b807e6f63cbee92692dc8665b8f71 tree. Local 'keryx health run' in /home/altsay/keryx-tui at f4ded686 (#663 head): Code Health PASS, project score 94 (trend stable), 336 findings, no gate conditions triggered."
+      "note": "CI: PR MrCipherSmith/keryx#662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69 18/18 check runs success (Pages deploy skipped), squash-merged as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff; PR #663 (N7/N8 follow-up) at head f4ded686 18/18 success (Pages deploy skipped), squash-merged as e92b2b8d666b807e6f63cbee92692dc8665b8f71. 272/272 flow-300 tests pass on an extracted e92b2b8d666b807e6f63cbee92692dc8665b8f71 tree. Local 'keryx health run' in ~/keryx-tui at f4ded686 (#663 head): Code Health PASS, project score 94 (trend stable), 336 findings, no gate conditions triggered."
     }
   },
   "pr": {
@@ -352,7 +352,7 @@
     {
       "at": "2026-09-23T07:09:11.231Z",
       "event": "ac-confirmed",
-      "detail": "AC12: CI on PR MrCipherSmith/keryx#662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69: 18/18 check runs success (deploy to GitHub Pages skipped); squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Local 'keryx health run' in /home/altsay/keryx-tui (head 2889ff55639f8485dfe51b9642d14cf6da0b6f69): Code Health PASS, project score 94 (trend stable), 335 findings, no gate conditions triggered. 192/192 flow-300 tests also pass on an extracted tree of d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC12: CI on PR MrCipherSmith/keryx#662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69: 18/18 check runs success (deploy to GitHub Pages skipped); squash-merged into main as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. Local 'keryx health run' in ~/keryx-tui (head 2889ff55639f8485dfe51b9642d14cf6da0b6f69): Code Health PASS, project score 94 (trend stable), 335 findings, no gate conditions triggered. 192/192 flow-300 tests also pass on an extracted tree of d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-23T07:09:16.999Z",
@@ -462,7 +462,7 @@
     {
       "at": "2026-09-23T07:30:15.550Z",
       "event": "ac-confirmed",
-      "detail": "AC12: CI: PR MrCipherSmith/keryx#662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69 18/18 check runs success (Pages deploy skipped), squash-merged as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff; PR #663 (N7/N8 follow-up) at head f4ded686 18/18 success (Pages deploy skipped), squash-merged as e92b2b8d666b807e6f63cbee92692dc8665b8f71. 272/272 flow-300 tests pass on an extracted e92b2b8d666b807e6f63cbee92692dc8665b8f71 tree. Local 'keryx health run' in /home/altsay/keryx-tui at f4ded686 (#663 head): Code Health PASS, project score 94 (trend stable), 336 findings, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC12: CI: PR MrCipherSmith/keryx#662 at head 2889ff55639f8485dfe51b9642d14cf6da0b6f69 18/18 check runs success (Pages deploy skipped), squash-merged as d3a4d916c3a25336d3c89b7a4b03d6c3c1373dff; PR #663 (N7/N8 follow-up) at head f4ded686 18/18 success (Pages deploy skipped), squash-merged as e92b2b8d666b807e6f63cbee92692dc8665b8f71. 272/272 flow-300 tests pass on an extracted e92b2b8d666b807e6f63cbee92692dc8665b8f71 tree. Local 'keryx health run' in ~/keryx-tui at f4ded686 (#663 head): Code Health PASS, project score 94 (trend stable), 336 findings, no gate conditions triggered. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-23T07:30:23.957Z",

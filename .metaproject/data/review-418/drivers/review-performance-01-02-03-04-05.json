@@ -8,5 +8,5 @@
   "slice-05"
  ],
  "result": "raw/review-performance-01-02-03-04-05.txt",
- "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-performance/SKILL.md"
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-performance/SKILL.md"
 }

@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- **Worktree:** `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `c4ad2a60` (checked).
+- **Worktree:** `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `c4ad2a60` (checked).
 - **What was reviewed:**
   - This attempt's fixes, `cb09b7b2..c4ad2a60` (`pr-690-r3-fixes.diff`).
   - The full PR diff. `pr-690-r3.diff` was empty, so it was regenerated as `review313-r3/pr-690-full.diff` (merge-base `e04715a2..HEAD`).

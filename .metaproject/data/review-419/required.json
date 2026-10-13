@@ -13,15 +13,15 @@
   "excluded": [
     {
       "reviewer": "review-backend",
-      "reason": "stack: none of [nestjs, prisma] detected in package.json (detected from /home/altsay/keryx-fcomplete/package.json (10 declared dependencies))"
+      "reason": "stack: none of [nestjs, prisma] detected in package.json (detected from ~/keryx-fcomplete/package.json (10 declared dependencies))"
     },
     {
       "reviewer": "review-frontend",
-      "reason": "stack: none of [react, mobx] detected in package.json (detected from /home/altsay/keryx-fcomplete/package.json (10 declared dependencies))"
+      "reason": "stack: none of [react, mobx] detected in package.json (detected from ~/keryx-fcomplete/package.json (10 declared dependencies))"
     },
     {
       "reviewer": "review-frontend-conventions",
-      "reason": "stack: none of [react, mobx] detected in package.json (detected from /home/altsay/keryx-fcomplete/package.json (10 declared dependencies))"
+      "reason": "stack: none of [react, mobx] detected in package.json (detected from ~/keryx-fcomplete/package.json (10 declared dependencies))"
     },
     {
       "reviewer": "review-core-boundaries",

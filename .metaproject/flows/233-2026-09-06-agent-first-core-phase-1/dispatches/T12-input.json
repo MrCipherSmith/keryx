@@ -15,7 +15,7 @@
       "Synthetic Bun package-keyed arrays and npm modern/legacy formats parse; unknown/malformed output cannot report clean even rc0.",
       "Strict health CLI/service reject incomplete; optional skips visible and source-filter coverage truthful."
     ],
-    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/health-spec.md",
+    "context": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/health-spec.md",
     "existing_tests": [
       "src/health/health-truthful-gate.test.ts",
       "src/health/dependency-audit-format.test.ts",
@@ -33,9 +33,9 @@
     }
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "codebase_path": "~/goodea/keryx",
     "branch": "codex/agent-first-core",
-    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+    "context_path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
   },
   "automation": {
     "skip_confirmation": true,

@@ -7,5 +7,5 @@
   "slice-07"
  ],
  "result": "raw/review-highload-04-05-06-07.txt",
- "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
 }

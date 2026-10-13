@@ -64,12 +64,12 @@
   "max_findings": 10
  },
  "base_sha": "00879558256cef065f5e22fb0df66d227253a180",
- "pr_context": "/home/altsay/keryx-fcomplete/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/reviews/2026-10-12-ingest-github-com-mrciphersmith-keryx-pull-975/pr-context.md",
+ "pr_context": "~/keryx-fcomplete/.metaproject/flows/427-2026-10-11-review-autonomy-hardening/reviews/2026-10-12-ingest-github-com-mrciphersmith-keryx-pull-975/pr-context.md",
  "round": 1,
  "is_fix_round": false,
  "prior_findings": [],
  "reviewer": "review-logic",
- "skill_path": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-logic/SKILL.md",
+ "skill_path": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-logic/SKILL.md",
  "slices": [
   "slice-01",
   "slice-02"

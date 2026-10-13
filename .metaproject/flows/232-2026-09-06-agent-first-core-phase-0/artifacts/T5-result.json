@@ -19,21 +19,21 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/src/commands/routing-entrypoint-lifecycle.test.ts",
+      "path": "~/goodea/keryx/src/commands/routing-entrypoint-lifecycle.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Three black-box Bun lifecycle tests covering sync repeat, distill/update repeat and consumers, and pair-write fault recovery.",
       "hash": "f4f5759f0e818def06ac5544f872bdd7a562f3c807b876ff62bca128b1be9145"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-test-case-specs.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-test-case-specs.json",
       "kind": "report",
       "exists": true,
       "summary": "Exact test_case_specs with criterion mapping, test IDs, focused run command, and GREEN expectation.",
       "hash": "02bcd0b38409903461ad31088e0b698ac17e195a836da9bf83a0ed9082adb667"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-red-evidence.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-red-evidence.md",
       "kind": "report",
       "exists": true,
       "summary": "Immutable focused RED outcome, exact failure signatures, source revision and retained gdctx raw-log references.",

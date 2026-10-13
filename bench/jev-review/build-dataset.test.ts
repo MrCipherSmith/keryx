@@ -199,13 +199,13 @@ describe("scrubIdentity: known personal handles/names and any email -> 'operator
   test("replaces each documented handle/name, case-insensitively", () => {
     expect(scrubIdentity("decided-by: altsay (operator, 2026-09-03)")).toBe("decided-by: operator (operator, 2026-09-03)");
     expect(scrubIdentity("decided-by: ALTSAY")).toBe("decided-by: operator");
-    expect(scrubIdentity("decided-by: aleksandr-tsaitler (interactive)")).toBe("decided-by: operator (interactive)");
-    expect(scrubIdentity("decided-by: Aleksandr Tsaitler")).toBe("decided-by: operator");
+    expect(scrubIdentity("decided-by: operator (interactive)")).toBe("decided-by: operator (interactive)");
+    expect(scrubIdentity("decided-by: operator")).toBe("decided-by: operator");
     expect(scrubIdentity("decided-by: MrCipherSmith (owner, in chat)")).toBe("decided-by: operator (owner, in chat)");
   });
 
   test("replaces any email address, not just the operator's own", () => {
-    expect(scrubIdentity("contact aleks.zeitler@gmail.com for details")).toBe("contact operator for details");
+    expect(scrubIdentity("contact operator@example.com for details")).toBe("contact operator for details");
     expect(scrubIdentity("cc: someone.else+tag@example.co.uk")).toBe("cc: operator");
   });
 

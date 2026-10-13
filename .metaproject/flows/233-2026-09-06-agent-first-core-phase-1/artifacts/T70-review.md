@@ -7,7 +7,7 @@ code and none of the reviews under recheck.
 
 ## Scope
 
-- Root: `/Users/Goodea/goodea/keryx` (the only checkout used; `pwd` confirmed
+- Root: `~/goodea/keryx` (the only checkout used; `pwd` confirmed
   before the first read). No `.claude/worktrees/**` directory was entered.
 - Branch: `codex/agent-first-core`. Base commit: `0bc6418fa1a038f8ec909cf949fecba077acf9a4`
   (`feat(metaproject): shrink the routing gate…`). All work under review is
@@ -576,7 +576,7 @@ pre-drift ones.
 
 ## Evidence
 
-Raw logs, all under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`,
+Raw logs, all under `~/goodea/keryx/.metaproject/data/gdctx/raw/`,
 SHA-256 recorded in `T70-evidence-sha256.txt`:
 
 | Log | SHA-256 |

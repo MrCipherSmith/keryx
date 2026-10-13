@@ -225,7 +225,7 @@
     {
       "at": "2026-10-02T15:19:06.252Z",
       "event": "ac-confirmed",
-      "detail": "AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, helyx-channel 178131) [stated])"
+      "detail": "AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: operator (operator, helyx-channel 178131) [stated])"
     },
     {
       "at": "2026-10-02T15:21:17.968Z",
@@ -244,7 +244,7 @@
     {
       "at": "2026-10-02T20:09:46.792Z",
       "event": "origin-set",
-      "detail": "unknown -> human-request; quote: \"каждый раз, когда создаётся flow, агент должен сам определять, откуда он пришёл. Если это рождается из обсуждения — первоначальную идею даёт пользователь, агент обсуждает и получает подтверждение — он должен в этом flow формализовать этот запрос от человека и указать в эффекты\"; source: ~/prompts/keryx-supervisor/flow-E-flow-origin.md, подтверждено в channel message 177555 (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
+      "detail": "unknown -> human-request; quote: \"каждый раз, когда создаётся flow, агент должен сам определять, откуда он пришёл. Если это рождается из обсуждения — первоначальную идею даёт пользователь, агент обсуждает и получает подтверждение — он должен в этом flow формализовать этот запрос от человека и указать в эффекты\"; source: ~/prompts/keryx-supervisor/flow-E-flow-origin.md, подтверждено в channel message 177555 (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: operator)"
     }
   ],
   "acKinds": {
@@ -393,7 +393,7 @@
       "at": "2026-10-02T15:19:06.252Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay (operator, helyx-channel 178131)",
+        "value": "operator (operator, helyx-channel 178131)",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },

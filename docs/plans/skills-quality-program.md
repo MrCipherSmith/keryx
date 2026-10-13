@@ -115,7 +115,7 @@ acceptance criteria are written against the tree it will actually change.
 
 ## Constraints for every task
 
-- Worktree: `/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`.
+- Worktree: `~/goodea/keryx/.claude/worktrees/skills-quality`.
   Each flow runs on its own branch cut from main after the previous one merged
   (256: `skills/quality-program`, merged as #533; 257: `skills/quality-gate`,
   merged as #540 at `ea569c92`; 258: `skills/skill-gaps`, open as #545).

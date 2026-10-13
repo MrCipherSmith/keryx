@@ -6,7 +6,7 @@ Scope: bare `keryx` → interactive REPL over the reused W14/W20 providers. New
 `src/commands/shell.ts`; additive edits to `src/cli.ts` (bare→shell, printHelp) +
 `src/commands/harness.ts` (no-args→usage). NO SDK/new dep (`deps {}`). Reuse-only.
 Tests OFFLINE (injected stdin/stdout + FakeProvider); live TTY = manual smoke. D-02.
-Root = `/Users/Goodea/goodea/keryx` (branch feature/keryx-interactive-shell). Worktree-guard.
+Root = `~/goodea/keryx` (branch feature/keryx-interactive-shell). Worktree-guard.
 
 | ID | Kind | Model | Title / definition |
 |----|------|-------|--------------------|

@@ -2,7 +2,7 @@
 
 ## Repository and Delivery
 
-- Worktree: `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/tui-foreground-operation-cancellation`
+- Worktree: `~/goodea/keryx/.worktrees/tui-foreground-operation-cancellation`
 - Branch: `fix/tui-foreground-operation-cancellation`
 - Recorded base branch: `main`
 - Base commit at creation: `09e8555c9079c3142125799c9e560e65d1eeae01` (`origin/main`)

@@ -27,7 +27,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). All four inputs now yield one pii.ssn match: john-smith-ssn-123-45-6789-deadbeef, Employee-ID-deadbeef-SSN-123-45-6789, abcdef12-ssn-123-45-6789, SSN:123-45-6789-abcdef0123. The guard returns false whenever SSN_LABEL matches the token or the 32 characters before it (pii.ts:377-383). Fix commit 7078e6c9.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). All four inputs now yield one pii.ssn match: john-smith-ssn-123-45-6789-deadbeef, Employee-ID-deadbeef-SSN-123-45-6789, abcdef12-ssn-123-45-6789, SSN:123-45-6789-abcdef0123. The guard returns false whenever SSN_LABEL matches the token or the 32 characters before it (pii.ts:377-383). Fix commit 7078e6c9.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -56,7 +56,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). 20260912a-123-45-6789, case-1234567e-123-45-6789, 1234567e-123-45-6789 and E1234567-123-45-6789 are each redacted (1 match); suppression now needs an adjacent 16+ character hex run with an a-f letter (isSsnHashRun, pii.ts:348-355). Fix commit 7078e6c9.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). 20260912a-123-45-6789, case-1234567e-123-45-6789, 1234567e-123-45-6789 and E1234567-123-45-6789 are each redacted (1 match); suppression now needs an adjacent 16+ character hex run with an a-f letter (isSsnHashRun, pii.ts:348-355). Fix commit 7078e6c9.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -93,7 +93,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). deadbeef-123-45-6789, ssn-a1b2c3d4-123-45-6789, 1234567e-123-45-6789, ssn-12345678a-123-45-6789 and release-123-45-6789-hotfix are all redacted; md5, sha1 and sha256 neighbours (32/40/64 hex) on either side still suppress by design, as the operator decision (poll 93) and the refined rule in description.md allow. Fix commit 7078e6c9.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). deadbeef-123-45-6789, ssn-a1b2c3d4-123-45-6789, 1234567e-123-45-6789, ssn-12345678a-123-45-6789 and release-123-45-6789-hotfix are all redacted; md5, sha1 and sha256 neighbours (32/40/64 hex) on either side still suppress by design, as the operator decision (poll 93) and the refined rule in description.md allow. Fix commit 7078e6c9.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -122,7 +122,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). sha256 neighbour (64 hex) before and after the SSN is suppressed exactly like md5 (32) and sha1 (40); SSN_TOKEN_SCAN_LIMIT is 192 so a 64-hex neighbour no longer truncates the scan (pii.ts:340-341). Fix commit 7078e6c9.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). sha256 neighbour (64 hex) before and after the SSN is suppressed exactly like md5 (32) and sha1 (40); SSN_TOKEN_SCAN_LIMIT is 192 so a 64-hex neighbour no longer truncates the scan (pii.ts:340-341). Fix commit 7078e6c9.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -170,7 +170,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). The split uses the match's actual offset (pii.ts:389-391): `S-foo-S-md5` gives 1 match, `S-md5-S` gives 0 and `S-S` gives 2. Fix commit 7078e6c9.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 7078e6c9) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). The split uses the match's actual offset (pii.ts:389-391): `S-foo-S-md5` gives 1 match, `S-md5-S` gives 0 and `S-S` gives 2. Fix commit 7078e6c9.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -199,7 +199,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 1280d3b2) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). The `file_${digest}_${SSN}.bin` case is gone from pii-identifier-sweep.test.ts (rg finds no match) and the adjacency check needs a `-` directly beside the SSN (pii.ts:392, 395). Fix commit 1280d3b2.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 1280d3b2) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). The `file_${digest}_${SSN}.bin` case is gone from pii-identifier-sweep.test.ts (rg finds no match) and the adjacency check needs a `-` directly beside the SSN (pii.ts:392, 395). Fix commit 1280d3b2.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -228,7 +228,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 1280d3b2) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). UUID_TOKEN now appears only in the phone guard isIdentifierFragment (pii.ts:283, 318); the SSN guard no longer references it (rg for UUID_TOKEN lists those two lines only). Fix commit 1280d3b2.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 1280d3b2) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). UUID_TOKEN now appears only in the phone guard isIdentifierFragment (pii.ts:283, 318); the SSN guard no longer references it (rg for UUID_TOKEN lists those two lines only). Fix commit 1280d3b2.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -257,7 +257,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 1280d3b2) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). <md5>-123-45-6789 is the SSN and <md5>-123-45-6789 (social) both yield one pii.ssn match (label after the token vetoes suppression, pii.ts:384-388). Fix commit 1280d3b2.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 1280d3b2) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). <md5>-123-45-6789 is the SSN and <md5>-123-45-6789 (social) both yield one pii.ssn match (label after the token vetoes suppression, pii.ts:384-388). Fix commit 1280d3b2.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -286,7 +286,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 19321fa3) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). Label ending at character 24 after the token end is redacted and at character 25 is suppressed (probe, md5 neighbour); SSN_LABEL_LOOKAHEAD is 24 and the new sweep tests pin both sides. The fix author mutated 24->12, 23 and 25 and each failed exactly one new test. Fix commit 19321fa3.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 19321fa3) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). Label ending at character 24 after the token end is redacted and at character 25 is suppressed (probe, md5 neighbour); SSN_LABEL_LOOKAHEAD is 24 and the new sweep tests pin both sides. The fix author mutated 24->12, 23 and 25 and each failed exactly one new test. Fix commit 19321fa3.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {
@@ -315,7 +315,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 19321fa3) in /home/altsay/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). SSN_LABEL_LOOKBEHIND is 32 (pii.ts:345); the sweep tests added in 19321fa3 pin a label starting 32 characters before the token (vetoes) and 33 (does not). The fix author mutated 32->200, 31 and 33 and each failed exactly one new test; not re-mutated by this verifier. Fix commit 19321fa3.",
+      "evidence": "Ran at 7b93fc97 (merge of PR #906, which contains 19321fa3) in ~/keryx-flow261: bun probe script on detectPii (policyId pii.ssn match counts) and `bun test src/security/detect` (219 pass, 0 fail, 10 files). SSN_LABEL_LOOKBEHIND is 32 (pii.ts:345); the sweep tests added in 19321fa3 pin a label starting 32 characters before the token (vetoes) and 33 (does not). The fix author mutated 32->200, 31 and 33 and each failed exactly one new test; not re-mutated by this verifier. Fix commit 19321fa3.",
       "verifier": "flow261-closeout-verifier"
     },
     "disposition": {

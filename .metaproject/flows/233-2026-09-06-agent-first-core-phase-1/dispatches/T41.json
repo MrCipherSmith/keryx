@@ -15,24 +15,24 @@
     "A rewrite that removes nothing is not reported as a redaction; the repository JSON sweep shows no regression in byte-preserved counts and no remaining mislabelled results, with counts reported before and after."
   ],
   "context_refs": [
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-repojson.ts", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-validator.ts", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-spec.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-implementation.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-repojson.ts", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck2-validator.ts", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-spec.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-implementation.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
-    "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
-    "/Users/Goodea/goodea/keryx/src/security/service.ts",
-    "/Users/Goodea/goodea/keryx/src/mcp/redact-seam.ts",
-    "/Users/Goodea/goodea/keryx/src/security/persistence-sinks.test.ts",
-    "/Users/Goodea/goodea/keryx/src/mcp/structural-redaction.test.ts"
+    "~/goodea/keryx/src/security/output-validation.ts",
+    "~/goodea/keryx/src/security/output-validation.test.ts",
+    "~/goodea/keryx/src/security/service.ts",
+    "~/goodea/keryx/src/mcp/redact-seam.ts",
+    "~/goodea/keryx/src/security/persistence-sinks.test.ts",
+    "~/goodea/keryx/src/mcp/structural-redaction.test.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
+    "Root ~/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run; the global keryx binary is stale, use bun src/cli.ts.",
     "Ownership: src/security/output-validation.ts and its test, src/mcp/redact-seam.ts, and only the validateSerializedOutput and prepareOutputForPersistence regions of src/security/service.ts. Do not touch detect/exfil.ts: a concurrent worker owns it. Do not touch guard.ts, config.ts, the gate region of service.ts, path-scan.ts, src/commands/*, flow files, package.json or the lockfile.",
     "Do not weaken the canonical equivalence rule that closed the hidden-byte class: the five duplicate-member shapes and their committed regressions must keep passing, and format-unsafe must remain reachable only when the structure itself has no safe representation.",
     "Do not import the validator directly into src/mcp/redact-seam.ts; src/mcp/boundary.test.ts forbids it. Go through the ../security/service facade.",
@@ -43,7 +43,7 @@
   "allowed_actions": ["read", "write", "run-command"],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-result.json"
   },
   "budget": { "max_output_tokens": null },
   "provenance": { "created_at": "2026-09-06T14:35:00+00:00", "created_by": "flow-orchestrator" }

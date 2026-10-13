@@ -44,7 +44,7 @@ Enforced consequences:
 
 ## Reference designs studied
 
-### helyx (`/home/altsay/bots/helyx`) — two distinct patterns
+### helyx (`~/bots/helyx`) — two distinct patterns
 
 **Pattern 1 — inverted MCP channel (`channel/`).** A human (or a tmux
 supervisor) starts Claude Code; helyx attaches as a stdio MCP server

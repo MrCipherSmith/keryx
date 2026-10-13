@@ -4,4 +4,4 @@ waves: 1 for one reviewer owning every slice (<= 90000 bytes per dispatch)
 - slice-02  29666 bytes  9 files  [domain]  src/review [test], src/review, src/tui [test] +1 more
 omitted: 0 files (0 bytes of diff)
 
-manifest: /home/altsay/keryx-fcomplete/.metaproject/data/review-427/slices/manifest.json
+manifest: ~/keryx-fcomplete/.metaproject/data/review-427/slices/manifest.json

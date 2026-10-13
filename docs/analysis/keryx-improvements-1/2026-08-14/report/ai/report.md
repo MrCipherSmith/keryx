@@ -4,7 +4,7 @@
 artifact: analysis-report
 status: complete
 date: 2026-08-14
-worktree: /Users/tsaitler.aleksandr/goodea/keryx-improvements-1
+worktree: ~/goodea/keryx-improvements-1
 scope:
   - src/sac
   - src/ctx

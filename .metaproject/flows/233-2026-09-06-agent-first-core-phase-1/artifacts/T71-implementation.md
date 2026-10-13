@@ -245,7 +245,7 @@ Raw: `.metaproject/data/gdctx/raw/T71-doc-parity.log`.
 Probes ran **directly with `bun`**, not through `ctx run`, for the reason every prior round on this
 surface disclosed and which holds here: `ctx run`'s compaction elides the per-case rows that are the
 evidence. The one required focused-suite run went through `ctx run` as the dispatch specifies. All
-raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 No network, no model call, no git or flow-state change, no dependency or lockfile change, no
 `bun test` without file arguments. Every host is reserved or synthetic (`attacker.invalid`,

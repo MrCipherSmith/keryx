@@ -1,7 +1,7 @@
 # Контекст этапа 2
 Version: 0.3.0
 
-Project: /Users/Goodea/goodea/keryx. Integration branch: codex/agent-first-core; recorded base main@0bc6418fa1a038f8ec909cf949fecba077acf9a4.
+Project: ~/goodea/keryx. Integration branch: codex/agent-first-core; recorded base main@0bc6418fa1a038f8ec909cf949fecba077acf9a4.
 
 Specs: docs/requirements/keryx-agent-first-core/README.md, specification.md, policies.md, artifact-lifecycle.md, decision-traceability.md.
 

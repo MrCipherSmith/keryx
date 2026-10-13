@@ -1,7 +1,7 @@
 # Tasks — Flow 028 (R2 review polish — deferred LOW/INFO)
 
 Statuses via `keryx flow task done 028 <taskId>`. TDD. Reuse-only; deterministic/offline; deps `{}`;
-fail-closed preserved; D-02; frozen untouched. Root `/Users/Goodea/goodea/keryx` (branch
+fail-closed preserved; D-02; frozen untouched. Root `~/goodea/keryx` (branch
 feature/keryx-r2-review-polish). Worktree-guard. Commits/PR: NO co-authorship. STOP-and-report if H
 or E force a real prior-wave refactor.
 

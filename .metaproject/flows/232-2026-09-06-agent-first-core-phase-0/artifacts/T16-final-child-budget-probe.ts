@@ -10,7 +10,7 @@
  *      reservation/prompt report the CAPPED value (truthful, not the ask)
  *   D4 max_tool_calls 0 denies every invocation and reports calls<=0
  */
-import { createSpawnSubagentTool } from "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool";
+import { createSpawnSubagentTool } from "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool";
 
 type Script = "tool-every-round" | "tool-then-text";
 
@@ -62,7 +62,7 @@ function makeProbe(script: Script): {
     events,
     makeTool: () =>
       createSpawnSubagentTool({
-        cwd: "/Users/Goodea/goodea/keryx",
+        cwd: "~/goodea/keryx",
         getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
         makeProvider: () => provider as any,
         getDetectedProviders: () => [{ name: "ollama" }],

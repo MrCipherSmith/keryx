@@ -14,8 +14,8 @@ Version: 0.1.0
 
 | # | Target | Why | Bias |
 |---|---|---|---|
-| T1 | `helyx` (`/home/altsay/bots/helyx`) | ~2 650 TypeScript files, actively developed, populated `.metaproject/` — graph, wiki (architecture / components / testing), memory, health, testing | **Primary.** Not keryx, so the tool does not grade itself. |
-| T2 | `keryx` (`/home/altsay/keryx`) | The richest workspace in existence: full wiki, dense graph, accumulated memory | **Secondary, biased.** Reported separately and never averaged with T1. |
+| T1 | `helyx` (`~/bots/helyx`) | ~2 650 TypeScript files, actively developed, populated `.metaproject/` — graph, wiki (architecture / components / testing), memory, health, testing | **Primary.** Not keryx, so the tool does not grade itself. |
+| T2 | `keryx` (`~/keryx`) | The richest workspace in existence: full wiki, dense graph, accumulated memory | **Secondary, biased.** Reported separately and never averaged with T1. |
 
 Excluded: every `/tmp/.../scratchpad/*` registry entry (fixtures, not projects)
 and the `deprecated*` trees (out of scope for this work).

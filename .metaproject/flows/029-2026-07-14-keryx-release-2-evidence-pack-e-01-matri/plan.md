@@ -21,7 +21,7 @@ review verifies no contradiction with the frozen package / ADRs / merged code.
 | T2/T3/T4 | umbrella | orchestrator | Opus | — |
 
 Orchestrator = Opus. Workers via subagent-dispatch → subagent-result, worktree-guard
-(`cd /Users/Goodea/goodea/keryx`, branch `feature/keryx-release2-evidence`). Sequential: T5 → T6 → T7 → T8.
+(`cd ~/goodea/keryx`, branch `feature/keryx-release2-evidence`). Sequential: T5 → T6 → T7 → T8.
 
 ## Steps
 

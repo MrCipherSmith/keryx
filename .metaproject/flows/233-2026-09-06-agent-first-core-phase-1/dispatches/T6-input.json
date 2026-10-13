@@ -18,7 +18,7 @@
       "MCP resource listing and harness wiki/skills discovery/direct reads observe the same containment rules; cycles are bounded.",
       "Race test verifies descriptor/identity protection or explicit capability refusal; no unsupported full TOCTOU claim."
     ],
-    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
+    "context": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
     "existing_tests": [
       "src/mcp/resources-containment.test.ts",
       "src/harness/tool/metaproject-adapter-containment.test.ts",
@@ -36,9 +36,9 @@
     }
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "codebase_path": "~/goodea/keryx",
     "branch": "codex/agent-first-core",
-    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+    "context_path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
   },
   "automation": {
     "skip_confirmation": true,

@@ -144,6 +144,6 @@
     "omittedBytes": 0,
     "droppedBlocks": 0
   },
-  "dir": "/home/altsay/keryx-fcomplete/.metaproject/data/review/slices",
-  "manifestPath": "/home/altsay/keryx-fcomplete/.metaproject/data/review/slices/manifest.json"
+  "dir": "~/keryx-fcomplete/.metaproject/data/review/slices",
+  "manifestPath": "~/keryx-fcomplete/.metaproject/data/review/slices/manifest.json"
 }

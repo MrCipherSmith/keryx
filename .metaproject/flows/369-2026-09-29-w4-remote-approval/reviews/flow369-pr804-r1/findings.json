@@ -130,7 +130,7 @@
     "global_id": "flow369-pr804-r1#F-004",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: altsay-flow-agent. The resolution file is the source of truth and the ledger is a mirror; a ledger failure surfacing as an error is the fail-loud choice. Follow-up, not blocking."
+      "evidence": "decided-by: operator-flow-agent. The resolution file is the source of truth and the ledger is a mirror; a ledger failure surfacing as an error is the fail-loud choice. Follow-up, not blocking."
     }
   },
   {
@@ -159,7 +159,7 @@
     "global_id": "flow369-pr804-r1#F-005",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: altsay-flow-agent. The window fails closed (a denial), never open; a crash inside it denies an approval that was allowed, which is safe. Follow-up."
+      "evidence": "decided-by: operator-flow-agent. The window fails closed (a denial), never open; a crash inside it denies an approval that was allowed, which is safe. Follow-up."
     }
   },
   {
@@ -258,7 +258,7 @@
     "global_id": "flow369-pr804-r1#F-008",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: altsay-flow-agent. The store holds a handful of records per install today and stock serve raises none; pruning and indexing wait for a real volume."
+      "evidence": "decided-by: operator-flow-agent. The store holds a handful of records per install today and stock serve raises none; pruning and indexing wait for a real volume."
     }
   }
 ]

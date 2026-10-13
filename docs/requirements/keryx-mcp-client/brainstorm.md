@@ -86,7 +86,7 @@ that sense; codex's elicitation is a side-channel approval request, not a
 tool call the model itself makes. Kept as a reference for whichever later
 version of this client does add real tool-bridging.
 
-## Reference design: helyx (`/home/altsay/bots/helyx`, not locally available)
+## Reference design: helyx (`~/bots/helyx`, not locally available)
 
 Already documented in `keryx-external-agent-runtime/brainstorm.md` from a
 prior research pass; restated here with the specific angle this package

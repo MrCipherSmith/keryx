@@ -5,5 +5,5 @@
   "slice-02"
  ],
  "result": "raw/review-highload-01-02.txt",
- "definition": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
 }

@@ -97,12 +97,12 @@
   "max_findings": 10
  },
  "base_sha": "628d6e5ea9d0f3698e7f115122096a63c0913974",
- "pr_context": "/home/altsay/keryx-fcomplete/.metaproject/flows/418-2026-10-09-shell-review-orchestration/reviews/2026-10-12-pr-github-com-mrciphersmith-keryx-pull-940/pr-context.md",
+ "pr_context": "~/keryx-fcomplete/.metaproject/flows/418-2026-10-09-shell-review-orchestration/reviews/2026-10-12-pr-github-com-mrciphersmith-keryx-pull-940/pr-context.md",
  "round": 1,
  "is_fix_round": false,
  "prior_findings": [],
  "reviewer": "review-performance",
- "skill_path": "/home/altsay/keryx-fcomplete/.metaproject/skills/gdskills/review/review-performance/SKILL.md",
+ "skill_path": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-performance/SKILL.md",
  "slices": [
   "slice-01",
   "slice-02",

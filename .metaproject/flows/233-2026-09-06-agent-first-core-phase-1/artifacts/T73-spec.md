@@ -1,6 +1,6 @@
 # T73 spec — closing T62 F-004's remaining disclosed sites (prompt string + five docs)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Written
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Written
 before any edit, per `tdd-workflow.mdc`. This task is documentation/string-only
 — no behaviour change, per the dispatch's own constraint.
 

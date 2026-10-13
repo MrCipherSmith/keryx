@@ -1,6 +1,6 @@
 # Review 310 R5: PR #684 (flow 310, W2), final narrow verification round
 
-Scope: fix commit a29e6235 (plus the record commit 7fd965c5) on flow/310-w2 (head 7fd965c5), in /Users/Goodea/goodea/keryx-ape-310-w2. The review was read-only on the repo. All CLI probes ran in fresh git repos under scratchpad/review310-r5/ (script e2e.sh, output e2e.out).
+Scope: fix commit a29e6235 (plus the record commit 7fd965c5) on flow/310-w2 (head 7fd965c5), in ~/goodea/keryx-ape-310-w2. The review was read-only on the repo. All CLI probes ran in fresh git repos under scratchpad/review310-r5/ (script e2e.sh, output e2e.out).
 
 R4 disposition:
 - **R4-F2: resolved.** `hasManagedAgentExports` now counts only verified files. In e2e.out:

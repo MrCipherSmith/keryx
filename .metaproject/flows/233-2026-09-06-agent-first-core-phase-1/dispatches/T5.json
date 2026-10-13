@@ -17,25 +17,25 @@
   ],
   "context_refs": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
       "kind": "custom",
       "exists": true
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "path": "~/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
       "kind": "custom",
       "exists": true
     }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/mcp/resources.ts",
-    "/Users/Goodea/goodea/keryx/src/mcp/resources.test.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/metaproject-adapter.ts",
-    "/Users/Goodea/goodea/keryx/src/lib/contained-path.ts",
-    "/Users/Goodea/goodea/keryx/src/sac/secure-resource-read.ts"
+    "~/goodea/keryx/src/mcp/resources.ts",
+    "~/goodea/keryx/src/mcp/resources.test.ts",
+    "~/goodea/keryx/src/harness/tool/metaproject-adapter.ts",
+    "~/goodea/keryx/src/lib/contained-path.ts",
+    "~/goodea/keryx/src/sac/secure-resource-read.ts"
   ],
   "constraints": [
-    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md first. Local tests-creator fully; testing context; graph/wiki before deep code.",
+    "Read ~/goodea/keryx/.metaproject/index.md first. Local tests-creator fully; testing context; graph/wiki before deep code.",
     "Own containment tests in src/mcp, harness/tool and potential shared lib test. No production/flow/git/AC edits or external model/network calls. Temporary synthetic fixtures only. Stats disabled; auto_commit false.",
     "Root owns MCP dispatch/redact-seam/security redaction and scan. You own resources/contained readers/skills paths tests only. Coordinate shared files explicitly before edits.",
     "Health worker writes src/health tests; independent M10 reviewer read-only. No global test suite; focused containment only.",
@@ -48,7 +48,7 @@
   ],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-result.json"
   },
   "budget": {
     "max_output_tokens": null

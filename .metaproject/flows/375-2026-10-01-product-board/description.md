@@ -20,7 +20,7 @@ One page, `keryx product map`, built only from the derived product index `.metap
 - The board gates and blocks nothing.
 - `keryx product` gains exactly one command, `map` (3 of the 4 allowed by the bulk budget in `docs/requirements/keryx-product-module/implementation-plan.md`); `admit`, `show` and `list` stay refused.
 
-Decision A1 (operator, poll 2026-10-01 03:48 UTC): the G1 product gate is lifted for `map` only; the G1 readout planned for 2026-10-28 stays untouched. decided-by: altsay (poll answer).
+Decision A1 (operator, poll 2026-10-01 03:48 UTC): the G1 product gate is lifted for `map` only; the G1 readout planned for 2026-10-28 stays untouched. decided-by: operator (poll answer).
 
 ## Outcome criteria
 
