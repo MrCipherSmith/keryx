@@ -10,10 +10,11 @@ import type {
   WikiPageNode,
 } from "./types";
 import { TYPE_ONLY_IMPORT_KIND } from "./types";
+import { gdgraphStorageDir } from "./data-dir";
 import { resolveGraphTarget } from "./target";
 
-export async function loadGraph(projectRoot: string): Promise<GraphData> {
-  const storageDir = path.join(projectRoot, ".metaproject", "data", "gdgraph", "storage");
+export async function loadGraph(projectRoot: string, dataDir?: string): Promise<GraphData> {
+  const storageDir = gdgraphStorageDir(projectRoot, dataDir);
   const nodes = await readJsonl<GraphNode>(path.join(storageDir, "nodes.jsonl"));
   const edges = await readJsonl<GraphEdge>(path.join(storageDir, "edges.jsonl"));
   // B1 symbol layer: loaded ONLY if present. Missing files ⇒ empty/omitted layer

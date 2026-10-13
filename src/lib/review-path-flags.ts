@@ -12,7 +12,8 @@ import { type PlacedPathResult, placePathWithinSync } from "./contained-path";
 export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
   slice: ["--diff", "--out"],
   "retry-plan": ["--manifest", "--result", "--state"],
-  "dispatch-check": ["--manifest", "--payload"],
+  "dispatch-check": ["--manifest", "--payload", "--package"],
+  layers: ["--package"],
 };
 
 /** The flags of the same commands that name no path (ids, numbers, switches). Not confined by design. */
@@ -20,6 +21,7 @@ export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> 
   slice: ["--ref", "--base", "--context", "--max-bytes", "--wave-bytes", "--json", "--help", "-h"],
   "retry-plan": ["--reviewer", "--slices", "--covered", "--next-wave", "--dry-run", "--json", "--help", "-h"],
   "dispatch-check": ["--max-bytes", "--pr-context", "--json", "--help", "-h"],
+  layers: ["--head", "--base", "--write-wiki", "--json", "--help", "-h"],
 };
 
 /** `-` means standard input for these flags and names no file. */

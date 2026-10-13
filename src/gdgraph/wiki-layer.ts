@@ -15,6 +15,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { gdgraphStorageDir } from "./data-dir";
 import { collectPages } from "../wiki/collect";
 import { computeModuleKeyFiles } from "../wiki/collect";
 import { resolveDescribeSet } from "../wiki/describes";
@@ -25,8 +26,8 @@ export const WIKI_PAGES_FILE = "wiki-pages.jsonl";
 export const DESCRIBES_FILE = "describes.jsonl";
 export const BUILD_MANIFEST_FILE = "build-manifest.json";
 
-function storageDir(projectRoot: string): string {
-  return path.join(projectRoot, ".metaproject", "data", "gdgraph", "storage");
+function storageDir(projectRoot: string, dataDir?: string): string {
+  return gdgraphStorageDir(projectRoot, dataDir);
 }
 
 /**
@@ -181,8 +182,10 @@ export async function enrichBuildWithWikiLayer(input: {
   /** Injected in tests; defaults to the real `validModuleNames`. */
   validModules?: Set<string> | undefined;
   loadValidModules?: (projectRoot: string) => Promise<Set<string> | undefined>;
+  /** A gdgraph data directory other than the project's own (a review package's graph). */
+  dataDir?: string;
 }): Promise<WikiLayer> {
-  const dir = storageDir(input.projectRoot);
+  const dir = storageDir(input.projectRoot, input.dataDir);
   await mkdir(dir, { recursive: true });
 
   const mtimes = new Map<string, number>();
@@ -205,7 +208,7 @@ export async function enrichBuildWithWikiLayer(input: {
   const validModules =
     input.validModules !== undefined
       ? input.validModules
-      : await (input.loadValidModules ?? defaultLoadValidModules)(input.projectRoot);
+      : await (input.loadValidModules ?? ((root) => defaultLoadValidModules(root, input.dataDir)))(input.projectRoot);
 
   const wikiPages = await collectPages(input.projectRoot);
   const contents = new Map<string, string>();
@@ -236,9 +239,9 @@ export async function enrichBuildWithWikiLayer(input: {
   return layer;
 }
 
-async function defaultLoadValidModules(projectRoot: string): Promise<Set<string> | undefined> {
+async function defaultLoadValidModules(projectRoot: string, dataDir?: string): Promise<Set<string> | undefined> {
   // Dynamic so `gdgraph` keeps no static dependency on `wiki/service`, which
   // reads the graph itself — the same cycle-avoidance the symbol layer uses.
   const { validModuleNames } = await import("../wiki/service");
-  return validModuleNames(projectRoot);
+  return validModuleNames(projectRoot, dataDir);
 }

@@ -14,6 +14,7 @@
 // instead of a stranger's first five minutes.
 export const GDGRAPH_CORE_SOURCES: readonly string[] = [
   "build.ts",
+  "data-dir.ts",
   "query.ts",
   "target.ts",
   "types.ts",

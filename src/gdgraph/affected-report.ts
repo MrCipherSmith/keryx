@@ -25,6 +25,10 @@ import { explainAbsentGraphTarget, loadDeletionTrail } from "../forgetting/servi
 export interface AffectedReportOptions {
   depth?: number;
   ranked?: boolean;
+  /** Read this gdgraph data directory (a review package's graph) instead of the project's own. */
+  dataDir?: string;
+  /** Freshness to report for a `dataDir` graph; the project graph's own staleness check says nothing about it. */
+  freshness?: StalenessCheck;
 }
 
 export interface AffectedReport {
@@ -58,7 +62,13 @@ export async function buildAffectedReport(
   const depth = opts.depth !== undefined && Number.isFinite(opts.depth) ? opts.depth : config.affected.defaultDepth;
   const ranked = opts.ranked ?? true;
 
-  const graph = await loadGraph(root);
+  const graph = await loadGraph(root, opts.dataDir);
+  const freshnessOf = (): Promise<StalenessCheck> =>
+    opts.dataDir === undefined
+      ? checkGraphStaleness(root)
+      : Promise.resolve(
+          opts.freshness ?? { status: "unknown", reasons: ["package graph: freshness is recorded in layers.json"] },
+        );
 
   // Symbol-aware: if the target isn't a known file but names a symbol,
   // resolve it to its owning file — mirrors `runAffected`'s own resolution.
@@ -83,7 +93,7 @@ export async function buildAffectedReport(
       "the graph index holds no file nodes — it was never built here, or its storage is unreadable. " +
         "No claim is being made about whether this target exists.",
     );
-    const freshness = await checkGraphStaleness(root);
+    const freshness = await freshnessOf();
     return {
       exitCode: 1,
       resolutionNote,
@@ -108,7 +118,7 @@ export async function buildAffectedReport(
       `gdgraph: "${target}" is not a node in the built graph (never indexed, or the ` +
       `path/symbol does not exist) — this is not the same as an indexed target with ` +
       `zero edges. Run \`keryx gdgraph build\` if the file is new, or double-check the path.`;
-    const freshness = await checkGraphStaleness(root);
+    const freshness = await freshnessOf();
     return {
       exitCode: 1,
       resolutionNote,
@@ -132,7 +142,7 @@ export async function buildAffectedReport(
     };
   }
 
-  const freshness: StalenessCheck = await checkGraphStaleness(root);
+  const freshness: StalenessCheck = await freshnessOf();
   return {
     exitCode: 0,
     resolutionNote,
