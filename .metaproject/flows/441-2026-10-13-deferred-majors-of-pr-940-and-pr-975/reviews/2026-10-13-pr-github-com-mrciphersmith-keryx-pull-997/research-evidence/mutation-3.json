@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t1",
+  "command": "bun test src/review/ledger.test.ts src/commands/review-slice.test.ts src/commands/review.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1395
+  },
+  "mutants": [
+    {
+      "id": "M03-objectEnd-escape-never-set",
+      "file": "src/review/ledger.ts",
+      "anchor": "else if (char === \"\\\\\") escaped = true;",
+      "replacement": "else if (char === \"\\\\\") escaped = false;",
+      "line": 94,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1316
+    },
+    {
+      "id": "M30-fence-pointer-ignores-range-start",
+      "file": "src/review/ledger.ts",
+      "anchor": "return next < ranges.length && start >= ranges[next]![0];",
+      "replacement": "return next < ranges.length;",
+      "line": 177,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1387
+    }
+  ],
+  "totals": {
+    "killed": 2,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

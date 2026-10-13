@@ -6,7 +6,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { installStatePath, readInstallState, recordSurfaceInstalled } from "./install-state";
 
 async function withTempDir<T>(run: (root: string) => Promise<T>): Promise<T> {
@@ -15,6 +15,18 @@ async function withTempDir<T>(run: (root: string) => Promise<T>): Promise<T> {
     return await run(root);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+}
+
+// Explicit clock advances: filesystem latency must not decide whether timestamps differ.
+let recordedTime = Date.parse("2026-10-13T08:43:35.000Z");
+async function recordAtNextTime(...args: Parameters<typeof recordSurfaceInstalled>): Promise<void> {
+  const timestamp = new Date(recordedTime += 1000).toISOString();
+  const clock = spyOn(Date.prototype, "toISOString").mockReturnValue(timestamp);
+  try {
+    await recordSurfaceInstalled(...args);
+  } finally {
+    clock.mockRestore();
   }
 }
 
@@ -28,7 +40,7 @@ test("a second recordSurfaceInstalled call with unchanged content does not rewri
     await mkdir(path.join(root, ".claude"), { recursive: true });
     await writeFile(path.join(root, ".claude", "settings.json"), '{"hooks":{}}\n', "utf8");
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
@@ -41,7 +53,7 @@ test("a second recordSurfaceInstalled call with unchanged content does not rewri
     // detectable via mtime even if byte comparison had a blind spot.
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
@@ -61,7 +73,7 @@ test("installedAt is kept from the first install across a no-op re-record", asyn
     await mkdir(path.join(root, ".claude"), { recursive: true });
     await writeFile(path.join(root, ".claude", "settings.json"), '{"hooks":{}}\n', "utf8");
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
@@ -70,7 +82,7 @@ test("installedAt is kept from the first install across a no-op re-record", asyn
     const firstInstalledAt = firstState?.installedModules.find((m) => m.moduleId === "integrations")?.installedAt;
     expect(firstInstalledAt).toBeTruthy();
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
@@ -89,14 +101,14 @@ test("a real content change (different written path) still rewrites the file and
     await writeFile(path.join(root, ".claude", "settings.json"), '{"hooks":{}}\n', "utf8");
     await writeFile(path.join(root, ".claude", "extra.json"), "{}\n", "utf8");
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
     });
     const firstState = await readInstallState(root, "claude");
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json", ".claude/extra.json"],
       managedSentinel: true,
@@ -117,7 +129,7 @@ test("a changed on-disk hash (same paths, different content) still rewrites the 
     await mkdir(path.join(root, ".claude"), { recursive: true });
     await writeFile(path.join(root, ".claude", "settings.json"), '{"hooks":{}}\n', "utf8");
 
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
@@ -125,7 +137,7 @@ test("a changed on-disk hash (same paths, different content) still rewrites the 
     const firstState = await readInstallState(root, "claude");
 
     await writeFile(path.join(root, ".claude", "settings.json"), '{"hooks":{"changed":true}}\n', "utf8");
-    await recordSurfaceInstalled(root, "claude", {
+    await recordAtNextTime(root, "claude", {
       moduleId: "integrations",
       writtenPaths: [".claude/settings.json"],
       managedSentinel: true,
@@ -133,5 +145,31 @@ test("a changed on-disk hash (same paths, different content) still rewrites the 
     const secondState = await readInstallState(root, "claude");
 
     expect(secondState?.recordedAt).not.toBe(firstState?.recordedAt);
+  });
+});
+
+
+test("changed content is persisted even when writes share a timestamp", async () => {
+  await withTempDir(async (root) => {
+    await initMetaproject(root);
+    await mkdir(path.join(root, ".claude"), { recursive: true });
+    const file = path.join(root, ".claude", "settings.json");
+    const clock = spyOn(Date.prototype, "toISOString").mockReturnValue("2026-10-13T08:43:35.947Z");
+    try {
+      const entry = { moduleId: "integrations", writtenPaths: [".claude/settings.json"], managedSentinel: true };
+      await writeFile(file, '{"hooks":{}}\n', "utf8");
+      await recordSurfaceInstalled(root, "claude", entry);
+      const first = await readInstallState(root, "claude");
+      const firstBytes = await readFile(installStatePath(root, "claude"), "utf8");
+      await writeFile(file, '{"hooks":{"changed":true}}\n', "utf8");
+      await recordSurfaceInstalled(root, "claude", entry);
+      const second = await readInstallState(root, "claude");
+      expect(second?.recordedAt).toBe(first?.recordedAt);
+      expect(second?.installedModules[0]?.installedAt).toBe(first?.installedModules[0]?.installedAt);
+      expect(second?.installedModules[0]?.sha256).not.toEqual(first?.installedModules[0]?.sha256);
+      expect(await readFile(installStatePath(root, "claude"), "utf8")).not.toBe(firstBytes);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

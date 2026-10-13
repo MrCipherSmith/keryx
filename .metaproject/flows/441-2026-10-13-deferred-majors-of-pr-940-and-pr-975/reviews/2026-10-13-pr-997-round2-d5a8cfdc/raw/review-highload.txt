@@ -1,0 +1,55 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "findings": [
+    {
+      "id": "HL-1",
+      "severity": "info",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "const body = await readFile(file, \"utf8\");\n    const result = isEmptyOutput(body) ? undefined : parseReviewResult(body);",
+      "problem": "Neither loadRaws nor readResult bounds the size of a reply before parsing it. A closed object that fails JSON.parse costs a thrown exception at about 1.8 us each and nothing caps how many occur. Worst per-byte input: 8 early REVIEW_RESULT {\"a\": markers followed by {\"\"} repeated, 17 char-steps per byte. Measured: 0.5 MB 295 ms, 1 MB 580-590 ms, 2 MB 1031-1152 ms, 8 MB 4049-4582 ms; linear at about 0.55 s/MB.",
+      "impact": "Latency only, linear, reachable only with a 1 MB+ file in raw/ or on stdin. Real raws are 5-10 KB.",
+      "suggested_fix": "Optional: ceiling (for example 1 MiB) in loadRaws and readResult, outside the parser, so AC11-AC18 are untouched.",
+      "evidence": "r2/review-highload/ mkinst.ts, inst.ts, bench.ts, run.sh. Doubling ratios 1.9-2.1.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-2",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g)].slice(-MAX_MARKERS);",
+      "problem": "afterMarker materialises a match array for every marker and keeps 8 (92 MB RSS at 133k markers in 2 MB). topLevelObjects keeps found as {start,value} for every top-level object: 2 MB of {} gives +150 MB RSS (about 75 B per input byte).",
+      "impact": "Linear memory amplification, reachable only with a 1 MB+ reply.",
+      "suggested_fix": "Iterate matchAll lazily and keep a ring of the last 8 matches.",
+      "evidence": "bench.ts cases emptyObjs, tinyObjs, markersValidSmall.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "HL-3",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "if (claimsResult || (unclosed += 1) > MAX_UNCLOSED) return { found, truncated: true };",
+      "problem": "The caps turn a genuine complete bare result into a gap (undefined) and cannot turn it into a wrong result. 9 unclosed {\" fragments before or after a bare good result give undefined; 8 give the result. A genuine marker result followed by 9 later REVIEW_RESULT {\"a\": gives undefined. A closed-invalid outer object (Quoted: {\"x\" then good and } end) swallows a bare result. A REVIEW_RESULT fence is immune. Caps never change which VALID marker wins.",
+      "impact": "Fail-closed availability only; the fenced form is immune.",
+      "suggested_fix": "No change required; optionally document that the fence is the only form immune to prose-borne truncation.",
+      "evidence": "r2/review-highload/caps.ts.",
+      "confidence": "high",
+      "reviewer": "review-highload"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-003", "state": "closed", "evidence": "Marker regex, 200 KB of spaces: 79.7 s at 141c8852, 1.0 ms at 70fc3f85, 2.2 ms at d5a8cfdc. Labelled-fence regex: 33.8 s at 141c8852, 15.5 s at 70fc3f85 (still quadratic), 1.4 ms at d5a8cfdc. Fence filter 0.79-1.65 s down to 7-23 ms. No remaining quadratic regex."},
+    {"id": "F-002", "state": "partial", "evidence": "Scan-cost side only: bounded at 8 afterMarker scans plus 9 topLevelObjects scans; fail-closed scope belongs to review-logic."}
+  ],
+  "answers": {
+    "Q1": "Not owned. The MAX_MARKERS window never changes which valid marker wins.",
+    "Q2": "Caps can only produce undefined, never a wrong result. Linear, about 17 char-steps per byte worst case; 2 MB hostile inputs from 14 ms to about 1.1 s; worst memory +150 MB RSS per 2 MB. No superlinear growth, no crash at 333k-deep nesting.",
+    "Q3": "Not owned. readResult adds one extra O(N) JSON.parse."
+  }
+}
+```

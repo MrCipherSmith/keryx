@@ -1,0 +1,349 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "fenceRanges pairs ANY triple backtick (an inline mention included, fence length ignored, closer need not start a line) with the next one after the end of its line. One inline triple backtick in prose flips the pairing of every later fence, so afterMarker (line 203) and scannedResult (line 222), which both trust these ranges, mis-classify markers: a quoted marker inside a real fence is read as outside (or a real marker as inside). The round-3 rule 'a marker inside a fenced block is not a marker' therefore holds only for well-formed line-start fences.",
+    "impact": "Fail open (security-code): a forged 'REVIEW_RESULT: {status DONE, no findings}' line quoted inside a three backticksts or three backticksdiff fence, plus an earlier inline three backticksREVIEW_RESULT mention, plus a real bare NEEDS_CONTEXT result -> parseReviewResult returns the forged DONE with 0 findings (control without the inline mention: undefined = a gap); the real NEEDS_CONTEXT/blocker is lost. Fail closed (highload, architecture, performance): an inline three backticksxthree backticks span before a real marker, with a fenced sample of another status after it, turns the reply into a gap where d5a8cfdc returned the real result. The accepted AC15 residual covers only an UNFENCED quote.",
+    "suggested_fix": "Make fenceRanges line-based (CommonMark): an opener is a line starting (after up to 3 spaces) with 3+ backticks and no further backtick; a closer is a line-start run of at least the opener's length; an unclosed opener runs to the end of the reply; strip a trailing \\r. Keep the single forward pass so fenceTester stays linear. Pin the four reproductions in ledger.test.ts and re-check the existing fence tests (ledger.test.ts:392-400 pin a closing fence followed by text on the same line).",
+    "evidence": "bun against exported parseReviewResult, T = three backticks. (1) 'The parser reads T REVIEW_RESULT T fences.\\n\\nT ts\\nREVIEW_RESULT: <forged DONE>\\nT\\n\\n<real NEEDS_CONTEXT bare object>' -> DONE, 0 findings; control without the first sentence -> undefined. (2) clean-code: 'the T json convention\\nREVIEW_RESULT: ok(DONE)\\nT json\\nok(BLOCKED)\\nT' -> undefined, without the inline T -> DONE. (3) highload P1: 'I used T foo T inline.\\n\\nREVIEW_RESULT {DONE}\\n\\nExample:\\nT json\\n{BLOCKED}\\nT' -> undefined at 44bed779, DONE at d5a8cfdc. Scripts under scratchpad/review-security-code/{a,b}.ts, review-highload/probe.ts, review-clean-code/t2.ts. Also raised by review-performance PERF-R3-1; review-clean-code F-001; review-highload HL3-1; review-architecture ARCH-R3-1; review-logic F-018. Verifier (review-verifier, execution): at 07730d87 the fail-open input returns the forged DONE with 0 findings; the same inputs at d5a8cfdc return the forged DONE even without the inline mention, and at base 01e0dbfe the real NEEDS_CONTEXT result. Round 3 narrowed the exposure relative to round 2 but it is still a divergence from base.",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 144,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:144 fenceRanges",
+        "src/review/ledger.ts:158 fenceTester",
+        "src/review/ledger.ts:203 afterMarker",
+        "src/review/ledger.ts:222 scannedResult"
+      ],
+      "enumeration_method": "keryx ctx rg fenceTester|fenceRanges: one producer of ranges, two consumers; labelledFence uses its own regex and is unaffected."
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun scratchpad/verifier/f001.ts <ver> <dir> importing parseReviewResult (T = three backticks; real = {status NEEDS_CONTEXT, reviewer review-logic, findings [1 blocker F-1]}; forged = {status DONE, reviewer forged, findings []}). At head 07730d87: (1) 'The parser reads T REVIEW_RESULT T fences.' + fenced Tts block holding 'REVIEW_RESULT: <forged>' + bare <real> -> status=DONE reviewer=forged findings=0 (the real NEEDS_CONTEXT/blocker is lost: fail open). (1c) same without the inline mention -> undefined. (2) 'the Tjson convention' + 'REVIEW_RESULT: <forged>' + Tjson fence holding <real> -> undefined; control without the inline T -> DONE forged (fail closed: a gap). (3) 'I used T foo T inline.' + 'REVIEW_RESULT <forged>' + 'Example:' + Tjson fence holding <real> -> undefined; control without the inline pair -> DONE forged. head ledger.ts is byte-identical to 44bed779 (diff -q silent). Same six inputs at d5a8cfdc: forged DONE in all six, controls included (no fence awareness for markers). At base 01e0dbfe: the real NEEDS_CONTEXT result in all six. So the fail-open input is not new in round 3 relative to d5a8cfdc (there it failed open even without the inline mention; round 3 narrowed it to an inline T before the fence) but it is a divergence from base 01e0dbfe. Inputs 2 and 3 are reconstructions from the finding text (real = a NEEDS_CONTEXT object, not the reviewers' exact strings).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Carried round-2 F-004, unchanged. objectEnd documents claimsResult as 'the object itself (not an object nested in it)', but topLevelObjects re-enters every unclosed fragment (start += 1), so a nested cut-off object carrying a result key still ends the scan as truncated. Neither the topLevelObjects doc nor a test says so.",
+    "impact": "A complete bare result followed by prose like {\"meta\":{\"status\":\"ok\" gives no result (re-dispatch), while {\"meta\":{\"x\":1 is read. Fails closed, never a wrong result.",
+    "suggested_fix": "One sentence in the topLevelObjects doc (a nested cut-off object is met again at its own brace, so a result key anywhere in a cut-off fragment ends the scan) and one test pinning the first case.",
+    "evidence": "bun: 'ok(DONE)\\n{\"meta\":{\"status\":\"ok\"' -> undefined; 'ok(DONE)\\n{\"meta\":{\"x\":1' -> the result. Script scratchpad/review-clean-code/t3.ts.",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 105,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:88-91 objectEnd doc",
+        "src/review/ledger.ts:120-124 topLevelObjects doc"
+      ],
+      "enumeration_method": "the two comments describing claimsResult; one behaviour"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun scratchpad/verifier/misc.ts <dir> (orig = head copy): 'ok(DONE) newline {\"meta\":{\"status\":\"ok\"' -> undefined; 'ok(DONE) newline {\"meta\":{\"x\":1' -> {status DONE, reviewer r, findings []}. A nested cut-off object carrying a result key ends the scan as truncated although objectEnd documents claimsResult as the object itself. keryx ctx rg for 'meta' and 'nested' in ledger.test.ts: no test pins it (hits are AC11, AC12 and line 191 only).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Carried round-2 F-008, unchanged. objectEnd is both a brace matcher and a result-key detector; afterMarker discards claimsResult yet the detector runs per marker candidate. KEY_COLON (l.86) and OBJECT_START (l.83) are module-level sticky regexes whose lastIndex every caller must set before use. The try { JSON.parse } catch pair is written three times (l.137, 188, 210-213).",
+    "impact": "Maintainability only: a fourth caller can forget to reset lastIndex; changing the parse-failure policy means three edits. No behaviour defect found.",
+    "suggested_fix": "Pass the key detector to objectEnd as an optional callback or split it; add a tryParse(raw, from, to) helper; build the colon test locally.",
+    "evidence": "ledger.ts lines 83, 86, 105-107, 137, 186-188, 208-213 at head 07730d87.",
+    "confidence": "medium",
+    "file": "src/review/ledger.ts",
+    "line": 208,
+    "class_scope": {
+      "sites": [
+        "l.83",
+        "l.86",
+        "l.137",
+        "l.188",
+        "l.210-213"
+      ],
+      "enumeration_method": "read of the whole file"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-003"
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "Titles at lines 388 ('a fence that never closes fences nothing: its object is bare, so two statuses stay ambiguous') and 392 ('an object right after a closing fence is bare, not fenced') name a rule their assertion cannot fail on: both inputs hold two reviewer-shaped objects with different statuses, so the reply is undefined whether the object is counted as fenced or as bare. Line 397 does discriminate.",
+    "impact": "A regression in the unclosed-fence rule or the closing-fence boundary leaves these two green while their titles claim to guard it. Another test pins the unclosed-fence rule (line 407), so this is a title/assertion mismatch, not a coverage hole.",
+    "suggested_fix": "Give the object in question the same status as the other and assert which reviewer wins, or retitle both to what they assert.",
+    "evidence": "Standalone copy of ledger.ts in scratchpad/review-style3. Mutant A (fenceRanges closes an unclosed fence at end of input): 388 still gives undefined. Mutant B (fenceTester treats the end position as inside): 392 still gives undefined while 397 changes to reviewer 'bare'.",
+    "confidence": "high",
+    "file": "src/review/ledger.test.ts",
+    "line": 388,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.test.ts:388",
+        "src/review/ledger.test.ts:392"
+      ],
+      "enumeration_method": "read of the fences describe, each title checked against a mutant"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Scratch copies of ledger.ts plus a real copy of ledger.test.ts (siblings symlinked), bun test ledger.test.ts -t <title>. Original: titles 'never closes fences nothing' (l.388), 'right after a closing fence is bare' (l.392), 'starts right where a closing fence ends' (l.397) -> 1 pass each. mutA (fenceRanges: if (close === -1) { ranges.push([open, raw.length]); break; }): l.388 1 pass 0 fail, l.392 1 pass, l.397 1 pass; full file 88 pass 1 fail, the failing test being 'an unclosed fence does not hide what follows it' (l.407). mutB (fenceTester: ranges[next][1] <= position -> < position): l.388 1 pass, l.392 1 pass, l.397 (fail); full file 88 pass 1 fail (l.397 only). So the two titled tests give the same output under both mutants; l.397 discriminates mutB and l.407 discriminates mutA.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "good_json (added in 44bed779) is a snake_case helper in a camelCase codebase, declared at file level after the describe that uses it (lines 377-379), and redundant: the enclosing describe at line 262 already holds goodJson (same fields, another key order).",
+    "impact": "Naming-convention break and a second spelling of one fixture.",
+    "suggested_fix": "Delete good_json and use goodJson at lines 377-379.",
+    "evidence": "git log -S good_json: only 44bed779. goodJson is declared at ledger.test.ts:262, an ancestor scope of line 358.",
+    "confidence": "high",
+    "file": "src/review/ledger.test.ts",
+    "line": 435,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.test.ts:435",
+        "src/review/ledger.test.ts:377-379"
+      ],
+      "enumeration_method": "git log -S good_json plus rg"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg -n --all good_json src -> 4 matches, all in src/review/ledger.test.ts: calls at 377, 378, 379 and the declaration 'function good_json(): string' at 435 (after the describe that uses it, snake_case). git log --oneline -S good_json -- src -> 44bed779 only. goodJson is declared at ledger.test.ts:262 (const goodJson = JSON.stringify(good), good = {reviewer r, status DONE, findings []}) in the describe opened at 260, an ancestor scope of line 358; good_json returns the same fields in another key order.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "Carried round-2 STY-4, unchanged. The header comment 'A command naming a missing file passes vacuously in `bun test`, so the gate proves nothing.' is false for a command that names a single missing file.",
+    "impact": "A maintainer reads the guard as covering a hazard that does not exist for single-file commands and misses the real one (a missing file next to an existing one).",
+    "suggested_fix": "Reword: bun test skips a missing file when the command also names other test files, so the gate passes without running it.",
+    "evidence": "bun test src/nope/missing.test.ts exits 1; bun test src/nope/missing.test.ts src/flow/verify-exec-files.test.ts exits 0 (run in the worktree).",
+    "confidence": "high",
+    "file": "src/flow/verify-exec-files.test.ts",
+    "line": 2,
+    "class_scope": {
+      "sites": [
+        "src/flow/verify-exec-files.test.ts:2"
+      ],
+      "enumeration_method": "the one header comment"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "In the worktree: bun test src/nope/missing.test.ts -> exit 1 (single missing file; bun prints the 'Tests need .test ...' note). bun test src/nope/missing.test.ts src/flow/verify-exec-files.test.ts -> '3 pass 0 fail', exit 0 (the missing file is skipped when another test file is named). Header lines 1-2 of src/flow/verify-exec-files.test.ts read: 'A command naming a missing file passes vacuously in bun test, so the gate proves nothing.' So the comment is wrong for the single-file case and right only for a missing file next to an existing one.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Carried round-2 F-010 / ARCH-3 (a). AC18 (acceptance-criteria.md:49) says the test fails when a named *.test.ts file does not exist; the four flow-375 KNOWN_MISSING exemptions make it pass for files that do not exist. The PR body states the list and 'Not done: F-010', but no operator decision on the AC18 deviation is recorded (PR body, flow journal).",
+    "impact": "AC18 is met only through an unsigned exemption; the frozen criterion and the test disagree.",
+    "suggested_fix": "Record the operator's decision on flow 375 (write the four tests, or re-seal with keryx flow ac update) before merge, or state in the PR body that AC18 is met with the named exemption by operator decision.",
+    "evidence": "acceptance-criteria.md:49; PR 997 body 'Not done: F-008 (refactor), F-010 (KNOWN_MISSING kept as is)'; journal.md of flow 441 has no entry for the exemption.",
+    "confidence": "medium",
+    "file": "src/flow/verify-exec-files.test.ts",
+    "line": 15,
+    "class_scope": {
+      "sites": [
+        "src/flow/verify-exec-files.test.ts:15",
+        ".metaproject/flows/441-.../acceptance-criteria.md:49"
+      ],
+      "enumeration_method": "KNOWN_MISSING entries"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "AC18 text (acceptance-criteria.md of flow 441, line 49 of the file in /home/altsay/keryx-fdm, not 55): 'fails when a named *.test.ts file does not exist ... [verify: judged]'. src/flow/verify-exec-files.test.ts:15-22 KNOWN_MISSING lists four flow-375 files (src/product/board.test.ts, board-stale, board-model, board-dashboard) as allowed to be missing, with the comment 'the operator decides whether to write the tests or re-seal the criteria'. keryx ctx rg -n 'AC18|KNOWN_MISSING|375|exempt' on journal.md of flow 441: no match; journal.md has no entry about the exemption (last entry is the AC13 ac-updated). decisions.md of both earlier review packages list only follow-up lines; the only mentions are reviewer reports raising the same question (round-1 report.md:26 'Q3 (AC18) ... PR body does not record an operator decision'). PR 997 body (gh pr view 997): 'Flow 375 has four missing board tests; they sit in a named known-missing list' and 'Not done: F-008 (refactor), F-010 (KNOWN_MISSING kept as is)'; no operator decision on AC18 recorded in the repository or the PR body. Scope of the check: files and PR body only, not operator polls outside them.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "Unpinned behaviour: the truncation test (a cut-off object that claims a result key means no result) is pinned only for compact JSON and a cut-off object carrying all keys. Mutants O08 (KEY_COLON /\\s*:/y -> /:/y), O09 (RESULT_KEYS reduced to status) and O11 (RESULT_KEYS reduced to reviewer, findings) survive with the suite green.",
+    "impact": "A cut-off reply whose first key is written as \"status\" : or whose only result key is reviewer or status would be read as prose, and a complete nested result inside it returned instead of a gap.",
+    "suggested_fix": "One table test in the 'an unclosed object that carries the result keys' block: three cut-off outer objects (space before the colon; only reviewer; only status) each wrapping a complete nested reviewer result, each expecting undefined.",
+    "evidence": "keryx review mutate (mutation-1.md in the package): O08, O09, O11 survived. Inputs: {\"status\" : \"DONE\", \"slices\":[<complete nested result> -> original undefined, mutant returns the nested result; same for {\"reviewer\":\"r\",\"slices\":[...] and {\"status\":\"DONE\",\"slices\":[...]. mutant:O08 mutant:O09 mutant:O11",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 105,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:85 RESULT_KEYS",
+        "src/review/ledger.ts:86 KEY_COLON"
+      ],
+      "enumeration_method": "surviving mutants O08, O09, O11"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-008",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-ran O08, O09, O11 by hand in scratch copies (python replace of the exact mutant text, then bun test ledger.test.ts with a real copy of the test file): each full run '89 pass 0 fail'. Inputs via misc.ts, original vs mutant: '{\"status\" : \"DONE\", \"slices\":[<complete nested result>' original undefined, O08 returns the nested result; '{\"reviewer\":\"r\",\"slices\":[<nested>' original undefined, O09 (RESULT_KEYS = status only) returns the nested result; '{\"status\":\"DONE\",\"slices\":[<nested>' original undefined, O11 (RESULT_KEYS = reviewer, findings) returns the nested result.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "Unpinned behaviour in two round-3 branches. B06 (compare the bare status with fencedResults[0] instead of the last fenced result) and N03 (slice(-MAX_MARKERS) before the fence filter instead of after) survive. The 63/64/65 test uses unfenced markers only, so the order of filter and slice is not exercised.",
+    "impact": "N03: a real marker followed by a fenced block quoting 64 or more marker lines would be lost and the reply becomes a gap. B06: with two differing fenced samples, the ambiguity check would compare against the wrong one.",
+    "suggested_fix": "N03: extend the 'only the last 64 markers' test with one real marker plus 64 fenced marker lines expecting the real result. B06: two fenced results with different statuses plus a bare result equal to the last one, expecting the last fenced result.",
+    "evidence": "keryx review mutate: B06 and N03 survived. N03 input: 'REVIEW_RESULT {DONE}' then a fence holding 64 lines 'REVIEW_RESULT {BLOCKED}': original DONE, mutant undefined. B06 input: fence DONE, fence BLOCKED, bare BLOCKED: original BLOCKED, mutant undefined. mutant:B06 mutant:N03",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 204,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:204",
+        "src/review/ledger.ts:229"
+      ],
+      "enumeration_method": "surviving mutants B06, N03"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-009",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-ran N03 and B06 in scratch copies, bun test ledger.test.ts -> 89 pass 0 fail for each. N03 (slice(-MAX_MARKERS) before the filter): 'REVIEW_RESULT <DONE reviewer r>' then a Ttext fence holding 64 'REVIEW_RESULT <BLOCKED>' lines -> original {DONE, r}, mutant undefined. B06 (compare with fencedResults[0]): fence DONE(a), fence BLOCKED(b), bare BLOCKED(c) -> original {BLOCKED, b}, mutant undefined.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "Unpinned behaviour: F05 (closing-fence search starting at open + 3 instead of the next line) and H01 (hasStatus accepting any defined status, not a string) survive. The rule that the closing fence is searched after the opening line, so an inline three backticks pair in prose is read as an opener, has no test either way (related to F-001).",
+    "impact": "F05 changes which object counts as fenced when a prose line holds an inline three backticksxthree backticks span. H01: a numeric status in a labelled fence would be accepted as a result.",
+    "suggested_fix": "H01: assert that a labelled fence with {\"status\":1} gives undefined. F05: pin the intended outcome of an inline three backticks span on a prose line (together with the F-001 fix).",
+    "evidence": "keryx review mutate: F05 and H01 survived. H01 input: 'three backticksREVIEW_RESULT\\n{\"status\":1}\\nthree backticks': original undefined, mutant {\"status\":1}. F05 input: 'see three backticksxthree backticks {DONE reviewer line1}\\nthree backticksjson\\n{DONE reviewer fenced}\\nthree backticks': original line1, mutant fenced. mutant:F05 mutant:H01",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 149,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:149",
+        "src/review/ledger.ts:169"
+      ],
+      "enumeration_method": "surviving mutants F05, H01"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-010",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-ran H01 and F05 in scratch copies, bun test ledger.test.ts -> 89 pass 0 fail for each. H01 (hasStatus accepts any defined status): 'TREVIEW_RESULT newline {\"status\":1} newline T' original undefined, mutant {\"status\":1}. F05 (closing search from open + 3): 'see Tx T <DONE line1> newline Tjson fence <DONE fenced>' original reviewer line1, mutant reviewer fenced.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "Doc precision. MARKER's comment says 'after at most a quote, list or heading prefix' while the class [ \\t>*#-]* takes any run of blanks and > * # -; an ordered-list prefix '1. ', bold '**REVIEW_RESULT:** {', an em dash or a code span is not a marker (fails closed: read by the scan, a gap if a differing bare object exists). Rule 2 of the parseReviewResult doc omits the prefix class; scannedResult's one-line summary omits that a differing bare object cancels the fenced one.",
+    "impact": "A reader may expect numbered lists or bold markers to count. None at run time.",
+    "suggested_fix": "Word the comment 'any run of blanks and > * # -'; add the prefix clause to rule 2; comment the lookbehind as 'start of input or after a newline'.",
+    "evidence": "bun: '1. REVIEW_RESULT: ok(DONE)\\nok(BLOCKED)' -> undefined; '**REVIEW_RESULT:** ok(DONE)\\nok(BLOCKED)' -> undefined; '- > # * REVIEW_RESULT: ok(DONE)\\nok(BLOCKED)' -> DONE. Also raised by review-style STY-R3-5; review-architecture ARCH-R3-4; review-logic F-019.",
+    "confidence": "medium",
+    "file": "src/review/ledger.ts",
+    "line": 195,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:194",
+        "src/review/ledger.ts:218",
+        "src/review/ledger.ts:239"
+      ],
+      "enumeration_method": "comments of the round-3 delta compared with code"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-011"
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The now exported isReviewerResult is also a private function in src/review/managed.ts:1676 with a different contract (findings array only, no status). Same directory, same name, two meanings.",
+    "impact": "Auto-import or a copy between the files picks the wrong guard; nothing wrong today.",
+    "suggested_fix": "Optional rename of one of the two (isAttributableResult or isReviewerReply).",
+    "evidence": "keryx ctx rg isReviewerResult src: ledger.ts:173 (status plus reviewer string or findings array), managed.ts:1676 (findings array).",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 173,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:173",
+        "src/review/managed.ts:1676"
+      ],
+      "enumeration_method": "keryx ctx rg isReviewerResult src"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg -n isReviewerResult src -> src/review/ledger.ts:173 'export function isReviewerResult(value: unknown): value is ParsedResult' (status string plus reviewer string or findings array) and src/review/managed.ts:1676 'function isReviewerResult(value: unknown): value is ReviewerResultLike' (object with a findings array, no status check); managed.ts:1610 and 1655 call its own private copy, src/commands/review-ledger.ts:9,99 imports the ledger one. Same name, two contracts, same directory.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "Worst-case latency scales with MAX_UNCLOSED + MAX_MARKERS = 64 + 64 scans to the end of the reply. Measured: 1 MB with 64 unclosed prose braces 122 ms (8 braces 15.7 ms, one scan 3.1 ms); 64 unclosed markers 236 ms at 1 MB and 941 ms at 4 MB (linear, 4.0x). An adversarial 11 KB reply takes 0.29 ms. No quadratic path in any of 46 shapes tried at 1-8 MB.",
+    "impact": "Visible only at 1 MB+ on a reviewer reply (typical 5-10 KB). The 64 caps cost 8x the old 8 only in that regime. The comment 'about 3 ms per MB' is accurate per scan.",
+    "suggested_fix": "None needed. Optional: reword the comment to '3 ms per MB per scan'.",
+    "evidence": "scratchpad/review-performance/bench.ts, scratchpad/review-highload/hl.ts. Also raised by review-highload HL3-2.",
+    "confidence": "high",
+    "file": "src/review/ledger.ts",
+    "line": 118,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.ts:117-118 MAX_UNCLOSED",
+        "src/review/ledger.ts:192 MAX_MARKERS"
+      ],
+      "enumeration_method": "the two caps"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-013"
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Three small title/assertion drifts. Line 376: the third input ({\"verdict\":\"DONE\"}) is valid JSON without a status. Line 74: the title states a REVIEW_RESULT fence needs a status and a json fence a reviewer or findings, but the body asserts neither refusal (pinned at 174-184). Lines 284 and 423 repeat the same prefix list, and 283/421 overlap.",
+    "impact": "Reading cost only.",
+    "suggested_fix": "Title 376 'a labelled fence that does not hold a result decides'; shorten 74; one shared PREFIXES constant.",
+    "evidence": "ledger.test.ts:74-79, 283-287, 376-380, 421-426.",
+    "confidence": "medium",
+    "file": "src/review/ledger.test.ts",
+    "line": 376,
+    "class_scope": {
+      "sites": [
+        "src/review/ledger.test.ts:74",
+        "283-287",
+        "376",
+        "421-426"
+      ],
+      "enumeration_method": "read of the test file"
+    },
+    "global_id": "2026-10-13-pr-997-round3-07730d87#F-014"
+  }
+]

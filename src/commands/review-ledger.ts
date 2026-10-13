@@ -6,7 +6,7 @@ import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { pendingMutants } from "../review/mutate";
-import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
+import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, emptyRetryState, readSliceIds, scopeFingerprint } from "../review/retry-plan";
 import type { SliceManifest } from "../review/slice";
 
@@ -95,7 +95,8 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
       setAside.push(`raw/${name}`);
       continue;
     }
-    if (result !== undefined && result.reviewer === undefined && !Array.isArray(result.findings)) {
+    // A ```REVIEW_RESULT fence keeps the status-only rule in parseReviewResult; such a result names no reviewer and cannot be attributed, so it is ignored here.
+    if (result !== undefined && !isReviewerResult(result)) {
       ignored.push(`raw/${name}`);
       continue;
     }

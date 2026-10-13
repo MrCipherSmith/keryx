@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3",
+  "command": "bun test src/tui/main-queue-drain.test.ts src/tui/main-queue.test.ts src/tui/tui-bus.test.ts src/tui/tui-hold.test.ts src/tui/remote-queue-wiring.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 345
+  },
+  "mutants": [
+    {
+      "id": "M01-drainNext-budget-without-forced-slot",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "budget = options.pending() + 1;",
+      "replacement": "budget = options.pending();",
+      "line": 213,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 355
+    },
+    {
+      "id": "M02-drainNext-never-stops-on-busy",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (options.isBusy()) return \"started\";\n",
+      "replacement": "\n",
+      "line": 218,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 356
+    },
+    {
+      "id": "M03-drainNext-no-paint",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    options.paint();\n",
+      "replacement": "\n",
+      "line": 215,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 364
+    },
+    {
+      "id": "M04-drainNext-empty-take-reports-started",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (next === undefined) return \"drained\";",
+      "replacement": "if (next === undefined) return \"started\";",
+      "line": 216,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 276
+    },
+    {
+      "id": "M05-drainNext-budget-spent-reports-started",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (options.isBusy()) return \"started\";\n  }\n  return \"drained\";",
+      "replacement": "    if (options.isBusy()) return \"started\";\n  }\n  return \"started\";",
+      "line": 218,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 340
+    },
+    {
+      "id": "M06-settle-wakes-bus-only-never-gated-on-drained",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (deps.drain() === \"drained\") deps.onSettle();",
+      "replacement": "deps.drain();\n      deps.onSettle();",
+      "line": 244,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 335
+    },
+    {
+      "id": "M07-settle-never-wakes-bus",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (deps.drain() === \"drained\") deps.onSettle();",
+      "replacement": "deps.drain();",
+      "line": 244,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 337
+    },
+    {
+      "id": "M08-settle-ignores-pending-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onTurnSettle() {\n      if (deps.isAwaitingSettlement()) return;\n",
+      "replacement": "    onTurnSettle() {\n",
+      "line": 242,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 336
+    },
+    {
+      "id": "M09-operation-complete-ignores-pending-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onForegroundOperationComplete() {\n      if (deps.isAwaitingSettlement()) return;\n",
+      "replacement": "    onForegroundOperationComplete() {\n",
+      "line": 238,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 359
+    },
+    {
+      "id": "M10-lease-release-guards-only-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      if (deps.isBusy()) return;\n      deps.drain();",
+      "replacement": "      if (deps.isAwaitingSettlement()) return;\n      deps.drain();",
+      "line": 247,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 353
+    },
+    {
+      "id": "M11-lease-release-drains-while-busy",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      if (deps.isBusy()) return;\n      deps.drain();",
+      "replacement": "      deps.drain();",
+      "line": 247,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 313
+    },
+    {
+      "id": "M12-shell-queue-work-ignores-handoff",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+      "replacement": "chrome.isBusy() || foregroundOperation.isActive;",
+      "line": 7962,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 357
+    },
+    {
+      "id": "M13-shell-queue-work-ignores-foreground-operation",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+      "replacement": "chrome.isBusy() || forceHandoff.isAwaitingSettlement;",
+      "line": 7962,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 362
+    },
+    {
+      "id": "M14-shell-queue-work-ignores-chrome-busy",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+      "replacement": "foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+      "line": 7962,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 348
+    },
+    {
+      "id": "M15-shell-take-queue-before-forced",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "take: () => forceHandoff.takeNext() ?? mainQueue.shift(),",
+      "replacement": "take: () => mainQueue.shift() ?? forceHandoff.takeNext(),",
+      "line": 7966,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 368
+    },
+    {
+      "id": "M16-shell-pending-always-zero",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "pending: () => mainQueue.length,",
+      "replacement": "pending: () => 0,",
+      "line": 7967,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 368
+    },
+    {
+      "id": "M17-shell-drain-does-not-paint",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "paint: paintMainQueue,",
+      "replacement": "paint: () => {},",
+      "line": 7968,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 350
+    },
+    {
+      "id": "M18-shell-awaiting-settlement-never",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "isAwaitingSettlement: () => forceHandoff.isAwaitingSettlement,",
+      "replacement": "isAwaitingSettlement: () => false,",
+      "line": 7972,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 346
+    },
+    {
+      "id": "M19-shell-bus-wake-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onSettle: () => busWakeController?.onSettle(),",
+      "replacement": "onSettle: () => undefined,",
+      "line": 7974,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 340
+    },
+    {
+      "id": "M20-shell-turn-settle-site-deleted",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        drainSites.onTurnSettle();\n",
+      "replacement": "\n",
+      "line": 9942,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 350
+    },
+    {
+      "id": "M21-shell-operation-complete-site-deleted",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "                  drainSites.onForegroundOperationComplete();\n",
+      "replacement": "\n",
+      "line": 9634,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 354
+    },
+    {
+      "id": "M22-shell-lease-release-site-wired-to-settle",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onRelease: () => drainSites.onLeaseRelease(),",
+      "replacement": "onRelease: () => drainSites.onTurnSettle(),",
+      "line": 10023,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 345
+    }
+  ],
+  "totals": {
+    "killed": 17,
+    "survived": 5,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

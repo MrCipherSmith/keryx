@@ -1,0 +1,110 @@
+[
+  {
+    "id": "F-016",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "createMainQueueDrain is built once with `queue: mainQueue`, and its take and pending read `deps.queue` for the life of the shell. The shell does not keep one array: `mainQueue` is a `let` that is replaced with a new array by setQueue (tui-shell.ts:4997, reached from remote-queue-wiring.ts removeMainQueue, editMainQueue, requeuePendingEdit and dropQueuedTelegramLines) and by forceMainQueue (tui-shell.ts:8049). Lines are pushed onto the live variable (8579, 8617, 8659, 9439). After the first replacement the drain reads the array it was given at start-up, which no longer has anything to do with the panel. Before the round-1 fix every site read the live variable (`forceHandoff.takeNext() ?? mainQueue.shift()` at base lines 9617, 9926, 10022). main-queue-drain.test.ts builds its model with a fixed `queue: shell.queue` array, so it cannot see this, and tui-hold.test.ts pins the exact text `queue: mainQueue,`.",
+    "impact": "Trigger: the operator queues two lines behind a running turn and removes or edits one (/queue remove 1, /queue edit 1 then submit, the queue-nav Delete or Edit, or the Telegram queue is dropped), or uses Force on any queued line; the turn then settles. Outcome, reproduced against the real createMainQueueDrain and removeMainQueueItem: (a) the removed line is dispatched anyway, as a turn with whatever approvals it raises (rows 2 and 3 of the repro: ran [a] where a was deleted, live queue [b]); (b) a Forced line runs twice, once from the hand-off and once from the stale array (row 4); (c) lines queued after the replacement are never taken by the settle, operation-complete, lease-release or detached-end sites: the panel shows them as queued and only the next typed line (drainIdleMainQueue reads the live variable) moves them. onSettle also fires against the stale array, so the bus wake sees a non-empty live queue and wakes nothing. Everything before the first replacement works, which is why every test passes.",
+    "suggested_fix": "Pass the queue as a getter: `queue: () => mainQueue` in the shell, `deps.queue()` in main-queue.ts take and pending. (Alternative: make setQueue and forceMainQueue edit the array in place.) Add a model case that replaces `shell.queue` with removeMainQueueItem between the enqueue and the settle and asserts the removed line does not run and a line queued afterwards does; change the tui-hold audit from `queue: mainQueue,` to the getter form.",
+    "evidence": "research-evidence/stale-queue-repro.md (executed against the real factory; four scenarios). mutant:S22-set-queue-in-place survived: the in-place fix passes all eight test files, so nothing tells the bug from the fix. S24 is killed only by the source-text pin of the buggy text. git log -S shows `queue: mainQueue,` first appears in 83838859.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 7966,
+    "quote": "queue: mainQueue,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 7966
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:4997 (setQueue: remove, edit, requeue edit, drop Telegram lines)",
+        "src/tui/tui-shell.ts:8049 (forceMainQueue)",
+        "src/tui/tui-shell.ts:7966 (the captured reference)"
+      ],
+      "enumeration_method": "keryx ctx rg for `mainQueue = ` in tui-shell.ts (exactly two reassignments) and for `deps.setQueue(` in remote-queue-wiring.ts (four calls); keryx ctx rg for `deps.queue` in main-queue.ts (take and pending are the only two readers)."
+    },
+    "global_id": "2026-10-13-pr-999-round2-f6b16a38#F-016"
+  },
+  {
+    "id": "F-017",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "detachSlashWork is the shell half of the F-001 fix and lives in tui-shell.ts, so it is covered only by source-text checks (the helper body contains `drainSites.onDetachedWorkDone();`, the call count is six). The model test lowers the counter by hand (`endDetached`). Nothing runs a detached promise that rejects. Mutant S21 changes `.finally` to `.then` and passes every test.",
+    "impact": "Trigger: an edit turns `.finally` into `.then` (or moves the decrement into the success path), and a detached /model, /connect, /goal, /schedule or /search-* handler throws (redetect failing is enough). Outcome: detachedSlashWork stays above zero, queueWorkInFlight stays true, and no site drains again, so every later queued line waits until the shell restarts; the same edit also leaves an unhandled rejection. Mutant S21 survived.",
+    "suggested_fix": "Move the counter and the wrapper into main-queue.ts (createMainQueueDrain returns `detach(work)` and includes the counter in its own in-flight check) so main-queue-drain.test.ts drives it with a promise that resolves and one that rejects; or pin `.finally(() => {` in the tui-hold helper-body audit.",
+    "evidence": "mutant:S21-detach-end-only-on-success",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 7976,
+    "quote": "void work.finally(() => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 7976
+    },
+    "global_id": "2026-10-13-pr-999-round2-f6b16a38#F-017",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#S21-detach-end-only-on-success"
+    }
+  },
+  {
+    "id": "F-018",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The turn-settle site wakes the bus when its drain ends empty, and the bus wake re-checks the inbox only on that call or on a poll that brought a new event (bus-wake.ts onPoll gates on newEvents). The detached-end site shares the drain but not the wake: when /model, /connect or another detached command finishes with nothing left in the queue, drainWhenIdle drains nothing and calls onSettle never.",
+    "impact": "Trigger: a bus message is waiting in the inbox while the operator queued a slash command with detached work (for example /model) behind a turn; the turn settles, the picker opens, the operator picks, the work ends. Outcome: the queue is empty and the shell idle, but the waiting bus message is not woken until a later poll delivers another event or another turn settles. Present on main in the same shape (the base also skipped the wake after a drain that ran a slash command), so not a regression of this diff; the hold the fix adds makes the end of the detached work the natural place to wake.",
+    "suggested_fix": "Have onDetachedWorkDone behave like onTurnSettle without the hand-off gate it does not need: `if (workInFlight()) return; if (drain() === \"empty\") deps.onSettle();`. The lease-release and operation-complete sites have the same omission; decide for all three and add a model case.",
+    "evidence": "main-queue.ts 263-278; bus-wake.ts onPoll/onSettle contract (lines 98-114); tui-shell.ts 9998-10005.",
+    "confidence": "medium",
+    "file": "src/tui/main-queue.ts",
+    "line": 277,
+    "quote": "onDetachedWorkDone: drainWhenIdle,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 277
+    },
+    "global_id": "2026-10-13-pr-999-round2-f6b16a38#F-018"
+  },
+  {
+    "id": "F-019",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Round 1 F-001 listed the bus wake among the things that treat the shell as idle while detached slash work runs. The fix gave the drain the one definition (queueWorkInFlight) and did not give it to the other reader: the bus wake's isIdle checks chrome.isBusy, foregroundOperation.isActive, the queue length and the lease, and not detachedSlashWork or forceHandoff.isAwaitingSettlement.",
+    "impact": "Trigger: /goal (or /schedule, /search-*) is running detached, or a /model picker is open, and a bus poll delivers a new wake-eligible message. Outcome: the poll path starts a bus-message turn (runLine with an empty line) beside the detached work, on the same history for /goal. The onSettle variant of this is now closed; the onPoll variant is not. Reachable on main as well (typing during /goal while idle), so low blast, but it is the same definition the PR introduced and left out of one reader.",
+    "suggested_fix": "Include the shared predicate in isIdle (queueWorkInFlight is defined above the controller's construction in the same scope) or expose it from the factory and read it in both places.",
+    "evidence": "tui-shell.ts 7962-7963 (queueWorkInFlight) and 10000-10005 (isIdle); mutant S25 shows the queue term of isIdle is pinned, nothing pins the in-flight term.",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "isIdle: () =>",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 8665, 10000, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 10000
+    },
+    "global_id": "2026-10-13-pr-999-round2-f6b16a38#F-019"
+  },
+  {
+    "id": "F-020",
+    "reviewer": "review-clean-code",
+    "severity": "info",
+    "problem": "Three small points on the new drain, none with a trigger today. (1) onTurnSettle drains while detachedSlashWork is above zero (it checks the hand-off but not the counter), so a typed question that settles beside a running /goal drains the next queued line beside it; the same overlap exists on main by typing. (2) The sites do not check `destroyed`, unlike drainIdleMainQueue's caller; a detached command that ends after the shell is torn down would drain into a disposed shell if lines remain. (3) The lease-site comment (10019-10022) still says the drain is 'skipped outright while a turn is still busy' and does not point at drainSites, although the guard is now the wider queueWorkInFlight. The empty drain also paints once for nothing.",
+    "impact": "No observable outcome found. (2) needs a queue that is non-empty at teardown and a detached command still running; runLine's own guards were not traced.",
+    "suggested_fix": "None required; fold (3) into the next edit of that comment, and consider a `destroyed` guard in the factory deps if teardown with queued lines is reachable.",
+    "evidence": "tui-shell.ts 9944, 10019-10026; main-queue.ts 263-279.",
+    "confidence": "low",
+    "file": "src/tui/tui-shell.ts",
+    "line": 9944,
+    "quote": "drainSites.onTurnSettle();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 9944
+    },
+    "global_id": "2026-10-13-pr-999-round2-f6b16a38#F-020"
+  }
+]

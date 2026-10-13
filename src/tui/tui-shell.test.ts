@@ -4012,7 +4012,10 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
   test("the settle handler still drains a queued operator item before anything else", () => {
     // The existing operator-first drain must survive: a queued message is the
     // real next step and beats a pending notification.
-    expect(wakeSource).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
+    expect(wakeSource).toContain("forced: forceHandoff,");
+    expect(wakeSource).toContain("queue: () => mainQueue,");
+    const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
+    expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   });
 
   test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
@@ -4228,7 +4231,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
   const fnBody = tuiSource.slice(tuiSource.indexOf("export async function launchTuiAgentShell(opts: {"));
 
   test("resumeSessionInteractive rebinds the slate after it applies the resumed session", () => {
-    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
     const applied = block.indexOf("applyOpened(opened, true);");
@@ -4237,7 +4240,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
   });
 
   test("resumeSessionInteractive refreshes the workspace sidebar from the rebound slate", () => {
-    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
     const bound = block.indexOf("bindSlateToLiveSession();");
     expect(bound).toBeGreaterThanOrEqual(0);

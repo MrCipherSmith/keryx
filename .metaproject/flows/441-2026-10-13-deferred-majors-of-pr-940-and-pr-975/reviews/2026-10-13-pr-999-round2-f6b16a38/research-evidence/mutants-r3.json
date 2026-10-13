@@ -1,0 +1,224 @@
+[
+ {
+  "id": "N01-budget-short-by-one",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "for (let budget = options.pending(); budget > 0; budget--)",
+  "replacement": "for (let budget = options.pending() - 1; budget > 0; budget--)"
+ },
+ {
+  "id": "N02-budget-extra-slot",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "for (let budget = options.pending(); budget > 0; budget--)",
+  "replacement": "for (let budget = options.pending() + 1; budget > 0; budget--)"
+ },
+ {
+  "id": "N03-never-stops-on-busy",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    if (options.isBusy()) return \"started\";\n",
+  "replacement": "\n"
+ },
+ {
+  "id": "N04-no-paint",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    options.paint();\n",
+  "replacement": "\n"
+ },
+ {
+  "id": "N05-empty-take-reports-started",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "if (next === undefined) return \"empty\";",
+  "replacement": "if (next === undefined) return \"started\";"
+ },
+ {
+  "id": "N07-no-self-requeue-stop",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    if (options.pending() >= before) return \"exhausted\";\n",
+  "replacement": "\n"
+ },
+ {
+  "id": "N08-self-requeue-stop-strict",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "if (options.pending() >= before) return \"exhausted\";",
+  "replacement": "if (options.pending() > before) return \"exhausted\";"
+ },
+ {
+  "id": "N12-settle-ignores-handoff",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    onTurnSettle() {\n      if (deps.forced.isAwaitingSettlement) return;\n",
+  "replacement": "    onTurnSettle() {\n"
+ },
+ {
+  "id": "N13-operation-complete-ignores-handoff",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    onForegroundOperationComplete() {\n      if (deps.forced.isAwaitingSettlement) return;\n",
+  "replacement": "    onForegroundOperationComplete() {\n"
+ },
+ {
+  "id": "N16-lease-release-site-empty",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "onLeaseRelease: drainWhenIdle,",
+  "replacement": "onLeaseRelease() {},"
+ },
+ {
+  "id": "N20-paint-dropped",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "paint: deps.paint,",
+  "replacement": "paint: () => {},"
+ },
+ {
+  "id": "N23-final-return-exhausted",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "so the count is now zero\n  return \"empty\";",
+  "replacement": "so the count is now zero\n  return \"exhausted\";"
+ },
+ {
+  "id": "N24-budget-steps-by-two",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "budget > 0; budget--) {\n    const before",
+  "replacement": "budget > 0; budget -= 2) {\n    const before"
+ },
+ {
+  "id": "F01-detach-end-only-on-success",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "work.then(end, end);",
+  "replacement": "work.then(end);"
+ },
+ {
+  "id": "F02-detach-counter-never-lowered",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "        detached -= 1;\n",
+  "replacement": "\n"
+ },
+ {
+  "id": "F03-detach-counter-never-raised",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "      detached += 1;\n",
+  "replacement": "\n"
+ },
+ {
+  "id": "F04-in-flight-ignores-detached",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "deps.workInFlight() || detached > 0",
+  "replacement": "deps.workInFlight()"
+ },
+ {
+  "id": "F05-take-from-stale-queue",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "deps.queue().shift()",
+  "replacement": "(deps.queue.c ??= deps.queue()).shift()"
+ },
+ {
+  "id": "F06-pending-from-stale-queue",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "deps.forced.pendingCount + deps.queue().length",
+  "replacement": "deps.forced.pendingCount + (deps.queue.c ??= deps.queue()).length"
+ },
+ {
+  "id": "F07-no-wake-on-empty",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "if (outcome === \"empty\") deps.onSettle();",
+  "replacement": ""
+ },
+ {
+  "id": "F08-wake-always",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "if (outcome === \"empty\") deps.onSettle();",
+  "replacement": "deps.onSettle();"
+ },
+ {
+  "id": "F09-turn-settle-ignores-handoff",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    onTurnSettle() {\n      if (deps.forced.isAwaitingSettlement) return;",
+  "replacement": "    onTurnSettle() {"
+ },
+ {
+  "id": "F10-op-complete-ignores-handoff",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    onForegroundOperationComplete() {\n      if (deps.forced.isAwaitingSettlement) return;",
+  "replacement": "    onForegroundOperationComplete() {"
+ },
+ {
+  "id": "F11-idle-drain-ignores-flight",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "    if (workInFlight()) return;\n    drain();",
+  "replacement": "    drain();"
+ },
+ {
+  "id": "F12-lease-release-noop",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "onLeaseRelease: drainWhenIdle,",
+  "replacement": "onLeaseRelease() {},"
+ },
+ {
+  "id": "F13-detach-end-no-drain",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "        detached -= 1;\n        drainWhenIdle();",
+  "replacement": "        detached -= 1;"
+ },
+ {
+  "id": "F14-busy-ignores-detached",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "isBusy: workInFlight,",
+  "replacement": "isBusy: deps.workInFlight,"
+ },
+ {
+  "id": "F15-wake-after-detach-drops",
+  "file": "src/tui/main-queue.ts",
+  "anchor": "        drainWhenIdle();\n      };",
+  "replacement": "        if (workInFlight()) return;\n        deps.queue().shift();\n      };"
+ },
+ {
+  "id": "H01-bus-idle-ignores-flight",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "        !drainSites.workInFlight() &&\n        mainQueue.length === 0 &&",
+  "replacement": "        mainQueue.length === 0 &&"
+ },
+ {
+  "id": "H02-bus-idle-ignores-queue",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "        mainQueue.length === 0 &&\n        leaseView()?.held() !== true,",
+  "replacement": "        leaseView()?.held() !== true,"
+ },
+ {
+  "id": "H03-shell-queue-stale",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "queue: () => mainQueue,",
+  "replacement": "queue: ((c) => () => c)(mainQueue),"
+ },
+ {
+  "id": "H04-detach-bypassed",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "=> drainSites.detach(work);",
+  "replacement": "=> void work;"
+ },
+ {
+  "id": "H05-onsettle-dropped",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "onSettle: () => busWakeController?.onSettle(),",
+  "replacement": "onSettle: () => {},"
+ },
+ {
+  "id": "H06-in-flight-drops-handoff",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,\n      onSettle",
+  "replacement": "chrome.isBusy() || foregroundOperation.isActive,\n      onSettle"
+ },
+ {
+  "id": "H07-lease-release-dropped",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "onRelease: () => drainSites.onLeaseRelease(),",
+  "replacement": "onRelease: () => {},"
+ },
+ {
+  "id": "H08-turn-settle-dropped",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "      drainSites.onTurnSettle();\n",
+  "replacement": "\n"
+ },
+ {
+  "id": "H09-op-complete-dropped",
+  "file": "src/tui/tui-shell.ts",
+  "anchor": "                  drainSites.onForegroundOperationComplete();\n",
+  "replacement": "\n"
+ }
+]

@@ -234,4 +234,22 @@ describe("Flow 269: Phase 2 Pickers in ModalHost", () => {
     expect(await resultPromise).toBeUndefined();
     h.destroy();
   });
+  otuiTest("shutdown abort closes the real session picker and ignores late Enter", async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui, { width: 120, height: 40 });
+    try {
+      const controller = new AbortController();
+      const picked = pickSessionInTui(otui.core, h.chrome, [session({ id: "abort-target", title: "Target", createdAt: "2026-10-08T10:00:00.000Z", updatedAt: "2026-10-08T10:00:00.000Z", messageCount: 1 })], undefined, controller.signal);
+      await h.flush();
+      expect(h.chrome.overlayActive()).toBe(true);
+      controller.abort();
+      expect(await picked).toBeUndefined();
+      await h.flush();
+      expect(h.chrome.overlayActive()).toBe(false);
+      h.mockInput.pressEnter();
+      await h.flush();
+      expect(await picked).toBeUndefined();
+    } finally { h.destroy(); }
+  });
+
 });

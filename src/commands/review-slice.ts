@@ -5,7 +5,7 @@ import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { writeFileAtomic } from "../lib/fs";
 import { placeReviewPath, reviewPathFlagRefusal } from "../lib/review-path-flags";
-import { parseReviewResult } from "../review/ledger";
+import { hasStatus, parseReviewResult } from "../review/ledger";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
@@ -187,7 +187,7 @@ async function readJsonSource<T>(source: string, label: string): Promise<T> {
 
 class UnreadableInput extends Error {}
 
-/** A reviewer result: plain JSON, or a saved raw reply carrying a REVIEW_RESULT block (what the ledger's next command names). */
+/** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (the shapes it accepts are listed in its doc). A truncated or ambiguous reply is refused. */
 async function readResult(source: string): Promise<ReviewerResult> {
   let raw: string;
   try {
@@ -195,9 +195,17 @@ async function readResult(source: string): Promise<ReviewerResult> {
   } catch (error) {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
-  const parsed = parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no status-bearing JSON object: ${source}`);
+  const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status; a \`\`\`REVIEW_RESULT block with a status; or one object with a status and a reviewer or findings, bare or after a REVIEW_RESULT marker; a truncated or ambiguous reply is refused): ${source}`);
   return parsed as ReviewerResult;
+}
+
+/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
+function wholeFileResult(raw: string): ReviewerResult | undefined {
+  try {
+    const whole: unknown = JSON.parse(raw);
+    return hasStatus(whole) ? whole as ReviewerResult : undefined;
+  } catch { return undefined; }
 }
 
 function failUnreadable(error: unknown): void {
