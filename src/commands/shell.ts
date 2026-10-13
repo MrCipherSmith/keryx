@@ -120,7 +120,7 @@ import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
 import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
-import { terminalSafe } from "../lib/terminal-safe";
+import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
@@ -2257,9 +2257,8 @@ export async function runAgentRepl(
   };
   agentIo.onQuestionSelfAnswered = (question, answerLabel) => {
     stopSpinner();
-    const shortQuestion = question.length > 100 ? `${question.slice(0, 97)}…` : question;
     // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
-    const line = terminalSafe(`${shortQuestion} → ${answerLabel}`).text;
+    const line = selfAnsweredLine(question, answerLabel);
     out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(line)}\n`);
   };
 
@@ -3051,7 +3050,8 @@ export async function runAgentRepl(
           if (wanted === "auto") {
             agentIo.onSystem?.(
               "⚠ auto mode skips confirmation for EVERY action, including destructive commands.\n" +
-                "Only credential-touching commands still ask. Type 'yes' to confirm: ",
+                "Only credential-touching commands still ask. The agent also answers its own questions (recommended option, said so); irreversible or untrusted ones still ask you.\n" +
+                "Type 'yes' to confirm: ",
             );
             const answer = ((await readLine()) ?? "").trim();
             confirmed = /^y(es)?$/i.test(answer);

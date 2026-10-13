@@ -11,7 +11,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runTriggerOnce, triggerCommand } from "./trigger";
-import { dispatchLockPath, providerReportsUsage, sandboxedHealthGate, triggerDispatchScratchParent, type HealthGateResult } from "./trigger-dispatch";
+import { deniedUnattendedApproval, dispatchLockPath, providerReportsUsage, sandboxedHealthGate, triggerDispatchScratchParent, type HealthGateResult } from "./trigger-dispatch";
+import type { ApproverProvenance } from "./agent";
 import { planUnattendedSandbox, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
 import { evaluateTriggerBudget, reserveTriggerSpend } from "../trigger/run";
 import { openReservations } from "../trigger/record";
@@ -569,6 +570,16 @@ async function records(): Promise<TriggerRunRecord[]> {
   const read = await readTriggerRuns(root);
   return read.state === "present" ? [...read.records] : [];
 }
+
+describe("the unattended approver", () => {
+  test("denies, records the denial, and is marked as having nobody behind it so its no is not an operator's refusal", async () => {
+    const denials: Parameters<typeof deniedUnattendedApproval>[1] = [];
+    const approver = deniedUnattendedApproval("ask", denials);
+    expect(await approver("shell_exec", "{}", undefined)).toBe(false);
+    expect(denials).toHaveLength(1);
+    expect((approver as ApproverProvenance).attended).toBe(false);
+  });
+});
 
 const NO_SANDBOX: UnattendedSandboxPlan = { ok: false, reason: "no sandbox launcher: test host" };
 

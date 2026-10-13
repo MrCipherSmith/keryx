@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AgentIO } from "../commands/agent";
+import type { AgentIO, ApproverProvenance } from "../commands/agent";
 import {
   createForegroundAgentIoFacade,
   type TurnScopedIo,
@@ -9,6 +9,7 @@ import {
   forceForegroundQueueItem,
   runAfterForegroundSettlement,
   settleForegroundOperation,
+  withTurnScopedIo,
 } from "./foreground-operation";
 
 // Two Force presses arriving while one operation is still settling.
@@ -222,6 +223,22 @@ test("flow 268 T17: an accepted foreground facade forwards onReasoningDelta and 
   ]);
 });
 
+test("withTurnScopedIo lays a turn's hooks over the shell io, leaves the shell io alone and reads the rest live", () => {
+  const received: string[] = [];
+  const io: AgentIO = { write: (text) => received.push(`write:${text}`), permissionMode: () => "auto" };
+  const scoped = withTurnScopedIo(io, { permissionMode: () => "ask", mcpGrantsApply: () => false });
+
+  expect(scoped.permissionMode?.()).toBe("ask");
+  expect(scoped.mcpGrantsApply?.()).toBe(false);
+  expect(io.permissionMode?.()).toBe("auto");
+  expect(io.mcpGrantsApply).toBeUndefined();
+
+  scoped.write("a");
+  io.onSystem = (text) => received.push(`system:${text}`);
+  scoped.onSystem?.("late");
+  expect(received).toEqual(["write:a", "system:late"]);
+});
+
 test("a self-answered question reaches the shell while the turn is current and never after it settled", () => {
   const owner = createForegroundOperationOwner();
   const operation = owner.begin();
@@ -235,6 +252,19 @@ test("a self-answered question reaches the shell while the turn is current and n
   facade.onQuestionSelfAnswered?.("Which scope?", "Small");
 
   expect(received).toEqual(["Which scope?->Full"]);
+});
+
+test("the facade's approver says whether its turn is still current, so a displaced turn's no is not a person's refusal", () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const facade = createForegroundAgentIoFacade(owner, operation, { write: () => {}, requestApproval: async () => false });
+  const { current } = facade.requestApproval as unknown as ApproverProvenance;
+
+  expect(typeof current).toBe("function");
+  expect(current?.()).toBe(true);
+  owner.settle(operation);
+  owner.begin();
+  expect(current?.()).toBe(false);
 });
 
 test("flow 219: an approval resolved after disposal remains denied", async () => {

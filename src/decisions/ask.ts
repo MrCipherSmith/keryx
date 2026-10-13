@@ -18,6 +18,7 @@
 // The types are structural copies of the harness' `AskUserFn`, because the core
 // zone cannot import the client zone; they are assignable both ways.
 
+import { ASK_USER_CANCEL } from "../harness/tool/builtin/ask-user-tool";
 import type { Arm } from "./arms";
 import { answerDecision, openDecision, recordReason } from "./journal";
 import type { FlowContext } from "./context";
@@ -89,7 +90,7 @@ export interface JournalAskDeps {
   now?: (() => Date) | undefined;
 }
 
-export const CANCEL_ANSWER = "__cancel__";
+export const CANCEL_ANSWER = ASK_USER_CANCEL;
 const SKIP_REASON = "skip";
 const LATER_REASON = "later";
 

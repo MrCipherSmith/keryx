@@ -22,7 +22,7 @@ when nothing should be reachable at all.
 |---|---|
 | `ask` (default) | Every `shell_exec`, `spawn_subagent`, and destructive-risk tool call asks first — today's behavior, unchanged if you never touch this feature. |
 | `trust` | Safe calls run without asking. A call still asks when it is destructive — either the tool's own static risk, or a command keryx's classifier recognizes as destructive (`rm -rf`, force-push, and similar). |
-| `auto` | No command asks, **including destructive ones** (the credential floor below still does) — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
+| `auto` | Commands do not ask, **including destructive ones**, apart from the hard floors below (credentials, SAC review confirmation, publish lease) and the question floors in [Who answers a question](#who-answers-a-question) — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
 
 One thing no mode ever changes: a command that touches keryx's own
 credential/permission files (`auth.json`, `permissions.json`,
@@ -70,16 +70,18 @@ In `auto` the model is told `[auto mode] chose this without asking the user`, so
 it cannot present the choice as yours, and the shell prints a
 `◇ answered without asking (auto):` line with the question and the chosen
 label. Such a question uses no tool-call budget and is not remembered as an answer
-of yours. It is not an invocation, so `maxToolCalls` is untouched and no hook is
-consulted for it; the cap of 3 identical calls still applies. It is not written to the
+of yours. It is not an invocation, so the tool-call budget is untouched and no hook is
+consulted for it; the default cap of 3 identical calls still applies. It is not written to the
 recommendation journal either, because no person answered it. An automatic review does
 not use this path: its own rules decide what is answered and what goes to a person.
 
 The question still goes to you when it decides an irreversible action
 (`irreversible` or `action`), when the turn holds untrusted external content, when
-the turn started in Telegram (the buttons appear in the topic, as before), when
-review-auto is on and the question carries a `policy` tag, or when it asks for
-permission after you refused an action in any mode. "Asks for permission" is decided
+the turn started in Telegram, including a `/goal` sent from there (the buttons appear in
+the topic, as before), when review-auto is on, `KERYX_REVIEW_AUTO_ANSWER=1` is set or an
+autonomous answers file is set and the question carries a `policy` tag, or when it asks for
+permission after you refused an action in any mode since the last mode change, `/new`,
+`/clear` or resume. "Asks for permission" is decided
 by the question's wording, so this is a floor for questions phrased that way, not a
 guarantee against a differently worded one. An unattended run stops at a question as
 before.
@@ -254,8 +256,9 @@ is no longer answered with its recommended option. It reaches you instead, and t
 transcript says so. An irreversible question was never auto-answered. `/clear`, `/new`,
 resuming a session and changing the permission mode clear the memory. The per-call memory
 is scoped to `review-auto`; under `inherit` a denied call is asked again. Only the
-permission-question floor above is kept after a refusal in every mode, and only a person's
-"no" counts: an unattended run, a superseded turn or an interrupted one does not.
+permission-question floor above is kept after a refusal in every mode (until the next mode
+change, `/new`, `/clear` or resume), and only a person's "no" counts: an unattended run, a
+superseded turn or an interrupted one does not.
 
 ### Routine commands: no prompt after untrusted content
 

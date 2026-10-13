@@ -108,11 +108,12 @@ let operatorRefused = false;
 
 /**
  * Remember an action the operator refused under review-auto, so it can neither grant it again nor ask itself to
- * overturn it. Only review-auto writes and reads the per-call set; the question floor has its own flag.
+ * overturn it. Only review-auto writes and reads the per-call set. It also marks the question floor, like
+ * `noteOperatorRefusal`, which is what the other modes call on their own.
  */
 export function recordOperatorDenial(fingerprint: string): void {
   operatorDenials.add(fingerprint);
-  operatorRefused = true;
+  noteOperatorRefusal();
 }
 
 export function operatorDenied(fingerprint: string): boolean {
@@ -124,7 +125,7 @@ export function noteOperatorRefusal(): void {
   operatorRefused = true;
 }
 
-/** Cleared on `/clear`, `/new` and a permission-mode change, so a refusal does not outlive the conversation or the posture it was made under. */
+/** Cleared on `/clear`, `/new`, a resumed session and a permission-mode change, so a refusal does not outlive the conversation or the posture it was made under. */
 export function resetOperatorDenials(): void {
   operatorDenials.clear();
   operatorRefused = false;

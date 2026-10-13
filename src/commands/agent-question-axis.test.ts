@@ -106,6 +106,8 @@ interface RunExtras {
   noPermissionMode?: boolean;
   /** A turn that started in Telegram answers `false` here (flow 396). */
   mcpGrantsApply?: () => boolean;
+  /** The turn's abort signal (the operator interrupting). */
+  signal?: AbortSignal;
 }
 
 interface Run {
@@ -152,6 +154,7 @@ async function run(
     {
       ...(extras.review === undefined ? {} : { automaticReview: true, automaticReviewRun: extras.review }),
       ...(extras.slateSession === undefined ? {} : { slateSession: extras.slateSession }),
+      ...(extras.signal === undefined ? {} : { signal: extras.signal }),
     },
   );
   return out;
@@ -444,4 +447,88 @@ test("review-auto: a refused command stays refused, in another spelling too, wit
   const again = await run("auto", [toolCall("s2", "shell_exec", { command: "cat   ~/.config/keryx/auth.json" }), TEXT_DONE], [shellTool], {}, true, { requestApproval });
   expect(again.results[0]!.output).toBe(REFUSED_EARLIER);
   expect(approvals).toBe(1);
+});
+
+// PR 992 round 3 (F-002, F-003, F-006).
+
+function toolOfRisk(name: string, risk: "delegate" | "write" | "read"): InteractiveTool {
+  return {
+    definition: { name, description: name, inputSchema: { type: "object", properties: {}, additionalProperties: false }, risk },
+    invoke: async () => ({ output: "ran", isError: false }),
+  };
+}
+
+function rememberRefusal(name: string): void {
+  const raw = "{}";
+  recordOperatorDenial(toolCallHash(name, raw));
+  recordOperatorDenial(refusalFingerprint(name, raw, toolCallHash(name, raw)));
+}
+
+// F-002: the delegate and write branches read the refusal memory only under review-auto (mutants M24, M25).
+test.each<["delegate" | "write", string]>([
+  ["delegate", "delegate_helper"],
+  ["write", "write_helper"],
+])("%s branch: outside review-auto a remembered refusal is not read, the approver is asked", async (risk, name) => {
+  rememberRefusal(name);
+  let approvals = 0;
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    approvals += 1;
+    return true;
+  };
+  const r = await run("ask", [toolCall("t1", name, {}), TEXT_DONE], [toolOfRisk(name, risk)], {}, true, { requestApproval });
+  expect(approvals).toBe(1);
+  expect(r.results[0]!.output).toBe("ran");
+});
+
+test.each<["delegate" | "write", string]>([
+  ["delegate", "delegate_helper"],
+  ["write", "write_helper"],
+])("%s branch: under review-auto a remembered refusal is answered without asking", async (risk, name) => {
+  setReviewSystem("review-auto");
+  rememberRefusal(name);
+  let approvals = 0;
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    approvals += 1;
+    return true;
+  };
+  const r = await run("ask", [toolCall("t1", name, {}), TEXT_DONE], [toolOfRisk(name, risk)], {}, true, { requestApproval });
+  expect(approvals).toBe(0);
+  expect(r.results[0]!.output).toBe(REFUSED_EARLIER);
+});
+
+// F-003: the wrapper's own read (M08). A durable read tool after untrusted content reaches no branch read, only the wrapper.
+test("review-auto: the wrapper answers a remembered refusal for a durable read tool without asking", async () => {
+  setReviewSystem("review-auto");
+  const fetchTool: InteractiveTool = {
+    definition: { name: "web_fetch", description: "fetch", inputSchema: { type: "object", properties: {}, additionalProperties: false }, risk: "read" },
+    invoke: async () => ({ output: "<page>", isError: false, untrusted: true }),
+  };
+  rememberRefusal("workspace_create");
+  let approvals = 0;
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    approvals += 1;
+    return true;
+  };
+  const r = await run(
+    "auto",
+    [toolCall("f1", "web_fetch", {}), toolCall("w1", "workspace_create", {}), TEXT_DONE],
+    [fetchTool, toolOfRisk("workspace_create", "read")],
+    {},
+    true,
+    { requestApproval },
+  );
+  expect(approvals).toBe(0);
+  expect(r.results[1]!.output).toBe(REFUSED_EARLIER);
+});
+
+// F-006: a `no` that arrives because the operator interrupted the turn is not a refusal (personRefused, signal.aborted).
+test("an approver answering no after the turn was aborted remembers nothing", async () => {
+  const controller = new AbortController();
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    controller.abort();
+    return false;
+  };
+  await run("ask", [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE], [shellTool], {}, true, { requestApproval, signal: controller.signal });
+  expect(reviewAutoMayAnswer(PERMISSION_QUESTION)).toBe(true);
+  expect(operatorDenied(toolCallHash("shell_exec", JSON.stringify(CREDENTIALS)))).toBe(false);
 });

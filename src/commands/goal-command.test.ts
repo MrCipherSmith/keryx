@@ -64,6 +64,8 @@ import type { AgentDeps, AgentIO } from "./agent";
 import { DEFAULT_AUTO_GOAL_ROUNDS, ROUND_DONE_MARKER, parseGoalArgs, parseVerifierVerdict, runGoalCommand } from "./goal-command";
 import type { GoalArgsError, GoalVerifierVerdict, ParsedGoalArgs } from "./goal-command";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import { withTurnScopedIo } from "../tui/foreground-operation";
 import { detachSlateSession, type SlateSessionRef } from "../session/slate-lifecycle";
 import { appendSeed, readSlate } from "../session/slate";
 import { COLLAPSED_HEADER } from "../session/prune";
@@ -2044,4 +2046,89 @@ test("flow 271 R4-1: a lease lost while the verifier runs stops the loop — no 
   expect(system.join("")).toContain("another shell took this session over");
   expect(await readFile(path.join(dir, "slate.json"), "utf8")).toBe(slateAtLoss as string);
   expect(await readdir(path.join(dir, "slate-archive")).catch(() => [])).toEqual([]);
+});
+
+// --- PR 992 round 3 (F-001): a Telegram-started /goal keeps the question with the human under `/mode auto` ---
+
+async function runGoalWithQuestion(io: AgentIO): Promise<void> {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  const question = JSON.stringify({
+    question: "Which scope?",
+    options: [
+      { id: "small", label: "Small", description: "" },
+      { id: "full", label: "Full", description: "", recommended: true },
+    ],
+  });
+  let call = 0;
+  const deps: AgentDeps = {
+    provider: {
+      describe: () => description,
+      stream: (_request, opts) => {
+        const events: Array<Partial<NormalizedEvent>> =
+          call++ === 0
+            ? [
+                { kind: "tool_call_start", toolCallId: "q1", toolName: "ask_user" },
+                { kind: "tool_call_end", toolCallId: "q1", input: question },
+                { kind: "model_end" },
+              ]
+            : [{ kind: "text_delta", text: "done" }, { kind: "model_end" }];
+        return (async function* (): AsyncGenerator<NormalizedEvent> {
+          let sequence = 0;
+          for (const partial of events) yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
+        })();
+      },
+    },
+    providerId: "scripted",
+    modelId: "m",
+    tools: [createAskUserTool(async (request) => request.options[0]!.id)],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runGoalCommand({
+    raw: "pick a scope",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession: { dir, cwd, opened: false },
+    mintAttemptId: () => "attempt-0",
+  });
+}
+
+test("F-001: under /mode auto a /goal answers its own question, unless the turn came from Telegram", async () => {
+  const selfAnswered: string[] = [];
+  const shellIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onQuestionSelfAnswered: (question) => selfAnswered.push(question),
+  };
+  await runGoalWithQuestion(shellIo);
+  expect(selfAnswered).toEqual(["Which scope?"]);
+
+  const telegramAnswered: string[] = [];
+  const results: InteractiveToolResult[] = [];
+  const telegramIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onQuestionSelfAnswered: (question) => telegramAnswered.push(question),
+    onToolResult: (_name, result) => results.push(result),
+  };
+  await runGoalWithQuestion(withTurnScopedIo(telegramIo, { mcpGrantsApply: () => false }));
+  expect(telegramAnswered).toEqual([]);
+  expect(results.map((r) => r.output).join("\n")).toMatch(/User selected id="small"/);
 });

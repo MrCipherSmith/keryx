@@ -430,6 +430,8 @@ export interface AgentIO {
    * Flow 396: whether the operator's `trustedMcpTools` grants may skip the prompt for this call.
    * A turn that came from Telegram returns `false`: an MCP `use_tool` always asks there, even for a
    * tool the operator trusted in the shell. Absent or `true`: grants apply as before.
+   * It is also the marker for "this turn came from Telegram": `/mode auto` leaves an `ask_user` question
+   * with the person on a turn that answers `false` here, so the shell sets it for a Telegram turn only.
    */
   mcpGrantsApply?: () => boolean;
   /**

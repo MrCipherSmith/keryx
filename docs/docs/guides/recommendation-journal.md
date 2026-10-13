@@ -7,7 +7,7 @@ sometimes do not. The report is plain counting: no model is involved.
 
 ## What is recorded
 
-Every question with options writes one record:
+Every question with options that a person answers writes one record:
 
 - the flow and the stage it was asked in (or no flow);
 - the question and the options, with the order they were shown in;

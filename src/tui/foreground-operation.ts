@@ -228,6 +228,20 @@ export async function forceForegroundQueueItem<T>(
  */
 export type TurnScopedIo = Partial<Pick<AgentIO, "requestApproval" | "permissionMode" | "onAutoApproved" | "mcpGrantsApply">>;
 
+/**
+ * The shell's `io` with one turn's hooks laid over it, for a model turn that does not go through the
+ * foreground facade (a `/goal` from Telegram). Every other hook is read live from `io`, so a hook the shell
+ * installs later still applies.
+ */
+export function withTurnScopedIo(io: AgentIO, turn: TurnScopedIo): AgentIO {
+  const scoped: AgentIO = Object.create(io);
+  for (const key of Object.keys(turn) as Array<keyof TurnScopedIo>) {
+    const hook = turn[key];
+    if (hook !== undefined) Object.defineProperty(scoped, key, { value: hook, writable: true, enumerable: true, configurable: true });
+  }
+  return scoped;
+}
+
 export function createForegroundAgentIoFacade(
   owner: ForegroundOperationOwner,
   token: ForegroundOperationToken,

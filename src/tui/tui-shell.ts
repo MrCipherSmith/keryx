@@ -318,7 +318,7 @@ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
-import { terminalSafe } from "../lib/terminal-safe";
+import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
 import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
@@ -358,6 +358,7 @@ import {
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
+  withTurnScopedIo,
   type TurnScopedIo,
 } from "./foreground-operation";
 import {
@@ -393,7 +394,7 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import type { AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
+import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
@@ -3705,7 +3706,7 @@ export function describeModeRow(
 const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   ask: "Every mutating action asks first (today's default)",
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
-  auto: "Skips confirmation for everything except credential-touching commands",
+  auto: "Skips confirmation except for credential-touching commands; the agent answers its own questions",
 };
 
 /** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
@@ -5993,7 +5994,7 @@ export async function launchTuiAgentShell(opts: {
             showComposerChoiceDetailed(otui, r, chrome.dock, {
               title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
               subtitle: "Pick an option, or type your own answer · Esc cancels",
-              cancelId: "__cancel__",
+              cancelId: ASK_USER_CANCEL,
               // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
               ownAnswer: {},
               onOpen: () => chrome.blurComposer(),
@@ -6187,9 +6188,8 @@ export async function launchTuiAgentShell(opts: {
     io.onAutoApproved = autoApprovedFor(false);
     // NOT dimmed, for the same reason: `auto` mode answered a question the user never saw, so this line is the record.
     io.onQuestionSelfAnswered = (question, answerLabel) => {
-      const shortQuestion = question.length > 100 ? `${question.slice(0, 97)}…` : question;
       // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
-      const line = terminalSafe(`${shortQuestion} → ${answerLabel}`).text;
+      const line = selfAnsweredLine(question, answerLabel);
       transcript.add(
         new otui.TextRenderable(r, {
           id: `qs${uid++}`,
@@ -7639,7 +7639,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
+                `Only credential-touching commands still ask. The agent also answers its own questions; irreversible or untrusted ones still ask you. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -8830,7 +8830,8 @@ export async function launchTuiAgentShell(opts: {
             await runGoalCommand({
               raw: line.slice(command.name.length).trim(),
               cwd: sessionCwd,
-              io,
+              // A goal typed in the topic starts a model turn Telegram started: it is judged and asked like one.
+              io: source === TG_SOURCE ? withTurnScopedIo(io, telegramTurnIo) : io,
               deps,
               history,
               slateSession,

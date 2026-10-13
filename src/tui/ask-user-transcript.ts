@@ -5,6 +5,7 @@
 // it, so a pasted credential never reaches the screen), a picked option with its typed reason, a
 // plain pick, or a cancel.
 import { storedOperatorText } from "../decisions/service";
+import { ASK_USER_CANCEL } from "../harness/tool/builtin/ask-user-tool";
 import type { ComposerChoiceResult } from "./composer-choice";
 import { dimChunk, roleChunk } from "./theme-text";
 
@@ -23,7 +24,7 @@ export function mountAskAnswerLine(
   id: string,
   options: readonly AskAnswerLineOption[],
   result: ComposerChoiceResult,
-  cancelId = "__cancel__",
+  cancelId = ASK_USER_CANCEL,
 ): void {
   let content: ReturnType<typeof otui.t>;
   if (result.kind === "own") {
