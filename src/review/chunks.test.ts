@@ -148,7 +148,9 @@ describe("running the chunks one at a time through the retry plan (AC8b, AC8c)",
     await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
     const afterFirst = (await readChunkState(packageDir)).derived.length;
     expect(afterFirst).toBe(2);
-    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    await recordChunk(packageDir, "chunk-001.r1-1", { status: "DONE" });
+    const again = await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    expect(again.decision).toBe("retry");
     expect((await readChunkState(packageDir)).derived).toHaveLength(afterFirst);
   });
 
