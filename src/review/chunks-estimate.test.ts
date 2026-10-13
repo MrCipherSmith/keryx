@@ -189,3 +189,37 @@ test("saving the routing table keeps the reviewChunks key", async () => {
   expect(saved.reviewChunks).toEqual({ maxPasses: 7 });
   expect(saved.categories.review).toEqual({ kind: "session-default" });
 });
+
+test("a routing.config.json that is not a JSON object leaves the defaults and a warning that says so (R2-33)", async () => {
+  writeFileSync(path.join(root, "routing.config.json"), "[1, 2]");
+  const limits = await readChunkLimits(root);
+  expect(limits.maxPasses).toBe(DEFAULT_MAX_PASSES);
+  expect(limits.source).toBe("default");
+  expect(limits.warning).toContain("could not be read as a JSON object");
+  writeFileSync(path.join(root, "routing.config.json"), "{ not json");
+  expect((await readChunkLimits(root)).warning).toContain("could not be read");
+  dropFiles(3);
+  const record = await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
+  expect(renderChunkEstimate(record).join("\n")).toContain("warning: ");
+});
+
+test("maxPasses is rounded down, capped at 100, and a value that rounds to 0 keeps the default (R2-33)", async () => {
+  const limitsFor = async (maxPasses: unknown) => {
+    writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewChunks: { maxPasses } }));
+    return readChunkLimits(root);
+  };
+  expect((await limitsFor(7.9)).maxPasses).toBe(7);
+  expect((await limitsFor(500)).maxPasses).toBe(100);
+  expect((await limitsFor(0.5)).maxPasses).toBe(DEFAULT_MAX_PASSES);
+  expect((await limitsFor("9")).maxPasses).toBe(DEFAULT_MAX_PASSES);
+  expect((await limitsFor(7.9)).source).toBe("routing.config.json");
+  expect((await limitsFor(7.9)).warning).toBeUndefined();
+});
+
+test("`chunks next` records its estimate from the one it computed (R2-39)", async () => {
+  dropFiles(3);
+  await capture(() => runChunks(["next", "--package", pkg, "--json"], { rejectUnknownFlags: () => {} }));
+  const record = await readChunkEstimate(pkg);
+  expect(record?.estimate.chunks).toBe(1);
+  expect(record?.decision).toBe("proceed");
+});

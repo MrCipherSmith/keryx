@@ -4,6 +4,7 @@ import { resolveProjectRoot } from "../lib/contained-path";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { CHUNK_STATE_FILE, ensureChunkPlan, mergeChunkPass, nextChunk, readChunkPlan, recordChunk } from "../review/chunks";
 import {
+  type ChunkEstimate,
   DEFAULT_MAX_PASSES,
   answerChunkEstimate,
   chunkModeOf,
@@ -87,12 +88,11 @@ async function readResult(args: readonly string[], cwd: string = process.cwd()):
 const out = (json: boolean, value: unknown, lines: string[]): void => console.log(json ? JSON.stringify(value, null, 2) : lines.join("\n"));
 
 /** Records the estimate when none is on file, so a run that needs no question still leaves its estimate in the package. */
-async function ensureEstimateRecorded(packageDir: string, projectRoot: string, modeFlag?: string): Promise<void> {
-  const estimate = await estimateChunkRun(packageDir, projectRoot);
+async function ensureEstimateRecorded(packageDir: string, estimate: ChunkEstimate | null): Promise<void> {
   if (estimate === null) return;
   const previous = await readChunkEstimate(packageDir);
   if (previous?.estimate.planKey === estimate.planKey) return;
-  await recordChunkEstimate(packageDir, estimate, chunkModeOf(packageDir, modeFlag));
+  await recordChunkEstimate(packageDir, estimate, chunkModeOf(packageDir));
 }
 
 export async function runChunks(args: string[], deps: ChunksDeps): Promise<void> {
@@ -137,13 +137,14 @@ export async function runChunks(args: string[], deps: ChunksDeps): Promise<void>
       out(json, { chunk: null }, ["no chunks: the blast radius dropped no files"]);
       return;
     }
-    const blocker = await chunkRunBlocker(packageDir, projectRoot);
+    const estimate = await estimateChunkRun(packageDir, projectRoot);
+    const blocker = await chunkRunBlocker(packageDir, projectRoot, estimate);
     if (blocker !== undefined) {
       out(json, { chunk: null, blocked: blocker }, [`blocked: ${blocker}`]);
       process.exitCode = 1;
       return;
     }
-    await ensureEstimateRecorded(packageDir, projectRoot);
+    await ensureEstimateRecorded(packageDir, estimate);
     const next = await nextChunk(packageDir);
     const lines =
       next.chunk === null

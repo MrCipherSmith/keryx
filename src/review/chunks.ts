@@ -16,6 +16,13 @@ export const CHUNKS_FILE = "chunks.json";
 export const CHUNK_STATE_FILE = "chunk-state.json";
 export const CHUNK_PASS_FILE = "chunk-pass.json";
 const CHUNK_STATE_LOCK = "chunk-state.lock";
+/** How long a writer waits for the chunk lock: a record on a large pass can take a while, and giving up would drop an outcome. */
+export const CHUNK_LOCK_WAIT_MS = 120_000;
+
+/** Every writer of chunks.json, chunk-state.json, chunk-estimate.json and chunk-pass.json takes this one lock. It is not reentrant. */
+export function withChunkStateLock<T>(packageDir: string, fn: () => Promise<T>): Promise<T> {
+  return withFileLock(path.join(packageDir, CHUNK_STATE_LOCK), fn, { timeoutMs: CHUNK_LOCK_WAIT_MS });
+}
 export const CHUNK_REVIEWER = BLAST_RADIUS_SCOPE_REVIEWER;
 /** The tier every chunk pass runs on: one down from the flagship. */
 export const CHUNK_TIER = "middle";
@@ -120,11 +127,16 @@ export async function readChunkPlan(packageDir: string): Promise<ChunkPlan | und
 
 /**
  * Writes `chunks.json` from the dropped files of `blast-radius.json`. No dropped file means no plan (null).
- * A plan that exists is kept: once a pass has been recorded the plan may not move under it.
+ * A plan whose dropped set still matches is kept (so is one written before `droppedKey` existed). A plan cut from a
+ * different dropped set is replaced while no pass is recorded and refused once one is: the plan may not move under a pass.
  */
 export async function ensureChunkPlan(packageDir: string, projectRoot: string, options: { maxBytes?: number; maxFiles?: number } = {}): Promise<ChunkPlan | null> {
   const radius = await readBlastRadius(packageDir);
   if (radius === undefined || radius.dropped.length === 0) return null;
+  return withChunkStateLock(packageDir, () => cutChunkPlan(packageDir, projectRoot, radius, options));
+}
+
+async function cutChunkPlan(packageDir: string, projectRoot: string, radius: BlastRadius, options: { maxBytes?: number; maxFiles?: number }): Promise<ChunkPlan> {
   const droppedKey = droppedKeyOf(radius.dropped.map((entry) => entry.file));
   const existing = await readChunkPlan(packageDir);
   if (existing !== undefined) {
@@ -162,7 +174,7 @@ export async function ensureChunkPlan(packageDir: string, projectRoot: string, o
   return plan;
 }
 
-export function emptyChunkState(): ChunkState {
+function emptyChunkState(): ChunkState {
   return { schemaVersion: 1, retry: emptyRetryState(), derived: [], outcomes: {} };
 }
 
@@ -225,7 +237,11 @@ function runStates(plan: ChunkPlan, state: ChunkState): Array<{ chunk: ChunkEntr
 export type NextChunk = { chunk: ChunkEntry | null; remaining: number; reason: string; reviewer: string; tier: string };
 
 /** The one chunk to dispatch now. The retry plan's next wave is cut to its first chunk: passes run one at a time. */
-export async function nextChunk(packageDir: string): Promise<NextChunk> {
+export function nextChunk(packageDir: string): Promise<NextChunk> {
+  return withChunkStateLock(packageDir, () => nextChunkLocked(packageDir));
+}
+
+async function nextChunkLocked(packageDir: string): Promise<NextChunk> {
   const plan = await readChunkPlan(packageDir);
   if (plan === undefined) throw new Error(`No ${CHUNKS_FILE} in ${packageDir}: nothing was dropped from the blast radius, or \`keryx review chunks plan\` has not run.`);
   const state = await readChunkState(packageDir);
@@ -268,18 +284,29 @@ function halves(chunk: ChunkEntry, attempt: number): ChunkEntry[] {
  * Records what one chunk pass returned. A DONE pass covers its chunk. A failed pass goes through the retry plan: it is
  * handed back smaller (the chunk is cut in half) while the plan still allows a retry, and otherwise stays pending.
  */
-export async function recordChunk(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<{ decision: RetryDecision; reason: string; state: ChunkRunState }> {
+export function recordChunk(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<ChunkRecordResult> {
   // Two overlapping records would each start from the same snapshot, and the later write would erase the earlier outcome.
-  return withFileLock(path.join(packageDir, CHUNK_STATE_LOCK), () => recordChunkLocked(packageDir, chunkId, result), { timeoutMs: 30_000 });
+  return withChunkStateLock(packageDir, () => recordChunkLocked(packageDir, chunkId, result));
 }
 
-async function recordChunkLocked(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<{ decision: RetryDecision; reason: string; state: ChunkRunState }> {
+export type ChunkRecordResult = { decision: RetryDecision; reason: string; state: ChunkRunState };
+
+async function recordChunkLocked(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<ChunkRecordResult> {
   const plan = await readChunkPlan(packageDir);
   if (plan === undefined) throw new Error(`No ${CHUNKS_FILE} in ${packageDir}.`);
   const state = await readChunkState(packageDir);
   const all = [...plan.chunks, ...state.derived];
   const chunk = all.find((entry) => entry.id === chunkId);
   if (chunk === undefined) throw new Error(`Unknown chunk ${chunkId}; the plan has ${all.map((entry) => entry.id).join(", ")}.`);
+  const { next, decision } = applyChunkResult(plan, state, chunk, result);
+  await writeChunkState(packageDir, next);
+  const states = runStates(plan, next);
+  const mine = states.find((entry) => entry.chunk.id === chunkId || next.derived.some((d) => d.id === chunkId && d.retryOf?.includes(entry.chunk.id)));
+  return { decision: decision.decision, reason: decision.reason, state: mine?.state ?? "pending" };
+}
+
+/** The state after one chunk's result, and the retry decision that led to it. Reads and writes nothing. */
+function applyChunkResult(plan: ChunkPlan, state: ChunkState, chunk: ChunkEntry, result: ChunkResultInput): { next: ChunkState; decision: ReturnType<typeof planRetry> } {
   const manifest = chunkManifest(plan, state.derived);
   const read = readText(manifest);
   const status = result.status.toUpperCase();
@@ -291,7 +318,7 @@ async function recordChunkLocked(packageDir: string, chunkId: string, result: Ch
       reviewer: CHUNK_REVIEWER,
       status,
       ...(fingerprint === undefined ? {} : { scopeFingerprint: fingerprint }),
-      slices: finished ? [chunkId] : [],
+      slices: finished ? [chunk.id] : [],
     },
     reviewer: CHUNK_REVIEWER,
     sliceIds: plan.chunks.map((entry) => entry.id),
@@ -299,25 +326,23 @@ async function recordChunkLocked(packageDir: string, chunkId: string, result: Ch
     readSliceText: read,
   });
   const next: ChunkState = { ...state, retry: decision.state, derived: [...state.derived], outcomes: { ...state.outcomes } };
-  const prior = state.outcomes[chunkId];
-  next.outcomes[chunkId] = {
+  const prior = state.outcomes[chunk.id];
+  next.outcomes[chunk.id] = {
     status,
     decision: decision.decision,
     attempts: (prior?.attempts ?? 0) + 1,
     seq: Math.max(0, ...Object.values(state.outcomes).map((o) => o.seq)) + 1,
     findings: finished ? findingsOf(result.findings) : (prior?.findings ?? []),
   };
-  const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunkId));
+  const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunk.id));
   if (!finished && decision.decision === "retry" && !decision.progress && chunk.files.length > 1 && !alreadySplit) {
     next.derived.push(...halves(chunk, decision.priorAttempts + 1));
   }
-  await writeChunkState(packageDir, next);
-  const states = runStates(plan, next);
-  const mine = states.find((entry) => entry.chunk.id === chunkId || next.derived.some((d) => d.id === chunkId && d.retryOf?.includes(entry.chunk.id)));
-  return { decision: decision.decision, reason: decision.reason, state: mine?.state ?? "pending" };
+  return { next, decision };
 }
 
-// The finding contract's names are blocker/major/minor/info; the older names stay as aliases.
+// The finding contract's names are blocker/major/minor/info. critical, high and medium are aliases of blocker, major and minor;
+// low is not an alias of any of them: it ranks between minor and info. A severity named otherwise ranks last (5).
 const SEVERITY_RANK: Record<string, number> = { blocker: 0, critical: 0, major: 1, high: 1, minor: 2, medium: 2, low: 3, info: 4 };
 
 const findingKey = (finding: ChunkFinding): string =>
@@ -378,9 +403,12 @@ export async function computeChunkPass(packageDir: string): Promise<ChunkPass | 
 
 /** Writes `chunk-pass.json`. Deterministic for a given state. */
 export async function mergeChunkPass(packageDir: string): Promise<ChunkPass | null> {
-  const pass = await computeChunkPass(packageDir);
-  if (pass !== null) await writeFileAtomic(path.join(packageDir, CHUNK_PASS_FILE), `${JSON.stringify(pass, null, 2)}\n`);
-  return pass;
+  if ((await readChunkPlan(packageDir)) === undefined) return null;
+  return withChunkStateLock(packageDir, async () => {
+    const pass = await computeChunkPass(packageDir);
+    if (pass !== null) await writeFileAtomic(path.join(packageDir, CHUNK_PASS_FILE), `${JSON.stringify(pass, null, 2)}\n`);
+    return pass;
+  });
 }
 
 export function hasChunkPlan(packageDir: string): boolean {

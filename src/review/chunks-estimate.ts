@@ -3,13 +3,12 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
-import { writeFileAtomic } from "../lib/fs";
-import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan } from "./chunks";
+import { pathExists, writeFileAtomic } from "../lib/fs";
+import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan, withChunkStateLock } from "./chunks";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
-import { readJsonFileOr } from "../lib/json";
+import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
 
 export const CHUNK_ESTIMATE_FILE = "chunk-estimate.json";
 /** The file automatic review mode (flow 429) leaves in its package; `commands/automatic-review.ts` takes its name from here. */
@@ -27,27 +26,33 @@ export type ChunkLimits = {
   outputUsdPerMTok: number;
   secondsPerPass: number;
   source: "default" | "routing.config.json";
+  /** Set when routing.config.json exists but could not be read; the defaults apply and the estimate says so. */
+  warning?: string;
 };
 
 export const DEFAULT_CHUNK_LIMITS: ChunkLimits = { maxPasses: DEFAULT_MAX_PASSES, inputUsdPerMTok: 3, outputUsdPerMTok: 15, secondsPerPass: 150, source: "default" };
 
 const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
 
-/** `reviewChunks` in the project's `routing.config.json`; any field it leaves out, or sets badly, keeps its default. */
+/**
+ * `reviewChunks` in the project's `routing.config.json`. A field it leaves out, or sets to something that is not a positive
+ * number, keeps its default. `maxPasses` is rounded down and capped at 100; a value that rounds to 0 keeps the default.
+ * A file that exists but is not a JSON object leaves the defaults in force and a `warning` that says so.
+ */
 export async function readChunkLimits(projectRoot: string): Promise<ChunkLimits> {
-  try {
-    const parsed = JSON.parse(await readFile(path.join(projectRoot, "routing.config.json"), "utf8")) as { reviewChunks?: Record<string, unknown> };
-    const own = parsed?.reviewChunks;
-    if (own === null || typeof own !== "object") return { ...DEFAULT_CHUNK_LIMITS };
-    const limits: ChunkLimits = { ...DEFAULT_CHUNK_LIMITS, source: "routing.config.json" };
-    if (positive(own.maxPasses)) limits.maxPasses = Math.min(Math.floor(own.maxPasses), MAX_PASSES_LIMIT);
-    if (positive(own.inputUsdPerMTok)) limits.inputUsdPerMTok = own.inputUsdPerMTok;
-    if (positive(own.outputUsdPerMTok)) limits.outputUsdPerMTok = own.outputUsdPerMTok;
-    if (positive(own.secondsPerPass)) limits.secondsPerPass = own.secondsPerPass;
-    return limits;
-  } catch {
-    return { ...DEFAULT_CHUNK_LIMITS };
-  }
+  const file = path.join(projectRoot, "routing.config.json");
+  if (!(await pathExists(file))) return { ...DEFAULT_CHUNK_LIMITS };
+  const read = await readJsonObjectFile(file);
+  if (read.state !== "object") return { ...DEFAULT_CHUNK_LIMITS, warning: `${file} could not be read as a JSON object (${read.state}); the default ceiling applies` };
+  const own = read.value.reviewChunks;
+  if (own === null || typeof own !== "object" || Array.isArray(own)) return { ...DEFAULT_CHUNK_LIMITS };
+  const fields = own as Record<string, unknown>;
+  const limits: ChunkLimits = { ...DEFAULT_CHUNK_LIMITS, source: "routing.config.json" };
+  if (positive(fields.maxPasses) && Math.floor(fields.maxPasses) >= 1) limits.maxPasses = Math.min(Math.floor(fields.maxPasses), MAX_PASSES_LIMIT);
+  if (positive(fields.inputUsdPerMTok)) limits.inputUsdPerMTok = fields.inputUsdPerMTok;
+  if (positive(fields.outputUsdPerMTok)) limits.outputUsdPerMTok = fields.outputUsdPerMTok;
+  if (positive(fields.secondsPerPass)) limits.secondsPerPass = fields.secondsPerPass;
+  return limits;
 }
 
 export type ChunkEstimate = {
@@ -67,6 +72,8 @@ export type ChunkEstimate = {
   limitsSource: ChunkLimits["source"];
   /** Identifies the chunk plan this estimate belongs to; an answer given to another plan does not carry over. */
   planKey: string;
+  /** Why the limits are the defaults although routing.config.json exists. */
+  limitsWarning?: string;
 };
 
 export async function estimateChunkRun(packageDir: string, projectRoot: string, limits?: ChunkLimits): Promise<ChunkEstimate | null> {
@@ -93,6 +100,7 @@ export async function estimateChunkRun(packageDir: string, projectRoot: string, 
     ceilingFiles: effective.maxPasses * DEFAULT_BLAST_RADIUS_MAX_FILES,
     overCeiling: remaining.length > effective.maxPasses,
     limitsSource: effective.source,
+    ...(effective.warning === undefined ? {} : { limitsWarning: effective.warning }),
     // The whole plan, not what is left of it: recording a chunk DONE must not take the operator's answer with it.
     planKey: createHash("sha256").update(plan.chunks.map((chunk) => `${chunk.id}:${chunk.files.join(",")}`).join("|")).digest("hex").slice(0, 16),
   };
@@ -129,34 +137,38 @@ export async function readChunkEstimate(packageDir: string): Promise<ChunkEstima
 }
 
 /** Records the estimate and the decision it leads to. An answer survives only while the estimate covers the same chunks. */
-export async function recordChunkEstimate(packageDir: string, estimate: ChunkEstimate, mode: ChunkMode): Promise<ChunkEstimateRecord> {
-  const previous = await readChunkEstimate(packageDir);
-  const same = previous?.estimate.planKey === estimate.planKey;
-  const decision = decisionFor(estimate, mode);
-  const record: ChunkEstimateRecord = {
-    schemaVersion: 1,
-    estimate,
-    mode,
-    decision,
-    asked: decision !== "proceed",
-    ...(same && previous?.answer !== undefined ? { answer: previous.answer } : {}),
-  };
-  await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
-  return record;
+export function recordChunkEstimate(packageDir: string, estimate: ChunkEstimate, mode: ChunkMode): Promise<ChunkEstimateRecord> {
+  return withChunkStateLock(packageDir, async () => {
+    const previous = await readChunkEstimate(packageDir);
+    const same = previous?.estimate.planKey === estimate.planKey;
+    const decision = decisionFor(estimate, mode);
+    const record: ChunkEstimateRecord = {
+      schemaVersion: 1,
+      estimate,
+      mode,
+      decision,
+      asked: decision !== "proceed",
+      ...(same && previous?.answer !== undefined ? { answer: previous.answer } : {}),
+    };
+    await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
+    return record;
+  });
 }
 
 export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date()): Promise<ChunkEstimateRecord> {
-  const previous = await readChunkEstimate(packageDir);
-  if (previous === undefined) throw new Error("No chunk estimate is recorded; run `keryx review chunks estimate` first.");
   if (quote.trim() === "") throw new Error("The answer needs the operator's own words (--quote).");
-  const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString() } };
-  await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
-  return record;
+  return withChunkStateLock(packageDir, async () => {
+    const previous = await readChunkEstimate(packageDir);
+    if (previous === undefined) throw new Error("No chunk estimate is recorded; run `keryx review chunks estimate` first.");
+    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString() } };
+    await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
+    return record;
+  });
 }
 
 /** Why `chunks next` may not hand out a chunk yet: empty when the run is under the ceiling or the operator said yes. */
-export async function chunkRunBlocker(packageDir: string, projectRoot: string): Promise<string | undefined> {
-  const estimate = await estimateChunkRun(packageDir, projectRoot);
+export async function chunkRunBlocker(packageDir: string, projectRoot: string, known?: ChunkEstimate | null): Promise<string | undefined> {
+  const estimate = known === undefined ? await estimateChunkRun(packageDir, projectRoot) : known;
   if (estimate === null || !estimate.overCeiling) return undefined;
   const record = await readChunkEstimate(packageDir);
   const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;
@@ -180,6 +192,7 @@ export function renderChunkEstimate(record: ChunkEstimateRecord): string[] {
   if (decision === "proceed") lines.push(`${mode}: at or under the ceiling; the run goes ahead without a question`);
   else if (decision === "ask-once") lines.push("automatic: over the ceiling; the operator is asked once before any chunk runs");
   else lines.push("interactive: over the ceiling; the run waits for the operator's yes");
+  if (estimate.limitsWarning !== undefined) lines.push(`warning: ${estimate.limitsWarning}`);
   if (answer !== undefined) lines.push(`answer: ${answer.value} — "${answer.quote}" (${answer.at})`);
   return lines;
 }

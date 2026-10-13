@@ -188,7 +188,8 @@ export function coverageLine(report: Pick<CoverageReport, "counts" | "omissionRe
   return `coverage: in scope ${inScope}, covered ${covered}, omitted ${omitted}${reasons === "" ? "" : ` (${reasons})`}, uncovered ${uncovered}`;
 }
 
-const MIN_WAIVER_QUOTE_LENGTH = 8;
+/** Characters, not words, of the operator's own text (the flag's name does not count). */
+export const MIN_WAIVER_QUOTE_CHARS = 8;
 
 /**
  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape
@@ -196,8 +197,10 @@ const MIN_WAIVER_QUOTE_LENGTH = 8;
  */
 export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date()): Promise<CoverageWaiver | undefined> {
   // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
-  const words = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
-  if (words.length < MIN_WAIVER_QUOTE_LENGTH) throw new Error("--waive-coverage needs the operator's own words as its value, at least a short sentence.");
+  const quote = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
+  if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
+    throw new Error(`--waive-coverage needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
+  }
   const file = path.join(packageDir, "research.json");
   const research = record(await readJson<unknown>(file));
   const dispatch = record(research?.dispatch);
@@ -205,7 +208,7 @@ export async function recordCoverageWaiver(packageDir: string, operatorQuote: st
   const report = await computeCoverage(packageDir, { research });
   const uncovered = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
   if (!report.tracked || uncovered.length === 0) return undefined;
-  const waiver: CoverageWaiver = { operatorQuote: operatorQuote.trim(), time: now.toISOString(), files: uncovered };
+  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered };
   await writeFileAtomic(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
   return waiver;
 }

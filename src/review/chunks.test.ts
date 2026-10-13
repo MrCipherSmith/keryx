@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CHUNKS_FILE, CHUNK_PASS_FILE, ensureChunkPlan, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk } from "./chunks";
+import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
+import { answerChunkEstimate, estimateChunkRun, recordChunkEstimate } from "./chunks-estimate";
 
 let root: string;
 let packageDir: string;
@@ -87,6 +88,25 @@ describe("the chunk plan over the dropped blast-radius files (AC8a)", () => {
     const second = await ensureChunkPlan(packageDir, root);
     expect(second?.dropped).toBe(4);
     expect(second?.chunks.flatMap((chunk) => chunk.files)).toContain("src/extra.ts");
+    const onDisk = JSON.parse(await readFile(path.join(packageDir, CHUNKS_FILE), "utf8")) as { dropped: number; droppedKey: string };
+    expect(onDisk.dropped).toBe(4);
+    expect(onDisk.droppedKey).toBe(second?.droppedKey as string);
+    expect(onDisk.droppedKey).not.toBe(first?.droppedKey as string);
+  });
+
+  test("a plan written before droppedKey existed is kept with its recorded passes, even when the dropped set differs (R2-30)", async () => {
+    const files = names(3);
+    await sizedFiles([...files, "src/extra.ts"]);
+    await writeRadius(files.map((file) => drop(file)));
+    const first = (await ensureChunkPlan(packageDir, root))!;
+    const { droppedKey: _key, ...legacy } = first;
+    await writeFile(path.join(packageDir, CHUNKS_FILE), JSON.stringify(legacy));
+    await recordChunk(packageDir, "chunk-001", { status: "DONE" });
+    await writeRadius([...files, "src/extra.ts"].map((file) => drop(file)));
+    const kept = await ensureChunkPlan(packageDir, root);
+    expect(kept).toEqual(legacy as typeof kept);
+    expect(JSON.parse(await readFile(path.join(packageDir, CHUNKS_FILE), "utf8"))).toEqual(legacy);
+    expect(Object.keys((await readChunkState(packageDir)).outcomes)).toEqual(["chunk-001"]);
   });
 
   test("no dropped files means no plan and no file", async () => {
@@ -224,11 +244,107 @@ describe("running the chunks one at a time through the retry plan (AC8b, AC8c)",
     expect(new Set(Object.values(state.outcomes).map((outcome) => outcome.seq)).size).toBe(4);
   });
 
-  test("chunk-pass.json is replaced whole, with no temp file left (R1-17)", async () => {
+  test("a successful merge leaves no temp file and no lock behind (R1-17, R2-28: pins the leftovers, not atomicity)", async () => {
     await planOf(2, 600, { maxFiles: 2 });
     await recordChunk(packageDir, "chunk-001", { status: "DONE" });
     await mergeChunkPass(packageDir);
     expect((await readdir(packageDir)).filter((entry) => entry.endsWith(".tmp"))).toEqual([]);
     expect(existsSync(path.join(packageDir, "chunk-state.lock"))).toBe(false);
+  });
+
+  test("an unknown severity loses to minor in either order, and a tie keeps the first finding (R2-30)", () => {
+    const at = (severity: string, title: string) => ({ file: "src/x.ts", line: 3, severity, title });
+    const merge = (first: string, second: string) =>
+      mergeFindings([
+        { chunk: "chunk-001", findings: [at(first, "first")] },
+        { chunk: "chunk-002", findings: [at(second, "second")] },
+      ])[0];
+    expect(merge("weird", "minor")?.severity).toBe("minor");
+    expect(merge("minor", "weird")?.severity).toBe("minor");
+    expect(merge("minor", "minor")?.title).toBe("first");
+    expect(merge("weird", "odd")?.title).toBe("first");
+  });
+
+  test("the same chunk merged twice is listed once (R2-30)", () => {
+    const merged = mergeFindings([
+      { chunk: "chunk-001", findings: [{ file: "src/x.ts", line: 3, severity: "minor", title: "a" }] },
+      { chunk: "chunk-001", findings: [{ file: "src/x.ts", line: 3, severity: "major", title: "b" }] },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ severity: "major", chunks: ["chunk-001"] });
+  });
+});
+
+describe("every writer of the chunk files waits for the chunk lock (R2-19)", () => {
+  async function planned(): Promise<void> {
+    const files = names(4);
+    await sizedFiles(files, 600);
+    await writeRadius(files.map((file) => drop(file)));
+    await ensureChunkPlan(packageDir, root, { maxFiles: 2 });
+    await recordChunkEstimate(packageDir, (await estimateChunkRun(packageDir, root))!, "interactive");
+  }
+
+  async function blockedWhile(start: () => Promise<unknown>, settled: () => Promise<boolean>): Promise<void> {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let acquired: () => void = () => {};
+    const inside = new Promise<void>((resolve) => (acquired = resolve));
+    const holder = withChunkStateLock(packageDir, async () => {
+      acquired();
+      await held;
+    });
+    await inside;
+    const writer = start();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(await settled()).toBe(false);
+    release();
+    await holder;
+    await writer;
+    expect(await settled()).toBe(true);
+  }
+
+  test("ensureChunkPlan", async () => {
+    const files = names(3);
+    await sizedFiles(files);
+    await writeRadius(files.map((file) => drop(file)));
+    await blockedWhile(() => ensureChunkPlan(packageDir, root), async () => existsSync(path.join(packageDir, CHUNKS_FILE)));
+  });
+
+  test("recordChunkEstimate", async () => {
+    await planned();
+    await rm(path.join(packageDir, "chunk-estimate.json"));
+    await blockedWhile(
+      async () => recordChunkEstimate(packageDir, (await estimateChunkRun(packageDir, root))!, "interactive"),
+      async () => existsSync(path.join(packageDir, "chunk-estimate.json")),
+    );
+  });
+
+  test("answerChunkEstimate", async () => {
+    await planned();
+    await blockedWhile(
+      () => answerChunkEstimate(packageDir, "yes", "go ahead"),
+      async () => JSON.parse(await readFile(path.join(packageDir, "chunk-estimate.json"), "utf8")).answer !== undefined,
+    );
+  });
+
+  test("mergeChunkPass", async () => {
+    await planned();
+    await blockedWhile(() => mergeChunkPass(packageDir), async () => existsSync(path.join(packageDir, CHUNK_PASS_FILE)));
+  });
+
+  test("nextChunk returns only after the holder lets go", async () => {
+    await planned();
+    let done = false;
+    await blockedWhile(
+      async () => {
+        await nextChunk(packageDir);
+        done = true;
+      },
+      async () => done,
+    );
+  });
+
+  test("the wait is long enough for a slow record on a large pass", () => {
+    expect(CHUNK_LOCK_WAIT_MS).toBeGreaterThanOrEqual(60_000);
   });
 });

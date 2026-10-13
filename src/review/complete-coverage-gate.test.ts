@@ -50,6 +50,21 @@ test("the only way past is the operator's own words, recorded with the time and 
   expect(await packageResearchErrors(pkg, artifacts, [])).toEqual([]);
 });
 
+test("R2-18: the quote has a boundary of 8 characters of the operator's own text, and needs letters or digits", async () => {
+  await expect(recordCoverageWaiver(pkg, "skip it")).rejects.toThrow("at least 8 characters");
+  await expect(recordCoverageWaiver(pkg, "--waive-coverage")).rejects.toThrow("operator's own words");
+  await expect(recordCoverageWaiver(pkg, "........")).rejects.toThrow("letters or digits");
+  await expect(recordCoverageWaiver(pkg, "--waive-coverage skip it")).rejects.toThrow("at least 8 characters");
+  expect(JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8")).dispatch.coverageWaiver).toBeUndefined();
+  expect((await recordCoverageWaiver(pkg, "skip it!"))?.operatorQuote).toBe("skip it!");
+});
+
+test("R2-17: what is recorded is the operator's text with the flag's own name taken out", async () => {
+  const waiver = await recordCoverageWaiver(pkg, "please waive coverage of the generated files");
+  expect(waiver?.operatorQuote).toBe("please  of the generated files");
+  expect(waiver?.operatorQuote).not.toMatch(/waive/i);
+});
+
 test("a waiver does not cover a file that became uncovered afterwards", async () => {
   await recordCoverageWaiver(pkg, "skip them");
   writeFileSync(
