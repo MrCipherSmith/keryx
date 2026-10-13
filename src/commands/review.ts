@@ -571,7 +571,7 @@ export interface ReviewCommandSeams {
   isTerminal?: () => boolean;
 }
 
-export async function reviewCommand(args: string[], seams: ReviewCommandSeams = {}): Promise<void> {
+export async function reviewCommand(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   const command = args[0];
   if (!command || command === "--help" || command === "-h") {
     printHelp();
@@ -3864,7 +3864,7 @@ function reportFilterStatsProblems(stats: unknown, where: string): void {
   process.exitCode = 1;
 }
 
-async function runComplete(args: string[], seams: ReviewCommandSeams = {}): Promise<void> {
+async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
   const ref = args[0];
   if (!ref) {
@@ -3877,7 +3877,7 @@ async function runComplete(args: string[], seams: ReviewCommandSeams = {}): Prom
   }
   // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
   // statement, so a person has to be at the terminal that carries it.
-  const isTerminal = seams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (waiver !== undefined && !isTerminal()) {
     throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
   }
