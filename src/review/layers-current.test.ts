@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { LAYERS_VERSION, layersCurrent, packageGraphDir, type LayersFile } from "./layers";
+import { LAYERS_VERSION, layersCurrent, packageGraphDir, resolveCommit, type LayersFile } from "./layers";
 
 const HEAD = "a".repeat(40);
 const OTHER = "b".repeat(40);
@@ -77,5 +77,25 @@ describe("layersCurrent decides whether a recorded graph can be reused", () => {
   test("a recorded graph whose directory is gone is not current", async () => {
     expect(await layersCurrent(dir, layers())).toBe(false);
     expect(await layersCurrent(dir, layers({ graphCommit: null }))).toBe(false);
+  });
+});
+
+describe("resolveCommit accepts only a full commit id from git", () => {
+  const gitSays = (out: string | null) => ({ git: async () => out });
+
+  test("returns a full sha-1 or sha-256 id and nothing else git might print", async () => {
+    expect(await resolveCommit(dir, "main", gitSays(HEAD))).toBe(HEAD);
+    expect(await resolveCommit(dir, "main", gitSays("c".repeat(64)))).toBe("c".repeat(64));
+    expect(await resolveCommit(dir, "main", gitSays("abc123"))).toBeNull();
+    expect(await resolveCommit(dir, "main", gitSays("fatal: not a revision"))).toBeNull();
+    expect(await resolveCommit(dir, "main", gitSays(""))).toBeNull();
+    expect(await resolveCommit(dir, "main", gitSays(null))).toBeNull();
+  });
+
+  test("a revision that looks like an option never reaches git", async () => {
+    let called = false;
+    const deps = { git: async () => { called = true; return HEAD; } };
+    expect(await resolveCommit(dir, "--upload-pack=x", deps)).toBeNull();
+    expect(called).toBe(false);
   });
 });

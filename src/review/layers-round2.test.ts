@@ -248,6 +248,33 @@ describe("a killed refresh leaves nothing behind (R2-08)", () => {
       await rm(fresh, { recursive: true, force: true });
     }
   });
+
+  test("the sweep leaves an old worktree alone unless it is a keryx checkout directly under the temp directory", async () => {
+    const temp = await realpath(tmpdir());
+    const foreign = await mkdtemp(path.join(temp, "someone-elses-"));
+    const holder = await mkdtemp(path.join(temp, "keryx-layers-holder-"));
+    const nested = path.join(holder, "keryx-layers-nested");
+    try {
+      await rm(foreign, { recursive: true, force: true });
+      git(fixture.root, ["worktree", "add", "--detach", foreign, fixture.second]);
+      git(fixture.root, ["worktree", "add", "--detach", nested, fixture.second]);
+      const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+      await utimes(foreign, longAgo, longAgo);
+      await utimes(nested, longAgo, longAgo);
+
+      await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir });
+
+      expect(existsSync(foreign)).toBe(true);
+      expect(registered()).toContain(foreign);
+      expect(existsSync(nested)).toBe(true);
+      expect(registered()).toContain(nested);
+    } finally {
+      git(fixture.root, ["worktree", "remove", "--force", foreign]);
+      git(fixture.root, ["worktree", "remove", "--force", nested]);
+      await rm(foreign, { recursive: true, force: true });
+      await rm(holder, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("shell-quoted package directories in hints (R2-13)", () => {

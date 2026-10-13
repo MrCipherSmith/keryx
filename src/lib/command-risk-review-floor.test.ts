@@ -34,6 +34,7 @@ describe("coverage waiver floor is decided on parsed words (R2-05)", () => {
     ["line continuation inside the flag", "keryx review complete p --waive-c\\\noverage x"],
     ["line continuation, CRLF", "keryx review complete p --waive-c\\\r\noverage x"],
     ["nested seven bash -c deep", deepBashC(`keryx review complete p --waive-""coverage "quote quote"`, 7)],
+    ["backtick substitution that holds no flag text", "keryx review complete p `printf %s zzz` x"],
     ["upper case", "KERYX REVIEW COMPLETE p --WAIVE-COVERAGE x"],
   ];
   for (const [name, command] of spellings) {
@@ -68,6 +69,9 @@ describe("chunk estimate answer floor (R2-16)", () => {
       `bash -c "keryx review chunks estimate $'\\\\x2d\\\\x2danswer' 5"`,
       "keryx review chunks estimate --ans\\\nwer 5",
       deepBashC("keryx review chunks estimate --ans''wer yes", 7),
+      "keryx review chunks --answer yes $'est\\x69mate'",
+      "keryx review chunks $'estimate' $'\\x2d\\x2danswer' 5",
+      "bash -c 'keryx review chunks --answer yes estimate'",
     ]) {
       expect(touchesChunkEstimateAnswer(command)).toBe(true);
       expect(touchesHumanConfirmation(command)).toBe(true);
@@ -81,6 +85,8 @@ describe("chunk estimate answer floor (R2-16)", () => {
       "keryx review chunks next --package p --answer yes",
       "keryx review chunks plan --package p",
       "echo --answer yes",
+      "keryx review chunks estimate --package p; echo --answer yes",
+      "keryx review chunks estimate --package p && echo --answer yes",
     ]) {
       expect(touchesChunkEstimateAnswer(command)).toBe(false);
     }
