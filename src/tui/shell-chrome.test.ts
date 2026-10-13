@@ -35,8 +35,9 @@ import {
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 import * as themeModule from "./theme";
 import { paintRendererBackground, selectThemeColors, themeColorToHex } from "./shell-chrome";
-import { appendUserEcho, createBlockView, createSegmentView } from "./transcript-blocks";
+import { appendUserEcho, createAssistantMessageStream, createBlockView, createBlockMount, createBlockRegistry, createSegmentView } from "./transcript-blocks";
 import * as shellChromeModule from "./shell-chrome";
+import { createShellRenderer } from "./shell-chrome";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -182,6 +183,94 @@ async function mountChrome(
   };
 }
 
+otuiTest("flow 413: trimming preserves a retained viewport anchor", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  try {
+    for (let i = 0; i < 256; i++) {
+      h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, {
+        id: `anchor-${i}`, content: `row ${i}`, flexShrink: 0,
+      }));
+    }
+    await h.flush();
+    h.chrome.scroll.stickyScroll = false;
+    h.chrome.scroll.scrollTop = 100;
+    await h.flush();
+    const anchor = h.chrome.transcript.getChildren().find(n => n.id === "anchor-110")!;
+    const y = anchor.y;
+    for (let i = 256; i < 266; i++) {
+      h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, {
+        id: `anchor-${i}`, content: `row ${i}`, flexShrink: 0,
+      }));
+    }
+    await h.flush();
+    await h.flush();
+    expect(anchor.isDestroyed).toBe(false);
+    expect(anchor.y).toBe(y);
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: expanded historical blocks are bounded too", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  try {
+    const registry = createBlockRegistry();
+    const mount = createBlockMount(otui.core, h.renderer, h.chrome.transcript, registry);
+    for (let i = 0; i < 600; i++) {
+      mount.add({ kind: "output", summary: `block ${i}`, fullText: "body", lineCount: 1 }, { startExpanded: true });
+    }
+    expect(h.chrome.transcript.getChildren().length).toBeLessThanOrEqual(257);
+    expect(registry.list().length).toBeLessThanOrEqual(256);
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: reset and empty finalize destroy streamed containers", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  try {
+    const stream = createAssistantMessageStream(otui.core, h.renderer, h.chrome.transcript);
+    for (const finish of [() => stream.reset(), () => stream.finalize("")]) {
+      stream.push("partial");
+      const node = h.chrome.transcript.getChildren().at(-1)!;
+      finish();
+      expect(node.isDestroyed).toBe(true);
+      expect(h.chrome.transcript.getChildren()).not.toContain(node);
+    }
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: trim anchor does not undo intervening user scroll", async () => {
+  const otui = requireOtui(); const h = await mountChrome(otui);
+  try {
+    for (let i = 0; i < 256; i++) {
+      h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, {
+        id: `scroll-${i}`, content: `row ${i}`, flexShrink: 0,
+      }));
+    }
+    await h.flush(); h.chrome.scroll.stickyScroll = false;
+    h.chrome.scroll.scrollTop = 100; await h.flush();
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { id: "scroll-new", content: "new", flexShrink: 0 }));
+    h.chrome.scroll.scrollTop = 150; await h.flush(); await h.flush();
+    expect(h.chrome.scroll.scrollTop).toBe(150);
+  } finally { h.destroy(); }
+});
+otuiTest("flow 413: completed transcript history plateaus and typing stays live", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  try {
+    let first: InstanceType<OtuiBundle["core"]["TextRenderable"]> | undefined;
+    for (let i = 0; i < 4000; i++) {
+      const node = new otui.core.TextRenderable(h.renderer, { id: `bounded-${i}`, content: `history ${i}` });
+      first ??= node;
+      h.chrome.transcript.add(node);
+      if ([100, 500, 1000, 2000, 4000].includes(i + 1)) {
+        expect(h.chrome.transcript.getChildren().length).toBeLessThanOrEqual(257);
+      }
+    }
+    expect(first?.isDestroyed).toBe(true);
+    await h.mockInput.pressKeys(["a", "b"]);
+    await h.flush();
+    expect(h.chrome.input.value).toBe("ab");
+    expect(h.captureCharFrame()).toContain("ab");
+  } finally {
+    h.destroy();
+  }
+});
 otuiTest("AC1: mounting the chrome renders header, transcript, composer and footer, with the composer focused", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
@@ -535,8 +624,9 @@ otuiTest("AC3: `/` opens the menu, printable keys filter it, Esc closes it and r
   expect(h.chrome.input.value).toBe("/h");
   const filtered = h.captureCharFrame();
   expect(filtered).toContain("/help");
+  expect(filtered).toContain("/history");
   expect(filtered).not.toContain("/model"); // filtered out by the `h` prefix
-  expect(h.chrome.menu.options.length).toBe(1);
+  expect(h.chrome.menu.options.length).toBe(2); // /help and /history
   expect(h.chrome.menu.visible).toBe(true);
 
   // Backspace widens the filter again.
@@ -1389,4 +1479,56 @@ test("the shell renderer paints the theme background at creation, not only on a 
   // and clears every frame with it, so a fresh start shows the terminal's own
   // background behind the transcript until a `/theme` switch repaints it.
   expect(body).toContain("paintRendererBackground(renderer, getTheme());");
+});
+
+// AC6 (flow 418): Ctrl+C is the caller's to interpret, not an unconditional exit.
+function fakeRendererOtui() {
+  const handlers = new Set<(key: unknown) => void>();
+  const seen: { config?: Record<string, unknown> } = {};
+  const renderer = {
+    isDestroyed: false,
+    setBackgroundColor() {},
+    _internalKeyInput: {
+      onInternal: (_e: string, h: (key: unknown) => void) => void handlers.add(h),
+      offInternal: (_e: string, h: (key: unknown) => void) => void handlers.delete(h),
+    },
+  };
+  const otui = {
+    createCliRenderer: async (config: Record<string, unknown>) => {
+      seen.config = config;
+      return renderer;
+    },
+  } as unknown as Parameters<typeof createShellRenderer>[0];
+  const press = (key: { name: string; ctrl: boolean }) => {
+    const calls = { prevented: 0, stopped: 0 };
+    for (const h of [...handlers]) h({ ...key, meta: false, sequence: "", preventDefault: () => calls.prevented++, stopPropagation: () => calls.stopped++ });
+    return calls;
+  };
+  return { otui, seen, press, handlers };
+}
+
+test("createShellRenderer without onCtrlC keeps OpenTUI's exit-on-Ctrl+C", async () => {
+  const f = fakeRendererOtui();
+  await createShellRenderer(f.otui);
+  expect(f.seen.config?.exitOnCtrlC).toBe(true);
+  (f.seen.config?.onDestroy as () => void)();
+});
+
+test("createShellRenderer with onCtrlC turns exit-on-Ctrl+C off and routes only Ctrl+C to the caller", async () => {
+  const f = fakeRendererOtui();
+  let presses = 0;
+  await createShellRenderer(f.otui, { onCtrlC: () => void presses++ });
+  expect(f.seen.config?.exitOnCtrlC).toBe(false);
+
+  const calls = f.press({ name: "c", ctrl: true });
+  expect(presses).toBe(1);
+  expect(calls).toEqual({ prevented: 1, stopped: 1 });
+
+  f.press({ name: "c", ctrl: false });
+  f.press({ name: "d", ctrl: true });
+  expect(presses).toBe(1);
+
+  (f.seen.config?.onDestroy as () => void)();
+  f.press({ name: "c", ctrl: true });
+  expect(presses).toBe(1);
 });

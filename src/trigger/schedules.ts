@@ -39,6 +39,8 @@ import {
   type ScheduleHost,
 } from "./install";
 import { latestRunByTrigger, readTriggerRuns, type TriggerRunRecord } from "./record";
+import { anchorDigest, markDigestResumed } from "./digest-state";
+import { REVIEW_STALL_MINUTES_DEFAULT } from "./review-config";
 import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, triggerReportsDir } from "./store";
 import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
 import { pinGrantedBinary, resolvesInsideProject, type BinaryPin } from "./granted-binary";
@@ -87,6 +89,12 @@ export interface ScheduleRequest {
    * (no OS timer). `prompt` is unused by a digest and may be empty.
    */
   readonly digest?: { readonly topic?: string; readonly memoryLimitMb?: number };
+  /**
+   * Flow 424: make this schedule an autonomous review of one pull request. The entry carries
+   * `action.review`, grants no tools, and the OS timer runs `keryx trigger run`, which starts
+   * `keryx review run --autonomous` for the pull request. `prompt` is unused and may be empty.
+   */
+  readonly review?: { readonly ref: string; readonly budgetMinutes?: number; readonly budgetTokens?: number; readonly stallMinutes?: number };
 }
 
 export interface DraftContext {
@@ -182,6 +190,11 @@ function defaultAccountOf(): (program: string, bin: string) => Promise<string | 
   };
 }
 
+/** A review runs in the review-autonomous profile (trust, inside the OS sandbox); other schedules default to read-only. */
+function scheduleMode(request: ScheduleRequest): "ask" | "trust" {
+  return request.permissionMode ?? (request.review !== undefined ? "trust" : "ask");
+}
+
 /** Build a draft. Writes nothing and installs nothing. */
 export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext): Promise<DraftResult> {
   const cadence = parseCadence(request.cadence);
@@ -247,11 +260,18 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   }
   const action: Record<string, unknown> = {
     kind: "agent-task",
-    prompt: request.prompt.trim().length > 0 ? request.prompt : isDigest ? "Scheduled GitHub and board digest" : request.prompt,
+    prompt:
+      request.prompt.trim().length > 0
+        ? request.prompt
+        : isDigest
+          ? "Scheduled GitHub and board digest"
+          : request.review !== undefined
+            ? `Scheduled autonomous review of ${request.review.ref}`
+            : request.prompt,
     dispatch: {
       provider: request.provider,
       model: request.model,
-      permissionMode: request.permissionMode ?? "ask",
+      permissionMode: scheduleMode(request),
       rates: { inputUsdPerMTok: request.rates.inputUsdPerMTok, outputUsdPerMTok: request.rates.outputUsdPerMTok },
       ceilingUsd: request.ceilingUsd,
       ...(request.maxSeconds !== undefined ? { maxSeconds: request.maxSeconds } : {}),
@@ -271,6 +291,16 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
           digest: {
             topic: request.digest.topic ?? DIGEST_DEFAULT_TOPIC,
             memoryLimitMb: request.digest.memoryLimitMb ?? DIGEST_DEFAULT_MEMORY_MB,
+          },
+        }
+      : {}),
+    ...(request.review !== undefined
+      ? {
+          review: {
+            ref: request.review.ref.trim(),
+            ...(request.review.budgetMinutes !== undefined ? { budgetMinutes: request.review.budgetMinutes } : {}),
+            ...(request.review.budgetTokens !== undefined ? { budgetTokens: request.review.budgetTokens } : {}),
+            stallMinutes: request.review.stallMinutes ?? REVIEW_STALL_MINUTES_DEFAULT,
           },
         }
       : {}),
@@ -339,8 +369,10 @@ function renderCard(input: {
     `next runs: ${input.nextRuns.map((d) => d.toISOString()).join(", ") || "none within a year"}`,
     digest !== undefined
       ? `digest: GitHub (read-only) and the product board for ${input.repos.join(", ")}; delivered to this project's remote session topic, or the "${digest.topic ?? DIGEST_DEFAULT_TOPIC}" topic when it has none; memory limit ${digest.memoryLimitMb ?? DIGEST_DEFAULT_MEMORY_MB} MiB`
-      : `prompt: ${request.prompt}`,
-    `runner: ${request.provider}/${request.model}, mode ${request.permissionMode ?? "ask"}${(request.permissionMode ?? "ask") === "trust" ? " (the agent can run shell commands in the sandbox)" : " (read-only: every command is denied)"}`,
+      : request.review !== undefined
+        ? `review: autonomous review (profile review-autonomous) of ${request.review.ref}, nobody at the keyboard — questions are answered by the safe default and journaled; stops at ${request.review.budgetMinutes ?? "no"} min / ${request.review.budgetTokens ?? "no"} tokens and after ${request.review.stallMinutes ?? REVIEW_STALL_MINUTES_DEFAULT} min without progress; reviews the source only (no browser checks); trusts the OS sandbox`
+        : `prompt: ${request.prompt}`,
+    `runner: ${request.provider}/${request.model}, mode ${scheduleMode(request)}${scheduleMode(request) === "trust" ? " (the agent can run shell commands in the sandbox)" : " (read-only: every command is denied)"}`,
     `budget: ceiling $${request.ceilingUsd} for this schedule (the project-wide ceiling also applies), max ${request.maxSeconds ?? 600}s per run, rates $${request.rates.inputUsdPerMTok}/$${request.rates.outputUsdPerMTok} per M tokens in/out`,
     `network: ${
       network === "full"
@@ -402,6 +434,8 @@ export async function confirmSchedule(projectRoot: string, draft: ScheduleDraft,
   const stored = await addConfirmedSchedule(projectRoot, draft.entry);
   // Flow 389: a digest is fired by `keryx serve`, so no OS timer is installed for it.
   if ((draft.entry["action"] as { digest?: unknown } | undefined)?.digest !== undefined) {
+    // Anchored at creation: a cron time that passes before serve first ticks is a missed slot, not a skipped one.
+    await anchorDigest(projectRoot, stored.name, new Date());
     return { name: stored.name, backend: "serve", unit: "keryx serve", confirmedHash: stored.confirmedHash };
   }
   try {
@@ -511,6 +545,7 @@ export async function resumeStoredSchedule(projectRoot: string, name: string, ho
     throw new Error(`resume refused: schedule "${name}" has no confirmed runner recorded — remove it and create it again`);
   }
   if (entry.action.digest === undefined) await resumeSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+  else await markDigestResumed(projectRoot, name);
   await setScheduleEnabled(projectRoot, name, true);
 }
 

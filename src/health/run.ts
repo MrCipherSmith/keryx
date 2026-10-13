@@ -5,7 +5,12 @@ import { collectGitProvenance } from "../metrics/provenance";
 import { loadHealthConfig } from "./config";
 import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
-import { loadBaseline, writeBaseline } from "./baseline";
+import {
+  loadBaseline,
+  loadBaselineSources,
+  scoredSources,
+  writeBaseline,
+} from "./baseline";
 import { getChurn } from "./metrics/churn";
 import { rankHotspots } from "./metrics/hotspot";
 import { readWikiFreshnessMetric } from "./metrics/wiki-freshness";
@@ -16,6 +21,7 @@ import { loadSkillOwnership } from "./skills";
 import { analyzeSourceFiles } from "./source-analysis";
 import { FINDING_ADAPTERS, NoImportError } from "./sources";
 import { makeFinding } from "./sources/helpers";
+import { OXLINT_NO_FILES, OXLINT_PARSE_ERROR, oxlintMissingReason } from "./sources/oxlint";
 import {
   commandExists,
   dataRoot,
@@ -95,7 +101,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     FINDING_ADAPTERS.map((adapter) => {
       const cfg = config.sources[adapter.id] ?? { mode: "auto", required: false };
       if (filter && !filter.has(adapter.id)) {
-        return filteredOutcome(adapter.id, cfg);
+        return filteredOutcome(adapter, cfg);
       }
       return runAdapter(adapter, ctx, cfg, stamp);
     }),
@@ -165,6 +171,18 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
 
   const churn = await getChurn(cwd, config.metrics.churnWindowDays);
   const baseline = await loadBaseline(cwd);
+  // A source measured now that the baseline never measured (e.g. oxlint, new
+  // in this release, on a project that already named it) contributes new
+  // MEASUREMENT, not new defects: its findings are kept out of the regression
+  // comparison instead of reading as a drop in unchanged code, and the gate
+  // says so until an operator re-baselines. The run never rewrites the
+  // baseline itself. The recorded set names what shaped the scores (see
+  // `scoredSources`).
+  const measured = scoredSources(sourceInfos, coverage.total !== null || coverage.byFile.size > 0);
+  const baselineSources = await loadBaselineSources(cwd);
+  const newSources = new Set(
+    baselineSources === null ? [] : measured.filter((s) => !baselineSources.has(s)),
+  );
   const metrics = await computeMetrics({
     cwd,
     config,
@@ -173,6 +191,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     coverage,
     churn,
     baseline,
+    newSources,
     ownership,
     scopeSelector: selector,
     sourceAnalysis,
@@ -184,6 +203,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     sources: sourceInfos,
     config,
     strict,
+    newSources: [...newSources],
   });
 
   // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
@@ -207,6 +227,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     findings,
     hotspots,
     wikiFreshness,
+    scoredSources: measured,
     ...(input.runId
       ? {
           runId: input.runId,
@@ -217,9 +238,11 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
 
   const paths = await writeOutputs(cwd, report, config, stamp);
 
-  // Accept-current baseline on the first run (none exists yet).
+  // Accept-current baseline on the first run (none exists yet), recording
+  // which sources it measured. After that, only `health baseline update`
+  // writes it.
   if (baseline.size === 0) {
-    await writeBaseline(cwd, metrics, report.generatedAt);
+    await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);
   }
 
   return { report, markdownPath: paths.markdownPath, jsonPath: paths.jsonPath };
@@ -272,9 +295,20 @@ function errorCodeSuffix(error: unknown): string {
  * has not been written for yet, so its report line falls back to naming
  * only the source — unchanged from before this flow.
  */
-function missingSourceReason(sourceId: string): string | undefined {
+function missingSourceReason(sourceId: string, cwd: string): string | undefined {
   if (sourceId === "tests") {
     return "no `bun` binary found (checked node_modules/.bin and PATH)";
+  }
+  if (sourceId === "eslint") {
+    return "eslint config found, binary not found (node_modules/.bin/eslint and PATH)";
+  }
+  if (sourceId === "oxlint") {
+    // Two intent signals, two sentences: naming a config file the tree does
+    // not have is the false-claim defect the `skipped` rule below closes.
+    return oxlintMissingReason(cwd);
+  }
+  if (sourceId === "typescript") {
+    return "tsconfig.json found, binary not found (node_modules/.bin/tsc and PATH)";
   }
   return undefined;
 }
@@ -297,6 +331,8 @@ function missingSourceReason(sourceId: string): string | undefined {
 const KNOWN_VALIDATION_ERRORS = new Set<string>([
   "ESLint JSON format was not recognized",
   "ESLint JSON parse failed",
+  OXLINT_PARSE_ERROR,
+  OXLINT_NO_FILES,
   "dependency audit JSON contains an invalid or unsupported entry",
   "dependency audit JSON parse failed",
   "dependency audit JSON format was not recognized",
@@ -326,6 +362,7 @@ export async function runAdapter(
 ): Promise<{ info: SourceRunInfo; findings: Finding[] }> {
   const base = {
     source: adapter.id,
+    ...(adapter.capability !== undefined ? { capability: adapter.capability } : {}),
     mode: cfg.mode,
     required: cfg.required,
     imported: false,
@@ -363,7 +400,13 @@ export async function runAdapter(
     // which is for a `detect()` that THREW, a different failure) is read
     // by `gate.ts` the same way it already reads it for a required source
     // (line ~85 there).
-    const reason = missingSourceReason(adapter.id);
+    // The reason describes a FAILED LOOKUP (config present, binary absent), so
+    // it is attached to `missing` ONLY. Attaching it to `skipped` too -- which
+    // an earlier draft of this did, because both statuses return from the same
+    // line -- put the sentence "eslint config found" into the artifact of a
+    // project that has no eslint config at all, i.e. replaced a silent absence
+    // with a false claim about the tree.
+    const reason = status === "missing" ? missingSourceReason(adapter.id, ctx.cwd) : undefined;
     return { info: { ...base, status, ...(reason !== undefined ? { error: reason } : {}) }, findings: [] };
   }
 
@@ -477,15 +520,23 @@ export async function runAdapter(
 }
 
 function filteredOutcome(
-  source: SourceRunInfo["source"],
+  adapter: SourceAdapter,
   cfg: SourceConfig,
 ): { info: SourceRunInfo; findings: Finding[] } {
-  return { info: filteredInfo(source, cfg), findings: [] };
+  // Same capability runAdapter records, so a report says the same thing about
+  // a source whether or not a filter was used. `filtered` is what keeps a
+  // filtered-out linter from being excused by a sibling (gate.ts).
+  const info = filteredInfo(adapter.id, cfg);
+  return {
+    info: adapter.capability !== undefined ? { ...info, capability: adapter.capability } : info,
+    findings: [],
+  };
 }
 
 function filteredInfo(source: string, cfg: SourceConfig): SourceRunInfo {
   return {
     source,
+    filtered: true,
     status: "skipped",
     mode: cfg.mode,
     required: cfg.required,

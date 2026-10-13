@@ -13,7 +13,7 @@ describe("commands the shell defers while busy (AC9)", () => {
     }
   });
 
-  for (const line of ["/new", "/resume", "/sessions", "/compact", "/model"]) {
+  for (const line of ["/new", "/resume", "/sessions", "/compact"]) {
     it(`${line} is refused with the shell's reason while a turn runs`, async () => {
       const h = commandHarness({ busy: true });
       await h.bridge.enable();

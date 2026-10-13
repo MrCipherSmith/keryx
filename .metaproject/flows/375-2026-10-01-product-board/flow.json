@@ -21,7 +21,7 @@
     "url": null
   },
   "owner": {
-    "value": "altsay",
+    "value": "operator",
     "basis": "stated",
     "source": "`--owner` flag on `flow init`"
   },

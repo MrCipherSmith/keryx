@@ -49,7 +49,7 @@ import {
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { withFileLock } from "../../lib/fs";
 import { loadShellConfig, shellConfigPath } from "../../lib/shell-config";
-import { MODEL_RANK_HINTS, rankModelId } from "../../gdskills/model-tier";
+import { MODEL_RANK_HINTS, TIER_RANK_HINTS, pinHintsFor, rankModelId, type ModelRankHint } from "../../gdskills/model-tier";
 import type { AvailablePredicate } from "./table";
 
 // ---------------------------------------------------------------------------
@@ -194,6 +194,30 @@ export function guessStrengthTier(modelId: string): { readonly value: StrengthTi
   if (rank < 0) return { value: "light", source: "guessed" };
   if (rank > 0) return { value: "deep", source: "guessed" };
   return { value: "standard", source: "guessed" };
+}
+
+/**
+ * Rank hints for tier resolution: the built-in size words and pins, then an exact
+ * pin for every model of `providerId` whose strength tier the operator set with
+ * `keryx routing profile set --tier`. Operator pins come last, so they win.
+ */
+export function rankHintsWithOperatorTiers(
+  providerId: string,
+  profiles: Readonly<Record<string, ModelProfile>>,
+): readonly ModelRankHint[] {
+  const pins = Object.values(profiles)
+    .filter((p) => p.providerId === providerId && p.strengthTier.source === "operator")
+    .map((p) => ({ modelId: p.modelId, tier: p.strengthTier.value }));
+  return pins.length === 0 ? TIER_RANK_HINTS : [...TIER_RANK_HINTS, ...pinHintsFor(pins)];
+}
+
+/** {@link rankHintsWithOperatorTiers} over the stored profiles; an unreadable store means no pins. */
+export function loadRankHints(providerId: string, dir?: string): readonly ModelRankHint[] {
+  try {
+    return rankHintsWithOperatorTiers(providerId, loadModelProfiles(dir));
+  } catch {
+    return TIER_RANK_HINTS;
+  }
 }
 
 /**

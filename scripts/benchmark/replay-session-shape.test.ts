@@ -3,10 +3,16 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  BOUNDED_PEAK_LIMIT,
+  BOUNDED_TOTAL_LIMIT,
+  FLOW_394_REPLAY_TOTAL,
   REPLAY_WINDOW,
+  formatBounded,
   formatComparison,
   generateSession,
+  runBoundedReplay,
   runReplay,
+  type BoundedComparison,
   type ReplayComparison,
 } from "./replay-session-shape";
 
@@ -75,5 +81,40 @@ describe("AC9: replay of the 2026-10-01 session shape", () => {
   test("total estimated input is at least 50% lower than main before this flow", async () => {
     const { before, after } = await replay();
     expect(after.totalEstimate).toBeLessThanOrEqual(before.totalEstimate * 0.5);
+  });
+});
+
+let boundedRun: Promise<BoundedComparison> | undefined;
+function bounded(): Promise<BoundedComparison> {
+  boundedRun ??= runBoundedReplay();
+  return boundedRun;
+}
+
+describe("flow 393 AC3: replay of the bounded request", () => {
+  test("the flow 394 baseline is still what the AC measured against", async () => {
+    const { flow394 } = await bounded();
+    expect(flow394.totalEstimate).toBe(FLOW_394_REPLAY_TOTAL);
+    expect(flow394.peakEstimate).toBe(96_783);
+  });
+
+  test("prints the numbers", async () => {
+    console.log(formatBounded(await bounded()));
+  });
+
+  test("peak per-request input is at most 64,000 estimated tokens", async () => {
+    const { bounded: b } = await bounded();
+    expect(b.peakEstimate).toBeLessThanOrEqual(BOUNDED_PEAK_LIMIT);
+  });
+
+  test("total estimated input is at least 25% below flow 394", async () => {
+    const { bounded: b } = await bounded();
+    expect(b.totalEstimate).toBeLessThanOrEqual(BOUNDED_TOTAL_LIMIT);
+  });
+
+  test("it got there by rewriting the request in batches, not by compacting", async () => {
+    const { bounded: b } = await bounded();
+    expect(b.rewrites).toBeGreaterThan(0);
+    expect(b.rewrites).toBeLessThan(b.requests / 2); // batches, not one rewrite per round
+    expect(b.compactions).toBe(0);
   });
 });

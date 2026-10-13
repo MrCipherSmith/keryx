@@ -29,6 +29,11 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+import { auditPackage } from "../review/severity-audit";
+import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
+import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
+import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -38,7 +43,10 @@ import { printImportHelp, runImportReviewers } from "../review/import-reviewers"
 // any of them.
 import { runJevRules } from "./review-jev-rules";
 import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
+import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
+import { printLedgerHelp, runLedger } from "./review-ledger";
+import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
 import { runJevComments, readCommentAdvisoryLabels } from "./review-jev-comments";
@@ -58,6 +66,7 @@ import { runJevEditGuard } from "./review-jev-edit-guard";
 // registration.
 import { runJevSelect } from "./review-jev-select";
 import { runJevProfile } from "./review-jev-profile";
+import { AUTOMATIC_REVIEW_FLAG } from "./automatic-review";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -105,6 +114,7 @@ import {
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
+import { withLiveCodexModels } from "./live-codex-models";
 import { detectProviders } from "./select";
 import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
 import { envWithSavedApiKeys } from "../lib/shell-config";
@@ -143,7 +153,7 @@ import {
 } from "../review/pr-comments";
 import {
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
-  DEFAULT_MAX_PARALLEL_REVIEWERS,
+  MAX_REVIEWERS_PER_WAVE_FULL,
   DEFAULT_SPEND_CEILING_USD,
   evaluateSpendCap,
   planReviewerWaves,
@@ -266,7 +276,7 @@ import { runModelTurn } from "../harness/provider/single-turn";
  * A misspelling here is always a mistake: there is no case where a review
  * command should do LESS than the operator asked and say nothing.
  */
-const CREATE_FLAGS = [
+export const CREATE_FLAGS = [
   "--target",
   "--ref",
   "--target-ref",
@@ -276,6 +286,7 @@ const CREATE_FLAGS = [
   "--reviewers",
   "--report",
   "--verifications",
+  "--research",
   "--verification-mode",
   "--scope",
   "--blast-radius",
@@ -292,9 +303,10 @@ const CREATE_FLAGS = [
   "--tokens-out",
   "--parallel",
   "--outstanding",
+  AUTOMATIC_REVIEW_FLAG,
 ] as const;
 
-const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
+const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
 
 export const COMMENTS_COLLECT_FLAGS = [
   "--repo",
@@ -495,6 +507,11 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
+const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
+const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
+const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -568,6 +585,22 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runFloor(args.slice(1));
       return;
     }
+    if (command === "slice") {
+      await runSlice(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "dispatch-check") {
+      await runDispatchCheck(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "retry-plan") {
+      await runRetryPlan(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "ledger") {
+      await runLedger(args.slice(1), SLICE_DEPS);
+      return;
+    }
     if (command === "blast-radius") {
       await runBlastRadius(args.slice(1));
       return;
@@ -605,6 +638,11 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "metrics") {
       await runReviewMetricsCommand(args.slice(1));
+      return;
+    }
+    // flow 424: one unattended review of a pull request (the review-autonomous profile).
+    if (command === "run") {
+      await runReviewRun(args.slice(1));
       return;
     }
     // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
@@ -676,6 +714,26 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runReviewers(args.slice(1));
       return;
     }
+    if (command === "required") {
+      await runRequired(args.slice(1));
+      return;
+    }
+    if (command === "mutate") {
+      await runMutate(args.slice(1));
+      return;
+    }
+    if (command === "context-collect") {
+    await runContextCollect(args.slice(1));
+    return;
+  }
+  if (command === "severity-audit") {
+      await runSeverityAudit(args.slice(1));
+      return;
+    }
+    if (command === "compare-reference") {
+      await runCompareReference(args.slice(1));
+      return;
+    }
     if (command === "import") {
       rejectUnknownFlags(args.slice(1), IMPORT_FLAGS, "import");
       await runImportReviewers(args.slice(1));
@@ -718,10 +776,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
+    ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
     verifications: await readVerifications(optionValue(args, "--verifications")),
+    research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
     blastRadius: await readBlastRadiusRecord(optionValue(args, "--blast-radius")),
@@ -747,6 +807,9 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  if (result.manifest.automatic === true) {
+    console.log("run mode: automatic review");
+  }
   // Printed on every run, and printed as an absence when it is one: the review
   // completion gate compares this against the pull request's head, and a round
   // that recorded none fails that comparison as `unobserved`. An operator who
@@ -1001,9 +1064,11 @@ async function runBudget(args: string[]): Promise<void> {
       ?.split(",")
       .map((item) => item.trim())
       .filter(Boolean) ?? [];
+  if (args.some((arg) => arg.startsWith("--full="))) throw new Error("`--full` takes no value.");
   const plan = planReviewerWaves(reviewers, {
     cap: parseNonNegativeInteger(optionValue(args, "--parallel"), "--parallel"),
     outstanding: parseNonNegativeInteger(optionValue(args, "--outstanding"), "--outstanding"),
+    full: args.includes("--full"),
   });
 
   console.log("# review budget");
@@ -1025,7 +1090,7 @@ async function runBudget(args: string[]): Promise<void> {
   console.log(`holds_across_nesting: ${plan.holdsAcrossNesting ? "yes (against the declared count)" : "no"}`);
   if (!plan.holdsAcrossNesting) {
     console.log(
-      "  The cap bounds THIS plan only. Nothing declared what job-orchestrator or flow-orchestrator already had in flight, and keryx cannot observe it. Pass --outstanding <n> to make the cap mean something across the nesting.",
+      "  The cap bounds THIS plan only. Nothing declared how many subagents the main session still has running, and keryx cannot observe them. Pass --outstanding <n> to count them against the cap.",
     );
   }
   plan.waves.forEach((wave, index) => {
@@ -1361,7 +1426,7 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
   if (session.providerId === "" || session.modelId === "") {
     return [];
   }
-  return await detectProviders({ fetch, env: envWithSavedApiKeys() });
+  return await withLiveCodexModels(await detectProviders({ fetch, env: envWithSavedApiKeys() }));
 }
 
 /**
@@ -2889,6 +2954,107 @@ export async function runReviewers(args: string[], deps: CollectReviewersDeps = 
   }
 }
 
+async function runRequired(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, REQUIRED_FLAGS, "required");
+  const mode = optionValue(args, "--mode") ?? "all";
+  if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff"');
+  const scope = await readScope(optionValue(args, "--scope"));
+  if (mode === "diff" && (optionValue(args, "--operator-quote") ?? "").trim() === "")
+    throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
+  if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
+  const radiusFile = optionValue(args, "--blast-radius");
+  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
+    blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
+  });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(set, null, 2));
+    return;
+  }
+  console.log(`mode: ${set.mode}${set.filesKnown ? "" : " (no scope file list: path-gated reviewers stay required)"}`);
+  console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
+  for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+}
+
+async function runCompareReference(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, COMPARE_REFERENCE_FLAGS, "compare-reference");
+  const reference = optionValue(args, "--reference");
+  const packageArg = optionValue(args, "--package");
+  if (reference === undefined || packageArg === undefined) throw new Error("compare-reference needs --reference <report.md> and --package <review-dir>");
+  const items = parseReferenceReport(await readFile(path.resolve(reference), "utf8"));
+  if (items.length === 0) throw new Error(`${reference} holds no reference items (Major table rows, Cycle paragraphs, Minor and Question bullets)`);
+  const inputArg = optionValue(args, "--input");
+  const comparison = compareReference(items, await loadPackageEvidence(path.resolve(packageArg), inputArg === undefined ? undefined : path.resolve(inputArg)));
+  console.log(args.includes("--json") ? JSON.stringify(comparison, null, 2) : renderComparison(comparison));
+}
+
+async function runMutate(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, MUTATE_FLAGS, "mutate");
+  const testCommand = optionValue(args, "--test");
+  const packageArg = optionValue(args, "--package");
+  if (testCommand === undefined || packageArg === undefined) throw new Error("mutate needs --test \"<command>\" and --package <review-dir>");
+  const packageDir = path.resolve(packageArg);
+  const worktree = path.resolve(optionValue(args, "--worktree") ?? process.cwd());
+  const specFile = path.resolve(optionValue(args, "--spec") ?? path.join(packageDir, EVIDENCE_DIR, MUTANTS_SPEC));
+  const timeout = optionValue(args, "--timeout-ms");
+  const timeoutMs = timeout === undefined ? undefined : Number(timeout);
+  if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout-ms must be a positive number");
+  const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs });
+  const written = await writeMutationEvidence(packageDir, record);
+  if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
+  else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
+}
+
+/** CI checks from `--checks <file>`, else `gh pr checks`; undefined (CI status "unknown") when neither is available. */
+async function readCiChecks(args: string[], repo: string, number: number): Promise<CheckSummary[] | undefined> {
+  const file = optionValue(args, "--checks");
+  if (file !== undefined) return parseGhChecks(JSON.parse(await readFile(file, "utf8")) as unknown);
+  if (optionValue(args, "--fixtures") !== undefined) return undefined;
+  const proc = Bun.spawn(["gh", "pr", "checks", String(number), "--repo", repo, "--json", "name,bucket"], { stdout: "pipe", stderr: "pipe" });
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+  if (out.trim() === "") return code === 0 ? [] : undefined;
+  try {
+    return parseGhChecks(JSON.parse(out) as unknown);
+  } catch {
+    return undefined;
+  }
+}
+
+async function runContextCollect(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, CONTEXT_COLLECT_FLAGS, "context-collect");
+  const repo = requiredOption(args, "--repo", "context-collect");
+  const number = requiredInteger(args, "--pr");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("context-collect needs --package <review-dir>");
+  const result = await collectPrContext({
+    port: await resolvePort(args),
+    repo,
+    number,
+    self: optionValue(args, "--self") ?? (await resolveSelfLogin(args)),
+    packageDir: path.resolve(packageArg),
+    checks: await readCiChecks(args, repo, number),
+  });
+  const { context } = result;
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ json: result.json, md: result.md, round: context.round, ci: context.ci.state, comments: context.comments.length, backendPins: context.backendPins.length }, null, 2));
+    return;
+  }
+  console.log(`${repo}#${number} round ${context.round}: ${context.comments.length} comment(s) in full, CI ${context.ci.state}, ${context.backendPins.length} backend pin(s)\npr_context: ${result.md}`);
+}
+
+async function runSeverityAudit(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, SEVERITY_AUDIT_FLAGS, "severity-audit");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("severity-audit needs --package <review-dir>");
+  const result = await auditPackage(path.resolve(packageArg), { dryRun: args.includes("--dry-run") });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""} - ${c.reason}`);
+  console.log(`${result.changes.length} of ${result.findings} finding(s) changed${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
+}
+
 async function runStack(args: string[]): Promise<void> {
   rejectUnknownFlags(args, STACK_FLAGS, "stack");
   const cwd = process.cwd();
@@ -3417,6 +3583,8 @@ async function readDiffSource(source: string): Promise<string> {
   return await Bun.file(source).text();
 }
 
+const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, rejectUnknownFlags };
+
 /**
  * The diff the scope is built from.
  *
@@ -3576,6 +3744,9 @@ async function runStatus(args: string[]): Promise<void> {
   // first would make this reader unreachable on exactly the old packages a
   // recall comparison most wants to group.
   console.log(renderCrossFamilyReviewLine(manifest.cross_family_review));
+  if (manifest.automatic === true) {
+    console.log("run mode: automatic review");
+  }
   reportCrossFamilyReviewProblems(manifest.cross_family_review, `${ref}/manifest.json`);
 
   const stats = manifest.filter_stats;
@@ -3875,10 +4046,15 @@ ${reviewHelpSection("learn")}
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["scope", printScopeHelp],
+  ["slice", printSliceHelp],
+  ["dispatch-check", printDispatchCheckHelp],
+  ["retry-plan", printRetryPlanHelp],
+  ["ledger", printLedgerHelp],
   ["tier", printTierHelp],
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],
   ["import", printImportHelp],
+  ["run", () => console.log(RUN_HELP)],
 ]);
 
 /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
@@ -3897,17 +4073,90 @@ function reviewHelpText(): string {
 
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
-                      [--reviewers a,b] [--report <path>]
+                      [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                      [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                     [--research <ledger.json>] [--review-id <id>] [--automatic]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                      [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                      [--tokens-in <n>] [--tokens-out <n>]
                       [--parallel <n>] [--outstanding <n>]
+                      --research is the research ledger {version, scopeReviewed, rawReconciled,
+                      obligations, dispatch}; without it the package stays PENDING and
+                      \`review complete\` refuses on scope, raw reconciliation and dispatch evidence.
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
+                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
+                     Cuts scope A into reviewer-sized slice files plus a manifest;
+                     ledgers (csv, lockfiles, snapshots) are omitted with a reason.
+                     --wave-bytes is the most one reviewer dispatch carries.
+  keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--json]
+                        Runs the reviewers' proposed mutants (default spec:
+                        <review-dir>/research-evidence/mutants.json) in a scratch
+                        copy of the worktree; the worktree is never written. The
+                        baseline must pass first. A survivor means no assertion
+                        pins that behaviour. Writes mutation-<n>.json and .md to
+                        research-evidence/.
+  keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>
+                        [--self <login>] [--checks <gh-checks.json>] [--json]
+                        Writes pr-context.json and pr-context.md into the package:
+                        every review comment in full (no cut), the round-1 intent,
+                        the CI status and the backend pins the pull request names.
+                        A pull-request review dispatches with pr_context set to the
+                        .md; "dispatch-check --pr-context" refuses a payload without.
+  keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+                        Raises a finding to major when the mutant it cites
+                        (evidence "mutant:<id>") survived a recorded run on a
+                        file the review changed; records the evidence id. A cited
+                        mutant no run executed stays minor with label "unproven".
+                        Never deletes a finding; separate from the verifier.
+  keryx review compare-reference --reference <report.md> --package <review-dir>
+                        [--input <dir>] [--json]
+                        Compares a reference report's items (Major rows, Cycle,
+                        Minor and Question bullets) with a package, per item:
+                        A role not run, B role ran and nothing matches, C seen and
+                        lost after the answer, D kept (with severity), E the
+                        reference ran a mutant and this package has no mutation
+                        pass. --input adds the raw reviewer replies for class C.
+  keryx review required [--mode all|diff] [--scope <scope.json>]
+                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
+                        --blast-radius adds review-regression to the set; without a
+                        computed blast radius it is excluded with that reason.
+                        The reviewer set a round must dispatch: every available
+                        reviewer for all (the default for a pull request), the
+                        diff-derived set for diff. diff needs the operator's own
+                        words naming a narrower review in --operator-quote, and
+                        the dispatch records them as operatorQuote.
+                        \`review complete\` refuses a smaller dispatch.
+  keryx review dispatch-check --payload <file|-> [--manifest <file>]
+                              [--max-bytes <n>] [--json]
+                              Refuses a reviewer payload with no slice, one over the
+                              manifest's wave budget, or a shape the schema rejects.
+  keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
+                          [--slices a,b] [--covered a,b] [--next-wave] [--state <file>]
+                          [--dry-run] [--json]
+                          Hands out the next wave of uncovered slices. A reviewer that
+                          covered new slices keeps its attempt; two results in a row with
+                          nothing new, or 6 failed rounds, are "Not run" — never a clean
+                          pass. NEEDS_CONTEXT is not terminal: its questions are answered,
+                          the scope stays open. --result is optional with --next-wave.
+  keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
+                            [--findings <file>] [--dispositions <file>] [--out <file>]
+                            [--dry-run] [--json]
+                            Builds research.json from the raw results, drivers and
+                            slice manifest; READY or the exact next step per gap.
+                            Then: keryx review ingest --research research.json.
+  keryx review run --autonomous --target pr --ref <pull request URL> [--budget-minutes N]
+                   [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
+                   One unattended review (profile review-autonomous). Exit 0 complete,
+                   2 incomplete, 3 floor, 4 budget, 5 stalled, 1 refused.
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
                      --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
@@ -3918,7 +4167,7 @@ Usage:
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
-                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
@@ -4220,12 +4469,11 @@ budget:
   The gate to run BEFORE dispatching, where stopping is still possible. Exits
   non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
   orchestrator asks the operator instead of proceeding. Also prints the reviewer
-  dispatch waves for the concurrency cap (default ${DEFAULT_MAX_PARALLEL_REVIEWERS} in flight).
-  --outstanding <n> is what an enclosing orchestrator already has in flight.
-  WITHOUT it the cap bounds this plan only: keryx cannot observe subagents in
-  another process, so it does NOT bind the total across job-orchestrator ->
-  flow-orchestrator -> review-orchestrator, and it says so rather than implying
-  otherwise.
+  dispatch waves for the concurrency cap (default ${MAX_REVIEWERS_PER_WAVE_FULL} in flight; split by diff domain, never above ${MAX_REVIEWERS_PER_WAVE_FULL} for a full review).
+  --parallel <n> sets the wave size; with --full it can only lower it, because
+  --full holds the wave to ${MAX_REVIEWERS_PER_WAVE_FULL}. --outstanding <n> is how many subagents the main
+  session still has running. WITHOUT it the cap bounds this plan only: keryx
+  cannot observe those subagents, and it says so rather than implying otherwise.
 
 tier:
   The \`model\` block a dispatch document carries, COMPUTED — run this instead of

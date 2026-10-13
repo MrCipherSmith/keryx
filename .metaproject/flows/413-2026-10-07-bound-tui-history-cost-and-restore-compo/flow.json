@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "413",
+  "slug": "bound-tui-history-cost-and-restore-compo",
+  "title": "Bound TUI history cost and restore composer focus during streaming",
+  "status": "in-progress",
+  "createdAt": "2026-10-07T17:24:31.966Z",
+  "updatedAt": "2026-10-08T07:18:58.295Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:86cce1fa0a85ca68307af5844e49148d185031edd4965183e51048be283417b3",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-08T07:18:57.456Z",
+      "note": "Real renderer focus regressions and final busy submit PTY passed"
+    },
+    "AC2": {
+      "at": "2026-10-08T07:18:57.652Z",
+      "note": "Bound256 completed nodes; PTY795 nodes at500 through4000; archives untouched"
+    },
+    "AC3": {
+      "at": "2026-10-08T07:18:57.854Z",
+      "note": "verification.md records six PTY points, all120 probes and Main/Side delivery"
+    },
+    "AC4": {
+      "at": "2026-10-08T07:18:58.063Z",
+      "note": "150 tests, tsc pass, independent static review no findings; limitations documented"
+    },
+    "AC5": {
+      "at": "2026-10-08T07:18:58.295Z",
+      "note": "Local worktree only; no merge/push; flow left in-progress"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "research/part2-data",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected; verification.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Bounded history and focus lifecycle implemented"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "150 focused tests and typecheck pass"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent static review and local handoff documented; no PR requested"
+    },
+    {
+      "id": "T5",
+      "title": "Repeat PTY streaming latency and busy-submit delivery/focus measurement",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Final PTY streaming probes and Main/Side delivery pass; verification.md"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-07T17:24:31.966Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-07T19:14:01.056Z",
+      "event": "task-added",
+      "detail": "T5: Repeat PTY streaming latency and busy-submit delivery/focus measurement"
+    },
+    {
+      "at": "2026-10-07T19:14:01.221Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-07T19:14:01.376Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-08T07:18:56.403Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-08T07:18:56.636Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-08T07:18:56.853Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-08T07:18:57.018Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-08T07:18:57.263Z",
+      "event": "task-done",
+      "detail": "T5: Repeat PTY streaming latency and busy-submit delivery/focus measurement"
+    },
+    {
+      "at": "2026-10-08T07:18:57.456Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Real renderer focus regressions and final busy submit PTY passed (signed: agent [stated])"
+    },
+    {
+      "at": "2026-10-08T07:18:57.653Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Bound256 completed nodes; PTY795 nodes at500 through4000; archives untouched (signed: agent [stated])"
+    },
+    {
+      "at": "2026-10-08T07:18:57.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verification.md records six PTY points, all120 probes and Main/Side delivery (signed: agent [stated])"
+    },
+    {
+      "at": "2026-10-08T07:18:58.064Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: 150 tests, tsc pass, independent static review no findings; limitations documented (signed: agent [stated])"
+    },
+    {
+      "at": "2026-10-08T07:18:58.295Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Local worktree only; no merge/push; flow left in-progress (signed: agent [stated])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-08T07:18:57.456Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:86cce1fa0a85ca68307af5844e49148d185031edd4965183e51048be283417b3"
+    },
+    {
+      "at": "2026-10-08T07:18:57.652Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:86cce1fa0a85ca68307af5844e49148d185031edd4965183e51048be283417b3"
+    },
+    {
+      "at": "2026-10-08T07:18:57.854Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:86cce1fa0a85ca68307af5844e49148d185031edd4965183e51048be283417b3"
+    },
+    {
+      "at": "2026-10-08T07:18:58.063Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:86cce1fa0a85ca68307af5844e49148d185031edd4965183e51048be283417b3"
+    },
+    {
+      "at": "2026-10-08T07:18:58.295Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "agent",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:86cce1fa0a85ca68307af5844e49148d185031edd4965183e51048be283417b3"
+    }
+  ]
+}

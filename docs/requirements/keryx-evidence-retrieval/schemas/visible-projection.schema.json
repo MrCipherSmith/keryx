@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Final Request Visible Projection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestHash",
+    "providerAdapter",
+    "spans"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "requestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "providerAdapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "spans": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "versionHash",
+          "contentHash",
+          "locator",
+          "coverage"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "versionHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "locator": {
+            "$ref": "search-result.schema.json#/$defs/locator"
+          },
+          "coverage": {
+            "enum": [
+              "exact",
+              "partial",
+              "summary",
+              "unknown"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -107,6 +107,19 @@ A digest cannot change anything on GitHub.
 - **Accounts.** `gh` runs as the account the project path selects: `~/work/**` uses the work
   account, everything else the personal one, through the same `gh` wrapper you use yourself.
   A digest never runs `gh auth switch` or `gh auth login`.
+- **The account needs the `gh` wrapper.** The digest asks for the account with `GH_ACCOUNT`, and
+  only the machine's `gh` wrapper honours it. The real `gh` binary ignores it and uses whichever
+  login is active. A digest cannot ask `gh` who it is (`gh api` and `gh auth` are not allowed), so
+  every run report states the account it asked for ("gh account asked for"). If you do not use
+  the wrapper, check that the active login is the one you want.
+- **A minimal environment.** `gh` does not inherit all of serve's environment. It gets `PATH`,
+  `HOME`, the locale and `XDG_*` variables, `gh`'s config location and the wrapper's own overrides,
+  proxy and certificate settings, and `GH_ACCOUNT`. A token variable such as `GH_TOKEN` or
+  `GITHUB_TOKEN`, and every other secret serve holds, is not passed on, so a token in serve's
+  environment cannot override the account the path chose.
+- **Scrubbed at the last hop.** The digest text is scrubbed for secrets after it is built and
+  before it is cut to length and delivered, so a token that appears in a GitHub or board title
+  never reaches Telegram.
 
 ## Limits
 
@@ -143,3 +156,23 @@ At the cron time a digest needs `keryx serve`. If serve was down, it starts **on
 newest missed time when it comes back, never one per missed time. A time is claimed before the
 run starts, so a restart in the middle of a run does not run it a second time; the run record
 shows what happened.
+
+A digest you create while serve is not running starts counting from the moment you confirmed
+it. A cron time between that moment and serve's first tick is still run, once. Pausing and
+resuming never catches up: a digest that was paused while serve was down is armed again by the
+first tick after the resume, and runs from the next cron time.
+
+## When the schedule fires
+
+The cadence is read in the **local time of the machine where `keryx serve` runs**, not in UTC:
+`daily at 08:00` is 08:00 on that machine. Across a daylight-saving change the local hour stays
+the same and the UTC instant moves. A time the change skips (the hour that does not exist when
+clocks go forward) has no run that day.
+
+## When a delivery cannot be queued
+
+The digest records what it saw only after its message is queued for delivery. If the queue
+cannot be written, the run fails, the snapshot is not advanced, and the same changes
+are in the next digest. A message that was queued and then fails twelve times is given up on:
+a change in it is not repeated in a later digest, and the full text is in the run report under
+`.metaproject/data/trigger/reports/<name>/`.

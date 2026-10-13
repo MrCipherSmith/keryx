@@ -1,0 +1,54 @@
+{
+  "commit": "04809f4f",
+  "generated_at": "2026-10-04T13:17Z",
+  "flows": 383,
+  "flows_by_status": {
+    "done": 339,
+    "blocked": 2,
+    "in-progress": 25,
+    "ready": 3,
+    "initializing": 3,
+    "implemented": 11
+  },
+  "acceptance_criteria": 3175,
+  "acceptance_criteria_confirmed": 3062,
+  "verify_tags": {
+    "untagged": 2906,
+    "exec": 201,
+    "none": 16,
+    "judged": 31,
+    "invariant": 21
+  },
+  "flows_since_baseline": 44,
+  "outcome_author": {
+    "None": 354,
+    "agent": 18,
+    "human": 11
+  },
+  "origin": {
+    "None": 373,
+    "human-request": 9,
+    "agent-finding": 1
+  },
+  "reviewed_flows": 159,
+  "review_rounds": 368,
+  "findings": 2544,
+  "findings_by_severity": {
+    "major": 831,
+    "minor": 1204,
+    "info": 334,
+    "blocker": 175
+  },
+  "findings_blocking": 175,
+  "verdicts": {
+    "refuted": 1623,
+    "confirmed": 329,
+    "no-verdict": 577,
+    "unverifiable": 15
+  },
+  "refuted_by_disposition": {
+    "acted-on": 1546,
+    "dismissed-incorrect": 49,
+    "no-disposition": 28
+  }
+}

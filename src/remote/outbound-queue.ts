@@ -11,9 +11,10 @@
 //     the entry is dropped and reported rather than blocking the queue forever.
 //
 // Text is stored as the plain Markdown-ish text `formatReply` produced and rendered
-// to Telegram HTML only when it is sent (`sendHtml`). If Telegram refuses the markup
-// (400 "can't parse entities") that one part is resent once as plain text and
-// `onFallback` records it; a restart never sees stale HTML on disk.
+// only when it is sent, in the rendering mode in effect then (`sendRendered`, flow 395):
+// a rich message, Telegram HTML or plain text. If Telegram refuses a step the one part is
+// resent once at the step below (rich to HTML to plain) and `onFallback` records it; a
+// restart never sees stale HTML or blocks on disk.
 //
 // A crash between a successful send and its ack resends that one message on the
 // next start. Telegram offers no idempotency key, so outbound is at-least-once.
@@ -24,7 +25,7 @@ import { redactSensitiveText } from "../security/service";
 import { DurableLog, type LoadReport } from "./durable-log";
 import { ensureRemoteDir, OUTBOUND_FILE } from "./paths";
 import { formatReply } from "./format";
-import { sendHtml } from "./format-html";
+import { type RenderFallback, RenderingState, sendRendered } from "./rendering";
 import { type BotApi, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
 export const OUTBOUND_MAX_ENTRIES = 200;
@@ -35,6 +36,8 @@ export interface OutboundEntry {
   threadId?: number;
   text: string;
   keyboard?: InlineKeyboard;
+  /** Flow 401: the reply box opens on this message. Durable, so a restart still sends it as a prompt. */
+  forceReply?: { placeholder?: string };
   createdAt: number;
 }
 
@@ -52,6 +55,8 @@ export interface OutboundMessage {
   threadId?: number;
   text: string;
   keyboard?: InlineKeyboard;
+  /** Flow 401: send with `force_reply` (rides on the last part, like the keyboard). */
+  forceReply?: { placeholder?: string };
   /**
    * Called once, in memory only, after the LAST part (the one that carries the keyboard) was
    * sent. Not durable: a restart resends the entry without it, and the caller must cope.
@@ -76,8 +81,10 @@ export interface OutboundQueueOptions {
   maxEntries?: number;
   /** Called for an entry that was discarded: bound overflow or a permanent refusal. */
   onDrop?: (entry: OutboundEntry, reason: string) => void;
-  /** Called when Telegram refused the HTML of an entry and it was resent as plain text. */
-  onFallback?: (entry: OutboundEntry) => void;
+  /** Called when Telegram refused a rendering of an entry and it was resent one step down (rich to HTML, HTML to plain). */
+  onFallback?: (entry: OutboundEntry, fallback: RenderFallback) => void;
+  /** The rendering mode and the last fallback, shared with whoever shows them. Default: mode `auto`. */
+  rendering?: RenderingState;
   /** Default retry delay for a network or server error. */
   retryDelayMs?: number;
 }
@@ -101,6 +108,9 @@ function parseEntry(value: unknown): OutboundEntry | undefined {
   if (raw.keyboard !== undefined && !Array.isArray(raw.keyboard)) {
     return undefined;
   }
+  if (raw.forceReply !== undefined && (typeof raw.forceReply !== "object" || raw.forceReply === null)) {
+    return undefined;
+  }
   return raw as unknown as OutboundEntry;
 }
 
@@ -109,7 +119,8 @@ export class OutboundQueue {
   private readonly now: () => number;
   private readonly log: DurableLog<OutboundEntry>;
   private readonly onDrop: (entry: OutboundEntry, reason: string) => void;
-  private readonly onFallback: (entry: OutboundEntry) => void;
+  private readonly onFallback: (entry: OutboundEntry, fallback: RenderFallback) => void;
+  private readonly rendering: RenderingState;
   private readonly retryDelayMs: number;
   private readonly sentHooks = new Map<string, (info: SentMessageInfo) => void>();
   private blockedUntil = 0;
@@ -120,6 +131,7 @@ export class OutboundQueue {
     this.now = options.now;
     this.onDrop = options.onDrop ?? (() => undefined);
     this.onFallback = options.onFallback ?? (() => undefined);
+    this.rendering = options.rendering ?? new RenderingState({ now: options.now });
     this.retryDelayMs = options.retryDelayMs ?? 5_000;
     const directory = ensureRemoteDir(options.dir);
     this.log = new DurableLog<OutboundEntry>({
@@ -156,6 +168,7 @@ export class OutboundQueue {
         ...(message.threadId === undefined ? {} : { threadId: message.threadId }),
         text,
         ...(message.keyboard === undefined || index !== parts.length - 1 ? {} : { keyboard: message.keyboard }),
+        ...(message.forceReply === undefined || index !== parts.length - 1 ? {} : { forceReply: message.forceReply }),
         createdAt: this.now(),
       };
       if (message.onSent !== undefined && index === parts.length - 1) {
@@ -225,15 +238,16 @@ export class OutboundQueue {
         return { sent, dropped, remaining: this.log.size, retryInMs: wait, stoppedBy: "rate limited" };
       }
       try {
-        const result = await sendHtml(
+        const result = await sendRendered(
           this.api,
           {
             chatId: entry.chatId,
             text: entry.text,
             ...(entry.threadId === undefined ? {} : { messageThreadId: entry.threadId }),
             ...(entry.keyboard === undefined ? {} : { inlineKeyboard: entry.keyboard }),
+            ...(entry.forceReply === undefined ? {} : { forceReply: entry.forceReply }),
           },
-          () => this.onFallback(entry),
+          { state: this.rendering, onFallback: (fallback) => this.onFallback(entry, fallback) },
         );
         this.log.ack(entry.id);
         sent += 1;

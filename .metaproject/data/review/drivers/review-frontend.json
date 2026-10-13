@@ -1,0 +1,16 @@
+{
+ "reviewer": "review-frontend",
+ "slices": [
+  "slice-01",
+  "slice-02",
+  "slice-03",
+  "slice-04",
+  "slice-05",
+  "slice-06",
+  "slice-07",
+  "slice-08",
+  "slice-09"
+ ],
+ "result": "raw/review-frontend.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+}

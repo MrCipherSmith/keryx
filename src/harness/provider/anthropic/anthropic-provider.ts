@@ -8,14 +8,13 @@
 // this module's boundary.
 //
 // Determinism / offline: `fetch` is always injected via `deps.fetch` (the global
-// is never touched); no `Date.now`/`Math.random` (a clock is injectable via
-// `deps.clock` but unused on the offline paths). Every yielded event/error is
+// is never touched); retry dates use `deps.clock` (or Date.now); no `Math.random`. Every yielded event/error is
 // scrubbed of the credential before it leaves this module, and nothing is ever
 // persisted (storage-off).
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 // A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
-import { retryableFor } from "../provider-port";
+import { isTransportFailure, retryableFor, withRetryAfter } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
   NormalizedError,
@@ -443,17 +442,12 @@ function mergeUsage(
 }
 
 /** Classify a non-2xx HTTP response into the neutral error taxonomy. */
-function classifyHttpError(status: number, headers: Headers): NormalizedError {
+function classifyHttpError(status: number, _headers: Headers): NormalizedError {
   if (status === 401) {
     return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
   }
   if (status === 429) {
     const error: NormalizedError = { kind: "rate_limit", retryable: retryableFor("rate_limit", true), message: "" };
-    const retryAfter = headers.get("retry-after");
-    const seconds = retryAfter === null ? undefined : Number.parseInt(retryAfter, 10);
-    if (seconds !== undefined && Number.isFinite(seconds)) {
-      error.retryAfterMs = seconds * 1000;
-    }
     return error;
   }
   if (status === 529) {
@@ -704,7 +698,7 @@ export class AnthropicProvider implements ProviderPort {
 
     // AC4 provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
-      const error = classifyHttpError(response.status, response.headers);
+      const error = withRetryAfter(classifyHttpError(response.status, response.headers), response.headers, this.deps.clock);
       let providerMessage = `Anthropic API returned HTTP ${response.status}`;
       try {
         const parsed = asRecord(JSON.parse(await response.text()));
@@ -743,6 +737,7 @@ export class AnthropicProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       });
       return;
     }
@@ -784,9 +779,10 @@ export class AnthropicProvider implements ProviderPort {
           return;
         }
         yield errorEvent({
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
+          kind: isTransportFailure(cause) ? "unavailable" : "malformed",
+          retryable: isTransportFailure(cause),
           message: redact(`Anthropic SSE body read failed: ${String(cause)}`),
+          ...(isTransportFailure(cause) ? { detail: { incompleteStream: true } } : {}),
         });
         return;
       }
@@ -1039,6 +1035,7 @@ export class AnthropicProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("Anthropic SSE stream ended mid-record (torn stream)"),
+        detail: { incompleteStream: true },
       };
     } else if (!receivedAnyChunk) {
       // A 200 with literally zero bytes never sets `sawStart` and would
@@ -1048,12 +1045,14 @@ export class AnthropicProvider implements ProviderPort {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("empty response body"),
+        detail: { incompleteStream: true },
       };
     } else if (sawStart && !sawStop) {
       malformed = {
         kind: "malformed",
         retryable: retryableFor("malformed", false),
         message: redact("Anthropic SSE stream ended before message_stop (truncated stream)"),
+        detail: { incompleteStream: true },
       };
     }
 

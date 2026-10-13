@@ -33,11 +33,15 @@ import { isLoopbackAddress } from "../lib/serve-config";
 import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
 import {
   type AckBody,
+  type ApprovalAckBody,
   type ApprovalBody,
   type ApprovalDecision,
-  type ApprovalEvent,
+  type ApprovalResultBody,
+  isApprovalId,
   type ChoiceEvent,
+  OWN_ANSWER_WINDOW_MS,
   type PromptBody,
+  type PromptCloseBody,
   type PromptResponse,
   type ApprovalResponse,
   type CallbackEvent,
@@ -58,6 +62,21 @@ import { readShellToken, SERVE_PROOF_HEADER, shellRequestCredential, verifyServe
 
 const UNVERIFIED_SERVE_MESSAGE =
   "the program answering on keryx serve's port did not prove it is the keryx serve this shell trusts; its answer was ignored. Restart `keryx serve` (an older serve cannot prove itself; update keryx on both sides)";
+
+/** What a Telegram question came back as (flow 401): a pressed position, the person's own text, or nothing (with the reason serve refused it, when it did: flow 387, L-4). */
+export type ChoiceAnswer =
+  | { kind: "index"; index: number; refusal?: undefined }
+  | { kind: "own"; text: string; refusal?: undefined }
+  | { kind: "none"; refusal?: string };
+
+/** Read at the call: an earlier check on the same signal must not narrow it to "not aborted". */
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
+
+function closeByFor(signal: AbortSignal | undefined): "shell" | "cancelled" {
+  return signal?.reason === "cancelled" ? "cancelled" : "shell";
+}
 
 export interface InboundMeta {
   updateId: number;
@@ -83,6 +102,15 @@ export interface RemoteClientOptions {
   /** Buttons the shell attached to a reply itself (not approvals). */
   onCallback?: (data: string, meta: { updateId: number; threadId: number; fromId: number }) => void | Promise<void>;
   onStatus?: (status: ClientStatus) => void;
+  /**
+   * An approval decision frame arrived from the topic (flow 397, AC5). Called once per approval id,
+   * before the shell acknowledges it, so the operator sees the decision as it lands. `applied` is
+   * whether it reached a live question here: false for a stale id, one the shell already gave up on,
+   * or one that was never asked, and the shell must not say it acted on those.
+   */
+  onApprovalFrame?: (frame: { approvalId: string; decision: ApprovalDecision; applied: boolean }) => void;
+  /** {@link RemoteClient.unconfirmedApprovals} changed (a decision arrived, was confirmed, or aged out): repaint what shows it. */
+  onUnconfirmedChange?: () => void;
   /** User-global directory override (the test seam). */
   dir?: string | undefined;
   fetchImpl?: typeof fetch;
@@ -94,10 +122,52 @@ export interface RemoteClientOptions {
   requestTimeoutMs?: number;
   /** Test seam: is the serve process named in `endpoint.json` running, as this user? */
   isAlive?: (pid: number) => boolean;
+  /** How long a decision that beat the question it answers may wait for that question to register (default 2 s). */
+  earlyDecisionMs?: number;
+}
+
+/** What came back for one approval (flow 396). `approvalId` is absent when nothing was ever asked. */
+export interface ApprovalAnswer {
+  decision: ApprovalDecision;
+  approvalId?: string;
+  /** The Telegram user who pressed the button; absent for a deny that was not a press (timeout, dropped stream). */
+  fromId?: number;
+}
+
+/**
+ * An approval event from the stream, read without trusting its shape (flow 396). It needs an id to
+ * mean anything; a decision that is not exactly `allow`, `always` or `deny` is a `deny`, never a yes.
+ * `fromId` is kept only when it is a whole number. Exported for the tests.
+ */
+export function readApprovalEvent(parsed: unknown): { approvalId: string; pressed: PressedApproval } | undefined {
+  if (parsed === null || typeof parsed !== "object") return undefined;
+  const o = parsed as { approvalId?: unknown; decision?: unknown; fromId?: unknown };
+  if (typeof o.approvalId !== "string" || o.approvalId.length === 0) return undefined;
+  const decision: ApprovalDecision = o.decision === "allow" || o.decision === "always" ? o.decision : "deny";
+  const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+  return { approvalId: o.approvalId, pressed: { decision, ...(fromId === undefined ? {} : { fromId }) } };
+}
+
+export interface PressedApproval {
+  decision: ApprovalDecision;
+  fromId?: number;
 }
 
 export type StartResult =
-  | { ok: true; name: string; threadId: number; runTimeoutMs: number }
+  | {
+      ok: true;
+      name: string;
+      threadId: number;
+      runTimeoutMs: number;
+      permissionMode?: "ask" | "trust";
+      approvalTimeoutMs?: number;
+      /**
+       * Flow 399: whether the FIRST registration of this client found a topic already holding the
+       * name (true) or created a new one (false). A reconnect re-registers and always finds the
+       * topic, so only the first answer is kept. Absent when the answer did not say.
+       */
+      reused?: boolean;
+    }
   | { ok: false; code: string; message: string; retrying: boolean };
 
 class FatalClientError extends Error {
@@ -115,6 +185,32 @@ const DEFAULT_BACKOFF_INITIAL_MS = 250;
 const DEFAULT_BACKOFF_MAX_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const MAX_EARLY_DECISIONS = 32;
+
+/** Why serve refused a request: the message it sent (bounded, one line), else a sentence for the status. */
+async function refusalReason(response: Response): Promise<string> {
+  try {
+    const parsed = (await response.json()) as { error?: { message?: unknown } } | null;
+    const message = parsed?.error?.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message.replace(/\s+/g, " ").trim().slice(0, 200);
+    }
+  } catch {
+    // No readable body: the status says enough.
+  }
+  return response.status === 429 ? "too many questions are waiting for this session" : `the topic refused the question (status ${response.status})`;
+}
+
+/**
+ * A decision frame can beat the response that names its approval id by a few milliseconds. That is the
+ * only reason to park one; a frame no question claims within this long was for a question that is gone.
+ * Serve waits 5 s for the ack, so this must stay well under it.
+ */
+const DEFAULT_EARLY_DECISION_MS = 2_000;
+/** Approval ids already seen and how they ended, so a repeated frame is acknowledged again but never resolves a waiter twice. */
+const MAX_SEEN_APPROVALS = 256;
+/** How long a decision whose ack did not go through still counts as "not confirmed" in the status. */
+const UNCONFIRMED_APPROVAL_LINGER_MS = 60_000;
+const MAX_UNCONFIRMED_APPROVALS = 64;
 /** How many recently completed update ids the shell remembers, to drop a redelivery without running it again. */
 const MAX_COMPLETED_IDS = 256;
 
@@ -182,10 +278,18 @@ export class RemoteClient {
   /** The register request in flight, so `close` can wait for it and deregister what it created. */
   private registering: Promise<void> | undefined;
   private inboundChain: Promise<void> = Promise.resolve();
-  private readonly waiters = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly earlyDecisions = new Map<string, ApprovalDecision>();
-  private readonly choiceWaiters = new Map<string, { resolve: (index: number | undefined) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly earlyChoices = new Map<string, number>();
+  private readonly waiters = new Map<string, { resolve: (answer: PressedApproval) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly earlyDecisions = new Map<string, { pressed: PressedApproval; timer: ReturnType<typeof setTimeout> }>();
+  /** `pending` is a parked decision whose question has not claimed it yet; its ack goes out when it settles. */
+  private readonly seenApprovals = new Map<string, "applied" | "not-applied" | "pending">();
+  private readonly earlyDecisionMs: number;
+  /** Decision frames received whose ack has not gone through (approval id to when it arrived). Bounded and aged out. */
+  private readonly unackedApprovals = new Map<string, number>();
+  private readonly lingerTimers = new Set<ReturnType<typeof setTimeout>>();
+  private readonly choiceWaiters = new Map<string, { resolve: (answer: ChoiceAnswer) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly earlyChoices = new Map<string, ChoiceAnswer>();
+  /** Prompts this side ended (the dock answered first, the turn stopped): a frame for one is dropped, never parked as early. */
+  private readonly closedChoices = new Set<string>();
   private firstResult: ((result: StartResult) => void) | undefined;
 
   /** The topic name and thread, once registered. */
@@ -193,6 +297,15 @@ export class RemoteClient {
   threadId: number | undefined;
   /** How long a run started from Telegram may take; learned at registration. */
   runTimeoutMs: number | undefined;
+  /**
+   * What serve says a Telegram-started turn starts under, and how long an approval waits (flow 396).
+   * Undefined when the serve that answered is older than this client: the shell then keeps today's
+   * behaviour (`ask`, 5 minutes) rather than guess.
+   */
+  permissionMode: "ask" | "trust" | undefined;
+  approvalTimeoutMs: number | undefined;
+  /** `reused` of the first successful registration; later registrations (reconnects) never change it. */
+  private firstReused: boolean | undefined;
   /** When serve last answered a heartbeat (or the stream last said ready), epoch ms. For the shell's status display. */
   lastHeartbeatAt: number | undefined;
 
@@ -204,10 +317,22 @@ export class RemoteClient {
     this.sleep = options.sleep ?? abortableSleep;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.isAlive = options.isAlive ?? ownProcessIsAlive;
+    this.earlyDecisionMs = options.earlyDecisionMs ?? DEFAULT_EARLY_DECISION_MS;
   }
 
   get connected(): boolean {
     return this.streamOpen && !this.stopped;
+  }
+
+  /** How many approval decisions arrived whose ack serve has not confirmed (in flight, or failed within the last minute). */
+  get unconfirmedApprovals(): number {
+    const cutoff = Date.now() - UNCONFIRMED_APPROVAL_LINGER_MS;
+    for (const [id, at] of [...this.unackedApprovals.entries()]) {
+      if (at < cutoff) {
+        this.unackedApprovals.delete(id);
+      }
+    }
+    return this.unackedApprovals.size;
   }
 
   // ---- lifecycle -----------------------------------------------------------
@@ -270,6 +395,10 @@ export class RemoteClient {
     }
     this.lifetime.abort();
     this.streamAbort?.abort();
+    for (const timer of this.lingerTimers) {
+      clearTimeout(timer);
+    }
+    this.lingerTimers.clear();
     this.failApprovals();
     this.firstResult?.({ ok: false, code: "stopped", message: "the client was stopped before it connected", retrying: false });
     this.firstResult = undefined;
@@ -297,35 +426,87 @@ export class RemoteClient {
    * stream, an error.
    */
   async requestApproval(prompt: string, timeoutMs: number): Promise<ApprovalDecision> {
-    if (!this.connected) {
-      return "deny";
+    return (await this.askApproval(prompt, timeoutMs)).decision;
+  }
+
+  /**
+   * Like {@link requestApproval}, and it can offer "Always: <remember>" (flow 396). The answer names the
+   * approval and the Telegram user who pressed, so the shell can audit it and report what became of an
+   * "Always" press with {@link reportApprovalResult}. Same fail-closed rule: no press is a deny.
+   */
+  async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal } = {}): Promise<ApprovalAnswer> {
+    if (!this.connected || options.signal?.aborted === true) {
+      return { decision: "deny" };
     }
-    const body: ApprovalBody = { sessionId: this.options.sessionId, prompt, timeoutMs };
+    const body: ApprovalBody = {
+      sessionId: this.options.sessionId,
+      prompt,
+      timeoutMs,
+      ...(options.remember === undefined ? {} : { remember: options.remember }),
+    };
     let approvalId: string;
     try {
       const response = await this.post("approval", body);
       if (!response.ok) {
-        return "deny";
+        return { decision: "deny" };
       }
-      approvalId = ((await response.json()) as ApprovalResponse).approvalId;
+      const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;
+      if (typeof id !== "string" || id.length === 0) {
+        return { decision: "deny" };
+      }
+      approvalId = id;
     } catch {
-      return "deny";
+      return { decision: "deny" };
     }
     const early = this.earlyDecisions.get(approvalId);
     if (early !== undefined) {
+      // The frame beat this response: now it reaches a live question, so it is applied, and only now.
+      clearTimeout(early.timer);
       this.earlyDecisions.delete(approvalId);
-      return early;
+      this.settleApproval(approvalId, early.pressed.decision, true);
+      return { ...early.pressed, approvalId };
     }
     if (!this.connected) {
-      return "deny";
+      return { decision: "deny" };
     }
-    return new Promise<ApprovalDecision>((resolve) => {
-      const timer = setTimeout(() => {
+    if (isAborted(options.signal)) {
+      await this.closePrompt(approvalId, closeByFor(options.signal));
+      return { decision: "deny", approvalId };
+    }
+    return new Promise<ApprovalAnswer>((resolve) => {
+      const signal = options.signal;
+      const onAbort = (): void => {
+        // The turn was stopped (flow 396 `/stop`): the question is moot, so it is a deny and a late press finds nothing.
+        const waiter = this.waiters.get(approvalId);
+        if (waiter !== undefined) clearTimeout(waiter.timer);
         this.waiters.delete(approvalId);
-        resolve("deny");
+        resolve({ decision: "deny", approvalId });
+        // Flow 419: the buttons may still be in the topic; serve takes them down and says where it was answered.
+        void this.closePrompt(approvalId, closeByFor(signal));
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        this.waiters.delete(approvalId);
+        resolve({ decision: "deny" });
       }, timeoutMs);
-      this.waiters.set(approvalId, { resolve, timer });
+      this.waiters.set(approvalId, {
+        resolve: (pressed) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve({ ...pressed, approvalId });
+        },
+        timer,
+      });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
+  }
+
+  /** Tell the topic whether an "Always" press became a saved rule. Best effort: the approval itself already counted. */
+  async reportApprovalResult(approvalId: string, remembered: boolean): Promise<void> {
+    try {
+      await this.post("approval-result", { sessionId: this.options.sessionId, approvalId, remembered });
+    } catch {
+      // The message keeps saying "Saving the rule"; nothing else depends on this.
+    }
   }
 
   /**
@@ -334,19 +515,59 @@ export class RemoteClient {
    * stream. Nothing here ever turns an absent answer into a yes.
    */
   async requestChoice(text: string, rows: string[][], timeoutMs: number, forUserId?: number): Promise<number | undefined> {
+    const answer = await this.askChoice(text, rows, timeoutMs, forUserId === undefined ? {} : { forUserId });
+    return answer.kind === "index" ? answer.index : undefined;
+  }
+
+  /**
+   * Like {@link requestChoice}, and the prompt can offer an own answer (flow 401). The answer is the
+   * pressed position, the person's own text, or none. With `own`, serve may keep the prompt open past
+   * `timeoutMs` for a typed reply, so the wait here is bounded by that window too; serve says so with a
+   * `closed` frame the moment it gives up, so the shell never waits longer than serve does.
+   *
+   * When serve refused the question (too many waiting, no stream, an error) the answer is none and says
+   * why in `refusal`, so the caller can tell the operator instead of calling it a timeout (flow 387 review, L-4).
+   *
+   * `signal` ends the question from this side (the dock answered first, the turn stopped): serve is told,
+   * puts the topic message in its final state, and the answer is none. An abort with the reason `"cancelled"`
+   * (the turn stopped) is told to serve as cancelled; any other abort (the dock answered) as answered in the shell.
+   */
+  async askChoice(
+    text: string,
+    rows: string[][],
+    timeoutMs: number,
+    options: { forUserId?: number; own?: boolean; signal?: AbortSignal } = {},
+  ): Promise<ChoiceAnswer> {
+    const none: ChoiceAnswer = { kind: "none" };
     if (!this.connected) {
-      return undefined;
+      return { kind: "none", refusal: "the shell is not connected to this topic" };
     }
-    const body: PromptBody = { sessionId: this.options.sessionId, text, rows, timeoutMs, ...(forUserId === undefined ? {} : { forUserId }) };
+    if (options.signal?.aborted === true) {
+      return none;
+    }
+    const body: PromptBody = {
+      sessionId: this.options.sessionId,
+      text,
+      rows,
+      timeoutMs,
+      ...(options.forUserId === undefined ? {} : { forUserId: options.forUserId }),
+      ...(options.own === true ? { own: true } : {}),
+    };
     let promptId: string;
     try {
       const response = await this.post("prompt", body);
       if (!response.ok) {
-        return undefined;
+        return { kind: "none", refusal: await refusalReason(response) };
       }
       promptId = ((await response.json()) as PromptResponse).promptId;
     } catch {
-      return undefined;
+      return { kind: "none", refusal: "the question could not be sent to the topic" };
+    }
+    const signal = options.signal;
+    if (signal?.aborted === true) {
+      this.markChoiceClosed(promptId);
+      await this.closePrompt(promptId, closeByFor(signal));
+      return none;
     }
     const early = this.earlyChoices.get(promptId);
     if (early !== undefined) {
@@ -354,15 +575,43 @@ export class RemoteClient {
       return early;
     }
     if (!this.connected) {
-      return undefined;
+      return none;
     }
-    return new Promise<number | undefined>((resolve) => {
-      const timer = setTimeout(() => {
+    return new Promise<ChoiceAnswer>((resolve) => {
+      const onAbort = (): void => {
+        const waiter = this.choiceWaiters.get(promptId);
+        if (waiter !== undefined) clearTimeout(waiter.timer);
         this.choiceWaiters.delete(promptId);
-        resolve(undefined);
-      }, timeoutMs);
-      this.choiceWaiters.set(promptId, { resolve, timer });
+        this.markChoiceClosed(promptId);
+        resolve(none);
+        void this.closePrompt(promptId, closeByFor(signal));
+      };
+      const timer = setTimeout(
+        () => {
+          signal?.removeEventListener("abort", onAbort);
+          this.choiceWaiters.delete(promptId);
+          resolve(none);
+        },
+        timeoutMs + (options.own === true ? OWN_ANSWER_WINDOW_MS : 0),
+      );
+      this.choiceWaiters.set(promptId, {
+        resolve: (answer) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve(answer);
+        },
+        timer,
+      });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
+  }
+
+  /** Best effort: serve ends a prompt the shell no longer needs. A failure leaves the topic message to expire by itself. */
+  private async closePrompt(promptId: string, by: "shell" | "cancelled" = "cancelled"): Promise<void> {
+    try {
+      await this.post("prompt-close", { sessionId: this.options.sessionId, promptId, by });
+    } catch {
+      // The prompt expires on its own.
+    }
   }
 
   /**
@@ -413,7 +662,7 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | PromptCloseBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
@@ -539,7 +788,15 @@ export class RemoteClient {
               this.lastHeartbeatAt = Date.now();
               this.options.onStatus?.({ state: "connected" });
               if (this.name !== undefined && this.threadId !== undefined && this.runTimeoutMs !== undefined) {
-                this.settleFirst({ ok: true, name: this.name, threadId: this.threadId, runTimeoutMs: this.runTimeoutMs });
+                this.settleFirst({
+                  ok: true,
+                  name: this.name,
+                  threadId: this.threadId,
+                  runTimeoutMs: this.runTimeoutMs,
+                  ...(this.permissionMode === undefined ? {} : { permissionMode: this.permissionMode }),
+                  ...(this.approvalTimeoutMs === undefined ? {} : { approvalTimeoutMs: this.approvalTimeoutMs }),
+                  ...(this.firstReused === undefined ? {} : { reused: this.firstReused }),
+                });
               }
             } else if (status.kind === "superseded") {
               // Another connection for this session id took over; fighting it would loop forever.
@@ -579,6 +836,9 @@ export class RemoteClient {
       this.name = result.name;
       this.threadId = result.threadId;
       this.runTimeoutMs = result.runTimeoutMs;
+      this.permissionMode = result.permissionMode;
+      this.approvalTimeoutMs = result.approvalTimeoutMs;
+      if (this.firstReused === undefined && typeof result.reused === "boolean") this.firstReused = result.reused;
       return;
     }
     const error = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
@@ -606,11 +866,16 @@ export class RemoteClient {
       // callbacks are handled at once, below.
       this.inboundChain = this.inboundChain.then(() => this.handleInbound(inbound)).catch(() => undefined);
     } else if (event === "approval") {
-      const approval = parsed as ApprovalEvent;
-      this.resolveApproval(approval.approvalId, approval.decision);
+      this.handleApprovalFrame(parsed);
     } else if (event === "choice") {
       const choice = parsed as ChoiceEvent;
-      this.resolveChoice(choice.promptId, choice.index);
+      if (typeof choice.own === "string") {
+        this.resolveChoice(choice.promptId, { kind: "own", text: choice.own });
+      } else if (choice.closed !== undefined) {
+        this.resolveChoice(choice.promptId, { kind: "none" });
+      } else {
+        this.resolveChoice(choice.promptId, { kind: "index", index: choice.index });
+      }
     } else if (event === "callback") {
       const callback = parsed as CallbackEvent;
       if (this.options.onCallback !== undefined) {
@@ -658,17 +923,148 @@ export class RemoteClient {
     }
   }
 
-  private resolveApproval(approvalId: string, decision: ApprovalDecision): void {
+  /**
+   * A decision frame. The ack says whether the decision was APPLIED to a live question here, not
+   * only that the frame arrived: serve shows "Allowed" only for an applied one, so what the operator
+   * reads in the topic is what the shell did. With a question waiting it is applied at once. With none
+   * it is parked for a moment (the frame can beat the response that names its id) and acked as applied
+   * only if a question claims it in time, otherwise as not applied (a stale id, a reconnect, a
+   * question already given up on). A repeat for an id already settled is acknowledged again with the
+   * same outcome (the first ack may have been lost) but is not said or resolved twice.
+   */
+  private handleApprovalFrame(parsed: unknown): void {
+    const read = readApprovalEvent(parsed);
+    if (read === undefined || !isApprovalId(read.approvalId)) {
+      return;
+    }
+    const { approvalId, pressed } = read;
+    const seen = this.seenApprovals.get(approvalId);
+    if (seen === "pending") {
+      // Parked and waiting: its own ack goes out when it settles.
+      return;
+    }
+    this.countUnconfirmed(approvalId);
+    if (seen !== undefined) {
+      void this.ackApproval(approvalId, seen === "applied");
+      return;
+    }
+    if (this.waiters.has(approvalId)) {
+      this.settleApproval(approvalId, pressed.decision, true, () => this.resolveApproval(approvalId, pressed));
+      return;
+    }
+    this.rememberSeen(approvalId, "pending");
+    this.parkEarlyDecision(approvalId, pressed);
+  }
+
+  private rememberSeen(approvalId: string, outcome: "applied" | "not-applied" | "pending"): void {
+    this.seenApprovals.delete(approvalId);
+    this.seenApprovals.set(approvalId, outcome);
+    if (this.seenApprovals.size > MAX_SEEN_APPROVALS) {
+      const oldest = this.seenApprovals.keys().next().value;
+      if (oldest !== undefined) {
+        this.seenApprovals.delete(oldest);
+      }
+    }
+  }
+
+  /** Count a decision as not confirmed until its ack goes through; the oldest drop past the bound. */
+  private countUnconfirmed(approvalId: string): void {
+    this.unackedApprovals.delete(approvalId);
+    this.unackedApprovals.set(approvalId, Date.now());
+    this.notifyUnconfirmed();
+    while (this.unackedApprovals.size > MAX_UNCONFIRMED_APPROVALS) {
+      const oldest = this.unackedApprovals.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.unackedApprovals.delete(oldest);
+    }
+  }
+
+  /** Say what happened on screen, then (optionally) hand the decision over, then acknowledge it to serve. */
+  private settleApproval(approvalId: string, decision: ApprovalDecision, applied: boolean, apply?: () => void): void {
+    this.rememberSeen(approvalId, applied ? "applied" : "not-applied");
+    try {
+      this.options.onApprovalFrame?.({ approvalId, decision, applied });
+    } catch {
+      // A failing display never costs the decision.
+    }
+    apply?.();
+    void this.ackApproval(approvalId, applied);
+  }
+
+  /** Park a decision no question has claimed yet, for a short bounded time. */
+  private parkEarlyDecision(approvalId: string, pressed: PressedApproval): void {
+    while (this.earlyDecisions.size >= MAX_EARLY_DECISIONS) {
+      const oldest = this.earlyDecisions.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.dropEarlyDecision(oldest);
+    }
+    const timer = setTimeout(() => this.dropEarlyDecision(approvalId), this.earlyDecisionMs);
+    (timer as { unref?: () => void }).unref?.();
+    this.earlyDecisions.set(approvalId, { pressed, timer });
+  }
+
+  /** Nobody claimed it: it was for a question that is gone, so it is acked as not applied. */
+  private dropEarlyDecision(approvalId: string): void {
+    const early = this.earlyDecisions.get(approvalId);
+    if (early === undefined) {
+      return;
+    }
+    clearTimeout(early.timer);
+    this.earlyDecisions.delete(approvalId);
+    if (!this.stopped) {
+      this.settleApproval(approvalId, early.pressed.decision, false);
+    }
+  }
+
+  private async ackApproval(approvalId: string, applied: boolean): Promise<void> {
+    let confirmed = false;
+    try {
+      const response = await this.post("approval-ack", { sessionId: this.options.sessionId, approvalId, applied });
+      confirmed = response.ok;
+    } catch {
+      // Stays counted as not confirmed for a minute; serve shows the approval as not confirmed after its own wait.
+    }
+    if (this.stopped) {
+      // The ack finished after stop(): no timer (teardown already cleared them all) and no repaint of a dead panel.
+      return;
+    }
+    if (confirmed) {
+      this.unackedApprovals.delete(approvalId);
+      this.notifyUnconfirmed();
+      return;
+    }
+    this.lingerTimers.add(
+      this.scheduleUnref(() => {
+        // Aged out: the display must not keep showing it after the count has dropped.
+        this.notifyUnconfirmed();
+      }, UNCONFIRMED_APPROVAL_LINGER_MS + 50),
+    );
+  }
+
+  private notifyUnconfirmed(): void {
+    try {
+      this.options.onUnconfirmedChange?.();
+    } catch {
+      // A failing repaint never costs an approval.
+    }
+  }
+
+  private scheduleUnref(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+    const timer = setTimeout(() => {
+      this.lingerTimers.delete(timer);
+      fn();
+    }, ms);
+    (timer as { unref?: () => void }).unref?.();
+    return timer;
+  }
+
+  private resolveApproval(approvalId: string, decision: PressedApproval): void {
     const waiter = this.waiters.get(approvalId);
     if (waiter === undefined) {
-      // The decision beat the response that names its id; park it briefly.
-      if (this.earlyDecisions.size >= MAX_EARLY_DECISIONS) {
-        const oldest = this.earlyDecisions.keys().next().value;
-        if (oldest !== undefined) {
-          this.earlyDecisions.delete(oldest);
-        }
-      }
-      this.earlyDecisions.set(approvalId, decision);
       return;
     }
     clearTimeout(waiter.timer);
@@ -676,9 +1072,13 @@ export class RemoteClient {
     waiter.resolve(decision);
   }
 
-  private resolveChoice(promptId: string, index: number): void {
+  private resolveChoice(promptId: string, answer: ChoiceAnswer): void {
     const waiter = this.choiceWaiters.get(promptId);
     if (waiter === undefined) {
+      if (this.closedChoices.has(promptId)) {
+        // This side already ended the question (the dock answered, the turn stopped): a late answer is not parked.
+        return;
+      }
       // The press beat the response that names its id; park it briefly.
       if (this.earlyChoices.size >= MAX_EARLY_DECISIONS) {
         const oldest = this.earlyChoices.keys().next().value;
@@ -686,19 +1086,30 @@ export class RemoteClient {
           this.earlyChoices.delete(oldest);
         }
       }
-      this.earlyChoices.set(promptId, index);
+      this.earlyChoices.set(promptId, answer);
       return;
     }
     clearTimeout(waiter.timer);
     this.choiceWaiters.delete(promptId);
-    waiter.resolve(index);
+    waiter.resolve(answer);
+  }
+
+  private markChoiceClosed(promptId: string): void {
+    this.earlyChoices.delete(promptId);
+    if (this.closedChoices.size >= MAX_EARLY_DECISIONS) {
+      const oldest = this.closedChoices.values().next().value;
+      if (oldest !== undefined) {
+        this.closedChoices.delete(oldest);
+      }
+    }
+    this.closedChoices.add(promptId);
   }
 
   private failChoices(): void {
     for (const [id, waiter] of [...this.choiceWaiters.entries()]) {
       clearTimeout(waiter.timer);
       this.choiceWaiters.delete(id);
-      waiter.resolve(undefined);
+      waiter.resolve({ kind: "none" });
     }
     this.earlyChoices.clear();
   }
@@ -707,9 +1118,12 @@ export class RemoteClient {
     for (const [id, waiter] of [...this.waiters.entries()]) {
       clearTimeout(waiter.timer);
       this.waiters.delete(id);
-      waiter.resolve("deny");
+      waiter.resolve({ decision: "deny" });
     }
-    this.earlyDecisions.clear();
+    for (const id of [...this.earlyDecisions.keys()]) {
+      // Nobody is coming for these: each is acked as not applied (and said so), unless the shell is gone.
+      this.dropEarlyDecision(id);
+    }
     this.failChoices();
   }
 }

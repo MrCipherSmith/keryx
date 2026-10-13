@@ -49,6 +49,7 @@ import { readConfigFile } from "../lib/config-dir";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import type { BinaryPin } from "./granted-binary";
 import { type DigestConfig, digestConfigProblems, normalizeDigestConfig } from "./digest-config";
+import { type ReviewConfig, normalizeReviewConfig, reviewConfigProblems } from "./review-config";
 import { grantedToolProblems } from "./granted-tools";
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,11 @@ export interface AgentTaskAction {
    * Covered by `confirmedHash` like every other field.
    */
   readonly digest?: DigestConfig;
+  /**
+   * Flow 424: present only on a scheduled autonomous review — an `agent-task` that runs
+   * `keryx review run --autonomous` on one pull request. Covered by `confirmedHash`.
+   */
+  readonly review?: ReviewConfig;
 }
 
 /**
@@ -478,6 +484,7 @@ function agentTaskProblems(raw: Record<string, unknown>): string[] {
   }
   // Flow 389: the optional digest block, validated against this action's own grants.
   problems.push(...digestConfigProblems(raw.digest, grants !== null && typeof grants === "object" && !Array.isArray(grants) ? (grants as Record<string, unknown>) : undefined));
+  problems.push(...reviewConfigProblems(raw.review, raw as { digest?: unknown }));
   return problems;
 }
 
@@ -708,6 +715,7 @@ function normalizeAgentTask(action: AgentTaskAction): AgentTaskAction {
     },
     report: { keep: action.report?.keep ?? DEFAULT_AGENT_TASK_REPORT_KEEP },
     ...(action.digest !== undefined ? { digest: normalizeDigestConfig(action.digest) as DigestConfig } : {}),
+    ...(action.review !== undefined ? { review: normalizeReviewConfig(action.review) as ReviewConfig } : {}),
   };
 }
 

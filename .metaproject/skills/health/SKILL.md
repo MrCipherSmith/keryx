@@ -31,5 +31,5 @@ keryx health baseline update
 ## Notes
 
 - Sources are required or optional; missing required sources fail the gate under `--strict`.
-- Baseline is accept-current on first run; update it explicitly.
+- Baseline is accept-current on first run; update it explicitly. It records which sources it measured: a source measured later is left out of the regression comparison (the gate names it) until the baseline is updated.
 - The report is a versioned contract consumed by gdskills.

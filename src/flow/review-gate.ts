@@ -1,3 +1,4 @@
+import { packageResearchErrors } from "../review/research";
 /**
  * The review gate (flow 204, AC5-AC7 / specification §2).
  *
@@ -441,6 +442,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
     const scopePath = path.join(packageDir, "scope.md");
     const scope = (await pathExists(scopePath)) ? await readScopeMarkdown(scopePath) : null;
 
+    problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings));
     rounds.push({
       reviewId,
       dir: path.relative(cwd, packageDir),

@@ -406,3 +406,79 @@ describe("the fake Bot API and HTML", () => {
     expect(api.sent[0]?.parseMode).toBeUndefined();
   });
 });
+
+describe("renderTelegramHtml: lists, tasks and rules (flow 395, AC3)", () => {
+  test("an ordered list keeps its numbers and a nested bullet keeps its indentation", () => {
+    expect(renderTelegramHtml("1. one\n2. two\n   - nested\n     - deeper\n3. three")).toBe("1. one\n2. two\n   \u2022 nested\n     \u2022 deeper\n3. three");
+  });
+
+  test("a task item shows an empty or a ticked box instead of [ ] and [x]", () => {
+    expect(renderTelegramHtml("- [ ] open\n- [x] done\n- [X] also done")).toBe("\u2610 open\n\u2611 done\n\u2611 also done");
+  });
+
+  test("a task item keeps its indentation and its inline markup", () => {
+    expect(renderTelegramHtml("  - [x] ship **it**")).toBe("  \u2611 ship <b>it</b>");
+  });
+
+  test("a rule shows as a line, and only --- is a rule", () => {
+    expect(renderTelegramHtml("above\n---\nbelow")).toBe("above\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nbelow");
+    expect(renderTelegramHtml("-----")).toBe("\u2500".repeat(12));
+    expect(renderTelegramHtml("- - -")).not.toContain("\u2500");
+  });
+
+  test("a rule line is inside a fence left as written", () => {
+    expect(renderTelegramHtml("```\n---\n```")).toBe("<pre><code>---</code></pre>");
+  });
+
+  test("all of it passes the validator and adds no tag", () => {
+    const html = renderTelegramHtml("1. a\n   - [x] b\n\n---\n\n| h | i |\n|---|---|\n| 1 | 2 |");
+    expect(checkTelegramHtml(html).ok).toBe(true);
+    expect([...html.matchAll(/<\/?([a-z]+)/g)].map((match) => match[1])).toEqual(["pre", "pre"]);
+  });
+});
+
+describe("renderTelegramHtml: text without the new constructs is unchanged from 0.3.63 (AC9)", () => {
+  // Each expected string was produced by the 0.3.63 renderer.
+  const GOLDEN: [string, string][] = [
+    ["Result: **ok** with `a < b` & more", "Result: <b>ok</b> with <code>a &lt; b</code> &amp; more"],
+    ["## Heading with `code`\n\n- first _item_\n- second\n\n> a quote\n> two lines", "<b>Heading with code</b>\n\n\u2022 first <i>item</i>\n\u2022 second\n\n<blockquote>a quote\ntwo lines</blockquote>"],
+    ["```ts\nconst ok = a < b;\n```\n\nafter", '<pre><code class="language-ts">const ok = a &lt; b;</code></pre>\nafter'],
+    ["see [docs](https://example.com/a?b=1&c=2) and https://a.b", 'see <a href="https://example.com/a?b=1&amp;c=2">docs</a> and https://a.b'],
+    ["1. one\n2. two\n   - nested", "1. one\n2. two\n   \u2022 nested"],
+  ];
+
+  test.each(GOLDEN)("%j", (input, expected) => {
+    expect(renderTelegramHtml(input)).toBe(expected);
+  });
+
+  test("a reply split into parts is cut exactly where 0.3.63 cut it", () => {
+    const long = Array.from({ length: 12 }, (_, n) => `Paragraph ${n + 1}: the settings modal reads the same file.`).join("\n\n");
+    const parts = formatReply(long, 200);
+    expect(parts).toHaveLength(4);
+    expect(parts[0]).toBe("(1/4)\nParagraph 1: the settings modal reads the same file.\n\nParagraph 2: the settings modal reads the same file.\n\nParagraph 3: the settings modal reads the same file.");
+  });
+});
+
+describe("renderTelegramHtml: generated tables, lists and rules keep every invariant (AC4)", () => {
+  function next(seed: number): () => number {
+    let state = seed;
+    return () => {
+      state = (state * 1103515245 + 12345) & 0x7fffffff;
+      return state >>> 8;
+    };
+  }
+  const PIECES = ["| a | b |\n|---|:-:|\n| 1 | 2 |", "1. x", "   - y", "- [x] z", "- [ ] w", "---", "text **b** `c`", "<b>raw</b>", "> q", "# h", "| lone | pipe |", "\n"];
+
+  test("300 mixed inputs render balanced, validated HTML with only the renderer's own tags", () => {
+    for (let seed = 1; seed <= 300; seed += 1) {
+      const rand = next(seed);
+      const text = Array.from({ length: 2 + (rand() % 10) }, () => PIECES[rand() % PIECES.length] as string).join("\n");
+      const html = renderTelegramHtml(text);
+      const checked = checkTelegramHtml(html);
+      if (!checked.ok) {
+        throw new Error(`seed ${seed}: ${checked.reason}\ninput: ${JSON.stringify(text)}`);
+      }
+      expect(html).not.toContain("<b>raw</b>");
+    }
+  });
+});

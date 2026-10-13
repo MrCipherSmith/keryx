@@ -219,7 +219,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/mode",
     group: "Look and feel",
-    summary: "Show or switch the permission mode — /mode [ask|trust|auto].",
+    summary: "Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides.",
   },
   {
     kind: "slash",
@@ -253,6 +253,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/trail",
+    group: "Working in keryx shell",
+    summary: "The tool calls this session recorded (what stays when older rounds leave the request) — /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP].",
+  },
+  {
+    kind: "slash",
+    name: "/notes",
+    group: "Working in keryx shell",
+    summary: "The notes the model keeps for itself (the facts that survive older rounds) — /notes [key].",
+  },
+  {
+    kind: "slash",
     name: "/rewind",
     group: "Working in keryx shell",
     summary: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]; snapshots cover the work tree only.",
@@ -275,6 +287,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/queue",
     group: "Working in keryx shell",
     summary: "Manage the main queue — /queue <remove|edit|force> [N] (N = qN position, default 1).",
+  },
+  {
+    kind: "slash",
+    name: "/tasks",
+    group: "Working in keryx shell",
+    summary: "List supervised shell tasks — /tasks [output <task_id> [cursor] | kill <task_id>].",
   },
   {
     kind: "slash",
@@ -327,7 +345,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "review",
     group: "Managed work",
-    summary: "Managed review packages and lightweight report-only review mode.",
+    summary: "Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands.",
   },
   { kind: "slash", name: "/flows", group: "Managed work", summary: "Browse project flows and inspect one." },
   {
@@ -455,6 +473,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "permissions",
+    group: "Automation",
+    summary: "The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one.",
+  },
+  {
+    kind: "cli",
     name: "governance",
     group: "Automation",
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
@@ -463,7 +487,20 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "decisions",
     group: "Automation",
-    summary: "Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind).",
+    summary:
+      "Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). A question also takes your own text: the last row \"Свой ответ…\" in the shell, the \"✍ Свой ответ\" button in Telegram, and Tab after an option adds a typed reason.",
+  },
+  {
+    kind: "cli",
+    name: "intake",
+    group: "Automation",
+    summary: "GitHub work intake: tickets, review requests, failed CI, PR comments and board movement as cards in Telegram; status, pause, poll by hand, and a usefulness report.",
+  },
+  {
+    kind: "cli",
+    name: "research",
+    group: "Automation",
+    summary: "Part 1 materials: sync refreshes the -latest counts, the text-free decisions export and the status page next to the catalog; no commit, only when the content changed.",
   },
   {
     kind: "cli",
@@ -503,9 +540,21 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/autoreview",
+    group: "Automation",
+    summary: "Autonomous PR review with nobody at the keyboard: start, list, stop, arbiter — phase, rounds and tokens in the sidebar; arbiter lists what the question arbiter decided.",
+  },
+  {
+    kind: "slash",
     name: "/approvals",
     group: "Automation",
     summary: "Pending remote approvals with scope, consequence and expiry — allow or deny one call, once.",
+  },
+  {
+    kind: "slash",
+    name: "/permissions",
+    group: "Automation",
+    summary: "The saved shell rules (what Always remembered): honoured or not, session grants — remove one.",
   },
   {
     kind: "slash",
@@ -524,7 +573,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/decisions",
     group: "Automation",
-    summary: "Recommendation journal report: match share by mode and stage, and the deviations with their reasons.",
+    summary: "Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row).",
   },
   {
     kind: "slash",
@@ -542,13 +591,37 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/remote-control",
     group: "Automation",
-    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name|off|status].",
+    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status].",
+  },
+  {
+    kind: "slash",
+    name: "/history",
+    group: "Automation",
+    summary: "Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default.",
   },
   {
     kind: "slash",
     name: "/channels",
     group: "Automation",
     summary: "Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status].",
+  },
+  {
+    kind: "slash",
+    name: "/intake",
+    group: "Automation",
+    summary: "GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status|list|pause|resume|poll].",
+  },
+  {
+    kind: "slash",
+    name: "/rendering",
+    group: "Automation",
+    summary: "How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto|rich|html|plain].",
+  },
+  {
+    kind: "slash",
+    name: "/remote-policy",
+    group: "Automation",
+    summary: "Telegram defaults for a turn started there: mode ask|trust, run limit, approval wait. Never changes the shell's /mode.",
   },
 
   // ---- External agents, ACP and MCP ----------------------------------------
@@ -745,6 +818,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "retention",
     group: "Maintenance and diagnostics",
     summary: "Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars).",
+  },
+  {
+    kind: "cli",
+    name: "remote",
+    group: "Automation",
+    summary: "Preview how Telegram replies are rendered (tables, lists, rules) in every mode, with no network: format-sample.",
   },
   {
     kind: "cli",

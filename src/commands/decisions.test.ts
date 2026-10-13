@@ -45,10 +45,10 @@ const OPEN = ["open", "--question", "Which approach?", "--option", "a=Safe", "--
 test("open returns an id, a mode, the display order and whether to mark; answer reveals and asks for a reason once", async () => {
   const opened = await run(OPEN);
   expect(opened.exitCode).toBe(0);
-  const decision = JSON.parse(opened.out) as { id: string; mode: string; order: string[]; showMark: boolean; options: Array<{ id: string; label: string }> };
-  expect(["ordinary", "blind"]).toContain(decision.mode);
+  const decision = JSON.parse(opened.out) as { id: string; mode: string; arm: string; order: string[]; showMark: boolean; options: Array<{ id: string; label: string }> };
+  expect(["ordinary", "blind", "partial"]).toContain(decision.mode);
   expect([...decision.order].sort()).toEqual(["a", "b", "c"]);
-  expect(decision.showMark).toBe(decision.mode === "ordinary");
+  expect(decision.showMark).toBe(decision.arm !== "D");
   expect(decision.options.map((o) => o.id)).toEqual(decision.order);
 
   const answered = await run(["answer", decision.id, "--choice", "c", "--json"]);
@@ -135,4 +135,23 @@ test("open takes the flow and stage from the checkout when they are not given (F
   const args = OPEN.filter((a, i) => a !== "--stage" && OPEN[i - 1] !== "--stage");
   const opened = JSON.parse((await run([...args, "--json"])).out) as { flow: string | null };
   expect(opened.flow).toBe("007");
+});
+
+test("import: a bad line is skipped and counted, and with --json a failure is JSON", async () => {
+  const good = { id: "h1", at: "2026-08-14T09:30:00Z", flow: null, stage: "design", question: "Q?", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }], recommendation: { optionId: "a", reason: "r" }, source: "poll 1", answer: { choice: "a" } };
+  await writeFile(path.join(root, "in.jsonl"), `${JSON.stringify(good)}\n{broken\n`);
+  const done = await run(["import", "in.jsonl"]);
+  expect(done.exitCode).toBe(0);
+  expect(done.out.split("\n")[0]).toBe("Imported: 1, skipped: 0, with recommendation: 1, answered: 1, deviations: 0, malformed: 1");
+  expect(done.out).toContain("line 2: not valid JSON");
+
+  const missing = await run(["import", "nope.jsonl", "--json"]);
+  expect(missing.exitCode).toBe(1);
+  expect(JSON.parse(missing.out)).toEqual({ error: "cannot read nope.jsonl" });
+  expect(missing.err).toBe("");
+  const plain = await run(["import", "nope.jsonl"]);
+  expect(plain.err).toBe("cannot read nope.jsonl");
+
+  const json = await run(["import", "in.jsonl", "--json"]);
+  expect(JSON.parse(json.out)).toMatchObject({ imported: 0, skipped: 1, malformed: [{ line: 2, message: "not valid JSON" }] });
 });

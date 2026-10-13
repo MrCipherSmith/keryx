@@ -187,11 +187,18 @@ it raises no approvals today; they become reachable when a tool registry is
 injected into the turn. A Telegram or web card for these approvals, session-wide
 grants from a remote answer, and approvals for unattended trigger runs are not
 built. (A `keryx shell` session driven from a Telegram topic with `/remote-control`
-has its own Allow/Deny buttons in the topic; that path has been exercised only
+has its own Allow/Always/Deny buttons in the topic; that path has been exercised only
 against a fake Bot API, not real Telegram. In that path a topic holds at most 500
 undelivered lines, and a pure-collision batch after Telegram renumbers its updates,
 one whose ids are all ones already seen, cannot be told from a redelivery and is
-dropped.)
+dropped. A turn from the topic runs in `trust` by default, so a person with an
+allowed Telegram id can run any command the floors do not stop, including network
+and outside-project commands, with no run time limit; set `permissionMode: "ask"`
+and a `runTimeoutMs` in `remote/config.json` to be stricter. An `Always` rule is
+removed only in the shell or with `keryx permissions remove`, never from a topic.
+The 15-minute approval wait and `/remote-policy` apply to the Telegram path only; a
+running `keryx serve` hands changed values to shells that register after its own
+restart or reload.)
 
 Boundaries that hold:
 

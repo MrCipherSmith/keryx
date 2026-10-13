@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
 import { AGENT_SLASH_COMMANDS } from "../commands/agent-commands";
+import { describeRoundLimitSplit } from "../commands/round-limit";
 import {
   allHelpTokens,
   closestHelpTopics,
@@ -324,6 +325,77 @@ describe("remote control is documented where operators look", () => {
   });
 });
 
+// Flow 397 (AC6): the approval ack and its "not confirmed" ending are told in the same four
+// places, and the version is above 0.3.64, the release before it.
+describe("the approval ack is documented where operators look", () => {
+  const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`AC6: ${file} names the approval ack and the "not confirmed" ending`, () => {
+      const text = read(file).replace(/\s+/g, " ");
+      expect(text).toContain("not confirmed");
+      expect(text).toMatch(/approval-ack|confirmed by the shell|confirm\w* (?:it )?received/);
+    });
+  }
+
+  test("AC6: the guide describes the ack, the wait and the counter", () => {
+    const text = read("docs/docs/guides/drive-keryx-remotely.md").replace(/\s+/g, " ");
+    expect(text).toContain("approval-ack");
+    expect(text).toContain("not confirmed");
+    expect(text).toContain("5 seconds");
+    expect(text).toContain("Approvals not confirmed");
+  });
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`F2: ${file} says the ack carries whether the answer was applied, and the "Not applied" ending`, () => {
+      const text = read(file).replace(/\s+/g, " ");
+      expect(text).toMatch(/not applied|Not applied/);
+      expect(text).toMatch(/applied/);
+    });
+  }
+
+  // Flow 397 review S-1: the ack trusts the session id in its body under the shared shell token, and an
+  // older shell (no `applied`) is read as received-only, so it over-reports Allowed. Both are stated, and
+  // the behaviour is pinned in approval-ack.test.ts ("an ack with no applied field ...", "an ack from another session ...").
+  for (const file of ["docs/docs/guides/drive-keryx-remotely.md", "docs/docs/cli-reference.md"]) {
+    test(`S-1: ${file} states that an older shell over-reports Allowed and that the ack is authorised by the shared shell token`, () => {
+      const text = read(file).replace(/\s+/g, " ");
+      expect(text).toContain("over-report");
+      expect(text).toMatch(/shared shell token/);
+      expect(text).toMatch(/older shell|shell older than/);
+    });
+  }
+
+  // Flow 397 review T-4: the bump is read from the release notes, not from a number that goes stale. The
+  // entry that tells the approval ack sits under a version above 0.3.66 (main when the flow merged), and
+  // package.json is at or past that version, so a missing or lowered bump fails at any later release.
+  test("AC6: the approval ack is released under a version above 0.3.66, and package.json has reached it", () => {
+    const parse = (version: string): number => {
+      const [major = 0, minor = 0, patch = 0] = version.split(".").map((part) => Number.parseInt(part, 10));
+      return major * 1_000_000 + minor * 1_000 + patch;
+    };
+    const sections = read("CHANGELOG.md").split(/^## \[/m).slice(1);
+    const entry = sections.find((section) => section.includes("Approval answers from Telegram are confirmed by the shell"));
+    expect(entry).toBeDefined();
+    const released = /^(\d+\.\d+\.\d+)\]/.exec(entry ?? "")?.[1];
+    expect(released).toBeDefined();
+    expect(parse(released ?? "0.0.0")).toBeGreaterThan(parse("0.3.66"));
+    const current = (JSON.parse(read("package.json")) as { version: string }).version;
+    expect(parse(current)).toBeGreaterThanOrEqual(parse(released ?? "0.0.0"));
+  });
+});
+
 // Flow 377: `/channels` is told in the same places, and the version is above 0.3.48.
 describe("/channels is documented where operators look", () => {
   const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
@@ -346,5 +418,28 @@ describe("/channels is documented where operators look", () => {
       .split(".")
       .map((part) => Number.parseInt(part, 10));
     expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_048);
+  });
+});
+
+describe("flow 429 AC7: /mode help states the round limit the turn loop enforces", () => {
+  test("the static /mode summary carries the default split describeRoundLimitSplit renders", () => {
+    const entry = HELP_GROUPS.find((e) => e.kind === "slash" && e.name === "/mode");
+    expect(entry?.summary).toContain(`Round limit: ${describeRoundLimitSplit({})}`);
+    expect(entry?.summary).toContain("KERYX_AGENT_MAX_ROUNDS overrides");
+  });
+
+  test("the /mode command description follows an env override", async () => {
+    const previous = process.env.KERYX_AGENT_MAX_ROUNDS;
+    process.env.KERYX_AGENT_MAX_ROUNDS = "50";
+    try {
+      const specifier = "../commands/agent-commands?env-override";
+      const fresh = (await import(specifier)) as typeof import("../commands/agent-commands");
+      const slash = fresh.AGENT_SLASH_COMMANDS.find((c) => c.name === "/mode");
+      expect(slash?.description).toContain(describeRoundLimitSplit({ KERYX_AGENT_MAX_ROUNDS: "50" }));
+      expect(slash?.description).toContain("50 rounds per turn");
+    } finally {
+      if (previous === undefined) delete process.env.KERYX_AGENT_MAX_ROUNDS;
+      else process.env.KERYX_AGENT_MAX_ROUNDS = previous;
+    }
   });
 });

@@ -1,0 +1,1 @@
+{"tier": "standard", "tier_reasons": ["base:standard", "resolve:ranking-refused"], "inherit": true, "tier_resolution": "session-fallback", "model_discovery": {"provider": "", "candidates": [], "ranked": [], "session_rank": null, "fallback_reason": "the session names no model to anchor the ranking on"}}

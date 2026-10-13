@@ -30,6 +30,10 @@
       "method": "execution",
       "evidence": "at 4f1326d2 (worktree keryx-w376): ran `bun test` on review-fixes, client, shell-token, poll-lock, shell-bridge, restart, single-poller, second-serve, token-scope, main-queue and help-groups tests: 147 pass, 0 fail. client.ts target() now calls this.isAlive(endpoint.value.pid) (process.kill(pid, 0); ESRCH and EPERM both refused) before readShellToken, and both post() and the stream GET go through target(). service.ts start() calls mintShellToken after acquiring the poller lock and replaces the file atomically, so a restarted serve rejects every old token. review-fixes.test.ts 'a pid that is not running: no request is made at all, so no token leaves' (pass) records zero fetch calls for start() and reply(); 'a restarted serve rejects the old token, and a running shell re-reads the file and follows' (pass) gets 401 for the old token and a reconnect with the new one. Residual, not part of the reproduced scenario: while the serve pid is alive the token still goes over loopback TCP to whatever answers on the port (no Unix socket or challenge-response); the SIGKILL-then-squat case no longer reproduces.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (the PR head b55951eb holds identical src/remote and src/tui trees): src/remote/client.ts target() refuses when isAlive(endpoint.pid) is false, before readShellToken; src/remote/service.ts mints a fresh shell token on every start (shell-token.ts mintShellToken); tests in src/remote/review-fixes.test.ts. Residual: while serve's pid is alive the token still goes over loopback TCP to the port."
     }
   },
   {
@@ -90,6 +94,10 @@
       "method": "execution",
       "evidence": "at 4f1326d2: poll-lock.ts createWhole() writes the pid to a private staging file and link()s it to poller.lock, so the lock never exists empty; a stale lock is renamed aside, inspected, and put back if what was moved is a live holder's fresh lock; a pid-less lock younger than EMPTY_LOCK_GRACE_MS (5 s) is treated as held. poll-lock.test.ts passes (10 tests), including 'the lock is never visible half-written', 'a young lock with no pid in it is somebody mid-write: held, not taken over' and 'two takers of the same dead lock: the one that loses the race puts the winner's lock back and refuses'. ensureShellToken is gone: shell-token.ts mintShellToken writes through writeOwnerOnlyFileAtomic (temp file plus rename) and is called only after the lock is held, so a second serve neither reads an empty token file nor rotates it.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/poll-lock.ts createWhole() link()s a fully written staging file, stale lock renamed aside and re-checked, young pid-less lock held; mintShellToken replaces ensureShellToken; src/remote/poll-lock.test.ts."
     }
   },
   {
@@ -115,6 +123,10 @@
       "method": "execution",
       "evidence": "at 4f1326d2: http-surface.ts deliverCallback computes told = stream?.write(...) === true and calls noteDecision only when told; without a stream or after a failed write nothing is posted. review-fixes.test.ts 'a decision that could not be handed to the shell is not announced as granted (MINOR-2)' (targeted run, pass) closes the stream, waits for serve to answer 409 to an approval probe, presses Allow, and asserts that 'Approval granted.' is never sent to the topic. The shell still does not acknowledge approval frames, so a write that succeeds into a half-open socket can still be announced; that was the 'better' option in the finding, not the minimum.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/http-surface.ts deliverCallback announces only when stream.write returned true; src/remote/review-fixes.test.ts 'a decision that could not be handed to the shell is not announced as granted'. Residual: no ack of approval frames by the shell."
     }
   },
   {
@@ -215,6 +227,10 @@
       "method": "execution",
       "evidence": "at 4f1326d2: shell-bridge.ts disable() calls host.dropQueuedTelegramLines() before its first await, tells the shell through notice() and, best effort, replies in the topic with the dropped lines before closing; tui-shell.ts wires dropQueuedTelegramLines to dropQueuedBySource(mainQueue, TG_SOURCE) and repaints, and the shell-close path reaches disable() through the finally. shell-bridge.test.ts 'turning off tells the shell and the topic which queued Telegram lines were dropped' and 'turning off with nothing queued says nothing about dropped lines' pass, as does main-queue.test.ts 'dropQueuedBySource splits the Telegram lines out in queue order and keeps the rest'. A crash of the shell process (not a close or an off) still loses queued lines without a notice, which the finding did not claim as in scope.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts disable() drops queued tg lines via host.dropQueuedTelegramLines and tells the shell and the topic; src/remote/shell-bridge.test.ts, src/tui/main-queue.test.ts."
     }
   },
   {
@@ -353,6 +369,10 @@
       "method": "execution",
       "evidence": "at 4f1326d2: client.ts keeps `registering`, the register request in flight, and close() awaits it (catching its error) before checking this.name, so the deregister is sent for a topic the register just created; the connect path also returns without opening a stream when stopped or leaving. review-fixes.test.ts 'the register finishes, then the client deregisters: no orphan topic is left behind' (targeted run, pass) holds the register request open, calls close(), releases it, and asserts a deregister request was made and the hub lists no session.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/client.ts close() awaits the in-flight register before deregistering; src/remote/review-fixes.test.ts 'the register finishes, then the client deregisters: no orphan topic is left behind'."
     }
   },
   {
@@ -403,6 +423,10 @@
       "method": "execution",
       "evidence": "at 4f1326d2: shell-bridge.ts toolCall() clears lastAssistantText during a Telegram turn, and tui-shell.ts wraps io.onToolCall to call remoteBridge.toolCall(), so a round that is followed by a tool call is dropped as narration and a turn that ends after a tool-only round sends no stale text. shell-bridge.test.ts 'text followed by a tool call is narration: the reply is the text of the round that ended without one', 'a tool call in a typed turn changes nothing' and 'a long reply is cut with a note; a failed turn without text says so; an empty one says done' pass (targeted run).",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts toolCall() clears lastAssistantText, wired from src/tui/tui-shell.ts onToolCall; src/remote/shell-bridge.test.ts 'text followed by a tool call is narration...'."
     }
   },
   {

@@ -2,11 +2,13 @@ import { expect, test } from "bun:test";
 import type { AgentIO } from "../commands/agent";
 import {
   createForegroundAgentIoFacade,
+  type TurnScopedIo,
   createForegroundForceHandoff,
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
   runAfterForegroundSettlement,
+  settleForegroundOperation,
 } from "./foreground-operation";
 
 // Two Force presses arriving while one operation is still settling.
@@ -252,4 +254,95 @@ test("foreground facade shares MCP grants but denies their use after losing owne
   owner.settle(operation);
   expect(facade.readOnly?.()).toBe(true);
   expect(facade.permissionMode?.()).toBe("ask");
+});
+
+test("flow 396: the hooks of a Telegram turn reach that turn's facade only, never the shell's own io or another turn", async () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const asked: string[] = [];
+  const auto: string[] = [];
+  // The shell's io is the typed-turn behaviour: ask in the dock, mode ask, MCP grants apply.
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "ask",
+    mcpGrantsApply: () => true,
+    requestApproval: async (tool) => {
+      asked.push(`dock:${tool}`);
+      return false;
+    },
+    onAutoApproved: (tool) => auto.push(`typed:${tool}`),
+  };
+  const telegram: TurnScopedIo = {
+    permissionMode: () => "trust",
+    mcpGrantsApply: () => false,
+    requestApproval: async (tool) => {
+      asked.push(`topic:${tool}`);
+      return true;
+    },
+    onAutoApproved: (tool) => auto.push(`telegram:${tool}`),
+  };
+
+  const telegramTurn = createForegroundAgentIoFacade(owner, operation, io, telegram);
+  expect(telegramTurn.permissionMode?.()).toBe("trust");
+  expect(telegramTurn.mcpGrantsApply?.()).toBe(false);
+  expect(await telegramTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(true);
+  telegramTurn.onAutoApproved?.("shell_exec", "{}", { destructive: false, credentials: false });
+
+  // The shell's io, and a facade made without the hooks, are untouched by the Telegram turn running beside them.
+  expect(io.permissionMode?.()).toBe("ask");
+  expect(io.mcpGrantsApply?.()).toBe(true);
+  expect(await io.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+  const typedTurn = createForegroundAgentIoFacade(owner, operation, io);
+  expect(typedTurn.permissionMode?.()).toBe("ask");
+  expect(typedTurn.mcpGrantsApply?.()).toBe(true);
+  expect(await typedTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+  typedTurn.onAutoApproved?.("shell_exec", "{}", { destructive: false, credentials: false });
+
+  expect(asked).toEqual(["topic:shell_exec", "dock:shell_exec", "dock:shell_exec"]);
+  expect(auto).toEqual(["telegram:shell_exec", "typed:shell_exec"]);
+
+  // Losing ownership still wins over the hooks: a stale Telegram turn is a deny and mode ask.
+  owner.settle(operation);
+  expect(telegramTurn.permissionMode?.()).toBe("ask");
+  expect(await telegramTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+});
+
+
+test("ordinary cancellation still accepts stopped callbacks and finalization", () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  const painted: string[] = [];
+  const facade = createForegroundAgentIoFacade(owner, token, { write: () => {}, onSystem: s => painted.push(s) });
+  owner.cancel("user interruption");
+  facade.onSystem?.("[stopped]");
+  expect(painted).toEqual(["[stopped]"]);
+  expect(settleForegroundOperation(owner, token)).toBe(true);
+});
+
+test("a settlement handoff cannot dispatch into a replacement session", async () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  let dispatched = 0;
+  const pending = runAfterForegroundSettlement(owner, () => { dispatched += 1; });
+  owner.invalidateSession();
+  owner.settle(token);
+  await pending;
+  expect(dispatched).toBe(0);
+});
+
+
+test("session switch clears old Force selections and permits a fresh settlement handoff", async () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  const handoff = createForegroundForceHandoff<string>();
+  const dispatched: string[] = [];
+  const old = forceForegroundQueueItem(owner, handoff, "old", { run: item => dispatched.push(item) });
+  owner.invalidateSession();
+  handoff.clear();
+  const fresh = forceForegroundQueueItem(owner, handoff, "fresh", { run: item => dispatched.push(item) });
+  owner.settle(token);
+  await Promise.all([old, fresh]);
+  expect(dispatched).toEqual(["fresh"]);
+  expect(handoff.hasPending).toBe(false);
+  expect(handoff.isAwaitingSettlement).toBe(false);
 });

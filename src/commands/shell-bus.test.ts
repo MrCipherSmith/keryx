@@ -778,15 +778,15 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
 
   test("busWorking tracks both the task-notification turn and the operator turn", () => {
     const notificationIndex = replBody.indexOf('origin: "task-notification"');
-    const notificationBlock = replBody.slice(notificationIndex - 300, notificationIndex);
+    const notificationBlock = replBody.slice(replBody.lastIndexOf('if (input.kind === "completion")', notificationIndex), notificationIndex);
     expect(notificationBlock).toContain("busWorking = true;");
 
     // Flow 275 T8: the operator turn now runs through the extracted
     // `runOperatorLine` helper (so it can also be called from the held-queue
     // drain path) — same `busWorking = true;` just before it, parameter
     // renamed from `line` to `operatorLine`.
-    const turnIndex = replBody.indexOf("await runAgentTurn(agentIo, deps, history, operatorLine,");
-    const turnBlock = replBody.slice(turnIndex - 300, turnIndex);
+    const turnIndex = replBody.indexOf("const flight = runAgentTurn(agentIo, deps, history, operatorLine,");
+    const turnBlock = replBody.slice(replBody.indexOf("const runOperatorLine = async"), turnIndex);
     expect(turnBlock).toContain("busWorking = true;");
   });
 });

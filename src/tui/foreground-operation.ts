@@ -12,11 +12,15 @@ interface ActiveForegroundOperation {
   controller: AbortController;
   settled: Promise<void>;
   resolveSettled: () => void;
+  invalidated: boolean;
 }
 
 export class ForegroundOperationOwner {
   private active: ActiveForegroundOperation | undefined;
   private disposed = false;
+  private sessionGeneration = 0;
+
+  get generation(): number { return this.sessionGeneration; }
 
   get signal(): AbortSignal {
     if (this.active === undefined) {
@@ -34,7 +38,7 @@ export class ForegroundOperationOwner {
   }
 
   accepts(token: ForegroundOperationToken): boolean {
-    return !this.disposed && this.active?.token === token;
+    return !this.disposed && this.active?.token === token && !this.active.invalidated;
   }
 
   begin(): ForegroundOperationToken {
@@ -49,7 +53,7 @@ export class ForegroundOperationOwner {
     const settled = new Promise<void>((resolve) => {
       resolveSettled = resolve;
     });
-    this.active = { token, controller: new AbortController(), settled, resolveSettled };
+    this.active = { token, controller: new AbortController(), settled, resolveSettled, invalidated: false };
     return token;
   }
 
@@ -58,6 +62,13 @@ export class ForegroundOperationOwner {
     if (controller !== undefined && !controller.signal.aborted) {
       controller.abort(reason);
     }
+  }
+
+  /** Revoke session-bound callbacks immediately, retain busy ownership until settlement. */
+  invalidateSession(): void {
+    this.sessionGeneration += 1;
+    if (this.active !== undefined) this.active.invalidated = true;
+    this.cancel("session switched");
   }
 
   settled(): Promise<void> {
@@ -97,6 +108,11 @@ export class ForegroundForceHandoff<T> {
     if (this.awaitingSettlement) return false;
     this.awaitingSettlement = true;
     return true;
+  }
+
+  clear(): void {
+    this.pending.length = 0;
+    this.awaitingSettlement = false;
   }
 
   get isAwaitingSettlement(): boolean {
@@ -146,8 +162,9 @@ export async function runAfterForegroundSettlement(
   owner: ForegroundOperationOwner,
   action: () => void,
 ): Promise<void> {
+  const generation = owner.generation;
   await owner.settled();
-  if (!owner.isDisposed) {
+  if (!owner.isDisposed && owner.generation === generation) {
     action();
   }
 }
@@ -199,12 +216,26 @@ export async function forceForegroundQueueItem<T>(
  * mutating the TUI. Each callback reads the current delegate at call time so
  * shell-installed hooks remain live during a valid operation.
  */
+/**
+ * The approval-related hooks that belong to ONE turn rather than to the shell (flow 396): a turn that came
+ * from Telegram is judged and asked in the topic, a typed one in the dock, and what one turn is must never
+ * decide how another piece of work running beside it is judged. The shell's own `io` carries the typed-turn
+ * behaviour; a Telegram turn passes its hooks here, so they reach only the calls made inside that turn.
+ */
+export type TurnScopedIo = Partial<Pick<AgentIO, "requestApproval" | "permissionMode" | "onAutoApproved" | "mcpGrantsApply">>;
+
 export function createForegroundAgentIoFacade(
   owner: ForegroundOperationOwner,
   token: ForegroundOperationToken,
   io: AgentIO,
+  turn: TurnScopedIo = {},
 ): AgentIO {
   const accepts = (): boolean => owner.accepts(token);
+  // Read at call time, like every other hook here: the shell may install them after the facade exists.
+  const approve = () => turn.requestApproval ?? io.requestApproval;
+  const autoApproved = () => turn.onAutoApproved ?? io.onAutoApproved;
+  const modeOf = () => turn.permissionMode ?? io.permissionMode;
+  const mcpGrantsApply = turn.mcpGrantsApply ?? io.mcpGrantsApply;
   return {
     write: (text) => {
       if (accepts()) io.write(text);
@@ -222,6 +253,7 @@ export function createForegroundAgentIoFacade(
     // same guarded way as `onReasoning` above — a stale/disposed turn must
     // not paint a "thinking…" indicator or a finished reasoning block onto
     // whatever operation now owns the screen.
+    onAttemptInterrupted: () => { if (accepts()) io.onAttemptInterrupted?.(); },
     onReasoningDelta: (delta) => {
       if (accepts()) io.onReasoningDelta?.(delta);
     },
@@ -245,16 +277,17 @@ export function createForegroundAgentIoFacade(
     },
     requestApproval: async (tool, input, meta) => {
       if (!accepts()) return false;
-      const response = await io.requestApproval?.(tool, input, meta);
+      const response = await approve()?.(tool, input, meta);
       return accepts() ? response ?? false : false;
     },
     onAutoApproved: (tool, input, meta) => {
-      if (accepts()) io.onAutoApproved?.(tool, input, meta);
+      if (accepts()) autoApproved()?.(tool, input, meta);
     },
-    permissionMode: () => (accepts() ? io.permissionMode?.() ?? "ask" : "ask"),
+    permissionMode: () => (accepts() ? modeOf()?.() ?? "ask" : "ask"),
     // Share the session grant set with the shell, but never let a stale turn
     // use it: readOnly denies every mutating tool when ownership is lost.
     ...(io.trustedMcpTools === undefined ? {} : { trustedMcpTools: io.trustedMcpTools }),
+    ...(mcpGrantsApply === undefined ? {} : { mcpGrantsApply }),
     ...(io.mcpToolFingerprint === undefined ? {} : { mcpToolFingerprint: io.mcpToolFingerprint }),
     ...(io.mcpToolDestructive === undefined ? {} : { mcpToolDestructive: io.mcpToolDestructive }),
     ...(io.beforeMutation === undefined
@@ -266,4 +299,11 @@ export function createForegroundAgentIoFacade(
         }),
     readOnly: () => !accepts() || (io.readOnly?.() ?? false),
   };
+}
+
+/** Session effects are valid only before settlement and only in the originating session. */
+export function settleForegroundOperation(owner: ForegroundOperationOwner, token: ForegroundOperationToken): boolean {
+  const accepted = owner.accepts(token);
+  owner.settle(token);
+  return accepted;
 }

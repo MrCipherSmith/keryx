@@ -98,7 +98,7 @@ describe("r02 F-006: an inferred flow is never written into the flow's own journ
   }
 
   async function decide(flow: string, flowSource: "env" | "branch" | "inferred" | undefined, id: string): Promise<void> {
-    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: rec, flow, flowSource, id, random: () => 0.9 });
+    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: rec, flow, flowSource, id, arm: "A" });
     await answerDecision({ cwd: root, id, choice: "b" });
   }
 

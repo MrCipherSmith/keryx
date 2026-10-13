@@ -5,6 +5,8 @@
 // Headless throughout: a fake `runExternal` hook, a fake `ExternalRunHandle`,
 // and no renderer. Nothing here spawns a vendor CLI or spends a subscription.
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ExternalRunHandle } from "../harness/external/supervise";
 import type { StructuredSubagentResult } from "../harness/tool/builtin/spawn-subagent-tool";
 import type { ExternalRunSignal } from "./external-bridge";
@@ -15,7 +17,7 @@ import {
   setExternalRunListener,
   setExternalSpawnApprover,
 } from "./external-bridge";
-import { attachExternalOperator, ExternalOperator } from "./external-operator";
+import { attachExternalOperator, delegateReport, ExternalOperator } from "./external-operator";
 import { setSubagentFleetListener, type SubagentFleetEvent } from "./subagent-bridge";
 
 function handle(streaming = true): ExternalRunHandle & { writes: string[]; kills: number } {
@@ -464,5 +466,50 @@ describe("the module-level bridge", () => {
         workerId: "sub:1",
       }),
     ).toEqual({ ok: false, reason: NO_EXTERNAL_APPROVER_REASON });
+  });
+});
+
+// Review of flow 387, L-2: a /delegate sent from the Telegram topic must be answered with how the
+// agent ended, and its reaction must follow. The shell collects that through `trackCommandWork`.
+describe("/delegate ends in the topic (review of flow 387, L-2)", () => {
+  test("a finished run prints the agent's status and output and does not fail the command", () => {
+    const report = delegateReport("codex-cli", {
+      ok: true,
+      runId: "ext:1",
+      label: "codex",
+      result: { status: "Completed", output: "found it", isError: false },
+    });
+    expect(report.text).toBe("◇ codex-cli Completed: found it\n");
+    expect(report.failed).toBe(false);
+  });
+
+  test("a run that ended in error fails the command", () => {
+    const report = delegateReport("codex-cli", {
+      ok: true,
+      runId: "ext:1",
+      label: "codex",
+      result: { status: "Error", output: "exit 2", isError: true },
+    });
+    expect(report.text).toContain("exit 2");
+    expect(report.failed).toBe(true);
+  });
+
+  test("a refusal fails the command and says why", () => {
+    const report = delegateReport("codex-cli", { ok: false, reason: "no runtime wired" });
+    expect(report.text).toBe("◇ /delegate refused: no runtime wired\n");
+    expect(report.failed).toBe(true);
+  });
+
+  // The shell's closure cannot be run without a terminal, so the wiring is held at the source: the
+  // run is registered as command work and its end is printed through `delegateReport`.
+  test("the shell registers the delegated run as command work, so a topic command waits for its end", () => {
+    const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+    const start = source.indexOf("const runDelegate = (line: string): void => {");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = source.slice(start, source.indexOf("\n    };\n", start));
+    expect(body).toContain("trackCommandWork(async () => {");
+    expect(body).toContain("delegateReport(parsed.agentId, outcome)");
+    expect(body).toContain("if (report.failed)");
+    expect(body).not.toContain("void (async");
   });
 });

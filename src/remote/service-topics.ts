@@ -84,6 +84,14 @@ export class ServiceTopics {
     return false;
   }
 
+  /** The service topic that owns a thread, if any. */
+  byThread(chatId: number, threadId: number): ServiceTopicRecord | undefined {
+    for (const record of this.byName.values()) {
+      if (record.chatId === chatId && record.threadId === threadId) return record;
+    }
+    return undefined;
+  }
+
   records(): ServiceTopicRecord[] {
     return [...this.byName.values()];
   }

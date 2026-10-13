@@ -64,18 +64,33 @@ async function pressEscapeAndSettle(h: {
  * generous deadline instead; a pass returns as soon as the frame is there.
  */
 async function waitForFrameAfterEscape(
-  h: { flush: () => Promise<unknown>; captureCharFrame: () => string },
+  h: { flush: () => Promise<unknown>; renderOnce: () => Promise<unknown>; captureCharFrame: () => string },
   predicate: (frame: string) => boolean,
   deadlineMs = 5_000,
 ): Promise<string> {
   const until = Date.now() + deadlineMs;
   for (;;) {
     await h.flush();
+    // flush waits for scheduled work; an idle scheduler need not repaint the
+    // step mounted by the Esc continuation. Sample an explicitly rendered frame.
+    await h.renderOnce();
     const frame = h.captureCharFrame();
     if (predicate(frame) || Date.now() >= until) return frame;
     await new Promise((resolve) => setTimeout(resolve, ESC_PARSER_TIMEOUT_MS));
   }
 }
+
+test("Esc frame polling renders even when flush reports visual idle", async () => {
+  let rendered = false;
+  let renders = 0;
+  const h = {
+    flush: async () => {},
+    renderOnce: async () => { rendered = true; renders += 1; },
+    captureCharFrame: () => rendered ? "Select a provider" : "",
+  };
+  expect(await waitForFrameAfterEscape(h, (f) => f.includes("Select a provider"), 0)).toBe("Select a provider");
+  expect(renders).toBe(1);
+});
 
 /**
  * Replace an input's contents rather than appending to them.
@@ -230,17 +245,23 @@ describe("REGRESSION — an unreachable endpoint re-opens the URL step", () => {
       expect(retryFrame).not.toContain("Select a model");
 
       // Backing out of the endpoint step must NOT fall through to a model
-      // picker built from the failed probe.
+      // picker built from the failed probe, or cancel the whole wizard.
+      let settled = false;
+      void resultPromise.then(() => { settled = true; });
       await pressEscapeAndSettle(h);
-      expect(await waitForFrameAfterEscape(h, (f) => f.includes("Select a provider"))).toContain("Select a provider");
+      const providerFrame = await waitForFrameAfterEscape(h, (f) => f.includes("Select a provider"));
+      expect(providerFrame).toContain("Select a provider");
+      expect(providerFrame).not.toContain("Select a model");
+      expect(settled).toBe(false);
       await pressEscapeAndSettle(h);
       expect(await resultPromise).toBeUndefined();
+      expect(settled).toBe(true);
     } finally {
       h.renderer.destroy();
       await rm(configDir, { recursive: true, force: true });
     }
-    // Two Esc waits of up to 5s each run inside this test; bun's default 5s
-    // per-test limit cut it short on a loaded macOS runner.
+    // Esc parsing plus deadline-based frame polling may exceed bun's default
+    // 5s test limit on a loaded runner. This allowance is unchanged.
   }, 20_000);
 });
 

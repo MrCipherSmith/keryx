@@ -1,4 +1,5 @@
 import { eslintAdapter } from "./eslint";
+import { oxlintAdapter } from "./oxlint";
 import { typescriptAdapter } from "./typescript";
 import { testsAdapter } from "./tests";
 import { dependencyAuditAdapter } from "./dependency-audit";
@@ -9,6 +10,7 @@ import type { SourceAdapter } from "../types";
 // SonarQube adapter (import-oriented, disabled by default).
 export const FINDING_ADAPTERS: SourceAdapter[] = [
   eslintAdapter,
+  oxlintAdapter,
   typescriptAdapter,
   testsAdapter,
   dependencyAuditAdapter,
@@ -16,3 +18,4 @@ export const FINDING_ADAPTERS: SourceAdapter[] = [
 ];
 
 export { NoImportError } from "./helpers";
+export { oxlintAdapter } from "./oxlint";

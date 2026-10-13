@@ -42,6 +42,8 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "connect", kind: "picker", description: "Switch to a connected provider with buttons" },
   { name: "resume", kind: "picker", description: "Return to an earlier session with buttons" },
   { name: "sessions", kind: "builtin", description: "List recent sessions" },
+  { name: "history", kind: "builtin", description: "Post the last messages of this session here: /history [N], 1 to 20" },
+  { name: "stop", kind: "builtin", description: "Stop the run you started from Telegram" },
   { name: "new", kind: "text", description: "Start a new session; this topic stays bound to it" },
   { name: "clear", kind: "text", description: "Same as /new" },
   { name: "compact", kind: "text", description: "Compact the conversation: /compact [focus]" },
@@ -62,6 +64,7 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "delegate", kind: "confirm", description: "Hand a paid task to an external agent: /delegate <agent> <task>; asks first" },
   { name: "external", kind: "confirm", description: "Show or switch sending work to external providers; on and off ask first" },
   { name: "external-agents", kind: "confirm", description: "Show or switch the external agent runtime; on and off ask first" },
+  { name: "route", kind: "confirm", description: "Show or switch model routing: /route [on|off]; on and off ask first" },
 ];
 
 /** Commands that are never run from the topic, each with the reason the topic is told. */
@@ -72,14 +75,13 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   provider: "it asks for provider keys and addresses, which are never typed into a chat",
   "search-provider": "it asks for provider keys, which are never typed into a chat",
   "search-connect": "it changes where searches are sent",
-  "remote-control": "turning remote control off would delete this topic, and its panel is local",
+  "remote-control": "turning remote control off would archive this topic, and its panel is local",
   integrate: "it edits other tools' configuration on this machine",
   copy: "it uses this machine's clipboard",
   game: "it needs the shell's screen",
   setup: "it asks for keys and changes the configuration",
   mcp: "it can trust tools and change server connections; use the shell",
   guard: "it changes a safety guard; use the shell",
-  route: "it changes where work is routed; use the shell",
   editguard: "it changes a safety guard; use the shell",
   settings: "it edits settings, some of them secret; use the shell",
   bus: "it talks to other agents on this machine",
@@ -89,7 +91,9 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   governance: "it needs the shell's screen",
   decisions: "it opens a panel in the shell",
   expand: "it needs the shell's screen",
-  interrupt: "use the Stop button on a message, or stop it in the shell",
+  interrupt: "use /stop here to end a run you started from Telegram, or stop it in the shell",
+  permissions: "it opens a panel in the shell; saved rules are changed there, never from a chat",
+  "remote-policy": "it changes what Telegram may do without asking; use the shell",
   demote: "it works on the shell's own tasks",
   models: "use /model",
   "external-diff": "listing and applying external patches stays in the shell, where the patch hash is typed",
@@ -108,7 +112,13 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
 };
 
 /** The commands a shell refuses while a turn runs, when the host gives no better answer. */
-export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect"];
+export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect", "route", "external", "external-agents"];
+
+/**
+ * Commands that are not refused while a turn runs but held: the topic is told they are queued, and each runs
+ * when main is idle (flow 419, AC4). Shell spelling. `/mode` is not here: the shell takes it at any moment.
+ */
+export const QUEUED_WHEN_BUSY_COMMANDS: readonly string[] = ["model", "route", "external", "external-agents"];
 
 /** The reason the shell gives for a command it will not run during a turn. */
 export const BUSY_REASON = "main is busy: command deferred";
@@ -146,6 +156,26 @@ function split(line: string): { token: string; args: string } {
   return { token: bare, args };
 }
 
+/**
+ * True when a "/" line is addressed to another bot (`/model@otherbot`) rather than to this one. A line
+ * with no `@suffix`, or with this bot's own (any case, `@` and all), is not. Pure; false when the
+ * bot's name is not known, so a command is never dropped on a guess.
+ */
+export function isAddressedToOtherBot(line: string, botUsername: string | undefined): boolean {
+  if (botUsername === undefined || botUsername.length === 0) {
+    return false;
+  }
+  const head = line.trim().split(/\s/, 1)[0] ?? "";
+  if (!head.startsWith("/")) {
+    return false;
+  }
+  const at = head.indexOf("@");
+  if (at === -1) {
+    return false;
+  }
+  return head.slice(at + 1).toLowerCase() !== botUsername.replace(/^@/, "").toLowerCase();
+}
+
 function refuse(command: string, reason: string, known: boolean): GatewayDecision {
   return { kind: "refuse", command, reason, known };
 }
@@ -167,7 +197,7 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
 
   if (canonical === "remote-control") {
     const sub = args.split(/\s+/)[0]?.toLowerCase() ?? "";
-    return refuse(canonical, sub === "off" ? "it would delete this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
+    return refuse(canonical, sub === "off" ? "it would archive this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
   }
   if (spec === undefined) {
     if (refusedReason !== undefined) {
@@ -218,6 +248,16 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
         };
       }
       return first === "" ? { kind: "run", command: name, line: "/external" } : refuse(name, "use /external, /external on or /external off", true);
+    case "route":
+      if (first === "on" || first === "off") {
+        return {
+          kind: "confirm",
+          command: name,
+          line: `/route ${first}`,
+          summary: `Switch model routing ${first}? This changes which model answers each turn.`,
+        };
+      }
+      return first === "" ? { kind: "run", command: name, line: "/route" } : refuse(name, "use /route, /route on or /route off", true);
     case "external-agents":
       if (first === "on" || first === "off") {
         return {
@@ -277,6 +317,11 @@ export function remoteHelpText(): string {
 /** Whether `name` (shell spelling) needs the shell idle. Used when the host gives no answer. */
 export function isBusyDeferred(name: string): boolean {
   return BUSY_DEFERRED_COMMANDS.includes(name);
+}
+
+/** Whether a command from the topic waits for an idle main instead of being refused while a turn runs. */
+export function isQueuedWhenBusy(name: string): boolean {
+  return QUEUED_WHEN_BUSY_COMMANDS.includes(name);
 }
 
 /** Every menu name is valid for Telegram; the test holds this. */

@@ -132,7 +132,8 @@ export class ProposalLifecycleService {
     beforeTransitionAppend?: () => Promise<void> | void;
   }) { this.root = path.resolve(options.workspaceRoot); this.now = options.now ?? (() => new Date()); }
 
-  async create(input: { request: unknown; requestCorrelationId: string; workspaceId: string; id: string; proposalRevision: string; kind: ProposalKind; wrapUp: TrustedWrapUpProvenance }): Promise<Proposal> {
+  async create(input: { request: unknown; requestCorrelationId: string; workspaceId: string; id: string; proposalRevision: string; kind: ProposalKind; wrapUp: TrustedWrapUpProvenance; signal?: AbortSignal }): Promise<Proposal> {
+    input.signal?.throwIfAborted();
     const actor = await this.actor(input.request, input.requestCorrelationId);
     const policyRevision = await this.strict();
     const wrapUp = this.options.wrapUpAuthority.verify(input.wrapUp, { actor, workspaceId: input.workspaceId });
@@ -155,7 +156,7 @@ export class ProposalLifecycleService {
     proposal.workspaceId = workspaceId;
     await this.validateProposal(proposal);
     await this.validateEvidence(proposal.evidence);
-    return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId, action: "write", execute: async (manifest) => {
+    return this.options.workspaces.withAuthorizedActor({ actorContext: actor, workspaceId, action: "write", ...(input.signal ? { signal: input.signal } : {}), execute: async (manifest) => {
       // KNOWN RISK: kept as an inline check rather than centralized in
       // `withAuthorizedActor` — `review()` below uses the same `action:
       // "write"`/"review" plumbing and must NOT be gated on archived status
@@ -178,9 +179,9 @@ export class ProposalLifecycleService {
         // itself uses, so nothing can swap the evidence out from under the
         // recorded gate between the scan and the write (finding 3).
         proposal.security.gate = await this.scanEvidenceSecurityGate(proposal.evidence);
-        await writeFileAtomic(file, `${JSON.stringify(proposal, null, 2)}\n`);
+        await writeFileAtomic(file, `${JSON.stringify(proposal, null, 2)}\n`, input.signal ? { signal: input.signal } : {});
         return proposal;
-      });
+      }, input.signal ? { signal: input.signal } : {});
     } });
   }
 
@@ -757,6 +758,7 @@ export function createLocalProposalLifecycleService(cwd: string): ProposalLifecy
 export function createHarnessProposalLifecycleService(
   cwd: string,
   opts: {
+    preserved?: { dir: string; snapshot: string; signal?: AbortSignal };
     workspaceId: string;
     note?: string;
     /**
@@ -781,6 +783,21 @@ export function createHarnessProposalLifecycleService(
     ...nowOpt,
     resolveExplicitWrapUp: async (request) => {
       if (request.source !== "session") throw new Error(`this composition only resolves "session" wrap-ups, got "${request.source}"`);
+      if (opts.preserved !== undefined) {
+        const { resolvePreservedWrapUp } = await import("./preserved-wrap-up");
+        if (request.sourceRef !== `./.metaproject/workspaces/${opts.workspaceId}/preserved-evidence/${opts.preserved.snapshot}/wrap-up.md`) throw new Error("preserved source mismatch");
+        const preserved = opts.preserved;
+        return workspaces.withAuthorizedActor({
+          actorContext: request.actor,
+          workspaceId: opts.workspaceId,
+          action: "write",
+          ...(preserved.signal ? { signal: preserved.signal } : {}),
+          execute: async (manifest) => {
+            if (manifest.status === "archived") throw new ProposalLifecycleError("guard_denied", "workspace is archived");
+            return resolvePreservedWrapUp({ cwd, workspaceId: opts.workspaceId, ...preserved, ...nowOpt });
+          },
+        });
+      }
       return resolveSessionWrapUp({ cwd, workspaceId: opts.workspaceId, sourceRef: request.sourceRef, ...nowOpt });
     },
   });

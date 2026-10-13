@@ -1,0 +1,12 @@
+{
+ "reviewer": "review-frontend-conventions",
+ "slices": [
+  "slice-04",
+  "slice-05",
+  "slice-06",
+  "slice-07",
+  "slice-08"
+ ],
+ "result": "raw/review-frontend-conventions-04-05-06-07-08.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-frontend-conventions/SKILL.md"
+}

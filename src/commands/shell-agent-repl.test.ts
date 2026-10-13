@@ -1,18 +1,22 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { busLeasesFromClient, readlineAgentHelpText, runAgentRepl } from "./shell";
-import type { AgentDeps } from "./agent";
+import { waitForRecovery, type AgentDeps, type InteractiveRecovery } from "./agent";
+import { scriptedProvider as recoveryProvider } from "./agent.test-helpers";
+import type { ShellEvent, ShellEventSink } from "./shell-events";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ShellSessionOpts } from "./shell-types";
 import type { BusClient } from "../bus/client";
-import type { SessionLeaseHandle } from "../session/lease";
+import { openLeasedSession, type SessionLeaseHandle, type SessionLeaseOwner } from "../session/lease";
+import { acquireLeaseSync } from "../lib/fs";
 import { resolveBusRoot } from "../bus/paths";
 import { createPauseLease } from "../bus/pause";
 import { CI_ENV_VARS } from "../capability/external-agents";
 import { loadShellPermissions } from "../lib/shell-permissions";
+import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
@@ -102,6 +106,9 @@ async function repl(
     configDir?: string;
     /** Flow 354 (L-15) — see `runAgentRepl`'s own `rich.onCompletionWaitersSize` doc. */
     onCompletionWaitersSize?: (size: number) => void;
+    recovery?: InteractiveRecovery;
+    signal?: AbortSignal;
+    events?: ShellEventSink;
   } = {},
 ): Promise<string> {
   const out: string[] = [];
@@ -111,6 +118,8 @@ async function repl(
       printPrompt: () => {},
       safeBoundary: undefined,
       write: (s) => out.push(s),
+      ...(opts.recovery === undefined ? {} : { recovery: opts.recovery }),
+      ...(opts.signal === undefined ? {} : { signal: opts.signal }),
       ...(opts.onCompletionWaitersSize !== undefined
         ? { onCompletionWaitersSize: opts.onCompletionWaitersSize }
         : {}),
@@ -122,7 +131,7 @@ async function repl(
     { cwd, enabled: false, ...opts.session },
     undefined,
     undefined,
-    undefined,
+    opts.events,
     opts.configDir ?? path.join(root, "config"),
   );
   return out.join("");
@@ -348,15 +357,17 @@ function fakeJobRegistry(): { registry: JobRegistry; fire: () => void; drained: 
 function runningRepl(opts: { deps: AgentDeps; configDir?: string }): {
   push: (line: string) => void;
   output: () => string;
+  prompts: () => number;
   busBox: { current: BusClient | undefined };
   done: Promise<void>;
 } {
   const q = lineQueue();
   const out: string[] = [];
+  let prompts = 0;
   const busBox: { current: BusClient | undefined } = { current: undefined };
   const done = runAgentRepl(
     q.lines,
-    { printPrompt: () => {}, safeBoundary: undefined, write: (s) => out.push(s) },
+    { printPrompt: () => { prompts += 1; }, safeBoundary: undefined, write: (s) => out.push(s) },
     opts.deps,
     fakePort(),
     { cwd, enabled: true, busBox },
@@ -365,7 +376,7 @@ function runningRepl(opts: { deps: AgentDeps; configDir?: string }): {
     undefined,
     opts.configDir ?? path.join(root, "config"),
   );
-  return { push: q.push, output: () => out.join(""), busBox, done };
+  return { push: q.push, output: () => out.join(""), prompts: () => prompts, busBox, done };
 }
 
 describe("flow 275 T8/F3 — held-turn wiring, the completion-wake held gate, and busLeases (was three source-text audits)", () => {
@@ -666,10 +677,11 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (was a source
     // and fast instead of driving the default cap of 5.
     const savedCap = process.env.KERYX_SHELL_MAX_AUTO_WAKE;
     process.env.KERYX_SHELL_MAX_AUTO_WAKE = "1";
+    let session: ReturnType<typeof runningRepl> | undefined;
     try {
       const jobs = fakeJobRegistry();
       const model = textOnlyProvider("ok");
-      const session = runningRepl({
+      session = runningRepl({
         deps: {
           providerId: "s",
           modelId: "m",
@@ -680,34 +692,47 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (was a source
           provider: model.provider,
         } as unknown as AgentDeps,
       });
-      await waitUntil(() => session.output().includes("bus: off"), "session setup to finish");
+      await waitUntil(() => session!.output().includes("bus: off"), "session setup to finish");
 
-      // First completion: wakes (cap is 1, so this is allowed).
+      // Stop firing as soon as the completion is drained; otherwise polling
+      // can feed the turn's per-round drain instead of reaching the idle cap.
       await waitUntil(() => {
+        if (jobs.drained() >= 1) return true;
         jobs.fire();
-        return model.calls() >= 1;
-      }, `the first auto-wake\n${session.output()}`);
+        return false;
+      }, "the first auto-wake to be taken");
+      await waitUntil(() => session!.prompts() >= 1, "the first auto-wake to finish");
       // Second completion, right after: the cap is now spent.
       await waitUntil(() => {
+        if (session!.output().includes("automatic wakes are capped")) return true;
         jobs.fire();
-        return session.output().includes("automatic wakes are capped");
+        return false;
       }, `the cap notice\n${session.output()}`);
       const callsAtCap = model.calls();
 
       // An operator line resets the counter — proven by a FURTHER completion
       // being allowed through afterwards, not merely by the reset assignment
       // existing somewhere in the source.
+      const promptsAtCap = session.prompts();
       session.push("hi");
-      await waitUntil(() => model.calls() > callsAtCap, `the operator's own turn\n${session.output()}`);
+      await waitUntil(() => session!.prompts() > promptsAtCap, "the operator's own turn to finish");
+      expect(model.calls()).toBeGreaterThan(callsAtCap);
       const callsAfterOperatorTurn = model.calls();
+      const drainsAfterOperatorTurn = jobs.drained();
       await waitUntil(() => {
+        if (jobs.drained() > drainsAfterOperatorTurn) return true;
         jobs.fire();
-        return model.calls() > callsAfterOperatorTurn;
-      }, `a completion to wake again after the reset\n${session.output()}`);
+        return false;
+      }, "a completion to wake again after the reset");
+      await waitUntil(() => model.calls() > callsAfterOperatorTurn, "the reset wake to reach the model");
 
       session.push("/exit");
       await session.done;
     } finally {
+      if (session !== undefined) {
+        session.push("/exit");
+        await session.done;
+      }
       if (savedCap === undefined) delete process.env.KERYX_SHELL_MAX_AUTO_WAKE;
       else process.env.KERYX_SHELL_MAX_AUTO_WAKE = savedCap;
     }
@@ -1097,6 +1122,78 @@ describe("/plan toggles read-only mode (flow 265, was a source-text audit)", () 
 });
 
 // ---------------------------------------------------------------------------
+// Flow 429 — the round limit of a turn follows the permission mode.
+// ---------------------------------------------------------------------------
+
+/** Never finishes on its own: every round reads a distinct missing path, so only the round limit ends the turn. */
+function endlessReadProvider(): { provider: ProviderPort; calls: () => number } {
+  let calls = 0;
+  return {
+    calls: () => calls,
+    provider: {
+      describe: () => TOOL_CALL_DESCRIPTION,
+      stream: (_request, opts) => {
+        calls += 1;
+        const id = `r${calls}`;
+        const events: Partial<NormalizedEvent>[] =
+          calls > 260
+            ? [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]
+            : [
+                { kind: "tool_call_start", toolCallId: id, toolName: "list_dir" },
+                { kind: "tool_call_end", toolCallId: id, input: JSON.stringify({ path: `missing-${calls}` }) },
+                { kind: "model_end" },
+              ];
+        return (async function* (): AsyncGenerator<NormalizedEvent> {
+          let sequence = 0;
+          for (const partial of events) {
+            yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
+          }
+        })();
+      },
+    },
+  };
+}
+
+describe("flow 429 AC6 — /mode changes the round limit of the next turn without a restart", () => {
+  const cases: Array<{ name: string; lines: string[]; limit: number }> = [
+    { name: "ask", lines: ["go", "/exit"], limit: 40 },
+    { name: "trust", lines: ["/mode trust", "go", "/exit"], limit: 200 },
+    { name: "auto", lines: ["/mode auto", "yes", "go", "/exit"], limit: 200 },
+  ];
+  for (const { name, lines, limit } of cases) {
+    test(`${name}: a turn is cut off after ${limit} model rounds`, async () => {
+      const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+      delete process.env.KERYX_AGENT_MAX_ROUNDS;
+      try {
+        const { provider, calls } = endlessReadProvider();
+        const deps = fakeDeps({ provider, tools: builtinReadOnlyTools(cwd), idSeq: () => randomUUID() });
+        await repl(lines, { deps });
+        expect(calls()).toBe(limit);
+      } finally {
+        if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+      }
+    });
+  }
+});
+
+describe("flow 429 AC7 — the readline /mode output shows the round limit", () => {
+  test("/mode names the limit of the current mode, and a switch names the new one", async () => {
+    const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+    delete process.env.KERYX_AGENT_MAX_ROUNDS;
+    try {
+      const output = await repl(["/mode", "/mode trust", "/mode auto", "yes", "/exit"]);
+      expect(output).toContain("Round limit: 40 rounds per turn, asks before extending");
+      expect(output).toContain("Automatic review (name it in a request): 200 rounds per turn, extends without asking");
+      expect(output).toContain("it stops to ask only for:");
+      expect(output).toContain("Permission mode: trust (200 rounds per turn, asks before extending)");
+      expect(output).toContain("Permission mode: auto (200 rounds per turn, extends without asking)");
+    } finally {
+      if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // /settings (flow 374) — the readline view of the same rows the TUI modal shows.
 // ---------------------------------------------------------------------------
 
@@ -1314,4 +1411,242 @@ describe("flow 360: /mcp trust in the readline REPL", () => {
     expect(output).toContain("TUI-only");
     expect(output).toContain("/mcp trust list");
   });
+});
+
+// Flow 415: actual ownership transitions rather than source audits.
+describe("flow 415 — agent /new preservation barriers", () => {
+  let savedDataDir: string | undefined;
+  let savedExitCode: typeof process.exitCode;
+  beforeEach(() => {
+    savedDataDir = process.env.KERYX_DATA_DIR;
+    savedExitCode = process.exitCode;
+    process.env.KERYX_DATA_DIR = path.join(root, "data");
+  });
+  afterEach(() => {
+    if (savedDataDir === undefined) delete process.env.KERYX_DATA_DIR;
+    else process.env.KERYX_DATA_DIR = savedDataDir;
+    process.exitCode = savedExitCode ?? 0;
+  });
+  function snapshot(dir: string): Record<string, string> {
+    const files: Record<string, string> = {};
+    const walk = (relative: string): void => {
+      for (const entry of readdirSync(path.join(dir, relative), { withFileTypes: true })) {
+        if (entry.name === "active.lease") continue;
+        const name = path.join(relative, entry.name);
+        if (entry.isDirectory()) walk(name);
+        else files[name] = readFileSync(path.join(dir, name)).toString("base64");
+      }
+    };
+    walk("");
+    return files;
+  }
+  test("/new after lease loss leaves successor files and ownership untouched", async () => {
+    const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    let before: Record<string, string> | undefined;
+    let previous: SessionLeaseHandle | undefined;
+    let next: SessionLeaseHandle | undefined;
+    const at = new Date().toISOString();
+    const owner: SessionLeaseOwner = {
+      schemaVersion: 1, token: randomUUID(), pid: process.pid, host: hostname(),
+      instanceId: randomUUID(), name: null, acquiredAt: at, heartbeatAt: at,
+    };
+    let releaseRival: (() => void) | undefined;
+    try {
+      await runAgentRepl((async function* () {
+        previous = leaseBox.current;
+        if (previous === undefined) throw new Error("expected initial lease");
+        const dir = path.dirname(previous.lockPath);
+        writeFileSync(path.join(dir, "slate.json"), JSON.stringify({ successor: owner.token }));
+        before = snapshot(dir);
+        rmSync(previous.lockPath, { recursive: true, force: true });
+        const rival = acquireLeaseSync(previous.lockPath, owner, { staleMs: 60_000 });
+        if (!rival.ok) throw new Error("expected successor lease");
+        releaseRival = () => rival.handle.release();
+        yield "/new";
+        next = leaseBox.current;
+        yield "/exit";
+      })(), { printPrompt: () => {}, safeBoundary: undefined, write: () => {} }, fakeDeps(), fakePort(),
+      { cwd, enabled: true, leaseBox }, undefined, undefined, undefined, path.join(root, "config"));
+      expect(next).toBeDefined();
+      expect(next).not.toBe(previous);
+      expect(next?.released).toBe(true);
+      expect(snapshot(path.dirname(previous!.lockPath))).toEqual(before!);
+      expect(readFileSync(path.join(previous!.lockPath, "owner.json"), "utf8")).toContain(owner.token);
+      expect(process.exitCode ?? 0).toBe(savedExitCode ?? 0);
+    } finally { releaseRival?.(); }
+  });
+  test("shutdown during /new waits for switch rollback before releasing ownership", async () => {
+    const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    const finalizerBox: { current: (() => Promise<void>) | undefined } = { current: undefined };
+    const opened: SessionLeaseHandle[] = [];
+    const output: string[] = [];
+    let shutdown: Promise<void> | undefined;
+    await runAgentRepl((async function* () {
+      yield "/new";
+      await shutdown;
+      yield "/exit";
+    })(), { printPrompt: () => {}, safeBoundary: undefined, write: (s) => output.push(s) }, fakeDeps(), fakePort(), {
+      cwd, enabled: true, leaseBox, finalizerBox,
+      openLeased: (opts) => {
+        const result = openLeasedSession(opts);
+        opened.push(result.lease);
+        if (opened.length === 2) {
+          expect(finalizerBox.current).toBeDefined();
+          shutdown = finalizerBox.current!();
+          expect(opened.every((lease) => !lease.released)).toBe(true);
+        }
+        return result;
+      },
+    }, undefined, undefined, undefined, path.join(root, "config"));
+    expect(opened).toHaveLength(2);
+    expect(shutdown).toBeDefined();
+    expect(output.join("")).toContain("Kept the current session.");
+    expect(opened.every((lease) => lease.released && !existsSync(lease.lockPath))).toBe(true);
+    expect(leaseBox.current).toBeUndefined();
+    expect(process.exitCode ?? 0).toBe(savedExitCode ?? 0);
+  });
+});
+
+
+test("flow 415 — shutdown retains both leases until delayed switch preservation settles", async () => {
+  const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+  const finalizerBox: { current: (() => Promise<void>) | undefined } = { current: undefined };
+  const opened: SessionLeaseHandle[] = [];
+  let unblock!: () => void;
+  const barrier = new Promise<void>((resolve) => { unblock = resolve; });
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  let settled = false;
+  const previousExitCode = process.exitCode;
+  const previousDataDir = process.env.KERYX_DATA_DIR;
+  process.env.KERYX_DATA_DIR = path.join(root, "data-delayed-switch");
+  const output: string[] = [];
+  const running = runAgentRepl((async function* () {
+    yield "/new";
+    yield "/exit";
+  })(), { printPrompt: () => {}, safeBoundary: undefined, write: (s) => output.push(s) }, fakeDeps(), fakePort(), {
+    cwd, enabled: true, leaseBox, finalizerBox,
+    openLeased: (opts) => {
+      const result = openLeasedSession(opts);
+      opened.push(result.lease);
+      return result;
+    },
+    closeSlateForSwitch: async () => {
+      entered();
+      await barrier;
+    },
+  }, undefined, undefined, undefined, path.join(root, "config"));
+  try {
+    await started;
+    const shutdown = finalizerBox.current!().then(() => { settled = true; });
+    // Allow checkpoint/release to run if the switch wait was accidentally removed.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(settled).toBe(false);
+    expect(opened).toHaveLength(2);
+    expect(opened.every((lease) => !lease.released && existsSync(lease.lockPath))).toBe(true);
+    unblock();
+    await shutdown;
+    await running;
+    expect(output.join("")).toContain("Kept the current session.");
+    expect(opened.every((lease) => lease.released && !existsSync(lease.lockPath))).toBe(true);
+    expect(leaseBox.current).toBeUndefined();
+  } finally {
+    unblock();
+    await running;
+    process.exitCode = previousExitCode ?? 0;
+    if (previousDataDir === undefined) delete process.env.KERYX_DATA_DIR;
+    else process.env.KERYX_DATA_DIR = previousDataDir;
+  }
+});
+
+test("readline recovery completes the original operator prompt without another input or early turn_end", async () => {
+  const { provider, requests } = recoveryProvider([
+    [{ kind: "text_delta", text: "partial" }, { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "Recovered in readline." }, { kind: "model_end" }],
+  ]);
+  const events: ShellEvent[] = [];
+  const out = await repl(["hello", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id", maxRounds: 1 }),
+    events: { emit: (event) => events.push(event) },
+    recovery: { random: () => 0, wait: async () => {
+      expect(events.filter((e) => e.type === "turn_start")).toHaveLength(1);
+      expect(events.some((e) => e.type === "turn_end")).toBe(false);
+      expect(events.some((e) => e.type === "assistant")).toBe(false);
+    } },
+  });
+  expect(requests).toHaveLength(2);
+  expect(out).toContain("[recovering]");
+  expect(out).toContain("[interrupted output]");
+  expect(out).toContain("Recovered in readline.");
+  expect(events.filter((e) => e.type === "turn_start")).toHaveLength(1);
+  expect(events.filter((e) => e.type === "turn_end")).toEqual([
+    { type: "turn_end", text: "Recovered in readline.", toolCalls: 0 },
+  ]);
+});
+
+test("readline shutdown signal aborts recovery wait, emits a stopped outcome and sends no late request", async () => {
+  const controller = new AbortController();
+  const { provider, requests } = recoveryProvider([
+    [{ kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "must not run" }, { kind: "model_end" }],
+  ]);
+  const events: ShellEvent[] = [];
+  const out = await repl(["hello", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }), signal: controller.signal,
+    events: { emit: (event) => events.push(event) },
+    recovery: { wait: (ms, signal) => { const waiting = waitForRecovery(ms, signal); controller.abort(); return waiting; } },
+  });
+  expect(requests).toHaveLength(1);
+  expect(out).toContain("[stopped]");
+  const end = events.find((e) => e.type === "turn_end");
+  expect(end?.type === "turn_end" && end.errorMessage).toContain("[stopped]");
+});
+
+
+test("readline lease loss aborts recovery without a late request", async () => {
+  const { openLeasedSession } = await import("../session/lease");
+  const { provider, requests } = recoveryProvider([
+    [{ kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "must not run" }, { kind: "model_end" }],
+  ]);
+  let lose!: () => void;
+  let lost = false;
+  const previousExitCode = process.exitCode;
+  let out: string;
+  try {
+    out = await repl(["hello", "/exit"], {
+      deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }),
+      session: { enabled: true, openLeased: (opts) => {
+        const opened = openLeasedSession(opts);
+        return { ...opened, lease: { ...opened.lease,
+          get lost() { return lost; }, checkLost: () => lost,
+          onLost: (callback) => { lose = () => { lost = true; callback(); }; return () => {}; },
+        } };
+      } },
+      recovery: { wait: (ms, signal) => { const waiting = waitForRecovery(ms, signal); lose(); return waiting; } },
+    });
+  } finally {
+    // A lost lease makes the final checkpoint fail by design, which sets the exit status.
+    process.exitCode = previousExitCode ?? 0;
+  }
+  expect(requests).toHaveLength(1);
+  expect(out).toContain("[stopped]");
+});
+
+
+test("readline turn totals include billed failed recovery attempts and reset for the next turn", async () => {
+  const { provider } = recoveryProvider([
+    [{ kind: "usage_update", usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, cacheReadTokens: 3, cacheWriteTokens: 1, exact: true } }, { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    [{ kind: "text_delta", text: "recovered" }, { kind: "usage_update", usage: { inputTokens: 20, outputTokens: 4, totalTokens: 24, cacheReadTokens: 5, cacheWriteTokens: 2, exact: true } }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "next turn" }, { kind: "usage_update", usage: { inputTokens: 1, outputTokens: 1 } }, { kind: "model_end" }],
+  ]);
+  const events: ShellEvent[] = [];
+  await repl(["hello", "next", "/exit"], {
+    deps: fakeDeps({ provider, tools: [], idSeq: () => "id" }),
+    events: { emit: event => events.push(event) }, recovery: { wait: async () => {} },
+  });
+  const ends = events.filter(e => e.type === "turn_end");
+  expect(ends[0]?.type === "turn_end" && ends[0].usage).toEqual({ inputTokens: 30, outputTokens: 6, totalTokens: 36, cacheReadTokens: 8, cacheWriteTokens: 3, exact: true } as import("../harness/provider/types").NormalizedUsage);
+  expect(ends[1]?.type === "turn_end" && ends[1].usage).toEqual({ inputTokens: 1, outputTokens: 1, exact: false } as import("../harness/provider/types").NormalizedUsage);
+  expect(events.filter(e => e.type === "usage")).toHaveLength(3);
 });

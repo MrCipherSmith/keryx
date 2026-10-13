@@ -27,6 +27,9 @@ import { courseFromSlate } from "../../../session/slate-course";
 import { redactSensitiveText } from "../../../security/redact";
 import type { InteractiveTool } from "./interactive-tools";
 
+/** Newest Trail entries `slate_read` includes beside the total count (flow 393). */
+const SLATE_READ_TRAIL_LATEST = 20;
+
 // `SEED_TEXT_MAX_LENGTH`/`SLATE_SEED_KINDS`/`isSlateSeedKind` used to be local,
 // unexported copies defined in this file (F-002, review remediation, prior
 // round). Flow 182 T7 (F-001 fix) promoted them to `../../../session/slate` —
@@ -70,7 +73,23 @@ export function slateReadTool(cwd: string, getSessionDir: () => string | undefin
         const slate = await readSlate(dir);
         const course = await courseFromSlate(cwd, slate);
         return {
-          output: JSON.stringify({ course, seeds: slate?.seeds ?? [], workspaceId: slate?.workspaceId }, null, 2),
+          // Flow 393 AC10: `notes` and `trail` are NEW fields, present only once something is
+          // recorded, so a slate without them reads exactly as before; `course`, `seeds` and
+          // `workspaceId` keep their shape. The Trail is summarised (count + newest entries) so a
+          // long session cannot make this read huge; `slate_trail` pages the rest.
+          output: JSON.stringify(
+            {
+              course,
+              seeds: slate?.seeds ?? [],
+              workspaceId: slate?.workspaceId,
+              ...(slate?.notes !== undefined && Object.keys(slate.notes).length > 0 ? { notes: slate.notes } : {}),
+              ...(slate?.trail !== undefined && slate.trail.length > 0
+                ? { trail: { count: slate.trail.length, latest: slate.trail.slice(-SLATE_READ_TRAIL_LATEST) } }
+                : {}),
+            },
+            null,
+            2,
+          ),
           isError: false,
         };
       } catch (cause) {

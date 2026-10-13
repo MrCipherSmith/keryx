@@ -354,3 +354,30 @@ describe("row C — a tool call the provider sends without an id", () => {
     expect(starts.map((e) => e.toolCallId)).toEqual(["call_1", "call_2"]);
   });
 });
+
+
+const resetAdapters = {
+  openai: (fetch: typeof globalThis.fetch) => new OpenAiProvider({ grant: { network: true, apiKey: "fixture" }, fetch }),
+  anthropic: (fetch: typeof globalThis.fetch) => new AnthropicProvider({ grant: { network: true, apiKey: "fixture" }, fetch }),
+  gemini: (fetch: typeof globalThis.fetch) => new GeminiProvider({ grant: { network: true, apiKey: "fixture" }, fetch }),
+  compat: (fetch: typeof globalThis.fetch) => new OpenAiCompatEngine({ grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch }, COMPAT_IDENTITY),
+};
+
+for (const [name, make] of Object.entries(resetAdapters)) {
+  for (const failure of ["reset", "programming", "abort"] as const) {
+    test(`${name}: body read ${failure} preserves the transport/abort/permanent boundary`, async () => {
+      const cause = failure === "reset" ? Object.assign(new Error("socket failure"), { code: "ECONNRESET" })
+        : failure === "abort" ? new DOMException("cancelled", "AbortError") : new Error("bad invariant");
+      const fetch = Object.assign(async () => new Response(new ReadableStream<Uint8Array>({
+        pull(controller) { controller.error(cause); },
+      })), { preconnect: () => {} });
+      const events = await collect(make(fetch).stream(buildRequest(`read-${name}`), { attemptId: "read" }));
+      expect(events.some(e => e.kind === "model_end")).toBe(false);
+      const errors = providerErrors(events);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.error?.kind).toBe(failure === "reset" ? "unavailable" : failure === "abort" ? "cancelled" : "malformed");
+      expect(errors[0]?.error?.retryable).toBe(failure === "reset");
+      expect(errors[0]?.error?.detail?.incompleteStream).toBe(failure === "reset" ? true : undefined);
+    });
+  }
+}

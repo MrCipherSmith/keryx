@@ -189,12 +189,12 @@ export interface CollapseGroup {
 }
 
 /** An assistant message carrying opaque reasoning replay items. */
-function hasReplay(m: NormalizedMessage): boolean {
+export function hasReplay(m: NormalizedMessage): boolean {
   return m.role === "assistant" && (m.reasoning?.replay?.length ?? 0) > 0;
 }
 
 /** `m` without its reasoning replay (the visible reasoning text and flags stay). */
-function withoutReplay(m: NormalizedMessage): NormalizedMessage {
+export function withoutReplay(m: NormalizedMessage): NormalizedMessage {
   const { reasoning, ...rest } = m;
   if (reasoning === undefined) {
     return m;
@@ -363,6 +363,24 @@ export interface PruneOptions {
   collapseGroups?: boolean;
   /** Called once, just before `history` is changed (hosts flush their archive here). */
   beforeApply?: () => void;
+  /**
+   * Flow 393 AC14: a last say on a plan that already clears the saving threshold (the cache-cost
+   * gate). Called once with the plan and the history it was made from; `false` leaves `history`
+   * untouched.
+   */
+  shouldApply?: (plan: PrunePlan, history: readonly NormalizedMessage[]) => boolean;
+}
+
+/**
+ * Index of the first message a plan would change: everything from there on is re-sent uncached
+ * after the rewrite. `history.length` when the plan changes nothing.
+ */
+export function firstChangedIndex(plan: PrunePlan, history: readonly NormalizedMessage[]): number {
+  let first = history.length;
+  for (const e of plan.entries) first = Math.min(first, e.index);
+  for (const g of plan.groups) first = Math.min(first, g.start);
+  for (const e of plan.strips) first = Math.min(first, e.index);
+  return first;
 }
 
 export interface PruneResult {
@@ -419,6 +437,9 @@ export async function pruneToolOutputs(history: NormalizedMessage[], opts: Prune
     plan.entries.length + plan.groups.length + plan.strips.length === 0 ||
     plan.savedTokens < (opts.minSavingTokens ?? PRUNE_MIN_SAVING_TOKENS)
   ) {
+    return { pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 };
+  }
+  if (opts.shouldApply !== undefined && !opts.shouldApply(plan, history)) {
     return { pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 };
   }
   opts.beforeApply?.();

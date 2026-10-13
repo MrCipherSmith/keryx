@@ -317,6 +317,11 @@ async function auditFixture(content: string, exitCode: number): Promise<string> 
     JSON.stringify({
       sources: {
         eslint: { mode: "disabled", required: false },
+        // Flow 352: `oxlint` is a new default source, so a fixture that
+        // disables every other check has to disable it too -- otherwise its
+        // "skipped" row would be counted as an unmeasured check and make this
+        // fixture's expected `coverage: "complete"` unreachable.
+        oxlint: { mode: "disabled", required: false },
         typescript: { mode: "disabled", required: false },
         tests: { mode: "disabled", required: false },
         coverage: { mode: "disabled", required: false },

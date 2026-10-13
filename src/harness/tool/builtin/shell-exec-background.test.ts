@@ -381,7 +381,8 @@ describe("flow 263 AC2: a command that exits within the yield returns the synchr
     expect(result.output).toBe("(no output; exit 3)");
   });
 
-  test("output over 20 000 bytes is capped from the start and marked truncated", async () => {
+  test("output over 20 000 bytes keeps its head and its tail, within the cap, and says what was cut", async () => {
+    // Flow 393 AC11 replaced the head-only cut: the tail of a long output is where the error is.
     const big = `HEAD${"x".repeat(30_000)}TAIL`;
     const { spawn } = scriptedSpawner(() => ({ kind: "exit", stdout: big, exitCode: 0 }));
     const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
@@ -389,9 +390,10 @@ describe("flow 263 AC2: a command that exits within the yield returns the synchr
     const result = await tool.invoke({ command: "cat big.log" });
     expect(result.isError).toBe(false);
     expect(result.output.startsWith("HEAD")).toBe(true);
-    expect(result.output).not.toContain("TAIL");
-    expect(result.output.endsWith("\n…(truncated)")).toBe(true);
-    expect(result.output.length).toBe(20_000 + "\n…(truncated)".length);
+    expect(result.output).toContain("TAIL");
+    expect(result.output.length).toBeLessThanOrEqual(20_000);
+    expect(result.output).toContain("[output truncated: stdout 1 lines, 30008 bytes");
+    expect(result.spill?.full).toBe(big);
   });
 });
 

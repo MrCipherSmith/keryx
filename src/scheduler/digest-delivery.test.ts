@@ -239,7 +239,10 @@ describe("AC6: a gh or model failure is a report entry and a status line in the 
   test("gh failing for every source stops the run: a status line goes to the topic and the report says why", async () => {
     await rmBoard();
     const gh = new FakeGh().fail("pr", "gh: not logged in").fail("issue", "gh: not logged in").fail("review", "gh: not logged in").fail("ci", "gh: not logged in");
-    await run(gh);
+    await runDigest(env, name, {
+      runGh: gh.run, summarize: fakeSummary().summarize, now: clock.now, sink,
+      runId: () => "dig-20261002T120000-3991d42d",
+    });
 
     const record = await lastRecord();
     expect(record.outcome).toBe("failed");
@@ -358,6 +361,48 @@ describe("AC6: through serve's own Telegram path (a real hub over the fake Bot A
   });
 
   const hubSinkOf = (): ReturnType<typeof hubSink> => hubSink(h.makeHub());
+
+
+  for (const target of ["service", "session"] as const) {
+    for (const queued of [false, true]) {
+      test(`failure locator survives the real ${target} hub path (${queued ? "queued retry" : "immediate"})`, async () => {
+        await rmBoard();
+        const hub = h.makeHub();
+        let thread: number;
+        if (target === "session") {
+          const registered = await hub.register({ sessionId: "locator-session", project: env.root, name: "keryx" });
+          if (!registered.ok) throw new Error(registered.message);
+          thread = registered.threadId;
+        } else {
+          await hub.sendToServiceTopic("Digest", "warm-up");
+          thread = h.api.topics()[0]!.messageThreadId;
+        }
+        const before = h.api.sentTo(thread).length;
+        if (queued) h.api.setDown(true);
+        const gh = new FakeGh().fail("pr", "gh: not logged in").fail("issue", "gh: not logged in").fail("review", "gh: not logged in").fail("ci", "gh: not logged in");
+        await runDigest(env, name, {
+          runGh: gh.run, summarize: fakeSummary().summarize, now: clock.now, sink: hubSink(hub),
+          runId: () => "dig-20261002T120000-3991d42d",
+        });
+        const record = await lastRecord();
+        expect(record.outcome).toBe("failed");
+        expect(record.agentTask?.reportPath).toEndWith("dig-20261002T120000-3991d42d.md");
+        if (queued) {
+          expect(h.api.sentTo(thread)).toHaveLength(before);
+          expect(hub.outboundPending()).toBeGreaterThan(0);
+          expect((await readDeliveryState(env.root, name)).last?.status).toBe("queued");
+          h.api.setDown(false);
+          await h.clock.advance(10 * 60_000);
+          await hub.flushOutbound();
+        }
+        const delivered = h.api.sentTo(thread).slice(before);
+        expect(delivered).toHaveLength(1);
+        expect(delivered[0]?.text).toContain(`Report: ${record.agentTask?.reportPath}`);
+        expect(delivered[0]?.text).toContain("stopped — no source could be read");
+        expect(hub.outboundPending()).toBe(0);
+      });
+    }
+  }
 
   test("with no session, the digest creates the topic Digest and is written into it; the next digest reuses the topic", async () => {
     const hub = h.makeHub();

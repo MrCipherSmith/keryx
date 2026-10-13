@@ -858,6 +858,8 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "graph_query",
     "graph_symbol",
     "health_status",
+    // Flow 393: working-memory recall (read-only) and the Notes writer.
+    "history_search",
     "list_dir",
     "memory_search",
     "plan_get",
@@ -865,6 +867,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "plan_update",
     "read_file",
     "read_wiki",
+    "recall_step",
     "repomap",
     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
     // the card; schedule_list is read-only. TUI roster only.
@@ -886,7 +889,9 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "shell_task_wait",
     "skill_load",
     "skills_catalog",
+    "slate_note",
     "slate_read",
+    "slate_trail",
     "slate_write_seed",
     "spawn_subagent",
     "test_related",
@@ -1209,14 +1214,25 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
     );
   });
 
-  test("closes the live slate at exactly the three documented trigger points (EOF, /exit|/quit, /new|/clear) — not fewer, not more", () => {
-    const occurrences = replBody.split(closeCall).length - 1;
-    expect(occurrences).toBe(3);
+  test("exit uses one preservation barrier; switching retains its separate slate close", () => {
+    const barrierStart = replBody.indexOf("const finalizeShell = createShellFinalizer({");
+    const barrierEnd = replBody.indexOf("cleanup: async (signal) =>", barrierStart);
+    expect(barrierEnd).toBeGreaterThan(barrierStart);
+    const barrier = replBody.slice(barrierStart, barrierEnd);
+    expect(barrierStart).toBeGreaterThanOrEqual(0);
+    expect(barrier).toContain("preserve: async () => {");
+    expect(barrier.split(closeCall).length - 1).toBe(1);
+    expect(barrier).not.toContain("await replayPreservationOutbox(");
+    const optionalCleanup = replBody.slice(barrierEnd, replBody.indexOf("release: () =>", barrierEnd));
+    expect(optionalCleanup).toContain("await replayPreservationOutbox(");
+    expect(optionalCleanup).toContain("await deps.sweepBackgroundJobs?.();");
+    expect(replBody.split(closeCall).length - 1).toBe(2);
+    expect(replBody).toContain("sessionOpts.finalizerBox.current = finalizeForSignal");
   });
 
   test("EOF (end of input) is one of the close-trigger points", () => {
     const eofBlock = replBody.slice(replBody.indexOf("if (line === undefined) {"), replBody.indexOf("return; // end of input") + 1);
-    expect(eofBlock).toContain(closeCall);
+    expect(eofBlock).toContain("await finalizeShell();");
   });
 
   test("/exit and /quit is one of the close-trigger points", () => {
@@ -1224,7 +1240,7 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
       replBody.indexOf('command === "/exit" || command === "/quit"'),
       replBody.indexOf('command === "/exit" || command === "/quit"') + 300,
     );
-    expect(exitBlock).toContain(closeCall);
+    expect(exitBlock).toContain("await finalizeShell();");
   });
 
   test("/new (and /clear) closes the OLD slate before a fresh SlateSessionRef is created for the new session dir", () => {
@@ -1249,9 +1265,11 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
     // `runOperatorLine` helper now (parameter renamed `line` → `operatorLine`
     // so it reads the same whether called directly or drained from the held
     // queue) — the slate-session threading itself is unchanged.
-    expect(replBody).toContain(
-      "await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession, pruneArchive: true } : {});",
-    );
+    expect(replBody).toContain("const flight = runAgentTurn(agentIo, deps, history, operatorLine, {");
+    expect(replBody).toContain("...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),");
+    expect(replBody).toContain("AbortSignal.any([abort.signal, activeTurnAbort.signal");
+    expect(replBody).toContain("activeAgentFlight = flight;");
+    expect(replBody).toContain("await flight;");
   });
 });
 

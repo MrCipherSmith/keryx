@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "409",
+  "slug": "pii-ssn-and-phone-glued-to-a-word-withou",
+  "title": "PII: SSN and phone glued to a word without hyphen; ssn label reported as phone",
+  "status": "initializing",
+  "createdAt": "2026-10-05T18:27:42.537Z",
+  "updatedAt": "2026-10-05T18:27:42.537Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Завести отдельный flow на оба пункта (рекомендую)",
+    "source": "operator poll 95, 2026-10-05T18:26Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-05T18:27:42.537Z",
+      "event": "created"
+    }
+  ]
+}

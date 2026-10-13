@@ -17,7 +17,18 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { archiveSlate, openSlateAtomic, readSlate, writeSlate, type Slate, type SlateAnchors } from "./slate";
+import {
+  appendTrailEntry,
+  archiveSlate,
+  openSlateAtomic,
+  readArchivedWorkingMemory,
+  readSlate,
+  workingMemoryOf,
+  writeSlate,
+  type Slate,
+  type SlateAnchors,
+  type TrailEntry,
+} from "./slate";
 import { resolveProjectRoot } from "./paths";
 import type { CourseProjection } from "./slate-course";
 
@@ -131,8 +142,8 @@ export async function openSlate(opts: OpenSlateOptions): Promise<Slate> {
  * none exists (`archiveSlate`'s own contract). After this, the next
  * `openSlate` at the same `dir` sees no unclosed prior slate.
  */
-export async function closeSlate(dir: string, mintAttemptId: () => string): Promise<void> {
-  await archiveSlate(dir, mintAttemptId());
+export async function closeSlate(dir: string, mintAttemptId: () => string, signal?: AbortSignal): Promise<void> {
+  await archiveSlate(dir, mintAttemptId(), signal);
 }
 
 /**
@@ -182,6 +193,8 @@ export interface SlateSessionRef {
    * never cleared: a shell that gets the session back builds a fresh ref.
    */
   detached?: boolean;
+  /** Cancels pending Slate writes and fences their commit after ownership loss. */
+  writes?: AbortController;
 }
 
 /**
@@ -192,6 +205,19 @@ export interface SlateSessionRef {
 export function detachSlateSession(ref: SlateSessionRef | undefined): void {
   if (ref !== undefined) {
     ref.detached = true;
+    ref.writes?.abort();
+  }
+}
+
+async function attachedWrite<T>(ref: SlateSessionRef, run: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+  if (isSlateSessionDetached(ref)) return undefined;
+  const controller = ref.writes ??= new AbortController();
+  try {
+    return await run(controller.signal);
+  } catch (error) {
+    // Genuine storage failures are never swallowed.
+    if (controller.signal.aborted && error === controller.signal.reason) return undefined;
+    throw error;
   }
 }
 
@@ -220,7 +246,7 @@ export async function writeSlateSession(
   if (isSlateSessionDetached(ref)) {
     return undefined;
   }
-  return writeSlate(ref.dir, update);
+  return attachedWrite(ref, (signal) => writeSlate(ref.dir, update, signal));
 }
 
 /**
@@ -271,12 +297,21 @@ export async function ensureSlateOpened(
   if (isSlateSessionDetached(ref)) {
     return;
   }
-  await openSlateAtomic(ref.dir, mintAttemptId, (_existing) => ({
-    anchors,
-    course: {},
-    seeds: [],
-  }));
-  ref.opened = true;
+  // Flow 393: the Trail and Notes belong to the conversation, not to one slate attempt. A live slate
+  // that is being re-opened (a resumed session whose process died) or an archived one (the session
+  // was resumed after a clean exit, or its slate closed mid-conversation) hands them to the new slate.
+  const archived = await readArchivedWorkingMemory(ref.dir);
+  const opened = await attachedWrite(ref, (signal) => openSlateAtomic(ref.dir, mintAttemptId, (existing): Slate => {
+    const live = workingMemoryOf(existing);
+    return {
+      anchors,
+      course: {},
+      seeds: [],
+      ...(live.trail !== undefined || archived.trail !== undefined ? { trail: live.trail ?? archived.trail } : {}),
+      ...(live.notes !== undefined || archived.notes !== undefined ? { notes: live.notes ?? archived.notes } : {}),
+    };
+  }, signal));
+  if (opened !== undefined) ref.opened = true;
 }
 
 /**
@@ -291,8 +326,11 @@ export async function closeSlateSession(
   if (ref === undefined || isSlateSessionDetached(ref)) {
     return;
   }
-  await closeSlate(ref.dir, mintAttemptId);
-  ref.opened = false;
+  await attachedWrite(ref, async (signal) => {
+    await closeSlate(ref.dir, mintAttemptId, signal);
+    return true;
+  });
+  if (!isSlateSessionDetached(ref)) ref.opened = false;
 }
 
 /**
@@ -428,6 +466,7 @@ export async function recordSlateTouch(
   dir: string,
   touched: readonly string[],
   extra?: { tree?: string; runtime?: { provider: string; model: string } },
+  signal?: AbortSignal,
 ): Promise<{ changed: boolean; slate: Slate }> {
   let changed = false;
   const slate = await writeSlate(dir, (prev) => {
@@ -456,7 +495,7 @@ export async function recordSlateTouch(
     if (extra?.tree !== undefined) nextAnchors.tree = extra.tree;
     if (extra?.runtime !== undefined) nextAnchors.runtime = extra.runtime;
     return { ...prev, anchors: nextAnchors };
-  });
+  }, signal);
   return { changed, slate };
 }
 
@@ -473,7 +512,22 @@ export async function recordSlateSessionTouch(
   if (isSlateSessionDetached(ref)) {
     return undefined;
   }
-  return recordSlateTouch(ref.dir, touched, extra);
+  return attachedWrite(ref, (signal) => recordSlateTouch(ref.dir, touched, extra, signal));
+}
+
+/**
+ * Flow 393 (AC1, AC8): append one Trail entry through a ref. `undefined`, and
+ * nothing written, once the ref is detached — a shell that lost the session's
+ * lease must never write a Trail entry into the slate its successor now holds.
+ */
+export async function recordSlateSessionTrail(
+  ref: SlateSessionRef,
+  entry: Omit<TrailEntry, "step">,
+): Promise<TrailEntry | undefined> {
+  if (isSlateSessionDetached(ref)) {
+    return undefined;
+  }
+  return attachedWrite(ref, (signal) => appendTrailEntry(ref.dir, entry, signal));
 }
 
 /**

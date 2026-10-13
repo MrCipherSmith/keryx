@@ -15,9 +15,11 @@ import {
   classifyRemoteCommand,
   type GatewayDecision,
   isBusyDeferred,
+  isQueuedWhenBusy,
   refusalText,
   remoteHelpText,
 } from "./command-gateway";
+import { HISTORY_EMPTY_MESSAGE } from "./history";
 
 /** What running a command in the shell produced. */
 export interface CommandOutcome {
@@ -56,6 +58,12 @@ export interface RemoteCommandHost {
   isBusy(): boolean;
   /** Stop the running turn. The router never calls it: a command from the topic must not stop a turn. The bridge uses it for a Telegram turn's own run limit. */
   cancelTurn(): void;
+  /**
+   * `/stop` (flow 396): end the running turn if Telegram started it. "stopped" means it was asked to stop (the
+   * bridge says so when the turn ends); "idle" means no turn is running; "operator" means the running turn
+   * was started in the shell, which a topic may not stop.
+   */
+  stopTelegramTurn?(): "stopped" | "idle" | "operator";
   /** Run a slash line as the operator would type it and collect what it printed. */
   runCommand?(line: string): Promise<CommandOutcome>;
   /**
@@ -78,31 +86,53 @@ export interface RemoteCommandHost {
 export interface RouterLimits {
   /** After this long a command that is still running says so in the topic. */
   runningNoticeMs: number;
-  /** After this long the topic stops waiting for a command and is told it is still running. Nothing is cancelled. */
+  /** After this long the topic stops waiting for a command and is told it is still running. Nothing is cancelled; the topic hears how it ended. */
   commandLimitMs: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs: number;
+  /** How often a command held for an idle main looks again (flow 419, AC4). */
+  idlePollMs?: number;
+  /** After this long a held command is dropped, and the topic is told. */
+  queuedCommandLimitMs?: number;
 }
 
-export const DEFAULT_ROUTER_LIMITS: RouterLimits = { runningNoticeMs: 4_000, commandLimitMs: 120_000, choiceTimeoutMs: 120_000 };
+export const DEFAULT_ROUTER_LIMITS: RouterLimits = {
+  runningNoticeMs: 4_000,
+  commandLimitMs: 120_000,
+  choiceTimeoutMs: 120_000,
+  idlePollMs: 250,
+  queuedCommandLimitMs: 30 * 60_000,
+};
 
 /** The most items on one picker page; with the navigation row this stays within the eight rows a keyboard may have. */
 export const PICKER_PAGE_SIZE = 7;
 const LABEL_CHARS = 56;
 
+/** What `choose` returns when the question was refused before anyone could see it (serve said no). */
+export interface ChoiceRefusal {
+  refused: string;
+}
+
 export interface RouterContext {
   host: RemoteCommandHost;
   /** Send text to the topic. False when it could not be sent. */
   reply(text: string): Promise<boolean>;
+  /** False once remote control is off: a command held for an idle main is dropped. Absent: always live. */
+  live?(): boolean;
+  /**
+   * `/history [N]` (flow 399): post the session's last messages to the topic. Resolves with the one
+   * line to answer with when nothing was posted (usage, empty history), undefined when the messages went out.
+   */
+  history?(args: string): Promise<string | undefined>;
   /** One line in the bridge's recent events. */
   record(text: string): void;
   /** Redact, trim and cap text for the topic. */
   compose(text: string): string;
   /**
-   * Ask the topic with buttons. Resolves with the flat index of the pressed button, or undefined
-   * when nobody pressed in time (or the topic is gone).
+   * Ask the topic with buttons. Resolves with the flat index of the pressed button, undefined
+   * when nobody pressed in time (or the topic is gone), or a refusal with the reason serve gave.
    */
-  choose(text: string, rows: string[][], timeoutMs: number, forUserId: number | undefined): Promise<number | undefined>;
+  choose(text: string, rows: string[][], timeoutMs: number, forUserId: number | undefined): Promise<number | undefined | ChoiceRefusal>;
   /** True while a command that swaps the session runs: the topic stays bound to it. */
   holdTopic(on: boolean): void;
   /** Whether the session was swapped since the last call; the separator line replaced the output. */
@@ -154,6 +184,20 @@ export class RemoteCommandRouter {
             await this.listSessionsText();
             ended(end, "done");
           });
+        } else if (decision.command === "stop") {
+          this.stop(end);
+        } else if (decision.command === "history") {
+          // Reads the session and posts to the topic; allowed while a turn runs.
+          this.detach(async () => {
+            const answer = this.ctx.history === undefined ? "This shell cannot post its history." : await this.ctx.history(decision.args);
+            if (answer === undefined) {
+              ended(end, "done");
+              return;
+            }
+            // An empty history is an answer, not a failure; a usage error or a refused post is one.
+            ended(end, answer === HISTORY_EMPTY_MESSAGE ? "done" : "failed");
+            await this.ctx.reply(this.ctx.compose(answer)).catch(() => false);
+          });
         } else {
           void this.ctx.reply(this.ctx.compose(remoteHelpText())).catch(() => false);
           ended(end, "done");
@@ -180,6 +224,23 @@ export class RemoteCommandRouter {
         });
         return;
     }
+  }
+
+  /** `/stop`: answered at once, never queued behind the turn it stops. */
+  private stop(end: CommandEnd | undefined): void {
+    const result = this.ctx.host.stopTelegramTurn?.() ?? "idle";
+    if (result === "stopped") {
+      // The topic hears "Stopped by you." when the turn has really ended.
+      ended(end, "done");
+      return;
+    }
+    const text =
+      result === "operator"
+        ? "/stop did nothing: the running turn was started in the shell, so only the shell can stop it."
+        : "/stop did nothing: no run started from Telegram is going on.";
+    this.ctx.record(`/stop: ${result === "operator" ? "turn belongs to the shell" : "nothing to stop"}`);
+    void this.ctx.reply(text).catch(() => false);
+    ended(end, "failed");
   }
 
   /** Resolves when every command taken so far, and every question asked, has finished. */
@@ -213,9 +274,58 @@ export class RemoteCommandRouter {
 
   /** Put a run on the line. Used by the gateway's `run` and by an answered Yes/No. */
   enqueue(line: string, command: string, end?: CommandEnd): void {
+    if (isQueuedWhenBusy(command) && this.busyReason(line, command) !== undefined) {
+      this.detach(async () => {
+        if (await this.awaitIdle(line, command)) {
+          this.enqueueNow(line, command, end);
+        } else {
+          ended(end, "failed");
+        }
+      });
+      return;
+    }
+    this.enqueueNow(line, command, end);
+  }
+
+  private enqueueNow(line: string, command: string, end?: CommandEnd): void {
     this.chain = this.chain
       .then(() => this.execute(command, line, async () => (this.ctx.host.runCommand === undefined ? undefined : this.ctx.host.runCommand(line)), end))
       .catch(() => undefined);
+  }
+
+  /**
+   * Flow 419, AC4: main is busy and the command is one the shell would defer. Say it is queued, then wait
+   * until main is idle. Resolves true when it is, false when the wait was given up (the topic was told or
+   * is gone). Never on the line, so a status question or a stop is not stuck behind it.
+   */
+  private async awaitIdle(line: string, command: string): Promise<boolean> {
+    this.ctx.record(`/${command} queued: main is busy`);
+    await this.ctx.reply(this.ctx.compose(`${line} is queued: main is busy. It runs when main is idle.`)).catch(() => false);
+    const { idlePollMs = 250, queuedCommandLimitMs = 30 * 60_000 } = this.ctx.limits;
+    const until = Date.now() + queuedCommandLimitMs;
+    while (this.ctx.host.isBusy()) {
+      if (this.ctx.live?.() === false) {
+        this.ctx.record(`${line} dropped: remote control went off while it waited`);
+        return false;
+      }
+      if (Date.now() >= until) {
+        this.ctx.record(`${line} dropped: main stayed busy`);
+        await this.ctx.reply(`${line} was not run: main stayed busy for ${Math.max(1, Math.round(queuedCommandLimitMs / 60_000))} minutes. Send it again when the run ends.`).catch(() => false);
+        return false;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, idlePollMs));
+    }
+    return true;
+  }
+
+  /** Run `work` after everything already on the line, and hold the line until it settles. */
+  private serial<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(work);
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   /** The reason the shell would refuse this right now, or undefined. */
@@ -256,8 +366,9 @@ export class RemoteCommandRouter {
       limitTimer = setTimeout(() => resolve("limit"), limits.commandLimitMs);
     });
     let outcome: CommandOutcome | undefined | "limit";
+    const running = work();
     try {
-      outcome = await Promise.race([work(), limit]);
+      outcome = await Promise.race([running, limit]);
     } catch (error) {
       outcome = { output: error instanceof Error ? error.message : String(error), ok: false };
     } finally {
@@ -273,6 +384,11 @@ export class RemoteCommandRouter {
     if (outcome === "limit") {
       // Never cancel anything here. The shell may be running the operator's own turn, which a
       // command from the topic has no right to stop; the command's own work is left to finish.
+      // Its outcome is not lost: when it ends, the topic is told how (flow 387 review, L-6).
+      void running.then(
+        (late) => this.lateOutcome(command, late, end),
+        (error: unknown) => this.lateOutcome(command, { output: error instanceof Error ? error.message : String(error), ok: false }, end),
+      );
       this.ctx.record(`/${command} still running: stopped waiting after the time limit`);
       ended(end, "failed");
       await this.ctx
@@ -300,13 +416,32 @@ export class RemoteCommandRouter {
     await this.ctx.reply(this.ctx.compose(outcome.ok ? text : `/${command} failed:\n${text}`)).catch(() => false);
   }
 
+  /** A command that outlasted its limit has ended: tell the topic how, and correct the reaction. */
+  private async lateOutcome(command: string, outcome: CommandOutcome | undefined, end: CommandEnd | undefined): Promise<void> {
+    if (outcome === undefined) {
+      return;
+    }
+    this.ctx.record(`/${command} ${outcome.ok ? "done" : "failed"} after the time limit`);
+    ended(end, outcome.ok ? "done" : "failed");
+    if (this.ctx.takeSwitched()) {
+      return;
+    }
+    const text = outcome.output.trim();
+    const head = `/${command} ${outcome.ok ? "finished" : "failed"} after the time limit`;
+    await this.ctx.reply(this.ctx.compose(text.length === 0 ? `${head}. It printed nothing.` : `${head}:\n${text}`)).catch(() => false);
+  }
+
   // ---- Yes/No ------------------------------------------------------------------------
 
   private async confirm(decision: Extract<GatewayDecision, { kind: "confirm" }>, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
     const yes = decision.agent !== undefined ? `Yes, send to ${decision.agent} (paid)` : "Yes";
     // Shown in the shell's remote panel for as long as the question stays unanswered.
     this.ctx.record(`/${decision.command} waiting for a press in the topic`);
-    const index = await this.ctx.choose(this.ctx.compose(decision.summary), [[this.label(yes), "No"]], this.ctx.limits.choiceTimeoutMs, fromId);
+    const index = await this.ask(decision.command, this.ctx.compose(decision.summary), [[this.label(yes), "No"]], fromId);
+    if (index === "refused") {
+      // Nothing was asked, so nothing runs; the topic was told why.
+      return "failed";
+    }
     if (index === 0) {
       this.ctx.record(`/${decision.command} confirmed in the topic`);
       // The reaction follows the run itself, not the question.
@@ -320,6 +455,21 @@ export class RemoteCommandRouter {
 
   // ---- pickers -----------------------------------------------------------------------
 
+  /**
+   * Put a question to the topic. A press gives its index and no press in time gives undefined. When serve
+   * refused the question ("refused") the reason is recorded and told to the topic, so a refusal is never
+   * mistaken for a question nobody answered.
+   */
+  private async ask(command: string, text: string, rows: string[][], fromId: number | undefined): Promise<number | undefined | "refused"> {
+    const answer = await this.ctx.choose(text, rows, this.ctx.limits.choiceTimeoutMs, fromId);
+    if (typeof answer === "object") {
+      this.ctx.record(`/${command} not asked: ${answer.refused}`);
+      await this.ctx.reply(this.ctx.compose(`/${command} was not asked: ${answer.refused}.`)).catch(() => false);
+      return "refused";
+    }
+    return answer;
+  }
+
   private label(text: string): string {
     const one = this.ctx.compose(text).replace(/\s+/g, " ").trim();
     const shown = one.length === 0 ? "(unnamed)" : one;
@@ -330,7 +480,7 @@ export class RemoteCommandRouter {
    * Show `options` as buttons, a page at a time. Resolves with the id of the pressed option, or
    * undefined when nobody pressed in time.
    */
-  private async pick(title: string, options: PickOption[], fromId: number | undefined): Promise<PickOption | undefined> {
+  private async pick(command: string, title: string, options: PickOption[], fromId: number | undefined): Promise<PickOption | "refused" | undefined> {
     const pages = Math.max(1, Math.ceil(options.length / PICKER_PAGE_SIZE));
     let page = 0;
     for (;;) {
@@ -347,9 +497,9 @@ export class RemoteCommandRouter {
         rows.push([...nav]);
       }
       const text = pages > 1 ? `${title}\nPage ${page + 1} of ${pages}` : title;
-      const index = await this.ctx.choose(this.ctx.compose(text), rows, this.ctx.limits.choiceTimeoutMs, fromId);
-      if (index === undefined) {
-        return undefined;
+      const index = await this.ask(command, this.ctx.compose(text), rows, fromId);
+      if (index === undefined || index === "refused") {
+        return index;
       }
       if (index < slice.length) {
         return slice[index];
@@ -362,7 +512,8 @@ export class RemoteCommandRouter {
   private async picker(command: string, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
     const line = `/${command}`;
     const busy = this.busyReason(line, command);
-    if (busy !== undefined) {
+    // A model picker is shown even while main is busy; only the switch itself waits for an idle main.
+    if (busy !== undefined && !isQueuedWhenBusy(command)) {
       this.ctx.record(`${line} not run: ${busy}`);
       await this.ctx.reply(`${line} was not run: ${busy}.`).catch(() => false);
       return "failed";
@@ -395,18 +546,28 @@ export class RemoteCommandRouter {
     const current = listing.models.find((model) => model.current === true);
     const title = `Pick a model (${listing.provider})${current !== undefined ? `\nNow: ${current.label}` : ""}`;
     const options = listing.models.map((model) => ({ id: model.id, label: model.current === true ? `* ${model.label}` : model.label }));
-    const chosen = await this.pick(title, options, fromId);
+    const chosen = await this.pick("model", title, options, fromId);
+    if (chosen === "refused") {
+      return "failed";
+    }
     if (chosen === undefined) {
       this.ctx.record("/model not answered in time; nothing changed");
       return "failed";
     }
-    const line = "/model";
-    const busy = this.busyReason(line, "model");
-    if (busy !== undefined) {
-      await this.ctx.reply(`/model was not run: ${busy}.`).catch(() => false);
+    const switchModel = host.switchModel.bind(host);
+    if (this.busyReason("/model", "model") !== undefined && !(await this.awaitIdle(`/model ${chosen.label.replace(/^\* /, "")}`, "model"))) {
       return "failed";
     }
-    const outcome = await host.switchModel(chosen.id, providerId);
+    // On the same line as every other command: a switch never overlaps one that is still executing.
+    const switched = await this.serial(async (): Promise<CommandOutcome | { busy: string }> => {
+      const busy = this.busyReason("/model", "model");
+      return busy !== undefined ? { busy } : await switchModel(chosen.id, providerId);
+    });
+    if ("busy" in switched) {
+      await this.ctx.reply(`/model was not run: ${switched.busy}.`).catch(() => false);
+      return "failed";
+    }
+    const outcome = switched;
     this.ctx.record(`/model ${outcome.ok ? "switched" : "failed"}`);
     const text = outcome.output.trim();
     await this.ctx.reply(this.ctx.compose(text.length > 0 ? text : outcome.ok ? `Model: ${chosen.label.replace(/^\* /, "")}.` : "The model was not changed.")).catch(() => false);
@@ -425,7 +586,10 @@ export class RemoteCommandRouter {
       return "failed";
     }
     const options = providers.map((provider) => ({ id: provider.id, label: provider.current === true ? `* ${provider.label}` : provider.label }));
-    const chosen = await this.pick("Connected providers. Pick one to switch to:", options, fromId);
+    const chosen = await this.pick("connect", "Connected providers. Pick one to switch to:", options, fromId);
+    if (chosen === "refused") {
+      return "failed";
+    }
     if (chosen === undefined) {
       this.ctx.record("/connect not answered in time; nothing changed");
       return "failed";
@@ -444,7 +608,10 @@ export class RemoteCommandRouter {
       await this.ctx.reply("There is no earlier session to return to.").catch(() => false);
       return "done";
     }
-    const chosen = await this.pick("Return to an earlier session:", sessions.map((s) => ({ id: s.id, label: s.label })), fromId);
+    const chosen = await this.pick("resume", "Return to an earlier session:", sessions.map((s) => ({ id: s.id, label: s.label })), fromId);
+    if (chosen === "refused") {
+      return "failed";
+    }
     if (chosen === undefined) {
       this.ctx.record("/resume not answered in time; nothing changed");
       return "failed";

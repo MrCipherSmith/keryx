@@ -9,6 +9,7 @@ import { FakeBotApi } from "./fake-bot-api";
 import { formatReply } from "./format";
 import { checkTelegramHtml } from "./format-html";
 import { OutboundQueue, type OutboundEntry } from "./outbound-queue";
+import { RenderingState } from "./rendering";
 import { type Harness, makeHarness, makeRemoteDir } from "./remote.test-helpers";
 import { BotApiError, TELEGRAM_MAX_TEXT } from "./types";
 
@@ -195,5 +196,46 @@ describe("the HTTP client", () => {
     expect(error).toBeInstanceOf(BotApiError);
     expect((error as BotApiError).status).toBe(400);
     expect((error as BotApiError).message).toContain("can't parse entities");
+  });
+});
+
+describe("the HTML path under the default `auto` mode (flow 395; AC5, AC9)", () => {
+  test("a reply without a table is sent exactly as in 0.3.63: HTML, one sendMessage, no rich call", async () => {
+    const api = new FakeBotApi();
+    const queue = queueOver(api);
+    queue.enqueue({ chatId: 1, text: "1. one\n2. two\n   - nested\n\n- [x] done\n- [ ] open\n\n---\n\n**end**" });
+    await queue.flush();
+    expect(api.callCount("sendRichMessage")).toBe(0);
+    expect(api.callCount("sendMessage")).toBe(1);
+    expect(api.sent[0]?.parseMode).toBe("HTML");
+    expect(api.sent[0]?.text).toBe("1. one\n2. two\n   \u2022 nested\n\n\u2611 done\n\u2610 open\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n<b>end</b>");
+  });
+
+  test("a failed HTML resend in auto mode is recorded as html-to-plain with the same text", async () => {
+    const api = new FakeBotApi();
+    const steps: string[] = [];
+    const dir = makeRemoteDir();
+    dirs.push(dir);
+    const queue = new OutboundQueue({ api, dir, now: () => 1, onFallback: (_entry, fallback) => steps.push(fallback.step) });
+    queue.load();
+    queue.enqueue({ chatId: 1, text: "see **this**" });
+    api.failNext("sendMessage", parseFailure());
+    await queue.flush();
+    expect(steps).toEqual(["html-to-plain"]);
+    expect(api.sent[0]).toMatchObject({ text: "see **this**" });
+    expect(api.sent[0]?.parseMode).toBeUndefined();
+  });
+
+  test("a table in html mode is an aligned <pre>, one message, and never raw pipes", async () => {
+    const api = new FakeBotApi();
+    const dir = makeRemoteDir();
+    dirs.push(dir);
+    const queue = new OutboundQueue({ api, dir, now: () => 1, rendering: new RenderingState({ mode: () => "html" }) });
+    queue.load();
+    queue.enqueue({ chatId: 1, text: "| a | b |\n|---|---|\n| 1 | 2 |" });
+    await queue.flush();
+    expect(api.callCount("sendRichMessage")).toBe(0);
+    expect(api.sent[0]?.text.startsWith("<pre>")).toBe(true);
+    expect(api.sent[0]?.text).not.toContain("|---");
   });
 });

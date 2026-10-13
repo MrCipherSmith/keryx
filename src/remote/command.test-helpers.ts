@@ -37,6 +37,18 @@ export interface CommandHarnessOptions {
   listSessions?: RemoteBridgeHost["listSessions"];
   resumeSession?: RemoteBridgeHost["resumeSession"];
   choiceTimeoutMs?: number;
+  idlePollMs?: number;
+  queuedCommandLimitMs?: number;
+  /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
+  runTimeoutMs?: number;
+  /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */
+  refuseChoice?: string;
+  progressIntervalMs?: number;
+  progressToolThreshold?: number;
+  sessionState?: RemoteBridgeHost["sessionState"];
+  turnRunning?: RemoteBridgeHost["turnRunning"];
+  /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */
+  askApproval?: NonNullable<RemoteClientLike["askApproval"]>;
 }
 
 export function commandHarness(opts: CommandHarnessOptions = {}) {
@@ -64,6 +76,8 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
             return (opts.runCommand as (line: string) => Promise<CommandOutcome>)(line);
           },
     ...(opts.busyRefusal !== undefined ? { busyRefusal: opts.busyRefusal } : {}),
+    ...(opts.sessionState !== undefined ? { sessionState: opts.sessionState } : {}),
+    ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),
     ...(opts.listModels !== undefined ? { listModels: opts.listModels } : {}),
     ...(opts.switchModel !== undefined ? { switchModel: opts.switchModel } : {}),
     ...(opts.listProviders !== undefined ? { listProviders: opts.listProviders } : {}),
@@ -78,6 +92,10 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
     ...(opts.runningNoticeMs !== undefined ? { commandRunningNoticeMs: opts.runningNoticeMs } : {}),
     ...(opts.commandLimitMs !== undefined ? { commandLimitMs: opts.commandLimitMs } : {}),
     ...(opts.choiceTimeoutMs !== undefined ? { choiceTimeoutMs: opts.choiceTimeoutMs } : {}),
+    idlePollMs: opts.idlePollMs ?? 5,
+    ...(opts.progressIntervalMs !== undefined ? { progressIntervalMs: opts.progressIntervalMs } : {}),
+    ...(opts.progressToolThreshold !== undefined ? { progressToolThreshold: opts.progressToolThreshold } : {}),
+    ...(opts.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: opts.queuedCommandLimitMs } : {}),
     makeClient: (options: RemoteClientOptions) => {
       const startResult: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0 };
       const fake = {
@@ -92,7 +110,7 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
           return "topic-a";
         },
         get runTimeoutMs() {
-          return 0;
+          return opts.runTimeoutMs ?? 0;
         },
         get lastHeartbeatAt() {
           return undefined;
@@ -104,9 +122,11 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
           return true;
         },
         requestApproval: async () => "deny" as const,
+        ...(opts.askApproval !== undefined ? { askApproval: opts.askApproval } : {}),
         reportState: async (updateId: number, state: MessageState) => {
           fake.reported.push([updateId, state]);
         },
+        ...(opts.refuseChoice !== undefined ? { askChoice: async () => ({ kind: "none" as const, refusal: opts.refuseChoice as string }) } : {}),
         requestChoice: (text: string, rows: string[][], timeoutMs: number) =>
           new Promise<number | undefined>((resolve) => {
             fake.choices.push({ text, rows, timeoutMs, answer: resolve });

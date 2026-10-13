@@ -7,10 +7,11 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { pauseStoredSchedule, resumeStoredSchedule } from "../trigger/schedules";
+import { confirmSchedule, pauseStoredSchedule, resumeStoredSchedule, type ScheduleDraft } from "../trigger/schedules";
 import { readTriggerRuns } from "../trigger/record";
-import { addDigestSchedule, FakeGh, fakeSummary, runDigest, setupDigestEnv, TestClock, type DigestTestEnv } from "./digest.test-helpers";
-import { createDigestTicker, firedPath, readFired, TICK_EVERY_MS, type DigestTicker } from "./digest-ticker";
+import { removeStoredSchedule } from "../trigger/store";
+import { addDigestSchedule, digestScheduleEntry, FakeGh, fakeSummary, runDigest, setupDigestEnv, TestClock, type DigestTestEnv } from "./digest.test-helpers";
+import { anchorDigest, createDigestTicker, firedPath, readFired, TICK_EVERY_MS, type DigestTicker } from "./digest-ticker";
 
 let env: DigestTestEnv;
 let clock: TestClock;
@@ -166,20 +167,26 @@ describe("AC1: a serve restart neither loses nor duplicates a due run", () => {
   });
 
   test("the claim is on disk before the run starts", async () => {
+    // The ticker wraps `fire` in try/catch, so an assertion that throws inside it is swallowed and the test
+    // passes whatever the order is. Record what `fire` saw, and assert on it after the tick returns.
+    const seen: { fired: boolean | undefined; slot: string | undefined; onDisk: boolean | undefined }[] = [];
     const ticker = createDigestTicker({
       roots: () => [env.root],
       now: clock.now,
       flush: async () => {},
       fire: async () => {
         const claimed = await readFired(env.root, name);
-        expect(claimed?.fired).toBe(true);
-        expect(claimed?.slot).toBe("2026-10-02T12:01:00.000Z");
-        expect(JSON.parse(await readFile(firedPath(env.root, name), "utf8")).fired).toBe(true);
+        seen.push({
+          fired: claimed?.fired,
+          slot: claimed?.slot,
+          onDisk: (JSON.parse(await readFile(firedPath(env.root, name), "utf8")) as { fired?: boolean }).fired,
+        });
       },
     });
     await ticker.tick();
     clock.set("2026-10-02T12:01:10Z");
     await ticker.tick();
+    expect(seen).toEqual([{ fired: true, slot: "2026-10-02T12:01:00.000Z", onDisk: true }]);
   });
 });
 
@@ -204,6 +211,23 @@ describe("AC1: a paused digest is not run, and resuming does not catch up", () =
     expect(fires).toHaveLength(1);
   });
 
+  test("a pause that no tick saw (serve was down) does not catch up when the digest is resumed", async () => {
+    // Review finding L-1: the pause is recorded by a running ticker, so a pause made while serve is down left no
+    // trace and the first tick after the resume fired a catch-up digest for the newest missed slot.
+    await makeTicker().tick(); // armed at 12:00
+    await pauseStoredSchedule(env.root, name);
+    // serve is down for three days: nobody ticks, then the operator resumes
+    clock.set("2026-10-05T12:00:30Z");
+    await resumeStoredSchedule(env.root, name);
+
+    const after = makeTicker();
+    expect((await after.tick()).map((r) => r.action)).toEqual(["armed"]);
+    expect(fires).toEqual([]);
+    clock.set("2026-10-05T12:01:10Z");
+    expect((await after.tick()).map((r) => r.action)).toEqual(["fired"]);
+    expect(fires).toHaveLength(1);
+  });
+
   test("a message already queued is still flushed while the digest is paused", async () => {
     const ticker = makeTicker();
     await ticker.tick();
@@ -212,6 +236,47 @@ describe("AC1: a paused digest is not run, and resuming does not catch up", () =
     clock.set("2026-10-02T12:05:00Z");
     await ticker.tick();
     expect(flushes).toEqual([name]);
+  });
+});
+
+describe("AC1: a digest created while serve was not running", () => {
+  const local = (hour: number, minute: number): string => new Date(2026, 9, 2, hour, minute, 0).toISOString();
+
+  test("a cron time that passed between the creation and serve's first tick is one missed slot: it fires once", async () => {
+    // Review finding L-2: the digest used to be armed at its first tick, so the first slot was skipped silently.
+    await removeStoredSchedule(env.root, name);
+    const late = await addDigestSchedule(env, { name: "late", cron: "0 9 * * *" });
+    await anchorDigest(env.root, late, new Date(local(8, 0)));
+    clock.set(local(9, 30));
+    const reports = await makeTicker().tick();
+
+    expect(reports.map((r) => r.action)).toEqual(["fired"]);
+    expect(reports[0]?.slot).toBe(local(9, 0));
+    expect(fires).toHaveLength(1);
+    expect(fires[0]).toStartWith("late@");
+  });
+
+  test("a digest nobody anchored is still armed by its first tick, and owes nothing for the time before it", async () => {
+    await removeStoredSchedule(env.root, name);
+    await addDigestSchedule(env, { name: "late", cron: "0 9 * * *" });
+    clock.set(local(9, 30));
+    expect((await makeTicker().tick()).map((r) => r.action)).toEqual(["armed"]);
+    expect(fires).toEqual([]);
+  });
+
+  test("confirming a digest anchors it at that moment (confirmSchedule), so the first tick owes the slots since", async () => {
+    await removeStoredSchedule(env.root, name);
+    const before = Date.now();
+    const entry = digestScheduleEntry(env, { name: "confirmed", cron: "0 9 * * *" });
+    const created = await confirmSchedule(env.root, { entry, cron: "0 9 * * *" } as unknown as ScheduleDraft);
+    expect(created.backend).toBe("serve");
+
+    const anchor = await readFired(env.root, "confirmed");
+    expect(anchor?.fired).toBe(false);
+    expect(anchor?.pausedAt).toBeUndefined();
+    const slotMs = Date.parse(anchor?.slot ?? "");
+    expect(slotMs).toBeGreaterThan(before - 60_000);
+    expect(slotMs).toBeLessThanOrEqual(Date.now());
   });
 });
 

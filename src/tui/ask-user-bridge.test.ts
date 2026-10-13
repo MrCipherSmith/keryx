@@ -5,8 +5,11 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { assignArm, reasonSubsample, saltFile } from "../decisions/arms";
+import { REASON_SUBSAMPLE_ENV } from "../decisions/journal";
 import { createFlowService } from "../flow/service";
-import { journaledAskUser, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
+import { recordOperatorDenial, resetOperatorDenials } from "../review/review-system";
+import { journaledAskUser, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 
 let root: string;
 const savedFlow = process.env["KERYX_FLOW"];
@@ -53,6 +56,59 @@ test("ask_user on a flow's branch records the flow and a real stage, and writes 
   expect(lastAskUserDecisionId()).toBe(open["id"] as string);
 });
 
+test("KERYX_REVIEW_AUTO_ANSWER answers a menu even before a review package exists, never an irreversible one", async () => {
+  let asked = 0;
+  setAskUserHost(async () => {
+    asked += 1;
+    return "b";
+  });
+  process.env["KERYX_REVIEW_AUTO_ANSWER"] = "1";
+  try {
+    expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe("a");
+    expect(asked).toBe(0);
+    expect(await journaledAskUser(root)({ question: "Publish?", options: OPTIONS, irreversible: true })).toBe("b");
+    expect(asked).toBeGreaterThan(0);
+  } finally {
+    delete process.env["KERYX_REVIEW_AUTO_ANSWER"];
+  }
+});
+
+test("after the operator refused an action, review-auto routes a permission-style menu to the human", async () => {
+  const notes: string[] = [];
+  setAskUserNotice((text) => notes.push(text));
+  let asked = 0;
+  setAskUserHost(async () => {
+    asked += 1;
+    return "deny";
+  });
+  const allowMenu = {
+    question: "Allow the local HTTP check on 127.0.0.1?",
+    options: [
+      { id: "allow", label: "Allow", description: "run it", recommended: true },
+      { id: "deny", label: "Deny", description: "skip it" },
+    ],
+  };
+  process.env["KERYX_REVIEW_AUTO_ANSWER"] = "1";
+  try {
+    expect(await journaledAskUser(root)(allowMenu)).toBe("allow");
+    expect(asked).toBe(0);
+    recordOperatorDenial("shell_exec:probe");
+    expect(await journaledAskUser(root)(allowMenu)).toBe("deny");
+    expect(asked).toBeGreaterThan(0);
+    expect(notes.some((text) => text.includes("review-auto: this permission question is yours"))).toBe(true);
+    asked = 0;
+    setAskUserHost(async () => {
+      asked += 1;
+      return "b";
+    });
+    expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe("a");
+    expect(asked).toBe(0);
+  } finally {
+    delete process.env["KERYX_REVIEW_AUTO_ANSWER"];
+    resetOperatorDenials();
+  }
+});
+
 test("a journaling failure shows up as a transcript note, and the question still returns (F-008)", async () => {
   await writeFile(path.join(root, ".metaproject", "data"), "in the way", "utf8");
   const notes: string[] = [];
@@ -81,4 +137,59 @@ test("a followed recommendation asks nothing more", async () => {
   setAskUserHost(async (request) => (questions.push(request.question), "a"));
   await journaledAskUser(root)({ question: "Pick", options: OPTIONS });
   expect(questions).toEqual(["Pick"]);
+});
+
+/** Pin the repository salt to one that puts the first decision in (or out of) the reason subsample. */
+async function pinSalt(inSample: boolean): Promise<void> {
+  for (let i = 0; i < 1000; i += 1) {
+    const salt = `bridge-salt-${i}-0123456789`;
+    if (reasonSubsample(assignArm(salt, 1).seed, 1) !== inSample) continue;
+    const file = await saltFile(root);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${salt}\n`, "utf8");
+    return;
+  }
+  throw new Error("no such salt");
+}
+
+/** The preload switches the reason subsample off for the suite; these tests turn it back on. */
+async function withSubsampleOn(run: () => Promise<void>): Promise<void> {
+  const saved = process.env[REASON_SUBSAMPLE_ENV];
+  delete process.env[REASON_SUBSAMPLE_ENV];
+  try {
+    await run();
+  } finally {
+    if (saved === undefined) delete process.env[REASON_SUBSAMPLE_ENV];
+    else process.env[REASON_SUBSAMPLE_ENV] = saved;
+  }
+}
+
+test("F-005: with the subsample switch unset, a followed recommendation in the subsample asks for a reason once, through the host", async () => {
+  await withSubsampleOn(async () => {
+    await pinSalt(true);
+    const questions: string[] = [];
+    setAskUserHost(async (request) => (questions.push(request.question), questions.length === 1 ? "a" : "least risk"));
+    expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe("a");
+    expect(questions).toHaveLength(2);
+    expect(questions[1]).toContain("Why this choice?");
+    const lines = (await readFile(path.join(root, ".metaproject", "data", "decisions", "journal.jsonl"), "utf8")).trim().split("\n");
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ kind: "open", reasonRequested: true, reasonPrompt: true });
+    expect(JSON.parse(lines[lines.length - 1] ?? "{}")).toMatchObject({ kind: "reason", reason: "least risk" });
+  });
+});
+
+test("F-001: a composer-dock pick records that its surface never prompts, and a followed recommendation in the subsample asks nothing", async () => {
+  await withSubsampleOn(async () => {
+    await pinSalt(true);
+    const shown: string[][] = [];
+    const picked = await journaledPick(
+      root,
+      { source: "tui-wiki-enrich", question: "Mode?", options: [{ id: "a", label: "A", description: "", recommended: true }, { id: "b", label: "B", description: "" }], cancelId: "cancel" },
+      async (options) => (shown.push(options.map((option) => option.id)), "a"),
+    );
+    expect(picked).toBe("a");
+    expect(shown).toHaveLength(1);
+    const lines = (await readFile(path.join(root, ".metaproject", "data", "decisions", "journal.jsonl"), "utf8")).trim().split("\n");
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({ kind: "open", reasonPrompt: false, reasonRequested: false });
+  });
 });

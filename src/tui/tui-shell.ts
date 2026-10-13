@@ -1,3 +1,5 @@
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
+import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
@@ -38,9 +40,11 @@ import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // optional-import guard, src/capability/no-optional-imports). `launchTuiAgentShell`
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
+import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
   describeReasoningEffortSource,
+  describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveMaxAutoWake,
@@ -69,8 +73,22 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
+import { permissionsSlashText } from "../commands/permissions-command";
+import {
+  loadPosture,
+  postureLines,
+  postureSidebarText,
+  REMOTE_POLICY_COMMAND,
+  remotePolicyText,
+  type RemotePolicyDeps,
+} from "../commands/remote-policy-command";
+import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
+import { type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
+import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
@@ -82,6 +100,8 @@ import {
   parseChannelsArgs,
 } from "./channels-surface";
 import {
+  HISTORY_COMMAND,
+  isHistoryCommand,
   isRemoteControlCommand,
   commandEchoText,
   labelTelegramLine,
@@ -98,10 +118,14 @@ import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
+import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
+import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
-import { classifyBusyDispatch } from "./busy-dispatch";
+import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
+import { classifyBusyDispatch, deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
 import {
   createSplashLifecycle,
@@ -122,7 +146,7 @@ import {
 } from "./inspector-sources";
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
-import { openRouting, ROUTING_COMMAND } from "./routing-inspector";
+import { openRouting, loadRoutingProviders, ROUTING_COMMAND } from "./routing-inspector";
 import { loadModelProfiles, profileKey, type ModelProfile, type ProfileRefreshSummary } from "../harness/routing/model-profile";
 import { appendTaskCostRecord } from "../harness/routing/task-cost";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
@@ -152,6 +176,7 @@ import { isJevProfileCommand, openJevProfile } from "./jev-profile-inspector";
 import { applyRecommendedJevProfileForShell, readJevProfileForShell, toggleJevProfileKeyForShell } from "../commands/review-jev-profile";
 import { renderTurnGuardNoticeLine } from "../review/turn-guard";
 import {
+  renderRoutingFallbackLine,
   renderRoutingSidebarValue,
   renderRoutingTagLine,
   runRoutingClassifierForTurn,
@@ -170,6 +195,8 @@ import {
   renderExternalStatusLines,
   runExternalAgentsCommand,
 } from "./external-command";
+import { isRenderingCommand, runRenderingCommand } from "./rendering-command";
+import { isNotesCommand, isTrailCommand, runNotesCommand, runTrailCommand } from "./working-memory-command";
 import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
 import { loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveJevApiKey } from "../harness/decision/jev-client";
@@ -241,6 +268,8 @@ import {
 // Flow 266 (AC8): the demote EFFECT lives with the registry so both shells
 // dispatch into one rule rather than growing two.
 import { demoteTask } from "../harness/tool/builtin/background-job-registry";
+import { runTasksCommand } from "./tasks-command";
+import { formatUsageLine } from "./usage-format";
 import {
   applyThemeId,
   formatThemeList,
@@ -257,6 +286,7 @@ import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
+import { mountAskAnswerLine } from "./ask-user-transcript";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
 import { formatBalance, mountBalancePanel } from "./balance-panel";
@@ -298,10 +328,18 @@ import {
   parseShellExecCommand,
   shellPermissionsFingerprint,
   shellPermissionsPath,
-  loadShellPermissions,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import {
+  evaluateTelegramShellApproval,
+  formatModeInForce,
+  modeAutoApprovalAudit,
+  modeInForce,
+  type ModeInForce,
+  type RememberOffer,
+  savedRuleAutoApprovalAudit,
+} from "../remote/telegram-permission";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import {
@@ -312,11 +350,13 @@ import {
 } from "../commands/permission-mode";
 import { isWikiEnrichIntent, planWikiEnrich, wikiEnrich } from "../wiki/enrich";
 import {
+  settleForegroundOperation,
   createForegroundAgentIoFacade,
   createForegroundForceHandoff,
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
+  type TurnScopedIo,
 } from "./foreground-operation";
 import {
   compactSession,
@@ -346,9 +386,12 @@ import {
   toLeasedChoice,
   withLeaseMarker,
 } from "./tui-session-lease";
-import { askUserSessionId, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
+import { DECISION_SOURCES } from "../decisions/service";
+import { raceAskUser } from "./ask-user-race";
+import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import { showComposerChoice, type ChoiceOption } from "./composer-choice";
+import type { AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
+import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
@@ -358,17 +401,16 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
-import type { PendingQueueEdit, QueuedMainQuestion } from "./main-queue";
+import type { QueuedMainQuestion, QueueWait } from "./main-queue";
 import {
-  formatMainQueueMarker,
+  describePendingCall,
+  formatQueueListing,
   drainIdleMainQueue,
-  dropQueuedBySource,
   parseQueueCommand,
-  pendingQueueEditFor,
   removeMainQueueItem,
-  editMainQueueItem,
-  reinsertEditedMainQueueItem,
 } from "./main-queue";
+import { buildMainQueueHelp, buildMainQueueRow } from "./main-queue-view";
+import { createRemoteQueueWiring } from "./remote-queue-wiring";
 import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
 import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
@@ -378,7 +420,7 @@ import { SubagentSessionStore } from "./subagent-session";
 // Flow 176 T18 — the external-agent operator loop. Everything but the four call
 // sites below lives in `external-operator.ts`; this file only constructs it,
 // attaches it, routes a sidebar click and dispatches `/delegate`.
-import { attachExternalOperator, type ExternalOperator } from "./external-operator";
+import { attachExternalOperator, delegateReport, type ExternalOperator } from "./external-operator";
 import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
@@ -1029,16 +1071,8 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
       );
     },
     onUsage: (usage) => {
-      const parts: string[] = [];
-      if (usage.inputTokens !== undefined) {
-        parts.push(`↑${usage.inputTokens}`);
-      }
-      if (usage.outputTokens !== undefined) {
-        parts.push(`↓${usage.outputTokens}`);
-      }
-      if (parts.length > 0) {
-        append(otui.t`${dimChunk(otui, `${parts.join(" ")} tokens`)}`);
-      }
+      const line = formatUsageLine(usage);
+      if (line !== undefined) append(otui.t`${dimChunk(otui, line)}`);
     },
     onToolCall: (name, input) => {
       const args = summarizeToolArgs(input);
@@ -1053,6 +1087,7 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     },
     onSystem: (text) =>
       append(text.includes("[error]") ? otui.t`${roleChunk(otui, "error", text)}` : otui.t`${dimChunk(otui, text)}`),
+    onAttemptInterrupted: () => messages.reset(),
     resetStream: () => {
       messages.reset();
     },
@@ -1152,6 +1187,14 @@ export function attachBlockIo(
     }
     lastPreviewAt = nowMs;
     chrome.onReasoningPreview?.(reasoningLivePreviewLines(liveText));
+  };
+  const previousAttemptInterrupted = io.onAttemptInterrupted;
+  io.onAttemptInterrupted = () => {
+    previousAttemptInterrupted?.();
+    hasStarted = false;
+    liveText = "";
+    lastPreviewAt = 0;
+    chrome.onReasoningPreview?.(undefined);
   };
   io.onReasoningEnd = (info) => {
     hasStarted = false;
@@ -1562,30 +1605,42 @@ async function pickWikiEnrichMode(
   r: Renderer,
   dock: Box,
   plan: { draftCount: number; acceptedCount: number; total: number },
+  cwd: string,
 ): Promise<WikiEnrichChoice> {
-  const id = await showComposerChoice(otui, r, dock, {
-    title: "Wiki enrich",
-    subtitle: `drafts: ${plan.draftCount} · accepted: ${plan.acceptedCount} · total: ${plan.total}`,
-    cancelId: "cancel",
-    options: [
-      {
-        id: "drafts",
-        label: `Enrich ${plan.draftCount} draft page(s)`,
-        description: "Default batch — Status: draft only",
-        recommended: true,
-      },
-      {
-        id: "force",
-        label: `Force enrich all ${plan.total} page(s)`,
-        description: `Includes ${plan.acceptedCount} accepted (+ other statuses)`,
-      },
-      {
-        id: "cancel",
-        label: "Skip / cancel",
-        description: "Do not run enrich",
-      },
-    ],
-  });
+  const id = await journaledPick(
+    cwd,
+    {
+      source: DECISION_SOURCES.wikiEnrich,
+      question: `Wiki enrich: ${plan.draftCount} draft, ${plan.acceptedCount} accepted, ${plan.total} pages in total. Which batch?`,
+      recommendationReason: "Enriching drafts is the default batch and leaves accepted pages untouched.",
+      cancelId: "cancel",
+      options: [
+        {
+          id: "drafts",
+          label: `Enrich ${plan.draftCount} draft page(s)`,
+          description: "Default batch — Status: draft only",
+          recommended: true,
+        },
+        {
+          id: "force",
+          label: `Force enrich all ${plan.total} page(s)`,
+          description: `Includes ${plan.acceptedCount} accepted (+ other statuses)`,
+        },
+        {
+          id: "cancel",
+          label: "Skip / cancel",
+          description: "Do not run enrich",
+        },
+      ],
+    },
+    (options, dismissId) =>
+      showComposerChoice(otui, r, dock, {
+        title: "Wiki enrich",
+        subtitle: `drafts: ${plan.draftCount} · accepted: ${plan.acceptedCount} · total: ${plan.total}`,
+        cancelId: dismissId,
+        options,
+      }),
+  );
   return id === "drafts" || id === "force" || id === "cancel" ? id : "cancel";
 }
 
@@ -1643,6 +1698,8 @@ export async function pickShellApproval(
   // about a specific call is not a property of the command text either, and
   // must never be answerable from a remembered grant.
   hookAsk = false,
+  // Flow 426 (AC5): the one-line cause of this prompt, shown above the command.
+  cause?: ApprovalCause,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1694,6 +1751,7 @@ export async function pickShellApproval(
       description: "Do not run",
     },
   ];
+  // Not journaled: a pure allow/deny has no recommendation to follow or ignore, so an arm would measure nothing.
   const id = await showComposerChoice(otui, r, dock, {
     title: credentials
       ? "⚠ touches keryx's OWN permissions/credentials — allow?"
@@ -1706,7 +1764,7 @@ export async function pickShellApproval(
           : "Allow shell command?",
     // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
     // focusable box (its own defensive char cap), not a single collapsed line.
-    subtitle: command,
+    subtitle: cause !== undefined ? `${approvalCauseLine(cause)}\n${command}` : command,
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
@@ -1930,6 +1988,14 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
  * renderer before it does (the startup picker) and in the chat shell, which
  * keep the full-screen overlay.
  */
+/** The dock side of an approval: `race` is set when the question is also in the Telegram topic. */
+type LocalApproval = (
+  tool: string,
+  inputJson: string,
+  meta: Parameters<NonNullable<TuiAgentIo["requestApproval"]>>[2],
+  race?: DockRace,
+) => ReturnType<NonNullable<TuiAgentIo["requestApproval"]>>;
+
 type StepTarget = Renderer | ModalChrome;
 
 /** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
@@ -2843,7 +2909,7 @@ function pickConnectedProviderStep(
     // registration order and stops at the first handler that calls
     // `stopPropagation()` — confirmed against the bundled implementation,
     // `node_modules/@opentui/core/chunk-bun-t2myhmwd.js`'s `emit`/`onInternal`
-    // pair, the same investigation technique `mainQueueButton`'s own mouse-
+    // pair, the same investigation technique the queue buttons' own mouse-
     // bubbling comment used). When nothing is armed this does nothing and
     // the key falls through to `openStepSurface`'s own Escape handler
     // (`onEscape` below) unchanged — so a SECOND Esc still leaves, matching
@@ -3605,10 +3671,19 @@ export function pickSessionInTui(
 
 /**
  * The sidebar's Mode row (flow 270 AC9): the permission mode, plus a separate
- * read-only part while `/plan on` holds, so it can be painted in its own colour.
+ * read-only part while `/plan on` holds, so it can be painted in its own colour,
+ * and an automatic-review part while a turn belongs to one (flow 429).
  */
-export function describeModeRow(mode: PermissionMode, readOnly: boolean): { mode: string; readOnly?: string } {
-  return readOnly ? { mode, readOnly: "· read-only" } : { mode };
+export function describeModeRow(
+  mode: PermissionMode,
+  readOnly: boolean,
+  automaticReview = false,
+): { mode: string; readOnly?: string; automaticReview?: string } {
+  return {
+    mode,
+    ...(readOnly ? { readOnly: "· read-only" } : {}),
+    ...(automaticReview ? { automaticReview: "· automatic review" } : {}),
+  };
 }
 
 /** `/mode` picker copy — one line per {@link PermissionMode}, kept beside the type it describes. */
@@ -3617,6 +3692,11 @@ const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
   auto: "Skips confirmation for everything except credential-touching commands",
 };
+
+/** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
+export function describeModePickerOption(mode: PermissionMode): string {
+  return `${MODE_PICKER_DESCRIPTIONS[mode]} · ${describeRoundLimit(mode)}`;
+}
 
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
@@ -3727,6 +3807,7 @@ export async function launchTuiAgentShell(opts: {
 
   let renderer: Renderer | undefined;
   let resolveDone: () => void = () => {};
+  let finalizeShell: (() => Promise<ShellFinalizationResult>) | undefined;
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
@@ -3735,7 +3816,8 @@ export async function launchTuiAgentShell(opts: {
   // No-op unless the shell was launched inside a herdr pane.
   const herdr = createHerdrReporter();
   /** Session-scoped allow patterns (plus persisted permissions.json). */
-  const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  // Empty on purpose: `evaluateShellApproval` loads the saved list on every call, and tracks what it loaded so a removal reaches this set.
+  const sessionShellAllow = new Set<string>();
   /** The stored-permission migration warning is shown at most once per session. */
   let permissionMigrationShown = false;
   /**
@@ -3752,7 +3834,7 @@ export async function launchTuiAgentShell(opts: {
   // Ctrl+C at the picker. A nullable handle is the honest shape for that window;
   // it is never rebound to a placeholder no-op (flow 112, AC2).
   let mountedChrome: ShellChrome | undefined;
-  // Flow 173 F-002: `onDestroy` (Ctrl+C — `exitOnCtrlC: true` below) is a
+  // Flow 173 F-002: `onDestroy` (a second Ctrl+C at an idle prompt, see `ctrlCPress`) is a
   // real, common exit path and must ALSO sweep background jobs (process-
   // group SIGTERM→SIGKILL) and purge the sidebar/store list, same as
   // `/exit`. It can fire before `deps`/`jobs` are ever assigned (Ctrl+C
@@ -3768,6 +3850,7 @@ export async function launchTuiAgentShell(opts: {
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
   let liveSchedules: SchedulesSidebar | undefined;
+  let liveAutoReview: AutoReviewSidebar | undefined;
   let liveReviewsPanel: ReviewsPanelHandle | undefined;
   // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
   // `busWakeController` below: the bridge's host closes over `runLine` and
@@ -3781,7 +3864,9 @@ export async function launchTuiAgentShell(opts: {
   let liveChannelsPanel: ChannelsPanelHandle | undefined;
   const channelsClient = new ChannelsClient();
   let liveApprovals: ApprovalsSidebar | undefined;
+  let liveIntake: IntakeSidebar | undefined;
   let liveDecisions: DecisionsSidebar | undefined;
+  let liveResearchSync: ResearchSyncPanelHandle | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
@@ -3866,37 +3951,38 @@ export async function launchTuiAgentShell(opts: {
     },
   });
   const foregroundOperation = createForegroundOperationOwner();
+  const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
   // `release()` is idempotent, so every exit path may call it.
   const sessionLease = createTuiLeaseHolder();
+  // Set once the chrome and io exist; until then (boot animation, pickers) Ctrl+C quits at once.
+  let ctrlCPress: (() => void) | undefined;
   try {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await createShellRenderer(otui, {
+    onCtrlC: () => (ctrlCPress ?? (() => renderer?.destroy()))(),
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
+        liveAutoReview?.dispose();
         liveReviewsPanel?.dispose();
         liveRemotePanel?.dispose();
         liveChannelsPanel?.dispose();
-        // Closing the shell deregisters: the topic goes with it. Best effort here
+        // Closing the shell deregisters: the topic is archived (closing note, history kept). Best effort here
         // (this callback is synchronous); the `finally` below awaits the same call.
         void remoteBridge?.disable();
         liveApprovals?.dispose();
+        liveIntake?.dispose();
         liveDecisions?.dispose();
+        liveResearchSync?.dispose();
         liveExternalDiff?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
-        // Flow 271/273 (AC7; review r1 F9): leave the bus BEFORE releasing the
-        // session lease — specification §5.4's order — synchronously, before
-        // anything that may block.
-        leaveBusThenRelease({
-          leaveBus: () => liveBus?.leave(), // idempotent, synchronous-safe
-          releaseLease: () => sessionLease.release(),
-        });
+        // Flow 415: retain ownership until final history + Slate outbox commit.
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setAskUserNotice(undefined);
@@ -3920,28 +4006,15 @@ export async function launchTuiAgentShell(opts: {
         // sweep settles, so nothing downstream of `launchTuiAgentShell()`
         // can run (and the process cannot exit) before the sweep actually
         // happened.
-        liveJobs?.removeAll(); // store-side purge; synchronous, safe here
-        // Flow 306 (W6 T14): `SessionEnd` on every exit this callback covers
-        // (Ctrl+C, an exit signal, or a normal `r.destroy()` — `onDestroy` is
-        // `keryx shell`'s one TUI-wide teardown point, "session lifetime is
-        // scoped ... full stop"). `liveDeps` is read the same TDZ-safe way
-        // `sweepBackgroundJobs` below already reads it; a reason more precise
-        // than "shell-exit" is not reliably known from this synchronous
-        // callback alone. Absent `hooks`, a no-op.
-        if (liveDeps?.hooks !== undefined) {
-          const sessionEndHooks = liveDeps.hooks;
-          void sessionEndHooks.runtime
-            .fire("SessionEnd", { sessionId: sessionEndHooks.sessionId, runId: sessionEndHooks.runId, endReason: "shell-exit" })
-            .catch(() => {
-              // Best-effort; a SessionEnd hook failure must never block teardown.
-            });
-        }
         void (async () => {
           try {
-            await liveDeps?.sweepBackgroundJobs?.();
-          } finally {
-            resolveDone();
-          }
+            if (finalizeShell !== undefined) await finalizeShell();
+            else {
+              await liveDeps?.sweepBackgroundJobs?.();
+              liveJobs?.removeAll();
+              leaveBusThenRelease({ leaveBus: () => liveBus?.leave(), releaseLease: () => sessionLease.release() });
+            }
+          } finally { resolveDone(); }
         })();
       },
     }));
@@ -4009,7 +4082,7 @@ export async function launchTuiAgentShell(opts: {
     // `/think`'s handler below both updates this and persists it.
     let thinkDisplayMode: ThinkDisplayMode = resolveThinkDisplayMode(loadShellConfig().thinkDisplay);
 
-    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
+    const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C cancels a turn (twice to exit) · /exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
 
     // Flow 303 (AC14 follow-up, PR #669 review HIGH 2): `startupIndicator`
@@ -4069,7 +4142,8 @@ export async function launchTuiAgentShell(opts: {
         status: `${sel.provider}/${sel.model}`,
         footerHint: FOOTER_IDLE,
         placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
-        commands: commandsForMode("agent"),
+        // Flow 403: `/intake` is listed only in a project that has an intake config; typed by hand it still answers.
+        commands: commandsForMode("agent").filter((c) => c.name !== "/intake" || intakeConfiguredSync(opts.session?.cwd ?? process.cwd())),
         headerMeta: "↑0 ↓0",
         // Closure-only: `permissionMode` is declared later in this function —
         // TDZ is a call-time concern for a closure (the same pattern as the
@@ -4077,7 +4151,8 @@ export async function launchTuiAgentShell(opts: {
         permissionMode: () => permissionMode,
         // The shared registry stays the single source of truth for the dropdown,
         // resolved through THIS surface's mode so the wording is agent-mode's.
-        filterCommands: (query) => filterCommands(query, "agent"),
+        filterCommands: (query) =>
+          filterCommands(query, "agent").filter((c) => c.name !== "/intake" || intakeConfiguredSync(opts.session?.cwd ?? process.cwd())),
         ...(opts.versionCheck !== undefined ? { versionCheck: opts.versionCheck } : {}),
       });
     } finally {
@@ -4391,6 +4466,17 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveSchedules = schedules;
+    // Flow 424 (AC10): the autonomous review's phase, rounds, tokens and last automatic answer, and
+    // `/autoreview start | list | stop`. It reads the run directory's files; it never touches the turn.
+    const autoReview = mountAutoReviewSidebar({
+      otui,
+      renderer: r,
+      parent: sidebar,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveAutoReview = autoReview;
     // `/reviews`: the managed pull request reviews, mounted after Schedules with the open-findings
     // count; a click opens the same modal the slash command does.
     const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
@@ -4405,6 +4491,11 @@ export async function launchTuiAgentShell(opts: {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
       onOpen: () => showRemoteControl(),
+      onOpenPermissions: () => showPermissions(),
+      getPosture: () => {
+        const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+        return posture === undefined ? undefined : postureSidebarText(posture);
+      },
     });
     // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
     liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
@@ -4423,6 +4514,17 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveApprovals = approvals;
+    // Flow 403 (AC19): `Intake: N ждут | следующий опрос ЧЧ:ММ | пауза | выкл`; a click opens `/intake`.
+    const intake = mountIntakeSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      root: opts.session?.cwd ?? process.cwd(),
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveIntake = intake;
     // Flow 392 (AC8): one row, only once the recommendation journal holds a decision.
     const decisionsPanel = mountDecisionsSidebar({
       otui,
@@ -4437,6 +4539,11 @@ export async function launchTuiAgentShell(opts: {
       session: askUserSessionId(),
     });
     liveDecisions = decisionsPanel;
+    // Flow 404 (AC9): when the Part 1 materials were last synced; a row only in a checkout that has the catalog.
+    liveResearchSync = mountResearchSyncPanel(otui, r, sidebar, {
+      root: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+    });
     // Flow 370 (AC6): one row, only while a write run awaits review.
     const externalDiff = mountExternalDiffSidebar({
       otui,
@@ -4515,6 +4622,8 @@ export async function launchTuiAgentShell(opts: {
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
+      // Flow 419 (AC5): the first subagent to start and the last to finish are a wave boundary for the topic.
+      remoteBridge?.subagentEvent(ev);
     });
     // Flow 173 (AC8): shell_exec(background:true)'s JobRegistry → sidebar/inspector.
     setBackgroundJobListener((ev) => {
@@ -4611,14 +4720,18 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       io.onSystem?.(`◇ delegating to ${parsed.agentId}…\n`);
-      void (async () => {
+      // Tracked, so a /delegate sent from the Telegram topic is answered with how the agent ended
+      // (and its reaction follows) instead of stopping at the "delegating" line. The shell itself
+      // still does not wait: tracking only registers the run. A refused or failed run throws after
+      // its line is printed, which is how the topic's command counts as failed.
+      trackCommandWork(async () => {
         const outcome = await external.delegate({ agentId: parsed.agentId, task: parsed.task });
-        io.onSystem?.(
-          outcome.ok
-            ? `◇ ${parsed.agentId} ${outcome.result.status}: ${outcome.result.output}\n`
-            : `◇ /delegate refused: ${outcome.reason}\n`,
-        );
-      })();
+        const report = delegateReport(parsed.agentId, outcome);
+        io.onSystem?.(report.text);
+        if (report.failed) {
+          throw new Error(`/delegate ${parsed.agentId} did not succeed`);
+        }
+      });
     };
 
     // Flow 273 (specification §5.1): the bus join's `status()` callback reads
@@ -4650,6 +4763,19 @@ export async function launchTuiAgentShell(opts: {
     setMainAgent("queued", "ready");
 
     const io = createTuiAgentIo(otui, r, transcript);
+    const ctrlCPolicy = createCtrlCPolicy({ now: Date.now });
+    ctrlCPress = () => {
+      // A turn already told to stop but not yet unwound counts as idle, so a wedged one cannot trap the user.
+      const action = ctrlCPolicy.press(foregroundOperation.isActive && !foregroundOperation.signal.aborted);
+      if (action === "cancel-turn") {
+        foregroundOperation.cancel("interrupted by Ctrl+C");
+        io.onSystem?.("◇ main turn interrupted (Ctrl+C).\n");
+      } else if (action === "arm-exit") {
+        chrome.showToast(CTRL_C_EXIT_HINT);
+      } else {
+        r.destroy();
+      }
+    };
     // review r1 F10: now that `io` exists, the drop notifier can actually print.
     busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));
     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
@@ -4809,6 +4935,10 @@ export async function launchTuiAgentShell(opts: {
       () => thinkDisplayMode,
     );
     io.onSystem = (text) => {
+      if (text.includes("[recovering]")) {
+        setBusyPhase(text.trim());
+        setMainAgent("running", "recovering");
+      }
       // Surface budget/stop/errors on the main agent slot.
       if (/\[error\]|\[budget\]|\[stopped\]/i.test(text)) {
         setMainAgent("failed", text.includes("[budget]") ? "budget" : "error");
@@ -4856,20 +4986,37 @@ export async function launchTuiAgentShell(opts: {
       guardCollector.onToolResult(name, toolResult);
       baseOnToolResultForGuard?.(name, toolResult);
     };
+    // Flow 397: the calls between the main queue, the session switches, the turn stream and the
+    // bridge live in `remote-queue-wiring.ts`, where a test drives them. Every closure below runs
+    // late (a keypress, a settled turn), so the names it reaches exist by then.
+    const remoteQueue = createRemoteQueueWiring({
+      getBridge: () => remoteBridge,
+      getQueue: () => mainQueue,
+      setQueue: (next) => {
+        mainQueue = next;
+      },
+      nextId: () => `mq${mainQueueSeq++}`,
+      summarize: summarizeSubmittedLine,
+      paint: () => paintMainQueue(),
+      composer: {
+        setText: (text) => {
+          input.value = text;
+        },
+        focus: () => input.focus(),
+      },
+      say: (text) => io.onSystem?.(text),
+      runLine: (line, origin, source) => runLine(line, origin, source),
+    });
     const baseOnAssistantTextForGuard = io.onAssistantText?.bind(io);
     io.onAssistantText = (text) => {
       guardCollector.onAssistantText(text);
       // Flow 376: the text a human would read; the bridge keeps the last one of a
       // Telegram-originated turn as the reply. Tool calls and reasoning never reach here.
-      remoteBridge?.assistantText(text);
+      remoteQueue.assistantText(text);
       baseOnAssistantTextForGuard?.(text);
     };
     // Flow 376: text followed by a tool call is narration, not the answer; the bridge drops it.
-    const baseOnToolCallForRemote = io.onToolCall?.bind(io);
-    io.onToolCall = (name, toolInput) => {
-      remoteBridge?.toolCall();
-      baseOnToolCallForRemote?.(name, toolInput);
-    };
+    io.onToolCall = remoteQueue.wrapOnToolCall(io.onToolCall?.bind(io));
     /** AC5: sidebar state — zero rows while off, "on · N checked[, M flagged]" while on. */
     const refreshGuardSidebar = (): void => {
       clearTranscriptChildren(sbGuard);
@@ -4913,14 +5060,7 @@ export async function launchTuiAgentShell(opts: {
     let routingEnabled = loadShellConfig().routingClassifier?.enabled === true;
     let routingRoutedCount = 0;
     let routingLastCategory: RoutingCategory | undefined;
-    /**
-     * PRD §9.5: an explicit `/model`/`/connect` switch always wins over
-     * classification. Scoped to THIS session's own live choices (the
-     * session's INITIAL model — auto-detected or read from a prior saved
-     * choice — is not itself a deliberate in-session pick) — `switchTo`
-     * below sets this the moment the operator actually picks a model.
-     */
-    let sessionModelExplicit = false;
+    // Flow 411: a manual model pick changes the baseline, not routing enablement.
     const refreshRoutingSidebar = (): void => {
       clearTranscriptChildren(sbRoute);
       if (!routingEnabled) return;
@@ -5121,7 +5261,8 @@ export async function launchTuiAgentShell(opts: {
     // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
     // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
     // offers exactly two choices; Esc/cancel is "no".
-    const confirmScheduleCard = async (card: readonly string[]): Promise<boolean> => {
+    const confirmScheduleCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
+      const dockSignal = race?.signal ?? foregroundOperation.signal;
       for (const line of card) {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
@@ -5132,8 +5273,11 @@ export async function launchTuiAgentShell(opts: {
           title: "Create this schedule and install its background timer?",
           subtitle: card[0] ?? "",
           cancelId: "cancel",
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
+          onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+          signal: dockSignal,
           options: [
             { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
             { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
@@ -5141,6 +5285,7 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
       input.focus();
+      if (race?.topicWon() === true) return false;
       setMainAgent("running", id === "create" ? "schedule" : "denied");
       transcript.add(
         new otui.TextRenderable(r, {
@@ -5162,7 +5307,8 @@ export async function launchTuiAgentShell(opts: {
     // chat message may reach the model. Same card-then-choice shape, accurate
     // wording, never remembered — like `confirmScheduleCard`, this answers a
     // gate a hook raised, not a grant a saved pattern could stand in for.
-    const confirmUserPromptCard = async (card: readonly string[]): Promise<boolean> => {
+    const confirmUserPromptCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
+      const dockSignal = race?.signal ?? foregroundOperation.signal;
       for (const line of card) {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
@@ -5173,8 +5319,11 @@ export async function launchTuiAgentShell(opts: {
           title: "Send this message to the model?",
           subtitle: card[0] ?? "",
           cancelId: "cancel",
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
+          onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+          signal: dockSignal,
           options: [
             { id: "send", label: "Send", description: "Let the message reach the model as written" },
             { id: "cancel", label: "Cancel", description: "The message is not sent" },
@@ -5182,6 +5331,7 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
       input.focus();
+      if (race?.topicWon() === true) return false;
       setMainAgent("running", id === "send" ? "prompt" : "denied");
       transcript.add(
         new otui.TextRenderable(r, {
@@ -5194,7 +5344,41 @@ export async function launchTuiAgentShell(opts: {
       );
       return id === "send";
     };
-    const requestApprovalLocally: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
+    // Flow 426 (AC6): while an approval is pending, the queue says the queued messages wait for it.
+    let pendingApprovalCall: string | undefined;
+    const queueWait = (): QueueWait =>
+      pendingApprovalCall !== undefined ? { kind: "approval", call: pendingApprovalCall } : { kind: "turn" };
+    const trackApproval =
+      (inner: NonNullable<TuiAgentIo["requestApproval"]>): NonNullable<TuiAgentIo["requestApproval"]> =>
+      async (tool, inputJson, meta) => {
+        const before = pendingApprovalCall;
+        pendingApprovalCall = describePendingCall(tool, inputJson);
+        if (mainQueue.length > 0) paintMainQueue();
+        try {
+          return await inner(tool, inputJson, meta);
+        } finally {
+          pendingApprovalCall = before;
+          if (mainQueue.length > 0) paintMainQueue();
+        }
+      };
+    const queueListingText = (): string =>
+      `${formatQueueListing(
+        mainQueue.map((item) => (item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion)),
+        queueWait(),
+      )
+        .map((line) => `◇ ${line}`)
+        .join("\n")}\n`;
+    // Flow 426 (AC5): every approval modal is preceded by the same one-line cause the Telegram relay carries.
+    const addCauseLine = (tool: string, meta: Parameters<typeof causeOfMeta>[1]): void => {
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `ap${uid++}`,
+          content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta)))}`,
+        }),
+      );
+    };
+    const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
+      const dockSignal = race?.signal ?? foregroundOperation.signal;
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
         // the call outright — this says why the operator is being asked.
@@ -5211,14 +5395,16 @@ export async function launchTuiAgentShell(opts: {
       // `confirmScheduleCard`'s schedule-install wording is wrong for a chat
       // message.
       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
-        return confirmUserPromptCard(meta.card);
+        addCauseLine(tool, meta);
+        return confirmUserPromptCard(meta.card, race);
       }
 
       // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
       // card is printed verbatim, the only choices are yes/no, and the answer is
       // never remembered — no mode and no saved pattern answers it.
       if (meta?.alwaysAsk === true && meta.card !== undefined) {
-        return confirmScheduleCard(meta.card);
+        addCauseLine(tool, meta);
+        return confirmScheduleCard(meta.card, race);
       }
 
       // Multi-agent spawn: auto-allow read_only; ask for general.
@@ -5260,6 +5446,7 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title:
@@ -5268,8 +5455,11 @@ export async function launchTuiAgentShell(opts: {
                 : "Spawn general subagent?",
             subtitle: taskPreview,
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               {
                 id: "allow",
@@ -5282,6 +5472,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "subagent" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5328,13 +5519,17 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: "Approve apply_patch?",
             subtitle: "Diff shown above · Esc denies",
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
               { id: "deny", label: "Deny", description: "Do not write anything" },
@@ -5342,6 +5537,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "write" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5404,6 +5600,7 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu();
         setMainAgent("blocked", "approval");
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: described.title,
@@ -5411,8 +5608,11 @@ export async function launchTuiAgentShell(opts: {
             // so no payload prefix can occupy the line read first.
             subtitle: summariseUseToolApproval(described),
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
               ...(canTrustMcp
@@ -5423,6 +5623,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         // Keep the allow/trust/deny mapping in a tested, fail-closed helper.
         const verdict = mcpDockVerdict(id, canTrustMcp, meta?.fingerprint);
         const allowed = verdict !== false;
@@ -5482,13 +5683,17 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("blocked", "approval");
         const elicitationSubtitle =
           described.message.length > 80 ? `${described.message.slice(0, 77)}…` : described.message;
+        addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: "Approve codex elicitation?",
             subtitle: elicitationSubtitle,
             cancelId: "deny",
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
             options: [
               { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
               { id: "deny", label: "Deny", description: "codex's action is refused" },
@@ -5496,6 +5701,7 @@ export async function launchTuiAgentShell(opts: {
           }),
         );
         input.focus();
+      if (race?.topicWon() === true) return false;
         setMainAgent("running", id === "allow" ? "write" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5574,6 +5780,7 @@ export async function launchTuiAgentShell(opts: {
       setMainAgent("blocked", "approval");
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+      addCauseLine(tool, meta);
       const choice = await chrome.withOverlay(() =>
         pickShellApproval(
           otui,
@@ -5584,8 +5791,11 @@ export async function launchTuiAgentShell(opts: {
           destructive,
           meta?.credentials === true,
           {
-            onOpen: () => chrome.blurComposer(),
-            signal: foregroundOperation.signal,
+            onOpen: () => {
+              chrome.blurComposer();
+              race?.opened();
+            },
+            signal: dockSignal,
           },
           // Flow 275 T7 (specification §4.4): never offer to remember while a
           // peer's `git-publish` lease applies to this command.
@@ -5595,9 +5805,11 @@ export async function launchTuiAgentShell(opts: {
           // Flow 306 (W6 T9): never offer to remember while a `PreToolUse`
           // hook asked about this specific call.
           ev.hookAsk || ev.untrustedOrigin,
+          causeOfMeta(tool, meta),
         ),
       );
       input.focus();
+      if (race?.topicWon() === true) return false;
 
       if (choice === "deny") {
         transcript.add(
@@ -5651,26 +5863,100 @@ export async function launchTuiAgentShell(opts: {
     // answer feeds the same approval flow (the fingerprint is echoed back, so a mismatch
     // is still a denial). Anything but an explicit allow - a timeout, a dropped stream, no
     // client - is a denial. Turns typed here keep the local dock above, untouched.
-    io.requestApproval = async (tool, inputJson, meta) => {
+    //
+    // Flow 396: this is the hook of a Telegram TURN, handed to that turn alone through the foreground
+    // facade (`telegramTurnIo`). The shell's own `io.requestApproval` is the dock, so work that runs beside a
+    // Telegram turn and is not part of it is never judged or asked as if it were.
+    const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
       const bridge = remoteBridge;
       if (bridge === undefined || !bridge.telegramTurnActive) {
         return requestApprovalLocally(tool, inputJson, meta);
       }
       const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+      const approvedAnswer = (): true | { approved: true; fingerprint: string } =>
+        meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      // Flow 396: a shell command is judged by the same allowlist as in the dock (saved and session
+      // patterns, with every exclusion: destructive, credentials, SAC/flow confirm, publish lease,
+      // hook ask, untrusted content). A match runs without a prompt; otherwise the prompt may carry
+      // an "Always" button for the pattern the dock would offer.
+      let offer: RememberOffer | undefined;
+      if (tool === "shell_exec") {
+        const judged = evaluateTelegramShellApproval({
+          inputJson,
+          ...(meta !== undefined ? { meta } : {}),
+          sessionAllow: sessionShellAllow,
+          fingerprintAtStart: permissionsFingerprintAtStart,
+        });
+        if (!permissionTamperShown && judged.evaluation.tampered) {
+          permissionTamperShown = true;
+          io.onSystem?.("⚠ the saved shell permissions changed outside this approval UI — review them before trusting an auto-approve\n");
+        }
+        if (judged.autoApprove) {
+          const shown = judged.evaluation.command.length > 200 ? `${judged.evaluation.command.slice(0, 199)}…` : judged.evaluation.command;
+          io.onSystem?.(`✓ auto-approved shell (saved rule): ${shown}\n`);
+          bridge.recordApproval(savedRuleAutoApprovalAudit({ userId: bridge.telegramTurnUserId, command: judged.evaluation.command }));
+          return approvedAnswer();
+        }
+        offer = judged.offer;
+      }
       io.onSystem?.(`◇ approval for ${brief} sent to the Telegram topic; waiting for the answer there.\n`);
       setMainAgent("blocked", "approval (telegram)");
-      const decision = await bridge.requestApproval(describeApprovalForTopic(tool, inputJson, meta));
+      const answer = await bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), offer === undefined ? {} : { remember: offer.pattern });
+      const decision = answer.decision;
+      let rememberedNote = "";
+      if (decision === "allow" && answer.always && offer !== undefined) {
+        // The pattern is the one the shell classified from the command it showed, never text from the
+        // model or from the button, and it goes through the same store and validators as the dock.
+        const stored = allowShellPattern(offer.pattern);
+        if (stored.length > 0) {
+          sessionShellAllow.add(stored);
+          permissionsFingerprintAtStart = shellPermissionsFingerprint();
+        }
+        rememberedNote = stored.length > 0 ? ` and remembered “${stored}”` : ` once; “${offer.pattern}” cannot be remembered`;
+        bridge.recordApproval(stored.length > 0 ? `saved a rule: ${stored}` : "a rule was asked for and refused by the store");
+        await bridge.reportRemembered(answer.approvalId, stored.length > 0);
+      }
       setMainAgent("running", decision === "allow" ? "approved (telegram)" : "denied");
-      io.onSystem?.(decision === "allow" ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`);
+      io.onSystem?.(
+        decision === "allow" ? `◇ ${brief} approved in Telegram${rememberedNote}.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`,
+      );
       if (decision !== "allow") return false;
-      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      return approvedAnswer();
     };
+    // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
+    // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
+    // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
+    // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;
+    // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.
+    const mirrorApprovalToTopic =
+      (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
+      async (tool, inputJson, meta) => {
+        const bridge = remoteBridge;
+        if (bridge === undefined || !bridge.active) {
+          return inner(tool, inputJson, meta);
+        }
+        const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+        const outcome = await raceApproval({
+          turnSignal: foregroundOperation.signal,
+          dock: (race) => inner(tool, inputJson, meta, race),
+          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+        });
+        if (outcome.from === "dock") return outcome.result;
+        const allowed = outcome.answer.decision === "allow";
+        input.focus();
+        setMainAgent("running", allowed ? "approved (telegram)" : "denied");
+        io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
+        if (!allowed) return false;
+        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      };
+    io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
 
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
       question: string;
-      options: Array<{ id: string; label: string; description: string; recommended?: boolean }>;
-    }): Promise<string> => {
+      options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
+    }): Promise<AskUserAnswer> => {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask");
       setBusyPhase("waiting for your answer (menu above input)");
@@ -5682,42 +5968,50 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
         }),
       );
-      const chosen = await chrome.withOverlay(() =>
-        showComposerChoice(otui, r, chrome.dock, {
-          title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
-          subtitle: "Pick an option · Esc cancels",
-          cancelId: "__cancel__",
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
-          options: req.options.map(
-            (o): ChoiceOption => ({
-              id: o.id,
-              label: o.label,
-              description: o.description.length > 0 ? o.description : " ",
-              ...(o.recommended === true ? { recommended: true } : {}),
+      // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
+      const topicBridge = remoteBridge?.active === true ? remoteBridge : undefined;
+      const outcome = await raceAskUser({
+        turnSignal: foregroundOperation.signal,
+        ...(topicBridge === undefined ? {} : { topic: (signal: AbortSignal) => topicBridge.askUser(req, signal) }),
+        dock: (dockSignal) =>
+          chrome.withOverlay(() =>
+            showComposerChoiceDetailed(otui, r, chrome.dock, {
+              title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
+              subtitle: "Pick an option, or type your own answer · Esc cancels",
+              cancelId: "__cancel__",
+              // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
+              ownAnswer: {},
+              onOpen: () => chrome.blurComposer(),
+              signal: dockSignal,
+              options: req.options.map(
+                (o): ChoiceOption => ({
+                  id: o.id,
+                  label: o.label,
+                  description: o.description.length > 0 ? o.description : " ",
+                  ...(o.recommended === true ? { recommended: true } : {}),
+                  ...(o.preselected !== undefined ? { preselected: o.preselected } : {}),
+                }),
+              ),
             }),
           ),
-        }),
-      );
+      });
       input.focus();
-      if (chosen !== "__cancel__") {
-        const picked = req.options.find((o) => o.id === chosen);
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `aska${uid++}`,
-            content: otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)}`,
-          }),
-        );
-      } else {
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `askc${uid++}`,
-            content: otui.t`${dimChunk(otui, "→ cancelled")}`,
-          }),
-        );
-      }
+      const result: ComposerChoiceResult =
+        outcome.from === "dock"
+          ? outcome.result
+          : typeof outcome.answer === "string"
+            ? { kind: "id", id: outcome.answer }
+            : outcome.answer.kind === "own"
+              ? { kind: "own", text: outcome.answer.text }
+              : { kind: "id", id: outcome.answer.choice };
+      if (outcome.from === "topic") io.onSystem?.("◇ answered in Telegram.\n");
+      // shown right after the question breadcrumb; an own answer in full: it is what the agent now acts on
+      mountAskAnswerLine(otui, r, transcript, `aska${uid++}`, req.options, result);
       setMainAgent("running", "waiting");
-      return chosen;
+      if (outcome.from === "topic") return outcome.answer;
+      if (result.kind === "own") return { kind: "own", text: result.text };
+      if (result.kind === "reason") return { kind: "option", choice: result.id, reason: result.reason };
+      return result.id;
     };
     setAskUserHost(askUserInteractive);
     // Flow 392: the blind-mode reveal lands in the transcript, right after the answer.
@@ -5796,7 +6090,23 @@ export async function launchTuiAgentShell(opts: {
     // ever reassigns the `let`, never re-derives this chain.
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
-    io.permissionMode = () => permissionMode;
+    // Flow 396: set when `/mode` commits a mode, typed here or sent from the topic. Until then a turn
+    // that came from Telegram starts under the saved Telegram default; afterwards the shell's mode
+    // wins for every turn. Neither the CLI flag nor a project default counts as a change.
+    let modeChangedThisSession = false;
+    const modeForTurn = (telegramTurn: boolean): ModeInForce =>
+      modeInForce({
+        shellMode: permissionMode,
+        changedThisSession: modeChangedThisSession,
+        telegramTurn,
+        telegramDefault: remoteBridge?.configuredPermissionMode ?? "ask",
+      });
+    // The mode a RUNNING turn is shown in (the sidebar row, `/settings`): that of the Telegram turn while one runs.
+    // It is a display. What a call is judged by is chosen per turn: `io` below is the typed-turn behaviour, and
+    // a turn that came from Telegram gets `telegramTurnIo` through the foreground facade, so work that is not
+    // part of that turn never inherits its trust (flow 396 finding 9).
+    const modeNow = (): ModeInForce => modeForTurn(remoteBridge?.telegramTurnActive === true);
+    io.permissionMode = () => modeForTurn(false).mode;
     io.trustedMcpTools = new Map<string, string>();
     // Read fresh on every call: a grant holds only while the tool's definition
     // in the live catalog still matches the fingerprint stored with it.
@@ -5807,19 +6117,29 @@ export async function launchTuiAgentShell(opts: {
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
     let readOnly = false;
     io.readOnly = () => readOnly;
+    // Run mode of the turn in flight (flow 429): set by `runAgentTurn`, shown beside the permission mode.
+    let automaticReview = false;
     const paintModeRow = (): void => {
-      const row = describeModeRow(permissionMode, readOnly);
+      const row = describeModeRow(permissionMode, readOnly, automaticReview);
+      // Flow 396: with remote control on, the row names the mode in force and where it comes from
+      // (`trust (Telegram default)`, `ask (shell /mode)`), because a Telegram turn and a typed one can differ.
+      const inForce = remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined;
       // Read-only is the state an operator must not forget they are in.
       // The row is also the sidebar's way into `/settings` (flow 374): clicking
       // it opens the modal, and the hint names the command while there is room.
-      const hint = settingsSidebarHint(row.readOnly !== undefined);
+      const flag = row.readOnly ?? row.automaticReview;
+      const hint = settingsSidebarHint(flag !== undefined);
       sbModeV.content =
-        row.readOnly !== undefined
-          ? otui.t`${dimChunk(otui, `mode ${row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
-          : otui.t`${dimChunk(otui, `mode ${row.mode}${hint === undefined ? "" : ` ${hint}`}`)}`;
+        flag !== undefined
+          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", [row.readOnly, row.automaticReview].filter(Boolean).join(" "))}`
+          : otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}${hint === undefined || inForce !== undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
-    io.onAutoApproved = (tool, input, meta) => {
+    io.onAutomaticReview = (active) => {
+      automaticReview = active;
+      paintModeRow();
+    };
+    const autoApprovedFor = (telegramTurn: boolean): NonNullable<TuiAgentIo["onAutoApproved"]> => (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
       // only the mode itself was chosen, once, so the transcript line is the
@@ -5832,16 +6152,33 @@ export async function launchTuiAgentShell(opts: {
             : tool;
       // `meta.credentials` never reaches here — resolveApprovalDecision's hard
       // floor means a credentials-touching call is never `auto`, in any mode.
+      const inForce = modeForTurn(telegramTurn);
       const label =
-        `◇ auto-approved (${permissionMode})` +
+        `◇ auto-approved (${inForce.mode})` +
         (meta.destructive ? " [destructive]" : "") +
         (meta.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "");
+      // Flow 396: a call that ran in a Telegram turn without a tap is also written to the remote
+      // panel's event list, with the Telegram user who sent the line (redacted and capped there).
+      if (telegramTurn && remoteBridge !== undefined) {
+        remoteBridge.recordApproval(modeAutoApprovalAudit({ mode: inForce.mode, userId: remoteBridge.telegramTurnUserId, preview }));
+      }
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
           content: otui.t`${roleChunk(otui, "attention", label)} ${dimChunk(otui, preview)}`,
         }),
       );
+    };
+    io.onAutoApproved = autoApprovedFor(false);
+    // Flow 396 (finding 9): what a turn that came from Telegram is judged and asked by. Passed to the
+    // foreground facade of THAT turn only, so it follows the turn and not a bridge-wide flag: a trust default
+    // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
+    // lets an MCP `use_tool` skip the question there.
+    const telegramTurnIo: TurnScopedIo = {
+      requestApproval: trackApproval(requestApprovalForTelegramTurn),
+      permissionMode: () => modeForTurn(true).mode,
+      onAutoApproved: autoApprovedFor(true),
+      mcpGrantsApply: () => false,
     };
 
     // Definite assignment: every control-flow path calls `applyOpened` before
@@ -5850,6 +6187,9 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
+    // Flow 399: the live session was opened with `-r`/`-c`/`/resume` (not started fresh). The
+    // topic's automatic history restore reads it when remote control creates a new topic.
+    let sessionResumed = false;
     let nextArchiveIndex = 0;
     let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -5928,20 +6268,18 @@ export async function launchTuiAgentShell(opts: {
     // Flow 376: a topic belongs to the session it was registered for. Switching the live
     // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
     // history interval closes on the session that opened it. A no-op while it is off.
-    const stopRemoteForSessionSwitch = (): void => {
-      // Flow 387 (AC17): a `/new`, `/clear` or `/resume` typed in the Telegram topic keeps the
-      // topic. The history interval closes on the session being left; `sessionEntered` opens
-      // the next one right after the live session is replaced.
-      if (remoteBridge?.keepingTopic === true) {
-        remoteBridge.sessionLeaving();
-        return;
+    const stopRemoteForSessionSwitch = (): void => remoteQueue.stopRemoteForSessionSwitch();
+
+    const invalidateForegroundSession = (): void => {
+      foregroundOperation.invalidateSession();
+      io.resetStream();
+      blockIo.resetReasoningLiveState();
+      forceHandoff.clear();
+      suggestionGate.cancel();
+      if (sessionPersistTimer !== undefined) {
+        clearTimeout(sessionPersistTimer);
+        sessionPersistTimer = undefined;
       }
-      if (remoteBridge?.active !== true) return;
-      // The close is asynchronous (it deregisters, which deletes the topic): say it is
-      // being turned off now, and that the topic is gone only once it really is.
-      const closing = remoteBridge.disable();
-      io.onSystem?.("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
-      void closing.then(() => io.onSystem?.("◇ remote control off: the topic is deleted.\n"));
     };
 
     const applyOpened = (
@@ -5956,9 +6294,12 @@ export async function launchTuiAgentShell(opts: {
       if (opened.history.length > 0) {
         splash?.removeIfShown();
       }
+      invalidateForegroundSession();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
-      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
+      const entry = sessionEntryOf(opened.resumed);
+      sessionResumed = entry.resumed;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
@@ -6099,7 +6440,18 @@ export async function launchTuiAgentShell(opts: {
           const outcome = await resolveLeasedStartup(cause, {
             choose: async (error) => {
               chrome.hideMenu();
-              const id = await showComposerChoice(otui, r, chrome.dock, leasedChoiceRequest(error));
+              const request = leasedChoiceRequest(error);
+              const id = await journaledPick(
+                sessionCwd,
+                {
+                  source: DECISION_SOURCES.sessionLease,
+                  question: request.title,
+                  recommendationReason: "Forking keeps the original session intact for the shell that holds it.",
+                  cancelId: request.cancelId,
+                  options: request.options,
+                },
+                (options, dismissId) => showComposerChoice(otui, r, chrome.dock, { ...request, options, cancelId: dismissId }),
+              );
               input.focus();
               return toLeasedChoice(error, id);
             },
@@ -6368,6 +6720,7 @@ export async function launchTuiAgentShell(opts: {
     // nothing more is written here, the slate ref is dropped (so tools record
     // no slate touches into the session), and the operator is told once.
     sessionLease.onLost((message) => {
+      foregroundOperation.cancel("session lease lost");
       // Flow 271 R3-1: detach the ref itself, not only this variable. A turn or
       // a `/goal --auto` loop that is already running holds the same object,
       // and every slate write through a detached ref refuses.
@@ -6379,7 +6732,7 @@ export async function launchTuiAgentShell(opts: {
       }
       io.onSystem?.(message);
     });
-    const saveSession = (): void => {
+    const saveSession = (paint = true): void => {
       if (!sessionLease.canPersist()) {
         return;
       }
@@ -6388,7 +6741,7 @@ export async function launchTuiAgentShell(opts: {
         provider: currentSel.provider,
         model: currentSel.model,
       });
-      paintSessionHeader();
+      if (paint) paintSessionHeader();
     };
 
     const syncArchive = (): void => {
@@ -6400,15 +6753,63 @@ export async function launchTuiAgentShell(opts: {
         nextArchiveIndex += 1;
       }
     };
-    const flushSessionCheckpoint = (): void => {
+    const flushSessionCheckpoint = (paint = true): void => {
       if (sessionPersistTimer !== undefined) {
         clearTimeout(sessionPersistTimer);
         sessionPersistTimer = undefined;
       }
       syncArchive();
-      saveSession();
+      saveSession(paint);
     };
+
+    const preservationAbort = new AbortController();
+    finalizeShell = createShellFinalizer({
+      stop: async () => {
+        preservationAbort.abort();
+        foregroundOperation.cancel("shell exit");
+        foregroundOperation.dispose();
+        await foregroundOperation.settled();
+      },
+      checkpoint: () => {
+        if (!sessionLease.canPersist()) throw new Error("session ownership lost");
+        // The renderer may already be destroyed on the exit path; painting then throws and fails the save.
+        flushSessionCheckpoint(false);
+      },
+      preserve: async () => {
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
+      },
+      cleanup: async (signal) => {
+        if (sessionLease.canPersist()) {
+          await replayPreservationOutbox({ cwd: sessionCwd, dir: liveSession.dir, signal, deadline: Date.now() + 2_000 });
+        }
+        signal.throwIfAborted();
+        await liveDeps?.sweepBackgroundJobs?.();
+        signal.throwIfAborted();
+        liveJobs?.removeAll();
+        if (liveDeps?.hooks !== undefined) {
+          const hooks = liveDeps.hooks;
+          await hooks.runtime.fire("SessionEnd", { sessionId: hooks.sessionId, runId: hooks.runId, endReason: "shell-exit" });
+        }
+      },
+      release: () => {
+        detachSlateSession(slateSession);
+        if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+        leaveBusThenRelease({ leaveBus: () => liveBus?.leave(), releaseLease: () => sessionLease.release() });
+      },
+      progress: (stage) => {
+        if (stage === "failed") process.exitCode = 1;
+        process.stderr.write(`${preservationProgress(stage)}\n`);
+      },
+    });
+    if (sessionLease.canPersist()) {
+      try {
+        const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: liveSession.dir, signal: preservationAbort.signal });
+        if (replay.proposed + replay.deferred > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred (not accepted memory).\n`);
+      } catch { /* an unreadable sessions root must not keep the lease held or end the shell */ }
+    }
+    if (foregroundOperation.isDisposed) return false;
     io.onHistoryChange = (kind) => {
+      if (foregroundOperation.isDisposed) return;
       syncArchive();
       if (kind === "assistant_delta") {
         if (sessionPersistTimer === undefined) {
@@ -6476,12 +6877,14 @@ export async function launchTuiAgentShell(opts: {
         );
         return false;
       }
+      invalidateForegroundSession();
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
-      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
+      sessionResumed = NEW_SESSION_ENTRY.resumed;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(NEW_SESSION_ENTRY.kind);
       history = [];
       archive = [];
       nextArchiveIndex = 0;
@@ -6622,6 +7025,54 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
       });
     };
+    // Flow 396: `/permissions`. Bare: the modal. `list` and `remove <n|pattern>`: a line in the transcript.
+    // A removal also leaves this shell's session set and refreshes the tamper fingerprint, so the rule stops
+    // approving at once and the shell does not warn about a change it made itself.
+    const permissionsChanged = (): void => {
+      permissionsFingerprintAtStart = shellPermissionsFingerprint();
+    };
+    const showPermissions = (): void => {
+      openPermissions(otui, chrome, {
+        sessionAllow: sessionShellAllow,
+        onChanged: permissionsChanged,
+        onKeypress: (handler) => onKeypress(r, handler),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+      });
+    };
+    const runPermissionsCommand = (line: string): void => {
+      const rest = line.trim().slice(PERMISSIONS_COMMAND.length).trim();
+      if (rest.length === 0) {
+        showPermissions();
+        return;
+      }
+      io.onSystem?.(permissionsSlashText(rest, { sessionAllow: sessionShellAllow, onChanged: permissionsChanged }));
+    };
+    // Flow 396: `/remote-policy`. The saved Telegram defaults, and this shell's copy of them. It never
+    // touches `permissionMode` or `modeChangedThisSession`: `/mode` owns those.
+    const runningTelegramPolicy = (): NonNullable<ReturnType<NonNullable<RemotePolicyDeps["running"]>>> | undefined => {
+      const bridge = remoteBridge;
+      if (bridge === undefined || !bridge.active) return undefined;
+      return {
+        defaultMode: bridge.configuredPermissionMode,
+        runTimeoutMs: bridge.runTimeoutMs,
+        approvalTimeoutMs: bridge.approvalTimeoutMs,
+      };
+    };
+    const telegramModeInForce = (): string | undefined => (remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined);
+    const remotePolicyDeps = (): RemotePolicyDeps => ({
+      running: runningTelegramPolicy,
+      inForce: telegramModeInForce,
+      applyPolicy: (patch) => {
+        remoteBridge?.applyPolicy(patch);
+        paintModeRow();
+        liveRemotePanel?.refresh();
+      },
+    });
+    const telegramPosture = () => loadPosture({ running: runningTelegramPolicy, inForce: telegramModeInForce });
+    const runRemotePolicyCommand = (line: string): void => {
+      io.onSystem?.(remotePolicyText(line.trim().slice(REMOTE_POLICY_COMMAND.length), remotePolicyDeps()));
+    };
     const showReviews = (): void => {
       void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
         .then(() => liveReviewsPanel?.refresh())
@@ -6647,12 +7098,46 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(turnedOff ? "◇ remote control off: the topic is deleted.\n" : "◇ remote control is already off.\n");
       liveRemotePanel?.refresh();
     };
+    // Flow 399: `/history [N]` (and the modal's `h`). One code path: the bridge posts and answers
+    // with the one line to show when nothing went out (usage, empty history, remote control off).
+    // Resolves with that line (undefined when messages went out); the sidebar is refreshed when it ends.
+    const postHistoryFor = async (line: string): Promise<string | undefined> => {
+      const bridge = remoteBridge;
+      if (bridge === undefined) return "Remote control is not available in this shell.";
+      try {
+        return await bridge.historyForCommand(historyArgsOf(line));
+      } catch {
+        return "The history could not be posted.";
+      } finally {
+        liveRemotePanel?.refresh();
+      }
+    };
+    const runHistoryCommand = (line: string): void => {
+      void postHistoryFor(line).then((answer) => {
+        if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
+      });
+    };
+    // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
+    // (an approval confirmed or aged out), not only on the next keypress.
+    const remoteModalListeners = new Set<() => void>();
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        subscribeChange: (listener) => {
+          remoteModalListeners.add(listener);
+          return () => {
+            remoteModalListeners.delete(listener);
+          };
+        },
+        getPostureLines: () => {
+          const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+          return posture === undefined ? undefined : postureLines(posture);
+        },
         onToggle: () => {
           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
         },
+        // The modal shows the answer itself (a line behind it would be unseen) and repaints when the posts end.
+        onHistory: () => postHistoryFor(HISTORY_COMMAND),
         renderer: r,
         ...inspectorKeys,
       });
@@ -7086,8 +7571,9 @@ export async function launchTuiAgentShell(opts: {
     /** The change itself, after any confirmation: `/mode`'s dialog and `/settings`' second Enter both end here. */
     const commitPermissionMode = (next: PermissionMode): void => {
       permissionMode = next;
+      modeChangedThisSession = true;
       paintModeRow();
-      chrome.showToast(`Permission mode: ${next}`);
+      chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
       const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
@@ -7107,7 +7593,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                "Only credential-touching commands still ask.",
+                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -7157,7 +7643,9 @@ export async function launchTuiAgentShell(opts: {
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: `Permission mode (current: ${permissionMode})`,
-            subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
+            subtitle:
+              (stored !== undefined ? `Project default: ${stored}` : "No project default set.") +
+              ` ${describeAutomaticReviewMode()}`,
             cancelId: permissionMode,
             enqueue: false,
             onBusy: () => {
@@ -7167,7 +7655,7 @@ export async function launchTuiAgentShell(opts: {
             options: PERMISSION_MODES.map((m) => ({
               id: m,
               label: m,
-              description: MODE_PICKER_DESCRIPTIONS[m],
+              description: describeModePickerOption(m),
               recommended: m === permissionMode,
             })),
           }),
@@ -7289,6 +7777,11 @@ export async function launchTuiAgentShell(opts: {
           routing: routingEnabled,
           thinkDisplay: thinkDisplayMode,
           reasoningOverride,
+          ...(() => {
+            const running = runningTelegramPolicy();
+            const inForce = telegramModeInForce();
+            return running === undefined ? {} : { telegram: { ...running, ...(inForce !== undefined ? { inForce } : {}) } };
+          })(),
         }),
       );
     const runSettingsAction = (command: string): Promise<void> =>
@@ -7302,9 +7795,11 @@ export async function launchTuiAgentShell(opts: {
         route: setRoutingEnabled,
         external: setExternalEnabled,
         externalAgents: (arg) => runExternalAgentsCommand(arg, sessionCwd),
+        rendering: (arg) => runRenderingCommand(arg),
         reasoning: runReasoningCommand,
         think: runThinkCommand,
         theme: runThemeCommand,
+        remotePolicy: (arg) => remotePolicyText(arg, remotePolicyDeps()),
         onSystem: (text) => io.onSystem?.(text),
       });
     const showSettings = (): void => {
@@ -7334,9 +7829,8 @@ export async function launchTuiAgentShell(opts: {
     };
     const switchTo = async (ns: TuiSelection): Promise<void> => {
       currentSel = ns;
-      // Flow 338 (PRD §9.5): an explicit `/model`/`/connect` pick always wins
-      // over automatic routing for the rest of this session.
-      sessionModelExplicit = true;
+      // Flow 411: `/model` and `/connect` change the fallback baseline;
+      // enabled category routing still applies to subsequent operator turns.
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
       deps = {
@@ -7373,14 +7867,6 @@ export async function launchTuiAgentShell(opts: {
     // QueuedMainQuestion type imported from ./main-queue (pure helpers).
     let mainQueue: QueuedMainQuestion[] = [];
     let mainQueueSeq = 0;
-    // Set by `editMainQueue`: the NEXT plain-text submit while busy re-queues
-    // this item at its original position instead of opening the recipient
-    // selector again (AC5 — edit must preserve position).
-    let pendingQueueEdit: PendingQueueEdit | undefined;
-    // Force can be selected more than once while cancellation is settling.
-    // Retain every selection in order; only the first schedules the current
-    // operation's settlement handoff (AC3).
-    const forceHandoff = createForegroundForceHandoff<QueuedMainQuestion>();
     let sideWorkerRunning = false;
     let sideClearTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -7427,13 +7913,7 @@ export async function launchTuiAgentShell(opts: {
       setRowActive: (active: boolean) => void;
       buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
     }> = [];
-    // Small styled label mimicking a clickable button -- `smallActionButton`
-    // (`./action-button`) holds the actual
-    // implementation now; `/connect`'s row-list step (flow 304) builds its
-    // Test/Disconnect buttons the SAME way, off the SAME function, rather
-    // than a parallel copy.
-    const mainQueueButton = (label: string, id: string, color: string, onMouseDown: () => void) =>
-      smallActionButton(otui, r, label, id, color, onMouseDown);
+    let mainQueueHelp: InstanceType<typeof otui.TextRenderable> | undefined;
     /** Repaint the queue-nav highlight only -- no rebuild, mirrors
      * composer-choice.ts's paintOptions() re-highlight-on-change shape. */
     const applyQueueNavHighlight = (): void => {
@@ -7485,43 +7965,38 @@ export async function launchTuiAgentShell(opts: {
         }
       }
       mainQueueBlocks = [];
+      if (mainQueueHelp !== undefined) {
+        try {
+          chrome.queueDock.remove(mainQueueHelp);
+        } catch {
+          // ignore
+        }
+        mainQueueHelp = undefined;
+      }
       selectedQueueIndex = clampQueueNavIndex(selectedQueueIndex, mainQueue.length);
       if (mainQueue.length === 0) {
         // Queue-nav only makes sense while there is something to act on.
         exitQueueNav();
       }
-      const theme = getTheme();
       for (let i = 0; i < mainQueue.length; i++) {
         const item = mainQueue[i];
         if (item === undefined) continue;
         const index = i;
-        const row = new otui.BoxRenderable(r, {
-          id: `mq-${item.id}`,
-          width: "100%",
-          flexDirection: "row",
-        });
-        const label = new otui.TextRenderable(r, {
-          id: `mq-${item.id}-t`,
-          flexGrow: 1,
-          minWidth: 0,
-          content: otui.t`${dimChunk(otui, `${formatMainQueueMarker(index)} ${item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion}`)}`,
-        });
-        row.add(label);
-        const force = mainQueueButton("Force", `mq-force-${item.id}`, theme.focus, () => forceMainQueue(index));
-        const edit = mainQueueButton("Edit", `mq-edit-${item.id}`, theme.text, () => editMainQueue(index));
-        const del = mainQueueButton("Delete", `mq-del-${item.id}`, theme.error, () => removeMainQueue(index));
-        row.add(force.box);
-        row.add(edit.box);
-        row.add(del.box);
-        chrome.queueDock.add(row);
-        mainQueueBlocks.push({
+        const built = buildMainQueueRow(otui, r, {
           id: item.id,
-          box: row,
-          setRowActive: (active) => {
-            row.backgroundColor = active ? theme.highlight : undefined;
-          },
-          buttons: { force, edit, delete: del },
+          index,
+          text: item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion,
+          wait: queueWait(),
+          onForce: () => forceMainQueue(index),
+          onEdit: () => editMainQueue(index),
+          onDelete: () => removeMainQueue(index),
         });
+        chrome.queueDock.add(built.box);
+        mainQueueBlocks.push({ id: item.id, box: built.box, setRowActive: built.setRowActive, buttons: built.buttons });
+      }
+      if (mainQueue.length > 0) {
+        mainQueueHelp = buildMainQueueHelp(otui, r);
+        chrome.queueDock.add(mainQueueHelp);
       }
       chrome.queueDock.visible = mainQueue.length > 0;
       applyQueueNavHighlight();
@@ -7533,27 +8008,8 @@ export async function launchTuiAgentShell(opts: {
       }
     };
 
-    const removeMainQueue = (index: number): void => {
-      if (index < 0 || index >= mainQueue.length) return;
-      // A Telegram line that is thrown away would leave its author waiting: tell the topic.
-      const removedItem = mainQueue[index];
-      if (removedItem?.source === TG_SOURCE) {
-        remoteBridge?.queuedLineRemoved(removedItem.question);
-      }
-      mainQueue = removeMainQueueItem(mainQueue, index);
-      paintMainQueue();
-    };
-
-    const editMainQueue = (index: number): void => {
-      const edited = editMainQueueItem(mainQueue, index);
-      if (edited === undefined) return;
-      mainQueue = edited.rest;
-      // `source` travels with the edit: a Telegram line stays a Telegram line.
-      pendingQueueEdit = pendingQueueEditFor(edited.removed, index);
-      input.value = edited.text;
-      input.focus();
-      paintMainQueue();
-    };
+    const removeMainQueue = (index: number): void => remoteQueue.removeMainQueue(index);
+    const editMainQueue = (index: number): void => remoteQueue.editMainQueue(index);
 
     const forceMainQueue = (index: number): void => {
       const item = mainQueue[index];
@@ -7576,7 +8032,7 @@ export async function launchTuiAgentShell(opts: {
       // showed stays green with the guard deleted.
       void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {
         announce: () => io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`),
-        run: (next) => runLine(next.question, "operator", next.source),
+        run: (next) => remoteQueue.runQueued(next),
       });
     };
 
@@ -7904,13 +8360,11 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.dispose();
             void (async () => {
               await performSlateExit({
-                closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
-                sweepJobs: async () => {
-                  await deps.sweepBackgroundJobs?.();
-                },
-                purgeJobList: () => jobs.removeAll(),
-                leaveBus: () => liveBus?.leave(),
-                releaseLease: () => sessionLease.release(),
+                closeSlate: async () => { await finalizeShell?.(); },
+                sweepJobs: async () => {},
+                purgeJobList: () => {},
+                leaveBus: () => {},
+                releaseLease: () => {},
                 detachRenderer: () => r.off("theme_mode", onThemeMode),
                 destroyRenderer: () => r.destroy(),
               });
@@ -7942,7 +8396,12 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "queue": {
-            const parsed = parseQueueCommand(line.trim().split(/\s+/).slice(1).join(" "));
+            const queueArgs = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
+            if (queueArgs === "" || queueArgs === "list") {
+              io.onSystem?.(queueListingText());
+              return;
+            }
+            const parsed = parseQueueCommand(queueArgs);
             if (parsed === undefined) {
               io.onSystem?.("◇ usage: /queue <remove|edit|force> [N]  (N = qN position, default 1)\n");
               return;
@@ -8030,6 +8489,10 @@ export async function launchTuiAgentShell(opts: {
             runRemoteControlCommand(line);
             return;
           }
+          case "history": {
+            runHistoryCommand(line);
+            return;
+          }
           case "channels": {
             runChannelsCommand(line);
             return;
@@ -8038,8 +8501,24 @@ export async function launchTuiAgentShell(opts: {
             routeSchedulesCommand(line, true, schedules);
             return;
           }
+          case "autoreview": {
+            routeAutoReviewCommand(line, true, autoReview);
+            return;
+          }
           case "approvals": {
             routeApprovalsCommand(line, true, approvals);
+            return;
+          }
+          case "intake": {
+            routeIntakeCommand(line, intake);
+            return;
+          }
+          case "permissions": {
+            runPermissionsCommand(line);
+            return;
+          }
+          case "remote-policy": {
+            runRemotePolicyCommand(line);
             return;
           }
           case "decisions": {
@@ -8070,12 +8549,20 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "deferred": {
-            // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
+            // Any other slash line waits for the turn's end and runs from the main queue; only the
+            // session-replacing ones (BUSY_REFUSED_COMMANDS) are refused.
+            if (deferredBusyAction(line, command?.name) === "queue") {
+              const id = `mq${mainQueueSeq++}`;
+              mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
+              paintMainQueue();
+              io.onSystem?.(`${queuedCommandNotice(mainQueue.length)}\n`);
+              return;
+            }
             transcript.add(
               new otui.TextRenderable(r, {
                 id: `c${uid++}`,
-                content: otui.t`${roleChunk(otui, "attention", 
-                  `◇ main is busy — command deferred. Ask a normal question for a side worker, or wait.`,
+                content: otui.t`${roleChunk(otui, "attention",
+                  `◇ main is busy — that command would replace the session under the running turn. Wait for the turn to end, or /interrupt.`,
                 )}`,
                 marginTop: 1,
               }),
@@ -8092,11 +8579,8 @@ export async function launchTuiAgentShell(opts: {
         // AC5: a pending `/queue edit` re-queues at its ORIGINAL position on
         // the very next busy submit, skipping the recipient selector entirely
         // (the item is already committed to the main queue by definition).
-        if (pendingQueueEdit !== undefined) {
-          const edit = pendingQueueEdit;
-          pendingQueueEdit = undefined;
-          mainQueue = reinsertEditedMainQueueItem(mainQueue, edit, line, displayLine);
-          paintMainQueue();
+        // (`remoteQueue` holds the pending edit: `/queue edit` set it, this takes it.)
+        if (remoteQueue.requeuePendingEdit(line, displayLine)) {
           return;
         }
         // Flow 275 T7 (specification §4.3, AC4): "dispatches no side worker
@@ -8114,20 +8598,32 @@ export async function launchTuiAgentShell(opts: {
         }
         void (async () => {
           let blockedByOpenDialog = false;
-          const chosen = await showComposerChoice(otui, r, chrome.dock, {
-            title: "Main agent is busy",
-            subtitle: line,
-            options: [
-              { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
-              { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
-            ],
-            cancelId: "side",
-            enqueue: false,
-            onBusy: () => {
-              blockedByOpenDialog = true;
-              chrome.showToast("Answer the open approval first, then resend.");
+          const chosen = await journaledPick(
+            sessionCwd,
+            {
+              source: DECISION_SOURCES.queueRoute,
+              // the message text stays out of the journal: only the choice is recorded
+              question: "The main agent is busy. Where should this message go?",
+              recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
+              cancelId: "side",
+              options: [
+                { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+                { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+              ],
             },
-          });
+            (options, dismissId) =>
+              showComposerChoice(otui, r, chrome.dock, {
+                title: "Main agent is busy",
+                subtitle: line,
+                options,
+                cancelId: dismissId,
+                enqueue: false,
+                onBusy: () => {
+                  blockedByOpenDialog = true;
+                  chrome.showToast("Answer the open approval first, then resend.");
+                },
+              }),
+          );
           if (blockedByOpenDialog) {
             // Don't silently pick "side" for a message the user never routed —
             // hand it back to the composer so nothing is lost.
@@ -8152,7 +8648,7 @@ export async function launchTuiAgentShell(opts: {
               takeForced: () => forceHandoff.takeNext(),
               dispatch: (next) => {
                 paintMainQueue();
-                runLine(next.question, "operator", next.source);
+                remoteQueue.runQueued(next);
               },
             });
           } else {
@@ -8186,13 +8682,11 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
             await performSlateExit({
-              closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
-              sweepJobs: async () => {
-                await deps.sweepBackgroundJobs?.();
-              },
-              purgeJobList: () => jobs.removeAll(),
-              leaveBus: () => liveBus?.leave(),
-              releaseLease: () => sessionLease.release(),
+              closeSlate: async () => { await finalizeShell?.(); },
+              sweepJobs: async () => {},
+              purgeJobList: () => {},
+              leaveBus: () => {},
+              releaseLease: () => {},
               detachRenderer: () => r.off("theme_mode", onThemeMode),
               destroyRenderer: () => r.destroy(),
             });
@@ -8213,6 +8707,10 @@ export async function launchTuiAgentShell(opts: {
                 : `${demoted.error}\n`,
             );
           }
+          return;
+        }
+        if (command.name === "/tasks") {
+          trackCommandWork(() => runTasksCommand(line.slice(command.name.length), deps.jobRegistry).then((text) => io.onSystem?.(text)));
           return;
         }
         if (command.name === "/clear" || command.name === "/new") {
@@ -8436,6 +8934,10 @@ export async function launchTuiAgentShell(opts: {
           runRemoteControlCommand(line);
           return;
         }
+        if (isHistoryCommand(command.name)) {
+          runHistoryCommand(line);
+          return;
+        }
         if (isChannelsCommand(command.name)) {
           runChannelsCommand(line);
           return;
@@ -8443,7 +8945,21 @@ export async function launchTuiAgentShell(opts: {
         if (routeSchedulesCommand(line, false, schedules)) {
           return;
         }
+        if (routeAutoReviewCommand(line, false, autoReview)) {
+          return;
+        }
         if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (routeIntakeCommand(line, intake)) {
+          return;
+        }
+        if (command.name === PERMISSIONS_COMMAND) {
+          runPermissionsCommand(line);
+          return;
+        }
+        if (command.name === REMOTE_POLICY_COMMAND) {
+          runRemotePolicyCommand(line);
           return;
         }
         if (routeDecisionsCommand(line, decisionsPanel)) {
@@ -8650,6 +9166,22 @@ export async function launchTuiAgentShell(opts: {
           showEditGuard();
           return;
         }
+        if (isRenderingCommand(command.name)) {
+          // flow 395: how Telegram replies are written. Bare prints the mode and what each does;
+          // with a mode it saves it, and serve reads it before the next message part.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ");
+          io.onSystem?.(runRenderingCommand(arg));
+          return;
+        }
+        if (isTrailCommand(command.name) || isNotesCommand(command.name)) {
+          // flow 393: the working memory, as text. Both read the live session's slate.json.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ");
+          const dir = liveSlateSession()?.dir;
+          trackCommandWork(() =>
+            (isTrailCommand(command.name) ? runTrailCommand(arg, dir) : runNotesCommand(arg, dir)).then((text) => io.onSystem?.(text)),
+          );
+          return;
+        }
         if (isExternalAgentsCommand(command.name)) {
           // flow 373: the shell's one-step opt-in to the agent RUNTIME (the same
           // enable/disable the CLI calls). Not `/external`, the privacy switch.
@@ -8799,7 +9331,7 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/queue") {
           // The queue only exists while main is busy (FIFO-drain empties it
           // the instant a turn frees up), so outside a busy turn it is empty.
-          io.onSystem?.("◇ main queue is empty.\n");
+          io.onSystem?.(queueListingText());
           return;
         }
         if (command.name === "/delegate") {
@@ -8862,6 +9394,12 @@ export async function launchTuiAgentShell(opts: {
         // says so; only a genuinely unknown token is "unknown" (S4 parity with
         // the readline surfaces).
         io.onSystem?.(describeUnavailableCommand(line, "agent") ?? `Unknown command: ${line}\n`);
+        const help = renderCommandHelp("agent");
+        addBlock({ kind: "output", fullText: help, summary: "Available commands", lineCount: help.trimEnd().split("\n").length }, {
+          hint: "ctrl+o · Enter to expand",
+          collapsedPreview: help.trimEnd().split("\n").slice(0, 8).join("\n"),
+          maxLines: 500,
+        });
         io.onSystem?.(helpText());
         return;
       }
@@ -8947,7 +9485,7 @@ export async function launchTuiAgentShell(opts: {
               draftCount: plan.drafts.length,
               acceptedCount: plan.accepted.length,
               total: plan.forceTargets.length,
-            });
+            }, inspectorCwd());
             if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             input.focus();
 
@@ -9078,7 +9616,7 @@ export async function launchTuiAgentShell(opts: {
                   if (!forceHandoff.isAwaitingSettlement) {
                     const next = forceHandoff.takeNext() ?? mainQueue.shift();
                     paintMainQueue();
-                    if (next !== undefined) runLine(next.question, "operator", next.source);
+                    if (next !== undefined) remoteQueue.runQueued(next);
                   }
                 },
               },
@@ -9098,7 +9636,9 @@ export async function launchTuiAgentShell(opts: {
       const operation = foregroundOperation.begin();
       // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
       // time limit handled by the bridge; every other turn resets that state.
-      remoteBridge?.turnStarted(source);
+      remoteQueue.turnStarted(source);
+      // The bridge says whether it took the line as a Telegram turn (it does not when remote control is off).
+      const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;
       // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
       // PRIOR turn (abort/error path; the root cause is fixed in
       // `commands/agent.ts`) must never leak stale live-preview text or
@@ -9185,17 +9725,8 @@ export async function launchTuiAgentShell(opts: {
       // synchronous (its existing contract — every other call site awaits
       // nothing from it).
       //
-      // The bound is NOT a flat `CLASSIFY_TURN_TIMEOUT_MS` (3s): `classifyTurn`
-      // (`../harness/decision/classify-turn.ts`) tries Jev, then — on ANY Jev
-      // failure/timeout — the main-model classifier, each stage independently
-      // raced against its own `CLASSIFY_TURN_TIMEOUT_MS` timer
-      // (`withTimeout`). Worst case (Jev hangs to its own timeout, THEN the
-      // main-model stage also hangs to its own timeout) is ~2x
-      // `CLASSIFY_TURN_TIMEOUT_MS` (~6s) before this IIFE falls back to the
-      // session's own model — deliberate: a slow/hanging Jev call should not
-      // starve the main-model fallback of its own full timeout budget. Still
-      // strictly bounded (never hangs indefinitely), just not by the single
-      // constant this comment used to claim.
+      // Flow 411: JEV and the independent fallback share one monotonic
+      // CLASSIFY_TURN_TIMEOUT_MS budget (3s), including cancellation.
       //
       // `sessionDeps` captures the OUTER (session) `deps` here, before the
       // IIFE's own block-scoped `deps` shadows the name below — a `const`
@@ -9211,11 +9742,13 @@ export async function launchTuiAgentShell(opts: {
         // (source-text audits in `turn-guard-shell-wiring.test.ts` key off
         // it).
         let deps = sessionDeps;
+        const turnSignal = foregroundOperation.signal;
         let routingOutcome: RoutingClassifierTurnResult | undefined;
-        if (routingEnabled && !sessionModelExplicit && origin === "operator" && line.trim().length > 0) {
+        if (routingEnabled && origin === "operator" && line.trim().length > 0) {
           try {
             routingOutcome = await runRoutingClassifierForTurn(line, {
               enabled: routingEnabled,
+              signal: turnSignal,
               // Flow 338 scoping note (routing-classifier-source.ts's own
               // header): Jev is tried whenever a credential resolves AND
               // routing itself is on — `/route on` IS the opt-in (PRD §9.2's
@@ -9224,13 +9757,14 @@ export async function launchTuiAgentShell(opts: {
               jevEnabled: routingEnabled,
               cwd: opts.session?.cwd ?? process.cwd(),
               detected: opts.detected ?? [],
+              providers: loadRoutingProviders,
               sessionProvider: currentSel.provider,
               sessionModel: currentSel.model,
             });
           } catch {
             // fail-closed: classification must never block or fail the turn.
           }
-          if (routingOutcome?.routed !== undefined) {
+          if (!turnSignal.aborted && routingOutcome?.routed !== undefined) {
             try {
               deps = {
                 ...(await opts.makeAgentDeps({ provider: routingOutcome.routed.providerId, model: routingOutcome.routed.modelId }, liveSlateSession, busClientRef)),
@@ -9239,15 +9773,22 @@ export async function launchTuiAgentShell(opts: {
                 ...(sessionDeps.busAck !== undefined ? { busAck: sessionDeps.busAck } : {}),
                 ...(sessionDeps.busLeases !== undefined ? { busLeases: sessionDeps.busLeases } : {}),
               };
-              routingRoutedCount += 1;
-              routingLastCategory = routingOutcome.category;
-              refreshRoutingSidebar();
-              const tag = renderRoutingTagLine(routingOutcome);
-              if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+              // Preparation can settle after cancellation; do not report a
+              // successful route for an executor that will never dispatch.
+              if (!turnSignal.aborted) {
+                routingRoutedCount += 1;
+                routingLastCategory = routingOutcome.category;
+                refreshRoutingSidebar();
+                const tag = renderRoutingTagLine(routingOutcome);
+                if (tag !== undefined) io.onSystem?.(`${tag}\n`);
+              }
             } catch {
               // fail-closed: a routed-deps build failure runs on the session's own model instead.
               deps = sessionDeps;
+              if (!turnSignal.aborted) io.onSystem?.("[route fallback: selected model could not be prepared; check availability and external policy; using session model]\n");
             }
+          } else if (!turnSignal.aborted) {
+            io.onSystem?.(`${renderRoutingFallbackLine(routingOutcome)}\n`);
           }
         }
         // Flow 341 (AC3, wired to PR #737's classifier): captured
@@ -9260,26 +9801,38 @@ export async function launchTuiAgentShell(opts: {
         const turnCategory: RoutingCategory | undefined = routingOutcome?.category;
         // flow 329: starts collecting THIS turn's tool calls/final text fresh —
         // must run before `runAgentTurn` so no early tool call is missed.
+        if (!foregroundOperation.accepts(operation)) {
+          foregroundOperation.settle(operation);
+          if (!foregroundOperation.isDisposed) stopBusy();
+          return;
+        }
+        deps = { ...deps, onContextCompaction: (result) => {
+          if (foregroundOperation.accepts(operation)) onContextCompaction(result);
+        } };
         guardCollector.reset(line);
         syncArchive();
         rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
-        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {});
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
         // and by the time the guard's own deferred continuation (further down)
         // wakes up from its `await`, a NEW turn may already be active, whose
         // signal would say nothing about whether THIS turn was cancelled.
-        const turnSignal = foregroundOperation.signal;
-        void runAgentTurn(foregroundIo, deps, history, line, {
+        void (turnSignal.aborted ? Promise.resolve() : runAgentTurn(foregroundIo, deps, history, line, {
         signal: turnSignal,
+        recovery: {},
         ...(origin === "operator" ? {} : { origin }),
         // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
         ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
-      }).finally(() => {
-        foregroundOperation.settle(operation);
+      })).finally(() => {
+        const accepted = settleForegroundOperation(foregroundOperation, operation);
+        if (!accepted) {
+          if (!foregroundOperation.isDisposed) stopBusy();
+          return;
+        }
         // Flow 376: the reply of a Telegram-originated turn goes back to the topic
         // (a no-op for any other turn). Cancelled and failed turns say so there.
-        void remoteBridge?.turnSettled({ failed: turnFailed || turnSignal.aborted });
+        void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });
         if (foregroundOperation.isDisposed) return;
         refreshRewindSidebar();
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
@@ -9373,7 +9926,7 @@ export async function launchTuiAgentShell(opts: {
           const next = forceHandoff.takeNext() ?? mainQueue.shift();
           paintMainQueue();
           if (next !== undefined) {
-            runLine(next.question, "operator", next.source);
+            remoteQueue.runQueued(next);
           } else {
             // Flow 274 T7 (specification §5.3): "on turn settle, when
             // busInbox still holds wake-eligible messages" — only once there
@@ -9468,7 +10021,7 @@ export async function launchTuiAgentShell(opts: {
         if (chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement) return;
         const drained = forceHandoff.takeNext() ?? mainQueue.shift();
         paintMainQueue();
-        if (drained !== undefined) runLine(drained.question, "operator", drained.source);
+        if (drained !== undefined) remoteQueue.runQueued(drained);
       },
     });
 
@@ -9557,7 +10110,7 @@ export async function launchTuiAgentShell(opts: {
       });
       return (
         `${formatSessionInfoText(snapshot).trimEnd()}\n\n` +
-        `Mode: ${permissionMode}${readOnly ? " (read-only on)" : ""}\n` +
+        `Mode: ${formatModeInForce(modeForTurn(true))}${readOnly ? " (read-only on)" : ""}\n` +
         `Turn: ${chrome.isBusy() ? "running" : "idle"} · queue: ${mainQueue.length} waiting`
       );
     };
@@ -9574,11 +10127,16 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`${await remoteStatusText()}\n`);
         });
       }
-      if (name === "/mode" && (first === "" || first === "auto")) {
+      // `/mode` typed in the topic changes the SHELL's mode, exactly as typed in the shell (flow 396):
+      // there is no Telegram-only mode. A bare `/mode` shows the mode in force for turns from the
+      // topic and where it comes from. `ask` runs directly; `trust` and `auto` were confirmed with a
+      // button press before they got here, so the shell's own dialog is not asked again.
+      const modeWords = line.trim().split(/\s+/).slice(1).filter((word) => word.length > 0);
+      if (name === "/mode" && (first === "" || ((first === "ask" || first === "trust" || first === "auto") && modeWords.length === 1))) {
         echoRemoteCommand(line);
         return await captureShellOutput(() => {
-          if (first === "auto") commitPermissionMode("auto");
-          io.onSystem?.(`Permission mode: ${permissionMode} (ask, trust or auto)\n`);
+          if (first === "ask" || first === "trust" || first === "auto") commitPermissionMode(first);
+          io.onSystem?.(`Permission mode: ${formatModeInForce(modeForTurn(true))} (ask, trust or auto)\n`);
         });
       }
       return await captureShellOutput(() => runLine(line, "operator", TG_SOURCE));
@@ -9601,13 +10159,13 @@ export async function launchTuiAgentShell(opts: {
           forceHandoff.isAwaitingSettlement ||
           mainQueue.length > 0 ||
           leaseView()?.held() === true,
-        runLine: (text) => runLine(text, "operator", TG_SOURCE),
-        enqueue: (text) => {
-          const id = `mq${mainQueueSeq++}`;
-          mainQueue.push({ id, question: text, displayQuestion: summarizeSubmittedLine(text), source: TG_SOURCE });
-          paintMainQueue();
-          io.onSystem?.(`◇ a line from Telegram is queued as q${mainQueue.length}.\n`);
-        },
+        // The streaming loop writes the assistant message in place while a turn runs: only then is
+        // the newest answer in `history` unfinished. A queued line or another holder of the lease
+        // makes the shell busy without making that answer incomplete.
+        turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
+        sessionState: () => ({ queued: mainQueue.length, mode: formatModeInForce(modeForTurn(true)) }),
+        runLine: (text) => remoteQueue.runTelegramLine(text),
+        enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
         notice: (text) => io.onSystem?.(`${text}\n`),
         cancelTurn: () => foregroundOperation.cancel("remote run time limit"),
         recordOn: (name) => {
@@ -9628,13 +10186,7 @@ export async function launchTuiAgentShell(opts: {
         },
         // Remote control going off: its queued lines have no topic to answer in. Drop
         // them from the shell queue and hand their text to the bridge, which says so.
-        dropQueuedTelegramLines: () => {
-          const { kept, dropped } = dropQueuedBySource(mainQueue, TG_SOURCE);
-          if (dropped.length === 0) return [];
-          mainQueue = kept;
-          paintMainQueue();
-          return dropped.map((item) => item.question);
-        },
+        dropQueuedTelegramLines: () => remoteQueue.dropQueuedTelegramLines(),
         // Flow 387: slash commands and button pickers from the topic. Each member is a thin
         // call into code the shell already has; none of them shows or accepts a credential.
         runCommand: runRemoteCommand,
@@ -9713,7 +10265,16 @@ export async function launchTuiAgentShell(opts: {
           // The switch happened when the live session is now the one asked for.
           return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
         },
-        onChange: () => liveRemotePanel?.refresh(),
+        onChange: () => {
+          liveRemotePanel?.refresh();
+          for (const listener of [...remoteModalListeners]) listener();
+          // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
+          paintModeRow();
+        },
+        // Flow 399: the whole conversation (the archive keeps what compaction removed from the
+        // context), and whether this session was resumed, for the automatic restore.
+        history: () => (archive.length > 0 ? archive : history),
+        sessionResumed: () => sessionResumed,
       },
     });
 
@@ -9745,7 +10306,8 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
-    // Flow 376: closing the shell deregisters from serve, which deletes the topic.
+    const preservation = await finalizeShell?.();
+    // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.
     await remoteBridge?.disable();
     // review r1 F9: leave the bus before releasing the lease (specification
@@ -9761,14 +10323,20 @@ export async function launchTuiAgentShell(opts: {
     } catch {
       // best-effort teardown
     }
+    if (preservation !== undefined) {
+      process.stderr.write(`${preservationProgress(preservation.preserved ? "queued" : "failed")}\n`);
+    }
     // Flow 300 review F4: a run-now child is never killed with the shell. Say,
     // once and after the alternate screen is gone, that it keeps running and
     // where its output goes; the ledger watcher shows its outcome next start.
     // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
     liveSchedules?.dispose();
+    liveAutoReview?.dispose();
     liveReviewsPanel?.dispose();
     liveApprovals?.dispose();
+    liveIntake?.dispose();
     liveDecisions?.dispose();
+    liveResearchSync?.dispose();
     liveExternalDiff?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);

@@ -45,3 +45,9 @@ test("classifyDeterministic: an ordinary coding request matches neither shortcut
 test("classifyDeterministic: empty input is unclassified", () => {
   expect(classifyDeterministic("   ")).toBeUndefined();
 });
+
+ test("Russian smoke greeting is quick without matching unrelated coding requests", () => {
+  expect(classifyDeterministic("Привет! Ответь одним словом.")).toBe("quick");
+  expect(classifyDeterministic("Спасибо!")).toBe("quick");
+  expect(classifyDeterministic("Привет! Исправь очередь сообщений")).toBeUndefined();
+});

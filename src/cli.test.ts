@@ -206,10 +206,32 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)\n",
     // Flow 392: `keryx decisions`, a brand-new verb, so a USAGE_BODY block (wrapped
     // over three lines) and a Commands: summary row.
-    "  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its\n",
+    // Flow 392 (backfill): the usage line now names `import` and `report --line`, so the pinned block grew on purpose.
+    "  keryx decisions open|answer|reason|report [--json|--line]|import <file.jsonl> [--dry-run] [--json]\n",
+    "                                               Recommendation journal: record a question with options and its\n",
     "                                               recommendation before showing it, the human's choice after;\n",
-    "                                               report = match share by mode and stage, deviations (no model)\n",
+    "                                               report = match share by mode and stage, deviations (no model);\n",
+    "                                               import = earlier decisions from a JSON-lines file, kept apart\n",
     "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
+    // Flow 395: `keryx remote`, a brand-new verb (the Telegram rendering preview).
+    "  keryx remote format-sample [--mode auto|rich|html|plain] [--full] [--json]\n",
+    "                                               Print the sample reply in each Telegram rendering mode\n",
+    "                                               (tables, lists, rules); no network\n",
+    "  remote    Telegram remote control: preview how replies are rendered, with no network\n",
+    // Flow 396: `keryx permissions`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    "  keryx permissions list [--json] | remove <number|pattern>\n",
+    "                                               The saved shell rules an Always answer left behind; take one back\n",
+    "  permissions The saved shell rules (what Always remembered): list them, remove one\n",
+    // Flow 403: `keryx intake`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    "  keryx intake status|list|pause|resume|poll|report [--json]\n",
+    "                                               GitHub work intake: tickets, reviews, failed CI, PR comments and board\n",
+    "                                               movement as Telegram cards; report = decisions, answer times, card -> flow -> PR\n",
+    "  intake    GitHub work intake: tickets, reviews, failed CI and PR comments as Telegram cards, with a usefulness report\n",
+    // Flow 404: `keryx research sync`, a brand-new verb, so a USAGE_BODY line and a Commands: summary row.
+    "  keryx research sync                          Refresh the Part 1 materials: counts at HEAD, text-free decisions export, sync-status.md (no commit)\n",
+    "  keryx research sync --schedule daily | --unschedule\n",
+    "                                               Run that sync once a day inside keryx serve (the daily entry), or take the entry away\n",
+    "  research  Part 1 materials: sync the -latest counts, the decisions export and the status page\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -271,6 +293,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       "  `flow init --origin human-request|agent-finding|agent-proposal --quote \"<verbatim>\" --source \"<ref>\"` records where the flow came from. Evidence, not assertion: `human-request` is recorded only with a verbatim `--quote` of the human's first message with the idea AND a `--source` (channel, message id or time); `agent-finding` and `agent-proposal` need a `--source`. Without the evidence, or with an invalid kind, the origin stays `unknown`, the command still succeeds and says why. The Outcome criteria template then holds the request (or the source), the agent's formalization and how to observe it. `flow origin set` changes it later, with a reason. The origin labels a sample and gates nothing.\n",
       // Flow 364: the read-only completion check.
       "  keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)\n",
+      // Flow 422: the freeze prompt for criteria with no verification kind can be skipped.
+      "  keryx flow freeze <id> --yes   (or KERYX_NONINTERACTIVE=1: skip the no-verification-kind prompt; the warning is journaled)\n",
     ],
   };
 

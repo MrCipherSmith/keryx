@@ -1,0 +1,12 @@
+# review budget
+
+spend_ceiling: 3 USD
+spent: 0
+spend_status: under
+
+concurrency_cap: 4
+outstanding_declared: 0
+effective_wave_size: 4
+waves: 0
+reviewers_queued: 0
+holds_across_nesting: yes (against the declared count)

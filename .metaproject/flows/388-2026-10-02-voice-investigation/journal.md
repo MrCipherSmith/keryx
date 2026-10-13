@@ -2,7 +2,7 @@
 
 - 2026-10-02T04:32:28.836Z - flow created
 - 2026-10-02T04:36:40.030Z - frozen: 5 criteria; checksum recorded
-- 2026-10-02T10:09:42.677Z - owner-changed: Aleksandr -> MrCipherSmith (operator standing instruction (poll 38, message 177828))
+- 2026-10-02T10:09:42.677Z - owner-changed: operator -> MrCipherSmith (operator standing instruction (poll 38, message 177828))
 - 2026-10-02T10:09:43.024Z - ac-confirmed: AC1: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-02T10:09:43.362Z - ac-confirmed: AC2: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-02T10:09:43.700Z - ac-confirmed: AC3: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
@@ -17,3 +17,4 @@
 - 2026-10-02T10:31:22.771Z - completing
 - 2026-10-02T10:31:27.384Z - completion-attempt-recorded: attempt 1: passed
 - 2026-10-02T10:31:27.386Z - done: all gates passed
+- 2026-10-02T20:09:46.008Z - origin-set: unknown -> human-request; quote: "И заведи фло на инвестигейшн, как научить телеграм и keryx общаться голосом как helyx с минимальными зависимостями и весом."; source: channel message 176715, 2026-10-01T20:42:47Z (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: operator)

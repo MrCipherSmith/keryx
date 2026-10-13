@@ -46,4 +46,18 @@ describe("the digest's board reader", () => {
       registerBoardReader(readDigestBoard);
     }
   });
+
+  test("L-3: a reader that throws is a board failure that names the cause, not an exception out of the digest", async () => {
+    registerBoardReader(async () => {
+      throw new Error("index exploded");
+    });
+    try {
+      const board = await readBoard("/nonexistent-project-root");
+      expect(board.items).toEqual([]);
+      expect(board.chains).toEqual([]);
+      expect(board.failure).toEqual({ source: "board", detail: "the board could not be read: index exploded" });
+    } finally {
+      registerBoardReader(readDigestBoard);
+    }
+  });
 });

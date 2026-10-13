@@ -454,13 +454,14 @@ describe("AC7 (TUI) — the lease is released on every exit path", () => {
   // here is the wiring: every exit path goes through it, and there are still
   // exactly four of them.
   const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
-  test("onDestroy (Ctrl+C) leaves the bus and releases the lease synchronously, before the deferred sweep", () => {
+  test("onDestroy joins preservation before releasing ownership", () => {
     const start = source.indexOf("onDestroy: () => {");
     expect(start).toBeGreaterThanOrEqual(0);
-    // Everything before the async IIFE is the synchronous part: `onDestroy`
-    // is typed `() => void` and @opentui/core never awaits it.
-    const synchronousPart = source.slice(start, source.indexOf("void (async () => {", start));
-    expect(synchronousPart).toContain("leaveBusThenRelease({");
+    const asyncStart = source.indexOf("void (async () => {", start);
+    const synchronousPart = source.slice(start, asyncStart);
+    expect(synchronousPart).not.toContain("leaveBusThenRelease({");
+    const deferred = source.slice(asyncStart, source.indexOf("finally { resolveDone(); }", asyncStart));
+    expect(deferred).toContain("if (finalizeShell !== undefined) await finalizeShell();");
   });
   test("/exit and the busy-menu exit both go through the shared exit sequence", () => {
     for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
@@ -478,7 +479,7 @@ describe("AC7 (TUI) — the lease is released on every exit path", () => {
     // exit path that released the lease without leaving the bus would have
     // been invisible to all of them. Counting the two helpers makes a fifth
     // path fail here instead.
-    expect(source.split("leaveBusThenRelease({").length - 1).toBe(2);
+    expect(source.split("leaveBusThenRelease({").length - 1).toBe(3);
     expect(source.split("await performSlateExit({").length - 1).toBe(2);
     // And nothing calls the raw release outside those helpers' step objects.
     expect(source).not.toContain("sessionLease.release();");

@@ -2,19 +2,39 @@
 // TUI and the shells import from here, never from the files behind it (the
 // import-zone ratchet counts any other reach as an avoidable bypass).
 
-import { buildReport, renderReport, type DecisionsReport } from "./report";
+import { buildReport, renderReport, renderReportLine, type DecisionsReport, type ReportOptions } from "./report";
+import { loadDecisionsSettings } from "./arms";
+import { readQuality } from "./quality";
 import { readJournal } from "./store";
 
-export { journalAsk } from "./ask";
-export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
+export { CANCEL_ANSWER, journalAsk } from "./ask";
+export { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
+export type { DecisionSource } from "./sources";
+export type { AskAnswer, AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
+export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
-export { buildReport, renderReport } from "./report";
-export type { DecisionsReport, DeviationRow, Tally } from "./report";
+export { buildReport, renderReport, renderReportLine } from "./report";
+export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";
+export { effectiveArm, isLegacy, stampLegacy } from "./legacy";
+export {
+  MODEL_LABEL,
+  commandModelCall,
+  isQuality,
+  rateBlindModel,
+  rateDecision,
+  readQuality,
+  renderQualityMatrix,
+} from "./quality";
+export type { BlindModelResult, ModelCallFn, ModelCallRequest, ModelCallResult, Quality, QualityMatrix, QualityRecord } from "./quality";
+export { EXPORT_FIELDS, buildExport, exportSummaryLine, loadExport, loadExportWithSummary, renderExport } from "./export";
+export type { ExportFormat, ExportOptions, ExportRow } from "./export";
+export { importBackfill, renderImportResult } from "./import";
+export type { ImportResult } from "./import";
 export { journalFile, resolveJournalFile } from "./store";
 export { resolveFlowContext } from "./context";
 export type { FlowContext, FlowSource } from "./context";
-export { MAX_TEXT_LENGTH, oneLine } from "./text";
+export { MAX_OPERATOR_TEXT_LENGTH, MAX_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
 export type { ChangeAnswerResult, GiveReasonResult } from "./followup";
 export type {
@@ -28,17 +48,32 @@ export type {
 } from "./types";
 
 /** Read the journal and fold it into the report. Never throws: a missing file is an empty report. */
-export async function loadReport(cwd: string): Promise<DecisionsReport> {
+export async function loadReport(cwd: string, options: Omit<ReportOptions, "quality"> = {}): Promise<DecisionsReport> {
   const { records, skipped } = await readJournal(cwd);
-  return buildReport(records, skipped);
+  return buildReport(records, skipped, { ...options, quality: await readQuality(cwd), settings: options.settings ?? (await loadDecisionsSettings(cwd)) });
 }
 
 /** The report as text, the same lines `keryx decisions report` prints. */
-export async function reportText(cwd: string): Promise<string> {
-  return renderReport(await loadReport(cwd));
+export async function reportText(cwd: string, options: Omit<ReportOptions, "quality"> = {}): Promise<string> {
+  return renderReport(await loadReport(cwd, options));
 }
 
-/** How many decisions the journal holds (the sidebar row shows only when this is above zero). */
+/** The report as ONE Russian line, for the daily topic message (`keryx decisions report --line`). */
+export async function reportLine(cwd: string): Promise<string> {
+  return renderReportLine(await loadReport(cwd));
+}
+
+/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
 export async function decisionCount(cwd: string): Promise<number> {
   return (await loadReport(cwd)).total;
+}
+
+/** How many live decisions carry the operator's own text or a typed reason (flow 401). */
+export async function annotatedCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).annotated.length;
+}
+
+/** How many backfilled (imported, historical) decisions the journal holds. */
+export async function backfilledCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).backfilled.total;
 }
