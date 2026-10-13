@@ -1,4 +1,4 @@
-import type { AgentIO } from "../commands/agent";
+import type { AgentIO, ApprovalMeta, ApprovalResponse } from "../commands/agent";
 
 /**
  * Owns the single cancellable operation that may keep the interactive shell
@@ -275,11 +275,15 @@ export function createForegroundAgentIoFacade(
     onTerminalState: (state) => {
       if (accepts()) io.onTerminalState?.(state);
     },
-    requestApproval: async (tool, input, meta) => {
-      if (!accepts()) return false;
-      const response = await approve()?.(tool, input, meta);
-      return accepts() ? response ?? false : false;
-    },
+    requestApproval: Object.assign(
+      async (tool: string, input: string, meta?: ApprovalMeta): Promise<ApprovalResponse> => {
+        if (!accepts()) return false;
+        const response = await approve()?.(tool, input, meta);
+        return accepts() ? response ?? false : false;
+      },
+      // A displaced turn's `false` is not the operator saying no.
+      { current: accepts },
+    ),
     onAutoApproved: (tool, input, meta) => {
       if (accepts()) autoApproved()?.(tool, input, meta);
     },

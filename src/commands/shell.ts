@@ -119,7 +119,8 @@ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
-import { parseReviewSystem, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { terminalSafe } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
@@ -2257,7 +2258,9 @@ export async function runAgentRepl(
   agentIo.onQuestionSelfAnswered = (question, answerLabel) => {
     stopSpinner();
     const shortQuestion = question.length > 100 ? `${question.slice(0, 97)}…` : question;
-    out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(`${shortQuestion} → ${answerLabel}`)}\n`);
+    // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+    const line = terminalSafe(`${shortQuestion} → ${answerLabel}`).text;
+    out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(line)}\n`);
   };
 
   let live: SessionHandle | undefined;
@@ -2369,6 +2372,7 @@ export async function runAgentRepl(
       );
       holdLease(next.lease);
       agentIo.trustedMcpTools?.clear();
+      resetOperatorDenials();
       return next.handle;
     } catch (cause) {
       agentIo.onSystem?.(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
@@ -2943,6 +2947,7 @@ export async function runAgentRepl(
         // tool result instead of "nothing to expand".
         lastToolOutput = undefined;
         lastToolName = undefined;
+        resetOperatorDenials();
         if (nextLive !== undefined) {
           live = nextLive;
           history = [];
@@ -3055,6 +3060,7 @@ export async function runAgentRepl(
             agentIo.onSystem?.("Cancelled — mode unchanged.\n");
           } else {
             permissionMode = wanted;
+            resetOperatorDenials();
             agentIo.onSystem?.(`Permission mode: ${permissionMode} (${describeRoundLimit(permissionMode)})\n`);
             if (saveFlag) {
               const saved = setProjectPermissionMode(sessionCwd, permissionMode);

@@ -22,7 +22,7 @@ when nothing should be reachable at all.
 |---|---|
 | `ask` (default) | Every `shell_exec`, `spawn_subagent`, and destructive-risk tool call asks first — today's behavior, unchanged if you never touch this feature. |
 | `trust` | Safe calls run without asking. A call still asks when it is destructive — either the tool's own static risk, or a command keryx's classifier recognizes as destructive (`rm -rf`, force-push, and similar). |
-| `auto` | Nothing asks, **including destructive commands** — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
+| `auto` | No command asks, **including destructive ones** (the credential floor below still does) — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
 
 One thing no mode ever changes: a command that touches keryx's own
 credential/permission files (`auth.json`, `permissions.json`,
@@ -40,7 +40,7 @@ A round is one request to the model and may carry several tool calls.
 |---|---|---|
 | `ask` | 40 | Asks "Increase limit and continue / Cancel"; a yes grants 40 more. |
 | `trust` | 200 | Asks the same question; a yes grants 200 more. |
-| `auto` | 200 | Never asks. Below 200 the turn extends itself and prints a `[budget]` line; at 200 it stops with a `[budget]` message. |
+| `auto` | 200 | Never asks to extend the limit. Below 200 the turn extends itself and prints a `[budget]` line; at 200 it stops with a `[budget]` message. |
 | automatic review (any mode) | 200 | Same as `auto`; see [Automatic review](#automatic-review). |
 
 `KERYX_AGENT_MAX_ROUNDS` wins in every mode, and 200 is the ceiling: a larger
@@ -70,14 +70,19 @@ In `auto` the model is told `[auto mode] chose this without asking the user`, so
 it cannot present the choice as yours, and the shell prints a
 `◇ answered without asking (auto):` line with the question and the chosen
 label. Such a question uses no tool-call budget and is not remembered as an answer
-of yours. Because it is not an invocation, hooks and `maxToolCalls` are skipped for
-it; the cap of 3 identical calls still applies. An automatic review does not use
-this path: its own rules decide what is answered and what goes to a person.
+of yours. It is not an invocation, so `maxToolCalls` is untouched and no hook is
+consulted for it; the cap of 3 identical calls still applies. It is not written to the
+recommendation journal either, because no person answered it. An automatic review does
+not use this path: its own rules decide what is answered and what goes to a person.
 
 The question still goes to you when it decides an irreversible action
-(`irreversible` or `action`), when the turn holds untrusted external content, or
-when it asks for permission after you refused an action. An unattended run
-stops at a question as before.
+(`irreversible` or `action`), when the turn holds untrusted external content, when
+the turn started in Telegram (the buttons appear in the topic, as before), when
+review-auto is on and the question carries a `policy` tag, or when it asks for
+permission after you refused an action in any mode. "Asks for permission" is decided
+by the question's wording, so this is a floor for questions phrased that way, not a
+guarantee against a differently worded one. An unattended run stops at a question as
+before.
 
 A session with no way to show a question (no dock, no host) tells the model
 "No one was asked" instead of "User cancelled the question (Esc)", so it does not
@@ -246,9 +251,11 @@ shell. The same call, in any spelling that normalizes to the same fingerprint
 the agent gets "refused earlier: choose another path" and no modal opens. An `ask_user`
 menu that asks for permission (allow, deny, consent, access, "разрешить", "запретить")
 is no longer answered with its recommended option. It reaches you instead, and the
-transcript says so. An irreversible question was never auto-answered. Restart the
-shell to clear the memory; nothing else does. The memory is scoped to `review-auto`;
-under `inherit` a denied call is asked again.
+transcript says so. An irreversible question was never auto-answered. `/clear`, `/new`,
+resuming a session and changing the permission mode clear the memory. The per-call memory
+is scoped to `review-auto`; under `inherit` a denied call is asked again. Only the
+permission-question floor above is kept after a refusal in every mode, and only a person's
+"no" counts: an unattended run, a superseded turn or an interrupted one does not.
 
 ### Routine commands: no prompt after untrusted content
 

@@ -515,7 +515,7 @@ export function deniedUnattendedApproval(
   permissionMode: TriggerDispatch["permissionMode"],
   denials: UnattendedDenial[],
 ): NonNullable<AgentIO["requestApproval"]> {
-  return async (tool, _input, meta) => {
+  const approver: NonNullable<AgentIO["requestApproval"]> = async (tool, _input, meta) => {
     const floors = [
       meta?.credentials === true ? "touches credential files" : undefined,
       meta?.publishLease === true ? "a publish lease applies" : undefined,
@@ -531,6 +531,8 @@ export function deniedUnattendedApproval(
     });
     return false;
   };
+  // Nobody is behind this `false`, so it is not the operator refusing anything.
+  return Object.assign(approver, { attended: false });
 }
 
 /** Run one dispatch for `entry` (a `flow-next` with a `dispatch` block). */

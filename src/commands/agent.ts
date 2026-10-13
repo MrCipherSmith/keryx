@@ -1,7 +1,8 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { rememberArbiterSession } from "../review/arbiter-session";
 import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
-import { REFUSED_EARLIER, asksForReviewAuto, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
+import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
+import { REFUSED_EARLIER, asksForReviewAuto, noteOperatorRefusal, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 import { classifyApprovalCause } from "./approval-cause";
 import type { ApprovalCause } from "./approval-cause";
 // Interactive agent-mode driver (flow 033 / SA-01 Flow A).
@@ -281,6 +282,16 @@ export interface ApprovalMeta {
  * hosts must offer it only for catalog-resolved MCP tools.
  */
 export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string; trustMcpTool?: boolean };
+
+/**
+ * Optional marks on an approver. Without them a `false` is a person's refusal. `attended: false` is an approver
+ * with nobody behind it (an unattended run); `current()` is false once the turn that asked has been displaced, so
+ * its `false` is a stale turn's, not an answer. Neither kind of `false` counts as the operator refusing.
+ */
+export interface ApproverProvenance {
+  attended?: boolean;
+  current?: () => boolean;
+}
 
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
@@ -2499,7 +2510,10 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
  * floor keeps for a human: an irreversible or action-tagged one, one shaped by untrusted content, or a permission-style
  * one after the operator refused something. An invalid call, by the tool's own schema, is left to `executeCall`, which
  * reports the error. A turn of an automatic review is left to it too: `AutomaticReviewRun.answerAskUser` decides what
- * that run answers and what goes on to a person (policy-tagged questions, the two emergencies).
+ * that run answers and what goes on to a person (policy-tagged questions, the two emergencies). So is a turn that
+ * started in Telegram (the person is not at the shell, and buttons in the topic are how they answer), and a
+ * policy-tagged question while review-auto, `KERYX_REVIEW_AUTO_ANSWER=1` or an autonomous answers file is set:
+ * those belong to the arbiter and the decision journal behind `journaledAskUser`, which this path skips.
  */
 function selfAnsweredQuestion(
   call: PendingCall,
@@ -2507,8 +2521,9 @@ function selfAnsweredQuestion(
   mode: PermissionMode,
   untrustedContentSeen: boolean,
   reviewRun: AutomaticReviewRun | undefined,
+  telegramTurn: boolean,
 ): { question: string; label: string; result: InteractiveToolResult } | undefined {
-  if (reviewRun !== undefined || call.name !== "ask_user" || resolveQuestionAnswerer(mode) !== "model") {
+  if (reviewRun !== undefined || telegramTurn || call.name !== "ask_user" || resolveQuestionAnswerer(mode) !== "model") {
     return undefined;
   }
   const tool = toolByName.get("ask_user");
@@ -2519,6 +2534,12 @@ function selfAnsweredQuestion(
   if (!parsed.ok) return undefined;
   const request = untrustedContentSeen ? { ...parsed.request, untrustedContent: true } : parsed.request;
   if (askFloor(request) !== undefined) return undefined;
+  if (
+    request.policy !== undefined &&
+    (reviewAutoActive() || process.env.KERYX_REVIEW_AUTO_ANSWER === "1" || (process.env[ENV_AUTONOMOUS_ANSWERS_FILE] ?? "").length > 0)
+  ) {
+    return undefined;
+  }
   const { question, option, result } = selfAnswerAskUser(request);
   return { question, label: option.label, result };
 }
@@ -4386,11 +4407,19 @@ async function runAgentTurnCore(
       const precomputedResult = concurrentSpawnResults?.get(call.id);
       let result: InteractiveToolResult;
       const storedAnswer = precomputedResult === undefined ? await storedAskUserAnswer(call, options) : undefined;
-      // Not an invocation: nothing ran, so the budget is untouched, and the hooks and the approval gate (a `read`
-      // tool never reaches the latter) are skipped, as for the automatic review's own answers.
+      // Not an invocation: nothing ran, so the invocation budget is untouched (the attempt guard has already counted
+      // the call), and the hooks and the approval gate (a `read` tool never reaches the latter) are skipped, as for the
+      // automatic review's own answers. A hook that wants every `ask_user` to reach a person is not consulted here.
       const selfAnswered =
         precomputedResult === undefined && storedAnswer === undefined
-          ? selfAnsweredQuestion(call, toolByName, io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE, untrustedContentSeen, reviewRun)
+          ? selfAnsweredQuestion(
+              call,
+              toolByName,
+              io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE,
+              untrustedContentSeen,
+              reviewRun,
+              io.mcpGrantsApply?.() === false,
+            )
           : undefined;
       if (precomputedResult !== undefined) {
         result = precomputedResult;
@@ -5518,6 +5547,12 @@ function executeCallTraced(...args: Parameters<typeof executeCallUnbounded>): Pr
   );
 }
 
+/** Whether a `false` from `approver` is a person's refusal: someone sits behind it, the turn is still current, and the turn was not interrupted. */
+function personRefused(approver: object, signal: AbortSignal | undefined): boolean {
+  const { attended, current } = approver as ApproverProvenance;
+  return attended !== false && signal?.aborted !== true && (current?.() ?? true);
+}
+
 async function executeCallUnbounded(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
@@ -5567,7 +5602,6 @@ async function executeCallUnbounded(
   const denialOutput = (generic: string): string => (refusedEarlier ? REFUSED_EARLIER : generic);
   if (requestApproval !== undefined) {
     const askHuman = requestApproval;
-    // The refusal is remembered in every mode, so the `auto` question floor sees it; only review-auto answers from the memory and grants.
     const reviewAuto = reviewAutoActive();
     requestApproval = async (name, toolInput, meta) => {
       const spelled = meta === undefined ? undefined : refusalFingerprint(name, toolInput, meta.fingerprint);
@@ -5577,9 +5611,14 @@ async function executeCallUnbounded(
       }
       if (!reviewAuto || !reviewAutoGrants(name, meta)) {
         const response = await askHuman(name, toolInput, meta);
-        if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {
-          recordOperatorDenial(meta.fingerprint);
-          recordOperatorDenial(spelled!);
+        if (meta !== undefined && !isApprovalFor(response, meta.fingerprint) && personRefused(askHuman, signal)) {
+          // The question floor learns of a genuine refusal in every mode; the per-call memory that answers "no" without asking is review-auto's alone.
+          if (reviewAuto) {
+            recordOperatorDenial(meta.fingerprint);
+            recordOperatorDenial(spelled!);
+          } else {
+            noteOperatorRefusal();
+          }
         }
         return response;
       }
@@ -5818,7 +5857,7 @@ async function executeCallUnbounded(
       }
     }
   } else if (risk === "delegate") {
-    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
+    if (reviewAutoActive() && operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
       return { output: REFUSED_EARLIER, isError: true };
     }
     // Fail-closed like `shell`: a delegate with no approver present is denied,
@@ -5865,7 +5904,7 @@ async function executeCallUnbounded(
       }
     }
   } else if (risk === "write") {
-    if (operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
+    if (reviewAutoActive() && operatorDenied(refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input)))) {
       return { output: REFUSED_EARLIER, isError: true };
     }
     // ADR-0010: `write` joins the shell/destructive/delegate gate. Same

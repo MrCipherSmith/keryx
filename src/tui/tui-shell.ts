@@ -1,6 +1,8 @@
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
+import { terminalSafe } from "../lib/terminal-safe";
+import { resetOperatorDenials } from "../review/review-system";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
@@ -6185,10 +6187,12 @@ export async function launchTuiAgentShell(opts: {
     // NOT dimmed, for the same reason: `auto` mode answered a question the user never saw, so this line is the record.
     io.onQuestionSelfAnswered = (question, answerLabel) => {
       const shortQuestion = question.length > 100 ? `${question.slice(0, 97)}…` : question;
+      // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+      const line = terminalSafe(`${shortQuestion} → ${answerLabel}`).text;
       transcript.add(
         new otui.TextRenderable(r, {
           id: `qs${uid++}`,
-          content: otui.t`${roleChunk(otui, "attention", "◇ answered without asking (auto):")} ${dimChunk(otui, `${shortQuestion} → ${answerLabel}`)}`,
+          content: otui.t`${roleChunk(otui, "attention", "◇ answered without asking (auto):")} ${dimChunk(otui, line)}`,
         }),
       );
     };
@@ -6324,6 +6328,7 @@ export async function launchTuiAgentShell(opts: {
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
+      resetOperatorDenials();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
@@ -6922,6 +6927,7 @@ export async function launchTuiAgentShell(opts: {
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
+      resetOperatorDenials();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       sessionResumed = NEW_SESSION_ENTRY.resumed;
@@ -7609,6 +7615,7 @@ export async function launchTuiAgentShell(opts: {
     /** The change itself, after any confirmation: `/mode`'s dialog and `/settings`' second Enter both end here. */
     const commitPermissionMode = (next: PermissionMode): void => {
       permissionMode = next;
+      resetOperatorDenials();
       modeChangedThisSession = true;
       paintModeRow();
       chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);

@@ -2,11 +2,11 @@
 // the real `ask_user` tool: who answers a question the model raises. Only `auto` hands it to the model, and the
 // floor (irreversible, action-tagged, untrusted-content) keeps a human in the loop even there.
 
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { runAgentTurn } from "./agent";
+import { runAgentTurn, toolCallHash } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
 import { AutomaticReviewRun } from "./automatic-review";
 import type { PermissionMode } from "./permission-mode";
@@ -14,10 +14,39 @@ import { readSlate, writeSlate } from "../session/slate";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { createAskUserTool, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import { resetOperatorDenials } from "../review/review-system";
+import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
+import {
+  ENV_REVIEW_SYSTEM,
+  REFUSED_EARLIER,
+  operatorDenied,
+  recordOperatorDenial,
+  refusalFingerprint,
+  resetOperatorDenials,
+  reviewAutoMayAnswer,
+  setReviewSystem,
+} from "../review/review-system";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription, ProviderPort } from "../harness/provider/types";
 
-afterEach(() => resetOperatorDenials());
+// The review system is process state and three environment variables decide it; every test starts from "not review-auto".
+const AMBIENT_ENV = [ENV_REVIEW_SYSTEM, "KERYX_REVIEW_AUTO_ANSWER", ENV_AUTONOMOUS_ANSWERS_FILE] as const;
+const savedEnv: Partial<Record<(typeof AMBIENT_ENV)[number], string | undefined>> = {};
+
+beforeEach(() => {
+  for (const key of AMBIENT_ENV) {
+    savedEnv[key] = process.env[key];
+    delete process.env[key];
+  }
+  setReviewSystem("inherit");
+});
+
+afterEach(() => {
+  resetOperatorDenials();
+  setReviewSystem("inherit");
+  for (const key of AMBIENT_ENV) {
+    if (savedEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = savedEnv[key];
+  }
+});
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {
@@ -75,6 +104,8 @@ interface RunExtras {
   requestApproval?: AgentIO["requestApproval"];
   /** The shell passes no `permissionMode` at all (an embedder, a test double): the default mode applies. */
   noPermissionMode?: boolean;
+  /** A turn that started in Telegram answers `false` here (flow 396). */
+  mcpGrantsApply?: () => boolean;
 }
 
 interface Run {
@@ -101,6 +132,7 @@ async function run(
     write: () => {},
     ...(extras.noPermissionMode === true ? {} : { permissionMode: () => mode }),
     ...(extras.requestApproval === undefined ? {} : { requestApproval: extras.requestApproval }),
+    ...(extras.mcpGrantsApply === undefined ? {} : { mcpGrantsApply: extras.mcpGrantsApply }),
     onToolResult: (_name, result) => out.results.push(result),
     onQuestionSelfAnswered: (question, label) => out.selfAnswered.push({ question, label }),
   };
@@ -306,4 +338,110 @@ test("auto in an automatic review: an ordinary question is answered by the run, 
   expect(r.selfAnswered).toEqual([]);
   expect(r.results[0]!.output).toContain("Automatic review");
   expect(review.disclosure().automatic).toBe(1);
+});
+
+// Review-auto with no AutomaticReviewRun (a plain shell in review-auto): a policy-tagged question is the human's, not the model's.
+test("auto under review-auto without a review run: a policy-tagged question goes to the host once (F-008, F-010)", async () => {
+  setReviewSystem("review-auto");
+  const r = await run("auto", [toolCall("a1", "ask_user", { ...question, policy: POLICY }), TEXT_DONE]);
+  expect(r.asked).toBe(1);
+  expect(r.selfAnswered).toEqual([]);
+  expect(r.results[0]!.output).toMatch(/^User selected id="small"/);
+});
+
+test.each<[string, () => void]>([
+  ["KERYX_REVIEW_AUTO_ANSWER=1", () => (process.env.KERYX_REVIEW_AUTO_ANSWER = "1")],
+  [`${ENV_AUTONOMOUS_ANSWERS_FILE} set`, () => (process.env[ENV_AUTONOMOUS_ANSWERS_FILE] = "/nonexistent/answers.json")],
+])("auto with %s: a policy-tagged question is not self-answered", async (_name, arm) => {
+  arm();
+  const r = await run("auto", [toolCall("a1", "ask_user", { ...question, policy: POLICY }), TEXT_DONE]);
+  expect(r.selfAnswered).toEqual([]);
+});
+
+test("auto under review-auto answers an untagged question itself, as plain auto does", async () => {
+  setReviewSystem("review-auto");
+  const r = await run("auto", [toolCall("a1", "ask_user", question), TEXT_DONE]);
+  expect(r.asked).toBe(0);
+  expect(r.selfAnswered).toHaveLength(1);
+});
+
+test("a turn started in Telegram keeps the question on the human under /mode auto (poll 153)", async () => {
+  const r = await run("auto", [toolCall("a1", "ask_user", question), TEXT_DONE], [], {}, true, { mcpGrantsApply: () => false });
+  expect(r.asked).toBe(1);
+  expect(r.selfAnswered).toEqual([]);
+  expect(r.results[0]!.output).toMatch(/^User selected id="small"/);
+});
+
+test("a turn started in the terminal (mcpGrantsApply true) is still self-answered under auto", async () => {
+  const r = await run("auto", [toolCall("a1", "ask_user", question), TEXT_DONE], [], {}, true, { mcpGrantsApply: () => true });
+  expect(r.asked).toBe(0);
+  expect(r.selfAnswered).toHaveLength(1);
+});
+
+const CREDENTIALS = { command: "cat ~/.config/keryx/auth.json" };
+const PERMISSION_QUESTION = { question: "Allow the agent to read the credentials file?", options: OPTIONS };
+
+// F-007: a refusal outside review-auto must not become a standing "no" for the identical call.
+test.each<PermissionMode>(["ask", "trust", "auto"])("%s: an identical call is asked again after the operator refused it (F-007)", async (mode) => {
+  let approvals = 0;
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    approvals += 1;
+    return false;
+  };
+  const rounds = [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE];
+  const first = await run(mode, rounds, [shellTool], {}, true, { requestApproval });
+  const second = await run(mode, rounds, [shellTool], {}, true, { requestApproval });
+  expect(approvals).toBe(2);
+  expect(first.results[0]!.output).toContain("not approved");
+  expect(second.results[0]!.output).toContain("not approved");
+  expect(second.results[0]!.output).not.toContain(REFUSED_EARLIER);
+});
+
+test("a refusal in any mode still keeps a permission-style question for the human", async () => {
+  const requestApproval: AgentIO["requestApproval"] = async () => false;
+  await run("trust", [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE], [shellTool], {}, true, { requestApproval });
+  expect(reviewAutoMayAnswer(PERMISSION_QUESTION)).toBe(false);
+  const r = await run("auto", [toolCall("a1", "ask_user", PERMISSION_QUESTION), TEXT_DONE]);
+  expect(r.asked).toBe(1);
+  expect(r.selfAnswered).toEqual([]);
+});
+
+test.each<[string, AgentIO["requestApproval"]]>([
+  ["an unattended approver", Object.assign(async () => false, { attended: false })],
+  ["a stale turn", Object.assign(async () => false, { current: () => false })],
+])("%s saying no is not a person's refusal: nothing is remembered", async (_name, requestApproval) => {
+  await run("ask", [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE], [shellTool], {}, true, { requestApproval });
+  expect(reviewAutoMayAnswer(PERMISSION_QUESTION)).toBe(true);
+  const raw = JSON.stringify(CREDENTIALS);
+  expect(operatorDenied(toolCallHash("shell_exec", raw))).toBe(false);
+});
+
+test("outside review-auto a remembered fingerprint is never read: the approver is still asked", async () => {
+  const raw = JSON.stringify(CREDENTIALS);
+  recordOperatorDenial(toolCallHash("shell_exec", raw));
+  let approvals = 0;
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    approvals += 1;
+    return false;
+  };
+  const r = await run("ask", [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE], [shellTool], {}, true, { requestApproval });
+  expect(approvals).toBe(1);
+  expect(r.results[0]!.output).not.toContain(REFUSED_EARLIER);
+});
+
+// F-012: under review-auto both the exact call and its normalised spelling are remembered.
+test("review-auto: a refused command stays refused, in another spelling too, without asking again", async () => {
+  setReviewSystem("review-auto");
+  let approvals = 0;
+  const requestApproval: AgentIO["requestApproval"] = async () => {
+    approvals += 1;
+    return false;
+  };
+  await run("auto", [toolCall("s1", "shell_exec", CREDENTIALS), TEXT_DONE], [shellTool], {}, true, { requestApproval });
+  const raw = JSON.stringify(CREDENTIALS);
+  expect(operatorDenied(toolCallHash("shell_exec", raw))).toBe(true);
+  expect(operatorDenied(refusalFingerprint("shell_exec", raw, toolCallHash("shell_exec", raw)))).toBe(true);
+  const again = await run("auto", [toolCall("s2", "shell_exec", { command: "cat   ~/.config/keryx/auth.json" }), TEXT_DONE], [shellTool], {}, true, { requestApproval });
+  expect(again.results[0]!.output).toBe(REFUSED_EARLIER);
+  expect(approvals).toBe(1);
 });

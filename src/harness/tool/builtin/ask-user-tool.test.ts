@@ -104,6 +104,11 @@ test("selfAnswerAskUser picks the recommended option, else the first, and says n
   const recommended = selfAnswerAskUser({ question: "q", options: [{ id: "a", label: "A", description: "" }, { id: "b", label: "B", description: "", recommended: true }] });
   expect(recommended.option.id).toBe("b");
   expect(recommended.result.output).toContain("[auto mode] chose this without asking the user");
+  expect(recommended.result.output).toContain('(recommended). The user did not answer this question.');
+  expect(recommended.result.isError).toBe(false);
   const plain = selfAnswerAskUser({ question: "q", options: [{ id: "a", label: "A", description: "" }, { id: "b", label: "B", description: "" }] });
   expect(plain.option.id).toBe("a");
+  expect(plain.result.output).toContain("The user did not answer this question.");
+  expect(plain.result.output).not.toContain("(recommended)");
+  expect(plain.result.isError).toBe(false);
 });
