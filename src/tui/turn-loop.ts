@@ -6,8 +6,10 @@
 // injected dependencies, and `turn-loop.test.ts` drives this module with a modelled `runLine`.
 //
 // The seam stops at `createTurnLoop`'s dependencies. What the shell passes in (`runLine`, `getBridge`,
-// `say`, `onDetachedFailure`, the idle predicate) and the busy branch of the shell's own `runLine` are not
-// run by that test; they are pinned as source text in tui-hold.test.ts and remote-queue-wiring.test.ts.
+// `say`, `onDetachedFailure`) and the shell's own call sites (the busy deferred branch, the lease-held
+// notices, the idle predicate of the recipient choice, the settle call) are not run by that test. They are
+// pinned as source text where their subject lives: tui-hold.test.ts (inputs, drain getter, held notices),
+// busy-dispatch.test.ts, main-queue.test.ts, tui-bus.test.ts, and tui-shell.test.ts (Force).
 // The OpenTUI renderer is still not mounted by any unit test.
 
 import { deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
@@ -53,7 +55,9 @@ export interface TurnLoop {
   /**
    * After the recipient choice closes its dock: when `isIdle()`, run one item (a forced one first) and
    * repaint before it. It asks the caller's predicate only; it does not consult detached slash work
-   * (`drain.workInFlight()`), unlike the drain's own idle drain. Not that function.
+   * (`drain.workInFlight()`), unlike the drain's own idle drain. Not that function. The caller restates the
+   * in-flight terms on purpose (the dock is the shell's, and `destroyed` is its own); the source pin in
+   * main-queue.test.ts holds the whole predicate.
    */
   drainAfterRecipientChoice(isIdle: () => boolean): void;
   readonly remote: RemoteQueueWiring;

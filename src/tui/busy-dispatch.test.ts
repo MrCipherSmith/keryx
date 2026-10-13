@@ -264,18 +264,15 @@ test("tui-shell.ts's busy 'deferred' case queues the slash line through the turn
   const endIdx = source.indexOf('case "not-a-command":', caseIdx);
   expect(caseIdx).toBeGreaterThan(-1);
   expect(endIdx).toBeGreaterThan(caseIdx);
-  const body = source.slice(caseIdx, endIdx);
-  expect(body).toContain("turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)");
-  const loop = readFileSync(join(import.meta.dir, "turn-loop.ts"), "utf8");
-  expect(loop).toContain('deferredBusyAction(line, commandName) !== "queue"');
-  expect(loop).toContain("queuedCommandNotice(position)");
+  const body = source.slice(caseIdx, endIdx).replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ");
+  // The whole statement, `return` included: without it a queued line would also get the refusal below.
+  expect(body).toContain("if (turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)) return;");
   expect(body).not.toContain("command deferred");
 });
 
 test("a queued slash line is drained through runLine as a command once the turn settles", () => {
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   expect(source).toContain("forced: forceHandoff,");
-  expect(readFileSync(join(import.meta.dir, "turn-loop.ts"), "utf8")).toContain("queue: () => queue,");
   const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
   expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   const wiring = readFileSync(join(import.meta.dir, "remote-queue-wiring.ts"), "utf8");

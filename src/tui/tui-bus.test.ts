@@ -713,7 +713,10 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
 
   test("turn settle reaches the bus-wake controller's onSettle through the shared drain sites (behaviour: main-queue-drain.test.ts)", () => {
     expect(source).toContain("onSettle: () => busWakeController?.onSettle(),");
-    expect(source).toContain("drainSites.onTurnSettle();");
+    // Exactly one call outside comments, and a bare statement: conditioning it would starve the wake.
+    const code = source.replace(/\/\/[^\n]*/g, "");
+    expect(code.split("drainSites.onTurnSettle();")).toHaveLength(2);
+    expect(code).toMatch(/[;{}]\s*drainSites\.onTurnSettle\(\);/);
   });
 
   test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {

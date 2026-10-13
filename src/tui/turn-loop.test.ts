@@ -7,9 +7,11 @@
 //
 // The boundary: the fake models only the happy busy branch of the shell's `runLine` (not
 // `classifyBusyDispatch`, the lease-held branch or the recipient dock). What the shell passes into
-// `createTurnLoop` (`runLine`, `getBridge`, `say`, `onDetachedFailure`, the idle predicate) and the call
-// sites of `turnLoop.*` / `drainSites.*` are pinned as source text in tui-hold.test.ts, tui-bus.test.ts
-// and remote-queue-wiring.test.ts.
+// `createTurnLoop` and the call sites of `turnLoop.*` / `drainSites.*` are pinned as source text, each
+// where its subject lives: the inputs and the drain getter in tui-hold.test.ts, the lease-held notices
+// there too, the busy deferred branch in busy-dispatch.test.ts, the idle predicate of the recipient
+// choice in main-queue.test.ts, the settle call in tui-bus.test.ts, the Force `replaceQueue` call in
+// tui-shell.test.ts. remote-queue-wiring.test.ts pins only how the wiring delegates, by count.
 
 import { describe, expect, test } from "bun:test";
 import { TG_SOURCE } from "../remote/shell-bridge";
@@ -277,6 +279,14 @@ describe("the queue as the panel and the next drain see it", () => {
     expect(h.ran).toEqual([{ line: "first" }]);
     h.settleTurn();
     expect(h.ran).toEqual([{ line: "first" }, { line: "from the topic", source: TG_SOURCE }]);
+  });
+
+  test("a line from the topic repaints the panel with the line already in the queue", () => {
+    const h = harness();
+    h.busy = true;
+    h.loop.remote.enqueueTelegramLine("one");
+    h.loop.remote.enqueueTelegramLine("two");
+    expect(h.events).toEqual(["paint:1", "paint:2"]);
   });
 
   test("replaceQueue swaps the array the drain reads: a removed line never runs, the kept one does", () => {

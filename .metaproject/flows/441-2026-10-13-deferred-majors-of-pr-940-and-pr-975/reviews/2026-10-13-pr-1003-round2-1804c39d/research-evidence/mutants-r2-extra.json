@@ -1,0 +1,6 @@
+{"mutants":[
+{"id":"N16b-remote-paint-noop","file":"src/tui/turn-loop.ts","anchor":"nextId,\n    paint: deps.paint,","replacement":"nextId,\n    paint: () => {},"},
+{"id":"N21-held-notice-banner-dropped","file":"src/tui/tui-shell.ts","anchor":"${leaseView()?.banner() ?? \"held\"} — queued as q${position} (no side worker while held).","replacement":"held — queued as q${position} (no side worker while held)."},
+{"id":"N22-held-busy-enqueue-no-return","file":"src/tui/tui-shell.ts","anchor":"(no side worker while held).\\n`);\n          return;","replacement":"(no side worker while held).\\n`);"},
+{"id":"N23-held-idle-enqueue-only-operator-dropped","file":"src/tui/tui-shell.ts","anchor":"if (origin === \"operator\") {\n          const position = turnLoop.enqueue(line, displayLine, source);","replacement":"if (true) {\n          const position = turnLoop.enqueue(line, displayLine, source);"}
+]}
