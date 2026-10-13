@@ -1,0 +1,104 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Round 3 style: no major. Round-2 style findings F-005, F-009, STY-1/2/3/5 are closed against the code; STY-4 is open. Three minor findings in the delta: a snake_case helper that duplicates a local constant, two test titles that pass under the mutant they name, and the unchanged verify-exec comment.",
+  "findings": [
+    {
+      "id": "STY-R3-1",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "line": 435,
+      "quote": "function good_json(): string {\n  return '{\"status\":\"DONE\",\"reviewer\":\"r\",\"findings\":[]}';\n}",
+      "problem": "Added in 44bed779. A snake_case helper in a camelCase codebase, declared at file level after the describe that uses it (lines 377-379), and redundant: the enclosing describe at line 262 already holds goodJson (JSON.stringify of good, same fields in another key order).",
+      "impact": "Naming-convention break, a second spelling of the same fixture, and a reader of the fences describe has to look past the end of the file for it.",
+      "suggested_fix": "Delete good_json and use the in-scope goodJson at lines 377-379 (it is visible there: the fences describe is nested in the one that declares it).",
+      "evidence": "git log -S good_json: only 44bed779. goodJson is declared at ledger.test.ts:262, an ancestor scope of line 358.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-2",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "line": 388,
+      "quote": "test(\"a fence that never closes fences nothing: its object is bare, so two statuses stay ambiguous\"",
+      "problem": "Titles at lines 388 and 392 name a rule the assertion cannot fail on. Both inputs hold two reviewer-shaped objects with different statuses, so the reply is undefined whether the object is counted as fenced or as bare. Line 392 (\"an object right after a closing fence is bare, not fenced\") has the same shape. Line 397 does discriminate.",
+      "impact": "A regression in the unclosed-fence rule or in the closing-fence boundary leaves these two green while their titles claim to guard it. Another test pins the unclosed-fence rule (line 407), so this is a title/assertion mismatch, not a coverage hole.",
+      "suggested_fix": "Make both inputs distinguish the two readings (give the object in question the same status as the other and assert which reviewer wins), or retitle them to what they assert (two differing statuses are ambiguous).",
+      "evidence": "Standalone copy of ledger.ts:82-255 in the scratchpad (review-style3). Mutant A: fenceRanges closes an unclosed fence at end of input: 388 still gives undefined. Mutant B: fenceTester treats the end position of a fence as inside (<= becomes <): 392 still gives undefined; 397 changes to reviewer 'bare'.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-3",
+      "severity": "minor",
+      "file": "src/flow/verify-exec-files.test.ts",
+      "line": 2,
+      "quote": "// A command naming a missing file passes vacuously in `bun test`, so the gate proves nothing.",
+      "problem": "Round-2 STY-4, unchanged. The comment is false for a command that names one missing file.",
+      "impact": "A maintainer reads the guard as covering a hazard that does not exist for single-file commands and misses the real one (a missing file next to an existing one).",
+      "suggested_fix": "Reword: bun test skips a missing file when the command also names other test files, so the gate passes without running it.",
+      "evidence": "bun test src/nope/missing.test.ts exits 1; bun test src/nope/missing.test.ts src/flow/verify-exec-files.test.ts exits 0 (run in the worktree, bun, this round).",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-4",
+      "severity": "info",
+      "file": "src/review/ledger.test.ts",
+      "line": 376,
+      "quote": "test(\"a labelled fence that is not valid JSON decides: the bare result after it is not read\"",
+      "problem": "Three small title/assertion drifts. Line 376: the third input ({\"verdict\":\"DONE\"}) is valid JSON without a status. Line 74: the title states that a REVIEW_RESULT fence needs a status and a json fence a reviewer or findings, but the body asserts neither refusal (they are pinned at 174-184). Lines 284 and 423 repeat the same prefix list, and 283/421 overlap.",
+      "impact": "Reading cost only.",
+      "suggested_fix": "Title 376 'a labelled fence that does not hold a result decides'; shorten 74 to what it asserts; one shared PREFIXES constant.",
+      "evidence": "ledger.test.ts:74-79, 283-287, 376-380, 421-426.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-R3-5",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 239,
+      "quote": "2. The object after the last bare REVIEW_RESULT marker (at the start of a line, outside a fence; only the last",
+      "problem": "Doc precision. Rule 2 says 'at the start of a line' but MARKER also accepts a quote, list or heading prefix (stated only on MARKER). OBJECT_START's doc (line 82) omits that whitespace may sit between the brace and the quote. The MAX_MARKERS doc ends 'and the scan of rule 3 follows', which does not say what follows what. `(?<![^\\n])` is the right idiom but unexplained. The rule list is written three times (parseReviewResult doc, the readResult error text in review-slice.ts:172, test titles); the error text also stays circular ('result holds no usable reviewer result') and does not list a ```json fenced result, which is accepted.",
+      "impact": "None at run time; the error text is true as far as it goes, so no operator-facing falsehood.",
+      "suggested_fix": "Add 'after at most a quote, list or heading prefix' to rule 2, one clause to the other docs, and comment the lookbehind as 'start of input or after a newline'.",
+      "evidence": "ledger.ts:82-83, 191-195, 239; review-slice.ts:172.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+## Summary
+
+Verdict: APPROVE_WITH_SUGGESTIONS. Naming and readability of the round-3 delta are in good shape; no major style finding, nothing that tells an operator something false.
+
+### Findings
+- Minor: STY-R3-1 (good_json), STY-R3-2 (titles 388/392 pass under the mutant they name), STY-R3-3 (verify-exec comment, carried STY-4).
+- Info: STY-R3-4 (title drifts, duplicated prefix list), STY-R3-5 (doc precision).
+
+### Questions
+None.
+
+### Pre-existing (not blocking)
+- review-ledger.ts:75: the JSDoc about set-aside raw files sits on `type ReplyNames`, not on `isReviewerReply`, which it describes.
+- Module-level sticky regexes OBJECT_START and KEY_COLON are shared mutable state (round-2 F-008, clean-code lane); every caller sets lastIndex right before use.
+
+### Prior-finding dispositions (style domain, checked against the code)
+- F-005: closed. review-slice.ts:172 now names the accepted shapes: object with a status; ```REVIEW_RESULT block with a status; status plus reviewer or findings, bare or after a marker. Residue: STY-R3-5.
+- F-009: closed. (a) line 74 retitled; (b) AC15 holds one assertion set; (c) timing titles read 'within two seconds'. Residue: STY-R3-4.
+- STY-1: closed (same code as F-005). STY-2: closed (isReviewerResult exported, used at review-ledger.ts:99). STY-3: closed (line 81/207, 125/238, 179-180/222-225 are no longer duplicates). STY-5: closed (rule 3 split into bullets, MAX_UNCLOSED cap and its 'next one' behaviour stated). STY-4: open (STY-R3-3).
+- F-011, F-012, F-014, F-015 (naming and title view): closed. Each behaviour has a named, discriminating test, except the two vacuous titles in STY-R3-2. F-001 and F-002 wording: closed (tests 268-292, 219-231 match the code and the operator decision).
+- Caps: the 64 boundaries are pinned with titles that match (335-355).
+
+### Verified clean
+Test names in review-ledger.test.ts and review-slice.test.ts match their assertions. The ledger.ts comments on topLevelObjects, afterMarker, scannedResult and the review-ledger.ts:98 comment match the code. No unused imports or dead code in the delta. File length 434 lines. No console use. F-id references in test titles follow an existing convention (9 files).
+
+Routing audit: graph_used no (7 named files); wiki_used not-relevant; ctx_used yes (keryx ctx run/rg); raw_rg_used no.

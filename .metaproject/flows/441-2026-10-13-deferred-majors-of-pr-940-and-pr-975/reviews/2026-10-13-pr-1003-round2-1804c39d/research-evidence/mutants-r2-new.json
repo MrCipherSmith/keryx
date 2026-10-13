@@ -1,0 +1,22 @@
+{"mutants":[
+{"id":"N01-whileBusy-no-return","file":"src/tui/tui-shell.ts","anchor":"if (turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)) return;","replacement":"turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source);"},
+{"id":"N02-held-busy-notice-q1","file":"src/tui/tui-shell.ts","anchor":"queued as q${position} (no side worker while held).","replacement":"queued as q1 (no side worker while held)."},
+{"id":"N03-held-idle-notice-q1","file":"src/tui/tui-shell.ts","anchor":"queued as q${position}.\\n`);","replacement":"queued as q1.\\n`);"},
+{"id":"N04-idle-no-destroyed","file":"src/tui/tui-shell.ts","anchor":"!destroyed &&\n                !chrome.isBusy() &&","replacement":"!chrome.isBusy() &&"},
+{"id":"N05-idle-no-busy","file":"src/tui/tui-shell.ts","anchor":"!chrome.isBusy() &&\n                !foregroundOperation.isActive &&\n                !forceHandoff","replacement":"!foregroundOperation.isActive &&\n                !forceHandoff"},
+{"id":"N06-idle-no-foreground","file":"src/tui/tui-shell.ts","anchor":"!foregroundOperation.isActive &&\n                !forceHandoff.isAwaitingSettlement &&\n                leaseView","replacement":"!forceHandoff.isAwaitingSettlement &&\n                leaseView"},
+{"id":"N07-idle-no-awaiting","file":"src/tui/tui-shell.ts","anchor":"!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,","replacement":"leaseView()?.held() !== true,"},
+{"id":"N08-idle-no-lease","file":"src/tui/tui-shell.ts","anchor":"!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,","replacement":"!forceHandoff.isAwaitingSettlement,"},
+{"id":"N09-enqueue-returns-len-minus-1","file":"src/tui/turn-loop.ts","anchor":"deps.paint();\n    return queue.length;","replacement":"deps.paint();\n    return queue.length - 1;"},
+{"id":"N10-sessionState-queued-zero","file":"src/tui/tui-shell.ts","anchor":"queued: turnLoop.queue.length,","replacement":"queued: 0,"},
+{"id":"N11-idle-dispatch-run-before-paint","file":"src/tui/turn-loop.ts","anchor":"deps.paint();\n          remote.runQueued(next);","replacement":"remote.runQueued(next);\n          deps.paint();"},
+{"id":"N12-enqueue-source-undefined-key","file":"src/tui/turn-loop.ts","anchor":"...(source !== undefined ? { source } : {})","replacement":"source"},
+{"id":"N13-seq-starts-1","file":"src/tui/turn-loop.ts","anchor":"let seq = 0;","replacement":"let seq = 1;"},
+{"id":"N14-queue-getter-copy","file":"src/tui/turn-loop.ts","anchor":"get queue() {\n      return queue;","replacement":"get queue() {\n      return [...queue];"},
+{"id":"N15-recipient-enqueue-gains-source","file":"src/tui/tui-shell.ts","anchor":"turnLoop.enqueue(line, displayLine);\n            // The recipient choice","replacement":"turnLoop.enqueue(line, displayLine, source);\n            // The recipient choice"},
+{"id":"N16-remote-paint-noop","file":"src/tui/turn-loop.ts","anchor":"paint: deps.paint,\n    runLine","replacement":"paint: () => {},\n    runLine"},
+{"id":"N17-remote-say-noop","file":"src/tui/turn-loop.ts","anchor":"say: deps.say,","replacement":"say: () => {},"},
+{"id":"N18-remote-runLine-noop","file":"src/tui/turn-loop.ts","anchor":"runLine: deps.runLine,","replacement":"runLine: (() => undefined) as never,"},
+{"id":"N19-drain-paint-noop","file":"src/tui/turn-loop.ts","anchor":"queue: () => queue,\n    paint: deps.paint,","replacement":"queue: () => queue,\n    paint: () => {},"},
+{"id":"N20-whileBusy-notice-position-plus-1","file":"src/tui/turn-loop.ts","anchor":"deps.say(`${queuedCommandNotice(position)}\\n`);","replacement":"deps.say(`${queuedCommandNotice(position + 1)}\\n`);"}
+]}

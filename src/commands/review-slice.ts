@@ -2,8 +2,10 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { resolveProjectRoot } from "../lib/contained-path";
 import { writeFileAtomic } from "../lib/fs";
-import { parseReviewResult } from "../review/ledger";
+import { placeReviewPath, reviewPathFlagRefusal } from "../lib/review-path-flags";
+import { hasStatus, parseReviewResult } from "../review/ledger";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
@@ -26,6 +28,29 @@ const RETRY_STATE_NAME = "retry-state.json";
 
 function wantsHelp(args: readonly string[]): boolean {
   return args.includes("--help") || args.includes("-h");
+}
+
+/**
+ * Refuse, before anything is read or written, a path flag that lands outside the project root,
+ * and hand back `placed(flag, fallback?)`: the real path a flag (or its default) lands on, judged again at the
+ * moment of use. The early check alone leaves a window between it and the read or write in which a directory can
+ * become a symlink; a command that opens the placed path, not the string it was given, closes it.
+ * A `-` value of a stdin flag comes back as `-`.
+ */
+function guardPaths(command: string, args: string[]): (flag: string, fallback?: string) => string | undefined {
+  const cwd = process.cwd();
+  const where = { projectRoot: resolveProjectRoot(cwd), cwd };
+  const refusal = reviewPathFlagRefusal(command, args, where);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+  return (flag, fallback) => {
+    const value = optionValue(args, flag) ?? fallback;
+    if (value === undefined) return undefined;
+    const placed = placeReviewPath(command, flag, value, where);
+    if (!placed.ok) throw new Error(placed.message);
+    return placed.path;
+  };
 }
 
 export function printSliceHelp(): void {
@@ -114,18 +139,20 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     return;
   }
   deps.rejectUnknownFlags(args, SLICE_FLAGS, "slice");
+  const placed = guardPaths("slice", args);
   const contextLines = deps.parseContextLines(optionValue(args, "--context"));
   const rawMax = optionValue(args, "--max-bytes");
   const maxBytes = validateSliceMaxBytes(rawMax === undefined ? DEFAULT_SLICE_MAX_BYTES : Number(rawMax));
-  const diffFile = optionValue(args, "--diff");
+  const diffFile = placed("--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
-  const outDir = path.resolve(optionValue(args, "--out") ?? DEFAULT_SLICE_DIR);
 
   const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = rawWave === undefined ? undefined : validateWaveBytes(Number(rawWave), maxBytes);
   const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
 
+  // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
+  const outDir = placed("--out", DEFAULT_SLICE_DIR) as string;
   await mkdir(outDir, { recursive: true });
   for (const entry of await readdir(outDir)) {
     if (/^slice-\d+\.diff$/.test(entry)) {
@@ -160,7 +187,7 @@ async function readJsonSource<T>(source: string, label: string): Promise<T> {
 
 class UnreadableInput extends Error {}
 
-/** A reviewer result: plain JSON, or a saved raw reply carrying a REVIEW_RESULT block (what the ledger's next command names). */
+/** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (the shapes it accepts are listed in its doc). A truncated or ambiguous reply is refused. */
 async function readResult(source: string): Promise<ReviewerResult> {
   let raw: string;
   try {
@@ -168,9 +195,17 @@ async function readResult(source: string): Promise<ReviewerResult> {
   } catch (error) {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
-  const parsed = parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no status-bearing JSON object: ${source}`);
+  const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status; a \`\`\`REVIEW_RESULT block with a status; or one object with a status and a reviewer or findings, bare or after a REVIEW_RESULT marker; a truncated or ambiguous reply is refused): ${source}`);
   return parsed as ReviewerResult;
+}
+
+/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
+function wholeFileResult(raw: string): ReviewerResult | undefined {
+  try {
+    const whole: unknown = JSON.parse(raw);
+    return hasStatus(whole) ? whole as ReviewerResult : undefined;
+  } catch { return undefined; }
 }
 
 function failUnreadable(error: unknown): void {
@@ -198,17 +233,18 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
     return;
   }
   deps.rejectUnknownFlags(args, DISPATCH_CHECK_FLAGS, "dispatch-check");
-  const payloadSource = optionValue(args, "--payload");
+  const placed = guardPaths("dispatch-check", args);
+  const payloadSource = placed("--payload");
   if (payloadSource === undefined) {
     throw new Error("Missing --payload <file|->. See `keryx review dispatch-check --help`.");
   }
-  const manifestSource = optionValue(args, "--manifest");
+  const manifestSource = placed("--manifest");
   const rawMax = optionValue(args, "--max-bytes");
 
   try {
     const payloads = asPayloads(await readJsonSource<unknown>(payloadSource, "payload"));
     const manifest = manifestSource === undefined ? undefined : await readJsonSource<SliceManifest>(manifestSource, "manifest");
-    const base = manifestSource === undefined ? process.cwd() : path.dirname(path.resolve(manifestSource));
+    const base = manifestSource === undefined ? process.cwd() : path.dirname(manifestSource);
     const result = await checkDispatch(payloads, {
       ...(manifest === undefined ? {} : { manifest }),
       ...(rawMax === undefined ? {} : { maxBytes: validateSliceMaxBytes(Number(rawMax)) }),
@@ -233,19 +269,19 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     return;
   }
   deps.rejectUnknownFlags(args, RETRY_PLAN_FLAGS, "retry-plan");
-  const manifestSource = optionValue(args, "--manifest");
-  const resultSource = optionValue(args, "--result");
+  const placed = guardPaths("retry-plan", args);
+  const manifestSource = placed("--manifest");
+  const resultSource = placed("--result");
   const nextWave = args.includes("--next-wave");
   if (manifestSource === undefined || (resultSource === undefined && !nextWave)) {
     throw new Error("Missing --manifest <file> or --result <file|-> (--result is optional with --next-wave). See `keryx review retry-plan --help`.");
   }
 
   try {
-    const manifestPath = path.resolve(manifestSource);
-    const manifestDir = path.dirname(manifestPath);
-    const manifest = await readJsonSource<SliceManifest>(manifestPath, "manifest");
+    const manifestDir = path.dirname(manifestSource);
+    const manifest = await readJsonSource<SliceManifest>(manifestSource, "manifest");
     const result = resultSource === undefined ? {} : await readResult(resultSource);
-    const statePath = path.resolve(optionValue(args, "--state") ?? path.join(manifestDir, RETRY_STATE_NAME));
+    const statePath = placed("--state", path.join(manifestDir, RETRY_STATE_NAME)) as string;
     const state = existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState();
     const reviewer = optionValue(args, "--reviewer") ?? result.reviewer;
     if (reviewer === undefined || reviewer === "") {
@@ -274,7 +310,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       if (plan.newSlices.length > 0) {
         await writeSliceFiles(manifestDir, plan.newSlices);
         const added = plan.newSlices.map(({ text: _text, ...entry }) => entry);
-        await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, slices: [...manifest.slices, ...added] }, null, 2)}\n`);
+        await writeFileAtomic(manifestSource, `${JSON.stringify({ ...manifest, slices: [...manifest.slices, ...added] }, null, 2)}\n`);
       }
       await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
     }

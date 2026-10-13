@@ -406,7 +406,7 @@ export interface ShellChrome {
    * Persistent queue dock above `dock`, listing queued main-turn messages
    * (`paintMainQueue` in `tui-shell.ts` mounts into it). Unlike `dock` it is
    * multi-item and stays mounted for as long as the queue is non-empty
-   * (`.visible` toggles with `mainQueue.length > 0`).
+   * (`.visible` toggles with `turnLoop.queue.length > 0`).
    */
   readonly queueDock: Box;
   readonly menu: Select;
@@ -919,7 +919,7 @@ export async function createShellChrome(
   // messages so they stop being painted into `transcript` (flow 170). Mirrors
   // `dock`'s own styling below so the two docks read as one visual family, but
   // starts hidden — `paintMainQueue()` in tui-shell.ts flips `.visible` once
-  // `mainQueue.length > 0`. Inserted between `scroll` and `dock` in add-order:
+  // `turnLoop.queue.length > 0`. Inserted between `scroll` and `dock` in add-order:
   // the passive queue reminder sits one step further from the composer than
   // the active choice dock.
   const queueDock = new otui.BoxRenderable(r, {

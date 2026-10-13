@@ -79,41 +79,215 @@ export const sha = (value: string | Uint8Array): string => createHash("sha256").
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
-/** The reviewer's result: the last fenced block that parses to an object carrying `status`. Never guessed from prose. */
-export function parseReviewResult(raw: string): ParsedResult | undefined {
-  const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
-  if (labelled.length > 0) {
-    try {
-      const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
-      return parsed !== null && typeof parsed === "object" && typeof parsed.status === "string"
-        ? parsed as ParsedResult : undefined;
-    } catch { return undefined; }
+/** A `{` followed by a quote or `}`: where a JSON object with keys, or an empty one, can start. A prose brace such as `{config}` or `{ to` does not match, so it never opens a candidate. */
+const OBJECT_START = /\{\s*["}]/y;
+
+const RESULT_KEYS = new Set(["status", "reviewer", "findings"]);
+const KEY_COLON = /\s*:/y;
+
+/**
+ * The brace closing the object that opens at `start`. When it never closes, `claimsResult` says whether the object
+ * itself (not an object nested in it) carries a key of a reviewer result: only then is the fragment a cut-off result.
+ */
+function objectEnd(raw: string, start: number): { end?: number; claimsResult: boolean } {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let keyFrom = 0;
+  let claimsResult = false;
+  for (let end = start; end < raw.length; end += 1) {
+    const char = raw[end];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') {
+        quoted = false;
+        if (depth === 1 && !claimsResult && RESULT_KEYS.has(raw.slice(keyFrom, end))) {
+          KEY_COLON.lastIndex = end + 1;
+          claimsResult = KEY_COLON.test(raw);
+        }
+      }
+    } else if (char === '"') { quoted = true; keyFrom = end + 1; }
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) return { end, claimsResult };
   }
-  let result: ParsedResult | undefined;
-  for (let start = 0; start < raw.length; start += 1) {
-    if (raw[start] !== "{") continue;
-    let depth = 0;
-    let quoted = false;
-    let escaped = false;
-    for (let end = start; end < raw.length; end += 1) {
-      const char = raw[end];
-      if (quoted) {
-        if (escaped) escaped = false;
-        else if (char === "\\") escaped = true;
-        else if (char === '"') quoted = false;
-      } else if (char === '"') quoted = true;
-      else if (char === "{") depth += 1;
-      else if (char === "}" && --depth === 0) {
-        try {
-          const parsed = JSON.parse(raw.slice(start, end + 1));
-          if (typeof parsed.status === "string") result = parsed as ParsedResult;
-          start = end;
-        } catch { /* prose brace: try the next candidate */ }
-        break;
+  return { claimsResult };
+}
+
+/** How many cut-off-looking fragments are skipped before the reply is read as truncated (no result, so the reviewer is re-dispatched): every one costs a scan to the end, about 3 ms per MB. */
+const MAX_UNCLOSED = 64;
+
+/**
+ * The objects that stand at the top level of a reply. A candidate that fails to parse is skipped whole, never entered.
+ * One that never closes ends the scan when it carries the result keys (a result cut off); otherwise it is prose and only
+ * its brace is skipped, up to MAX_UNCLOSED times; the next one ends the scan the same way (the reply gives no result).
+ * A cut-off fragment is entered again at each of its own braces, so a result key anywhere in it, even in an object nested
+ * inside the cut-off one, ends the scan as truncated.
+ */
+function topLevelObjects(raw: string): { found: Array<{ start: number; value: unknown }>; truncated: boolean } {
+  const found: Array<{ start: number; value: unknown }> = [];
+  let unclosed = 0;
+  for (let start = raw.indexOf("{"); start !== -1; start = raw.indexOf("{", start)) {
+    OBJECT_START.lastIndex = start;
+    if (!OBJECT_START.test(raw)) { start += 1; continue; }
+    const { end, claimsResult } = objectEnd(raw, start);
+    if (end === undefined) {
+      if (claimsResult || (unclosed += 1) > MAX_UNCLOSED) return { found, truncated: true };
+      start += 1;
+      continue;
+    }
+    const value = tryParse(raw.slice(start, end + 1));
+    if (value !== undefined) found.push({ start, value });
+    start = end + 1;
+  }
+  return { found, truncated: false };
+}
+
+/** An opening line: up to 3 spaces, 3 or more backticks, and no further backtick (an inline mention is not a fence). */
+const FENCE_OPEN = /^ {0,3}(`{3,})[^`]*$/;
+/** A closing line: up to 3 spaces and a run of backticks, nothing else on the line. */
+const FENCE_CLOSE = /^ {0,3}(`{3,})[ \t]*$/;
+
+/**
+ * `from` inclusive, `to` exclusive, of each fenced block, read line by line as CommonMark does: an opening line starts it, a
+ * line holding only a run of at least as many backticks ends it, and an opening that never closes runs to the end of the reply.
+ * A triple backtick inside a sentence therefore never changes which lines are fenced. One forward pass over the lines.
+ */
+function fenceRanges(raw: string): Array<readonly [number, number]> {
+  const ranges: Array<readonly [number, number]> = [];
+  let opened: { from: number; length: number } | undefined;
+  for (let lineStart = 0; lineStart < raw.length; ) {
+    const newline = raw.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? raw.length : newline;
+    const line = raw.slice(lineStart, raw.charCodeAt(lineEnd - 1) === 13 ? lineEnd - 1 : lineEnd);
+    if (opened === undefined) {
+      const open = FENCE_OPEN.exec(line);
+      if (open !== null) opened = { from: lineStart, length: open[1]!.length };
+    } else {
+      const close = FENCE_CLOSE.exec(line);
+      if (close !== null && close[1]!.length >= opened.length) {
+        ranges.push([opened.from, lineEnd] as const);
+        opened = undefined;
       }
     }
+    lineStart = lineEnd + 1;
   }
-  return result;
+  if (opened !== undefined) ranges.push([opened.from, raw.length] as const);
+  return ranges;
+}
+
+/** Whether a position lies inside a fenced block. Positions must be asked in ascending order: one forward pass over the ranges. */
+function fenceTester(raw: string): (position: number) => boolean {
+  const ranges = fenceRanges(raw);
+  let next = 0;
+  return (position) => {
+    while (next < ranges.length && ranges[next]![1] <= position) next += 1;
+    return next < ranges.length && position >= ranges[next]![0];
+  };
+}
+
+/** Any top-level JSON object with a string `status`: the first rule every kind of result shares. */
+export function hasStatus(value: unknown): value is ParsedResult & { status: string } {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && typeof (value as { status?: unknown }).status === "string";
+}
+
+/** A reviewer's own result: a status, and either the reviewer's name or a `findings` array (a slice entry carries neither). */
+export function isReviewerResult(value: unknown): value is ParsedResult {
+  if (!hasStatus(value)) return false;
+  const object = value as Record<string, unknown>;
+  return typeof object.reviewer === "string" || Array.isArray(object.findings);
+}
+
+type Decision = { result: ParsedResult | undefined };
+
+/** A line that only closes a fence. A JSON string cannot hold a raw newline, so such a line is never inside the object. */
+const LINE_CLOSE = /^ {0,3}```[ \t]*\r?$/gm;
+
+/**
+ * The last ```REVIEW_RESULT block. It keeps the status-only rule: the label already says what the block is.
+ * The block ends at the first triple backtick; when that cuts the object short (a triple backtick written inside a JSON
+ * string) it is read again up to the first line that holds only a closing fence.
+ */
+function labelledFence(raw: string): Decision | undefined {
+  const labelled = [...raw.matchAll(/```REVIEW_RESULT[ \t]*\r?\n([\s\S]*?)```/gi)];
+  if (labelled.length === 0) return undefined;
+  const last = labelled[labelled.length - 1]!;
+  let parsed = tryParse(last[1]!);
+  if (parsed === undefined) {
+    const bodyStart = last.index! + last[0].length - last[1]!.length - 3;
+    LINE_CLOSE.lastIndex = bodyStart;
+    const close = LINE_CLOSE.exec(raw);
+    if (close !== null) parsed = tryParse(raw.slice(bodyStart, close.index));
+  }
+  return { result: hasStatus(parsed) ? parsed : undefined };
+}
+
+function tryParse(source: string): unknown {
+  try { return JSON.parse(source); } catch { return undefined; }
+}
+
+/** How many of the last markers are tried (older ones are not read at all, and the scan of rule 3 follows): each one whose object never closes costs a scan to the end. */
+const MAX_MARKERS = 64;
+
+/** A marker counts where it starts its line, after at most a quote, list or heading prefix: a mention inside a sentence is prose. */
+const MARKER = /(?<![^\n])[ \t>*#-]*REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g;
+
+/**
+ * The reviewer result right after the last `REVIEW_RESULT` marker that starts a line outside a fenced block and has one.
+ * A marker followed by something that is not a reviewer result (prose such as `REVIEW_RESULT {contract}`, a cut-off
+ * object) is passed over for the one before it.
+ */
+function afterMarker(raw: string): ParsedResult | undefined {
+  const inFence = fenceTester(raw);
+  const markers = [...raw.matchAll(MARKER)].filter((marker) => !inFence(marker.index!)).slice(-MAX_MARKERS);
+  for (let at = markers.length - 1; at >= 0; at -= 1) {
+    const marker = markers[at]!;
+    const start = marker.index! + marker[0].length;
+    const { end } = objectEnd(raw, start);
+    if (end === undefined) continue;
+    const parsed = tryParse(raw.slice(start, end + 1));
+    if (isReviewerResult(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+/** No label, and no marker that gave a reviewer result: the reviewer-shaped objects at the top level, fenced ones first. */
+function scannedResult(raw: string): ParsedResult | undefined {
+  const { found, truncated } = topLevelObjects(raw);
+  if (truncated) return undefined;
+  const inFence = fenceTester(raw);
+  const fenced: unknown[] = [];
+  const bare: unknown[] = [];
+  for (const { start, value } of found) (inFence(start) ? fenced : bare).push(value);
+  const fencedResults = fenced.filter(isReviewerResult);
+  if (fencedResults.length > 0) {
+    const last = fencedResults[fencedResults.length - 1]!;
+    return bare.filter(isReviewerResult).some((value) => value.status !== last.status) ? undefined : last;
+  }
+  if (new Set(bare.filter(hasStatus).map((value) => value.status)).size > 1) return undefined;
+  const accepted = bare.filter(isReviewerResult);
+  return accepted[accepted.length - 1];
+}
+
+/**
+ * The reviewer's result, in this order; the first rule that applies decides.
+ * 1. The last ```REVIEW_RESULT fence: any object with a status.
+ * 2. The object after the last bare REVIEW_RESULT marker (at the start of a line, outside a fence; only the last
+ *    MAX_MARKERS are read) whose object is a reviewer result: a status plus a reviewer or a findings array. A marker
+ *    followed by anything else is passed over for the one before it.
+ * 3. Otherwise the top-level objects of the reply:
+ *    - a cut-off object that carries the result keys gives no result; prose that merely opens a brace is skipped, up to
+ *      MAX_UNCLOSED times, and the next one gives no result either;
+ *    - the last reviewer-shaped object inside a fenced block wins, unless a reviewer-shaped bare object carries a
+ *      different status (then none: a fenced sample cannot be told from the real result);
+ *    - with no fenced one, the last reviewer-shaped bare object, unless the bare objects (any with a status) carry
+ *      different statuses (then none; the same status twice is not ambiguous).
+ * Never guessed from prose.
+ */
+export function parseReviewResult(raw: string): ParsedResult | undefined {
+  const labelled = labelledFence(raw);
+  if (labelled !== undefined) return labelled.result;
+  return afterMarker(raw) ?? scannedResult(raw);
 }
 
 export function isEmptyOutput(raw: string): boolean {

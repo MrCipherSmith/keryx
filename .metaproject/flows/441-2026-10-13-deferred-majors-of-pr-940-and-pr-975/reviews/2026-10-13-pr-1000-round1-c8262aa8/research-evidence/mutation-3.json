@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t2",
+  "command": "bun test src/lib/trust-routine-command.test.ts src/lib/contained-path-place.test.ts src/commands/review-slice-paths.test.ts src/commands/agent-trust-orchestration.test.ts src/commands/agent-fewer-prompts.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 826
+  },
+  "mutants": [
+    {
+      "id": "cd-dash-option",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "target.startsWith(\"-\") || ",
+      "replacement": "target === \"-\" || ",
+      "note": "cd-dash-option",
+      "line": 219,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 725
+    },
+    {
+      "id": "expandable-dollar-only",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "value.startsWith(\"~\") || /[$\\\\*?[\\]{}`]/.test(value)",
+      "replacement": "value.startsWith(\"~\") || value.includes(\"$\")",
+      "note": "expandable-dollar-only",
+      "line": 210,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 908
+    },
+    {
+      "id": "cdpath-ignored",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "cdpath !== undefined && cdpath !== \"\" && ",
+      "replacement": "false && ",
+      "note": "cdpath-ignored",
+      "line": 221,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 937
+    },
+    {
+      "id": "cdpath-dot-slash-not-exempt",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "!target.startsWith(\"./\") && ",
+      "replacement": "",
+      "note": "cdpath-dot-slash-not-exempt",
+      "line": 221,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 728
+    },
+    {
+      "id": "preload-text-scan-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (/preload/i.test(text)) return true;",
+      "replacement": "",
+      "note": "preload-text-scan-dropped",
+      "line": 149,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 743
+    },
+    {
+      "id": "preload-parse-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "return hasKey(Bun.TOML.parse(text));",
+      "replacement": "return false;",
+      "note": "preload-parse-dropped",
+      "line": 153,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 752
+    },
+    {
+      "id": "preload-parse-failure-open",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "  } catch {\n    return true;\n  }\n}\n\nfunction bunfigState",
+      "replacement": "  } catch {\n    return false;\n  }\n}\n\nfunction bunfigState",
+      "note": "preload-parse-failure-open",
+      "line": 154,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 746
+    },
+    {
+      "id": "preload-key-case-sensitive",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "key.toLowerCase() === \"preload\"",
+      "replacement": "key === \"preload\"",
+      "note": "preload-key-case-sensitive",
+      "line": 152,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 736
+    },
+    {
+      "id": "count-empty-allowed",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^\\d+$/.test(value)",
+      "replacement": "/^\\d*$/.test(value)",
+      "note": "count-empty-allowed",
+      "line": 179,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 723
+    },
+    {
+      "id": "ctx-run-shares-walk",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "isRoutineSegment(words.slice(dashes + 1), { ...walk })",
+      "replacement": "isRoutineSegment(words.slice(dashes + 1), walk)",
+      "note": "ctx-run-shares-walk",
+      "line": 239,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 742
+    },
+    {
+      "id": "review-flags-not-checked",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "confinedPathFlags(sub).length > 0",
+      "replacement": "false",
+      "note": "review-flags-not-checked",
+      "line": 244,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 693
+    },
+    {
+      "id": "bun-args-unchecked",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!hasOnlyAllowedBunTestArgs(words.slice(2))) return false;",
+      "replacement": "",
+      "note": "bun-args-unchecked",
+      "line": 202,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 736
+    },
+    {
+      "id": "bun-untrusted-ignored",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (walk.untrusted || walk.cwd === undefined) return false;",
+      "replacement": "if (walk.cwd === undefined) return false;",
+      "note": "bun-untrusted-ignored",
+      "line": 199,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 743
+    },
+    {
+      "id": "bun-cwd-not-root",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (realOrResolved(walk.cwd) !== root) return false;",
+      "replacement": "",
+      "note": "bun-cwd-not-root",
+      "line": 201,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 761
+    },
+    {
+      "id": "extra-root-not-inside",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "real !== null && isInside(rootReal, real)",
+      "replacement": "real !== null",
+      "note": "extra-root-not-inside",
+      "line": 157,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 740
+    },
+    {
+      "id": "unresolvable-says-outside",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "cannot be resolved (dangling or looping symlink).",
+      "replacement": "resolves outside the project root.",
+      "note": "unresolvable-says-outside",
+      "line": 178,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 752
+    },
+    {
+      "id": "containment-dropped",
+      "file": "src/lib/contained-path.ts",
+      "anchor": "if (!allowed.some((root) => isInside(root, effective))) {",
+      "replacement": "if (false) {",
+      "note": "containment-dropped",
+      "line": 181,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 717
+    },
+    {
+      "id": "slice-out-judged-early",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const outDir = placed(\"--out\", DEFAULT_SLICE_DIR) as string;",
+      "replacement": "const outDir = path.resolve(optionValue(args, \"--out\") ?? DEFAULT_SLICE_DIR);",
+      "note": "slice-out-judged-early",
+      "line": 155,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 734
+    },
+    {
+      "id": "slice-diff-unplaced",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const diffFile = placed(\"--diff\");",
+      "replacement": "const diffFile = optionValue(args, \"--diff\");",
+      "note": "slice-diff-unplaced",
+      "line": 146,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 760
+    },
+    {
+      "id": "dispatch-manifest-unplaced",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const manifestSource = placed(\"--manifest\");\n  const rawMax",
+      "replacement": "const manifestSource = optionValue(args, \"--manifest\");\n  const rawMax",
+      "note": "dispatch-manifest-unplaced",
+      "line": 233,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 810
+    },
+    {
+      "id": "retry-state-unplaced",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "placed(\"--state\", path.join(manifestDir, RETRY_STATE_NAME)) as string",
+      "replacement": "path.resolve(optionValue(args, \"--state\") ?? path.join(manifestDir, RETRY_STATE_NAME))",
+      "note": "retry-state-unplaced",
+      "line": 277,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1161
+    },
+    {
+      "id": "stdin-dash-not-exempt",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "if (value === \"-\" && STDIN_FLAGS.has(flag))",
+      "replacement": "if (false)",
+      "note": "stdin-dash-not-exempt",
+      "line": 40,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1122
+    },
+    {
+      "id": "own-key-lookup-dropped",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "Object.hasOwn(REVIEW_CONFINED_PATH_FLAGS, command) ?",
+      "replacement": "true ?",
+      "note": "own-key-lookup-dropped",
+      "line": 30,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1028
+    },
+    {
+      "id": "agent-latch-cwd-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "...(tool.workingDirectory === undefined ? {} : { cwd: tool.workingDirectory }),",
+      "replacement": "",
+      "note": "agent-latch-cwd-dropped",
+      "line": 5647,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 977
+    },
+    {
+      "id": "agent-latch-untrusted-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "untrustedContent: untrustedOrigin,\n      ...(tool",
+      "replacement": "untrustedContent: false,\n      ...(tool",
+      "note": "agent-latch-untrusted-dropped",
+      "line": 5646,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 898
+    },
+    {
+      "id": "agent-tool-baseline-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (tool.workingDirectory !== undefined) recordBunfigBaseline(tool.workingDirectory);",
+      "replacement": "",
+      "note": "agent-tool-baseline-dropped",
+      "line": 2252,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 682
+    }
+  ],
+  "totals": {
+    "killed": 20,
+    "survived": 6,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

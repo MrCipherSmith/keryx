@@ -1,7 +1,7 @@
 // Pure main-queue helpers for the TUI busy-input router (flow 167),
 // GENERALISED to a queue per addressee (flow 176, T16).
 //
-// The interactive shell keeps `mainQueue` state + rendering inside
+// The interactive shell keeps the queue in `createTurnLoop` (src/tui/turn-loop.ts) and renders it inside
 // `launchTuiAgentShell` (src/tui/tui-shell.ts); this module holds the PURE,
 // unit-testable part — marker formatting and the remove/edit/reinsert
 // moves — so the queue behaviour is pinned by tests without mounting a whole
@@ -229,21 +229,21 @@ export function drainNext<T extends QueuedMainQuestion>(options: {
 }
 
 /** The part of `ForegroundForceHandoff` the drain reads. */
-interface ForcedItems<T> {
+export interface ForcedItems<T> {
   takeNext(): T | undefined;
   readonly pendingCount: number;
   readonly isAwaitingSettlement: boolean;
 }
 
 /**
- * The shell's whole queue drain in one place, so the shell and its test build the same wiring
- * (flow 441, R1). The sites differ in what surrounds the drain: a finished foreground operation
+ * The whole queue drain in one place (flow 441, R1): `createTurnLoop` builds it for the shell, and
+ * `main-queue-drain.test.ts` and `turn-loop.test.ts` build and drive it directly. The sites differ in what surrounds the drain: a finished foreground operation
  * and a settled turn wait for a pending force hand-off; a released lease and the end of a detached
  * slash command stay out while queue work is in flight, because that work's own end drains. Every
  * site that ends with nothing queued and nothing started calls `onSettle`, so the bus wake is
  * never starved by the site that happened to be last.
  *
- * `queue` is a getter: the shell replaces its queue array on `/queue remove`, `/queue edit` and
+ * `queue` is a getter: the turn loop replaces its queue array on `/queue remove`, `/queue edit` and
  * Force, so a reference taken once would drain a queue nobody shows any more.
  */
 export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {

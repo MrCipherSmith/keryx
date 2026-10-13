@@ -1,0 +1,43 @@
+STATUS: DONE_WITH_CONCERNS
+
+```REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "findings": [
+    {
+      "id": "SEC-1",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g)].slice(-MAX_MARKERS);",
+      "problem": "afterMarker accepts a REVIEW_RESULT marker anywhere in the reply (mid-line, blockquote, list item, diff line, inside a code fence) and takes the LAST one whose object is reviewer-shaped. A reviewer that wrote its real result as a bare marker and then quotes text containing REVIEW_RESULT: {status DONE, reviewer <same name>, findings []} has its result replaced by the quoted object.",
+      "impact": "Proven by script (case A): a real INCOMPLETE result with one blocker finding and slices [slice-01] became DONE with no findings and no slices; buildLedger then gave run.status=complete, obligations=0, rawReconciled=true, no gaps. Not exploitable against the fenced form the contract mandates (labelled fence wins first); needs the reviewer to repeat the line. Main's parser took the last status-bearing object of any shape, so this PR narrowed the hole.",
+      "suggested_fix": "Count a marker only when it starts its line (spaces or tabs before it allowed) and lies outside a ``` fence, using a forward cursor over fence ranges so it stays linear. A forged marker on its own plain line remains; it cannot be told from a real corrected result without breaking frozen AC15 (ledger.test.ts:227-231). Optional: in loadRaws compare result.reviewer with the driver reviewer or file stem.",
+      "evidence": "scratchpad r2/review-security-code/proof.ts cases A-G; compare.ts; fix tested on a copy of src: ledger.test.ts 64/64 and review-slice.test.ts 68/68 green; 2 MB hostile inputs at most 142 ms.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-2",
+      "severity": "info",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(result === undefined ? {} : { result }) });",
+      "problem": "loadRaws and buildLedger attribute a raw file to a reviewer only by the reviewer name the parsed object declares about itself; nothing compares it with the driver's reviewer or file stem. retry-plan does check.",
+      "impact": "A forged wrong name fails safe (real reviewer reads as no result). A forged same name is not caught. No path found where this alone opens the gate.",
+      "suggested_fix": "Optional hardening with SEC-1: require result.reviewer to equal the driver's reviewer when the driver names the file.",
+      "evidence": "review-ledger.ts loadRaws lines 84-106; ledger.ts 275-285, 363-364; proof.ts A and B.",
+      "confidence": "high",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-010", "state": "open", "evidence": "scannedResult compares only status strings; two bare reviewer-shaped objects with the same status and different findings are not ambiguous and the last wins. Same as on main."},
+    {"id": "F-003", "state": "closed", "evidence": "parseReviewResult on 2 MB hostile inputs took 6-142 ms each (scratchpad r2/review-security-code/perf.ts)."}
+  ],
+  "answers": {
+    "Q1": "Real, reachable, narrower than main. Exposed: real result as bare marker + object followed by a quoted marker object; real unmarked bare object followed by a quoted marker object. Not exposed: a real REVIEW_RESULT fence followed by a bare quote; forged marker before the real one; quotes inside the real object's JSON strings. Winning forgery changes status, findings, slices, needs_context, reviewer name. Narrowest fix: marker at line start and outside code fences; consistent with AC11-AC18. Rejected: requiring reviewer equality (forger uses real name), declaring two differing markers ambiguous (breaks AC15 corrected: test).",
+    "Q2": "Not owned; measured as by-product: all hostile 2 MB inputs under 150 ms.",
+    "Q3": "Not owned."
+  }
+}
+```

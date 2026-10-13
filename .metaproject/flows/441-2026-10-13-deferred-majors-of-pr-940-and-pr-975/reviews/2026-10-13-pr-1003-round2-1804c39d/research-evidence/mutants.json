@@ -1,0 +1,256 @@
+{
+ "mutants": [
+  {
+   "id": "T01-drain-queue-empty",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "queue: () => queue,",
+   "replacement": "queue: () => [],"
+  },
+  {
+   "id": "T02-drain-run-noop",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "run: (next) => remote.runQueued(next),",
+   "replacement": "run: () => {},"
+  },
+  {
+   "id": "T03-drain-forced-dropped",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "forced: deps.forced,",
+   "replacement": "forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },"
+  },
+  {
+   "id": "T04-drain-onSettle-noop",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "onSettle: deps.onSettle,",
+   "replacement": "onSettle: () => {},"
+  },
+  {
+   "id": "T05-drain-onDetachedFailure-noop",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "onDetachedFailure: deps.onDetachedFailure,",
+   "replacement": "onDetachedFailure: () => {},"
+  },
+  {
+   "id": "T06-drain-turnWorkInFlight-false",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "turnWorkInFlight: deps.turnWorkInFlight,",
+   "replacement": "turnWorkInFlight: () => false,"
+  },
+  {
+   "id": "T07-remote-nextId-constant",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "    nextId,\n",
+   "replacement": "    nextId: () => `mq0`,\n"
+  },
+  {
+   "id": "T07b-enqueue-id-constant",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "id: nextId(), question: line",
+   "replacement": "id: `mq0`, question: line"
+  },
+  {
+   "id": "T08-enqueue-no-paint",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "deps.paint();\n    return queue.length;",
+   "replacement": "return queue.length;"
+  },
+  {
+   "id": "T09-gate-flip",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "deferredBusyAction(line, commandName) !== \"queue\"",
+   "replacement": "deferredBusyAction(line, commandName) === \"queue\""
+  },
+  {
+   "id": "T09b-gate-deleted",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "if (deferredBusyAction(line, commandName) !== \"queue\") return false;",
+   "replacement": ""
+  },
+  {
+   "id": "T10-notice-dropped",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "deps.say(`${queuedCommandNotice(position)}",
+   "replacement": "void (`${queuedCommandNotice(position)}"
+  },
+  {
+   "id": "T10b-notice-position-const-1",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "queuedCommandNotice(position)",
+   "replacement": "queuedCommandNotice(1)"
+  },
+  {
+   "id": "T11-idle-takeForced-undefined",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "takeForced: () => deps.forced.takeNext(),",
+   "replacement": "takeForced: () => undefined,"
+  },
+  {
+   "id": "T12-idle-isIdle-always-true",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "isIdle,\n        takeForced",
+   "replacement": "isIdle: () => true,\n        takeForced"
+  },
+  {
+   "id": "T13-idle-dispatch-no-paint",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "deps.paint();\n          remote.runQueued(next);",
+   "replacement": "remote.runQueued(next);"
+  },
+  {
+   "id": "T13b-idle-dispatch-no-run",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "deps.paint();\n          remote.runQueued(next);",
+   "replacement": "deps.paint();"
+  },
+  {
+   "id": "T14-replaceQueue-noop",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "replaceQueue(next) {\n      queue = next;\n    },",
+   "replacement": "replaceQueue(next) {\n      void next;\n    },"
+  },
+  {
+   "id": "T15-setQueue-noop",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "setQueue: (next) => {\n      queue = next;\n    },",
+   "replacement": "setQueue: (next) => {\n      void next;\n    },"
+  },
+  {
+   "id": "T16-remote-getQueue-copy",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "getQueue: () => queue,",
+   "replacement": "getQueue: () => [...queue],"
+  },
+  {
+   "id": "T17-enqueue-question-display-swapped",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "question: line, displayQuestion: displayLine",
+   "replacement": "question: displayLine, displayQuestion: line"
+  },
+  {
+   "id": "T18-enqueue-source-dropped",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": ", ...(source !== undefined ? { source } : {}) });",
+   "replacement": " });"
+  },
+  {
+   "id": "T19-whileBusy-source-dropped",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "const position = enqueue(line, displayLine, source);",
+   "replacement": "const position = enqueue(line, displayLine);"
+  },
+  {
+   "id": "T20-whileBusy-line-display-swapped",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "const position = enqueue(line, displayLine, source);",
+   "replacement": "const position = enqueue(displayLine, line, source);"
+  },
+  {
+   "id": "T21-enqueue-returns-1",
+   "file": "src/tui/turn-loop.ts",
+   "anchor": "return queue.length;",
+   "replacement": "return 1;"
+  },
+  {
+   "id": "S01-shell-forced-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "forced: forceHandoff,",
+   "replacement": "forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },"
+  },
+  {
+   "id": "S02-shell-inflight-without-foregroundOperation",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+   "replacement": "turnWorkInFlight: () => chrome.isBusy() || forceHandoff.isAwaitingSettlement,"
+  },
+  {
+   "id": "S03-shell-inflight-without-awaitingSettlement",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+   "replacement": "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive,"
+  },
+  {
+   "id": "S04-shell-onSettle-noop",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "onSettle: () => busWakeController?.onSettle(),",
+   "replacement": "onSettle: () => undefined,"
+  },
+  {
+   "id": "S05-shell-onDetachedFailure-silent",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "onDetachedFailure: (error) => {",
+   "replacement": "onDetachedFailure: (error) => {\n        if (error !== undefined) return;"
+  },
+  {
+   "id": "S06-shell-runLine-source-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "runLine: (line, origin, source) => runLine(line, origin, source),",
+   "replacement": "runLine: (line, origin) => runLine(line, origin),"
+  },
+  {
+   "id": "S07-shell-getBridge-undefined",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "getBridge: () => remoteBridge,",
+   "replacement": "getBridge: () => undefined,"
+  },
+  {
+   "id": "S08-shell-say-noop",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "say: (text) => io.onSystem?.(text),",
+   "replacement": "say: () => undefined,"
+  },
+  {
+   "id": "S09-shell-whileBusy-source-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)",
+   "replacement": "turnLoop.enqueueWhileBusy(line, displayLine, command?.name)"
+  },
+  {
+   "id": "S10-shell-held-busy-enqueue-source-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "if (leaseView()?.held() === true) {\n          const position = turnLoop.enqueue(line, displayLine, source);",
+   "replacement": "if (leaseView()?.held() === true) {\n          const position = turnLoop.enqueue(line, displayLine);"
+  },
+  {
+   "id": "S11-shell-held-idle-enqueue-source-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "if (origin === \"operator\") {\n          const position = turnLoop.enqueue(line, displayLine, source);",
+   "replacement": "if (origin === \"operator\") {\n          const position = turnLoop.enqueue(line, displayLine);"
+  },
+  {
+   "id": "S12-shell-recipient-choice-no-drain",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "turnLoop.drainAfterRecipientChoice(",
+   "replacement": "((_idle: () => boolean) => undefined)("
+  },
+  {
+   "id": "S13-shell-force-replaceQueue-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "turnLoop.replaceQueue(removeMainQueueItem(turnLoop.queue, index));",
+   "replacement": "removeMainQueueItem(turnLoop.queue, index);"
+  },
+  {
+   "id": "S14-shell-drainSites-fresh-object",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "const drainSites = turnLoop.drain;",
+   "replacement": "const drainSites = { ...turnLoop.drain };"
+  },
+  {
+   "id": "S15-shell-settle-drain-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "drainSites.onTurnSettle();",
+   "replacement": ""
+  },
+  {
+   "id": "S16-shell-lease-release-drain-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "onRelease: () => drainSites.onLeaseRelease(),",
+   "replacement": "onRelease: () => undefined,"
+  },
+  {
+   "id": "S17-shell-foreground-complete-drain-dropped",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "drainSites.onForegroundOperationComplete();",
+   "replacement": ""
+  }
+ ]
+}

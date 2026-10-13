@@ -9,7 +9,7 @@
 
 export interface BusWakeInput {
   /**
-   * `!chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0`
+   * `!chrome.isBusy() && !foregroundOperation.isActive && turnLoop.queue.length === 0`
    * (specification §5.3) — the SAME idle test the task-notification wake
    * uses. The caller is responsible for also checking the "destroyed" guard
    * (Ctrl+C) before ever constructing this input; this function has no
@@ -73,7 +73,7 @@ export function decideBusWake(input: BusWakeInput): BusWakeDecision {
  *   nothing to drain, burning the auto-wake budget on an empty round.
  */
 export interface BusWakeControllerOptions {
-  /** `!destroyed && !drainSites.workInFlight() && mainQueue.length === 0 && no held lease` — read fresh at every decision, never cached. */
+  /** `!destroyed && !drainSites.workInFlight() && turnLoop.queue.length === 0 && no held lease` — read fresh at every decision, never cached. */
   isIdle: () => boolean;
   /** The live `BusInbox` this session drains from. */
   inbox: { hasWakeEligible(): boolean };

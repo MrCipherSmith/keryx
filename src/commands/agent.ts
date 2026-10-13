@@ -27,7 +27,7 @@ import { validateAgainstSchemaObject } from "../contracts/validator";
 import { tracePhase } from "../lib/phase-trace";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
-import { isTrustRoutineCommand, isTrustRoutineTool } from "../lib/trust-routine-command";
+import { isTrustRoutineCommand, isTrustRoutineTool, recordBunfigBaseline } from "../lib/trust-routine-command";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, resolveQuestionAnswerer, type PermissionMode } from "./permission-mode";
 import { AUTOMATIC_REVIEW_NOTE, AutomaticReviewRun, describeAutomaticReviewTurn, isAutomaticReviewRequest } from "./automatic-review";
 import {
@@ -2264,6 +2264,12 @@ export async function runAgentTurn(
   // state its marker in the instruction every request of this turn sends
   // (round loop and both wrap-ups read `deps.systemInstruction`).
   const controlNonce = deps.controlNonce ?? generateControlNonce();
+  // Flow 441 AC6: `bun test` is routine only while bunfig.toml is the file this process started with, for the
+  // process directory and for every directory a shell tool runs in.
+  recordBunfigBaseline();
+  for (const tool of deps.tools) {
+    if (tool.workingDirectory !== undefined) recordBunfigBaseline(tool.workingDirectory);
+  }
   // Only the operator's own top-level line can switch the review system on: a child's task text and any
   // non-operator origin (notifications, peers) are model- or peer-written and never carry that authority.
   if (options.origin === undefined && deps.subagentBudget === undefined && asksForReviewAuto(userLine)) {
@@ -5723,8 +5729,14 @@ async function executeCallUnbounded(
     // missing dimension. Escalation only — it never denies on its own (ADR-0009),
     // because a "safe" verdict from an incomplete list must never read as a grant.
     const command = typeof input.command === "string" ? input.command : "";
+    const routineContext = {
+      untrustedContent: untrustedOrigin,
+      ...(tool.workingDirectory === undefined ? {} : { cwd: tool.workingDirectory }),
+    };
+    let routineVerdict: boolean | undefined;
+    const isRoutine = (): boolean => (routineVerdict ??= isTrustRoutineCommand(command, routineContext));
     // Flow 426 AC4: what the operator refused stays refused in any spelling, even where the mode would run it.
-    if (reviewAutoActive() && command.length > 0 && !isTrustRoutineCommand(command)) {
+    if (reviewAutoActive() && command.length > 0 && !isRoutine()) {
       const key = refusalFingerprint(call.name, call.input, toolCallHash(call.name, call.input));
       if (operatorDenied(key)) return { output: REFUSED_EARLIER, isError: true };
     }
@@ -5756,7 +5768,7 @@ async function executeCallUnbounded(
       untrustedOrigin &&
       !(
         !gated.hookAsked &&
-        isTrustRoutineCommand(command) &&
+        isRoutine() &&
         ((mode === "trust" && gated.decision === "auto") || reviewAutoActive())
       );
     // Automatic review: the review's own CLI against its own package is the one

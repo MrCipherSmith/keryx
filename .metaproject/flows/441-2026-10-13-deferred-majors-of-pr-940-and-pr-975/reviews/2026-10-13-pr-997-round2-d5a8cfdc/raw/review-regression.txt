@@ -1,0 +1,46 @@
+STATUS: DONE_WITH_CONCERNS
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-regression",
+  "status": "DONE_WITH_CONCERNS",
+  "findings": [
+    {
+      "id": "REG-1",
+      "severity": "major",
+      "file": "src/commands/review-ledger.ts",
+      "line": 92,
+      "quote": "const result = isEmptyOutput(body) ? undefined : parseReviewResult(body);",
+      "problem": "scannedResult in src/review/ledger.ts prefers any fenced reviewer-shaped object over the bare result, even when the fence is not a labelled REVIEW_RESULT fence: if (fencedResults.length > 0) return fencedResults[fencedResults.length - 1]. A reply with no labelled fence and no marker, whose real result is a bare object and which also quotes a reviewer-shaped sample in a json fence, now returns the SAMPLE. The pre-PR parser returned the last object with a status, i.e. the real result when it came last. This is the unclosed half of round-1 F-001. The behaviour is pinned by ledger.test.ts 'a fenced result wins over a differing bare object' (about line 233); not frozen by AC11-AC18.",
+      "impact": "Trigger: a saved raw reply without a labelled fence or marker that has a bare reviewer-shaped result plus a json fence holding another object with a string status and a reviewer or findings array. Run through loadRaws and buildLedger: raw/review-logic.txt is attributed to reviewer 'example'; gaps become 'review-logic: no result recorded' and 'review-logic:EX-1: raw finding is not in the canonical findings'. The sample's finding becomes an obligation and the real finding never enters the ledger. retry-plan --result takes the sample's status and slices the same way. Real-data likelihood low: 0 of 98 replayed replies trigger it.",
+      "suggested_fix": "Operator decision. Narrowest: when a fenced reviewer-shaped result and a bare reviewer-shaped result both exist and differ in reviewer or status, return undefined (ambiguous) and update the test at about line 233. Alternative: pick by position (last reviewer-shaped object), the pre-PR rule.",
+      "evidence": "disp.ts in the scratchpad: fenced reviewer-shaped sample BEFORE real bare result old=review-logic/DONE, new=example/DONE; sample with different status old=review-logic/DONE, new=example/BLOCKED. raws.ts feeds the same file through loadRaws and buildLedger.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["src/commands/review-ledger.ts:92", "src/commands/review-slice.ts:171"],
+        "enumeration_method": "keryx ctx rg for parseReviewResult/hasStatus/ParsedResult under src: the only production importers of the parse functions are loadRaws and readResult; both reach scannedResult only when no labelled fence and no bare marker result applies."
+      }
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "state": "partial", "evidence": "Closed for the stated trigger (a json fence with {\"retries\":3} or a js fence before or after a bare result returns the real result; a status-only fenced sample is ignored). Still open: a fenced reviewer-shaped sample still wins over the real bare result (REG-1)."},
+    {"id": "F-002", "state": "closed", "evidence": "Each stray fragment from the finding now parses to the real result. Residual by design: an unclosed fragment carrying a result key before a complete result is undefined (AC11)."}
+  ],
+  "answers": {
+    "Q1": "A last prose line 'REVIEW_RESULT: {status DONE, reviewer review-logic, findings []}' beats a real result emitted as bare marker plus object (reproduced). A forged DONE with no findings marks the reviewer complete and drops its raw findings from the obligation list. Needs the real result in bare-marker form and a reply that quotes untrusted text with a literal marker line. Not a regression: the pre-PR parser returned the forged object there too. A real labelled fence is immune. A parser-side fix would break frozen AC15, so not asked for.",
+    "Q2": "Both caps can skip a genuine complete result only in attacker-shaped replies and both fail closed. MAX_UNCLOSED: 9+ unclosed fragments before a bare result give undefined (pre-PR returned the result). MAX_MARKERS: a real marker followed by more than 8 later non-result markers is pushed out of the last 8 and the scan then sees conflicting statuses. Worst case about 100 ms at 2 MB, linear.",
+    "Q3": "Parser, tests and loadRaws match amended AC13. A status-only object after a bare marker is the 'no parseable REVIEW_RESULT block' gap. A status-only object in the labelled fence is accepted by the parser and then listed under ignored in loadRaws, no gap. A whole file {\"status\":\"DONE\"} is accepted by retry-plan --result with --reviewer but is a gap in ledger build when saved as raw/<reviewer>.txt; previously it was silently ignored, so a retry-reply file saved as bare status-only JSON next to a complete raw for the same reviewer now makes the ledger NOT READY. Worth a line in the PR text."
+  },
+  "scope_a_observation": {
+    "id": "REG-2",
+    "severity": "pre-existing (not a regression; in both old and new)",
+    "problem": "10 of 26 real fenced replies parse to undefined in both old and new: a JSON string inside the labelled fence contains a literal triple backtick (the reviewer quotes the REVIEW_RESULT fence label), the lazy fence regex stops at it, JSON.parse fails, and labelledFence decides alone with no fallback. Taking the block up to a closing fence at line start, all 10 parse to complete valid results. The round-2 raw review-style.txt is one of them.",
+    "suggested_fix": "Fall back to the scan when the labelled block fails JSON.parse; the existing test at about ledger.test.ts:520 (invalid labelled block followed by a status-only object stays undefined) would still pass."
+  },
+  "replay": {
+    "files": 98, "same": 97, "differs": 1,
+    "difference": "corpus-sub/e09c69b8306d.txt is a review-verifier reply whose prose holds a status-only object in a code excerpt; old guessed it, new returns undefined (AC13/AC14, intended)."
+  }
+}
+```

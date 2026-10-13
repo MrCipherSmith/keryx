@@ -1,0 +1,9 @@
+{
+ "status": "DONE",
+ "verifier": "review-verifier",
+ "summary": "Round 2: the two majors raised by review-highload were run through /bin/sh and a git clone; both reproduce. Reproducers: scratchpad t2r2/review-highload/cd-symlink.ts and special-bunfig.ts; verifier/cdvar.ts and verifier/clone-bunfig.sh.",
+ "verifications": [
+  {"finding": "2026-10-13-pr-1000-round2-b2120e39#F-024", "verdict": "confirmed", "method": "execution", "evidence": "cdvar.ts: temp project with an in-project symlink `link` to a directory in another repository; `cd link && keryx review slice --diff - --out ../x` judged routine by isTrustRoutineCommand (also with untrustedContent true) and, run under /bin/sh, wrote manifest.json and slice-01.diff into the other repository. Same with an ancestor marker. Target with no marker above: table routine, the command refused (exit 1, 'resolves outside the project root'), nothing written. Control `--out x`: table not routine."},
+  {"finding": "2026-10-13-pr-1000-round2-b2120e39#F-025", "verdict": "confirmed", "method": "execution", "evidence": "special-bunfig.ts under ulimit -v 4000000 and timeout 15: bunfig.toml as a FIFO status 124 (hang), as symlink to /dev/stdin on a live pipe status 124. clone-bunfig.sh committed bunfig.toml as a mode-120000 symlink to /dev/stdin, cloned it and ran recordBunfigBaseline in the clone: status 124. /dev/zero target: 655-894 ms, fails closed (bun test not routine), not a hang. git grep at 01e0dbfe finds no bunfig read before this PR."}
+ ]
+}

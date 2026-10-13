@@ -1,0 +1,5 @@
+{"mutants":[
+{"id":"P01-idle-and-to-or-1","file":"src/tui/tui-shell.ts","anchor":"!destroyed &&\n                !chrome.isBusy() &&","replacement":"!destroyed ||\n                !chrome.isBusy() &&"},
+{"id":"P02-idle-and-to-or-lease","file":"src/tui/tui-shell.ts","anchor":"!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,","replacement":"!forceHandoff.isAwaitingSettlement ||\n                leaseView()?.held() !== true,"},
+{"id":"P03-settle-drain-conditional","file":"src/tui/tui-shell.ts","anchor":"drainSites.onTurnSettle();","replacement":"if (Date.now() < 0) drainSites.onTurnSettle();"}
+]}

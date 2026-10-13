@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    "src/commands/review-slice.test.ts",
+    "src/commands/review-slice.ts",
+    "src/flow/verify-exec-files.test.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts"
+  ]
+}

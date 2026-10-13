@@ -1,0 +1,79 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Round-3 delta in src/review/ledger.ts is correct for well-formed fences: F-001 and F-002 behave as specified on every input run (CRLF, prefixes, caps at 63/64/65, fenced marker, fenced sample after a bare result), fenceTester's ascending assumption holds at both call sites, and the work stays linear up to 13 MB. One minor residual: fence ranges are paired on any ``` (inline, 4-backtick), so a quoted marker line after the real marker result can still win; identical on base and round 2, so not a regression.",
+  "findings": [
+    {
+      "id": "F-018",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 144,
+      "problem": "fenceRanges pairs any ``` as a delimiter (inline, mid-line, any length) and closes at the next ``` anywhere after the opening line. After an inline ```x``` in prose, an odd stray ```, or a 4-backtick wrapper around a ```json block, the pairing flips, and a marker line that really sits inside a fence is classed as outside, so afterMarker (which skips only in-fence markers) takes it as the last marker. F-001 is therefore closed only for well-formed line-start fences.",
+      "impact": "Only when a quoted REVIEW_RESULT line follows the real marker result inside such a construct (a reviewer result is normally the last thing in a reply). The sample then replaces the real result silently, not as a gap. Identical on base and round 2 for these inputs, so not a regression of this round.",
+      "evidence": "Run against exported parseReviewResult, R(status, reviewer) = {status, reviewer, findings:[]}. (1) `a ```x``` b\\nREVIEW_RESULT: R(DONE,real)\\n```json\\nREVIEW_RESULT: R(BLOCKED,sample)\\n```\\n` gives BLOCKED/sample. (2) `use ``` wisely\\nREVIEW_RESULT: R(DONE,real)\\n```text\\nREVIEW_RESULT: R(BLOCKED,sample)\\n```\\n` gives BLOCKED/sample. (3) `REVIEW_RESULT: R(DONE,real)\\n````\\n```json\\nREVIEW_RESULT: R(BLOCKED,sample)\\n```\\n````\\n` gives BLOCKED/sample. The same three inputs give BLOCKED/sample on d5a8cfdc and on base 01e0dbfe. A plain well-formed fence (```text) after the real marker is handled: DONE/real.",
+      "suggested_fix": "Count a fence delimiter only where ``` starts a line (up to 3 spaces of indent) and close it at the next line-start run of at least the opener's length, in the same single forward pass. Tests at ledger.test.ts:392-400 pin a closing fence followed by text on the same line, so keep accepting that on the closing line. Or accept the residual and pin it beside the AC15 residual test at ledger.test.ts:289.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:144 fenceRanges", "src/review/ledger.ts:204 afterMarker via fenceTester", "src/review/ledger.ts:225 scannedResult via fenceTester"],
+        "enumeration_method": "fenceTester is the only consumer of fenceRanges (keryx ctx rg over ledger.ts); both call sites listed. The scan site fails closed (a flipped pairing yields a differing-status gap), so only the marker site gives a silent wrong result."
+      },
+      "dedupe_key": "ledger-fence-delimiter-pairing"
+    },
+    {
+      "id": "F-019",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 195,
+      "problem": "MARKER allows only [ \\t>*#-] before REVIEW_RESULT and nothing between the word and the colon, so the common bold form `**REVIEW_RESULT:** {...}` is not a marker. It is read by the scan instead.",
+      "impact": "Fails closed. `**REVIEW_RESULT:** R(DONE,real)` followed by a fenced sample R(BLOCKED,sample) returns undefined (a gap); alone, the bare object is read correctly (DONE/real). Not a defect, a strictness note.",
+      "evidence": "bun run: `**REVIEW_RESULT:** R(DONE,real)\\n```json\\nR(BLOCKED,sample)\\n```\\n` gives undefined; `**REVIEW_RESULT**: ...` the same.",
+      "suggested_fix": "Optionally allow `\\*{0,2}` after the word; otherwise leave as is.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Review Logic, round 3 (PR 997, head 07730d87, delta 44bed779)
+
+Method: bun scripts importing the exported parseReviewResult from the worktree (scratch only, nothing written in the worktree except keryx ctx rg artifacts under .metaproject/data/gdctx). Same inputs also run on d5a8cfdc and base 01e0dbfe for regression.
+
+### Findings by severity
+- Minor F-018: fence delimiter pairing (above). Not a regression.
+- Info F-019: bold marker form is not a marker (above).
+
+### Questions
+- None. W01 not contradicted: no input found that separates `ranges[next][1] <= position` from `<` at a marker, because a marker must follow a newline and so cannot start at close+3. The scan side is pinned by ledger.test.ts:397-400.
+
+### Pre-existing and carried (not findings)
+- F-016, F-017 and the AC15 residual stay carried. F-017 also reaches the fenced path: a bare real result with findings and a fenced sample with the same status, in either order, returns the sample (`R(DONE,real,[F-1])` then a ```json fence `R(DONE,example)` gives DONE/example). Same on d5a8cfdc; the status-only ambiguity gate is the F-017 class.
+- A quoted marker alone on a line after a real marker result wins (pinned, ledger.test.ts:289), also when it is a blockquote or a 4-space indented line.
+
+### Verified clean (executed)
+- CRLF: marker, marker-newline-object, and a fenced sample after the real result give DONE/real (round 2 and base returned the sample for the CRLF fenced case; now fixed).
+- Unclosed fence before the real marker: DONE/real. Unclosed fence after the real marker with a marker inside: BLOCKED/sample, which ledger.test.ts:407-412 pins on purpose.
+- Inline ``` pair in prose with a bare real result and a later fenced sample of another status: undefined (a gap, F-002 as decided); base returned the sample.
+- 4-backtick wrapper around a labelled fence: DONE/real; around a ```json sample before the real marker: DONE/real.
+- Marker in a fence only: DONE/real through the fenced scan path. Marker outside plus fenced sample before it: DONE/real.
+- Prefixes (after an older BLOCKED marker): "", two spaces, "- ", "> ", "## ", "* ", "**", "> - ", tab all count (DONE/real). "1. " and a backtick do not (older wins), which is acceptable. Marker then newline then the object, no colon, and "=" all work.
+- Caps: real marker followed by 62/63/64/65 invalid-but-closed markers gives DONE/real in all four (the scan rescues the 65 case); 65 unclosed markers gives undefined (cap = truncation, documented); 200 fenced markers do not consume the window, so MAX_MARKERS is applied after the fence filter. Prose fragments: 63 and 64 before or after the real result give DONE/real, 65 gives undefined.
+- fenceTester ascending assumption: afterMarker passes matchAll indices (ascending, filter preserves order); scannedResult passes topLevelObjects starts (strictly increasing: start = end+1 or start+1). No other consumer.
+- Performance (linear): 200k unclosed marker lines 4.2 MB in 598 ms (capped at 64 scans, about 3 ms per MB per scan); 200k fences, inline-tick lines, prefix-only lines, 4 MB whitespace line plus marker word, 200k markers with whitespace runs, 200k bare objects, 13 MB of marker results: all under 110 ms.
+- Test coverage for F-011, F-012, F-014, F-015 present: review-ledger.test.ts:215 (fenced status-only ignored by name) and :230, review-slice.test.ts:96 and :113, ledger.test.ts:308-413.
+
+### Prior-finding dispositions (my domain)
+- F-001: closed for well-formed fences and line starts; residual with malformed delimiters is F-018 (minor).
+- F-002: closed; fenced sample plus differing bare real gives undefined in both orders (ledger.ts:229).
+- F-003: partial; caps raised to 64, boundaries pinned (ledger.test.ts:335-356), reaching a cap is still read as truncation (documented in the comments).
+- F-004: open, minor, unchanged; objectEnd doc still says nested objects do not count, but `{"wrapper": {"status":"DONE","reviewer":"x"` followed by the real result gives undefined.
+- F-007, F-008: unchanged in code; doc for rule 3 and caps now states the caps and the ambiguity rule (F-007 largely closed).
+- F-011, F-012, F-013, F-014, F-015: closed by tests (locations above).
+- F-016, F-017: carried, out of scope.
+
+Routing audit: graph_used no (not-relevant, one file); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg); raw_rg_used no.

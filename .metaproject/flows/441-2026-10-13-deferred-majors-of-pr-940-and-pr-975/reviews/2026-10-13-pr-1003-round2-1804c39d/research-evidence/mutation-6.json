@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3b",
+  "command": "bun test src/tui/turn-loop.test.ts src/tui/busy-dispatch.test.ts src/tui/main-queue.test.ts src/tui/main-queue-drain.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-hold.test.ts src/tui/tui-bus.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 6987
+  },
+  "mutants": [
+    {
+      "id": "N01-whileBusy-no-return",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "if (turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)) return;",
+      "replacement": "turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source);",
+      "line": 8592,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7005
+    },
+    {
+      "id": "N02-held-busy-notice-q1",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queued as q${position} (no side worker while held).",
+      "replacement": "queued as q1 (no side worker while held).",
+      "line": 8626,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7043
+    },
+    {
+      "id": "N03-held-idle-notice-q1",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queued as q${position}.\\n`);",
+      "replacement": "queued as q1.\\n`);",
+      "line": 9438,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6969
+    },
+    {
+      "id": "N10-sessionState-queued-zero",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queued: turnLoop.queue.length,",
+      "replacement": "queued: 0,",
+      "line": 10163,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6937
+    },
+    {
+      "id": "N12-enqueue-source-undefined-key",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "...(source !== undefined ? { source } : {})",
+      "replacement": "source",
+      "line": 73,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6895
+    },
+    {
+      "id": "N14-queue-getter-copy",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "get queue() {\n      return queue;",
+      "replacement": "get queue() {\n      return [...queue];",
+      "line": 101,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6983
+    },
+    {
+      "id": "N16b-remote-paint-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "nextId,\n    paint: deps.paint,",
+      "replacement": "nextId,\n    paint: () => {},",
+      "line": 84,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6875
+    },
+    {
+      "id": "N21-held-notice-banner-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "${leaseView()?.banner() ?? \"held\"} — queued as q${position} (no side worker while held).",
+      "replacement": "held — queued as q${position} (no side worker while held).",
+      "line": 8626,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6882
+    },
+    {
+      "id": "M08-shell-sessionState-mode",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),",
+      "replacement": "sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(false)) }),",
+      "line": 10163,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6889
+    },
+    {
+      "id": "P01-idle-and-to-or-1",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!destroyed &&\n                !chrome.isBusy() &&",
+      "replacement": "!destroyed ||\n                !chrome.isBusy() &&",
+      "line": 8671,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6919
+    },
+    {
+      "id": "P02-idle-and-to-or-lease",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,",
+      "replacement": "!forceHandoff.isAwaitingSettlement ||\n                leaseView()?.held() !== true,",
+      "line": 8674,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6916
+    },
+    {
+      "id": "P03-settle-drain-conditional",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "drainSites.onTurnSettle();",
+      "replacement": "if (Date.now() < 0) drainSites.onTurnSettle();",
+      "line": 9941,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6911
+    }
+  ],
+  "totals": {
+    "killed": 9,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t2",
+  "command": "bun test src/lib/trust-routine-command.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 138
+  },
+  "mutants": [
+    {
+      "id": "exp-backslash",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/[$\\\\*?[\\]{}`]/",
+      "replacement": "/[$*?[\\]{}`]/",
+      "note": "isExpandable: backslash dropped from class",
+      "line": 223,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 135
+    },
+    {
+      "id": "exp-backtick",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/[$\\\\*?[\\]{}`]/",
+      "replacement": "/[$\\\\*?[\\]{}]/",
+      "note": "isExpandable: backtick dropped",
+      "line": 223,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 140
+    },
+    {
+      "id": "rk-review-only",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "args[0] === \"review\" && sub !== undefined",
+      "replacement": "sub !== undefined",
+      "note": "isRoutineKeryx: review gate widened",
+      "line": 261,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 134
+    },
+    {
+      "id": "seg-assign",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "stripAssignments(words).length !== words.length",
+      "replacement": "false",
+      "note": "env assignments accepted",
+      "line": 268,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 137
+    },
+    {
+      "id": "bunfig-isfile",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!stat.isFile() || stat.size > MAX_BUNFIG_BYTES) return { kind: \"unreadable\" };",
+      "replacement": "if (stat.size > MAX_BUNFIG_BYTES) return { kind: \"unreadable\" };",
+      "note": "F-025: non-regular check dropped",
+      "line": 168,
+      "status": "timeout",
+      "exitCode": 1,
+      "ms": 300007
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 1
+  }
+}

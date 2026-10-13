@@ -1,0 +1,85 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "STY-1",
+      "severity": "minor",
+      "file": "src/commands/review-slice.ts",
+      "quote": "result holds no usable reviewer result (a JSON object with a status, or a reply with a REVIEW_RESULT block carrying a reviewer or findings; a truncated or ambiguous reply is refused)",
+      "problem": "The parenthesis misstates the parser rules it summarises. (1) It says a REVIEW_RESULT block must carry a reviewer or findings; the ```REVIEW_RESULT fence needs only a status. A fence with {reviewer, findings} and no status is refused, and the message reads as if that reply qualifies. The round-2 commit says the text 'names the status requirement', but only for the whole-file branch. (2) It omits the bare-object reply (no marker, status plus reviewer or findings), the accepted shape this PR exists for. (3) 'holds no usable reviewer result' is still circular, and the one parenthesis mixes two inputs (whole file, reply) with an 'or' inside the second.",
+      "impact": "An operator whose saved reply was refused is told a rule that is wrong for the fence and incomplete for bare replies, and cannot tell from the message which field is missing. The test pins the substring 'a truncated or ambiguous reply is refused', so the prose is now part of the contract.",
+      "suggested_fix": "Name the three accepted shapes: 'a JSON object with a status; a ```REVIEW_RESULT block with a status; or a reply holding one object with a status and a reviewer or findings (bare, or after a REVIEW_RESULT marker). A truncated or ambiguous reply is refused'. Lead with 'no reviewer result found in'. Ideally build the text from one shared constant next to parseReviewResult. In the readResult JSDoc, stop calling both the fence and the marker a 'REVIEW_RESULT block'.",
+      "evidence": "Measured with parseReviewResult via bun in the scratchpad r2/review-style/t.ts: fence {reviewer,findings} without status gives undefined; fence {status} gives the object; ```json fence {status} gives undefined; bare prose object {status,reviewer} gives the object; marker {reviewer,findings} without status gives undefined. Rules read at ledger.ts lines 171-221 and 224-232 and review-slice.ts lines 163-182.",
+      "confidence": 0.9,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-2",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "// A ```REVIEW_RESULT fence keeps the status-only rule in parseReviewResult; such a result names no reviewer and cannot be attributed, so it is ignored here.\n    if (result !== undefined && result.reviewer === undefined && !Array.isArray(result.findings)) {",
+      "problem": "The comment is accurate. It documents a rule that exists in three places: the labelledFence status-only rule, the private isReviewerResult in ledger.ts, and this line, which hand-writes the negation of isReviewerResult's tail (reviewer string or findings array). It is held together by a comment. .metaproject/rules/core/shared-definitions.mdc says two places that must agree are connected by an import, 'A comment is not sufficient'. Note also that `result.reviewer === undefined` differs from isReviewerResult's `typeof reviewer === 'string'`: a fence with {status, reviewer: 7} passes this filter.",
+      "impact": "If the parser's definition of a reviewer result changes, this post-filter silently drifts. This is round-1 F-007, still open.",
+      "suggested_fix": "Export isReviewerResult from ledger.ts and use `result !== undefined && !isReviewerResult(result)` here, with the comment kept as the why.",
+      "evidence": "ledger.ts lines 162-167 (isReviewerResult, not exported) against review-ledger.ts lines 98-102. Rule text in .metaproject/rules/core/shared-definitions.mdc.",
+      "confidence": 0.8,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-3",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "quote": "test(\"reads a REVIEW_RESULT fence and a json fence, and takes the last block that carries a status\"",
+      "problem": "Titles that no longer match the assertions. (a) Line 74: a ```json fence is now accepted only with a reviewer or findings, so 'the last block that carries a status' is wrong (a status-only json fence gives undefined, measured). (b) Line 188, AC15: the last two assertions (truncated marker object; status-only marker object) test AC11 and AC13/AC14, not 'whatever other objects carry a status'. This is the same F-011 pattern in a new place. (c) Lines 129 and 248: titles claim 'linear time' but the assertion is `< 2000` ms, a wall-clock bound, not linearity. The same file also repeats tests: line 81 equals line 207 (escaped quote and brace); line 125 equals line 238 (fenced non-result does not hide the bare result); lines 179-180 equal lines 222-225 (no status with or without a marker).",
+      "impact": "A failing test points at the wrong rule, and the duplicates add maintenance with no coverage. A timing bound in a test titled 'linear' will fail on a slow CI runner and read as a parser regression.",
+      "suggested_fix": "Retitle line 74 to 'takes the last fenced block that is a result (a REVIEW_RESULT fence needs a status, a json fence a reviewer or findings)'. Move the two extra AC15 assertions to the AC11 and AC13 tests. Delete the three duplicate tests (207, 238, 222-225). Retitle the timing tests 'finish within two seconds'.",
+      "evidence": "ledger.test.ts lines 74, 81 vs 207, 125 vs 238, 179-180 vs 222-225, 188-193, 129-136, 248-255. Status-only json fence checked in r2/review-style/t.ts.",
+      "confidence": 0.85,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-4",
+      "severity": "minor",
+      "file": "src/flow/verify-exec-files.test.ts",
+      "quote": "// A command naming a missing file passes vacuously in `bun test`, so the gate proves nothing.",
+      "problem": "The claim holds only when the command also names an existing file. `bun test src/nope/missing.test.ts` alone exits 1 ('filters did not match any test files'); `bun test src/nope/missing.test.ts src/flow/verify-exec-files.test.ts` exits 0 and the missing file is skipped silently. The comment states the general case and hides the real hazard (a multi-file command).",
+      "impact": "A reader may conclude single-file verify lines are also at risk, or that the scan is redundant for them. The guard's purpose is misdescribed.",
+      "suggested_fix": "Reword: 'bun test skips a missing file when the command names other test files, so the gate passes without running it.'",
+      "evidence": "Both commands run in the worktree with bun 1.4.2: exit=1 and exit=0 as quoted.",
+      "confidence": 0.9,
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-5",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "3. Otherwise the top-level objects of the reply: a cut-off object that carries the result keys gives no result (prose",
+      "problem": "The parseReviewResult doc is correct after the fixes, but item 3 is one run-on sentence with a broken wrap (a short line mid-sentence) and says 'a few times' for MAX_UNCLOSED. The doc does not say that the 9th prose fragment also gives no result (topLevelObjects returns truncated: true past the cap).",
+      "impact": "Reading cost only. The cap behaviour is documented on MAX_UNCLOSED but not in the entry point's contract.",
+      "suggested_fix": "Split item 3 into three short clauses and add 'more than MAX_UNCLOSED unclosed fragments also give no result'.",
+      "evidence": "ledger.ts lines 117-141 and 223-233.",
+      "confidence": 0.7,
+      "reviewer": "review-style"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-005", "state": "partial", "evidence": "Error text now says 'a truncated or ambiguous reply is refused' and names the status for a whole file, and the readResult JSDoc was widened. The parenthesis is still wrong for the fence, omits the bare-object reply, and 'holds no usable reviewer result' is still circular. See STY-1."},
+    {"id": "F-006", "state": "closed", "evidence": "The doc at ledger.ts 223-233 now matches the code. Leftover is the run-on in item 3 (STY-5, info)."},
+    {"id": "F-007", "state": "open", "evidence": "Rule still in several places: labelledFence (hasStatus), isReviewerResult (private), the scan's hasStatus cast, wholeFileResult, and the loadRaws post-filter. The new comment at review-ledger.ts 98 explains it but connects nothing (shared-definitions.mdc). See STY-2."},
+    {"id": "F-008", "state": "closed", "evidence": "parseReviewResult is now 4 lines over labelledFence, afterMarker and scannedResult. OBJECT_START carries a comment saying why only a brace followed by a quote or } opens a candidate."},
+    {"id": "F-009", "state": "partial", "evidence": "Out of the style lane for the AC question. KNOWN_MISSING has an explanatory comment and a 'holds only files that are still missing' test; the 'passes vacuously' comment is imprecise (STY-4)."},
+    {"id": "F-011", "state": "closed", "evidence": "The labelled-fence assertion moved into its own test (line 183) and the AC14 test (174-181) asserts only the bare-reply rule. Same title-vs-assertion pattern remains at lines 74 and 188 (STY-3)."}
+  ],
+  "answers": {
+    "Q3_style_part": "Wording in code matches the amended AC13 on the parser side: tests line 175 and line 192 reject a status-only object after a bare marker or bare, line 184 accepts it in the fence, and the review-ledger.ts comment is accurate. The only wording gap is the readResult error text and JSDoc (STY-1). wholeFileResult accepts a status-only whole file by design."
+  }
+}
+```
+
+## Summary
+
+No major or blocker items in the style lane. STY-1 error text mismatch; STY-2 loadRaws re-implements the negation of private isReviewerResult; STY-3 test titles/duplicates; STY-4 imprecise comment in verify-exec-files.test.ts; STY-5 info on the parseReviewResult doc. Dispositions: F-005 partial, F-006 closed, F-007 open, F-008 closed, F-009 partial, F-011 closed.

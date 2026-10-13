@@ -1,0 +1,116 @@
+STATUS: DONE_WITH_CONCERNS
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "findings": [
+    {
+      "id": "TEST-1",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "quote": "test(\"AC14: a ```REVIEW_RESULT fence keeps the status-only rule\", () => {",
+      "problem": "The parser accepts a status-only object inside a labelled fence (AC13 amended). The test pins that, but nothing pins what the ledger does with it. loadRaws drops a result with no reviewer and no findings array without a gap. Mutants D01 and D03 (the two sides of that guard) are expected to survive.",
+      "impact": "A fenced {\"status\":\"DONE\"} reply is accepted by the parser, contributes nothing to the ledger and raises no gap. A change to or removal of that branch passes every test, so the AC13 amended wording is unpinned end to end.",
+      "suggested_fix": "Add one test in src/commands/review-ledger.test.ts: a raw file holding a fenced status-only result produces a named gap or an explicitly asserted no-op.",
+      "evidence": "mutant:D01, mutant:D03. Read of review-ledger.ts loadRaws lines 98-102 and review-ledger.test.ts lines 108-225.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-2",
+      "severity": "minor",
+      "file": "src/commands/review-slice.test.ts",
+      "quote": "test(\"a plain JSON file without a status is refused, and the reason is the exit code 2 contract\", async () => {",
+      "problem": "Only the refusal side of wholeFileResult is tested. A whole file that is one JSON object with a status and no reviewer, read with --reviewer, is accepted, and a bare-marker status-only object is a gap in the parser. That divergence has no test. The stdin path of readResult (mutant W06) is also unexercised.",
+      "impact": "Changing wholeFileResult to require a reviewer, or to accept an object without a status, keeps the suite green.",
+      "suggested_fix": "Add a whole-file status-only case with --reviewer (assert written), the same object after a bare marker (assert exit 2, nothing written), and a stdin case for W06.",
+      "evidence": "mutant:W01, mutant:W02, mutant:W06.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-3",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "quote": "test(\"an unclosed fragment that does not carry the result keys is skipped, before or after the result\", () => {",
+      "problem": "MAX_UNCLOSED = 8 and MAX_MARKERS = 8 are tested only through far-over-cap inputs. Witness inputs show behavioural differences for MAX_UNCLOSED 7/9 (T03, T04) and MAX_MARKERS 7/9 (A04, A05, A06) and for the >= variants.",
+      "impact": "A drift of a cap by one, or an off-by-one in the comparison, passes. The caps decide whether a genuine result is skipped.",
+      "suggested_fix": "Boundary tests: 8 unclosed non-result fragments then a valid result is read; 9 gives the documented outcome. Same for 8 invalid markers after a valid marker.",
+      "evidence": "mutant:T03, mutant:T04, mutant:T05, mutant:A04, mutant:A05, mutant:A06.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-4",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "quote": "test(\"the last marker wins when a reply names the result twice\", () => {",
+      "problem": "Marker forms and the marker fallback are thinly pinned: separators (=, newline after colon, space only: A01-A03), order of fenced and marker rules (P02), a cut-off last marker object falling back to the earlier marker (A10), a trailing 'see REVIEW_RESULT {contract}' fragment (A13).",
+      "impact": "The fail-open shape A10 (a cut-off last marker object returns the earlier marker's result) is untested, so a change in either direction is silent.",
+      "suggested_fix": "Tests for the colon-newline and colon-less forms, a truncated last marker with an earlier valid marker, and a trailing prose mention.",
+      "evidence": "mutant:A01, mutant:A02, mutant:A03, mutant:A10, mutant:A13, mutant:P02. A10 verified in a scratch copy.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-5",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "quote": "test(\"a bare object before a fence is not fenced: two bare objects with different statuses stay ambiguous\", () => {",
+      "problem": "Labelled-fence and fence-pairing edge cases are unpinned: two labelled fences (L04/L05), CRLF after the label (L02), trailing space (L03), lower-case label (L01), an invalid labelled fence followed by a bare result (L08/P01), pairing around a later unlabelled fence (F02-F04), a pretty-printed multi-line bare object (T02).",
+      "impact": "A regression in the fence regex or pairing logic would not fail a test. The labelled-fence regex is the code the last fix commit rewrote.",
+      "suggested_fix": "One table-driven test over these inputs.",
+      "evidence": "mutant:L01, L02, L03, L04, L05, L08, F02, F03, F04, T02.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-6",
+      "severity": "minor",
+      "file": "src/review/ledger.test.ts",
+      "quote": "expect(performance.now() - started).toBeLessThan(2000);",
+      "problem": "The two linear-time tests assert on wall-clock time with a fixed 2000 ms budget that depends on runner load.",
+      "impact": "Low flake risk (milliseconds against a 2 s budget).",
+      "suggested_fix": "Keep or raise the budget as a smoke check. No change required to merge.",
+      "evidence": "ledger.test.ts lines 129-136 and 248-255.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-7",
+      "severity": "minor",
+      "file": "src/flow/verify-exec-files.test.ts",
+      "quote": "test(\"the scan recognises exec lines and test-file tokens\", () => {",
+      "problem": "The AC18 scan has blind spots: a quoted path, a trailing comma, .spec.ts, a glob, .test.js and a command with '; echo' after the file are not recognised as a test-file token, so a missing file in those shapes passes.",
+      "impact": "Coverage-of-the-guard limit, not a false pass in the current data. Risk is a future exec line in one of those shapes naming a missing file.",
+      "suggested_fix": "Widen the token regex or state that only the plain *.test.ts shape is checked.",
+      "evidence": "Scratch script scan.ts over .metaproject/flows/*/acceptance-criteria.md.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "TEST-8",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "MAX_UNCLOSED",
+      "problem": "Equivalent or unusable mutants skipped: O02 (no input separates it), F01 (removing the lineEnd === -1 guard hangs the scan), remaining O-series commutative variants.",
+      "impact": "None for the verdict.",
+      "suggested_fix": "none",
+      "evidence": "Witness script comparing original and mutated parseReviewResult.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-004", "state": "closed", "evidence": "AC11-AC15 tests use inputs where only the rule under test can produce the asserted result; review-slice.test.ts reads real files."},
+    {"id": "F-009", "state": "partial", "evidence": "Known-missing list kept honest in one direction; scan still misses quoted, comma-terminated, .spec.ts, glob, .test.js and '; echo' shapes (TEST-7)."},
+    {"id": "F-011", "state": "closed", "evidence": "Titles match assertions in the tests checked."}
+  ],
+  "answers": {
+    "Q1": "last-valid-marker-wins is pinned; no test pins the quoted-prose residual or the cut-off last marker fallback (TEST-4).",
+    "Q2": "Linear time pinned by two wall-clock tests; cap boundaries not pinned (TEST-3).",
+    "Q3": "Parser side matches amended wording and is tested; loadRaws ignoring a fenced status-only result (TEST-1) and wholeFileResult accepting a whole-file status-only object (TEST-2) are not pinned."
+  }
+}
+```
