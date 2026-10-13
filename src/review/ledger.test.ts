@@ -78,6 +78,18 @@ describe("parseReviewResult", () => {
     expect(parseReviewResult(twoBlocks)?.reviewer).toBe("b");
   });
 
+  test("an escaped quote inside a string does not end it, so a brace after it does not close the object", () => {
+    const object = { reviewer: "review-logic", status: "DONE", note: 'said "} now' };
+    expect(parseReviewResult(`Done.\n${JSON.stringify(object)}\n`)).toEqual(object);
+  });
+
+  test("a bare object before a fence is not fenced: two bare objects with different statuses stay ambiguous", () => {
+    const first = { reviewer: "review-logic", status: "DONE" };
+    const second = { reviewer: "review-logic", status: "BLOCKED" };
+    const raw = `${JSON.stringify(first)}\n\`\`\`text\nplain notes\n\`\`\`\n${JSON.stringify(second)}\n`;
+    expect(parseReviewResult(raw)).toBeUndefined();
+  });
+
   test("returns nothing for prose, empty output or a block without a status", () => {
     expect(parseReviewResult("looks fine to me")).toBeUndefined();
     expect(parseReviewResult("(subagent produced no text)")).toBeUndefined();
@@ -88,14 +100,16 @@ describe("parseReviewResult", () => {
   describe("a bare reply (flow 441 AC11-AC15)", () => {
     const blocked = '{"status":"BLOCKED","reviewer":"r","findings":[]}';
 
-    test("AC11: a reply whose outer object never closes gives nothing, not a nested slice entry", () => {
-      const truncated = 'Result: {"status":"DONE","reviewer":"r","slices":[{"id":"slice-01","status":"DONE"},{"id":"slice-02","status":"DONE"}';
-      expect(parseReviewResult(truncated)).toBeUndefined();
+    const entry = (id: string) => `{"id":"${id}","status":"DONE","reviewer":"${id}","findings":[]}`;
+
+    test("AC11: a reply whose outer object never closes gives nothing, not a nested entry that looks like a result", () => {
+      expect(parseReviewResult(`Result: {"status":"DONE","reviewer":"r","slices":[${entry("slice-01")},${entry("slice-02")}`)).toBeUndefined();
+      expect(parseReviewResult(`Result: {"status":"DONE","reviewer":"r","slices":[${entry("slice-01")}`)).toBeUndefined();
     });
 
-    test("AC12: a trailing comma in `slices` or before the closing brace gives nothing", () => {
-      expect(parseReviewResult('{"status":"DONE","reviewer":"r","slices":[{"id":"s1","status":"DONE"},],"findings":[]}')).toBeUndefined();
-      expect(parseReviewResult('{"status":"DONE","reviewer":"r","findings":[],}')).toBeUndefined();
+    test("AC12: a trailing comma in `slices` or before the closing brace gives nothing, not a nested entry", () => {
+      expect(parseReviewResult(`{"status":"DONE","reviewer":"r","slices":[${entry("s1")},],"findings":[]}`)).toBeUndefined();
+      expect(parseReviewResult(`{"status":"DONE","reviewer":"r","findings":[${entry("s1")}],}`)).toBeUndefined();
     });
 
     test("AC13: two different statuses and no marker give nothing; a marker picks the object after it", () => {
@@ -111,12 +125,18 @@ describe("parseReviewResult", () => {
       expect(parseReviewResult(`${first}\n${second}`)?.reviewer).toBe("b");
     });
 
-    test("AC14: only an object with `reviewer` or a `findings` array counts", () => {
+    test("AC14: only an object with a status and a `reviewer` or a `findings` array counts", () => {
       expect(parseReviewResult('{"status":"DONE"}')).toBeUndefined();
       expect(parseReviewResult('{"status":"DONE","findings":"none"}')).toBeUndefined();
       expect(parseReviewResult('{"status":"DONE","reviewer":"r"}')?.reviewer).toBe("r");
       expect(parseReviewResult('{"status":"DONE","findings":[]}')?.status).toBe("DONE");
+      expect(parseReviewResult('{"reviewer":"r","findings":[]}')).toBeUndefined();
+      expect(parseReviewResult('REVIEW_RESULT: {"reviewer":"r","findings":[]}')).toBeUndefined();
+    });
+
+    test("AC14: a ```REVIEW_RESULT fence keeps the status-only rule", () => {
       expect(parseReviewResult('```REVIEW_RESULT\n{"status":"DONE"}\n```')?.status).toBe("DONE");
+      expect(parseReviewResult('```REVIEW_RESULT\n{"reviewer":"r","findings":[]}\n```')).toBeUndefined();
     });
 
     test("AC15: the object after the marker is the result whatever other objects carry a status", () => {
@@ -132,6 +152,61 @@ describe("parseReviewResult", () => {
       expect(parsed?.reviewer).toBe("r");
       expect(Array.isArray(parsed?.slices) && parsed.slices.length).toBe(1);
     });
+
+    test("an unbalanced prose brace before the result does not swallow it", () => {
+      const reply = 'Use the { to open the block.\n{"status":"DONE","reviewer":"r","findings":[]}';
+      expect(parseReviewResult(reply)?.reviewer).toBe("r");
+    });
+
+    test("an escaped quote in a string does not end the string, so a brace after it stays inside", () => {
+      const reply = '{"status":"DONE","reviewer":"r","findings":[],"summary":"said \\"stop\\" } then went on"}';
+      expect(parseReviewResult(reply)?.reviewer).toBe("r");
+    });
+
+    test("an unparseable outer object is skipped whole: a result-shaped object inside it is not read", () => {
+      const inner = '{"status":"DONE","reviewer":"inner","findings":[]}';
+      expect(parseReviewResult(`{"status":"DONE","reviewer":"r","findings":[${inner}],}`)).toBeUndefined();
+    });
+
+    test("a parsed result is not entered: a result-shaped object nested inside it does not replace it", () => {
+      const reply = '{"status":"DONE","reviewer":"outer","findings":[{"status":"DONE","reviewer":"inner","findings":[]}]}';
+      expect(parseReviewResult(reply)?.reviewer).toBe("outer");
+    });
+
+    test("an object without a status is never a result, with or without a marker", () => {
+      expect(parseReviewResult('{"reviewer":"r","findings":[]}')).toBeUndefined();
+      expect(parseReviewResult('REVIEW_RESULT: {"reviewer":"r","findings":[]}')).toBeUndefined();
+    });
+
+    test("the last marker wins when a reply names the result twice", () => {
+      const first = 'REVIEW_RESULT: {"status":"BLOCKED","reviewer":"first","findings":[]}';
+      const second = 'REVIEW_RESULT: {"status":"DONE","reviewer":"second","findings":[]}';
+      expect(parseReviewResult(`${first}\ncorrected:\n${second}`)?.reviewer).toBe("second");
+    });
+
+    test("a fenced result wins over a differing bare object, which is not ambiguity", () => {
+      const reply = '```json\n{"status":"DONE","reviewer":"fenced","findings":[]}\n```\n{"status":"BLOCKED","reviewer":"bare","findings":[]}';
+      expect(parseReviewResult(reply)?.reviewer).toBe("fenced");
+    });
+
+    test("a fenced example that is not a result does not hide the bare result after it", () => {
+      const reply = 'Example of a slice entry:\n```json\n{"id":"slice-01","status":"DONE"}\n```\nMy result: {"status":"DONE","reviewer":"r","findings":[]}';
+      expect(parseReviewResult(reply)?.reviewer).toBe("r");
+    });
+
+    test("a fenced example with a different status does not make the bare result ambiguous", () => {
+      const reply = '```json\n{"id":"slice-01","status":"NOT_READ"}\n```\n{"status":"DONE","reviewer":"r","findings":[]}';
+      expect(parseReviewResult(reply)?.reviewer).toBe("r");
+    });
+
+    test("a long run of whitespace after a marker, or thousands of fences, are read in linear time", () => {
+      const started = performance.now();
+      expect(parseReviewResult(`REVIEW_RESULT${" ".repeat(200_000)}`)).toBeUndefined();
+      expect(parseReviewResult(`see \`\`\`a\`\`\` and `.repeat(20_000))).toBeUndefined();
+      const block = '```json\n{"status":"DONE","reviewer":"r","findings":[]}\n```\n';
+      expect(parseReviewResult(block.repeat(60_000))?.reviewer).toBe("r");
+      expect(performance.now() - started).toBeLessThan(2000);
+    }, 20_000);
   });
 });
 

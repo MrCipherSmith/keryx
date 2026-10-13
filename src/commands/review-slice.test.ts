@@ -77,9 +77,18 @@ test("an unreadable or result-less file is the UnreadableInput exit: code 2, a n
     await writeFile(path.join(root, name), body, "utf8");
     await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", name]);
     expect(process.exitCode).toBe(2);
-    expect(errors.join("\n")).toContain("holds no reviewer result");
+    expect(errors.join("\n")).toContain("holds no usable reviewer result");
+    expect(errors.join("\n")).toContain("a truncated or ambiguous reply is refused");
   }
   expect(await Bun.file(path.join(root, "out", "retry-state.json")).exists()).toBe(false);
+});
+
+test("a plain JSON file without a status is refused, and the reason is the exit code 2 contract", async () => {
+  const { ids } = await sliceOnce();
+  await writeFile(path.join(root, "nostatus.json"), JSON.stringify({ reviewer: "review-logic", slices: ids }), "utf8");
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "nostatus.json", "--reviewer", "review-logic", "--dry-run", "--json"]);
+  expect(process.exitCode).toBe(2);
+  expect(errors.join("\n")).toContain("holds no usable reviewer result");
 });
 
 test("scopeFingerprint changes when a slice file changes without changing its size", async () => {

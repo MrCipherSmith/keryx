@@ -79,6 +79,7 @@ export const sha = (value: string | Uint8Array): string => createHash("sha256").
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
+/** A `{` followed by a quote or `}`: where a JSON object with keys, or an empty one, can start. A prose brace such as `{config}` or `{ to` does not match, so it never opens a candidate. */
 const OBJECT_START = /\{\s*["}]/y;
 
 /** Index of the brace closing the object that opens at `start`, or undefined when it never closes. */
@@ -113,47 +114,90 @@ function topLevelObjects(raw: string): { found: Array<{ start: number; value: un
   return { found, truncated: false };
 }
 
+/** `from` inclusive, `to` exclusive, of each ``` block that has an opening line and a closing ```. One forward pass, so a reply of many fences costs no more than its length. */
+function fenceRanges(raw: string): Array<readonly [number, number]> {
+  const ranges: Array<readonly [number, number]> = [];
+  for (let open = raw.indexOf("```"); open !== -1; ) {
+    const lineEnd = raw.indexOf("\n", open + 3);
+    if (lineEnd === -1) break;
+    const close = raw.indexOf("```", lineEnd + 1);
+    if (close === -1) break;
+    ranges.push([open, close + 3] as const);
+    open = raw.indexOf("```", close + 3);
+  }
+  return ranges;
+}
+
+/** Any top-level JSON object with a string `status`: the first rule every kind of result shares. */
+export function hasStatus(value: unknown): value is ParsedResult & { status: string } {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && typeof (value as { status?: unknown }).status === "string";
+}
+
+/** A reviewer's own result: a status, and either the reviewer's name or a `findings` array (a slice entry carries neither). */
 function isReviewerResult(value: unknown): value is ParsedResult {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!hasStatus(value)) return false;
   const object = value as Record<string, unknown>;
-  return typeof object.status === "string" && (typeof object.reviewer === "string" || Array.isArray(object.findings));
+  return typeof object.reviewer === "string" || Array.isArray(object.findings);
+}
+
+type Decision = { result: ParsedResult | undefined };
+
+/** The last ```REVIEW_RESULT block. It keeps the status-only rule: the label already says what the block is. */
+function labelledFence(raw: string): Decision | undefined {
+  const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
+  if (labelled.length === 0) return undefined;
+  try {
+    const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
+    return { result: hasStatus(parsed) ? parsed : undefined };
+  } catch { return { result: undefined }; }
+}
+
+/** The object right after the last bare `REVIEW_RESULT` marker. A marker decides: no other object is looked at when it fails. */
+function afterMarker(raw: string): Decision | undefined {
+  const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g)];
+  if (markers.length === 0) return undefined;
+  const marker = markers[markers.length - 1]!;
+  const start = marker.index! + marker[0].length;
+  const end = objectEnd(raw, start);
+  if (end === undefined) return { result: undefined };
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1));
+    return { result: isReviewerResult(parsed) ? parsed : undefined };
+  } catch { return { result: undefined }; }
+}
+
+/** No label and no marker: the reviewer-shaped objects at the top level, fenced ones first. */
+function scannedResult(raw: string): ParsedResult | undefined {
+  const { found, truncated } = topLevelObjects(raw);
+  if (truncated) return undefined;
+  const ranges = fenceRanges(raw);
+  let next = 0;
+  const inFence = (start: number): boolean => {
+    while (next < ranges.length && ranges[next]![1] <= start) next += 1;
+    return next < ranges.length && start >= ranges[next]![0];
+  };
+  const fenced: unknown[] = [];
+  const bare: unknown[] = [];
+  for (const { start, value } of found) (inFence(start) ? fenced : bare).push(value);
+  const fencedResults = fenced.filter(isReviewerResult);
+  if (fencedResults.length > 0) return fencedResults[fencedResults.length - 1];
+  if (new Set(bare.filter(hasStatus).map((value) => value.status)).size > 1) return undefined;
+  const accepted = bare.filter(isReviewerResult);
+  return accepted[accepted.length - 1];
 }
 
 /**
- * The reviewer's result. A fenced `REVIEW_RESULT` block wins (the last one). Otherwise only a top-level object that
- * carries `reviewer` or a `findings` array counts: the object right after a bare `REVIEW_RESULT` marker when there is one,
- * the last fenced block when there are fenced blocks, else the only status the reply holds. Two different statuses with no
- * marker, or an object that never closes, give no result. Never guessed from prose.
+ * The reviewer's result, in this order; the first rule that applies decides.
+ * 1. The last ```REVIEW_RESULT fence: any object with a status.
+ * 2. The object after the last bare REVIEW_RESULT marker: a status plus a reviewer or a findings array. If it is missing,
+ *    unparseable or never closes there is no result, and no other object is tried.
+ * 3. Otherwise the top-level objects of the reply: an object that never closes gives no result; the last reviewer-shaped
+ *    object inside a fenced block wins; with none, the last reviewer-shaped bare object, unless the bare objects carry
+ *    different statuses (then none; the same status twice is not ambiguous).
+ * Never guessed from prose.
  */
 export function parseReviewResult(raw: string): ParsedResult | undefined {
-  const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];
-  if (labelled.length > 0) {
-    try {
-      const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
-      return parsed !== null && typeof parsed === "object" && typeof parsed.status === "string"
-        ? parsed as ParsedResult : undefined;
-    } catch { return undefined; }
-  }
-  const markers = [...raw.matchAll(/REVIEW_RESULT[ \t]*[:=]?\s*(?=\{)/g)];
-  if (markers.length > 0) {
-    const marker = markers[markers.length - 1]!;
-    const start = marker.index! + marker[0].length;
-    const end = objectEnd(raw, start);
-    if (end === undefined) return undefined;
-    try {
-      const parsed = JSON.parse(raw.slice(start, end + 1));
-      return isReviewerResult(parsed) ? parsed : undefined;
-    } catch { return undefined; }
-  }
-  const { found, truncated } = topLevelObjects(raw);
-  if (truncated) return undefined;
-  const fences = [...raw.matchAll(/```[^\n]*\n[\s\S]*?```/g)].map((m) => [m.index!, m.index! + m[0].length] as const);
-  const fenced = found.filter(({ start }) => fences.some(([from, to]) => start >= from && start < to));
-  const pool = fenced.length > 0 ? fenced : found;
-  const statuses = new Set(pool.map(({ value }) => (value as { status?: unknown } | null)?.status).filter((status) => typeof status === "string"));
-  if (fenced.length === 0 && statuses.size > 1) return undefined;
-  const accepted = pool.map(({ value }) => value).filter(isReviewerResult);
-  return accepted.length === 0 ? undefined : accepted[accepted.length - 1];
+  return (labelledFence(raw) ?? afterMarker(raw) ?? { result: scannedResult(raw) }).result;
 }
 
 export function isEmptyOutput(raw: string): boolean {

@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    "src/commands/review-slice.test.ts",
+    "src/commands/review-slice.ts",
+    "src/flow/verify-exec-files.test.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/review.ts",
+      "hop": 1,
+      "fanIn": 30,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/review/ledger.ts",
+      "path": [
+        "src/commands/review-ledger.ts",
+        "src/review/ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/ledger.ts",
+      "path": [
+        "src/commands/review-ledger.test.ts",
+        "src/review/ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/import-only.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-ac-check-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-ci-triage-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-comments-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-conform-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-floor-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-help.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-comments-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-contract-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-docs-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-profile-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-risk-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-rules-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-scenarios-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-select-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-jev-triage-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-learn-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review-learn-reviewer-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/flow/renumber-reviews.e2e.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/flow/review-gate.e2e.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/cost-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/cross-family.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/filter-stats.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/loop-real-path.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/managed.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/pr-comments.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-slice.ts",
+      "path": [
+        "src/review/review-notes.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 9,
+    "changedFilesResolved": 5,
+    "changedFilesUnresolved": 4,
+    "candidates": 32,
+    "retained": 32,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 29,
+    "hopHistogram": {
+      "1": 3,
+      "2": 29
+    }
+  },
+  "graph": {
+    "nodes": 3037,
+    "edges": 10577
+  }
+}

@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { parseReviewResult } from "../review/ledger";
+import { hasStatus, parseReviewResult } from "../review/ledger";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
@@ -160,7 +160,7 @@ async function readJsonSource<T>(source: string, label: string): Promise<T> {
 
 class UnreadableInput extends Error {}
 
-/** A reviewer result: plain JSON, or a saved raw reply carrying a REVIEW_RESULT block (what the ledger's next command names). */
+/** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (a REVIEW_RESULT block, or a bare object carrying a reviewer or findings). A truncated or ambiguous reply is refused. */
 async function readResult(source: string): Promise<ReviewerResult> {
   let raw: string;
   try {
@@ -169,7 +169,7 @@ async function readResult(source: string): Promise<ReviewerResult> {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
   const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no reviewer result (a JSON object with a status and a reviewer or findings): ${source}`);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (plain JSON with a status, or a reply with a REVIEW_RESULT block or a bare object carrying a reviewer or findings; a truncated or ambiguous reply is refused): ${source}`);
   return parsed as ReviewerResult;
 }
 
@@ -177,7 +177,7 @@ async function readResult(source: string): Promise<ReviewerResult> {
 function wholeFileResult(raw: string): ReviewerResult | undefined {
   try {
     const whole: unknown = JSON.parse(raw);
-    return whole !== null && typeof whole === "object" && !Array.isArray(whole) && typeof (whole as { status?: unknown }).status === "string" ? whole as ReviewerResult : undefined;
+    return hasStatus(whole) ? whole as ReviewerResult : undefined;
   } catch { return undefined; }
 }
 

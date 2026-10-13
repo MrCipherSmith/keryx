@@ -95,6 +95,7 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
       setAside.push(`raw/${name}`);
       continue;
     }
+    // A ```REVIEW_RESULT fence keeps the status-only rule in parseReviewResult; such a result names no reviewer and cannot be attributed, so it is set aside here.
     if (result !== undefined && result.reviewer === undefined && !Array.isArray(result.findings)) {
       ignored.push(`raw/${name}`);
       continue;
