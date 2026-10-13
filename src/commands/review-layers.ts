@@ -3,7 +3,7 @@ import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { computeCoverage, coverageLine } from "../review/coverage-complete";
-import { type LayersFile, readLayers, refreshLayers } from "../review/layers";
+import { type LayersFile, manifestHead, readLayers, refreshLayers, waitForLayersRefresh } from "../review/layers";
 import { buildLayersBlock, layersBlockLines } from "../review/layers-payload";
 import { layersDetailLines } from "../review/layers-view";
 
@@ -55,19 +55,24 @@ export function resolvePackageDir(args: readonly string[], cwd: string = process
 
 /**
  * The package's layers, refreshing them first when `layers.json` is absent or was
- * built for another PR head. Review commands call this so no operator step stands
- * between a review and fresh layers.
+ * built for another PR head. The head is the caller's, else the package manifest's
+ * `target.head`, so a checkout that moved on since the package was made does not
+ * pick the head. A refresh already running for the package is waited for.
  */
 export async function ensurePackageLayers(
   packageDir: string,
   options: { projectRoot?: string; prHead?: string; base?: string } = {},
 ): Promise<LayersFile> {
+  if (!(await waitForLayersRefresh(packageDir))) {
+    throw new Error(`the layers of ${packageDir} are still being refreshed; try again when it finishes`);
+  }
+  const head = options.prHead ?? (await manifestHead(packageDir)) ?? undefined;
   const existing = await readLayers(packageDir);
-  if (existing !== null && (options.prHead === undefined || existing.prHead === options.prHead)) return existing;
+  if (existing !== null && (head === undefined || existing.prHead === head)) return existing;
   return refreshLayers({
     projectRoot: options.projectRoot ?? resolveProjectRoot(process.cwd()),
     packageDir,
-    ...(options.prHead === undefined ? {} : { prHead: options.prHead }),
+    ...(head === undefined ? {} : { prHead: head }),
     ...(options.base === undefined ? {} : { base: options.base }),
   });
 }

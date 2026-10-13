@@ -3,9 +3,9 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "../lib/fs";
+import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { type BlastRadius, BLAST_RADIUS_SCOPE_REVIEWER, DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
 import { type RetryDecision, type RetryState, emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest } from "./slice";
@@ -14,6 +14,7 @@ import { sliceGraph } from "./waves";
 export const CHUNKS_FILE = "chunks.json";
 export const CHUNK_STATE_FILE = "chunk-state.json";
 export const CHUNK_PASS_FILE = "chunk-pass.json";
+const CHUNK_STATE_LOCK = "chunk-state.lock";
 export const CHUNK_REVIEWER = BLAST_RADIUS_SCOPE_REVIEWER;
 /** The tier every chunk pass runs on: one down from the flagship. */
 export const CHUNK_TIER = "middle";
@@ -34,6 +35,8 @@ export type ChunkPlan = {
   maxFiles: number;
   maxBytes: number;
   dropped: number;
+  /** Hash of the dropped file set the plan was cut from; a plan written before this field existed has none. */
+  droppedKey?: string;
   chunks: ChunkEntry[];
 };
 
@@ -108,6 +111,8 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   }
 }
 
+const droppedKeyOf = (files: readonly string[]): string => createHash("sha256").update([...new Set(files)].sort().join("\n")).digest("hex").slice(0, 16);
+
 export async function readBlastRadius(packageDir: string): Promise<BlastRadius | undefined> {
   const radius = await readJson<BlastRadius>(path.join(packageDir, "blast-radius.json"));
   return radius !== undefined && Array.isArray(radius.dropped) && Array.isArray(radius.files) ? radius : undefined;
@@ -125,8 +130,17 @@ export async function readChunkPlan(packageDir: string): Promise<ChunkPlan | und
 export async function ensureChunkPlan(packageDir: string, projectRoot: string, options: { maxBytes?: number; maxFiles?: number } = {}): Promise<ChunkPlan | null> {
   const radius = await readBlastRadius(packageDir);
   if (radius === undefined || radius.dropped.length === 0) return null;
+  const droppedKey = droppedKeyOf(radius.dropped.map((entry) => entry.file));
   const existing = await readChunkPlan(packageDir);
-  if (existing !== undefined) return existing;
+  if (existing !== undefined) {
+    if (existing.droppedKey === undefined || existing.droppedKey === droppedKey) return existing;
+    // The dropped set moved. With no pass recorded the plan is replaced; with one, it may not move under the pass.
+    if (Object.keys((await readChunkState(packageDir)).outcomes).length > 0) {
+      throw new Error(
+        `${CHUNKS_FILE} was cut from a different dropped set than blast-radius.json now lists, and passes are already recorded. Remove ${CHUNKS_FILE}, ${CHUNK_STATE_FILE} and ${CHUNK_PASS_FILE} in ${packageDir} to plan again.`,
+      );
+    }
+  }
   const sizes = new Map<string, number>();
   await Promise.all(
     radius.dropped.map(async (entry) => {
@@ -145,6 +159,7 @@ export async function ensureChunkPlan(packageDir: string, projectRoot: string, o
     maxFiles,
     maxBytes,
     dropped: new Set(radius.dropped.map((entry) => entry.file)).size,
+    droppedKey,
     chunks,
   };
   await mkdir(packageDir, { recursive: true });
@@ -259,6 +274,11 @@ function halves(chunk: ChunkEntry, attempt: number): ChunkEntry[] {
  * handed back smaller (the chunk is cut in half) while the plan still allows a retry, and otherwise stays pending.
  */
 export async function recordChunk(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<{ decision: RetryDecision; reason: string; state: ChunkRunState }> {
+  // Two overlapping records would each start from the same snapshot, and the later write would erase the earlier outcome.
+  return withFileLock(path.join(packageDir, CHUNK_STATE_LOCK), () => recordChunkLocked(packageDir, chunkId, result), { timeoutMs: 30_000 });
+}
+
+async function recordChunkLocked(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<{ decision: RetryDecision; reason: string; state: ChunkRunState }> {
   const plan = await readChunkPlan(packageDir);
   if (plan === undefined) throw new Error(`No ${CHUNKS_FILE} in ${packageDir}.`);
   const state = await readChunkState(packageDir);
@@ -301,7 +321,8 @@ export async function recordChunk(packageDir: string, chunkId: string, result: C
   return { decision: decision.decision, reason: decision.reason, state: mine?.state ?? "pending" };
 }
 
-const SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+// The finding contract's names are blocker/major/minor/info; the older names stay as aliases.
+const SEVERITY_RANK: Record<string, number> = { blocker: 0, critical: 0, major: 1, high: 1, minor: 2, medium: 2, low: 3, info: 4 };
 
 const findingKey = (finding: ChunkFinding): string =>
   `${finding.file ?? ""}:${typeof finding.line === "number" ? finding.line : (finding.title ?? "")}`;
@@ -362,12 +383,8 @@ export async function computeChunkPass(packageDir: string): Promise<ChunkPass | 
 /** Writes `chunk-pass.json`. Deterministic for a given state. */
 export async function mergeChunkPass(packageDir: string): Promise<ChunkPass | null> {
   const pass = await computeChunkPass(packageDir);
-  if (pass !== null) await writeFile(path.join(packageDir, CHUNK_PASS_FILE), `${JSON.stringify(pass, null, 2)}\n`, "utf8");
+  if (pass !== null) await writeFileAtomic(path.join(packageDir, CHUNK_PASS_FILE), `${JSON.stringify(pass, null, 2)}\n`);
   return pass;
-}
-
-export async function readChunkPass(packageDir: string): Promise<ChunkPass | undefined> {
-  return readJson<ChunkPass>(path.join(packageDir, CHUNK_PASS_FILE));
 }
 
 export function hasChunkPlan(packageDir: string): boolean {

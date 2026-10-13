@@ -342,21 +342,7 @@ Stop and re-read these rules if you are thinking:
 
 ## Job Context Awareness
 
-When dispatched by `job-orchestrator` or `review-orchestrator` as part of a job pipeline, the prompt MAY include:
-
-```
-JOB_NAME:     <job-name>
-CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
-```
-
-If provided and the file exists, read the context document before starting the review. Use it to:
-- Understand which auth framework is in use (custom JWT, Passport, Keycloak, etc.)
-- Identify intentional public endpoints that are documented as unauthenticated by design
-- Understand which validation library and pipe configuration the project uses
-- Avoid flagging intentional architectural security decisions as findings
-
-If the file does not exist or is not provided, proceed normally — context is optional and non-blocking.
-
+When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY carry `JOB_NAME` and `CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md`. If given and the file exists, read it before you start; use it for intentional design decisions (do not flag correct library usage), acceptance criteria when there is no `issue_url`, and the severity of edge cases the team accepted. If absent, proceed normally: context is optional and non-blocking.
 
 ## Orchestrated Review Contract
 

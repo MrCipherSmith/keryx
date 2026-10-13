@@ -6,7 +6,6 @@ import {
   loadPackageGraph,
   readLayers,
   refreshLayers,
-  type ForbiddenModelProvider,
   type LayerDeps,
 } from "./layers";
 import { createLayersFixture, type LayersFixture } from "./layers.test-helpers";
@@ -19,25 +18,10 @@ afterEach(async () => {
   await fixture.cleanup();
 });
 
-function throwingProvider(calls: { count: number }): ForbiddenModelProvider {
-  return {
-    async complete() {
-      calls.count += 1;
-      throw new Error("a model was called during a layer refresh");
-    },
-  };
-}
-
 describe("refreshLayers (AC1)", () => {
   test("rebuilds the graph and writes layers.json with per-layer commit, time and counts", async () => {
-    const calls = { count: 0 };
-    const layers = await refreshLayers({
-      projectRoot: fixture.root,
-      packageDir: fixture.packageDir,
-      modelProvider: throwingProvider(calls),
-    });
+    const layers = await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir });
 
-    expect(calls.count).toBe(0);
     expect(layers.prHead).toBe(fixture.second);
     expect(layers.graph.status).toBe("ok");
     expect(layers.graph.commit).toBe(fixture.second);
@@ -58,8 +42,9 @@ describe("refreshLayers (AC1)", () => {
   test("the wiki refresh is a dry run by default and the memory count comes from the index", async () => {
     const seen: { dryRun: unknown[] } = { dryRun: [] };
     const deps: Partial<LayerDeps> = {
-      async indexMemory(cwd) {
+      async indexMemory(cwd, indexDir) {
         expect(cwd).toBe(fixture.root);
+        expect(indexDir).toBe(path.join(fixture.packageDir, "layers", "memory"));
         return { entryCount: 7 };
       },
       async refreshWiki(input) {

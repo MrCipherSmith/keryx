@@ -331,8 +331,48 @@ describe("layers in /reviews", () => {
     };
     const view = open(metrics(), { depth: [depthRow(), depthRow({ reviewId: "r2" })], actions });
     view.press("l");
+    await new Promise((resolve) => setTimeout(resolve, 0));
     view.press("c");
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(called).toEqual(["layers:r1", "chunks:r1"]);
+  });
+
+  test("a key pressed while an action for the same review is still running is ignored, and works again once it ends", async () => {
+    const called: string[] = [];
+    let release: (message: string) => void = () => {};
+    const actions = {
+      refreshLayers: (r: { reviewId: string }) => {
+        called.push(`layers:${r.reviewId}`);
+        return new Promise<string>((resolve) => {
+          release = resolve;
+        });
+      },
+      runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+    };
+    const view = open(metrics(), { depth: [depthRow()], actions });
+    view.press("l");
+    view.press("l");
+    view.press("c");
+    expect(called).toEqual(["layers:r1"]);
+    release("refreshed");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.press("c");
+    expect(called).toEqual(["layers:r1", "chunks:r1"]);
+  });
+
+  test("an action that rejects frees the review instead of leaving it pending", async () => {
+    const called: string[] = [];
+    const actions = {
+      refreshLayers: async (r: { reviewId: string }) => {
+        called.push(`layers:${r.reviewId}`);
+        throw new Error("boom");
+      },
+      runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+    };
+    const view = open(metrics(), { depth: [depthRow()], actions });
+    view.press("l");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.press("c");
     expect(called).toEqual(["layers:r1", "chunks:r1"]);
   });
 

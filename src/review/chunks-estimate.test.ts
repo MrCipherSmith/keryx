@@ -129,11 +129,25 @@ test("a no keeps the run blocked, and an answer does not carry over to a differe
   await answerChunkEstimate(pkg, "no", "too expensive");
   expect(await chunkRunBlocker(pkg, root)).toContain("the operator answered no");
 
-  await recordChunk(pkg, "chunk-001", { status: "DONE", findings: [] });
-  const smaller = (await estimateChunkRun(pkg, root))!;
-  expect(smaller.chunks).toBe(29);
-  const record = await recordChunkEstimate(pkg, smaller, "interactive");
+  dropFiles(1250);
+  const other = (await estimateChunkRun(pkg, root))!;
+  expect(other.chunks).toBe(32);
+  const record = await recordChunkEstimate(pkg, other, "interactive");
   expect(record.answer).toBeUndefined();
+  expect(await chunkRunBlocker(pkg, root)).not.toContain("answered no");
+});
+
+test("a yes covers the whole plan: recording a chunk DONE does not ask again (R1-06)", async () => {
+  dropFiles(1200);
+  await recordChunkEstimate(pkg, (await estimateChunkRun(pkg, root))!, "interactive");
+  await answerChunkEstimate(pkg, "yes", "run them");
+  expect(await chunkRunBlocker(pkg, root)).toBeUndefined();
+
+  await recordChunk(pkg, "chunk-001", { status: "DONE", findings: [] });
+  const after = (await estimateChunkRun(pkg, root))!;
+  expect(after).toMatchObject({ chunks: 29, overCeiling: true });
+  expect(await chunkRunBlocker(pkg, root)).toBeUndefined();
+  expect((await recordChunkEstimate(pkg, after, "interactive")).answer).toMatchObject({ value: "yes" });
 });
 
 test("the estimate and the answer are recorded in the package", async () => {

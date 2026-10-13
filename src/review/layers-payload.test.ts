@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PackageGraphError, refreshLayers } from "./layers";
-import { buildLayersBlock, LAYERS_BLOCK_SECTIONS } from "./layers-payload";
+import { buildLayersBlock, LAYERS_BLOCK_SECTIONS, MAX_BLOCK_FILES, shellQuote } from "./layers-payload";
 import { createLayersFixture, git, writeProjectFile, type LayersFixture } from "./layers.test-helpers";
 
 let fixture: LayersFixture;
@@ -100,8 +100,40 @@ describe("the layers block of a reviewer payload (AC5)", () => {
     const cut = block.truncated.find((entry) => entry.section === "affected");
     expect(cut).toBeDefined();
     expect(cut?.total).toBeGreaterThan(cut?.shown ?? 0);
-    expect(cut?.command).toContain("keryx gdgraph affected src/a.ts");
-    expect(block.truncated.every((entry) => LAYERS_BLOCK_SECTIONS.includes(entry.section))).toBe(true);
+    expect(cut?.command).toContain("keryx gdgraph affected 'src/a.ts'");
+    expect(block.truncated.every((entry) => entry.section === "files" || LAYERS_BLOCK_SECTIONS.includes(entry.section))).toBe(true);
+  });
+
+  test("every fetch command quotes the file name as one shell word (R1-09)", async () => {
+    await commitMore(async (root) => {
+      for (let index = 0; index < 60; index += 1) {
+        await writeProjectFile(root, `src/dependent-module-number-${String(index).padStart(2, "0")}.ts`, 'import { a } from "./a";\nexport const x = a;\n');
+      }
+    });
+    await refresh();
+    const hostile = "src/a b'$(id)`x`;rm -rf ~.ts";
+    const block = await buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: [hostile, "src/a.ts"], maxBytes: 1700 });
+    const quoted = shellQuote(hostile);
+    expect(quoted).toBe(`'src/a b'\\''$(id)\`x\`;rm -rf ~.ts'`);
+    const affected = block.truncated.find((entry) => entry.section === "affected");
+    expect(affected?.command.startsWith(`keryx gdgraph affected ${quoted} --depth 2 --data-dir '`)).toBe(true);
+    for (const cut of block.truncated) expect(cut.command.replace(quoted, "")).not.toContain("$(id)");
+  });
+
+  test("a path with a control character or a newline is refused (R1-09)", async () => {
+    await refresh();
+    for (const bad of ["src/a.ts\nrm -rf ~", "src/a\u0007.ts", "src/a\u001b[0m.ts"]) {
+      await expect(buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: [bad] })).rejects.toThrow("control character");
+    }
+  });
+
+  test("the file list is capped and the cut recorded; a block whose floor exceeds the cap is an error (R1-19)", async () => {
+    await refresh();
+    const many = Array.from({ length: MAX_BLOCK_FILES + 5 }, (_, index) => `src/missing-${String(index).padStart(3, "0")}.ts`);
+    const block = await buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: many });
+    expect(block.files).toHaveLength(MAX_BLOCK_FILES);
+    expect(block.truncated[0]).toMatchObject({ section: "files", shown: MAX_BLOCK_FILES, total: MAX_BLOCK_FILES + 5 });
+    await expect(buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: ["src/a.ts"], maxBytes: 40 })).rejects.toThrow("maxBytes is 40");
   });
 
   test("drops back to depth 1 when depth 2 would not fit", async () => {
@@ -124,7 +156,7 @@ describe("the layers block of a reviewer payload (AC5)", () => {
       await readFile(path.join(import.meta.dir, "../gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json"), "utf8"),
     ) as { properties: { layers: { properties: Record<string, unknown> & { truncated: { items: { properties: { section: { enum: string[] } } } } } } } };
     const layers = schema.properties.layers.properties;
-    expect(layers.truncated.items.properties.section.enum).toEqual([...LAYERS_BLOCK_SECTIONS]);
+    expect(layers.truncated.items.properties.section.enum).toEqual(["files", ...LAYERS_BLOCK_SECTIONS]);
     await refresh();
     const block = await buildLayersBlock({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: ["src/a.ts"] });
     for (const key of Object.keys(block)) expect(Object.keys(layers)).toContain(key);

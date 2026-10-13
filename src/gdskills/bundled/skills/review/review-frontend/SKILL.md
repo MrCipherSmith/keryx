@@ -594,22 +594,7 @@ Stop and re-read these rules if you are thinking:
 
 ## Job Context Awareness
 
-When dispatched by `job-orchestrator` or `review-orchestrator` as part of a job pipeline, the prompt MAY include:
-
-```
-JOB_NAME:     <job-name>
-CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
-```
-
-If provided and the file exists, read the context document before starting the review. Use it to:
-- Understand which MobX version and decorator configuration the project uses (legacy decorators vs. `makeObservable`)
-- Identify custom base store classes or lifecycle conventions that differ from defaults
-- Understand which accessibility standard the project targets (WCAG 2.1 AA vs. custom)
-- Identify intentional patterns that appear to violate rules but are documented exceptions
-- Validate findings against documented project-specific conventions
-
-If the file does not exist or is not provided, proceed normally — context is optional and non-blocking.
-
+When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY carry `JOB_NAME` and `CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md`. If given and the file exists, read it before you start; use it for intentional design decisions (do not flag correct library usage), acceptance criteria when there is no `issue_url`, and the severity of edge cases the team accepted. If absent, proceed normally: context is optional and non-blocking.
 
 ## Orchestrated Review Contract
 

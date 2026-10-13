@@ -809,9 +809,16 @@ export async function completeManagedReview(
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+  // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
+  // so the next run does not pass the same gate without the flag.
+  const researchPath = path.join(packageDir, "research.json");
+  const researchBefore = options.waiveCoverage === undefined ? undefined : await readFile(researchPath, "utf8").catch(() => undefined);
   const coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
   const researchProblems = await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
-  if (researchProblems.length) throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+  if (researchProblems.length) {
+    if (coverageWaiver !== undefined && researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore);
+    throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+  }
   const dispositions = options.dispositions ?? [];
   if (dispositions.length > 0) {
     await recordDispositions(packageDir, dispositions);

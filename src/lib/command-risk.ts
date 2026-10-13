@@ -623,5 +623,16 @@ export function touchesSchedulerControl(command: string): boolean {
  * included; no answer is remembered, and a pattern for any of them is refused.
  */
 export function touchesHumanConfirmation(command: string): boolean {
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command);
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || touchesCoverageWaiver(command);
+}
+
+const COVERAGE_WAIVER_MARKER = /--waive-coverage\b/i;
+
+/**
+ * Flow 431 (AC10): `keryx review complete --waive-coverage "<quote>"` is the operator accepting that in-scope files
+ * went unreviewed. The quote has to be theirs, so the command asks in every permission mode, like `flow confirm`.
+ * Text-matched with the same limit as the other markers. Pure.
+ */
+export function touchesCoverageWaiver(command: string): boolean {
+  return COVERAGE_WAIVER_MARKER.test(command);
 }

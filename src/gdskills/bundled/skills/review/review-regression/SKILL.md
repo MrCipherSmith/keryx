@@ -168,20 +168,11 @@ Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; 
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
-   name the input, call, or condition that reaches the code, you have an
-   observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code
-   under review. Do not report a safe API because it could be misused, or a
-   pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears
-   at several sites, report it once and list every site. Ten findings that are one
-   finding hide the other nine problems.
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severity (canonical)**. This reviewer does not restate them: `blocker` is the four merge-blocking shapes named there and nothing else, and the `major`/`minor` boundary is the trigger-and-outcome test.
 
 ---
 
@@ -203,17 +194,11 @@ boundary is the trigger-and-outcome test.
 
 Report done only once all of these hold:
 
-- Every finding is anchored inside the computed set or the changed set, at the
-  code that **breaks** rather than the code that changed.
-- Every finding is `major` or above, and every `major` names the changed file,
-  module or symbol whose behaviour moved — the anchor alone does not carry it.
-- Every finding carries `class_scope` whose `sites` are the callers that break and
-  whose `enumeration_method` is the walk over the blast-radius set that produced
-  them.
-- The summary states whether the cap dropped files, and whether the radius could
-  answer the question at all for the shape of this change.
-- Nothing that is merely an observation about pre-existing code is filed here; it
-  is either raised under scope A or not at all.
+- Every finding is anchored inside the computed set or the changed set, at the code that **breaks** rather than the code that changed.
+- Every finding is `major` or above, and every `major` names the changed file, module or symbol whose behaviour moved — the anchor alone does not carry it.
+- Every finding carries `class_scope` whose `sites` are the callers that break and whose `enumeration_method` is the walk over the blast-radius set that produced them.
+- The summary states whether the cap dropped files, and whether the radius could answer the question at all for the shape of this change.
+- Nothing that is merely an observation about pre-existing code is filed here; it is either raised under scope A or not at all.
 
 <!-- keryx:layers-block:start -->
 ## Project layers: graph, tests, wiki, memory

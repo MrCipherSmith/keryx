@@ -193,12 +193,16 @@ export function coverageLine(report: Pick<CoverageReport, "counts" | "omissionRe
   return `coverage: in scope ${inScope}, covered ${covered}, omitted ${omitted}${reasons === "" ? "" : ` (${reasons})`}, uncovered ${uncovered}`;
 }
 
+const MIN_WAIVER_QUOTE_LENGTH = 8;
+
 /**
  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape
  * of the mutation waiver: their quote, the time, and the waived file list). Nothing uncovered means nothing to waive.
  */
 export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date()): Promise<CoverageWaiver | undefined> {
-  if (!text(operatorQuote)) throw new Error("--waive-coverage needs the operator's own words as its value.");
+  // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
+  const words = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
+  if (words.length < MIN_WAIVER_QUOTE_LENGTH) throw new Error("--waive-coverage needs the operator's own words as its value, at least a short sentence.");
   const file = path.join(packageDir, "research.json");
   const research = record(await readJson<unknown>(file));
   const dispatch = record(research?.dispatch);

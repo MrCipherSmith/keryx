@@ -44,12 +44,16 @@ const WIKI_PAGE = [
  * commit, a gitignored `storage/` that does not exist, a wiki page and a memory
  * entry. HEAD is the second commit.
  */
-export async function createLayersFixture(): Promise<LayersFixture> {
+export const TRACKED_MEMORY_INDEX = ".metaproject/data/memory/index/index.json";
+
+export async function createLayersFixture(options: { trackMemoryIndex?: boolean } = {}): Promise<LayersFixture> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-layers-"));
   git(root, ["init", "-q", "-b", "main"]);
   git(root, ["config", "user.email", "test@example.com"]);
   git(root, ["config", "user.name", "test"]);
-  await writeProjectFile(root, ".gitignore", ".metaproject/data/**/storage/\n.metaproject/data/memory/index/\n");
+  const trackIndex = options.trackMemoryIndex === true;
+  await writeProjectFile(root, ".gitignore", `.metaproject/data/**/storage/\n${trackIndex ? "" : ".metaproject/data/memory/index/\n"}`);
+  if (trackIndex) await writeProjectFile(root, TRACKED_MEMORY_INDEX, '{"entryCount":0,"entries":[]}\n');
   await writeProjectFile(root, "package.json", '{"name":"fixture","version":"1.0.0"}\n');
   await writeProjectFile(root, "src/a.ts", "export const a = 1;\n");
   await writeProjectFile(root, "src/b.ts", 'import { a } from "./a";\nexport const b = a + 1;\n');

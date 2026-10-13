@@ -348,21 +348,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ## Job Context Awareness
 
-When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY include:
-
-```
-JOB_NAME:     <job-name>
-CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
-```
-
-If provided and the file exists, read the context document **before** reviewing the diff.
-Use it to:
-- Understand which architectural patterns and layers were intentionally chosen
-- Avoid flagging deliberate deviations from the default layer model as violations
-- Identify framework and library choices that affect what counts as a valid pattern
-
-If absent, proceed normally — context is optional and non-blocking.
-When in doubt about whether a pattern was intentional, use `info` severity and note the uncertainty.
+When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY carry `JOB_NAME` and `CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md`. If given and the file exists, read it before you start; use it for intentional design decisions (do not flag correct library usage), acceptance criteria when there is no `issue_url`, and the severity of edge cases the team accepted. If absent, proceed normally: context is optional and non-blocking.
 
 ---
 

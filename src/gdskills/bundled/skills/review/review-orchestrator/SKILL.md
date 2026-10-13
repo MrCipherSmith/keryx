@@ -792,13 +792,11 @@ and those are different questions — only the first has ever been asked here.
 A deep round dispatches under **both**. Scope B is computed, never browsed:
 
 ```bash
-keryx review blast-radius --ref "${BASE_SHA}" --json > blast-radius.json   # KEEP THIS FILE
-keryx review blast-radius --ref "${BASE_SHA}" --brief                      # what a scope-B reviewer is told
+keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --json > blast-radius.json   # KEEP THIS FILE
+keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --brief                      # what a scope-B reviewer is told
 ```
 
-**KEEP THIS FILE** is not advice. The ingest at Step 12 is **refused** if a
-scope-B finding arrives without it — pass it back as
-`review ingest ... --blast-radius blast-radius.json`.
+**KEEP THIS FILE**: the ingest at Step 12 is **refused** for a scope-B finding without it — pass it as `review ingest ... --blast-radius blast-radius.json`.
 
 Scope B is bounded and computed: distance ≤ 2 from every changed file, at most 40 files, closest
 first. Do not pick the files or widen the set. Record it with `--out "<review-package>/blast-radius.md"`,
@@ -813,9 +811,11 @@ names the caller that breaks.
 Recompute scope B on rounds 2..N only when the changed-file set moved, and always on the final round:
 
 ```bash
-keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --previous blast-radius.json [--final]
 ```
 
+`PKG` is the review package, created by `keryx review start` before dispatch; `--package` makes scope B read the graph built at the PR head. Give each reviewer `keryx review layers block --package "${PKG}" --files <its slice files> --json` as the payload's `layers` field.
+When `dropped` is non-empty, run `keryx review chunks plan|estimate|next|record|merge --package "${PKG}"` until `next` has none left. `review complete` refuses while a file is uncovered; `--waive-coverage "<operator quote>"` takes the operator's own words only, never yours.
 The measurements, the rule table and the recompute table: `SKILL.detail.md` § "Scope B — bounds, rejections and recompute".
 
 ### Path Mode

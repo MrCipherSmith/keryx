@@ -338,20 +338,7 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 
 ## Job Context Awareness
 
-When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
-
-```
-JOB_NAME:     <job-name>
-CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
-```
-
-If provided and the file exists, read the context document **before** running scope detection.
-Use it to understand:
-- Which ORM, validation library, or guard strategy was intentionally chosen
-- Project-level architectural decisions (e.g., no repository pattern by design)
-- Acceptance criteria to verify spec compliance
-
-If absent, proceed normally — context is optional and non-blocking.
+When dispatched by `review-orchestrator` or `job-orchestrator`, the prompt MAY carry `JOB_NAME` and `CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md`. If given and the file exists, read it before you start; use it for intentional design decisions (do not flag correct library usage), acceptance criteria when there is no `issue_url`, and the severity of edge cases the team accepted. If absent, proceed normally: context is optional and non-blocking.
 
 ---
 

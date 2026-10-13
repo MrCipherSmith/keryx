@@ -192,20 +192,11 @@ pass, then work the checklist.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
-   name the input, call, or condition that reaches the code, you have an
-   observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code
-   under review. Do not report a safe API because it could be misused, or a
-   pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears
-   at several sites, report it once and list every site. Ten findings that are one
-   finding hide the other nine problems.
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severity (canonical)**. This reviewer does not restate them: `blocker` is the four merge-blocking shapes named there and nothing else, and the `major`/`minor` boundary is the trigger-and-outcome test.
 
 ---
 
@@ -219,15 +210,9 @@ When dispatched by `review-orchestrator`, follow the provided `reviewer-input.sc
 
 ### Class scope — required for `blocker` and `major`
 
-Every `blocker` and `major` finding must carry `class_scope`: **every** site that
-holds the shape you found, and **how you enumerated them** — the grep or query
-you ran, or the guard that derives the set.
+Every `blocker` and `major` finding must carry `class_scope`: **every** site that holds the shape you found, and **how you enumerated them** — the grep or query you ran, or the guard that derives the set.
 
-A finding anchored to one `file:line` is a claim about one site. The recorded
-history of this repository is that a fix then repairs that site and leaves its
-siblings: one writer of five, one operator instruction of four, six readers of
-eight. Each was found by the *next* review round, which is why reviews here have
-run to seven and four rounds instead of one.
+A finding anchored to one `file:line` is a claim about one site. The recorded history of this repository is that a fix then repairs that site and leaves its siblings: one writer of five, one operator instruction of four, six readers of eight. Each was found by the *next* review round, which is why reviews here have run to seven and four rounds instead of one.
 
 ```yaml
 class_scope:
@@ -235,12 +220,9 @@ class_scope:
   enumeration_method: "grep for the config-path resolvers; 7 writers, 2 unguarded"
 ```
 
-"I checked the others" is not an enumeration method. A single-entry `sites` list
-is a claim that the class has exactly one member — make it deliberately, because
-`review-finding.schema.json` accepts it and the next round tests it.
+"I checked the others" is not an enumeration method. A single-entry `sites` list is a claim that the class has exactly one member — make it deliberately, because `review-finding.schema.json` accepts it and the next round tests it.
 
-`minor` and `info` may omit it: enumerating the class for every low-severity
-observation is theatre, not rigour.
+`minor` and `info` may omit it: enumerating the class for every low-severity observation is theatre, not rigour.
 
 ```markdown
 ### [F-NNN] Title
@@ -252,9 +234,7 @@ observation is theatre, not rigour.
 - **Fix**: concrete test rewrite or fixture/handler change
 ```
 
-Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
-This reviewer keeps no rubric of its own; what follows is where its recurring
-conditions land under that rubric.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`. This reviewer keeps no rubric of its own; what follows is where its recurring conditions land under that rubric.
 
 | Condition | Severity | Why, under the canonical rubric |
 |---|---|---|
@@ -266,22 +246,11 @@ conditions land under that rubric.
 | Substrate choice, smoke tagging, locator priority, co-location | `minor` | The suite is correct; the cost is to whoever maintains it |
 | A convention preference with no effect on determinism or signal | `info` | Shared laws 1 and 2 |
 
-A flaky test is `major`, not `blocker`: it wastes time, but it does not ship a
-defect. A test that cannot fail does — which is why it is the one `blocker` here.
+A flaky test is `major`, not `blocker`: it wastes time, but it does not ship a defect. A test that cannot fail does — which is why it is the one `blocker` here.
 
-The three mutation-pass rows sit at `minor` deliberately, and the reasoning is
-the canonical rubric rather than modesty: a coverage gap names no runtime trigger
-and no user-visible outcome, so it cannot be `major` under the boundary test. What
-makes them worth reporting is not severity but **evidence class** — each one is a
-command that ran, which is the rarest thing in a review and the only kind of
-finding a later round cannot argue away. Report them with the mutation and its
-result, and they survive adjudication intact. Report them as "coverage looks
-thin" and they are correctly discarded.
+The three mutation-pass rows sit at `minor` deliberately, and the reasoning is the canonical rubric rather than modesty: a coverage gap names no runtime trigger and no user-visible outcome, so it cannot be `major` under the boundary test. What makes them worth reporting is not severity but **evidence class** — each one is a command that ran, which is the rarest thing in a review and the only kind of finding a later round cannot argue away. Report them with the mutation and its result, and they survive adjudication intact. Report them as "coverage looks thin" and they are correctly discarded.
 
-The moment a surviving mutation is accompanied by a **reachable input that makes
-the unpinned code do the wrong thing**, that is a separate finding at the severity
-its own outcome earns — usually `major`. The coverage gap and the defect are two
-findings, not one, and conflating them loses whichever the adjudicator disbelieves.
+The moment a surviving mutation is accompanied by a **reachable input that makes the unpinned code do the wrong thing**, that is a separate finding at the severity its own outcome earns — usually `major`. The coverage gap and the defect are two findings, not one, and conflating them loses whichever the adjudicator disbelieves.
 
 ---
 
@@ -303,19 +272,12 @@ findings, not one, and conflating them loses whichever the adjudicator disbeliev
 
 Report done only once all of these hold:
 
-- The mutation table is published in full, survivors and casualties both, or the
-  report says which command failed and that the pass was skipped.
-- The report states the cap: how many added or previously-requested gates were
-  mutated and how many were not reached.
-- Every finding names `file:line` and the evidence that settles it — the mutation
-  and its result, the producer line, or the selector that names the branch.
-- Every `blocker` and `major` carries `class_scope` with `sites` and an
-  `enumeration_method` naming the search that produced them.
-- No finding invents a severity: each lands under **Severity (canonical)** in
-  `review-orchestrator/SKILL.md`, and a coverage gap is filed separately from any
-  defect it exposes.
-- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, or
-  `NEEDS_CONTEXT` naming the context that was missing — never a guess in its place.
+- The mutation table is published in full, survivors and casualties both, or the report says which command failed and that the pass was skipped.
+- The report states the cap: how many added or previously-requested gates were mutated and how many were not reached.
+- Every finding names `file:line` and the evidence that settles it — the mutation and its result, the producer line, or the selector that names the branch.
+- Every `blocker` and `major` carries `class_scope` with `sites` and an `enumeration_method` naming the search that produced them.
+- No finding invents a severity: each lands under **Severity (canonical)** in `review-orchestrator/SKILL.md`, and a coverage gap is filed separately from any defect it exposes.
+- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, or `NEEDS_CONTEXT` naming the context that was missing — never a guess in its place.
 
 <!-- keryx:layers-block:start -->
 ## Project layers: graph, tests, wiki, memory

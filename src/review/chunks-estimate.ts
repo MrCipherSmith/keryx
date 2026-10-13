@@ -63,7 +63,7 @@ export type ChunkEstimate = {
   ceilingFiles: number;
   overCeiling: boolean;
   limitsSource: ChunkLimits["source"];
-  /** Identifies the chunks this estimate covers; an answer given to another plan does not carry over. */
+  /** Identifies the chunk plan this estimate belongs to; an answer given to another plan does not carry over. */
   planKey: string;
 };
 
@@ -91,7 +91,8 @@ export async function estimateChunkRun(packageDir: string, projectRoot: string, 
     ceilingFiles: effective.maxPasses * DEFAULT_BLAST_RADIUS_MAX_FILES,
     overCeiling: remaining.length > effective.maxPasses,
     limitsSource: effective.source,
-    planKey: createHash("sha256").update(remaining.map((chunk) => `${chunk.id}:${chunk.files.join(",")}`).join("|")).digest("hex").slice(0, 16),
+    // The whole plan, not what is left of it: recording a chunk DONE must not take the operator's answer with it.
+    planKey: createHash("sha256").update(plan.chunks.map((chunk) => `${chunk.id}:${chunk.files.join(",")}`).join("|")).digest("hex").slice(0, 16),
   };
 }
 

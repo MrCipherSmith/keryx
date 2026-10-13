@@ -13,6 +13,8 @@ export const LAYERS_BLOCK_VERSION = 1;
 export const DEFAULT_LAYERS_BLOCK_MAX_BYTES = 8192;
 const MAX_SYMBOLS_PER_FILE = 6;
 const MAX_NEIGHBOURS_PER_SYMBOL = 4;
+/** The block names the reviewer's files; a slice larger than this lists the first ones and records the rest. */
+export const MAX_BLOCK_FILES = 100;
 
 export const LAYERS_BLOCK_SECTIONS = ["affected", "symbols", "relatedTests", "wiki", "memory"] as const;
 export type LayersBlockSection = (typeof LAYERS_BLOCK_SECTIONS)[number];
@@ -27,7 +29,7 @@ export interface LayersBlockSymbol {
 }
 
 export interface LayersBlockTruncation {
-  section: LayersBlockSection;
+  section: LayersBlockSection | "files";
   shown: number;
   total: number;
   /** The command that fetches the rest. */
@@ -181,19 +183,30 @@ async function memoryFor(
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function fetchCommand(section: LayersBlockSection, files: readonly string[], packageDir: string, projectRoot: string): string {
+/** One POSIX shell word: single-quoted, so a file name cannot add a second command. */
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+// eslint-disable-next-line no-control-regex -- the point is to refuse exactly these bytes
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+
+function fetchCommand(section: LayersBlockSection | "files", files: readonly string[], packageDir: string, projectRoot: string): string {
   const first = files[0] ?? "<file>";
+  const dataDir = shellQuote(path.relative(projectRoot, packageGraphDir(packageDir)));
   switch (section) {
     case "affected":
-      return `keryx gdgraph affected ${first} --depth 2 --data-dir ${path.relative(projectRoot, packageGraphDir(packageDir))}`;
+      return `keryx gdgraph affected ${shellQuote(first)} --depth 2 --data-dir ${dataDir}`;
     case "symbols":
-      return `keryx gdgraph symbol "<name>" --data-dir ${path.relative(projectRoot, packageGraphDir(packageDir))}`;
+      return `keryx gdgraph symbol '<name>' --data-dir ${dataDir}`;
     case "relatedTests":
-      return `keryx test related ${first}`;
+      return `keryx test related ${shellQuote(first)}`;
     case "wiki":
-      return `keryx wiki ask "what describes ${first}?"`;
+      return `keryx wiki ask ${shellQuote(`what describes ${first}?`)}`;
     case "memory":
-      return `keryx memory search "${moduleNameFromProjectPath(first)}"`;
+      return `keryx memory search ${shellQuote(moduleNameFromProjectPath(first))}`;
+    case "files":
+      return `keryx review layers block --package ${shellQuote(path.relative(projectRoot, packageDir) || ".")} --files <the rest>`;
   }
 }
 
@@ -208,7 +221,10 @@ function fetchCommand(section: LayersBlockSection, files: readonly string[], pac
  */
 export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<LayersBlock> {
   const maxBytes = input.maxBytes ?? DEFAULT_LAYERS_BLOCK_MAX_BYTES;
-  const files = unique(input.files.map(normalizePath).filter((file) => file.length > 0));
+  const allFiles = unique(input.files.map(normalizePath).filter((file) => file.length > 0));
+  const unsafe = allFiles.find((file) => CONTROL_CHARACTER.test(file));
+  if (unsafe !== undefined) throw new Error(`Refusing to build a layers block: ${JSON.stringify(unsafe)} has a control character in its path.`);
+  const files = allFiles.slice(0, MAX_BLOCK_FILES);
   const { graph, layers } = await loadPackageGraph(input.packageDir);
 
   const base = async (depth: 1 | 2): Promise<LayersBlock> => {
@@ -250,12 +266,17 @@ export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<La
   };
   const withTruncation = (): LayersBlock => ({
     ...block,
-    truncated: LAYERS_BLOCK_SECTIONS.filter((section) => lists[section].length < totals[section]).map((section) => ({
-      section,
-      shown: lists[section].length,
-      total: totals[section],
-      command: fetchCommand(section, files, input.packageDir, input.projectRoot),
-    })),
+    truncated: [
+      ...(allFiles.length > files.length
+        ? [{ section: "files" as const, shown: files.length, total: allFiles.length, command: fetchCommand("files", files, input.packageDir, input.projectRoot) }]
+        : []),
+      ...LAYERS_BLOCK_SECTIONS.filter((section) => lists[section].length < totals[section]).map((section) => ({
+        section,
+        shown: lists[section].length,
+        total: totals[section],
+        command: fetchCommand(section, files, input.packageDir, input.projectRoot),
+      })),
+    ],
   });
 
   // The truncation record itself costs bytes, so measure with it included.
@@ -264,7 +285,7 @@ export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<La
     for (const section of LAYERS_BLOCK_SECTIONS) {
       if (lists[section].length > 0 && (victim === null || lists[section].length > lists[victim].length)) victim = section;
     }
-    if (victim === null) break;
+    if (victim === null) throw new Error(`The layers block needs ${sizeOf(withTruncation())} bytes with every list empty; maxBytes is ${maxBytes}.`);
     lists[victim].pop();
   }
   return withTruncation();

@@ -24,7 +24,7 @@ export const REVIEWS_FOOTER = [
 export const REVIEWS_ACTIONS_FOOTER = [
   { key: "↑/↓", label: "scroll" },
   { key: "l", label: "refresh layers" },
-  { key: "c", label: "run missing chunks" },
+  { key: "c", label: "prepare missing chunks" },
   { key: "esc", label: "close" },
 ] as const;
 
@@ -122,13 +122,14 @@ export function presentReviews(
   const tabs = [{ id: "reviews", label: "Managed reviews" }];
   if (options.depth !== undefined) {
     views.depth = { header: [], rows: formatReviewDepthLines(options.depth), scroll: 0, node: undefined };
-    if (options.actions !== undefined) views.depth.header = ["actions: l refresh layers, c run missing chunks (newest review)"];
+    if (options.actions !== undefined) views.depth.header = ["actions: l refresh layers, c prepare missing chunks (newest review)"];
     tabs.push({ id: "depth", label: "Review depth" });
   }
   const windowOf = (view: TabView): number => Math.max(1, bodyRows - view.header.length);
   let width: number | undefined;
   let unsubscribeKey: (() => void) | undefined;
   let active = "reviews";
+  const pendingReviews = new Set<string>();
 
   const content = (view: TabView): string => {
     view.scroll = clampScroll(view.scroll, view.rows.length, windowOf(view));
@@ -160,12 +161,21 @@ export function presentReviews(
       const newest = options.depth?.[0];
       if ((token === "l" || token === "c") && options.actions !== undefined && newest !== undefined && views.depth !== undefined) {
         const depthView = views.depth;
-        const run = token === "l" ? options.actions.refreshLayers(newest) : options.actions.runMissingChunks(newest);
-        depthView.header = ["working…"];
-        void run.then((message) => {
-          depthView.header = message.split("\n");
+        if (pendingReviews.has(newest.reviewId)) {
+          depthView.header = [`${newest.reviewId}: still working, wait for it to finish…`];
           if (depthView.node !== undefined) depthView.node.content = content(depthView);
-        });
+          return;
+        }
+        pendingReviews.add(newest.reviewId);
+        const run = token === "l" ? options.actions.refreshLayers(newest) : options.actions.runMissingChunks(newest);
+        depthView.header = [token === "l" ? "refreshing layers…" : "estimating chunks…"];
+        void run
+          .catch((error: unknown) => `Action failed for ${newest.reviewId}: ${error instanceof Error ? error.message : String(error)}`)
+          .then((message) => {
+            pendingReviews.delete(newest.reviewId);
+            depthView.header = message.split("\n");
+            if (depthView.node !== undefined) depthView.node.content = content(depthView);
+          });
         if (depthView.node !== undefined) depthView.node.content = content(depthView);
         return;
       }
