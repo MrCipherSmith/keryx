@@ -49,3 +49,17 @@ Writer-version attribution remains unknown: journal records do not contain it, a
 - `bun test src/decisions/export.test.ts`: 24 passed, 0 failed.
 - Both new files checked for local username, home/repository paths and email-shaped strings: no matches. JSONL checked for prohibited text keys and seed, required host/seedHash, and unique `(host, seq)`: passed (28 decisions).
 - Preservation checks covered 37 pre-existing uncommitted files. All original bytes remain intact; the security audit log received appended events only. No pre-existing changes are included in the export commit.
+
+## Выгрузка 2026-10-13 11:51 UTC
+
+- Машина: `fa7c0ca1`.
+- Строк: 98; предыдущая выгрузка: 28; добавлено: 70.
+- Первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-13T11:44:17.266Z`.
+- Версия экспортера keryx: `0.3.112`; HEAD: `9449cd8cc9ffaad887b2844220b98a1b11ea5e95`. Версия записи отдельных решений неизвестна.
+- Команда: `bun run keryx research sync`; весь локальный журнал, без фильтра по дате.
+- Приватность: запрещённые текстовые поля и seed отсутствуют; проверка локальных идентификаторов, путей и email пройдена. Экспорт другой машины не изменён.
+- Независимая проверка: latest равен объединению raw, 232 строки; дубли `(host, seq)` отсутствуют.
+- Тесты: `bun test --timeout 30000 src/decisions/machine-export.test.ts src/commands/research-sync.test.ts` — 41 passed, 0 failed. При первом запуске два теста расписания превысили стандартный таймаут 5 секунд; повтор с 30 секундами прошёл без изменения кода.
+- Flow вне main: локальный untracked экземпляр 387, статус `in-progress`. Коммиты веток `chore/flow-387-complete`, `fix/387-review-r1`, `fix/387-review-r3` уже опубликованы и входят в `origin/main`; дополнительная публикация не нужна, новая ветка не создана.
+- Flow 415 и 416 уже присутствуют в main. Старый untracked экземпляр 415 сохранён отдельно до слияния main в исследовательскую ветку.
+- Исторические снимки не изменены. Единственная tracked-разница файлов flow с main — ранее существовавшие локальные добавления в журнал 406; они сохранены и не включены в исследовательский коммит.

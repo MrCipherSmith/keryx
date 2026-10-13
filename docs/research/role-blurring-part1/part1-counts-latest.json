@@ -1,51 +1,51 @@
 {
-  "commit": "844afa2d",
-  "generated_at": "2026-10-12T19:43Z",
-  "flows": 409,
+  "commit": "9449cd8cc",
+  "generated_at": "2026-10-13T11:51Z",
+  "flows": 413,
   "flows_by_status": {
-    "done": 345,
+    "done": 347,
     "blocked": 3,
-    "in-progress": 33,
-    "ready": 3,
+    "in-progress": 35,
+    "ready": 4,
     "initializing": 5,
-    "implemented": 20
+    "implemented": 19
   },
-  "acceptance_criteria": 3424,
+  "acceptance_criteria": 3479,
   "acceptance_criteria_confirmed": 3203,
   "verify_tags": {
-    "untagged": 3042,
-    "exec": 282,
+    "untagged": 3060,
+    "exec": 298,
     "none": 17,
-    "judged": 55,
+    "judged": 76,
     "invariant": 28
   },
-  "flows_since_baseline": 70,
+  "flows_since_baseline": 74,
   "outcome_author": {
-    "None": 364,
-    "agent": 27,
+    "None": 365,
+    "agent": 30,
     "human": 18
   },
   "origin": {
-    "None": 377,
+    "None": 379,
     "agent-finding": 3,
-    "human-request": 28,
+    "human-request": 30,
     "agent-proposal": 1
   },
-  "reviewed_flows": 166,
-  "review_rounds": 391,
-  "findings": 2646,
+  "reviewed_flows": 173,
+  "review_rounds": 404,
+  "findings": 2732,
   "findings_by_severity": {
-    "major": 838,
-    "minor": 1274,
-    "info": 359,
-    "blocker": 175
+    "major": 858,
+    "minor": 1320,
+    "blocker": 176,
+    "info": 378
   },
-  "findings_blocking": 175,
+  "findings_blocking": 176,
   "verdicts": {
     "refuted": 1668,
-    "confirmed": 344,
-    "no-verdict": 618,
-    "unverifiable": 16
+    "no-verdict": 661,
+    "confirmed": 384,
+    "unverifiable": 19
   },
   "refuted_by_disposition": {
     "acted-on": 1591,
