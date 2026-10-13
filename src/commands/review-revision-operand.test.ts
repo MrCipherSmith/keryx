@@ -35,6 +35,9 @@ const HOSTILE: ReadonlyArray<readonly string[]> = [
   ["review", "scope", `--ref=--output=${outside}`],
   ["review", "blast-radius", `--base=--output=${outside}`],
   ["review", "floor", `--ref=--output=${outside}`],
+];
+// These return early when Jev is not enabled (the CI default), so their exit code proves nothing there; the source pin below covers their call sites.
+const JEV_HOSTILE: ReadonlyArray<readonly string[]> = [
   ["review", "jev-select", `--ref=--output=${outside}`],
   ["review", "jev-risk", `--diff=--output=${outside}`],
   ["review", "jev-rules", `--diff=--output=${outside}`],
@@ -48,6 +51,13 @@ test("F-045: no review command lets a --flag=--output=<file> revision make git w
     const result = run(...args);
     expect(existsSync(outside), args.join(" ")).toBe(false);
     expect(result.exitCode, args.join(" ")).not.toBe(0);
+  }
+}, 120_000);
+
+test("F-045: no jev command lets a --flag=--output=<file> revision make git write a file", () => {
+  for (const args of JEV_HOSTILE) {
+    run(...args);
+    expect(existsSync(outside), args.join(" ")).toBe(false);
   }
 }, 120_000);
 
