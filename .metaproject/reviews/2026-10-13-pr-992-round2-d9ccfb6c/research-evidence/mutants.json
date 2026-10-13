@@ -1,0 +1,30 @@
+{
+  "mutants": [
+    { "id": "M01-review-run-stand-aside-dropped", "file": "src/commands/agent.ts", "anchor": "if (reviewRun !== undefined || call.name !== \"ask_user\" || resolveQuestionAnswerer(mode) !== \"model\") {", "replacement": "if (call.name !== \"ask_user\" || resolveQuestionAnswerer(mode) !== \"model\") {" },
+    { "id": "M02-schema-validation-dropped", "file": "src/commands/agent.ts", "anchor": "if (!validateAgainstSchemaObject(tool.definition.inputSchema, input).valid) return undefined;", "replacement": "if (false as boolean) return undefined;" },
+    { "id": "M03-parse-failure-ignored", "file": "src/commands/agent.ts", "anchor": "if (!parsed.ok) return undefined;", "replacement": "if (false as boolean) return undefined;" },
+    { "id": "M04-untrusted-latch-ignored", "file": "src/commands/agent.ts", "anchor": "const request = untrustedContentSeen ? { ...parsed.request, untrustedContent: true } : parsed.request;", "replacement": "const request = parsed.request;" },
+    { "id": "M05-floor-disabled", "file": "src/commands/agent.ts", "anchor": "if (askFloor(request) !== undefined) return undefined;", "replacement": "if (false as boolean) return undefined;" },
+    { "id": "M06-self-answer-remembered-as-operator-answer", "file": "src/commands/agent.ts", "anchor": "if (precomputedResult === undefined && storedAnswer === undefined && selfAnswered === undefined) {", "replacement": "if (precomputedResult === undefined && storedAnswer === undefined) {" },
+    { "id": "M07-missing-mode-defaults-to-auto", "file": "src/commands/agent.ts", "anchor": "io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE, untrustedContentSeen, reviewRun)", "replacement": "io.permissionMode?.() ?? \"auto\", untrustedContentSeen, reviewRun)" },
+    { "id": "M08-display-callback-swapped-args", "file": "src/commands/agent.ts", "anchor": "io.onQuestionSelfAnswered?.(selfAnswered.question, selfAnswered.label);", "replacement": "io.onQuestionSelfAnswered?.(selfAnswered.label, selfAnswered.question);" },
+    { "id": "M09-display-callback-dropped", "file": "src/commands/agent.ts", "anchor": "io.onQuestionSelfAnswered?.(selfAnswered.question, selfAnswered.label);", "replacement": "void selfAnswered;" },
+    { "id": "M10-denial-fingerprint-not-recorded", "file": "src/commands/agent.ts", "anchor": "recordOperatorDenial(meta.fingerprint);", "replacement": "void 0;" },
+    { "id": "M11-denial-spelled-not-recorded", "file": "src/commands/agent.ts", "anchor": "recordOperatorDenial(spelled!);", "replacement": "void 0;" },
+    { "id": "M12-denial-guard-always-records", "file": "src/commands/agent.ts", "anchor": "if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {", "replacement": "if (meta !== undefined) {" },
+    { "id": "M13-denial-guard-never-records", "file": "src/commands/agent.ts", "anchor": "if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {", "replacement": "if (meta !== undefined && (false as boolean)) {" },
+    { "id": "M14-refusal-memory-read-in-every-mode", "file": "src/commands/agent.ts", "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {", "replacement": "if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {" },
+    { "id": "M15-refusal-memory-never-read", "file": "src/commands/agent.ts", "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {", "replacement": "if (false as boolean) {" },
+    { "id": "M16-question-axis-trust-answers-as-model", "file": "src/commands/permission-mode.ts", "anchor": "return mode === \"auto\" ? \"model\" : \"human\";", "replacement": "return mode !== \"ask\" ? \"model\" : \"human\";" },
+    { "id": "M17-recommended-ignored", "file": "src/harness/tool/builtin/ask-user-tool.ts", "anchor": "const option = request.options.find((o) => o.recommended === true) ?? request.options[0]!;", "replacement": "const option = request.options[0]!;" },
+    { "id": "M18-self-answer-says-user-answered", "file": "src/harness/tool/builtin/ask-user-tool.ts", "anchor": ". The user did not answer this question.", "replacement": "." },
+    { "id": "M19-no-host-branch-dead", "file": "src/harness/tool/builtin/ask-user-tool.ts", "anchor": "if (chosen === ASK_USER_NO_HOST) {", "replacement": "if (chosen === ASK_USER_NO_HOST && (false as boolean)) {" },
+    { "id": "M20-no-host-returns-cancel", "file": "src/tui/ask-user-bridge.ts", "anchor": "return ASK_USER_NO_HOST;", "replacement": "return \"__cancel__\";" },
+    { "id": "M21-facade-forwards-stale-turn", "file": "src/tui/foreground-operation.ts", "anchor": "if (accepts()) io.onQuestionSelfAnswered?.(question, answerLabel);", "replacement": "io.onQuestionSelfAnswered?.(question, answerLabel);" },
+    { "id": "M22-floor-operator-denial-dropped", "file": "src/review/arbiter-floor.ts", "anchor": "if (!reviewAutoMayAnswer(request)) return \"operator-denial\";", "replacement": "" },
+    { "id": "M23-floor-untrusted-dropped", "file": "src/review/arbiter-floor.ts", "anchor": "if (request.untrustedContent === true) return \"untrusted-content\";", "replacement": "" },
+    { "id": "M24-floor-action-dropped", "file": "src/review/arbiter-floor.ts", "anchor": "if (typeof request.action === \"string\" && request.action.trim().length > 0) return \"action\";", "replacement": "" },
+    { "id": "M25-second-preload-dropped", "file": "bunfig.toml", "anchor": "preload = [\"./src/lib/test-preload.ts\", \"./src/lib/test-preload-hooks.ts\"]", "replacement": "preload = [\"./src/lib/test-preload.ts\"]" },
+    { "id": "M26-preload-reset-dropped", "file": "src/lib/test-preload-hooks.ts", "anchor": "beforeEach(() => resetOperatorDenials());", "replacement": "beforeEach(() => {});" }
+  ]
+}

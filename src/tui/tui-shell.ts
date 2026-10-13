@@ -1,6 +1,7 @@
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
+import { resetOperatorDenials } from "../review/review-system";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
@@ -317,7 +318,7 @@ import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
-import { terminalSafe } from "../lib/terminal-safe";
+import { selfAnsweredLine, terminalSafe } from "../lib/terminal-safe";
 import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
@@ -357,6 +358,7 @@ import {
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
+  withTurnScopedIo,
   type TurnScopedIo,
 } from "./foreground-operation";
 import {
@@ -392,7 +394,7 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import type { AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
+import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
@@ -3702,7 +3704,7 @@ export function describeModeRow(
 const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   ask: "Every mutating action asks first (today's default)",
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
-  auto: "Skips confirmation for everything except credential-touching commands",
+  auto: "Skips confirmation except for credential-touching commands; the agent answers its own questions",
 };
 
 /** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
@@ -5996,7 +5998,7 @@ export async function launchTuiAgentShell(opts: {
             showComposerChoiceDetailed(otui, r, chrome.dock, {
               title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
               subtitle: "Pick an option, or type your own answer · Esc cancels",
-              cancelId: "__cancel__",
+              cancelId: ASK_USER_CANCEL,
               // flow 401: the last row and the Tab key; only this picker has them (approvals and slash pickers never do)
               ownAnswer: {},
               onOpen: () => chrome.blurComposer(),
@@ -6188,6 +6190,17 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     io.onAutoApproved = autoApprovedFor(false);
+    // NOT dimmed, for the same reason: `auto` mode answered a question the user never saw, so this line is the record.
+    io.onQuestionSelfAnswered = (question, answerLabel) => {
+      // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+      const line = selfAnsweredLine(question, answerLabel);
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `qs${uid++}`,
+          content: otui.t`${roleChunk(otui, "attention", "◇ answered without asking (auto):")} ${dimChunk(otui, line)}`,
+        }),
+      );
+    };
     // Flow 396 (finding 9): what a turn that came from Telegram is judged and asked by. Passed to the
     // foreground facade of THAT turn only, so it follows the turn and not a bridge-wide flag: a trust default
     // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
@@ -6320,6 +6333,7 @@ export async function launchTuiAgentShell(opts: {
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
+      resetOperatorDenials();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
@@ -6918,6 +6932,7 @@ export async function launchTuiAgentShell(opts: {
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
+      resetOperatorDenials();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       sessionResumed = NEW_SESSION_ENTRY.resumed;
@@ -7607,6 +7622,7 @@ export async function launchTuiAgentShell(opts: {
       permissionMode = next;
       modeChangedThisSession = true;
       paintModeRow();
+      resetOperatorDenials();
       chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
@@ -7627,7 +7643,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
+                `Only credential-touching commands still ask. The agent also answers its own questions; irreversible or untrusted ones still ask you. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -8790,7 +8806,8 @@ export async function launchTuiAgentShell(opts: {
             await runGoalCommand({
               raw: line.slice(command.name.length).trim(),
               cwd: sessionCwd,
-              io,
+              // A goal typed in the topic starts a model turn Telegram started: it is judged and asked like one.
+              io: source === TG_SOURCE ? withTurnScopedIo(io, telegramTurnIo) : io,
               deps,
               history,
               slateSession,

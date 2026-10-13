@@ -1,0 +1,166 @@
+{
+  "mutants": [
+    {
+      "id": "M01-review-run-stand-aside-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "reviewRun !== undefined || telegramTurn || call.name !== \"ask_user\"",
+      "replacement": "telegramTurn || call.name !== \"ask_user\""
+    },
+    {
+      "id": "M02-telegram-stand-aside-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "reviewRun !== undefined || telegramTurn ||",
+      "replacement": "reviewRun !== undefined ||"
+    },
+    {
+      "id": "M04-policy-stand-aside-review-auto-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "reviewAutoActive() || process.env.KERYX_REVIEW_AUTO_ANSWER === \"1\"",
+      "replacement": "process.env.KERYX_REVIEW_AUTO_ANSWER === \"1\""
+    },
+    {
+      "id": "M05-policy-stand-aside-env-answer-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "process.env.KERYX_REVIEW_AUTO_ANSWER === \"1\" || ",
+      "replacement": ""
+    },
+    {
+      "id": "M06-policy-stand-aside-answers-file-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "(process.env[ENV_AUTONOMOUS_ANSWERS_FILE] ?? \"\").length > 0",
+      "replacement": "false"
+    },
+    {
+      "id": "M08-refusal-memory-never-read",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "replacement": "if (false as boolean) {"
+    },
+    {
+      "id": "M09-refusal-memory-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "replacement": "if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {"
+    },
+    {
+      "id": "M10-refusal-floor-never-learns-outside-review-auto",
+      "file": "src/commands/agent.ts",
+      "anchor": "noteOperatorRefusal();",
+      "replacement": "void 0;"
+    },
+    {
+      "id": "M11-unattended-no-is-a-refusal",
+      "file": "src/commands/agent.ts",
+      "anchor": "return attended !== false && signal?.aborted !== true && (current?.() ?? true);",
+      "replacement": "return signal?.aborted !== true && (current?.() ?? true);"
+    },
+    {
+      "id": "M13-stale-turn-no-is-a-refusal",
+      "file": "src/commands/agent.ts",
+      "anchor": "return attended !== false && signal?.aborted !== true && (current?.() ?? true);",
+      "replacement": "return attended !== false && signal?.aborted !== true;"
+    },
+    {
+      "id": "M14-trigger-approver-not-marked-unattended",
+      "file": "src/commands/trigger-dispatch.ts",
+      "anchor": "return Object.assign(approver, { attended: false });",
+      "replacement": "return approver;"
+    },
+    {
+      "id": "M15-facade-approver-not-marked-current",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "{ current: accepts },",
+      "replacement": "{},"
+    },
+    {
+      "id": "M16-facade-forwards-stale-turn-self-answer",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "if (accepts()) io.onQuestionSelfAnswered?.(question, answerLabel);",
+      "replacement": "io.onQuestionSelfAnswered?.(question, answerLabel);"
+    },
+    {
+      "id": "M19-self-answer-disclaimer-dropped",
+      "file": "src/harness/tool/builtin/ask-user-tool.ts",
+      "anchor": ". The user did not answer this question.",
+      "replacement": "."
+    },
+    {
+      "id": "M20-second-preload-dropped",
+      "file": "bunfig.toml",
+      "anchor": "preload = [\"./src/lib/test-preload.ts\", \"./src/lib/test-preload-hooks.ts\"]",
+      "replacement": "preload = [\"./src/lib/test-preload.ts\"]"
+    },
+    {
+      "id": "M21-preload-reset-dropped",
+      "file": "src/lib/test-preload-hooks.ts",
+      "anchor": "beforeEach(() => resetOperatorDenials());",
+      "replacement": "beforeEach(() => {});"
+    },
+    {
+      "id": "M22-mode-change-keeps-refusals-readline",
+      "file": "src/commands/shell.ts",
+      "anchor": "permissionMode = wanted;\n            resetOperatorDenials();",
+      "replacement": "permissionMode = wanted;"
+    },
+    {
+      "id": "M23-new-session-keeps-refusals-tui",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();",
+      "replacement": "io.trustedMcpTools?.clear();\n      stopRemoteForSessionSwitch();"
+    },
+    {
+      "id": "M24-delegate-branch-refusal-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "} else if (risk === \"delegate\") {\n    if (reviewAutoActive() && operatorDenied(",
+      "replacement": "} else if (risk === \"delegate\") {\n    if (operatorDenied("
+    },
+    {
+      "id": "M25-write-branch-refusal-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "} else if (risk === \"write\") {\n    if (reviewAutoActive() && operatorDenied(",
+      "replacement": "} else if (risk === \"write\") {\n    if (operatorDenied("
+    },
+    {
+      "id": "M17-self-answer-line-not-terminal-safe",
+      "file": "src/lib/terminal-safe.ts",
+      "anchor": "return terminalSafe(`${shortQuestion} → ${answerLabel}`).text;",
+      "replacement": "return `${shortQuestion} → ${answerLabel}`;"
+    },
+    {
+      "id": "M17b-self-answer-line-cut-by-code-unit",
+      "file": "src/lib/terminal-safe.ts",
+      "anchor": "const points = Array.from(question);",
+      "replacement": "const points = question.split(\"\");"
+    },
+    {
+      "id": "M17c-readline-bypasses-the-shared-line",
+      "file": "src/commands/shell.ts",
+      "anchor": "const line = selfAnsweredLine(question, answerLabel);",
+      "replacement": "const line = `${question} → ${answerLabel}`;"
+    },
+    {
+      "id": "M18-tui-bypasses-the-shared-line",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "const line = selfAnsweredLine(question, answerLabel);",
+      "replacement": "const line = `${question} → ${answerLabel}`;"
+    },
+    {
+      "id": "M26-aborted-turn-no-is-a-refusal",
+      "file": "src/commands/agent.ts",
+      "anchor": "return attended !== false && signal?.aborted !== true && (current?.() ?? true);",
+      "replacement": "return attended !== false && (current?.() ?? true);"
+    },
+    {
+      "id": "M27-goal-turn-not-marked-telegram",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "io: source === TG_SOURCE ? withTurnScopedIo(io, telegramTurnIo) : io,",
+      "replacement": "io,"
+    },
+    {
+      "id": "M28-turn-overlay-drops-hooks",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "if (hook !== undefined) Object.defineProperty(scoped, key,",
+      "replacement": "if (false as boolean) Object.defineProperty(scoped, key,"
+    }
+  ]
+}

@@ -98,7 +98,9 @@ The properties above are unconditional — they hold for `keryx harness run`,
 top of that same approval gate and adds a **session-level convenience layer**
 with three modes: `ask` (default, unchanged), `trust` (safe calls run without
 asking; a destructive one still asks), and `auto` (nothing asks except a
-credentials-touching command, which no mode ever auto-approves). Set it with
+credentials-touching command, which no mode ever auto-approves; it also answers
+the agent's own questions by picking the recommended option and saying so, while
+questions about irreversible or untrusted actions still ask you). Set it with
 `keryx shell --trust`/`--auto`, or the `/mode` command once inside a session.
 Full reference, including exactly where the per-project default is stored:
 [Choose an approval mode](guides/permission-modes.md).

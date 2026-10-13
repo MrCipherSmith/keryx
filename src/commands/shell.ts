@@ -119,7 +119,8 @@ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
-import { parseReviewSystem, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
@@ -2254,6 +2255,12 @@ export async function runAgentRepl(
     const trustedFlag = meta.mcpTrusted === true ? style.yellow(` ${TRUSTED_MARKER}`) : "";
     out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag}${trustedFlag} ${style.dim(preview)}\n`);
   };
+  agentIo.onQuestionSelfAnswered = (question, answerLabel) => {
+    stopSpinner();
+    // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+    const line = selfAnsweredLine(question, answerLabel);
+    out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(line)}\n`);
+  };
 
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
@@ -2364,6 +2371,7 @@ export async function runAgentRepl(
       );
       holdLease(next.lease);
       agentIo.trustedMcpTools?.clear();
+      resetOperatorDenials();
       return next.handle;
     } catch (cause) {
       agentIo.onSystem?.(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
@@ -2938,6 +2946,7 @@ export async function runAgentRepl(
         // tool result instead of "nothing to expand".
         lastToolOutput = undefined;
         lastToolName = undefined;
+        resetOperatorDenials();
         if (nextLive !== undefined) {
           live = nextLive;
           history = [];
@@ -3041,7 +3050,8 @@ export async function runAgentRepl(
           if (wanted === "auto") {
             agentIo.onSystem?.(
               "⚠ auto mode skips confirmation for EVERY action, including destructive commands.\n" +
-                "Only credential-touching commands still ask. Type 'yes' to confirm: ",
+                "Only credential-touching commands still ask. The agent also answers its own questions (recommended option, said so); irreversible or untrusted ones still ask you.\n" +
+                "Type 'yes' to confirm: ",
             );
             const answer = ((await readLine()) ?? "").trim();
             confirmed = /^y(es)?$/i.test(answer);
@@ -3050,6 +3060,7 @@ export async function runAgentRepl(
             agentIo.onSystem?.("Cancelled — mode unchanged.\n");
           } else {
             permissionMode = wanted;
+            resetOperatorDenials();
             agentIo.onSystem?.(`Permission mode: ${permissionMode} (${describeRoundLimit(permissionMode)})\n`);
             if (saveFlag) {
               const saved = setProjectPermissionMode(sessionCwd, permissionMode);

@@ -498,7 +498,9 @@ session with:
 with no argument, `/mode` shows the current mode and what it means; `/mode
 trust` auto-approves safe calls but still asks before anything destructive or
 credential-touching; `/mode auto` skips confirmation for everything except a
-credential-touching command, which no mode ever auto-approves. This is a
+credential-touching command, which no mode ever auto-approves, and it answers the
+agent's own questions by picking the recommended option and saying so (questions about
+irreversible or untrusted actions still ask you). This is a
 session-level control only — `keryx harness run`/`exec`, `keryx serve` and MCP
 sit above it, unconditionally policy-gated either way. See the
 [permission modes guide](guides/permission-modes.md) for the full picture,

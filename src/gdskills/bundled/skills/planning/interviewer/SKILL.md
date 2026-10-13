@@ -93,8 +93,8 @@ Before the first question, check whether a host can show it: the `ask_user` tool
 
 - **Host present:** ask every question through `ask_user`, one per call, with the A/B/C/D options as its options.
 - **No host:** ask NO question, not even in plain text; nobody is there to answer it. Return `status: "NEEDS_CONTEXT"` with the `assumptions` you would have asked about (question, assumption, `confidence: "assumption"`), `ready_to_proceed: false`. The caller decides.
-- A cancelled or empty `ask_user` answer is not an answer: record it as an assumption and stop asking.
-- Each `ask_user` question is recorded in the recommendation journal by the tool itself (source, arm, recommendation, answer); you do not record it. `src/decisions/interviewer-path.test.ts` pins this path through the agent's real tool roster.
+- A "No one was asked", cancelled or empty `ask_user` answer is not an answer: record it as an assumption and stop asking.
+- Each `ask_user` question a person answers is recorded in the recommendation journal by the tool itself (source, arm, recommendation, answer); you do not record it. A question the model answered itself under `/mode auto` never reached a person and is not journaled: treat its answer as an assumption, not a decision. `src/decisions/interviewer-path.test.ts` pins this path through the agent's real tool roster.
 
 ## Question Bank by Goal Type
 

@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-pr558new",
+  "command": "bun test src/commands/agent-question-axis.test.ts src/lib/test-preload.test.ts src/harness/tool/builtin/ask-user-tool.test.ts src/decisions/interviewer-path.test.ts src/review/review-system.test.ts src/tui/foreground-operation.test.ts src/tui/ask-user-bridge.test.ts src/tui/ask-user-bridge-arbiter.test.ts src/commands/permission-mode.test.ts src/commands/trigger-dispatch.test.ts src/commands/review-arbiter.test.ts src/commands/agent-fewer-prompts.test.ts src/commands/shell-agent-repl.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 17240
+  },
+  "mutants": [
+    {
+      "id": "M01-review-run-stand-aside-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "reviewRun !== undefined || telegramTurn || call.name !== \"ask_user\"",
+      "replacement": "telegramTurn || call.name !== \"ask_user\"",
+      "line": 2526,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17656
+    },
+    {
+      "id": "M02-telegram-stand-aside-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "reviewRun !== undefined || telegramTurn ||",
+      "replacement": "reviewRun !== undefined ||",
+      "line": 2526,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 18178
+    },
+    {
+      "id": "M04-policy-stand-aside-review-auto-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "reviewAutoActive() || process.env.KERYX_REVIEW_AUTO_ANSWER === \"1\"",
+      "replacement": "process.env.KERYX_REVIEW_AUTO_ANSWER === \"1\"",
+      "line": 2539,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13572
+    },
+    {
+      "id": "M05-policy-stand-aside-env-answer-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "process.env.KERYX_REVIEW_AUTO_ANSWER === \"1\" || ",
+      "replacement": "",
+      "line": 2539,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13391
+    },
+    {
+      "id": "M06-policy-stand-aside-answers-file-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "(process.env[ENV_AUTONOMOUS_ANSWERS_FILE] ?? \"\").length > 0",
+      "replacement": "false",
+      "line": 2539,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17418
+    },
+    {
+      "id": "M08-refusal-memory-never-read",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "replacement": "if (false as boolean) {",
+      "line": 5608,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 17529
+    },
+    {
+      "id": "M09-refusal-memory-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "replacement": "if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {",
+      "line": 5608,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17354
+    },
+    {
+      "id": "M10-refusal-floor-never-learns-outside-review-auto",
+      "file": "src/commands/agent.ts",
+      "anchor": "noteOperatorRefusal();",
+      "replacement": "void 0;",
+      "line": 5620,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17383
+    },
+    {
+      "id": "M11-unattended-no-is-a-refusal",
+      "file": "src/commands/agent.ts",
+      "anchor": "return attended !== false && signal?.aborted !== true && (current?.() ?? true);",
+      "replacement": "return signal?.aborted !== true && (current?.() ?? true);",
+      "line": 5553,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17709
+    },
+    {
+      "id": "M13-stale-turn-no-is-a-refusal",
+      "file": "src/commands/agent.ts",
+      "anchor": "return attended !== false && signal?.aborted !== true && (current?.() ?? true);",
+      "replacement": "return attended !== false && signal?.aborted !== true;",
+      "line": 5553,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13808
+    },
+    {
+      "id": "M14-trigger-approver-not-marked-unattended",
+      "file": "src/commands/trigger-dispatch.ts",
+      "anchor": "return Object.assign(approver, { attended: false });",
+      "replacement": "return approver;",
+      "line": 535,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 12990
+    },
+    {
+      "id": "M15-facade-approver-not-marked-current",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "{ current: accepts },",
+      "replacement": "{},",
+      "line": 289,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13060
+    },
+    {
+      "id": "M16-facade-forwards-stale-turn-self-answer",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "if (accepts()) io.onQuestionSelfAnswered?.(question, answerLabel);",
+      "replacement": "io.onQuestionSelfAnswered?.(question, answerLabel);",
+      "line": 295,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13004
+    },
+    {
+      "id": "M17-readline-self-answer-line-not-terminal-safe",
+      "file": "src/commands/shell.ts",
+      "anchor": "const line = terminalSafe(`${shortQuestion} → ${answerLabel}`).text;",
+      "replacement": "const line = `${shortQuestion} → ${answerLabel}`;",
+      "line": 2262,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13078
+    },
+    {
+      "id": "M18-tui-self-answer-line-not-terminal-safe",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "const line = terminalSafe(`${shortQuestion} → ${answerLabel}`).text;",
+      "replacement": "const line = `${shortQuestion} → ${answerLabel}`;",
+      "line": 6192,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13321
+    },
+    {
+      "id": "M19-self-answer-disclaimer-dropped",
+      "file": "src/harness/tool/builtin/ask-user-tool.ts",
+      "anchor": ". The user did not answer this question.",
+      "replacement": ".",
+      "line": 162,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 14749
+    },
+    {
+      "id": "M20-second-preload-dropped",
+      "file": "bunfig.toml",
+      "anchor": "preload = [\"./src/lib/test-preload.ts\", \"./src/lib/test-preload-hooks.ts\"]",
+      "replacement": "preload = [\"./src/lib/test-preload.ts\"]",
+      "line": 11,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16991
+    },
+    {
+      "id": "M21-preload-reset-dropped",
+      "file": "src/lib/test-preload-hooks.ts",
+      "anchor": "beforeEach(() => resetOperatorDenials());",
+      "replacement": "beforeEach(() => {});",
+      "line": 12,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13128
+    },
+    {
+      "id": "M22-mode-change-keeps-refusals-readline",
+      "file": "src/commands/shell.ts",
+      "anchor": "permissionMode = wanted;\n            resetOperatorDenials();",
+      "replacement": "permissionMode = wanted;",
+      "line": 3062,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13503
+    },
+    {
+      "id": "M23-new-session-keeps-refusals-tui",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "io.trustedMcpTools?.clear();\n      resetOperatorDenials();\n      stopRemoteForSessionSwitch();",
+      "replacement": "io.trustedMcpTools?.clear();\n      stopRemoteForSessionSwitch();",
+      "line": 6930,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13473
+    },
+    {
+      "id": "M24-delegate-branch-refusal-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "} else if (risk === \"delegate\") {\n    if (reviewAutoActive() && operatorDenied(",
+      "replacement": "} else if (risk === \"delegate\") {\n    if (operatorDenied(",
+      "line": 5859,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13322
+    },
+    {
+      "id": "M25-write-branch-refusal-read-in-every-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "} else if (risk === \"write\") {\n    if (reviewAutoActive() && operatorDenied(",
+      "replacement": "} else if (risk === \"write\") {\n    if (operatorDenied(",
+      "line": 5906,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 12863
+    }
+  ],
+  "totals": {
+    "killed": 13,
+    "survived": 9,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

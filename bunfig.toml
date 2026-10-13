@@ -1,9 +1,11 @@
 # Bun configuration.
 #
-# The only entry is a test preload that redirects the user-global keryx config
-# directory into a per-run temp directory. Without it a `bun test` run writes
-# into the developer's real `~/.local/share/keryx` — see src/lib/test-preload.ts
-# for the measurement that motivated it.
+# Two test preloads. ./src/lib/test-preload.ts redirects the user-global keryx config
+# directory into a per-run temp directory; without it a `bun test` run writes into the
+# developer's real `~/.local/share/keryx` (see that file for the measurement).
+# ./src/lib/test-preload-hooks.ts is the runner-only half: a global `beforeEach` that
+# clears the process-wide operator-refusal memory, which production clears on /clear, /new
+# and a mode change. src/lib/test-preload.test.ts pins both entries.
 
 [test]
-preload = ["./src/lib/test-preload.ts"]
+preload = ["./src/lib/test-preload.ts", "./src/lib/test-preload-hooks.ts"]

@@ -115,6 +115,16 @@ export function terminalSafe(value: string): TerminalSafeResult {
 }
 
 /**
+ * The line a shell shows for a question `auto` mode answered itself: `<question> → <label>`, both written by the
+ * model. The question is cut to 100 code points (never through a surrogate pair), then everything is escaped.
+ */
+export function selfAnsweredLine(question: string, answerLabel: string): string {
+  const points = Array.from(question);
+  const shortQuestion = points.length > 100 ? `${points.slice(0, 97).join("")}…` : question;
+  return terminalSafe(`${shortQuestion} → ${answerLabel}`).text;
+}
+
+/**
  * `terminalSafe` for multi-line text such as a patch: `\n` and `\t` stay as they are,
  * everything else unsafe (ESC, a bare `\r` that could overwrite the line, ...) is escaped.
  */
