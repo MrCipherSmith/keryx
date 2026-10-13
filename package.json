@@ -53,6 +53,7 @@
     "test:client": "bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime",
     "check": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test",
     "check:core": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core",
+    "docs:build": "mkdocs build --strict",
     "check:doc-links": "bun scripts/check-doc-links.ts",
     "check:retired-spellings": "bun scripts/check-retired-cli-spellings.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",

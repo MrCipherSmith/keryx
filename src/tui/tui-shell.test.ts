@@ -4228,7 +4228,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
   const fnBody = tuiSource.slice(tuiSource.indexOf("export async function launchTuiAgentShell(opts: {"));
 
   test("resumeSessionInteractive rebinds the slate after it applies the resumed session", () => {
-    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
     const applied = block.indexOf("applyOpened(opened, true);");
@@ -4237,7 +4237,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
   });
 
   test("resumeSessionInteractive refreshes the workspace sidebar from the rebound slate", () => {
-    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
     const bound = block.indexOf("bindSlateToLiveSession();");
     expect(bound).toBeGreaterThanOrEqual(0);

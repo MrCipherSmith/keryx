@@ -159,7 +159,9 @@ keryx review severity-audit --package <review-dir>
 ```
 
 `mutate` applies each proposed mutant in a scratch copy of the worktree (the
-worktree is never written) and records whether the tests failed. A mutant that
+worktree is never written) and records whether the tests failed. The table in
+`research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
+test command it was judged by and that command's exit code. A mutant that
 **survived** means no test pins that behaviour. `severity-audit` raises a finding
 that cites a surviving mutant (`mutant:<id>` in its `evidence`) from minor to major
 and records why; it never deletes a finding. For an attended run `review complete`

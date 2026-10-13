@@ -30,7 +30,7 @@ test("AC6: /new and /clear both go through startNewSession, which clears the tru
   const dispatch = SOURCE.indexOf('command.name === "/clear" || command.name === "/new"', FN_START);
   expect(dispatch).toBeGreaterThan(FN_START);
   expect(SOURCE.slice(dispatch, dispatch + 1200)).toContain("startNewSession(");
-  const body = bodyFrom("const startNewSession = (note?: string): boolean => {");
+  const body = bodyFrom("const startNewSession = async (signal: AbortSignal, note?: string): Promise<boolean> => {");
   const reset = body.indexOf("resetSessionSurface();");
   const clear = body.indexOf("io.trustedMcpTools?.clear();");
   const swap = body.indexOf("liveSession = opened.handle;");
@@ -42,8 +42,13 @@ test("AC6: /new and /clear both go through startNewSession, which clears the tru
 });
 
 test("AC6: the failed-open path returns before any grant is cleared", () => {
-  const body = bodyFrom("const startNewSession = (note?: string): boolean => {");
-  expect(body.indexOf("return false;")).toBeLessThan(body.indexOf("io.trustedMcpTools?.clear();"));
+  const body = bodyFrom("const startNewSession = async (signal: AbortSignal, note?: string): Promise<boolean> => {");
+  expect(body).toContain("opened = await preservedOpen(signal);");
+  const failed = body.indexOf("return false;");
+  const clear = body.indexOf("io.trustedMcpTools?.clear();");
+  expect(failed).toBeGreaterThan(body.indexOf("catch (cause)"));
+  expect(clear).toBeGreaterThan(-1);
+  expect(failed).toBeLessThan(clear);
 });
 
 test("AC3/AC4: /mcp trust is routed while idle and while busy, ahead of the server view", () => {

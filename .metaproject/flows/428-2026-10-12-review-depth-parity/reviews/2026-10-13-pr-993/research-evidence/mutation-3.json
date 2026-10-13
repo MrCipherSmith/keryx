@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f428",
+  "command": "bun test src/gdskills/reviewer-triggers.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 182
+  },
+  "mutants": [
+    {
+      "id": "M8",
+      "file": "src/review/coverage.ts",
+      "anchor": "? \"\\uE001\" : \"\\uE000\"",
+      "replacement": "? \"\\uE000\" : \"\\uE001\"",
+      "note": "trailing /** no longer reaches files",
+      "line": 46,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 139
+    },
+    {
+      "id": "M9",
+      "file": "src/review/coverage.ts",
+      "anchor": "if (gated(name) === false) {",
+      "replacement": "if (gated(name) === true) {",
+      "note": "path gate inverted",
+      "line": 110,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 141
+    }
+  ],
+  "totals": {
+    "killed": 2,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}
