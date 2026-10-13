@@ -1,0 +1,95 @@
+STATUS: DONE_WITH_CONCERNS
+
+```REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "findings": [
+    {
+      "id": "LOG-1",
+      "severity": "major",
+      "file": "src/review/ledger.ts",
+      "quote": "const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g)].slice(-MAX_MARKERS);",
+      "problem": "afterMarker matches REVIEW_RESULT anywhere in the text, not only at the start of a line. A reply with no REVIEW_RESULT fence whose prose contains 'REVIEW_RESULT: {valid reviewer-shaped JSON}' has that object chosen over the real bare result. The candidate only has to be a reviewer result, so a quoted contract line or fixture qualifies.",
+      "impact": "Trigger: a reviewer that does not use the fence and whose prose, before or after its real result, quotes the contract line or a fixture. Outcome: a real BLOCKED result with findings is replaced by DONE with zero findings or an arbitrary reviewer name; the ledger can pass. When the quote comes BEFORE the real result this is a regression: the base parser returned the real result. When AFTER, it was already so in the base parser. A REVIEW_RESULT fence dominates and is not affected.",
+      "suggested_fix": "Anchor the marker at line start: /(?<![^\\n])[ \\t>*#-]*REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g. Applied in a scratch copy: all 64 ledger tests stay green. A quote at line start still hijacks; two markers cannot fail closed because last-marker-wins is pinned.",
+      "evidence": "Probes p2.ts lines 34-43 and p3.ts lines 39-40 in scratchpad r2/review-logic. 'real BLOCKED bare result, then a line starting REVIEW_RESULT: {DONE, <name>}' returns DONE; 'quoted evil marker then real bare BLOCKED' returns the quoted one in the new parser and the real one in the old.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/review/ledger.ts:afterMarker (the only marker matcher)",
+          "src/review/ledger.ts:parseReviewResult precedence step 2 (sole caller)",
+          "src/commands/review-slice.ts:readResult",
+          "src/commands/review-ledger.ts:loadRaws"
+        ],
+        "enumeration_method": "keryx ctx rg for REVIEW_RESULT and afterMarker/parseReviewResult across src; every reviewer-reply parse goes through parseReviewResult and only afterMarker matches the bare marker."
+      }
+    },
+    {
+      "id": "LOG-2",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "if (claimsResult || (unclosed += 1) > MAX_UNCLOSED) return { found, truncated: true };",
+      "problem": "Reaching the MAX_UNCLOSED cap is treated as truncation, the same as an unclosed fragment carrying a result key. Nine or more unclosed non-result fragments discard a genuine result. The MAX_MARKERS window of 8 does the same to a genuine marker result followed by 9 or more trailing marker lines.",
+      "impact": "A reply with 9 or more '{\"' prose fragments, or 9 or more trailing REVIEW_RESULT-brace lines, next to a real result returns undefined and the ledger records a gap. Fails closed; base parser returned the result.",
+      "suggested_fix": "On the cap return truncated: false and keep truncated: true only for a fragment claiming a result key. Verified in scratch (64/64). Fragments BEFORE the result still give undefined.",
+      "evidence": "p2.ts caps section, p2fix.ts, p3fix.ts.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LOG-3",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "function objectEnd(",
+      "problem": "Quote parity can invert. A prose fragment 'see {\"x', then the real result, then a stray '\"' followed by '}' makes the candidate from the fragment close at that '}', fail JSON.parse and be skipped whole (AC12). The real result inside it is never revisited.",
+      "impact": "Odd quote count in the prose after the result, a '}' after it, plus an earlier non-result '{\"' fragment gives undefined and a gap. Fails closed; base returned the result.",
+      "suggested_fix": "None beyond the AC12 skip-whole rule; retry would weaken AC12.",
+      "evidence": "p2.ts line 19; p3.ts line 16.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LOG-4",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "claimsResult",
+      "problem": "claimsResult only looks at depth-1 keys seen before the cut. A truncated reply beginning with other keys (summary, slices) cut before any result key is skipped, and the scan re-enters a nested slice entry and returns DONE with no reviewer.",
+      "impact": "Structurally ambiguous with 'prose fragment then real result'. No observed producer emits this layout; loadRaws ignores a result with no reviewer and no findings array.",
+      "suggested_fix": "Document key order, or treat a depth-1 slices key as a claim.",
+      "evidence": "p3.ts lines 34-36.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LOG-5",
+      "severity": "info",
+      "file": "src/commands/review-slice.ts",
+      "quote": "result holds no usable reviewer result (a JSON object with a status, or a reply with a REVIEW_RESULT block carrying a reviewer or findings; a truncated or ambiguous reply is refused)",
+      "problem": "Error wording is imprecise: a fenced block is accepted with status only and a bare object is accepted too. wholeFileResult also accepts a status-only whole file that parseReviewResult and loadRaws reject.",
+      "impact": "Deliberate asymmetry (review-slice.test.ts:59-62) undocumented in the message; may confuse an operator.",
+      "suggested_fix": "Reword to say a fenced block needs only a status and a bare marker object needs a reviewer or findings.",
+      "evidence": "review-slice.ts:163-182; review-slice.test.ts:59-62.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-001", "state": "closed", "evidence": "A complete result survives a prose brace and prose naming the marker (p1 a1-a5)."},
+    {"id": "F-002", "state": "partial", "evidence": "AC11, AC12, AC13, AC15 hold (p1 b1-b11); new residuals LOG-1, LOG-2, LOG-3."},
+    {"id": "F-003", "state": "closed", "evidence": "p1 b12-b14: status-only after a bare marker rejected; fence still accepts status-only."},
+    {"id": "F-005", "state": "partial", "evidence": "OBJECT_START and key detection verified; cap behaviour is LOG-2."},
+    {"id": "F-006", "state": "closed", "evidence": "CRLF fence openers parse."},
+    {"id": "F-007", "state": "closed", "evidence": "An unclosed REVIEW_RESULT fence does not hide an earlier bare result."},
+    {"id": "F-008", "state": "closed", "evidence": "Escaped quotes in keys, a value equal to status and keys in arrays are not mistaken for result keys."},
+    {"id": "F-010", "state": "open", "evidence": "Same-status echo unchanged; info only."},
+    {"id": "F-011", "state": "closed", "evidence": "Brace-in-prose and marker-colon-prose return the real result (p1 a5)."}
+  ],
+  "answers": {
+    "Q1": "Hazard rather than direct attack: needs the reviewer to echo the string. A REVIEW_RESULT fence (last wins) dominates every other form. Narrowest fix: anchor the marker at line start (LOG-1).",
+    "Q2": "Performance linear; worst case about 394 ms for a 2 MB hostile input. Caps can discard a genuine result only by failing closed (LOG-2).",
+    "Q3": "Code and tests match the amended AC13; wholeFileResult's status-only acceptance is deliberate (LOG-5 wording only)."
+  }
+}
+```

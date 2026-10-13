@@ -1,0 +1,607 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/blast-radius.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/coverage.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/decisions.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/findings.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/learning.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/manifest.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/report.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants-2.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants-3.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants-4.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-1.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-1.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-2.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-2.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-3.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-3.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-4.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-4.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-5.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-5.md",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/scope-files.json",
+    ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/scope.md",
+    "src/commands/review-ledger.ts",
+    "src/commands/review-slice.test.ts",
+    "src/commands/review-slice.ts",
+    "src/flow/verify-exec-files.test.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/review.ts",
+      "hop": 1,
+      "fanIn": 30,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-ledger.test.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/import-only.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-ac-check-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-ci-triage-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-comments-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-conform-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-floor-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-help.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-comments-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-contract-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-docs-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-profile-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-risk-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-rules-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-scenarios-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-select-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-jev-triage-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-learn-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review-learn-reviewer-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/flow/renumber-reviews.e2e.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/flow/review-gate.e2e.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/cost-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/cross-family.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/filter-stats.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/loop-real-path.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/managed.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/pr-comments.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-ledger.ts",
+      "path": [
+        "src/review/review-notes.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-ledger.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/blast-radius.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/coverage.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/findings.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/learning.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants-2.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants-3.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants-4.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutants.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-1.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-1.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-2.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-2.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-3.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-3.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-4.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-4.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-5.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research-evidence/mutation-5.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/research.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/scope-files.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-github-com-mrciphersmith-keryx-pull-997/scope.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 34,
+    "changedFilesResolved": 6,
+    "changedFilesUnresolved": 28,
+    "candidates": 31,
+    "retained": 31,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 29,
+    "hopHistogram": {
+      "1": 2,
+      "2": 29
+    }
+  },
+  "graph": {
+    "nodes": 3039,
+    "edges": 10581
+  }
+}
