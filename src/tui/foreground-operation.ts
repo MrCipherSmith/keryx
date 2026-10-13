@@ -123,6 +123,10 @@ export class ForegroundForceHandoff<T> {
     return this.pending.length > 0;
   }
 
+  get pendingCount(): number {
+    return this.pending.length;
+  }
+
   takeAfterSettlement(): T | undefined {
     this.awaitingSettlement = false;
     return this.pending.shift();
