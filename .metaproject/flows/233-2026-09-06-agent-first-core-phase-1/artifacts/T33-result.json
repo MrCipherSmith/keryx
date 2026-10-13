@@ -24,13 +24,13 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Design written before coding: the five defects, why flow/service.ts decides the mapping, and the narrow-validation decision."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T33-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Per-defect evidence with before/after raw log paths and exact counts."

@@ -23,7 +23,7 @@ license: "MIT"
 
 ## Preflight
 
-Run in the main session: this skill dispatches workers. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+Run in the main session: this skill dispatches workers. Without a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent), or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose
 
@@ -560,7 +560,7 @@ the bound plus an escalation — never an unbounded loop.
    **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
    is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the
    agent finds the fix and then destroys it, throwing away ~15 points by not
-   stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
+   stopping. Other agent tools hardcode the same bound (`max_reflections = 3`).
    Rounds four through six of a self-fix loop were not buying convergence; they
    were buying regressions. Review rounds are the exception, as stated above.
 
@@ -690,5 +690,5 @@ Stop and re-read this skill if you are thinking:
 | "Tests pass and the review is clean, so I'll open the PR and complete the flow." | Phase 4 stops and asks the user how the flow should end; not every flow wants a PR. And completion requires a confirmed merge into the base branch captured at creation — not a green local run. |
 | "The worker returned BLOCKED twice — faster if I implement this task myself." | The implementer never self-accepts and the orchestrator never implements. Block the flow, escalate one concise question, then unblock and re-dispatch. Doing the work here erases the boundary the whole flow model rests on. |
 | "Verification is described in the plan, so it will happen." | A verification step in the plan is a task, not a sentence. If it is not a task with a status, nothing records whether it ran, and the flow reaches `implemented` with an unrun gate. |
-| "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` nests under this skill where keryx cannot see the in-flight subagents. Skipping the check means the cap bounds nothing. |
+| "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` runs inline in this same main session, where keryx cannot see the in-flight subagents; declare them with `--outstanding`. Skipping the check means the cap bounds nothing. |
 | "I'll set the verification kind later." | An `unclassified` criterion cannot become data afterwards without a recorded rewrite: `keryx flow ac update <id> --criterion ACn --text "…" --reason "<why>"`. Put the `[verify: …]` marker on every criterion before `flow freeze`. |

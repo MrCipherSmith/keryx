@@ -1,6 +1,25 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- **The round limit of a turn follows the permission mode.** A turn was capped at 40 model rounds in every mode, and the question "Increase limit and continue / Cancel" was the one prompt `auto` still left: a review shell sat on it for about 50 minutes. The default is now 40 in `ask` (unchanged), 200 in `trust` and 200 in `auto`; `KERYX_AGENT_MAX_ROUNDS` still wins in every mode and 200 stays the ceiling. In `auto` reaching the limit never asks: below 200 the turn extends itself and prints the `[budget]` line, and at 200 it stops with a `[budget]` message that names the ceiling. In `trust` and `ask` the question stays, and a yes grants one more allotment of the mode (200 or 40). The mode is read at the start of each turn, so `/mode` takes effect on the next turn; `/mode` (readline and TUI picker) and `/help` show the limit. Subagents, which is how review waves run, follow the same rule in `auto`: default 40 rounds, a `max_rounds` request honored up to 200; in `ask` and `trust` they keep 10 and 24.
+- **Automatic review is a run mode, not a permission mode.** Naming an automatic review in a request ("run an automatic review of PR 12", "автоматическое ревью") marks that one turn: it gets the 200-round limit with no question and the same `[budget]` stop as `auto`, whatever the permission mode. `keryx review start|attach|ingest --automatic` records `manifest.automatic: true`; `review status` prints the run mode. For the package the run created, the shell approves without asking the review's own commands: `start|attach|ingest --automatic`, `status` and `complete <review>`, `ledger build`, `severity-audit`, `context-collect`, `compare-reference` and `mutate` with `--package <review>`, `retry-plan --manifest`, `scope` and `blast-radius`, and `apply_patch` inside the package directory. Pipes, `;`, redirects, another review's id or path, every other subcommand and every hard floor (destructive, credentials, untrusted content, a hook's ask, publish lease, read-only) still ask. `ask_user` is answered with its recommended option and logged, except the two emergencies (`gate-waiver` and `reduced-reviewer-set`, accepted only after `review complete` has refused) and questions tagged irreversible or with a review `policy`, which go to the host (arbiter or operator). A count of manual and automatic inputs is written to `automatic-run-inputs.json` in the package. There is no way around the completion gate.
+
+### Review of PR 939 (flow 417 follow-up)
+
+- `classifyRoundNeed` is one rule, not a list of names. Prose is README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY and CODE_OF_CONDUCT at the top level; and a `.md`, `.rst` or `.adoc` file (`.mdx` is code: MDX executes JavaScript at site build) under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow `journal.md` whose name holds a lowercase letter (all-uppercase names such as `AGENT.md`, `WARP.md`, `CONTEXT.md` are steering by convention). Everything else needs a round: a directory named, singular or plural, agent, skill, command, rule, prompt, instruction, persona, steering or hook; any dot-segment; names starting `SKILL`, `AGENT`, `CLAUDE`, `GEMINI`, `QWEN`, `CODEX`, `WARP`, `CRUSH`, `JULES`, `KNOWLEDGE`, `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending `.local`, `.override`, `.instructions`, `.prompt`, `.agent` or `.chatmode`, or containing `prompt`, `instruction` or `system`; and a flow's `description.md`, `acceptance-criteria.md` and `tasks/` (gate inputs). `coverage/` and `__generated__/` skip only for lcov, info and map; json, txt, html and md there are code, which retires the agent-loaded-JSON special case. A path with `..`, a backslash, a leading `./` or `//` always needs a round. A generated path table and a table derived from the exported token lists pin this.
+- The review-orchestrator preflight lists changed files with `git diff --name-status --no-renames <base>...HEAD`, so a rename into `docs/` shows both paths. The preflight prose and `docs/docs/guides/review-with-a-record.md` state the round-skip rule and `cli-reference.md` states the caps; the module exports its token lists (steering directories, steering stems, suffixes and words, prose names, doc and generated extensions) and a test requires the preflight prose to contain each one and the function to agree with it. A docs test interpolates `MAX_RETRY_AFTER_SECONDS`, `MAX_REVIEWERS_PER_WAVE_FULL` and `REVIEW_ROUND_CAP` into the phrases in `cli-reference.md` and the guide. The flow, job and autodoc orchestrator skills are parity-tested between `src/gdskills/bundled` and `.metaproject`.
+- `classifyRoundNeed` is the tested reference of the round-skip rule; the skill prose is what the host executes, and no CLI command calls the function yet. The module header and the guide say so. The `holdsAcrossNesting` / `holds_across_nesting` key name is historical: it reports whether the cap held against the declared `--outstanding` count. The review-orchestrator skill keeps its 1616-line ceiling.
+- The four orchestrator skills name the spawn tool as `Agent`, `spawn_subagent` or the host's equivalent, and the preflight test pins the phrase. `review-orchestrator` path mode lists files with a form that returns a complete plain path list, its "Done when" line applies to managed rounds only, and a bare `STATUS: RATE_LIMITED` follows the rate-limit rule instead of `BLOCKED`.
+- `keryx review budget` help documents `--full` and no longer describes the retired job -> flow -> review nesting. `orchestratorToolProblems` reports nothing on hosts without nested spawn. `retry-after` is capped at 300 seconds.
+- Wording that still described the retired nested model is gone from the docs, `caps.ts`, `types.ts`, the flow, job and review orchestrator skills (both copies) and the job prompt: `review-orchestrator` runs inline in the main session, `--outstanding` is the number of subagents that session still has running, and the wave ceiling is 10 (`--parallel` replaces it without `--full`; with `--full` it can only lower it). The `review budget` flag table lists `--full`, and a drift test keeps the retired phrases out.
+- `autodoc-orchestrator` joins the orchestrators the inline note and `ORCHESTRATOR_AGENT_NAMES` list, so the generated managed block, routing and catalog text name four.
+
+### Review depth (flow 430)
+
+- `keryx review retry-plan` and `ledger build` read a reviewer's `slices` as ids or as objects with an `id`. A reviewer that listed every assigned slice as objects is no longer retired as `not-run`. An object whose `status` is not done (anything but DONE, COMPLETE, COVERED, OK, or none) leaves its slice uncovered; entries with no usable id are ignored. Both are reported by count in the plan's reason and in the ledger gap, with the affected ids for a status.
+- The reviewer output schema defines `slices`, and the review-orchestrator skill asks reviewers for it and documents `drivers/<reviewer>.json` (`reviewer`, `slices`, `result`, `definition`). `ledger build` also resolves the rule file from `skill_path`, top level or inside `payload`.
+- `ledger build` names a file in `raw/` that is not a reviewer reply (no `REVIEW_RESULT` block, not named by a driver, not named after a dispatched or required reviewer) as `set aside` instead of demanding a result from it. The file is left in place and listed in `research.json` under `setAside`. A driver whose `slices` holds an entry with no usable id is reported as a gap.
 
 ## [0.3.112] - 2026-10-12
 
@@ -12,8 +31,6 @@
 - `keryx review severity-audit` raises a finding that cites a surviving mutant on a changed file from a low severity to major; a cited mutant no run executed is labelled `unproven`. It never deletes a finding.
 - `keryx review context-collect` gathers the pull request's description, linked issues and comments for the reviewers. `keryx review compare-reference` classifies a reference report's items against a package.
 - `/reviews` has a "Review depth" tab, and the readline `/reviews` prints the same block: mode, reviewers dispatched against required, excluded reviewers with the reason, and the mutation tally.
-
-## [0.3.112] - 2026-10-12
 
 ### Agent Runtime
 
@@ -658,6 +675,11 @@ To get the 0.3.64 behaviour back, set these keys in `remote/config.json`: `"perm
 - **A timeout while starting a pairing no longer erases the bot token.** The shell wrote the new token, asked `serve` to open the pairing, and on any failure put the old file back, even when `serve` had simply not answered in time and may have taken the token, or had answered `superseded` because a newer start owns the file. It now puts the previous token back only when `serve` definitely refused (a rejected token, `already-connected`, `serve` not running and the like), and only when the file still holds exactly the token this start wrote: a token another shell wrote in between is left alone.
 - **A rejected token no longer cancels a valid start in progress.** A second `/channels` start with a token Telegram refuses used to answer `superseded` to a valid start that was still waiting for Telegram. Only a token Telegram accepted supersedes an earlier start now; of two valid starts the later one still wins.
 - **Stopping `serve` while a pairing is starting no longer leaves a poller behind.** A start waiting for Telegram when `serve` stopped could still begin polling afterwards and park a pairing in the stopped controller. It now answers `superseded` and starts nothing.
+- **`wiki collect --force` and `keryx sync --apply` no longer replace enriched pages with the generated stub (flow 386, #831).** An enriched page keeps `Status: draft` and the collect marker, so it passed the "unmodified draft" check and was overwritten whole; on a real 504-page wiki that cut a 181-line page to 90. Collect now regenerates only the generator's sections of an existing page (`## Reference`, `## Related Wiki` — keeping lines an enricher added there — and a map page's data sections only while that page was never enriched); front matter, prose and changelog stay, with one changelog entry and a Version bump.
+- **`wiki enrich` no longer drops a changelog, rewords its entries or lowers Version (flow 386, #831).** The model changes prose only: front matter, the changelog (attestation entries included) and a managed Reference block come back from the original, one entry and a Version bump are added, and a reply the model wrapped in a ```` ```markdown ```` fence is unwrapped. A page that would still break one of these is not written.
+### Added
+- **Per-page wiki history and undo (flow 386, #831).** Every command that writes or deletes a wiki page or `index.md` first keeps the page's exact bytes as a plain `.md` file in `.metaproject/data/gdwiki/history/<page>/`, with an `index.md` listing every version (when, which command and run, sha256, current first), and prints the run id to undo it with. `keryx wiki history <page>` / `--runs`, `keryx wiki restore <page> [--version vNNNN]`, `keryx wiki restore --run <id>` (changed pages go back, created ones are deleted, deleted ones return; a page changed again since is a conflict unless `--force`). Retention `history.keep` (default 20 per page) in `.metaproject/wiki.config.json`; the folder ignores itself for git. An edit made outside keryx is recorded when keryx next writes that page.
+- **`wiki validate` reports wiki drift (flow 386, #831):** `Version` lower than the newest changelog entry on every page, and, for a change keryx recorded, a dropped `## Changelog`, a removed or reworded entry, a dropped front-matter key or managed block, or a duplicated section, compared with the page's previous version.
 
 [Changes since 0.3.54](https://github.com/MrCipherSmith/keryx/compare/v0.3.54...v0.3.55)
 
@@ -4443,7 +4465,7 @@ code it did, so a script that ran before runs now.
 One theme: a project-skill you already have as a `SKILL.md` — in a folder,
 a file, or a GitHub blob — could not become a project-skill without being
 re-typed through `keryx skills create`. Overlay reviewers lived in
-`~/.vantage-frontend` and `review-orchestrator` never saw them.
+a consumer project's home directory and `review-orchestrator` never saw them.
 
 ### Added
 
@@ -4465,7 +4487,7 @@ re-typed through `keryx skills create`. Overlay reviewers lived in
 
 - **`keryx review import --from <dir>`.** Alias for
   `keryx skills import --module review` with an extra filter: only
-  `review-vantage-*` packages, so generic copies of bundled reviewers
+  `review-<overlay>-*` packages, so generic copies of bundled reviewers
   cannot shadow the engine.
 
 ### Changed
@@ -6009,8 +6031,8 @@ surface. This release closes the six flows that came out of it.
   more round. The armed round budget lives only on the in-memory session
   object, never in `slate.json`, so a forked or resumed session never
   silently inherits an unattended loop. Guide: `docs/docs/guides/goal.md`.
-  Drawn from a 13-competitor survey of comparable mechanisms in other
-  coding-agent CLIs — `docs/requirements/goal-continuation/`.
+  Drawn from a survey of comparable mechanisms —
+  `docs/requirements/goal-continuation/`.
 - **Slate v3: private MCP slate lifecycle for external hands (SLATE-22..26).**
   Three new MCP tools — `slate.open`/`slate.writeSeed`/`slate.close` — let
   any MCP-connected external harness (Claude Code, Codex, or anything else

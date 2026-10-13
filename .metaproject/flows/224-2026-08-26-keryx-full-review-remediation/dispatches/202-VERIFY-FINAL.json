@@ -20,10 +20,10 @@
     {"path": ".metaproject/data/gdctx/artifacts/2026-08-26T05-55-42-425Z_run.md", "kind": "report", "exists": true}
   ],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/quality/code-verifier/SKILL.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/quality/code-verifier/SKILL.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
   ],
   "constraints": [
     "Read the exact worktree index and code-verifier skill first; use gdgraph/gdctx and keryx ctx rg.",

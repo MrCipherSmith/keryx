@@ -429,7 +429,6 @@ Scope: PR #700, `origin/feat/agent-platform-expansion` @ aae031c1a, compared aga
   - CI covers the new dirs: `test:core` includes bundle, integrations, learning, rules and stack; `test:client:runtime` includes `src/agents/` and `src/harness/`.
 - **Packaging and docs.**
   - The tarball ships no test fixtures and no `__fixtures__`.
-  - No external project is named in `docs/docs` or `src` (searched for ECC, everything-claude-code and affaan).
   - The docs match the real CLI for flags and defaults, apart from R700-07 and R700-08.
 - **Merge.** The merge-tree against current `origin/main` has no conflicts.
 

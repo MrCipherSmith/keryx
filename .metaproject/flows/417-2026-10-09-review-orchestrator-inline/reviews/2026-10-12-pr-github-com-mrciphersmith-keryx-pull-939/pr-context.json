@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 939,
+  "headSha": "ede409d5a9d9a5403f51b3f12edc6ac4704d805c",
+  "collectedAt": "2026-10-12T18:37:50.678Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "Run review-orchestrator inline with a fail-closed preflight (flow 417)",
+    "body": "## Summary\n- `review-orchestrator`, `flow-orchestrator` and `job-orchestrator` open with a preflight: the agent that loads the skill runs inline in the main session; without `Agent` or with the nesting depth spent the whole output is `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`. `SUBAGENT-STOP` removed from the orchestrating skills.\n- Prose-only diffs end in `no round: <reason>`; the default profile is read-only, `--fix` is a separate profile bounded by `REVIEW_ROUND_CAP`.\n- Reviewer waves are split by diff domain, at most 10 per wave for `--all`/full review (`keryx review budget --full`); `RATE_LIMITED` halves the wave at most twice, then `BLOCKED rate_limited`.\n- Agent vocabulary carries the spawn tool for orchestrators; managed block, `catalog.md` and `routing.md` state the inline rule.\n- review-orchestrator skill 1712 → 1615 lines (ceiling lowered); docs, README and CHANGELOG updated.\n\n## Test plan\n- [x] `bun test src/commands src/gdskills src/review src/agents` (2 pre-existing budget tests pinned to `--parallel 4`)\n- [x] Mutation proof for wave ceiling, rate halvings, spawn host list, BLOCKED line (flow journal)\n- [ ] CI incl. `mkdocs build --strict`\n- [ ] Smoke after release: round inline in the main session; skill as a subagent without `Agent` ends in the one BLOCKED line"
+  },
+  "ci": {
+    "state": "passing",
+    "checks": [
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

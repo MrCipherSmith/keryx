@@ -2,7 +2,7 @@ VERDICT: findings — blocker: 0, major: 0, minor: 0, info: 3
 
 # Round 5 narrow verification — PR #706, flow 319
 
-Scope: `git diff 767d0b8f..83b8e1bd` in `/Users/Goodea/goodea/keryx-ape-319-rh` (dabf545e: the Bun flags go into schedule units only for a Bun interpreter; 83b8e1bd: R4-01 refuse-to-start with exit 78, R4-02 escaping of unknown hook ids).
+Scope: `git diff 767d0b8f..83b8e1bd` in `~/goodea/keryx-ape-319-rh` (dabf545e: the Bun flags go into schedule units only for a Bun interpreter; 83b8e1bd: R4-01 refuse-to-start with exit 78, R4-02 escaping of unknown hook ids).
 Reviewer: adversarial-opus-r5. Probes ran under `scratchpad/f319/adv5` with `env -i`, an isolated HOME/XDG, `GIT_CONFIG_GLOBAL=/dev/null` and a 20 s `alarm` on every run. No background processes were started, and none from adv5 remain. The only matching live process belongs to the parent's `gh pr checks` watch loop. No orphaned `serve` was found from this round.
 
 R4-01 and R4-02 are closed. No bypass was found. The targeted tests pass: safe-exec, trigger/schedule, trigger/install, commands/schedule and commands/hooks give 170 pass, 3 skip and 0 fail.

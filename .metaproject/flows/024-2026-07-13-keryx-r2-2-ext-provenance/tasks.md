@@ -7,7 +7,7 @@ SC_R18_EXTENSION_ESCALATION_REQUIRES_POLICY registry-side). New `src/harness/ext
 provenance.ts`; additive-only. Reuse W15 registry + R2-1 execute.ts (evaluateExtensionGrant)
 + W12 childProvenance + W7 Provenance + W10 approval. NO new dep/SDK/network (`deps {}`).
 Deterministic (injected id/clock). Fail-closed (authority not widened; out-of-grant → deny/
-ask). D-02. Root `/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-ext-provenance).
+ask). D-02. Root `~/goodea/keryx` (branch feature/keryx-release2-ext-provenance).
 Worktree-guard. Commits/PR: NO co-authorship.
 
 | ID | Kind | Model | Title / definition |

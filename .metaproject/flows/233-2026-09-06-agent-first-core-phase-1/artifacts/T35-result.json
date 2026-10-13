@@ -4,7 +4,7 @@
   "dispatch_id": "233-T35",
   "status": "DONE_WITH_CONCERNS",
   "summary": "Independent recheck of the T33 gate-path repair and the T34 coverage fixes. All seven reported defects reproduce as CLOSED under probes written fresh for this review (30 read-time gate cases including three filesystem-level unreadability shapes and two prototype-pollution payloads; symlink-first, hard-link, mutual-cycle and self-link coverage fixtures; non-recursive scans across three shapes end to end). Both consumer-facing claims are CONFIRMED by execution rather than accepted: src/flow/service.ts:672 blocks only on `fail` (null, pass, skipped and a throwing gate all leave passed:true, driven through the real complete() pipeline), and the pass-to-incomplete fold in runScanPath survived, with runGate reading `incomplete` on the same workspace afterwards. Stage 1 nevertheless does NOT pass: F-001 is an undisclosed defect of the SAME class T33 repaired, in the sibling reader of the same file -- `.metaproject/metaproject.json` containing `null` makes isSecurityEnabled throw, securityFlowGate throws despite its documented contract, and flow/service.ts records the gate as `skipped`, so flow completion passes with the security gate silently removed. Stage 2 (code quality) was therefore not started. Judgement calls: (1) the stored-pass-over-incomplete-coverage verdict change is ACCEPTED, with the caveat that it is a self-consistency check and not a tamper control, and is incomplete until runReport shares it; (2) the narrow gate validation argument HOLDS and both halves were tested -- a twelve-byte {\"gate\":\"pass\"} passes, so strictness buys nothing, while full-schema rejection would relabel {\"gate\":\"fail\"} and {\"gate\":\"needs-approval\"} as incomplete; (3) T37 MUST close before phase acceptance, because the residual's stated §14 mitigation does not exist -- with state.json recording mode \"ci\", the outcome is byte-identical to a fresh workspace. The mock.module restoration technique is SOUND and the eager snapshot is load-bearing: restoring from a live namespace reproduces the leak, restoring from the snapshot does not, and both test orderings are green.",
-  "summary_markdown": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md",
+  "summary_markdown": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md",
   "acceptance": [
     {
       "criterion": "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
@@ -24,55 +24,55 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Full review: scope, file hashes, Stage 1 table with one row per defect (1)-(7) plus the two consumer claims, findings, judgement calls, confirmed clean areas, evidence digests, routing audit."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-result.json",
       "kind": "final-report",
       "exists": false,
       "summary": "This file."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-gate.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-gate.ts",
       "kind": "custom",
       "exists": true,
       "summary": "30 read-time gate cases attacking hasRecognizedGate, the exhaustive switch and the coverage fold."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-scan.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-scan.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Per-file coverage rows under symlink-first, hard-link, mutual-cycle, symlinked-directory and external-escape fixtures, plus non-recursive scans end to end."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-flowfold.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-flowfold.ts",
       "kind": "custom",
       "exists": true,
       "summary": "The consumer claim, driven through the real createFlowService().complete() pipeline: 6 injected statuses and 8 real securityFlowGate workspaces."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-residual.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-residual.ts",
       "kind": "custom",
       "exists": true,
       "summary": "The disclosed residual with and without prior state, the posture-unavailable branches in all three modes, and the F-001 sibling-reader trigger."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-cli.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-cli.ts",
       "kind": "custom",
       "exists": true,
       "summary": "`keryx security report` exit codes over 7 stored artifacts."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-cli2.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-cli2.ts",
       "kind": "custom",
       "exists": true,
       "summary": "`exitCodeFor` over a real needs-approval decision in ci, enforced and advisory."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-mock.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-mock.ts",
       "kind": "custom",
       "exists": true,
       "summary": "The mock.module restoration technique, including a positive reproduction of the live-namespace leak it avoids."

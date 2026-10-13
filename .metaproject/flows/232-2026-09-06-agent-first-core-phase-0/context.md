@@ -1,7 +1,7 @@
 # Phase 0 context
 Version: 0.1.0
 
-- Project root: /Users/Goodea/goodea/keryx. Branch: codex/agent-first-core. Recorded base: main at 0bc6418fa1a038f8ec909cf949fecba077acf9a4.
+- Project root: ~/goodea/keryx. Branch: codex/agent-first-core. Recorded base: main at 0bc6418fa1a038f8ec909cf949fecba077acf9a4.
 - All nine phases share the integration branch; parent alone owns git operations and flow state. Workers own disjoint files, no commits, checkout, stash, push or merges.
 - User authorized implementation and phased flows. Stats opt-out persists. Completion choice is reserved until verified work is reviewable.
 - Required specification: docs/requirements/keryx-agent-first-core/README.md, implementation-plan.md, decision-traceability.md. Full schema/semantic docpack review passed, runtime not implemented by docs.

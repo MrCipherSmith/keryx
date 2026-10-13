@@ -314,7 +314,7 @@ export interface ChatShellOptions {
     onlyProvider?: string;
     onlyConnected?: boolean;
   }) => Promise<TuiSelection | undefined>;
-  /** Persist the provider/model chosen mid-session (opencode-style). Default on. */
+  /** Persist the provider/model chosen mid-session. Default on. */
   persistSelection?: boolean;
   /** `/exit`: the caller tears the renderer down. */
   onExit?: () => void;

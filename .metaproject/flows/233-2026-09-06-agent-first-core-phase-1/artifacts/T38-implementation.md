@@ -1,11 +1,11 @@
 # T38 implementation — close the CLI exit-code denylists (T35 F-002)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files only: `src/commands/security.ts`, `src/commands/security.check-input.test.ts`,
 new `src/commands/security-gate-exit.test.ts`. `src/security/*` was read only,
 never edited. Spec written before coding: `T38-spec.md` (same directory).
 
-All raw logs below are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs below are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Reviewer's probe, before and after (dispatch-mandated)
 

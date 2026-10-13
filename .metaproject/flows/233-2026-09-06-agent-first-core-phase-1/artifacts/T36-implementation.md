@@ -6,7 +6,7 @@ Second approach to T24 F-002 / F-004, not a retry. Spec written before any code 
 `T36-spec.md`. Independent evidence answered: `T24-recheck.md` (T24R#F-001 blocker,
 T24R#F-002 blocker, T24R#F-003 major).
 
-All raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`. Every command,
+All raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`. Every command,
 search and probe went through `bun src/cli.ts ctx run` / `ctx rg`. Synthetic credentials only
 (`AKIA` + `IOSFODNN7EXAMPLE`, `tr0ub4dor-correct-horse`) and the reserved `attacker.invalid` /
 `example.com` domains.

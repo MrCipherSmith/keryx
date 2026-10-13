@@ -13,14 +13,14 @@
   ],
   "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/commands/agent.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/session/store.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/session-wrap-up.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/review-confirm-token.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/wiki/enrich.ts"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/commands/agent.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/session/store.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/sac/session-wrap-up.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/sac/review-confirm-token.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/wiki/enrich.ts"
   ],
   "constraints": [
     "Read the new worktree .metaproject/index.md first; use local testing/gdgraph/gdwiki/gdctx routing.",

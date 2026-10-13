@@ -33,7 +33,7 @@ comma-separated list, `stack_requires` as a string, only keys directly under
 has already applied it — use the fields, not the raw frontmatter.
 
 A description saying another entry point dispatches it ("Dispatched by
-vantage-review …") is its author's routing note, not a restriction: this
+acme-review …") is its author's routing note, not a restriction: this
 orchestrator dispatches it through the fields above.
 
 ### Family flags — why a shared flag does not lift the path gate
@@ -441,8 +441,8 @@ flow (`flow-orchestrator` Phase 3), a pre-merge or pre-ship review, a
 re-request after fixes. A gating round runs the composition the start questions
 selected.
 
-- **No dispatch tool, no review.** A host that cannot dispatch subagents — this
-  engine running inside a subagent, say — returns
+- **No dispatch tool, no review.** A host that cannot dispatch subagents — no
+  spawn tool, or the depth budget spent — returns
   `STATUS: BLOCKED` with reason `nested_dispatch_unavailable` and no verdict.
   It does not review the diff alone and call that a round. Measured (flow 405):
   a single-agent round on a 150-line frontend PR wrote "did not dispatch any

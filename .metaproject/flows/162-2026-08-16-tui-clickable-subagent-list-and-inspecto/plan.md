@@ -14,7 +14,7 @@ Compose existing TUI pieces. Do not invent a second overlay.
 4. Click calls `presentSubagentInspector` → `openModal` (Work + Meta tabs),
    subscribed to the store so a running child updates live.
 
-Rejected: Grok-style fullscreen takeover (we already have a modal host);
+Rejected: a fullscreen takeover (we already have a modal host);
 SelectRenderable in the sidebar (steals composer focus).
 
 ## Steps

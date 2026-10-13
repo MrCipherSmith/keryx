@@ -178,9 +178,9 @@ export type ReviewerFlagReport = {
  *
  * A declared entry is normalised before it is compared with anything: split on
  * commas and whitespace, trimmed, lower-cased, and given a `--` when it has no
- * leading dash. Taken verbatim, `vantage`, `--Vantage ` and `--vantage` were
+ * leading dash. Taken verbatim, `acme`, `--Acme ` and `--acme` were
  * three flags; none was shared, so `familyFlags` stayed empty and the reviewer
- * spelled correctly was dispatched under `--vantage` without its path gate. An
+ * spelled correctly was dispatched under `--acme` without its path gate. An
  * entry that is still not a flag is dropped and reported rather than kept as a
  * flag nobody can pass.
  *

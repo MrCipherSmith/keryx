@@ -1,0 +1,455 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-01-02:F-001",
+      "source": "raw/review-architecture-01-02.txt",
+      "question": "Is review-architecture finding F-001 (The refusal-memory check now exists as three inline copies in the shared executeTool risk gate (shel) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-01-02.txt F-001; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-02: Refusal-memory guard pasted into three risk branches), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. agent.ts 5587, 5700 and 5745 repeat the fingerprint expression. Optional: one refusedEarlier(call) helper applied once before the risk dispatch (see also D-04, which is the behavioural side of the same code)."
+    },
+    {
+      "id": "review-architecture-01-02:F-002",
+      "source": "raw/review-architecture-01-02.txt",
+      "question": "Is review-architecture finding F-002 (The scope identity (contentHash -> scopeFingerprint) is derived in three places: slice.ts stamps con) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-01-02.txt F-002; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-06: runLedger rehashes slice files inline and mutates the manifest; scope identity has three derivations), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. commands/review-ledger.ts:207-212 overwrites contentHash in place; slice.ts, retry-plan.ts and the command derive the identity from text and from bytes (equal for valid UTF-8 today). Optional: one owner for the identity next to the manifest type."
+    },
+    {
+      "id": "review-architecture-01-02:F-003",
+      "source": "raw/review-architecture-01-02.txt",
+      "question": "Is review-architecture finding F-003 (Which slices a dispatch handed out reaches buildLedger through three overlapping channels: payloadSl) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-01-02.txt F-003; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-07: Dispatch attribution key `<reviewer>\\0<result path>` spelled by hand; three overlapping channels), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. commands/review-ledger.ts:154 and :183 and the test build the key separately; a driver `result` that is not spelled `raw/<name>.txt` fails to attribute and yields a coverage gap (fail-closed, never a pass). Optional: one key function and basename normalisation."
+    },
+    {
+      "id": "review-architecture-01-02:F-004",
+      "source": "raw/review-architecture-01-02.txt",
+      "question": "Is review-architecture finding F-004 (The cache identity is split: cacheKey(ParsedQuestion) (L251-258) hashes kind, facts, optionCount and) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-01-02.txt F-004; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-08: Arbiter cache identity split between cacheKey() and the call site), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. review-arbiter.ts:328 appends the option ids to cacheKey(question) ad hoc. Correct today. Optional: fold the ids into cacheKey()."
+    },
+    {
+      "id": "review-architecture-01-02:F-005",
+      "source": "raw/review-architecture-01-02.txt",
+      "question": "Is review-architecture finding F-005 (The predicate 'a reviewer reply is finished' (DONE or DONE_WITH_CONCERNS with no open needs_context)) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-architecture-01-02.txt F-005; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-03: 'Finished with no open needs_context' predicate written three times), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. ledger.ts:186-187 and :196, retry-plan.ts:224-226 give the same result today. Optional: export one isFinishedReply helper."
+    },
+    {
+      "id": "review-clean-code-01-02:F-001",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-001 (The 'sha256 of a value as hex' idiom is newly inlined in five places (retry-plan.ts:71 and :75, slic) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-001; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-01: sha256 hex re-inlined in five places beside the existing `sha` helper), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. retry-plan.ts:71 and :75, slice.ts:446, completion-gate.ts:31, commands/review-ledger.ts:209 each build createHash(\"sha256\")...digest(\"hex\"); ledger.ts:78 already has a truncated helper. Optional: one sha256Hex helper in a shared module; import order of the new node:crypto imports follows."
+    },
+    {
+      "id": "review-clean-code-01-02:F-002",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-002 (The 'refused earlier' guard is pasted verbatim into the delegate branch (5700) and the write branch ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-002; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-02: Refusal-memory guard pasted into three risk branches), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. agent.ts 5587, 5700 and 5745 repeat the fingerprint expression. Optional: one refusedEarlier(call) helper applied once before the risk dispatch (see also D-04, which is the behavioural side of the same code)."
+    },
+    {
+      "id": "review-clean-code-01-02:F-003",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-003 (The doc comment is stale after this PR. The rewritten body (a) gives priority to a ```REVIEW_RESULT ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-003; src/review/ledger.ts:82 is unchanged while the body at :83-117 was replaced",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-10: Stale doc comment on parseReviewResult). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Rewrite the comment to state the precedence and drop 'Never guessed from prose'; do it together with D-01."
+    },
+    {
+      "id": "review-clean-code-01-02:F-004",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-004 (planRetry is ~140 lines (161 to the end of the function) and this PR adds to it a scope-binding prea) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-004; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-04: planRetry length and the `current` boolean name), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. planRetry grew a scope-validation preamble; `current` hides that it is about the stored state. Optional: extract assertResultBoundToScope and rename to stateMatchesScope."
+    },
+    {
+      "id": "review-clean-code-01-02:F-005",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-005 (The predicate 'result is a finished status with no open needs_context' is now written three ways: le) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-005; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-03: 'Finished with no open needs_context' predicate written three times), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. ledger.ts:186-187 and :196, retry-plan.ts:224-226 give the same result today. Optional: export one isFinishedReply helper."
+    },
+    {
+      "id": "review-clean-code-01-02:F-006",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-006 (parseReviewResult mixes levels (regex fence handling and a hand-written JSON-brace state machine wit) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-006; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-05: parseReviewResult nesting and in-loop index mutation), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. Five levels of nesting and `start = end` inside the inner loop. Optional: extract balancedObjectEnd; resolved naturally by the D-01 and D-03 rewrite."
+    },
+    {
+      "id": "review-clean-code-01-02:F-007",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-007 (A low-level step (read every slice file, hash it, overwrite or `delete` `contentHash` on the parsed ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-007; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-06: runLedger rehashes slice files inline and mutates the manifest; scope identity has three derivations), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. commands/review-ledger.ts:207-212 overwrites contentHash in place; slice.ts, retry-plan.ts and the command derive the identity from text and from bytes (equal for valid UTF-8 today). Optional: one owner for the identity next to the manifest type."
+    },
+    {
+      "id": "review-clean-code-01-02:F-008",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-008 (The composite map key `<reviewer>\\0<resultFile>` is spelled out by hand in two places (line 154 when) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-008; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-07: Dispatch attribution key `<reviewer>\\0<result path>` spelled by hand; three overlapping channels), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. commands/review-ledger.ts:154 and :183 and the test build the key separately; a driver `result` that is not spelled `raw/<name>.txt` fails to attribute and yields a coverage gap (fail-closed, never a pass). Optional: one key function and basename normalisation."
+    },
+    {
+      "id": "review-clean-code-01-02:F-009",
+      "source": "raw/review-clean-code-01-02.txt",
+      "question": "Is review-clean-code finding F-009 (`current` is a non-prefixed boolean whose meaning ('the stored retry state was written for this exac) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-clean-code-01-02.txt F-009; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-04: planRetry length and the `current` boolean name), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. planRetry grew a scope-validation preamble; `current` hides that it is about the stored state. Optional: extract assertResultBoundToScope and rename to stateMatchesScope."
+    },
+    {
+      "id": "review-highload-01-02:F-001",
+      "source": "raw/review-highload-01-02.txt",
+      "question": "Is review-highload finding F-001 (dirSignature now recursively reads every file in full into memory and hashes it, and the per-file di) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-01-02.txt F-001; src/review/completion-gate.ts:22-38; sizes measured by the reviewers (du: 1.2 MB, 97 files here); only caller agent.ts:3308",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-08: The completion-gate watchdog hashes the whole review data tree on every gated turn end). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Fingerprint by size plus mtimeMs (and ino) from stat, or cache digests keyed by (path, size, mtimeMs), or stream and cap the bytes hashed per file."
+    },
+    {
+      "id": "review-highload-01-02:F-002",
+      "source": "raw/review-highload-01-02.txt",
+      "question": "Is review-highload finding F-002 (The unlabelled fallback of parseReviewResult tries every \"{\" as a start and scans forward until dept) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-01-02.txt F-002; bun timings quoted in raw/review-highload-01-02.txt F-002, raw/review-performance-01-02.txt F-001 and raw/review-security-code-01-02.txt F-002; code confirmed at src/review/ledger.ts:93-115",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-03: parseReviewResult is quadratic on text with many unclosed braces). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Bound the work: skip starts that fall inside a region already shown not to close, or scan once with a stack that records candidate spans, or cap the scanned length. Add a test with 50,000 `{` under a time budget."
+    },
+    {
+      "id": "review-highload-01-02:F-003",
+      "source": "raw/review-highload-01-02.txt",
+      "question": "Is review-highload finding F-003 (runRetryPlan reads retry-state.json (line 249) and the manifest, plans, then rewrites the whole file) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-highload-01-02.txt F-003; src/commands/review-slice.ts:249 (read), :277 (manifest write), :279 (state write)",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-09: retry-state.json and the manifest are read-modify-written without a lock (race pre-dates the PR)). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Serialise the cycle per statePath with a lock file, or re-read and merge immediately before writing a keyed entry; document that retry-plan runs sequentially if no lock is added. Same follow-up as the lock item of F-004 in the PR 940 round (flow 418)."
+    },
+    {
+      "id": "review-logic-01-02:F-001",
+      "source": "raw/review-logic-01-02.txt",
+      "question": "Is review-logic finding F-001 (The bare-JSON branch scans every '{' and keeps the last balanced object that has a string `status`. ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02.txt F-001; reproduced in this round with bun against the post-merge src/review/ledger.ts:83-117: a reply whose outer object ends in a trailing comma inside `slices` returns {\"id\":\"slice-03\",\"status\":\"DONE\"}; '```json REVIEW_RESULT {BLOCKED} ``` quote: {\"status\":\"DONE\",\"slices\":[\"a\"]}' returns the DONE object",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item D-01: parseReviewResult can return the wrong object as the reviewer result). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: After an outer candidate fails to balance or parse, resume the scan after its end instead of descending into nested braces; accept only top-level objects that carry `reviewer` or a `findings` array; prefer the object that follows the REVIEW_RESULT marker (also inside a ```json fence) and treat two distinct status objects as ambiguous (undefined). Add tests: a truncated reply and a trailing-comma `slices` array must be unreadable; a trailing {\"status\":\"DONE\"} after a BLOCKED result must not override it."
+    },
+    {
+      "id": "review-logic-01-02:F-002",
+      "source": "raw/review-logic-01-02.txt",
+      "question": "Is review-logic finding F-002 (The new operatorDenied checks on the delegate and write branches (lines 5700 and 5745) are not gated) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02.txt F-002; keryx ctx rg 'operatorDenied\\(' src/commands/agent.ts lists 5482, 5587, 5700, 5745; the shell branch at 5585 is gated by reviewAutoActive(); resetOperatorDenials has no non-test caller",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-04: Delegate and write denial-memory checks are not gated by review-auto and stay sticky). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Gate both checks with reviewAutoActive() like the shell branch, or clear the denial set when review-auto ends; add a test that a denial recorded under review-auto does not refuse the call in a later ordinary turn."
+    },
+    {
+      "id": "review-logic-01-02:F-003",
+      "source": "raw/review-logic-01-02.txt",
+      "question": "Is review-logic finding F-003 (The labelled ```REVIEW_RESULT form ends at the first triple backtick, so a JSON string that embeds a) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02.txt F-003; reproduced by the reviewer with bun (`fenced undefined`); regex confirmed at src/review/ledger.ts:84",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-05: A labelled REVIEW_RESULT block is cut at the first inner triple backtick). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: When the labelled block fails to parse, fall through to the balanced-brace scan over the text after the label; add a test with an embedded fenced snippet."
+    },
+    {
+      "id": "review-logic-01-02:F-004",
+      "source": "raw/review-logic-01-02.txt",
+      "question": "Is review-logic finding F-004 (planRetry throws a plain Error (\"Reviewer result is not bound to the current scope; ...\") on a scope) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02.txt F-004; keryx ctx rg shows the two `throw new Error` at src/review/retry-plan.ts:173 and :176 and `class UnreadableInput` at src/commands/review-slice.ts:161, the only class failUnreadable handles",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-06: A scope-binding failure in planRetry surfaces as an uncaught exception). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Throw UnreadableInput (or a dedicated error handled by failUnreadable) for the two binding failures; add a command-level test for the exit code and message."
+    },
+    {
+      "id": "review-logic-01-02:F-005",
+      "source": "raw/review-logic-01-02.txt",
+      "question": "Is review-logic finding F-005 (assignRawDispatch keys raws by `${driver.reviewer}\\0${driver.result}` and compares it verbatim with ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-logic-01-02.txt F-005; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-07: Dispatch attribution key `<reviewer>\\0<result path>` spelled by hand; three overlapping channels), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. commands/review-ledger.ts:154 and :183 and the test build the key separately; a driver `result` that is not spelled `raw/<name>.txt` fails to attribute and yields a coverage gap (fail-closed, never a pass). Optional: one key function and basename normalisation."
+    },
+    {
+      "id": "review-performance-01-02:F-001",
+      "source": "raw/review-performance-01-02.txt",
+      "question": "Is review-performance finding F-001 (parseReviewResult now tries every '{' as a candidate object start and scans forward to the end of th) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-01-02.txt F-001; bun timings quoted in raw/review-highload-01-02.txt F-002, raw/review-performance-01-02.txt F-001 and raw/review-security-code-01-02.txt F-002; code confirmed at src/review/ledger.ts:93-115",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-03: parseReviewResult is quadratic on text with many unclosed braces). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Bound the work: skip starts that fall inside a region already shown not to close, or scan once with a stack that records candidate spans, or cap the scanned length. Add a test with 50,000 `{` under a time budget."
+    },
+    {
+      "id": "review-performance-01-02:F-002",
+      "source": "raw/review-performance-01-02.txt",
+      "question": "Is review-performance finding F-002 (dirSignature used to stat each entry (size only) and now reads and SHA-256 hashes every file under .) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-performance-01-02.txt F-002; src/review/completion-gate.ts:22-38; sizes measured by the reviewers (du: 1.2 MB, 97 files here); only caller agent.ts:3308",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-08: The completion-gate watchdog hashes the whole review data tree on every gated turn end). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Fingerprint by size plus mtimeMs (and ino) from stat, or cache digests keyed by (path, size, mtimeMs), or stream and cap the bytes hashed per file."
+    },
+    {
+      "id": "review-security-code-01-02:F-001",
+      "source": "raw/review-security-code-01-02.txt",
+      "question": "Is review-security-code finding F-001 (The unlabelled branch of parseReviewResult scans the whole reply and keeps the LAST balanced JSON ob) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-01-02.txt F-001; reproduced in this round with bun against the post-merge src/review/ledger.ts:83-117: a reply whose outer object ends in a trailing comma inside `slices` returns {\"id\":\"slice-03\",\"status\":\"DONE\"}; '```json REVIEW_RESULT {BLOCKED} ``` quote: {\"status\":\"DONE\",\"slices\":[\"a\"]}' returns the DONE object",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item D-01: parseReviewResult can return the wrong object as the reviewer result). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: After an outer candidate fails to balance or parse, resume the scan after its end instead of descending into nested braces; accept only top-level objects that carry `reviewer` or a `findings` array; prefer the object that follows the REVIEW_RESULT marker (also inside a ```json fence) and treat two distinct status objects as ambiguous (undefined). Add tests: a truncated reply and a trailing-comma `slices` array must be unreadable; a trailing {\"status\":\"DONE\"} after a BLOCKED result must not override it."
+    },
+    {
+      "id": "review-security-code-01-02:F-002",
+      "source": "raw/review-security-code-01-02.txt",
+      "question": "Is review-security-code finding F-002 (The brace scanner restarts from every '{' and walks to the end of the input when the braces never ba) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-security-code-01-02.txt F-002; bun timings quoted in raw/review-highload-01-02.txt F-002, raw/review-performance-01-02.txt F-001 and raw/review-security-code-01-02.txt F-002; code confirmed at src/review/ledger.ts:93-115",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-03: parseReviewResult is quadratic on text with many unclosed braces). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Bound the work: skip starts that fall inside a region already shown not to close, or scan once with a stack that records candidate spans, or cap the scanned length. Add a test with 50,000 `{` under a time budget."
+    },
+    {
+      "id": "review-style-01-02:F-001",
+      "source": "raw/review-style-01-02.txt",
+      "question": "Is review-style finding F-001 (The doc comment of parseReviewResult describes the pre-PR behaviour (last fenced block of any langua) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02.txt F-001; src/review/ledger.ts:82 is unchanged while the body at :83-117 was replaced",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-10: Stale doc comment on parseReviewResult). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Rewrite the comment to state the precedence and drop 'Never guessed from prose'; do it together with D-01."
+    },
+    {
+      "id": "review-style-01-02:F-002",
+      "source": "raw/review-style-01-02.txt",
+      "question": "Is review-style finding F-002 (The brace/quote/escape scanner is inlined in parseReviewResult as a for-in-for loop with three mutab) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02.txt F-002; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-05: parseReviewResult nesting and in-loop index mutation), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. Five levels of nesting and `start = end` inside the inner loop. Optional: extract balancedObjectEnd; resolved naturally by the D-01 and D-03 rewrite."
+    },
+    {
+      "id": "review-style-01-02:F-003",
+      "source": "raw/review-style-01-02.txt",
+      "question": "Is review-style finding F-003 (The identical three-line operator-denial guard was pasted into the `delegate` branch (line 5700) and) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02.txt F-003; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-02: Refusal-memory guard pasted into three risk branches), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. agent.ts 5587, 5700 and 5745 repeat the fingerprint expression. Optional: one refusedEarlier(call) helper applied once before the risk dispatch (see also D-04, which is the behavioural side of the same code)."
+    },
+    {
+      "id": "review-style-01-02:F-004",
+      "source": "raw/review-style-01-02.txt",
+      "question": "Is review-style finding F-004 (The full-length sha256 hex digest is re-implemented inline in five places added or touched by the PR) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02.txt F-004; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-01: sha256 hex re-inlined in five places beside the existing `sha` helper), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. retry-plan.ts:71 and :75, slice.ts:446, completion-gate.ts:31, commands/review-ledger.ts:209 each build createHash(\"sha256\")...digest(\"hex\"); ledger.ts:78 already has a truncated helper. Optional: one sha256Hex helper in a shared module; import order of the new node:crypto imports follows."
+    },
+    {
+      "id": "review-style-01-02:F-005",
+      "source": "raw/review-style-01-02.txt",
+      "question": "Is review-style finding F-005 (The Map key format `reviewer + NUL + result path` is built by hand in two places, the producer at li) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02.txt F-005; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-07: Dispatch attribution key `<reviewer>\\0<result path>` spelled by hand; three overlapping channels), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. commands/review-ledger.ts:154 and :183 and the test build the key separately; a driver `result` that is not spelled `raw/<name>.txt` fails to attribute and yields a coverage gap (fail-closed, never a pass). Optional: one key function and basename normalisation."
+    },
+    {
+      "id": "review-style-01-02:F-006",
+      "source": "raw/review-style-01-02.txt",
+      "question": "Is review-style finding F-006 (The new `node:crypto` import is inserted between `node:fs` and `node:fs/promises` in review-ledger.t) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-style-01-02.txt F-006; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-01: sha256 hex re-inlined in five places beside the existing `sha` helper), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. retry-plan.ts:71 and :75, slice.ts:446, completion-gate.ts:31, commands/review-ledger.ts:209 each build createHash(\"sha256\")...digest(\"hex\"); ledger.ts:78 already has a truncated helper. Optional: one sha256Hex helper in a shared module; import order of the new node:crypto imports follows."
+    },
+    {
+      "id": "review-testing-practices-01-02:F-001",
+      "source": "raw/review-testing-practices-01-02.txt",
+      "question": "Is review-testing-practices finding F-001 (AC2 and AC5 (acceptance-criteria.md lines 6 and 9; flow.json acKinds AC2/AC5) name src/commands/revi) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02.txt F-001; keryx ctx rg 'review-slice.test' acceptance-criteria.md matches AC2 (line 4) and AC5 (line 7); `ls src/commands/review-slice.test.ts` in the post-merge tree: No such file or directory",
+      "reason": "DEFERRED, not fixed and not refuted: real major defect (follow-up item D-02: AC2 and AC5 name an exec check on a test file that does not exist). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Add src/commands/review-slice.test.ts covering readResult through the command (bare JSON, fenced REVIEW_RESULT and marked JSON accepted; a malformed or status-less result exits with the UnreadableInput message and records no coverage; the plan output carries scopeFingerprint and changes when a slice is rewritten with same-size content), or correct the two verify commands to name tests that exist."
+    },
+    {
+      "id": "review-testing-practices-01-02:F-002",
+      "source": "raw/review-testing-practices-01-02.txt",
+      "question": "Is review-testing-practices finding F-002 (The new test file covers only the pure helper assignRawDispatch. The changed runLedger wiring in src) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02.txt F-002; raw/review-testing-practices-01-02.txt F-002, F-003, F-004; keryx ctx rg shows no test referencing runLedger or loadRetry",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-07: Test gaps behind the hardening: runLedger wiring, the lifecycle fixture, the stall side of AC8). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Add a tmpdir test of `ledger build` with matching, stale and legacy retry state; build the lifecycle manifest hash from the text planRetry hashes and pass the accepted state on; add an unchanged-twice stall case and a symlink case to completion-gate.test.ts."
+    },
+    {
+      "id": "review-testing-practices-01-02:F-003",
+      "source": "raw/review-testing-practices-01-02.txt",
+      "question": "Is review-testing-practices finding F-003 (AC9 and the implementation report present this as a deterministic lifecycle fixture proving that cov) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02.txt F-003; raw/review-testing-practices-01-02.txt F-002, F-003, F-004; keryx ctx rg shows no test referencing runLedger or loadRetry",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-07: Test gaps behind the hardening: runLedger wiring, the lifecycle fixture, the stall side of AC8). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Add a tmpdir test of `ledger build` with matching, stale and legacy retry state; build the lifecycle manifest hash from the text planRetry hashes and pass the accepted state on; add an unchanged-twice stall case and a symlink case to completion-gate.test.ts."
+    },
+    {
+      "id": "review-testing-practices-01-02:F-004",
+      "source": "raw/review-testing-practices-01-02.txt",
+      "question": "Is review-testing-practices finding F-004 (AC8 requires both that nested or same-size changes count as progress and that unchanged artifacts ar) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02.txt F-004; raw/review-testing-practices-01-02.txt F-002, F-003, F-004; keryx ctx rg shows no test referencing runLedger or loadRetry",
+      "reason": "DEFERRED, not fixed and not refuted: real minor defect (follow-up item D-07: Test gaps behind the hardening: runLedger wiring, the lifecycle fixture, the stall side of AC8). Outside this round: PR 975 is merged and this change closes the flow without touching code. Follow-up: Add a tmpdir test of `ledger build` with matching, stale and legacy retry state; build the lifecycle manifest hash from the text planRetry hashes and pass the accepted state on; add an unchanged-twice stall case and a symlink case to completion-gate.test.ts."
+    },
+    {
+      "id": "review-testing-practices-01-02:F-005",
+      "source": "raw/review-testing-practices-01-02.txt",
+      "question": "Is review-testing-practices finding F-005 (Two new tests (this one and the lifecycle test) sit at file top level, outside any describe, with a ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "raw/review-testing-practices-01-02.txt F-005; read against the post-merge tree by the reviewer and re-checked with keryx ctx rg in this round",
+      "reason": "Maintainability observation (item O-09: Two new ledger tests sit outside any describe), no behavioural defect. Not fixed: PR 975 is merged and this change closes the flow without touching code. src/review/ledger.test.ts top-level tests with a stray indent; the unfenced `REVIEW_RESULT {...}` plus trailing example case is not asserted. Optional tidy-up."
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-frontend",
+      "review-frontend-conventions",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:7405058876d0",
+        "rawEvidence": "raw/review-architecture-01-02.txt#sha256:7405058876d0",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:6c2059ba671a",
+        "rawEvidence": "raw/review-backend-01-02.txt#sha256:6c2059ba671a",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-backend/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:7203d5e9f3b5",
+        "rawEvidence": "raw/review-clean-code-01-02.txt#sha256:7203d5e9f3b5",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:07b623b2b1cc",
+        "rawEvidence": "raw/review-frontend-01-02.txt#sha256:07b623b2b1cc",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-frontend/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend-conventions",
+        "executionId": "review-frontend-conventions:bfe9e32f1ad3",
+        "rawEvidence": "raw/review-frontend-conventions-01-02.txt#sha256:bfe9e32f1ad3",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-frontend-conventions/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:b4e394c0ef1d",
+        "rawEvidence": "raw/review-highload-01-02.txt#sha256:b4e394c0ef1d",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:9e837f0a6525",
+        "rawEvidence": "raw/review-logic-01-02.txt#sha256:9e837f0a6525",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:56be2bbe4a14",
+        "rawEvidence": "raw/review-performance-01-02.txt#sha256:56be2bbe4a14",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:3841fefdfa7b",
+        "rawEvidence": "raw/review-security-code-01-02.txt#sha256:3841fefdfa7b",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:f496dee9bd57",
+        "rawEvidence": "raw/review-style-01-02.txt#sha256:f496dee9bd57",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:1d86118616fb",
+        "rawEvidence": "raw/review-testing-practices-01-02.txt#sha256:1d86118616fb",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  }
+}

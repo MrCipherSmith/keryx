@@ -1,12 +1,12 @@
 # T68 implementation — closing T62 F-002, F-003, F-004
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/security/self-protect.ts`, `src/security/security.test.ts`,
 `src/security/templates.ts`, `src/security/templates.test.ts` (new),
 `docs/docs/cli-reference.md`. Spec written before coding: `T68-spec.md` (same
 directory).
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Residual 1 — F-002: `MODE_RANK` still ranks `gateway` above `enforced`/`ci`
 

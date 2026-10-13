@@ -117,7 +117,7 @@ export type ApprovalGateDecision = "auto" | "ask" | "deny";
  *     does not apply in a turn that holds untrusted external content.
  *   - `auto`  — bypass the prompt for everything except `credentials`. This
  *     is the deliberately dangerous mode (mirrors Claude Code's
- *     `bypassPermissions` / grok-build's yolo mode) — the caller is
+ *     `bypassPermissions`) — the caller is
  *     responsible for the one-time confirmation + persistent banner before
  *     any action is skipped under it.
  */

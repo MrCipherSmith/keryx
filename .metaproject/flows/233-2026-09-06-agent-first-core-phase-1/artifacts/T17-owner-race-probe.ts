@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { readContainedFile } from "/Users/Goodea/goodea/keryx/src/lib/contained-read";
+import { readContainedFile } from "~/goodea/keryx/src/lib/contained-read";
 const base = await mkdtemp(path.join(tmpdir(), "keryx-owner-race-"));
 const root = path.join(base,"owner");
 try {

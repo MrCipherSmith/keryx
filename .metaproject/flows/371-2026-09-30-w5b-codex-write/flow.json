@@ -55,14 +55,14 @@
     },
     "AC10": {
       "at": "2026-09-30T19:38:21.310Z",
-      "note": "operator report sent via helyx with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28)"
+      "note": "operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28)"
     }
   },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/808"
   },
   "owner": {
-    "value": "altsay",
+    "value": "operator",
     "basis": "stated",
     "source": "`--owner` flag on `flow init`"
   },
@@ -164,42 +164,42 @@
     {
       "at": "2026-09-30T18:23:15.073Z",
       "event": "ac-confirmed",
-      "detail": "AC1: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC1: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:15.234Z",
       "event": "ac-confirmed",
-      "detail": "AC2: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC2: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:15.396Z",
       "event": "ac-confirmed",
-      "detail": "AC3: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC3: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:15.557Z",
       "event": "ac-confirmed",
-      "detail": "AC4: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC4: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:15.719Z",
       "event": "ac-confirmed",
-      "detail": "AC5: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC5: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:15.880Z",
       "event": "ac-confirmed",
-      "detail": "AC6: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC6: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:16.039Z",
       "event": "ac-confirmed",
-      "detail": "AC7: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+      "detail": "AC7: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:16.199Z",
       "event": "ac-confirmed",
-      "detail": "AC8: live probe on codex 0.159.2 recorded in the journal (signed: altsay [stated])"
+      "detail": "AC8: live probe on codex 0.159.2 recorded in the journal (signed: operator [stated])"
     },
     {
       "at": "2026-09-30T18:23:16.359Z",
@@ -234,7 +234,7 @@
     {
       "at": "2026-09-30T19:38:21.311Z",
       "event": "ac-confirmed",
-      "detail": "AC10: operator report sent via helyx with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC10: operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-30T19:38:23.191Z",
@@ -311,7 +311,7 @@
       "at": "2026-09-30T18:23:15.073Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -322,7 +322,7 @@
       "at": "2026-09-30T18:23:15.234Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -333,7 +333,7 @@
       "at": "2026-09-30T18:23:15.395Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -344,7 +344,7 @@
       "at": "2026-09-30T18:23:15.557Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -355,7 +355,7 @@
       "at": "2026-09-30T18:23:15.719Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -366,7 +366,7 @@
       "at": "2026-09-30T18:23:15.879Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -377,7 +377,7 @@
       "at": "2026-09-30T18:23:16.039Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -388,7 +388,7 @@
       "at": "2026-09-30T18:23:16.199Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -421,7 +421,7 @@
       "at": "2026-09-30T19:38:38.051Z",
       "kind": "complete",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -457,7 +457,7 @@
         {
           "name": "owner",
           "status": "pass",
-          "detail": "owner: altsay"
+          "detail": "owner: operator"
         },
         {
           "name": "review",
@@ -509,7 +509,7 @@
         {
           "name": "owner",
           "status": "pass",
-          "detail": "owner: altsay"
+          "detail": "owner: operator"
         },
         {
           "name": "review",

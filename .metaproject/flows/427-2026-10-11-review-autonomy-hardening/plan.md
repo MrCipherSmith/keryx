@@ -4,7 +4,7 @@ Status: approved by operator
 Model: openai-codex/gpt-6.1-sol
 
 ## Approach
-Test-first, минимальные изменения существующих компонентов. Worktree /home/altsay/keryx/.worktrees/review-autonomy-hardening, branch fix/review-autonomy-hardening, baseline 00879558256cef065f5e22fb0df66d227253a180.
+Test-first, минимальные изменения существующих компонентов. Worktree ~/keryx/.worktrees/review-autonomy-hardening, branch fix/review-autonomy-hardening, baseline 00879558256cef065f5e22fb0df66d227253a180.
 Неатрибутированное покрытие не принимается. Широкая переработка runner и реальные model E2E отвергнуты как расширение scope и нарушение запрета запускать прогоны.
 
 ## Steps

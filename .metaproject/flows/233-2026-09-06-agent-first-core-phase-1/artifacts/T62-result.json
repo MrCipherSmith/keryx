@@ -17,7 +17,7 @@
       "evidence": "T53-extract 88 cases 0 bypasses with an identical 14-id over-approximation set; T53-resolve 41x15=615, 0 bypasses 0 false positives; T42-exfil-attack 42 cases 0/0; T24-recheck2-exfil 48 cases 0/0; T42-charrefs 48 names x 5 shapes = 240 cases, no named or numeric spelling bypass; T24-recheck2-boundary all 12 canonicalization shapes and all 28 MCP persistence cases keeping their exact state and reason token; T42-boundary ROW 1 six formerly-leaking shapes closed and ctlPublicLink state none; T52-base 14 cases notNeutralized [] falsePositives []; T39-posture, T39-exit and T39-scan reproducing cell for cell with gateway's four exit cells the one intended move. Every one re-run again after the mid-review drift with byte-identical output. Raw logs T62-rerun-*.log and T62-postdrift-*.log."
     },
     {
-      "criterion": "Every verdict row cites an executed probe with a raw log path under /Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/.",
+      "criterion": "Every verdict row cites an executed probe with a raw log path under ~/goodea/keryx/.metaproject/data/gdctx/raw/.",
       "status": "met",
       "evidence": "Stage 1 rows 1-6 cite T62-flow.log, T62-state.log, T62-mode.log, T62-health.log (rows 4 and 5) and T62-exfil.log respectively; the judgement call cites T62-exfil.log and T62-boundary.log; every re-run control cites a T62-rerun-*.log or T62-postdrift-*.log path with its SHA-256 in the Evidence table (36 rows)."
     }

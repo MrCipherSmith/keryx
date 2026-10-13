@@ -28,7 +28,7 @@ Three concrete consequences observed directly in this session's own routing:
    engaged) has any chance of a harness-level guarantee; the other four
    listed assistants get the prose path or nothing.
 3. **No progressive disclosure.** Five of six researched CLIs (Claude Code
-   itself, opencode, cline, kilocode) gate skill-body loading behind a
+   itself and three open-source harnesses) gate skill-body loading behind a
    description-matched tool call, keeping only short catalog entries
    in-context until invoked. keryx's only way to learn what's routable is to
    read `.metaproject/index.md` in full — there is no cheaper structured

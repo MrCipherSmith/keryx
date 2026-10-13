@@ -34,7 +34,7 @@ sequential and concurrent execution.
    the same batch keeps today's sequential path untouched.
 3. **D1c — Config field**: `HarnessRunConfig.subagents.maxConcurrency` (new,
    optional, conservative default — implementer picks the number; not fixed
-   by the spec, informed by but not copying grok-build's 32-default, since
+   by the spec, deliberately below a 32-default, since
    Keryx cannot assume the same provider-side rate-limit headroom for every
    configured provider/local-model combination). Threaded the same way
    `maxTreeDepth`/`maxChildrenPerRun` already are.

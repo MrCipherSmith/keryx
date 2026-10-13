@@ -1,7 +1,7 @@
 // Flow 422 (AC5): every route that creates a flow puts the verification-kind marker in front of the agent.
 //   intake  -> `keryx flow init` (createDefaultFlowPort) -> createFlowService().init -> renderAcceptanceCriteria
 //   goal    -> createFlowService().init, then its own one-criterion file (`autoProvisionFlow`)
-// The helyx/Telegram surface has no flow-creating code in this repository (see the flow-422 T8 report).
+// The chat-bot/Telegram surface has no flow-creating code in this repository (see the flow-422 T8 report).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";

@@ -23,19 +23,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Independent verification of both reported sites (what can reach each, what happens today when it throws) written before any code change, the fix design for both (safeFsErrorCode + split try for site 1, readScopeMarkdown mirroring readJson for site 2), what is deliberately not changed, the regression-test plan, and the verification plan."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full verification writeup for both sites (including the honest finding that site 2 was not a currently-live leak through the shipped CLI, only a real gap in the module's own defenses), the fix, the diagnostic-value tradeoff, what was not changed, RED/GREEN transcripts, and every verification command with raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."

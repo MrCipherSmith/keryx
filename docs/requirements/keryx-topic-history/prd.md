@@ -15,19 +15,19 @@ Screenshots: (1) what arrived in Telegram: a native three-column table "Номе
 
 179814:
 
-> Про таблицы в телеграм, в helyx они широкие и если не вылазят, есть горизонтальный скрол
+> Про таблицы в телеграм, в the chat bot они широкие и если не вылазят, есть горизонтальный скрол
 
 ## 2. Problem
 
 1. Exit from the shell deletes the Telegram topic. `keryx shell --continue` restores the session, but remote control does not start by itself (flow 376, AC4); `/remote-control <name>` then creates a new topic that is empty, while the session holds the whole conversation.
-2. A table reaches Telegram as a native table block in a narrow bubble and wraps tall; in helyx the same kind of table is wide and scrolls sideways.
+2. A table reaches Telegram as a native table block in a narrow bubble and wraps tall; in the chat bot the same kind of table is wide and scrolls sideways.
 
 ## 3. Goals
 
 - G1. A new topic created for a session that already has a conversation receives the last 10 messages (operator and agent) on its own.
 - G2. `/history [N]` posts the last N messages on demand (default 10), from the shell and from the topic.
 - G3. Both are visible in the shell: command registry, help, remote-control panel, sidebar and status.
-- G4. A table in a reply reads in Telegram as wide, with horizontal scroll when it does not fit, as in helyx, without weakening what flow 395 guarantees.
+- G4. A table in a reply reads in Telegram as wide, with horizontal scroll when it does not fit, as in the chat bot, without weakening what flow 395 guarantees.
 
 ## 4. Behaviour
 
@@ -62,13 +62,13 @@ No argument: 10. N from 1 to 20 (D2); anything else, including a non-number, get
 
 ### 4.8 Tables
 
-keryx sends a `table` block (`src/remote/format-rich.ts`, `is_bordered: true`) on purpose: spike S3 (`docs/requirements/keryx-telegram-rendering/spike.md`) requires that model text never reach a parser. helyx sends `rich_message: { markdown }` (`helyx/mcp/tools.ts`) after rewriting bare separator rows so each carries a colon (`helyx/channel/telegram.ts`), because Telegram recognises a Markdown table only then. Which of these Telegram lays out wide and scrollable is not known from the code; the first step is a probe (AC1) of three variants:
+keryx sends a `table` block (`src/remote/format-rich.ts`, `is_bordered: true`) on purpose: spike S3 (`docs/requirements/keryx-telegram-rendering/spike.md`) requires that model text never reach a parser. the chat bot sends `rich_message: { markdown }` (`the chat bot's mcp/tools.ts`) after rewriting bare separator rows so each carries a colon (`the chat bot/channel/telegram.ts`), because Telegram recognises a Markdown table only then. Which of these Telegram lays out wide and scrollable is not known from the code; the first step is a probe (AC1) of three variants:
 
 - A. the current `table` block (chosen by the operator after the probe: wide, scrolls sideways);
-- B. rich `markdown` as helyx sends it (likely the helyx look; carries the injection risk S3 is about);
+- B. rich `markdown` as the chat bot sends it (likely the the chat bot look; carries the injection risk S3 is about);
 - C. an aligned HTML `<pre>` table (Telegram scrolls `<pre>` blocks sideways; safe; loses cell styling).
 
-The operator read the probe messages and chose A, the current `table` block: it is wide and scrolls sideways like helyx (B and C not chosen; `spike.md`). So no new renderer is built. PR 2 pins what exists: the output of the native table block with every cell whole, no cell shortening anywhere (AC2); the 395 invariants (AC3); the HTML and plain fallbacks, wide aligned or stacked, in their order (AC4); and the split at row boundaries with the header repeated, within 4096 characters and the rich limits including 500 blocks, a table row being a block (AC5). The earlier decision of poll 51 (keep the native table, shorten cells with an ellipsis) is superseded by 179814 and stays dropped (D3).
+The operator read the probe messages and chose A, the current `table` block: it is wide and scrolls sideways like the chat bot (B and C not chosen; `spike.md`). So no new renderer is built. PR 2 pins what exists: the output of the native table block with every cell whole, no cell shortening anywhere (AC2); the 395 invariants (AC3); the HTML and plain fallbacks, wide aligned or stacked, in their order (AC4); and the split at row boundaries with the header repeated, within 4096 characters and the rich limits including 500 blocks, a table row being a block (AC5). The earlier decision of poll 51 (keep the native table, shorten cells with an ellipsis) is superseded by 179814 and stays dropped (D3).
 
 ## 5. Acceptance criteria
 

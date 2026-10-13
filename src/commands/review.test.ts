@@ -1675,3 +1675,21 @@ test("`review retry-plan` reads a saved raw reply carrying a REVIEW_RESULT block
   expect(process.exitCode).toBe(0);
   expect(JSON.parse(logs.join("\n")).reviewer).toBe("review-logic");
 });
+
+test("flow 429: --automatic is recorded on the manifest, printed on create and shown by status; absent otherwise", async () => {
+  const plain = await ingest("plain-round");
+  expect(JSON.parse(await readFile(path.join(plain, "manifest.json"), "utf8")).automatic).toBeUndefined();
+  expect(logs.join("\n")).not.toContain("run mode: automatic review");
+
+  logs = [];
+  const marked = await ingest("auto-round", ["--automatic"]);
+  expect(JSON.parse(await readFile(path.join(marked, "manifest.json"), "utf8")).automatic).toBe(true);
+  expect(logs.join("\n")).toContain("run mode: automatic review");
+
+  logs = [];
+  await reviewCommand(["status", "auto-round"]);
+  expect(logs.join("\n")).toContain("run mode: automatic review");
+  logs = [];
+  await reviewCommand(["status", "plain-round"]);
+  expect(logs.join("\n")).not.toContain("run mode: automatic review");
+});

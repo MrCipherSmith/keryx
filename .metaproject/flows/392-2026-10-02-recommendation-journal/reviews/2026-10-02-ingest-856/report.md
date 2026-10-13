@@ -142,7 +142,7 @@ Independent review of PR #856 (flow 392, recommendation journal): no blockers, f
     "id": "F-009",
     "severity": "minor",
     "problem": "The project-wide journal is a git-ignored file under the working directory (cwd/.metaproject/data/decisions), so each checkout and each git worktree has its own, and removing a worktree deletes it. With F-003 the flow's journal.md line, the only tracked copy, is also not written on the ask_user path.",
-    "impact": "The operator runs flows in worktrees such as /home/altsay/keryx-wF. Questions answered there are written to that worktree's journal; `git worktree remove` after the merge deletes it, and `keryx decisions report` in the main checkout never sees them. The 'at least 20 decisions after two weeks' of AC11 can only be met if everything is asked in one long-lived checkout.",
+    "impact": "The operator runs flows in worktrees such as ~/keryx-wF. Questions answered there are written to that worktree's journal; `git worktree remove` after the merge deletes it, and `keryx decisions report` in the main checkout never sees them. The 'at least 20 decisions after two weeks' of AC11 can only be met if everything is asked in one long-lived checkout.",
     "suggested_fix": "Resolve the journal under the common project root (the main worktree) or a user-level data dir, or document the limit in the guide next to the .gitignore line.",
     "evidence": "Read src/decisions/store.ts decisionsDir(cwd) = join(cwd, '.metaproject', 'data', 'decisions') and the .gitignore entry added in this PR; callers pass opts.session?.cwd ?? process.cwd().",
     "confidence": "medium",

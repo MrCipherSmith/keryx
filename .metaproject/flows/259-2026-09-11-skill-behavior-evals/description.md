@@ -1,7 +1,7 @@
 # Behavioral skill evals with a control arm on the benchmark harness
 
 Status: formalized (not frozen; freezes after flow 258 finishes)
-Source: user request 2026-09-11 after the agent-skills comparison
+Source: user request 2026-09-11 after an external skills-library review
 Program: docs/plans/skills-quality-program.md (flow 4 of 4)
 
 ## Problem

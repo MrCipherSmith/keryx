@@ -1,4 +1,4 @@
-# OS-sandbox for shell_exec (v1: workspace-write + network-off, grok-build model)
+# OS-sandbox for shell_exec (v1: workspace-write + network-off)
 
 Status: draft (flow-init skill formalizes this)
 Source: user description

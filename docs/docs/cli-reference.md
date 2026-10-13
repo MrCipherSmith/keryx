@@ -3542,8 +3542,8 @@ Accepts the same flags as `skills verify` (`--dry-run`, `--json`, `--all`).
 
 ## health
 
-Aggregate code-quality signals from multiple tools (ESLint, TypeScript, tests,
-dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
+Aggregate code-quality signals from multiple tools (ESLint or oxlint, TypeScript,
+tests, dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
 per-scope health scores, compare against a baseline, and evaluate a pass/warn/fail
 quality gate.
 
@@ -3566,6 +3566,52 @@ keryx health trend [--scope <key>] [--limit <n>]
 | `explain <file-or-module>` | `--narrate`, `--provider <p>`, `--json` | Print a scope's metrics + its first 20 findings from the last report. `--narrate` adds a model-written explanation and **needs a credential** — without one it exits `1`. Note it returns `0` before reaching the model when the scope has no metrics yet; run `keryx health run` first. |
 | `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
 | `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
+
+**Lint is a capability, not a tool name (flow 352, AC1–AC3).** `health` runs the
+linter the project actually has: ESLint is detected from its config files, oxlint
+from `.oxlintrc.*` or a `package.json` dependency, and each parses its own JSON
+output into findings tagged with the tool that produced them. `sources.eslint.required`
+means "this project is linted" — so when oxlint runs and parses, a skipped ESLint
+no longer blocks the run (the gate says `NOTE: eslint skipped; lint capability
+provided by oxlint` instead of `INCOMPLETE`). A project with neither linter keeps
+the previous required-ESLint `INCOMPLETE`, and a half-installed one (config present,
+binary absent → `missing`) still blocks.
+
+`required` on a linter therefore means the capability, not the tool: any source
+whose adapter declares the lint capability satisfies it, and there is no setting
+for "must be linted by ESLint specifically". oxlint is a default optional source,
+so a configuration that switches ESLint off and uses neither linter now reports
+`coverage: partial` (lint is genuinely unmeasured there) where it used to report
+`complete`; the gate status does not change. A linter excused because another
+one ran gets no `OPTIONAL: … skipped` line, so the reasons agree with coverage.
+A linter left out by `--sources` is never excused: a filtered run does not
+report a clean gate.
+
+**The baseline records which sources it measured.** A source that starts being
+measured after the baseline was taken — oxlint on a project that already named
+it, for example — adds findings, but they are new measurement of unchanged
+code, so they are left out of `regression_score` and `trend` and cannot fail
+the gate as a regression; `health_score` still counts them (a coverage report
+seen for the first time is treated the same way). The gate names them —
+`NOTE: not in the baseline yet, so not compared for regression: oxlint` — on
+every run until you run `keryx health baseline update`; from then on the new
+source is compared like any other. `health run` never rewrites an existing
+baseline. "Measured" means *shaped the scores*: sources that produced a
+result, plus coverage whenever its data was applied, whatever coverage's mode.
+A baseline taken before sources were recorded is read as every source keryx
+had before oxlint. `keryx health baseline update` refuses a report from a
+`--sources` run, and a module/file update while the report measured a source
+the baseline has not recorded (update the whole project's baseline first).
+
+**A `missing` source names what it looked for (flow 352, AC5).** `eslint`, `oxlint`
+and `typescript` now report e.g. `tsconfig.json found, binary not found
+(node_modules/.bin/tsc and PATH)`, so the fix is visible in `latest.md` instead of
+requiring a guess about whether the tool or the config was absent. oxlint's reason
+names the signal that fired: `.oxlintrc.*` found, or oxlint named in
+`package.json`. The TypeScript source resolves `tsc` from the project's own
+`node_modules/.bin` before `PATH`, so a repository whose compiler is a
+dev-dependency is checked by that compiler; that behaviour predates flow 352,
+which pins it with a test that puts a decoy `tsc` on `PATH` (AC4).
 
 **The `tests` source (flow 353, AC6).** In `auto` mode, `keryx health run`
 used to report the `tests` source as `missing` whenever no persisted
@@ -4667,11 +4713,19 @@ Create and manage durable review packages. Managed reviews preserve target
 identity, reviewer coverage, findings, decisions, learning candidates, and an
 optional flow relationship instead of leaving review state only in chat output.
 
+`--automatic` on `start`, `attach` and `ingest` marks the package as an
+**automatic review** run (`manifest.automatic: true`; `review status` prints
+`run mode: automatic review`). The mark is a run mode, not a permission mode and
+not a way around the gate: `review complete` and every one of its refusals work
+exactly as without it. Inside `keryx shell` it is what lets a turn run the
+review's own commands without a prompt — see
+[Automatic review](guides/permission-modes.md#automatic-review).
+
 ```text
 keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
-                    [--reviewers a,b] [--report <path>]
-keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                    [--reviewers a,b] [--report <path>] [--automatic]
+keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--automatic]
+keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                     [--refuted <file|->]
@@ -5284,7 +5338,12 @@ unreadable.
 
 `review retry-plan` decides what follows a reviewer result. `--result` is the
 reviewer's result JSON, or its saved raw reply (the last `REVIEW_RESULT` block is
-read); its `slices` list is what the reviewer covered. An attempt is spent only by
+read); its `slices` list is what the reviewer covered, written as slice ids or as
+objects carrying an `id` (`{"id": "slice-03", "status": "DONE", "coverage": "…"}`).
+An object counts as covered only when its `status` is absent or DONE, COMPLETE, COMPLETED,
+COVERED or OK (any case); NOT_READ, INCOMPLETE, SKIPPED, PARTIAL or any other status leaves
+that slice uncovered, and the plan's reason names those slices with their statuses. An entry
+with no usable id covers nothing and is named by count in the plan's reason. An attempt is spent only by
 a result that covered no slice the reviewer had not covered before. A reviewer that
 makes progress is handed the next wave of the slices still uncovered (decision
 `retry`, or `wave` after a finished result with slices still open) and is not
@@ -5325,6 +5384,20 @@ using the gate's own validators; exit 1 when not ready, so
 `--findings`, `--dispositions` (default: the obligations already in `research.json`),
 `--out` (default `<package>/research.json`), `--dry-run`, `--json`.
 
+`drivers/<reviewer>.json` records one dispatch:
+`{"reviewer", "slices": [...], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`.
+The rule file is taken from `definition`, or from a `skill_path` at the top level or
+inside a `payload` object, whichever names a file that exists; a reviewer with none
+stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.
+A file there with no `REVIEW_RESULT` block, that no driver names as its `result`, and
+whose name does not start with a dispatched or required reviewer's id is not a reply:
+the ledger lists it under `ignored` as `set aside: …`, records it in `setAside` in
+`research.json`, and leaves it where it is, never deleting it. A driver's `slices` is
+the list of slices handed to the reviewer, so a `status` on one of its entries is not
+read; an entry with no usable id there is reported as a gap by count, and none of that
+dispatch's slices counts as handed out until it is fixed. A file that holds a `REVIEW_RESULT` block, or is named by a driver, still
+has to be reconciled.
+
 **The set is under regression check, not under review**, and that is refused in
 code rather than discouraged in prose. Three rules, and every one of them is a
 fact about the claim rather than about who made it: `outside-set` (the file is in
@@ -5359,7 +5432,8 @@ refused rather than reported as an empty radius.
 Nothing in the review pipeline was capped: `budget.max_findings` was required by
 the schema with no default anywhere, there was no cost ceiling, and reviewers
 were dispatched in parallel with no wave size while `review-orchestrator` itself
-runs nested under `flow-orchestrator` and `job-orchestrator`.
+runs inline in the main session, next to the subagents that session has already
+dispatched.
 
 The defaults are in code (`src/review/caps.ts`), so a caller that says nothing
 still gets a bound.
@@ -5368,7 +5442,7 @@ still gets a bound.
 |---|---|---|---|
 | Findings | **10 per reviewer**, blockers exempt | `--max-findings <n>` | Truncates a reviewer's ordinary findings. `blocker` and `blocking_merge` findings are exempt and do not consume the budget. |
 | Spend | **3.00 USD** per round | `--spent <usd>`, `--spend-ceiling <usd>` | Stops and asks rather than proceeding. |
-| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after`; after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
+| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after` (at most 300 seconds); after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
 
 **Every cap records what it dropped**, in the package's `scope.md` under
 `## Caps` and on the terminal — a count, and for the findings cap the id of every
@@ -5391,12 +5465,12 @@ is denominated in, and token counts convert to it while the reverse does not.
 3.00 USD follows SWE-agent's $3/instance cap; a keryx review round is one target
 and one reviewer fan-out, the analogue of one instance.
 
-**The concurrency cap does not bind the nested total on its own, and says so.**
-keryx is a CLI invoked once per command: it cannot observe subagents running in
-another orchestrator's process, and there is no lease between the three
-orchestration levels. `--outstanding <n>` is an enclosing orchestrator declaring
-what it already has in flight, which shrinks the effective wave; it is a
-declaration, not an observation, and nothing verifies it. The record therefore
+**The concurrency cap does not bind the session's total on its own, and says so.**
+keryx is a CLI invoked once per command: it cannot observe the subagents the main
+session still has running, and there is no lease between them and this dispatch.
+`--outstanding <n>` is the main session declaring how many it has running, which
+shrinks the effective wave; it is a declaration, not an observation, and nothing
+verifies it. The record therefore
 carries `holds_across_nesting: yes (against the declared count)` or `no`, rather
 than implying a guarantee that does not exist.
 
@@ -6269,15 +6343,16 @@ keryx review budget --spent 2.10 --reviewers review-logic,review-style --outstan
 
 Exits 1 when spend has reached the ceiling, with a message naming the overage and
 asking the operator. Prints the dispatch waves, the queue size, and whether the
-concurrency cap holds across the nesting.
+concurrency cap is measured against a declared count of running subagents.
 
 | Flag | Description |
 |---|---|
 | `--spent <usd>` | Spend so far. Omitted, the record reads `not recorded` — which is **not** `under`: staying inside the ceiling was never demonstrated. |
 | `--ceiling <usd>` | Override the 3.00 USD default. |
 | `--reviewers a,b` | The reviewer set to plan into waves. |
-| `--parallel <n>` | Override the wave size (default 10, split by diff domain). |
-| `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+| `--parallel <n>` | Override the wave size (default 10, split by diff domain). With `--full` it can only lower it. |
+| `--full` | A full review or `--all`: holds the wave to 10 whatever `--parallel` says. |
+| `--outstanding <n>` | Subagents the main session still has running. The only thing that makes the cap mean anything beyond this dispatch. |
 
 ### `review bot` and `review metrics`
 

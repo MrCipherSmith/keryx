@@ -6,8 +6,8 @@
  * Nothing in the review pipeline was capped. `budget.max_findings` was
  * schema-required with no default anywhere, so every caller had to invent one;
  * there was no token or currency ceiling at all; and `review-orchestrator`
- * dispatched reviewers in parallel with no wave size, while itself running
- * nested under `flow-orchestrator` and `job-orchestrator`.
+ * dispatched reviewers in parallel with no wave size, while running inline in a
+ * main session that may already have other subagents going.
  *
  * # The rule every cap here obeys
  *
@@ -232,7 +232,7 @@ function isExemptFromFindingsCap(finding: CappableFinding): boolean {
  * - Currency is the unit the operator's budget is actually denominated in, and
  *   the unit a harness reports back. It is also the unit the decision is made
  *   in: nobody stops a review because it used tokens.
- * - Steps and rounds are already bounded (AC8, and the round bound is 3). A
+ * - Steps and rounds are already bounded (AC8; the review round cap is 5, `REVIEW_ROUND_CAP` in `src/flow/review-gate.ts`, and the self-fix bound is 3). A
  *   token cap would be a third bound in the same shape as the first two —
  *   "how much work" — while leaving "how much money" unbounded, which is the
  *   only one of the three that can surprise anybody.
@@ -338,8 +338,9 @@ export function spendFromTokens(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * The most reviewers one wave holds. A full review (`--all`) is split by diff
- * domain and no wave exceeds this; `--parallel <n>` can only lower it.
+ * The wave size when nothing else is set, and the hard ceiling for a full review
+ * (`--full` / `--all`). Without `--full`, `--parallel <n>` replaces it and may
+ * raise it; with `--full`, `--parallel <n>` can only lower it.
  */
 export const MAX_REVIEWERS_PER_WAVE_FULL = 10;
 
@@ -387,11 +388,13 @@ export function reviewerDomain(reviewer: string): ReviewerDomain {
 export type ConcurrencyPlan = {
   cap: number;
   /**
-   * Subagents the CALLER declared it already has in flight, `undefined` when it
-   * declared nothing.
+   * Subagents the CALLER declared the main session still has running, `undefined`
+   * when it declared nothing.
    *
-   * This is the whole nesting story, and it is a declaration rather than an
-   * observation. See {@link ConcurrencyPlan.holdsAcrossNesting}.
+   * The review-orchestrator runs inline in the main session, so the only
+   * subagents that can sit beside its reviewers are ones the main session itself
+   * started. This is a declaration, not an observation. See
+   * {@link ConcurrencyPlan.holdsAcrossNesting}.
    */
   outstanding: number | undefined;
   /** Wave size after subtracting `outstanding`. Never below 1. */
@@ -401,21 +404,22 @@ export type ConcurrencyPlan = {
   /** Reviewers not in wave 1 — deferred, not dropped, and counted. */
   queued: number;
   /**
-   * Whether the cap binds the total number of live reviewer subagents across the
-   * `job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator` nesting.
+   * Whether the cap was reduced by a declared count of subagents the main session
+   * still has running (`outstanding`).
    *
-   * **It does not, unless every enclosing orchestrator declares its in-flight
-   * count.** Said plainly rather than implied: keryx is a CLI invoked once per
-   * command. It has no view of subagents running inside another orchestrator's
-   * process, the harness reports no live subagent count to it, and there is no
-   * lease or lock between the three levels. What this plan bounds with certainty
-   * is one dispatch plan. It bounds the nested total only when a parent passes
-   * its own in-flight count as `outstanding` — and even then it is bounded by a
-   * number the parent asserted, which nothing here verifies.
+   * **Without that declaration the cap bounds this one dispatch plan only.** Said
+   * plainly rather than implied: keryx is a CLI invoked once per command. It has
+   * no view of subagents the main session started elsewhere, the harness reports
+   * no live subagent count to it, and there is no lease or lock. With a declared
+   * `outstanding` the plan is bounded by a number the caller asserted, which
+   * nothing here verifies.
    *
    * `false` with `outstanding: undefined` therefore means "the cap held for this
    * plan and nobody told us what else was running", which is exactly what the
    * record says.
+   *
+   * The key name is historical (from the retired nested model); it now means
+   * "the cap held against the declared `outstanding` count".
    */
   holdsAcrossNesting: boolean;
 };
@@ -501,10 +505,14 @@ export function rateLimitState(waveSize: number): RateLimitState {
   return { waveSize, halvings: 0 };
 }
 
+/** The longest a rate-limit wait may be; a larger `retry-after` is clamped to it. */
+export const MAX_RETRY_AFTER_SECONDS = 300;
+
 /**
  * What the orchestrator does after reviewers answered `STATUS: RATE_LIMITED`:
  * halve the wave (never below 1), put the limited reviewers back at the front of
- * the queue and wait `retry-after` when one was given. After
+ * the queue and wait `retry-after` when one was given, at most
+ * {@link MAX_RETRY_AFTER_SECONDS}. After
  * {@link MAX_RATE_HALVINGS} halvings a further rate limit stops the round with
  * `BLOCKED rate_limited` and the queue that was left.
  */
@@ -530,7 +538,7 @@ export function nextAfterRateLimit(
     action: "requeue",
     state: { waveSize: Math.max(1, Math.floor(state.waveSize / 2)), halvings: state.halvings + 1 },
     queue,
-    waitSeconds: retryAfterSeconds,
+    waitSeconds: retryAfterSeconds === undefined ? undefined : Math.min(retryAfterSeconds, MAX_RETRY_AFTER_SECONDS),
   };
 }
 
@@ -637,10 +645,9 @@ export function renderCapsMarkdown(record: ReviewCapsRecord): string {
     lines.push(`holds_across_nesting: ${plan.holdsAcrossNesting ? "yes (against the declared count)" : "no"}`);
     if (!plan.holdsAcrossNesting) {
       lines.push("");
-      lines.push("The cap bound THIS dispatch plan. It does not bind the total across");
-      lines.push("`job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator`: no");
-      lines.push("enclosing orchestrator declared its in-flight count, and keryx has no");
-      lines.push("way to observe one. Said plainly rather than implied.");
+      lines.push("The cap bound THIS dispatch plan only. Nothing declared how many");
+      lines.push("subagents the main session still had running, and keryx has no way to");
+      lines.push("observe them. Said plainly rather than implied.");
     }
     if (plan.waves.length > 1) {
       lines.push("");

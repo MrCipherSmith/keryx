@@ -1,6 +1,6 @@
 # T48 spec — close the health command's exit-code denylist (T38-F-001)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files: `src/commands/health.ts` and its focused tests
 (`src/commands/health-incomplete.test.ts`, `src/commands/health-status.test.ts`,
 a new `src/commands/health-gate-exit.test.ts`). Read-only: `src/health/*`

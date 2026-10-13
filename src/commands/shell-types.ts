@@ -35,11 +35,14 @@ export interface ShellSessionOpts {
    * outside the loop (the readline SIGINT/SIGTERM handler) can release it.
    */
   leaseBox?: { current: SessionLeaseHandle | undefined };
+  finalizerBox?: { current: (() => Promise<void>) | undefined };
   /**
    * Test seam: the leased open used for the start-up open and for `/new`.
    * Production leaves it unset and gets `openLeasedSession`.
    */
   openLeased?: (opts: OpenLeasedSessionOptions) => OpenLeasedSessionResult;
+  /** Test seam for the asynchronous preservation boundary during `/new`. */
+  closeSlateForSwitch?: typeof import("../session/slate-lifecycle").closeSlateSession;
   /**
    * `--name` (flow 273 T6), or the shell config's `bus.name`: the requested
    * bus instance name (decision D-06), threaded to `joinBus`'s

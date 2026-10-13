@@ -353,7 +353,7 @@ test("buildOrientation without a project-root index preserves the graph + wiki f
 });
 
 test("buildOrientation emits nothing for a `.metaproject` directory with nothing usable in it", async () => {
-  // The `vantage-specs` shape: `.metaproject/` exists (with an empty `workspaces/`), so
+  // The `acme-specs` shape: `.metaproject/` exists (with an empty `workspaces/`), so
   // nothing looks wrong — but there is no manifest and nothing built. This block used to
   // be injected anyway, telling the model to run `keryx gdgraph build` / `keryx wiki index`
   // in a project whose roster deliberately carries no graph_*/wiki_* tool.

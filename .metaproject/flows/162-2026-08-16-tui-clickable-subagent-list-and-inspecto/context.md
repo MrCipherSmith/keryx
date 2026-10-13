@@ -19,11 +19,10 @@ Collected deterministically by `keryx flow init` at 2026-08-16T16:01:00.005Z.
 - OpenTUI `RenderableOptions.onMouseDown` is available; chrome already sets
   `useMouse: true`.
 
-## Reference (cloned)
+## Reference
 
-`/Users/tsaitler.aleksandr/goodea/misk/grok-build` — tasks pane lists every
-subagent; click opens a child view overlay (`docs/user-guide/16-subagents.md`,
-`src/views/tasks_pane.rs`).
+Target UX: a tasks pane lists every subagent; a click opens a child view
+overlay.
 
 ## Wiki
 

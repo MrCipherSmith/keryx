@@ -1,6 +1,5 @@
 // Provider-neutral model limits for `/status`.
 //
-// Grok Build's `/usage` shows a real context window and a usage-limit %.
 // Keryx talks to many providers, so this module NEVER invents a window
 // (no hardcoded 128k). It only surfaces numbers the provider actually
 // reported: live `/models` fields, Ollama `/api/show`, optional balance,

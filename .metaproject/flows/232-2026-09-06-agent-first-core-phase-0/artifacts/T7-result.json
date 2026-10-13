@@ -19,28 +19,28 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-implementation-report.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-implementation-report.json",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Task-implementer output contract with implementation scope and verification status.",
       "hash": "a496a541d4a76764b0bcadf275eaa9e395b2ff30a48da9280bf81bf0057ec021"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-verification.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T7-verification.md",
       "kind": "report",
       "exists": true,
       "summary": "Immutable RED→GREEN, focused regression, typecheck, health, and shared-gate evidence with retained captures.",
       "hash": "2e40d061c5a544e3cea2972d8a38b30ad7a957027e5c9c526a21c7fbb66024da"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/routing-entrypoint.ts",
+      "path": "~/goodea/keryx/src/lib/routing-entrypoint.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Shared locked, atomic-per-file routing pair publisher.",
       "hash": "03427445eed43e45fe7562971ebd464b0bed48100b2c300fa49b26ebd8706dc8"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/commands/routing-entrypoint-lifecycle.test.ts",
+      "path": "~/goodea/keryx/src/commands/routing-entrypoint-lifecycle.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Preserved T5 black-box lifecycle and fault-injection suite; now 3/3 GREEN.",

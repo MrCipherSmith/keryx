@@ -5,6 +5,7 @@ import path from "node:path";
 import type { WorkspaceManifest } from "../sac/workspace-service";
 import { confirmTokenPath } from "../sac/review-confirm-token";
 import { createSession, persistHistory } from "../session/index";
+import { queuePreservedWrapUp } from "../session/preservation";
 import { buildToolRegistry } from "../mcp/tools";
 
 /**
@@ -355,4 +356,66 @@ test("CLI and MCP do not disagree about the same workspace at the same moment, a
   expect(missing).toMatchObject({ code: "sac_workspace_not_found", workspaceId: "workspace-never-existed00" });
   expect(JSON.stringify(missing)).not.toContain("workspace-service.ts");
   expect(JSON.stringify(missing)).not.toContain(import.meta.dir);
+}, CLI_SPAWN_TIMEOUT_MS);
+
+
+test("catch-up retries preserved Notes only on explicit opt-in, without duplicates or acceptance", async () => {
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "preservation-cli-project-")));
+  const dataDir = await realpath(await mkdtemp(path.join(tmpdir(), "preservation-cli-data-")));
+  try {
+    const created = await invoke(cwd, ["create", "--title", "Preserved Notes"], dataDir);
+    expect(created.exitCode).toBe(0);
+    const { id: workspaceId } = JSON.parse(created.stdout) as { id: string };
+    const session = createSession({ cwd, dataDir, title: "Notes only", provider: "openai-codex", model: "gpt-6.1-sol" });
+    const receipt = queuePreservedWrapUp(session.dir, JSON.stringify({ workspaceId, seeds: [], notes: { finding: { text: "Durable CLI finding" } } }));
+    const outbox = path.join(session.dir, "preservation", "outbox");
+    const before = (await readdir(outbox)).sort();
+    for (const flags of [[], ["--retry-preservation=false"]]) {
+      const report = await invoke(cwd, ["catch-up", "--json", ...flags], dataDir);
+      expect(report.exitCode).toBe(0);
+      expect(JSON.parse(report.stdout)).not.toHaveProperty("preservationReplay");
+      expect((await readdir(outbox)).sort()).toEqual(before);
+    }
+    const retry = await invoke(cwd, ["catch-up", "--json", "--retry-preservation"], dataDir);
+    expect(retry.exitCode).toBe(0);
+    expect(JSON.parse(retry.stdout).preservationReplay).toEqual({ proposed: 1, deferred: 0, unbound: 0 });
+    expect(await readFile(path.join(outbox, `${receipt.snapshot}.delivered`), "utf8")).toContain(receipt.snapshot);
+    const repeated = await invoke(cwd, ["catch-up", "--json", "--retry-preservation=true"], dataDir);
+    expect(repeated.exitCode).toBe(0);
+    expect(JSON.parse(repeated.stdout).preservationReplay).toEqual({ proposed: 0, deferred: 0, unbound: 0 });
+    const proposalDir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals");
+    const proposals = (await readdir(proposalDir)).filter(name => name.endsWith(".json"));
+    expect(proposals).toHaveLength(1);
+    expect(JSON.parse(await readFile(path.join(proposalDir, proposals[0]!), "utf8")).status).toBe("proposed");
+    const invalid = await invoke(cwd, ["catch-up", "--retry-preservation=maybe"], dataDir);
+    expect(invalid.exitCode).toBe(1);
+    expect(invalid.stderr).toContain("expected true or false");
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(dataDir, { recursive: true, force: true });
+  }
+}, CLI_SPAWN_TIMEOUT_MS);
+
+test("explicit preservation retry retains corrupt and unbound evidence", async () => {
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "preservation-cli-deferred-")));
+  const dataDir = await realpath(await mkdtemp(path.join(tmpdir(), "preservation-cli-deferred-data-")));
+  try {
+    const created = await invoke(cwd, ["create", "--title", "Deferred preservation"], dataDir);
+    expect(created.exitCode).toBe(0);
+    const { id: workspaceId } = JSON.parse(created.stdout) as { id: string };
+    for (const bound of [true, false]) {
+      const session = createSession({ cwd, dataDir, title: "Retained evidence", provider: "openai-codex", model: "gpt-6.1-sol" });
+      const receipt = queuePreservedWrapUp(session.dir, JSON.stringify({ ...(bound ? { workspaceId } : {}), seeds: [], notes: { finding: { text: "Retained finding" } } }));
+      if (bound) await writeFile(path.join(session.dir, "preservation", "generations", `${receipt.snapshot}.json`), "{}");
+    }
+    const retry = await invoke(cwd, ["catch-up", "--json", "--retry-preservation"], dataDir);
+    expect(retry.exitCode).toBe(0);
+    expect(JSON.parse(retry.stdout).preservationReplay).toEqual({ proposed: 0, deferred: 1, unbound: 1 });
+    const listed = await invoke(cwd, ["list-proposals", workspaceId], dataDir);
+    expect(listed.exitCode).toBe(0);
+    expect(JSON.parse(listed.stdout)).toEqual([]);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(dataDir, { recursive: true, force: true });
+  }
 }, CLI_SPAWN_TIMEOUT_MS);

@@ -16,16 +16,16 @@ body loaded on demand via a model-chosen or user-explicit invocation;
 context injection; hierarchical scoping (enterprise > personal > project,
 namespaced nesting).
 
-**opencode, cline, kilocode** (kilocode is an opencode fork): converged
+**Three open-source harnesses** (one a fork of another): converged
 independently on a near-identical shape — `SKILL.md` + frontmatter,
 filesystem-discovered across global/project scopes, a short catalog listed
 in the system prompt, full body delivered as a **tool result** when the
 model calls a dedicated `skill`/`use_skill` tool. All three *also* expose
 every skill as an explicit `/name` slash command — two invocation paths for
-the same content. Cline's own docs state this design explicitly mirrors
-Claude Code's.
+the same content. One of them documents this design as explicitly
+mirroring Claude Code's.
 
-**continue**: has a `Skill` type (`core/config/markdown/loadMarkdownSkills.ts`)
+**A fourth harness**: has a `Skill` type
 but it is undocumented and less load-bearing than its separate, much richer
 **Rules** system — markdown files concatenated unconditionally into the
 system prompt, applicability computed per-turn via glob/regex match against
@@ -33,7 +33,7 @@ touched files. This is architecturally the closest external analog to
 keryx's own `CLAUDE.md`/`AGENTS.md` mechanism, not to keryx's
 `.metaproject/skills/`.
 
-**oh-my-claudecode**: a Claude Code plugin, so it inherits the native
+**A fifth harness**: a Claude Code plugin, so it inherits the native
 `Skill` tool — but layers a redundant parallel "learned skills" system on
 top (`src/hooks/learner/`), reverse-engineering relevance-matching in
 userland via a `UserPromptSubmit` hook, apparently because a hook-based
@@ -52,9 +52,9 @@ triggers, per-skill workflow bullets) but the *only* delivery mechanism is
 `CLAUDE.md`'s prose "HARD GATE" plus `.metaproject/index.md`'s Intent Router
 table, read and obeyed voluntarily, then a plain `Read` on a `SKILL.md` file.
 
-This is closer to **continue's Rules** (unconditional prose, no tool) than to
+This is closer to **the fourth harness's Rules** (unconditional prose, no tool) than to
 any of the four CLIs that converged on a tool-mediated design — except
-continue's Rules are honestly scoped as "always-on injected instructions,"
+those Rules are honestly scoped as "always-on injected instructions,"
 where keryx's Intent Router presents itself as *routing* (implying
 selectivity/relevance-matching) while having none of the structural backing
 that makes routing real elsewhere.
@@ -79,13 +79,13 @@ run under. Rejected as *sufficient* (kept as R4, a complement, not a
 replacement) because keryx's own `SKILL.md` files declare
 `compatibility: cursor,codex,zed,opencode,claude` — four of those five gain
 nothing from a Claude-Code-only materialization step. This is the same
-reasoning gap oh-my-claudecode's redundant learner avoided asking: "does the
+reasoning gap the fifth harness's redundant learner avoided asking: "does the
 native mechanism already solve this for the assistant we care about" —
 worth asking here for Claude Code (yes, reuse it), and separately for the
 other four (no equivalent exists to reuse, hence Option B is still needed
 for them).
 
-**Option D — slash-command exposure for every gdskill (opencode/cline/kilocode
+**Option D — slash-command exposure for every gdskill (the
 dual-path convention).** Deferred, not rejected — see
 [decisions.md](decisions.md) D-04. For Claude Code, R4 already grants this
 for free (materialized skills become native `/name` commands automatically).
@@ -97,13 +97,12 @@ by this research pass.
 
 Separately researched (not part of this package's scope) whether keryx's
 `SandboxedWebTransport` compares favorably to the same six repos' web-fetch
-tools plus five more (`aider`, `codex`, `gemini-cli`, `qwen-code`, `crush`,
-`grok-build`, `deepseek-harness`). Finding, recorded here only as context for
+tools plus several more (including `codex` and `gemini-cli`). Finding, recorded here only as context for
 why this package's author trusts the comparative-research method used above:
 keryx's DNS-resolve-and-pin-then-sandboxed-subprocess design is matched in
-rigor only by `grok-build`'s Rust implementation; most researched CLIs
-(`cline`, `crush`, `aider`, `opencode`) ship no SSRF protection at all, and
-one (`deepseek-harness`) explicitly documents the gap rather than silently
+rigor only by one other harness's Rust implementation; most researched CLIs
+ship no SSRF protection at all, and
+one explicitly documents the gap rather than silently
 shipping it. No action item — cited to show the comparative method already
 produced one accurate, actionable finding this session, which is why the
 same method was trusted for the skills-loading question this package

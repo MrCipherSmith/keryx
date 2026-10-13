@@ -76,7 +76,7 @@ have to reimplement them or go without.
 
 ## D-03: keryx spawns the CLI; it does not serve a CLI that spawns itself
 
-**Question.** The reference implementation studied (helyx) has two working
+**Question.** The reference implementation studied has two working
 patterns: keryx-style *push*, where the harness spawns the CLI; and *pull*,
 where the harness runs an MCP server and a human-started CLI session pulls work
 from it.

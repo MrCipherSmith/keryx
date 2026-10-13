@@ -7,9 +7,9 @@ STATUS: DONE_WITH_CONCERNS
 Aggregate acceptance verdict for flow 232 (agent-first-core phase 0), covering norm
 M01 (routing entrypoint lifecycle) and norm M10 (benchmark/budget correctness),
 against the six frozen criteria in
-`/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md`.
+`~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md`.
 
-- Project root: `/Users/Goodea/goodea/keryx`, branch `codex/agent-first-core`, entirely uncommitted.
+- Project root: `~/goodea/keryx`, branch `codex/agent-first-core`, entirely uncommitted.
 - Reviewer implemented none of this work and reviewed no task of it before now.
 - Prior artifacts (`T9`, `T15`, `T16-final`, `T20`, `T21`) were read as **claims**. Every
   criterion below carries a check this reviewer executed on the current tree.
@@ -246,7 +246,7 @@ long way since some tasks ran. What I found:
 
 ## Evidence
 
-All paths absolute under `/Users/Goodea/goodea/keryx`. Everything below was executed by this
+All paths absolute under `~/goodea/keryx`. Everything below was executed by this
 reviewer during this review, on the current tree.
 
 | Check | Result | Raw log / artifact |

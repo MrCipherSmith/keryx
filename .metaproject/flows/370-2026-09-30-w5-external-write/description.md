@@ -1,7 +1,7 @@
 # P1 W5 external agent write mode, claude only
 
 Status: ready
-Source: operator answers 1A 2A 3A (helyx 173430, 2026-09-30); follow-up to flow 366
+Source: operator answers 1A 2A 3A (operator chat channel 173430, 2026-09-30); follow-up to flow 366
 
 ## Problem
 

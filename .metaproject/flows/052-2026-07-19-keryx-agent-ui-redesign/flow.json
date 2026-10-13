@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "052",
   "slug": "keryx-agent-ui-redesign",
-  "title": "keryx agent-mode UI redesign (codex/grok/pi aesthetic: minimal header, single prompt, clean role markers)",
+  "title": "keryx agent-mode UI redesign (codex aesthetic: minimal header, single prompt, clean role markers)",
   "status": "done",
   "createdAt": "2026-07-19T00:49:51.066Z",
   "updatedAt": "2026-07-19T00:53:53.340Z",

@@ -24,91 +24,91 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck.md",
       "kind": "review",
       "exists": true,
       "summary": "Stage 1 recheck report with the six verdict rows, four findings and the evidence table",
       "hash": "ef23bffd97f3cd49a8f55379256df44ad9f22365ef5330666587d641b95bfebf"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-result.json",
       "kind": "report",
       "exists": true,
       "summary": "This contract result (hash omitted: self-referential)",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-validator.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-validator.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Pure-validator probe: 12 F-001 cases, 10 F-002 cases, 12 F-003 cases, 33 F-004 cases",
       "hash": "c8bb50c49450f7ed61b94584f8565d5f89a52834d1f5485d21316f1fd68117e5"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-boundary.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-boundary.ts",
       "kind": "custom",
       "exists": true,
       "summary": "MCP dispatchCallTool, redactToolOutput and prepareOutputForPersistence probe",
       "hash": "f039f4d3886341bfbb355242ca23cd5fe8a9f6bba47f33ae9ee686fabde03d00"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-f002-class.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-recheck-f002-class.ts",
       "kind": "custom",
       "exists": true,
       "summary": "F-002 class enumeration plus a 401-file sweep of real repository JSON for false rejections",
       "hash": "97814bb01b321aaa980e846ad161d285acbfcda8a9bff7ac612a984621ee3016"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-validator-probe.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-validator-probe.json",
       "kind": "custom",
       "exists": true,
       "summary": "Validator probe output",
       "hash": "fb41bd9a1aaf26d47d66d06002b951c5446b344968524d5f97989c4e2e3e1c86"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-boundary-probe.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-boundary-probe.json",
       "kind": "custom",
       "exists": true,
       "summary": "Boundary probe output",
       "hash": "b0ca41a48b5831e0f72c9027520b4d0fc6f2415bcc50f830ae65a1b41dc78bb2"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-f002-class-probe.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-f002-class-probe.json",
       "kind": "custom",
       "exists": true,
       "summary": "F-002 class probe output",
       "hash": "7ddd1c1ee41c092f8088b9dd40e557b1fd86cbe1f2208bdbbc3fa95ecb1e1b1b"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-f004-summary.txt",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-f004-summary.txt",
       "kind": "custom",
       "exists": true,
       "summary": "F-004 33-case matrix summary",
       "hash": "4a57e36193db3a3a70e8f1eb169d522db56f2cd4448be46c4f7ba7eb000e8df0"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-reference-probe-rerun.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-reference-probe-rerun.json",
       "kind": "custom",
       "exists": true,
       "summary": "Re-run of the previous author T24-stage1-probe.ts as a control",
       "hash": "3d49953503ef0f749b11317b53ba598262e1d7dae87c573a852940482b7f3684"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-hashes-start.txt",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-hashes-start.txt",
       "kind": "custom",
       "exists": true,
       "summary": "Reviewed-file SHA-256 at review start",
       "hash": "2b92939900f5833d109b4fc981335c466c2b38beaf1fe65025ecc0fd435119f3"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-hashes-end.txt",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T24-recheck-hashes-end.txt",
       "kind": "custom",
       "exists": true,
       "summary": "Reviewed-file SHA-256 at review end; identical to start",
       "hash": "25515ad6359471f85d1e43fe246738d0d786fc70ccf0f1b115e7c12fce5bda9f"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-31-19-600Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-31-19-600Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Focused security/MCP suite: 49 pass, 0 fail, 161 assertions",

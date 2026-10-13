@@ -140,7 +140,7 @@
           {
             "at": "2026-09-28T12:17:01.424Z",
             "outcome": "started",
-            "detail": "Sonnet implementer in /home/altsay/keryx-ar3"
+            "detail": "Sonnet implementer in ~/keryx-ar3"
           }
         ]
       },
@@ -262,7 +262,7 @@
     {
       "at": "2026-09-28T12:17:01.424Z",
       "event": "task-attempt",
-      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-ar3"
+      "detail": "T5: started (attempt 1) — Sonnet implementer in ~/keryx-ar3"
     },
     {
       "at": "2026-09-28T12:20:19.243Z",
@@ -297,42 +297,42 @@
     {
       "at": "2026-09-28T16:29:35.572Z",
       "event": "ac-confirmed",
-      "detail": "AC1: 8 -> 2 cycles (only the A-4 facade loops, accepted); moves: impact-evidence, cli-registry, wiki/key-files, mcp-servers/json-utils; avoidable-bypass ceiling 150. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC1: 8 -> 2 cycles (only the A-4 facade loops, accepted); moves: impact-evidence, cli-registry, wiki/key-files, mcp-servers/json-utils; avoidable-bypass ceiling 150. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:35.734Z",
       "event": "ac-confirmed",
-      "detail": "AC2: retryableFor once in provider-port; mergeUsage per adapter (recorded). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC2: retryableFor once in provider-port; mergeUsage per adapter (recorded). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:35.898Z",
       "event": "ac-confirmed",
-      "detail": "AC3: gdgraph orphans reads bunfig preloads, comments stripped. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC3: gdgraph orphans reads bunfig preloads, comments stripped. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:36.058Z",
       "event": "ac-confirmed",
-      "detail": "AC4: security scan respects ignore rules, still reads secret-bearing names, coverage complete on this repo (~30 s). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC4: security scan respects ignore rules, still reads secret-bearing names, coverage complete on this repo (~30 s). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:36.225Z",
       "event": "ac-confirmed",
-      "detail": "AC5: G-4 accepted (fresh init 0 warnings, pinned); keryx update prunes stale worktrees, never with commits ahead, local or ignored-but-not-carryover files. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC5: G-4 accepted (fresh init 0 warnings, pinned); keryx update prunes stale worktrees, never with commits ahead, local or ignored-but-not-carryover files. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:36.387Z",
       "event": "ac-confirmed",
-      "detail": "AC6: doctor outside a project: one warn, exit 0 (smoke: exit 0); project search bounded; worktree check from the main checkout. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC6: doctor outside a project: one warn, exit 0 (smoke: exit 0); project search bounded; worktree check from the main checkout. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:36.553Z",
       "event": "ac-confirmed",
-      "detail": "AC7: compat in-band error classified, unknown codes not retried; Grok TOML never echoes raw values. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC7: compat in-band error classified, unknown codes not retried; Grok TOML never echoes raw values. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:36.714Z",
       "event": "ac-confirmed",
-      "detail": "AC8: tsc, lint, gates green; ledger, README, CHANGELOG 0.3.23/0.3.24. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+      "detail": "AC8: tsc, lint, gates green; ledger, README, CHANGELOG 0.3.23/0.3.24. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: operator [stated])"
     },
     {
       "at": "2026-09-28T16:29:36.870Z",
@@ -374,7 +374,7 @@
       "at": "2026-09-28T16:29:35.572Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -385,7 +385,7 @@
       "at": "2026-09-28T16:29:35.734Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -396,7 +396,7 @@
       "at": "2026-09-28T16:29:35.898Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -407,7 +407,7 @@
       "at": "2026-09-28T16:29:36.058Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -418,7 +418,7 @@
       "at": "2026-09-28T16:29:36.225Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -429,7 +429,7 @@
       "at": "2026-09-28T16:29:36.387Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -440,7 +440,7 @@
       "at": "2026-09-28T16:29:36.553Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -451,7 +451,7 @@
       "at": "2026-09-28T16:29:36.714Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -462,7 +462,7 @@
       "at": "2026-09-28T16:29:54.622Z",
       "kind": "complete",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },

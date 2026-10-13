@@ -223,8 +223,8 @@ starting point.
 
 The flow-173 wiki records the decision "Poll, not push" and lists push as
 out-of-scope. This package reverses that decision (D-02) because push is now
-shipped in a reference implementation (grok-build's `x.ai/task_completed` +
-completion reminder). The delivery rule is:
+shipped in a reference implementation (a task-completed notification +
+completion reminder in another agent harness). The delivery rule is:
 
 - Exactly one terminal event per task (N5).
 - A task needs a notification only if its handle was returned (`background`

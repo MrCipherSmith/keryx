@@ -24,63 +24,63 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Spec written before coding: why span accountability is structurally wrong, the canonical-equivalence decision rule, the renderer-grammar decoder, and the regression table.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T36-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Per-defect root cause, fix and before/after evidence with raw log paths; verification table; concerns; routing audit.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-after-compare.txt",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-after-compare.txt",
       "kind": "report",
       "exists": true,
       "summary": "Field-by-field before/after comparison of the three recheck probes.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-validator.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-validator.json",
       "kind": "report",
       "exists": true,
       "summary": "Recheck validator probe, before the change.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-validator.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-validator.json",
       "kind": "report",
       "exists": true,
       "summary": "Recheck validator probe, after the change.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-f002-class.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-f002-class.json",
       "kind": "report",
       "exists": true,
       "summary": "Recheck F-002 class probe, before the change: 5 hidden-byte shapes open, 5 rejections over 401 repository JSON files.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-f002-class.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-f002-class.json",
       "kind": "report",
       "exists": true,
       "summary": "Recheck F-002 class probe, after the change: 0 hidden-byte shapes, 0 rejections over 401 repository JSON files.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-boundary.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-before-boundary.json",
       "kind": "report",
       "exists": true,
       "summary": "Recheck boundary probe, before the change: persistence and seam leaks plus one false rejection.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-boundary.json",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T36-after-boundary.json",
       "kind": "report",
       "exists": true,
       "summary": "Recheck boundary probe, after the change: no leaks, no false rejections, F-001/F-003 verdicts unchanged.",

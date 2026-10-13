@@ -19,7 +19,7 @@
   "acConfirmed": {
     "AC1": {
       "at": "2026-10-01T12:19:02.690Z",
-      "note": "c3883345: trigger 'import vantage reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e"
+      "note": "c3883345: trigger 'import acme reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e"
     },
     "AC2": {
       "at": "2026-10-01T12:19:04.807Z",
@@ -329,7 +329,7 @@
     {
       "at": "2026-10-01T12:19:02.690Z",
       "event": "ac-confirmed",
-      "detail": "AC1: c3883345: trigger 'import vantage reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC1: c3883345: trigger 'import acme reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-10-01T12:19:04.807Z",

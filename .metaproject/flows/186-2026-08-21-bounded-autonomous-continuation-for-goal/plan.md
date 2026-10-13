@@ -141,7 +141,7 @@ pieces: `runAgentTurn`, `resolveApprovalDecision`, `SlateSessionRef`,
   the whole round budget on verification overhead alone — the round
   counter must count verifier-triggered continuations too, not just
   genuine work rounds (ties to AC5).
-- **Scope creep toward rebuilding qwen-code/grok-build's full machinery** —
+- **Scope creep toward rebuilding other tools' full machinery** —
   mitigated by this plan's explicit "one verifier call, not an evidence
   catalog; reuse Task Manager, not a new event-sourced record" framing
   throughout.

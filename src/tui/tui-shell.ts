@@ -1,10 +1,11 @@
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
+import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
 // agent.ts): it renders into an OpenTUI transcript and drives `runAgentTurn` from
-// a `split-footer` composer (a fixed footer input over a scrolling main region —
-// the Pi/grok layout). Chrome parity with the readline shell: assistant text →
+// a `split-footer` composer (a fixed footer input over a scrolling main region). Chrome parity with the readline shell: assistant text →
 // one sibling renderable per markdown segment, styled by the worker-free
 // `markdownToChunks` (the native `MarkdownRenderable` is deliberately NOT used —
 // flow 109 decision D-2); `● keryx` role header; `⚙ tool(args)` (via the pure
@@ -39,9 +40,11 @@ import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 // optional-import guard, src/capability/no-optional-imports). `launchTuiAgentShell`
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
+import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
   describeReasoningEffortSource,
+  describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveMaxAutoWake,
@@ -372,7 +375,8 @@ import {
   type SessionHandle,
 } from "../session";
 import { REWIND_LEASE_REFUSAL } from "../rewind/history";
-import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, whilePersisting } from "../session/lease";
+import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, switchPreservedSession, whilePersisting } from "../session/lease";
+import { SessionSwitchOwner, assertSessionSwitchActive } from "./session-switch";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
   createTuiLeaseHolder,
@@ -1040,7 +1044,7 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     onAssistantText: (text) => {
       messages.finalize(text);
     },
-    // Reasoning is COLLAPSED to a one-line marker (grok/opencode style) instead of
+    // Reasoning is COLLAPSED to a one-line marker instead of
     // dumping the whole chain-of-thought; `line count` hints at its length.
     //
     // flow 268 T17 (AC16): built from `onReasoningEnd`, not the older
@@ -1587,7 +1591,7 @@ export function isUserPromptApprovalCard(tool: string): boolean {
   return tool === "user_prompt";
 }
 
-/** Outcomes of the interactive shell_exec approval picker (OpenCode-style). */
+/** Outcomes of the interactive shell_exec approval picker. */
 export type ShellApprovalChoice = "once" | "always-exact" | "always-prefix" | "deny";
 
 /** Outcomes of the wiki-enrich pre-router picker. */
@@ -3311,7 +3315,7 @@ export function selectProviderModelInTui(
             process.env[envKey] = kr.value;
             // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
             noteSavedCredentialEnv([envKey]);
-            saveApiKey(envKey, kr.value, options.configDir); // persist (0600), opencode-style
+            saveApiKey(envKey, kr.value, options.configDir); // persist (0600)
           }
           // kind === "skip" → proceed without a key (curated fallback models)
           return "ok";
@@ -3588,7 +3592,9 @@ export function pickSessionInTui(
   rOrChrome: Renderer | ModalChrome,
   sessions: SessionSummary[],
   leaseState?: LeaseStateLookup,
+  signal?: AbortSignal,
 ): Promise<string | undefined> {
+  if (signal?.aborted === true) return Promise.resolve(undefined);
   const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
   const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
   const all: SessionPickerOption[] = sessionPickerOptions(sessions, leaseState);
@@ -3607,6 +3613,7 @@ export function pickSessionInTui(
   if (chrome !== undefined) {
     return new Promise((resolve) => {
       let chosen: string | undefined;
+      const abort = (): void => { chosen = undefined; handle?.close(); };
       const handle = openModal(otui, chrome, {
         title: "Session Switcher",
         tabs: [{ id: "sessions", label: "Sessions" }],
@@ -3629,11 +3636,12 @@ export function pickSessionInTui(
           });
           return onKeypress(r, list.onKey);
         },
-        onClose: () => resolve(chosen),
+        onClose: () => { signal?.removeEventListener("abort", abort); resolve(chosen); },
       });
       if (handle === undefined) {
         resolve(undefined);
-      }
+      } else signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted === true) abort();
     });
   }
 
@@ -3642,7 +3650,12 @@ export function pickSessionInTui(
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "sp-title", content: otui.t`${boldChunk(otui, "Open session")} ${dimChunk(otui, "↑/↓ Enter · Esc to cancel")}` }));
     let unsub = (): void => {};
+    let finished = false;
+    const abort = (): void => finish(undefined);
     const finish = (row: SessionPickerOption | undefined): void => {
+      if (finished) return;
+      finished = true;
+      signal?.removeEventListener("abort", abort);
       unsub();
       r.root.remove(box);
       resolve(row?.value);
@@ -3663,15 +3676,26 @@ export function pickSessionInTui(
       }
       list.onKey(key);
     });
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted === true) abort();
   });
 }
 
 /**
  * The sidebar's Mode row (flow 270 AC9): the permission mode, plus a separate
- * read-only part while `/plan on` holds, so it can be painted in its own colour.
+ * read-only part while `/plan on` holds, so it can be painted in its own colour,
+ * and an automatic-review part while a turn belongs to one (flow 429).
  */
-export function describeModeRow(mode: PermissionMode, readOnly: boolean): { mode: string; readOnly?: string } {
-  return readOnly ? { mode, readOnly: "· read-only" } : { mode };
+export function describeModeRow(
+  mode: PermissionMode,
+  readOnly: boolean,
+  automaticReview = false,
+): { mode: string; readOnly?: string; automaticReview?: string } {
+  return {
+    mode,
+    ...(readOnly ? { readOnly: "· read-only" } : {}),
+    ...(automaticReview ? { automaticReview: "· automatic review" } : {}),
+  };
 }
 
 /** `/mode` picker copy — one line per {@link PermissionMode}, kept beside the type it describes. */
@@ -3680,6 +3704,11 @@ const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   trust: "Auto-approves safe actions; still asks for destructive/credential ones",
   auto: "Skips confirmation for everything except credential-touching commands",
 };
+
+/** One `/mode` picker line: what the mode approves, then the round limit a turn gets in it. */
+export function describeModePickerOption(mode: PermissionMode): string {
+  return `${MODE_PICKER_DESCRIPTIONS[mode]} · ${describeRoundLimit(mode)}`;
+}
 
 /**
  * Run the OpenTUI agent shell. OpenTUI owns the terminal from the START — there is
@@ -3790,6 +3819,7 @@ export async function launchTuiAgentShell(opts: {
 
   let renderer: Renderer | undefined;
   let resolveDone: () => void = () => {};
+  let finalizeShell: (() => Promise<ShellFinalizationResult>) | undefined;
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
@@ -3964,13 +3994,7 @@ export async function launchTuiAgentShell(opts: {
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
-        // Flow 271/273 (AC7; review r1 F9): leave the bus BEFORE releasing the
-        // session lease — specification §5.4's order — synchronously, before
-        // anything that may block.
-        leaveBusThenRelease({
-          leaveBus: () => liveBus?.leave(), // idempotent, synchronous-safe
-          releaseLease: () => sessionLease.release(),
-        });
+        // Flow 415: retain ownership until final history + Slate outbox commit.
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setAskUserNotice(undefined);
@@ -3994,28 +4018,15 @@ export async function launchTuiAgentShell(opts: {
         // sweep settles, so nothing downstream of `launchTuiAgentShell()`
         // can run (and the process cannot exit) before the sweep actually
         // happened.
-        liveJobs?.removeAll(); // store-side purge; synchronous, safe here
-        // Flow 306 (W6 T14): `SessionEnd` on every exit this callback covers
-        // (Ctrl+C, an exit signal, or a normal `r.destroy()` — `onDestroy` is
-        // `keryx shell`'s one TUI-wide teardown point, "session lifetime is
-        // scoped ... full stop"). `liveDeps` is read the same TDZ-safe way
-        // `sweepBackgroundJobs` below already reads it; a reason more precise
-        // than "shell-exit" is not reliably known from this synchronous
-        // callback alone. Absent `hooks`, a no-op.
-        if (liveDeps?.hooks !== undefined) {
-          const sessionEndHooks = liveDeps.hooks;
-          void sessionEndHooks.runtime
-            .fire("SessionEnd", { sessionId: sessionEndHooks.sessionId, runId: sessionEndHooks.runId, endReason: "shell-exit" })
-            .catch(() => {
-              // Best-effort; a SessionEnd hook failure must never block teardown.
-            });
-        }
         void (async () => {
           try {
-            await liveDeps?.sweepBackgroundJobs?.();
-          } finally {
-            resolveDone();
-          }
+            if (finalizeShell !== undefined) await finalizeShell();
+            else {
+              await liveDeps?.sweepBackgroundJobs?.();
+              liveJobs?.removeAll();
+              leaveBusThenRelease({ leaveBus: () => liveBus?.leave(), releaseLease: () => sessionLease.release() });
+            }
+          } finally { resolveDone(); }
         })();
       },
     }));
@@ -4042,7 +4053,7 @@ export async function launchTuiAgentShell(opts: {
       r.destroy();
       return true; // could not select; treat as a clean exit (do not fall back)
     }
-    // Persist the chosen provider/model (opencode-style) so the next launch reuses it.
+    // Persist the chosen provider/model so the next launch reuses it.
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
     // Flow 303 (AC14): from here until `createShellChrome` paints the header,
     // transcript and focused composer below, the renderer's root would
@@ -6118,21 +6129,28 @@ export async function launchTuiAgentShell(opts: {
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
     let readOnly = false;
     io.readOnly = () => readOnly;
+    // Run mode of the turn in flight (flow 429): set by `runAgentTurn`, shown beside the permission mode.
+    let automaticReview = false;
     const paintModeRow = (): void => {
-      const row = describeModeRow(permissionMode, readOnly);
+      const row = describeModeRow(permissionMode, readOnly, automaticReview);
       // Flow 396: with remote control on, the row names the mode in force and where it comes from
       // (`trust (Telegram default)`, `ask (shell /mode)`), because a Telegram turn and a typed one can differ.
       const inForce = remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined;
       // Read-only is the state an operator must not forget they are in.
       // The row is also the sidebar's way into `/settings` (flow 374): clicking
       // it opens the modal, and the hint names the command while there is room.
-      const hint = settingsSidebarHint(row.readOnly !== undefined);
+      const flag = row.readOnly ?? row.automaticReview;
+      const hint = settingsSidebarHint(flag !== undefined);
       sbModeV.content =
-        row.readOnly !== undefined
-          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
+        flag !== undefined
+          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", [row.readOnly, row.automaticReview].filter(Boolean).join(" "))}`
           : otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}${hint === undefined || inForce !== undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
+    io.onAutomaticReview = (active) => {
+      automaticReview = active;
+      paintModeRow();
+    };
     const autoApprovedFor = (telegramTurn: boolean): NonNullable<TuiAgentIo["onAutoApproved"]> => (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
@@ -6307,14 +6325,15 @@ export async function launchTuiAgentShell(opts: {
       void liveBus?.setSession(opened.handle.summary.id).catch(() => {}); // review r1 F10: setSession never throws, but never trust that from the call site either
     };
 
-    const pickRecentSession = async (): Promise<SessionSummary | undefined> => {
+    const pickRecentSession = async (signal?: AbortSignal): Promise<SessionSummary | undefined> => {
       const rows = listSessions(sessionCwd);
       if (rows.length === 0) {
         io.onSystem?.("No saved sessions in this project.\n");
         return undefined;
       }
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, chrome, rows, leaseState));
+      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, chrome, rows, leaseState, signal));
+      if (signal?.aborted === true) return undefined;
       input.focus();
       if (pickId === undefined) {
         return undefined;
@@ -6726,7 +6745,7 @@ export async function launchTuiAgentShell(opts: {
       }
       io.onSystem?.(message);
     });
-    const saveSession = (): void => {
+    const saveSession = (paint = true): void => {
       if (!sessionLease.canPersist()) {
         return;
       }
@@ -6735,7 +6754,7 @@ export async function launchTuiAgentShell(opts: {
         provider: currentSel.provider,
         model: currentSel.model,
       });
-      paintSessionHeader();
+      if (paint) paintSessionHeader();
     };
 
     const syncArchive = (): void => {
@@ -6747,15 +6766,65 @@ export async function launchTuiAgentShell(opts: {
         nextArchiveIndex += 1;
       }
     };
-    const flushSessionCheckpoint = (): void => {
+    const flushSessionCheckpoint = (paint = true): void => {
       if (sessionPersistTimer !== undefined) {
         clearTimeout(sessionPersistTimer);
         sessionPersistTimer = undefined;
       }
       syncArchive();
-      saveSession();
+      saveSession(paint);
     };
+
+    const preservationAbort = new AbortController();
+    const sessionSwitches = new SessionSwitchOwner();
+    finalizeShell = createShellFinalizer({
+      stop: async () => {
+        preservationAbort.abort();
+        foregroundOperation.cancel("shell exit");
+        foregroundOperation.dispose();
+        await sessionSwitches.stop();
+        await foregroundOperation.settled();
+      },
+      checkpoint: () => {
+        if (!sessionLease.canPersist()) throw new Error("session ownership lost");
+        // The renderer may already be destroyed on the exit path; painting then throws and fails the save.
+        flushSessionCheckpoint(false);
+      },
+      preserve: async () => {
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
+      },
+      cleanup: async (signal) => {
+        if (sessionLease.canPersist()) {
+          await replayPreservationOutbox({ cwd: sessionCwd, dir: liveSession.dir, signal, deadline: Date.now() + 2_000 });
+        }
+        signal.throwIfAborted();
+        await liveDeps?.sweepBackgroundJobs?.();
+        signal.throwIfAborted();
+        liveJobs?.removeAll();
+        if (liveDeps?.hooks !== undefined) {
+          const hooks = liveDeps.hooks;
+          await hooks.runtime.fire("SessionEnd", { sessionId: hooks.sessionId, runId: hooks.runId, endReason: "shell-exit" });
+        }
+      },
+      release: () => {
+        detachSlateSession(slateSession);
+        if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+        leaveBusThenRelease({ leaveBus: () => liveBus?.leave(), releaseLease: () => sessionLease.release() });
+      },
+      progress: (stage) => {
+        if (stage === "failed") process.exitCode = 1;
+        process.stderr.write(`${preservationProgress(stage)}\n`);
+      },
+    });
+    if (sessionLease.canPersist()) {
+      try {
+        const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: liveSession.dir, signal: preservationAbort.signal });
+        if (replay.proposed + replay.deferred > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred (not accepted memory).\n`);
+      } catch { /* an unreadable sessions root must not keep the lease held or end the shell */ }
+    }
+    if (foregroundOperation.isDisposed) return false;
     io.onHistoryChange = (kind) => {
+      if (foregroundOperation.isDisposed) return;
       syncArchive();
       if (kind === "assistant_delta") {
         if (sessionPersistTimer === undefined) {
@@ -6812,10 +6881,26 @@ export async function launchTuiAgentShell(opts: {
      * session's lease is taken before the current one is released; if the open
      * fails, the current session stays open and held, and this returns false.
      */
-    const startNewSession = (note?: string): boolean => {
+    const preservedOpen = async (
+      signal: AbortSignal,
+      target: { resumeId?: string } = {},
+    ): Promise<ReturnType<typeof openLeasedSession>> => {
+      assertSessionSwitchActive(signal, sessionLease.canPersist());
+      const opened = await switchPreservedSession(sessionLease.current, () => openLeasedSession({
+        cwd: sessionCwd, ...target, provider: currentSel.provider, model: currentSel.model,
+      }), async () => {
+        flushSessionCheckpoint();
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
+        assertSessionSwitchActive(signal, sessionLease.canPersist());
+      });
+      sessionLease.hold(opened.lease);
+      return opened;
+    };
+
+    const startNewSession = async (signal: AbortSignal, note?: string): Promise<boolean> => {
       let opened: ReturnType<typeof openLeasedSession>;
       try {
-        opened = leasedOpen();
+        opened = await preservedOpen(signal);
       } catch (cause) {
         io.onSystem?.(
           `Could not start a new session: ${cause instanceof Error ? cause.message : String(cause)}\n` +
@@ -6847,11 +6932,10 @@ export async function launchTuiAgentShell(opts: {
     };
 
     // `/resume` and `/sessions`. The Telegram topic's picker (flow 387, AC17) reaches the same body
-    // with the chosen session pre-selected through `pendingResumeTarget`, so there is one resume path.
-    let pendingResumeTarget: SessionSummary | undefined;
-    const resumeSessionInteractive = async (): Promise<void> => {
-      const found = pendingResumeTarget ?? (await pickRecentSession());
-      pendingResumeTarget = undefined;
+    // with the chosen session passed explicitly, so there is one serialized resume path.
+    const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {
+      const found = target ?? (await pickRecentSession(signal));
+      if (signal.aborted) return;
       if (found === undefined) {
         return;
       }
@@ -6867,7 +6951,7 @@ export async function launchTuiAgentShell(opts: {
       // and its lease stay exactly as they were.
       let opened: ReturnType<typeof openLeasedSession>;
       try {
-        opened = leasedOpen({ resumeId: found.id });
+        opened = await preservedOpen(signal, { resumeId: found.id });
       } catch (cause) {
         const hint =
           cause instanceof SessionLeasedError
@@ -6881,9 +6965,7 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       applyOpened(opened, true);
-      // The previous session's slate is left as it is, not closed: this
-      // switch has already moved off it, and an unclosed slate is archived
-      // the next time that session opens one (see `freshSlateSessionRef`).
+      // Outgoing history and Slate were preserved before ownership transfer.
       bindSlateToLiveSession();
       // After the rebind: it reads the bound workspace from the slate ref.
       void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
@@ -6894,7 +6976,7 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(
         `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
       );
-    };
+    });
 
     paintSessionHeader();
 
@@ -7519,7 +7601,7 @@ export async function launchTuiAgentShell(opts: {
       permissionMode = next;
       modeChangedThisSession = true;
       paintModeRow();
-      chrome.showToast(`Permission mode: ${next}`);
+      chrome.showToast(`Permission mode: ${next} (${describeRoundLimit(next)})`);
     };
     const runModeCommand = (line: string): void => {
       const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
@@ -7539,7 +7621,7 @@ export async function launchTuiAgentShell(opts: {
               title: "Switch to auto mode?",
               subtitle:
                 "Skips confirmation for EVERY action, including destructive commands. " +
-                "Only credential-touching commands still ask.",
+                `Only credential-touching commands still ask. ${describeRoundLimit("auto")}.`,
               cancelId: "cancel",
               enqueue: false,
               onBusy: () => {
@@ -7589,7 +7671,9 @@ export async function launchTuiAgentShell(opts: {
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title: `Permission mode (current: ${permissionMode})`,
-            subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
+            subtitle:
+              (stored !== undefined ? `Project default: ${stored}` : "No project default set.") +
+              ` ${describeAutomaticReviewMode()}`,
             cancelId: permissionMode,
             enqueue: false,
             onBusy: () => {
@@ -7599,7 +7683,7 @@ export async function launchTuiAgentShell(opts: {
             options: PERMISSION_MODES.map((m) => ({
               id: m,
               label: m,
-              description: MODE_PICKER_DESCRIPTIONS[m],
+              description: describeModePickerOption(m),
               recommended: m === permissionMode,
             })),
           }),
@@ -8304,13 +8388,11 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.dispose();
             void (async () => {
               await performSlateExit({
-                closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
-                sweepJobs: async () => {
-                  await deps.sweepBackgroundJobs?.();
-                },
-                purgeJobList: () => jobs.removeAll(),
-                leaveBus: () => liveBus?.leave(),
-                releaseLease: () => sessionLease.release(),
+                closeSlate: async () => { await finalizeShell?.(); },
+                sweepJobs: async () => {},
+                purgeJobList: () => {},
+                leaveBus: () => {},
+                releaseLease: () => {},
                 detachRenderer: () => r.off("theme_mode", onThemeMode),
                 destroyRenderer: () => r.destroy(),
               });
@@ -8628,13 +8710,11 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
             await performSlateExit({
-              closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
-              sweepJobs: async () => {
-                await deps.sweepBackgroundJobs?.();
-              },
-              purgeJobList: () => jobs.removeAll(),
-              leaveBus: () => liveBus?.leave(),
-              releaseLease: () => sessionLease.release(),
+              closeSlate: async () => { await finalizeShell?.(); },
+              sweepJobs: async () => {},
+              purgeJobList: () => {},
+              leaveBus: () => {},
+              releaseLease: () => {},
               detachRenderer: () => r.off("theme_mode", onThemeMode),
               destroyRenderer: () => r.destroy(),
             });
@@ -8665,10 +8745,9 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
           // dir for a fresh one — archive whatever slate it was building
           // before switching away (parity with runAgentRepl in shell.ts).
-          void (async () => {
-            await closeSlateSession(slateSession, mintTimestampAttemptId);
+          void sessionSwitches.run(async (signal) => {
             // Creates a NEW session id; previous transcript stays on disk for /resume.
-            if (!startNewSession()) {
+            if (!await startNewSession(signal)) {
               return;
             }
             bindSlateToLiveSession();
@@ -8692,7 +8771,7 @@ export async function launchTuiAgentShell(opts: {
             io.onSystem?.(
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
             );
-          })();
+          });
           return;
         }
         if (command.name === "/schedule") {
@@ -10207,9 +10286,7 @@ export async function launchTuiAgentShell(opts: {
         resumeSession: async (id) => {
           const found = findSession(sessionCwd, id);
           if (found === undefined) return { output: "Session not found in this project.", ok: false };
-          pendingResumeTarget = found;
-          const outcome = await captureShellOutput(() => resumeSessionInteractive());
-          pendingResumeTarget = undefined;
+          const outcome = await captureShellOutput(() => resumeSessionInteractive(found));
           // The switch happened when the live session is now the one asked for.
           return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
         },
@@ -10254,6 +10331,7 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
+    const preservation = await finalizeShell?.();
     // Flow 376: closing the shell deregisters from serve, which archives the topic (flow 419).
     // Idempotent: the destroy hook above usually started it already.
     await remoteBridge?.disable();
@@ -10269,6 +10347,9 @@ export async function launchTuiAgentShell(opts: {
       renderer?.destroy();
     } catch {
       // best-effort teardown
+    }
+    if (preservation !== undefined) {
+      process.stderr.write(`${preservationProgress(preservation.preserved ? "queued" : "failed")}\n`);
     }
     // Flow 300 review F4: a run-now child is never killed with the shell. Say,
     // once and after the alternate screen is gone, that it keeps running and

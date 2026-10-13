@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- Worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `7b06de44` (confirmed). Diff `0b983e7e..7b06de44` (`pr-690-t21.diff`): `src/security/audit-harness/index.ts`, its test file, `src/bundle/plan.test.ts`, and flow bookkeeping. The W3 merge is out of scope.
+- Worktree `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `7b06de44` (confirmed). Diff `0b983e7e..7b06de44` (`pr-690-t21.diff`): `src/security/audit-harness/index.ts`, its test file, `src/bundle/plan.test.ts`, and flow bookkeeping. The W3 merge is out of scope.
 - Read-only. Nothing in the worktree was edited, staged, stashed or checked out. `git status --short` is clean after the run.
 - Pre-fix copy: `git archive 0b983e7e` extracted to `review313-r8/pre/`, the two HEAD test files copied in, and `node_modules` symlinked.
 - Probes are in `review313-r8/`:

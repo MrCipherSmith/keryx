@@ -236,8 +236,8 @@ its current wording untrue. It does not, in either direction:
 
 ## Verification
 
-Every command run from `/Users/Goodea/goodea/keryx`, no git state change, no network, no model call,
-synthetic and reserved hosts only. Raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+Every command run from `~/goodea/keryx`, no git state change, no network, no model call,
+synthetic and reserved hosts only. Raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ### Reviewer probes, unmodified, before and after
 

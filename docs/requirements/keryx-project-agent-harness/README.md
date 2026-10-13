@@ -184,9 +184,6 @@ These are contract ceilings, not benchmarks — the implementation may be faster
   criteria.
 - [Brainstorm and Decisions](brainstorm.md) — alternatives considered and
   decisions derived from open-source harness research.
-- [Best Practices and Research](best-practices.md) — selected patterns from
-  Pi, OpenCode, oh-my-claude, oh-my-claudecode, MCP, Anthropic, and OpenAI
-  Agents SDK materials.
 - [Agent Protocol](agent-protocol.md) — deterministic protocol for the
   project harness, flow-orchestrator, and child agents.
 - [Provider Protocol](provider-protocol.md) — model/provider abstraction,
@@ -298,6 +295,6 @@ These are contract ceilings, not benchmarks — the implementation may be faster
 ## Source and Assumptions
 
 This package is grounded in the current Keryx source and documentation as of
-2026-07-10. External research links are listed in `best-practices.md`.
+2026-07-10.
 Research findings are design input, not claims that Keryx already implements
 the referenced behavior.

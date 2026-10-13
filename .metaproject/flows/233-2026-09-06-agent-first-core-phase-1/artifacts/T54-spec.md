@@ -1,6 +1,6 @@
 # T54 spec — validate the security `mode` where it is loaded, and narrow the manifest widening
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`).
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`).
 Written before any code change. Findings: `T39-review.md` F-002 (major), F-005
 (minor), F-008 (info), plus `T42-review.md` T42#F-004 (doc defect).
 

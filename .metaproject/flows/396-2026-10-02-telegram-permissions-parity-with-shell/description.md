@@ -1,7 +1,7 @@
 # Telegram permissions parity with shell
 
 Status: draft (PRD in docs/requirements/keryx-telegram-permissions/prd.md)
-Source: user description (origin: human-request; helyx-channel message 178829, 2026-10-02T19:14Z, decisions in poll 47)
+Source: user description (origin: human-request; operator chat channel message 178829, 2026-10-02T19:14Z, decisions in poll 47)
 
 ## Problem
 
@@ -15,7 +15,7 @@ Decisions taken with the operator (poll 47): default posture "like the shell"; n
 
 ## Outcome criteria
 
-- Запрос (дословно): «А зачем такие ограничения? Я говорил, что телеграм должен быть интерфейсом, по возможности предоставляя максимальную функциональность как keryx shell? Как в helyx реализованы пермиссии? Он почти меня не спрашивает.» (source: helyx-channel message 178829 (2026-10-02T19:14Z), decisions in poll 47)
+- Запрос (дословно): «А зачем такие ограничения? Я говорил, что телеграм должен быть интерфейсом, по возможности предоставляя максимальную функциональность как keryx shell? Как в the chat bot реализованы пермиссии? Он почти меня не спрашивает.» (source: operator chat channel message 178829 (2026-10-02T19:14Z), decisions in poll 47)
 - Эффект (формализация агента): from Telegram the operator can run an ordinary task (edit files, run read and build commands) without tapping anything, is asked only for dangerous steps, can teach the shell a rule with one tap, and can stop a long run with `/stop`.
 - Как наблюдать (предложение агента): in the topic geekom:keryx a task that edits files and runs a Docker status check completes with no prompt; a destructive step asks and the prompt is still valid after 10 minutes; "Always" on a command means it is not asked again; a run past 30 minutes keeps going until `/stop`; `keryx serve status` shows the posture.
 

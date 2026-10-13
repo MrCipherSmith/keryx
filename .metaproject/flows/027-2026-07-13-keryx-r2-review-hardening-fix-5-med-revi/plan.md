@@ -19,7 +19,7 @@ preserved and adversarially re-verified.
 | T2/T3/T4 | umbrella | orchestrator | Opus | — |
 
 Orchestrator = Opus. Workers via subagent-dispatch → subagent-result, worktree-guard
-(`cd /Users/Goodea/goodea/keryx`, branch `feature/keryx-r2-review-hardening`).
+(`cd ~/goodea/keryx`, branch `feature/keryx-r2-review-hardening`).
 
 ## Steps
 

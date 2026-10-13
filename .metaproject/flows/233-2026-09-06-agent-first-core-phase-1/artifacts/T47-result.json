@@ -23,19 +23,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Fresh gate-detail enumeration, the diagnostic-value tradeoff analysis for gate 1 (and why it's mitigated by the existing `flow check` command rather than fixed by touching store.ts), the widened-helper design, the regression-test plan, and the verification plan, written before any code change."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full gate-by-gate enumeration table, the fix, the diagnostic-value tradeoff writeup, two out-of-scope review-gate.ts leak observations flagged (not fixed), RED/GREEN transcripts including the corrected test-design story, and every verification command with raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T47-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."

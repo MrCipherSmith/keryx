@@ -17,8 +17,7 @@ generalized MCP client port: stdio + streamable HTTP, `listTools`,
 
 SDK: `@modelcontextprotocol/sdk`, lazy `await import()`, same
 `*SdkMissingError` shape as `src/mcp/server.ts` and
-`src/mcp-client/client.ts`. No second MCP library (`rmcp` is Grok Build's
-stack; keryx does not take it).
+`src/mcp-client/client.ts`. No second MCP library.
 
 Config schema: [schemas/mcp-servers-config.schema.json](schemas/mcp-servers-config.schema.json).
 
@@ -51,7 +50,7 @@ Merge order on name conflict (highest wins, replace not field-merge):
 A personal disable overlay hides a server from connect/list-as-enabled
 without deleting it. `keryx mcp enable|disable` writes that overlay (and
 clears a sticky `enabled: false` only in the user native file, never in a
-committed project file — Grok Build's enable/disable rule).
+committed project file).
 
 `${VAR}` and `${VAR:-default}` expand in `url`, `command`, `args`, `env`
 values, and `headers` values at load time. Expanded values never appear in
@@ -85,8 +84,8 @@ HTTP optional fields: `headers`, `bearer_token_env_var`, `oauth` (object or
 `false` to disable discovery), `startup_timeout_sec`, `tool_timeout_sec`.
 Stdio optional fields: `args`, `env`, `cwd`, same timeouts.
 
-Server names: letters, digits, hyphen, underscore. Same restriction Grok
-Build documents for `grok mcp add`.
+Server names: letters, digits, hyphen, underscore. The same restriction
+other agent CLIs document for `mcp add`.
 
 ## 4. CLI / skill / TUI surface
 
@@ -157,11 +156,11 @@ scope: v1 is `keryx shell`).
   annotated read-only **and** the name/description do not match write
   verbs. Unknown ⇒ destructive. This is a fail-closed default, not a
   claim that MCP tools declare risk honestly.
-- Result truncation: default 20_000 bytes (Grok's default). Spill the
+- Result truncation: default 20_000 bytes. Spill the
   remainder to a session file; tell the model it was truncated.
 
 System instruction: a short block listing connected server names and tool
-counts, not schemas. Same reason as Grok: keep the advertised tool list
+counts, not schemas. Reason: keep the advertised tool list
 stable when catalogs change.
 
 ## 5. Data contracts
@@ -183,7 +182,7 @@ stable when catalogs change.
 
 FQN construction: `server + "__" + rawName`, then validate
 `^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$`. Failure → skip + doctor warning. Delimiter
-is `__` (Grok `MCP_TOOL_NAME_DELIMITER`), not OpenCode's `_`.
+is `__`, not a single `_`.
 
 ### 5.2 Connection status
 
@@ -233,14 +232,14 @@ status `needs_auth`, no browser, no hang.
 | `src/harness/external/supervise-mcp.ts` | Untouched. |
 
 Init/startup: connecting servers must not block the first prompt. Handshake
-runs in the background (Grok: session is not blocked for non-MCP work).
+runs in the background (the session is not blocked for non-MCP work).
 `search_tool` on a still-connecting catalog returns what is ready plus a
 line that some servers are still starting. Parallel handshakes are capped
-at 8 (Grok Build's constant); the constant is named in code, not magic.
+at 8; the constant is named in code, not magic.
 
 Subagents (`spawn_subagent`): v1 does **not** inherit MCP connections into
 children. Children keep today's builtin tool set. Inheritance (`all` /
-`none` / named) is a named follow-up; Grok Build has it, keryx subagent
+`none` / named) is a named follow-up; keryx subagent
 tool lists are assembled in
 `src/harness/tool/builtin/spawn-subagent-tool.ts` and must not silently
 grow.

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { EVIDENCE_DIR, MUTANTS_SPEC, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, writeMutationEvidence } from "./mutate";
+import { EVIDENCE_DIR, MUTANTS_SPEC, type MutantResult, type MutationRecord, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, writeMutationEvidence } from "./mutate";
 
 let base: string;
 let tree: string;
@@ -62,6 +62,32 @@ describe("runMutation", () => {
     expect(await readdir(scratch)).toEqual([]);
   });
 
+  test("every row names the test command and the exit code it was judged by, in the record and in the table", async () => {
+    const record = await runMutation({
+      worktree: tree,
+      command: command(),
+      scratchRoot: scratch,
+      mutants: parseMutantSpec([
+        { id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" },
+        { id: "B", file: "calc.js", anchor: "n > 0", replacement: "n >= 0" },
+        { id: "C", file: "calc.js", anchor: "no such text", replacement: "x" },
+      ]),
+    });
+    expect(record.mutants.map((m) => [m.id, m.command, m.exitCode])).toEqual([
+      ["A", command(), 1],
+      ["B", command(), 0],
+      ["C", command(), undefined],
+    ]);
+    const rows = renderMutationTable(record).split("\n").filter((line) => /^\| [ABC] \|/.test(line));
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toContain("killed");
+    expect(rows[0]).toContain("| 1 |");
+    expect(rows[1]).toContain("survived");
+    expect(rows[1]).toContain("| 0 |");
+    expect(rows[2]).toContain("anchor not found");
+    for (const row of rows) expect(row).toContain("check.js");
+  });
+
   test("an anchor that is missing, ambiguous, outside the tree or behind a link is invalid and never run", async () => {
     await writeFile(path.join(base, "outside.js"), "x\n");
     await symlink(path.join(base, "outside.js"), path.join(tree, "link.js"));
@@ -111,6 +137,53 @@ describe("parseMutantSpec", () => {
     expect(() => parseMutantSpec([])).toThrow("non-empty");
     expect(() => parseMutantSpec([{ id: "A", file: "f", anchor: "x", replacement: "y" }, { id: "A", file: "f", anchor: "x", replacement: "z" }])).toThrow("twice");
     expect(() => parseMutantSpec([{ id: "A", file: "f", anchor: "x", replacement: "x" }])).toThrow("nothing changes");
+  });
+});
+
+describe("renderMutationTable", () => {
+  const mutant = (over: Partial<MutantResult>): MutantResult => ({ id: "A", file: "f.ts", anchor: "x", replacement: "y", status: "killed", command: "bun test f.test.ts", exitCode: 1, ms: 1, ...over });
+  const record = (mutants: MutantResult[]): MutationRecord => ({
+    schemaVersion: 1,
+    worktree: "/w",
+    command: "bun test f.test.ts",
+    baseline: { exitCode: 0, ms: 1 },
+    mutants,
+    totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+  });
+
+  test("the header names the Test command and Exit columns", () => {
+    const lines = renderMutationTable(record([mutant({})])).split("\n");
+    expect(lines).toContain("| Mutant | Where | Change | Result | Test command | Exit |");
+    expect(lines).toContain("|---|---|---|---|---|---|");
+  });
+
+  test("a row that never ran shows - as its exit code, and a row that ran shows the code", () => {
+    const rows = renderMutationTable(record([mutant({ id: "A", exitCode: 3 }), mutant({ id: "B", status: "invalid", reason: "anchor not found", exitCode: undefined })]))
+      .split("\n")
+      .filter((line) => /^\| [AB] \|/.test(line));
+    expect(rows[0]!.endsWith("| 3 |")).toBe(true);
+    expect(rows[1]!.endsWith("| - |")).toBe(true);
+  });
+
+  test("a pipe in the command cell is escaped so the row keeps six cells", () => {
+    const row = renderMutationTable(record([mutant({ command: "bun test a || bun test b" })])).split("\n").find((line) => line.startsWith("| A |"))!;
+    expect(row).toContain("`bun test a \\|\\| bun test b`");
+    expect(row.replace(/\\\|/g, "").split("|").length).toBe(8);
+  });
+
+  test("a backtick or a carriage return in a cell cannot end the code span or the row", () => {
+    const row = renderMutationTable(record([mutant({ command: "echo `id`\rbun test", anchor: "a`b" })])).split("\n").find((line) => line.startsWith("| A |"))!;
+    expect(row).toContain("`echo 'id' bun test`");
+    expect(row).toContain("`a'b`");
+    expect(row).not.toContain("\r");
+    expect(row.split("`").length - 1).toBe(6);
+  });
+
+  test("a record written before rows carried a command falls back to the record's command", () => {
+    const old = mutant({});
+    delete old.command;
+    const row = renderMutationTable(record([old])).split("\n").find((line) => line.startsWith("| A |"))!;
+    expect(row).toContain("`bun test f.test.ts`");
   });
 });
 

@@ -30,7 +30,7 @@ Work:
 2. Generalize `src/mcp-client/` with `listTools` on a **generic** stdio
    connection (no Codex tap). Keep Codex function names for the specialist.
 3. Connection manager: start enabled stdio servers in the background, cap
-   concurrency (Grok uses 8; start with a small constant, document it).
+   concurrency (start with a small constant, document it).
 4. Catalog: FQN, regex skip, in-memory map.
 5. `search_tool` + `use_tool` as `InteractiveTool`s; wire into the shell
    tool list next to existing builtins.

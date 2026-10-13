@@ -1,6 +1,6 @@
 # T65 spec — align the command exit-code folds with the corrected `gateway` meaning
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Written
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Written
 before any code change.
 
 Owned files: `src/commands/security.ts`, `src/commands/security-gate-exit.test.ts`,

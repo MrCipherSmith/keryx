@@ -29,35 +29,35 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/src/mcp/resources-containment.test.ts",
+      "path": "~/goodea/keryx/src/mcp/resources-containment.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "MCP resources containment RED tests",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/harness/tool/metaproject-adapter-containment.test.ts",
+      "path": "~/goodea/keryx/src/harness/tool/metaproject-adapter-containment.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Harness wiki/skills containment RED tests",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.test.ts",
+      "path": "~/goodea/keryx/src/lib/contained-read.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Shared contained-reader RED tests and proposed seam contract",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-test-case-specs.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-test-case-specs.json",
       "kind": "report",
       "exists": true,
       "summary": "Exact test case specs and shared reader API proposal",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-red-evidence.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-red-evidence.md",
       "kind": "report",
       "exists": true,
       "summary": "Focused RED run and failure signatures",

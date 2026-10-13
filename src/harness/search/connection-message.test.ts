@@ -24,7 +24,7 @@ describe("search connection failure wording", () => {
 
   test("the search wording tells the model not to retry or rephrase, and to wait", () => {
     // The guidance the one other agent scraping this same endpoint gives its
-    // own model (crush): a search that already spent its retry ladder must not
+    // own model: a search that already spent its retry ladder must not
     // invite another attempt, because each one extends the limiter's window.
     expect(RATE_LIMITED_SEARCH_ERROR).toContain("Do not retry or rephrase");
     expect(RATE_LIMITED_SEARCH_ERROR).toContain("wait a few minutes");

@@ -7,10 +7,10 @@ taken from it, each with the alternative that was rejected and why.
 ## Prior art
 
 Unlike [keryx-background-task-execution](../keryx-background-task-execution/brainstorm.md),
-whose design was grounded in seven competitor harnesses read outside this
+whose design was grounded in eight other agent harnesses read outside this
 repository, **no external harness survey was performed for this package**. That
-is a known omission, not a claim that none exists: how Codex, Grok Build, Gemini
-CLI, Qwen, Cline, Crush or OpenCode persist command output is `unknown` here.
+is a known omission, not a claim that none exists: how Codex, Gemini CLI or the
+other surveyed harnesses persist command output is `unknown` here.
 What follows is in-repository precedent, all of it verifiable.
 
 | Precedent | What it establishes | Source |

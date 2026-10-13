@@ -1,7 +1,7 @@
 # Product module: observation verdicts, outcome slot at flow init, gates G1a and G1b
 
 Status: ready
-Source: operator decision on gate G1, 2026-09-29 (option 2), confirmed on the helyx channel
+Source: operator decision on gate G1, 2026-09-29 (option 2), confirmed on the operator chat channel
 
 ## Problem
 

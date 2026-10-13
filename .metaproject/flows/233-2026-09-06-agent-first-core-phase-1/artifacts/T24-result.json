@@ -22,14 +22,14 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent two-skill Stage 1 review with four blocker findings, exact attack vectors, fixes, class-scope enumeration, clean controls, immutable evidence, and routing audit.",
       "hash": "205f09370bf9e6ef496d4fc207f70e1bbc8ce5d7c30ffc8ed742c38ba43e0559"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-stage1-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-stage1-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Offline synthetic probe for property-name disclosure, duplicate-key persistence, $ref sibling validation, reason safety, undefined handling, encoded/srcset exfiltration, and a public-link control.",

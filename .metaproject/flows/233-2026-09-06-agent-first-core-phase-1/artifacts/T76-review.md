@@ -7,7 +7,7 @@ the code, none of the earlier reviews, and none of the repairs under recheck.
 
 ## Scope
 
-- Root: `/Users/Goodea/goodea/keryx` (`pwd` confirmed before the first read).
+- Root: `~/goodea/keryx` (`pwd` confirmed before the first read).
   No `.claude/worktrees/**` directory was entered. No `git stash` at any point.
 - Branch: `codex/agent-first-core`. HEAD: `0bc6418fa1a038f8ec909cf949fecba077acf9a4`.
   All work under review is uncommitted in this checkout.
@@ -146,7 +146,7 @@ entered.
 
 ## Evidence
 
-Raw logs, all under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`:
+Raw logs, all under `~/goodea/keryx/.metaproject/data/gdctx/raw/`:
 
 | Log | SHA-256 |
 |---|---|

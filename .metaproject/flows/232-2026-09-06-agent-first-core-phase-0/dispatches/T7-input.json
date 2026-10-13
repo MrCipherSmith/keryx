@@ -18,7 +18,7 @@
       "AC1: M01: init, rules sync, rules distill, update and repeated sequences preserve a short index plus full routing document through a shared writer; enabled module/security flags and user-owned entrypoint blocks are preserved.",
       "AC2: M01: orient/catalog and related consumers resolve the split entrypoint, regression fixtures assert correct ownership of both documents, failed pair publication is observable and recoverable on rerun without a false success."
     ],
-    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+    "context": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
     "existing_tests": [
       "src/commands/routing-entrypoint-lifecycle.test.ts",
       "src/lib/templates.test.ts",
@@ -34,9 +34,9 @@
     }
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "codebase_path": "~/goodea/keryx",
     "branch": "codex/agent-first-core",
-    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
+    "context_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
   },
   "automation": {
     "skip_confirmation": true,

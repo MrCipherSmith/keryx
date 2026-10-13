@@ -31,5 +31,5 @@ Three lanes with disjoint files run in parallel in this worktree; docs follow.
 
 - flow-orchestrator SKILL.md length ceiling (flow 417): the rule must be short.
 - The interactive question on freeze must not hang non-TTY callers (agents, CI, intake).
-- helyx/Telegram creation path: confirm it goes through `flow init`; if it renders its own template,
+- the chat bot/Telegram creation path: confirm it goes through `flow init`; if it renders its own template,
   record it in the journal rather than widening scope silently.

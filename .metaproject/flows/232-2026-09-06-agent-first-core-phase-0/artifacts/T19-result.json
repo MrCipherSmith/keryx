@@ -24,42 +24,42 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
       "kind": "custom",
       "exists": true,
       "summary": "Implementation specification written before production changes, including inclusive round semantics and compatibility rules.",
       "hash": "e3737fa71f0e7821574fefb8dc67d9dfeb98a6dfe9dbedfe39048a74520477d2"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Schema-valid task-implementer report for the strict round-budget fix.",
       "hash": "f531073e8c1c9c430d3aa42a34bc521faa9d58e0596fa96ed3f425794ea6795c"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
       "kind": "report",
       "exists": true,
       "summary": "TDD, probe, focused test, typecheck, lint, compatibility, and routing evidence.",
       "hash": "92024d30880851b8c1cd88e1cbaf180e999342440bef959e04e791ad254ce752"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-22-51-489Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-22-51-489Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Immutable initial RED execution: 21 passed and the two strict-cap assertions failed.",
       "hash": "0ce4dbf433a0d44171f0de7b8f65fa4f0da26e731abc16ee4d5b56cfac0ab7f8"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-50-292Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-50-292Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Immutable final bounded integration execution: 129 passed, 0 failed, 502 assertions.",
       "hash": "c25206370852610131b636783c44d105847964e1a8685c27e839398cc2143513"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-36-521Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-36-521Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Immutable unchanged-probe execution proving one provider request and one invocation at max_rounds 1.",

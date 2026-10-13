@@ -15,25 +15,25 @@
     "AC5 (M10): a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls."
   ],
   "context_refs": [
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-implementation-report.json", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md", "kind": "custom", "exists": true }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
-    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
+    "~/goodea/keryx/src/commands/agent.ts",
+    "~/goodea/keryx/src/commands/agent.test.ts",
+    "~/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "~/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run. The global keryx binary is stale: use bun src/cli.ts.",
+    "Root ~/goodea/keryx; read .metaproject/index.md first, then .metaproject/skills/gdskills/review/review-logic/SKILL.md. Code search only via bun src/cli.ts ctx rg; commands via bun src/cli.ts ctx run. The global keryx binary is stale: use bun src/cli.ts.",
     "Read-only on production and test code. Write only T16-final-review.md, T16-final-result.json and probe scripts named T16-final-*.ts under the flow 232 artifacts dir. No flow/git/deps/global-suite/network/model API actions. Stats off. You did not implement these changes.",
     "Other workers concurrently edit src/security/*; exclude them. Stage 1 before Stage 2; preserve the original T16 review evidence; bounded synthetic providers only.",
     "Return a subagent-result JSON at the artifact_path and reply with STATUS: line first."
@@ -41,7 +41,7 @@
   "allowed_actions": ["read", "write", "run-command"],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json"
   },
   "budget": { "max_output_tokens": null },
   "provenance": { "created_at": "2026-09-06T13:12:00+00:00", "created_by": "flow-orchestrator" }

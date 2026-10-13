@@ -47,7 +47,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/settings` | Every setting in one place, each with its On/Off or value buttons. |
 | `/model` | Switch the model. |
 | `/models` | Pick a model for the current provider (numbered menu). |
-| `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. |
+| `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides. |
 | `/think` | Expand the last reasoning block — /think [auto\|expand\|hide\|collapse]. |
 | `/reasoning` | Show or set reasoning effort — /reasoning [off\|minimal\|low\|medium\|high\|xhigh\|max]. |
 

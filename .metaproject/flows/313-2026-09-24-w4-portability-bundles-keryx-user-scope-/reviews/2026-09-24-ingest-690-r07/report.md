@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- Worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `17ea1884` (confirmed). Diff `ca745d67..17ea1884` (`pr-690-t20.diff`).
+- Worktree `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `17ea1884` (confirmed). Diff `ca745d67..17ea1884` (`pr-690-t20.diff`).
 - Read-only. Nothing in the worktree was edited, staged, stashed or checked out, and `git status --short` is clean after the run. One side effect to know about: `keryx ctx rg` writes its raw logs under the worktree's `.metaproject/data/gdctx/` (gitignored), as it always does.
 - Pre-fix check: `git archive ca745d67` was extracted to `review313-r7/pre/`, the five HEAD test files were copied in, and `node_modules` was symlinked.
 - Probes are in `review313-r7/`:

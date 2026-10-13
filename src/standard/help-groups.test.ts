@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
 import { AGENT_SLASH_COMMANDS } from "../commands/agent-commands";
+import { describeRoundLimitSplit } from "../commands/round-limit";
 import {
   allHelpTokens,
   closestHelpTopics,
@@ -417,5 +418,28 @@ describe("/channels is documented where operators look", () => {
       .split(".")
       .map((part) => Number.parseInt(part, 10));
     expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_048);
+  });
+});
+
+describe("flow 429 AC7: /mode help states the round limit the turn loop enforces", () => {
+  test("the static /mode summary carries the default split describeRoundLimitSplit renders", () => {
+    const entry = HELP_GROUPS.find((e) => e.kind === "slash" && e.name === "/mode");
+    expect(entry?.summary).toContain(`Round limit: ${describeRoundLimitSplit({})}`);
+    expect(entry?.summary).toContain("KERYX_AGENT_MAX_ROUNDS overrides");
+  });
+
+  test("the /mode command description follows an env override", async () => {
+    const previous = process.env.KERYX_AGENT_MAX_ROUNDS;
+    process.env.KERYX_AGENT_MAX_ROUNDS = "50";
+    try {
+      const specifier = "../commands/agent-commands?env-override";
+      const fresh = (await import(specifier)) as typeof import("../commands/agent-commands");
+      const slash = fresh.AGENT_SLASH_COMMANDS.find((c) => c.name === "/mode");
+      expect(slash?.description).toContain(describeRoundLimitSplit({ KERYX_AGENT_MAX_ROUNDS: "50" }));
+      expect(slash?.description).toContain("50 rounds per turn");
+    } finally {
+      if (previous === undefined) delete process.env.KERYX_AGENT_MAX_ROUNDS;
+      else process.env.KERYX_AGENT_MAX_ROUNDS = previous;
+    }
   });
 });

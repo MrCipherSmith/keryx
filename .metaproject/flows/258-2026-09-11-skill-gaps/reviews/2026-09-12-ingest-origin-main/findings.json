@@ -354,7 +354,7 @@
     "problem": "Flow 257's adapted techniques carry no credit anywhere, and the plan reads as though attribution is complete.",
     "impact": "AC11's standard is applied to this flow and silently not to the previous one.",
     "suggested_fix": "Record which of 257's files are owed a credit and which took nothing.",
-    "evidence": "addyosmani appears in no file that flow 257 touched.",
+    "evidence": "The upstream library's name appears in no file that flow 257 touched.",
     "confidence": "high",
     "file": "docs/plans/skills-quality-program.md",
     "line": 33,

@@ -1,6 +1,6 @@
 # Keryx Telegram: remote-control relays approvals, questions and progress
 
-Status: approved by operator (helyx 195233), frozen
+Status: approved by operator (operator chat channel 195233), frozen
 Source: live run of the review of PR 7435 on a keryx shell mirrored into a Telegram topic, 2026-10-09 (flow 417, AC16). Findings: `~/notes/flow-417-ac16-findings.md`, section B (B1-B6).
 
 ## Problem
@@ -21,7 +21,7 @@ Telegram topic, without touching the terminal.
 
 ## Outcome criteria
 
-- Запрос (дословно): «То, что потом через Keryx Surf приходит в Telegram, это тоже записываю, но это как отдельная проблема, которую мы будем потом фиксить и вообще дорабатывать Keryx Telegram.» (source: helyx 195182, 2026-10-09; «Заводи» helyx 195221)
+- Запрос (дословно): «То, что потом через Keryx Surf приходит в Telegram, это тоже записываю, но это как отдельная проблема, которую мы будем потом фиксить и вообще дорабатывать Keryx Telegram.» (source: the chat bot 195182, 2026-10-09; «Заводи» the chat bot 195221)
 - Эффект (формализация агента): every prompt the shell shows in the terminal also reaches the topic and its answer from the topic unblocks the shell; progress is visible; the topic survives the shell.
 - Как наблюдать (предложение агента): run a long review in a shell with `/remote-control`, leave the terminal, and finish it from Telegram only.
 

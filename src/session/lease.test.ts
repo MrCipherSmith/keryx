@@ -20,6 +20,7 @@ import {
   sessionLeasePath,
   sessionLeaseState,
   switchLeasedSession,
+  switchPreservedSession,
   watchLeaseLoss,
   whilePersisting,
 } from "./lease";
@@ -588,5 +589,36 @@ describe("an unreadable owner record is not a loss (review r2 N2)", () => {
     const record = JSON.parse(readFileSync(ownerPath, "utf8")) as SessionLeaseOwner;
     writeFileSync(ownerPath, JSON.stringify({ ...record, token: randomUUID() }));
     expect(opened.lease.checkLost()).toBe(true);
+  });
+});
+
+describe("preserved session switches", () => {
+  test("both leases stay held until asynchronous preservation completes", async () => {
+    const current = track(openLeasedSession({ cwd, dataDir }));
+    let next: ReturnType<typeof openLeasedSession> | undefined;
+    let finish!: () => void;
+    const barrier = new Promise<void>(resolve => { finish = resolve; });
+    const switched = switchPreservedSession(current.lease, () => {
+      next = track(openLeasedSession({ cwd, dataDir })); return next;
+    }, async () => {
+      expect(current.lease.released).toBe(false);
+      expect(next?.lease.released).toBe(false);
+      await barrier;
+      expect(current.lease.released).toBe(false);
+    });
+    expect(current.lease.released).toBe(false);
+    finish();
+    expect(await switched).toBe(next!);
+    expect(current.lease.released).toBe(true);
+    expect(next?.lease.released).toBe(false);
+  });
+  test("failed preservation keeps current ownership and releases unused target", async () => {
+    const current = track(openLeasedSession({ cwd, dataDir }));
+    let next: ReturnType<typeof openLeasedSession> | undefined;
+    await expect(switchPreservedSession(current.lease, () => {
+      next = track(openLeasedSession({ cwd, dataDir })); return next;
+    }, async () => { throw new Error("checkpoint failed"); })).rejects.toThrow("checkpoint failed");
+    expect(current.lease.released).toBe(false);
+    expect(next?.lease.released).toBe(true);
   });
 });

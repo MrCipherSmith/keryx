@@ -46,9 +46,7 @@ of truth — no context-collector/brainstorm dispatch needed:
   and Result handling sections, now annotated with exactly what Phase D
   changes (post docpack-review fix).
 - `docs/requirements/keryx-multi-agent-engine/brainstorm.md` — full
-  reference-study evidence (grok-build/codex/opencode), including the honest
-  hedge on opencode's default dispatch path (Vercel AI SDK, not directly
-  inspected).
+  reference-study evidence.
 
 ### Files this flow will touch
 

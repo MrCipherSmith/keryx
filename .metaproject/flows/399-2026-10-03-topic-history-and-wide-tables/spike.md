@@ -17,7 +17,7 @@ each variant does with model text.
 | unit tests | bun test src/remote src/tui src/commands | 2m 08s | ok | ci-runner-2 | 1,204 tests, none skipped |
 | smoke | keryx shell --headless --script smoke.txt | 12s | failed | ci-runner-3 | markup probe: <u>tag</u> and **stars** and [link](https://example.com) |
 
-AC1 asks for a 3-column table; this one has 6 so that it overflows. The "helyx separator
+AC1 asks for a 3-column table; this one has 6 so that it overflows. The "the chat bot separator
 rewrite" in the first wording of AC1 is not available to this repository, so B is the same
 Markdown sent as is (AC1 was reworded to say so).
 
@@ -43,12 +43,12 @@ in the topic and answers per variant: wide yes/no, scrolls sideways yes/no, how 
 
 | Variant | Message | Operator's answer |
 |:--------|:-------:|:------------------|
-| A | 61 | wide, scrolls sideways like helyx: chosen |
+| A | 61 | wide, scrolls sideways like the chat bot: chosen |
 | B | 62 | not chosen |
 | C | 63 | not chosen |
 
 The operator's wording: variant A, the native `table` block, is today's behaviour and is the one
-that is wide and scrolls sideways like helyx. "How tall it renders" was not given per variant.
+that is wide and scrolls sideways like the chat bot. "How tall it renders" was not given per variant.
 The three variants are no longer a choice: A wins, so no new renderer is written.
 
 ## Choice
@@ -64,7 +64,7 @@ replaces the earlier provisional pick of C, which was made before the operator l
 
 Code reading after the choice (format-table.ts, format-rich.ts, rendering.ts): no cell is
 shortened anywhere on the table path, so the native block carries every cell in full and is
-exactly as wide as helyx's. The `20` column cap (`MAX_TABLE_COLUMNS`) and the `1500` row cost
+exactly as wide as the chat bot's. The `20` column cap (`MAX_TABLE_COLUMNS`) and the `1500` row cost
 (`MAX_TABLE_ROW_COST`) only decide when the HTML and plain fallbacks stack a table instead of
 aligning it.
 

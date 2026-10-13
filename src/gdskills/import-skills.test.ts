@@ -220,8 +220,8 @@ describe("tree import selection", () => {
   test("an --only that matches nothing is refused with the candidates", async () => {
     await writeOverlayTree();
     await expect(
-      importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-vantage-*"] }),
-    ).rejects.toThrow(/--only review-vantage-\* matches none of the 4 packages[\s\S]*- review-house/);
+      importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-acme-*"] }),
+    ).rejects.toThrow(/--only review-acme-\* matches none of the 4 packages[\s\S]*- review-house/);
   });
 
   test("a tree of one package is still a tree: its deprecated package is skipped, and it needs no --only", async () => {

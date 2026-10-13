@@ -1,0 +1,93 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Review PR 978 (flow 419)",
+   "target": "pr",
+   "ref": "https://github.com/MrCipherSmith/keryx/pull/978"
+  },
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md",
+    ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    "src/remote/approval-mirror.test.ts",
+    "src/remote/bot-api-http.ts",
+    "src/remote/client.ts",
+    "src/remote/command-busy.test.ts",
+    "src/remote/command-gateway.test.ts",
+    "src/remote/command-gateway.ts",
+    "src/remote/command-model.test.ts",
+    "src/remote/command-queued.test.ts",
+    "src/remote/command-router.ts",
+    "src/remote/command.test-helpers.ts",
+    "src/remote/fake-bot-api.ts",
+    "src/remote/history.ts",
+    "src/remote/http-surface.ts",
+    "src/remote/hub.ts",
+    "src/remote/lifecycle.test.ts",
+    "src/remote/orphan.test.ts",
+    "src/remote/progress-notes.test.ts",
+    "src/remote/progress-notes.ts",
+    "src/remote/prompt-reminder.test.ts",
+    "src/remote/protocol.ts",
+    "src/remote/registry.ts",
+    "src/remote/service.ts",
+    "src/remote/shell-bridge.ts",
+    "src/remote/types.ts",
+    "src/tui/approval-mirror.test.ts",
+    "src/tui/approval-mirror.ts",
+    "src/tui/remote-queue-wiring.test.ts",
+    "src/tui/remote-queue-wiring.ts",
+    "src/tui/tui-shell.test.ts",
+    "src/tui/tui-shell.ts"
+   ],
+   "changed_lines": 2018
+  },
+  "routing": {
+   "selected_reviewers": []
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "omissions": []
+  }
+ },
+ "scope_mode": "diff",
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "inherit": true,
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "the session names no model to anchor the ranking on"
+  }
+ },
+ "budget": {
+  "max_findings": 10
+ },
+ "base_sha": "cbb38e27a8ed23254914177836b6865a2c7a8824",
+ "pr_context": "~/keryx-fcomplete/.metaproject/flows/419-2026-10-09-telegram-remote-control-relay/reviews/2026-10-12-ingest-github-com-mrciphersmith-keryx-pull-978/pr-context.md",
+ "round": 1,
+ "is_fix_round": false,
+ "prior_findings": [],
+ "reviewer": "review-backend",
+ "skill_path": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-backend/SKILL.md",
+ "slices": [
+  "slice-04",
+  "slice-05",
+  "slice-06"
+ ]
+}

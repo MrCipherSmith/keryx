@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { researchErrors } from "./research";
-import { scopeFingerprint, type RetryState } from "./retry-plan";
+import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
@@ -69,6 +69,8 @@ export type LedgerResult = {
     rawReconciled: boolean;
     obligations: Array<Record<string, unknown>>;
     dispatch: Record<string, unknown>;
+    /** Files in raw/ that were set aside as not reviewer replies; written by `ledger build`, not read by the gate. */
+    setAside?: string[];
   };
   gaps: LedgerGap[];
 };
@@ -118,9 +120,7 @@ export function isEmptyOutput(raw: string): boolean {
   return raw.trim() === "" || /^\(subagent produced no text\)$/.test(raw.trim());
 }
 
-function sliceIdsOf(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((v) => (typeof v === "string" ? v : (v as { id?: unknown })?.id)).filter(text) : [];
-}
+const sliceIdsOf = (value: unknown): string[] => readSliceIds(value).ids;
 
 /** Ids a set of dispatched slices accounts for: themselves, and an original whose smaller retry slices were all covered. */
 function accountedFor(manifest: SliceManifest, reviewer: string, ids: Iterable<string>): Set<string> {
@@ -203,6 +203,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       for (const id of known?.covered ?? []) claimed.add(id);
     }
     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+    const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
+    const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
     if (!finished) {
       run.status = "incomplete";
       run.scopeComplete = false;
@@ -210,7 +212,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       const why = asked.length > 0 ? `open needs_context (${asked.length}): ${asked.slice(0, 3).join(" | ")}` : status;
       const left = manifest === undefined ? undefined : wavesLeft(manifest, reviewer, seen);
       const tail = left === undefined || left.slices === 0 ? "" : `; ${left.slices} slice(s) uncovered, ${left.waves} wave(s) left`;
-      gaps.push({ reviewer, detail: `${reviewer}: ${why}; scope not closed${tail}`, next: retryNext(reviewer, latest, input.manifestPath), ...(left === undefined ? {} : { waves: left.waves }) });
+      gaps.push({ reviewer, detail: `${reviewer}: ${why}; scope not closed${tail}${droppedTail}`, next: retryNext(reviewer, latest, input.manifestPath), ...(left === undefined ? {} : { waves: left.waves }) });
       runs.push(run);
       continue;
     }
@@ -224,7 +226,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
         const shown = missing.slice(0, 8).join(", ") + (missing.length > 8 ? `, … (+${missing.length - 8})` : "");
         const left = wavesLeft(manifest, reviewer, seen);
         const processed = known?.covered !== undefined && sliceIdsOf(result.slices).every((id) => known.covered!.includes(id)) ? undefined : latest;
-        gaps.push({ reviewer, detail: `${reviewer}: ${missing.length} slice(s) not covered by any dispatched payload: ${shown}; ${left.waves} wave(s) of at most ${waveBytesOf(manifest)} bytes left`, next: waveNext(reviewer, input.manifestPath, processed), waves: left.waves });
+        gaps.push({ reviewer, detail: `${reviewer}: ${missing.length} slice(s) not covered by any dispatched payload: ${shown}; ${left.waves} wave(s) of at most ${waveBytesOf(manifest)} bytes left${droppedTail}`, next: waveNext(reviewer, input.manifestPath, processed), waves: left.waves });
       } else complete.set(reviewer, seen);
     } else complete.set(reviewer, new Set());
     run.scopeComplete = scopeComplete;

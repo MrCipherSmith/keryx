@@ -1,6 +1,6 @@
 # T58 spec — a forced-closed posture must not become the recorded `previous` state
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Written
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Written
 before any code change. Extends `T37-implementation.md` (Defect 3) and
 `T54-implementation.md` (Concern 1), which closes `T39-review.md` F-008 (info):
 "A forced-`enforced` posture is persisted into `state.json`, so restoring a

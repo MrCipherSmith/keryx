@@ -6,7 +6,7 @@ Flow 353 appended `doctor` and `/doctor` to the "Start here" help group (`src/st
 
 ### Verified clean
 
-- `bun test src/tui/help-modal.test.ts` at `cbbbe29f` (worktree `/home/altsay/keryx-w5`) — 5 pass, 14 skip, 0 fail, 28 expect() calls (19 tests, 197ms).
+- `bun test src/tui/help-modal.test.ts` at `cbbbe29f` (worktree `~/keryx-w5`) — 5 pass, 14 skip, 0 fail, 28 expect() calls (19 tests, 197ms).
 - `src/standard/help-groups.ts:100-127` — the "Start here" group's literal entry order is `init`, `status`, `shell`, `help`, `/help`, `doctor`, `/doctor`, ending exactly there before the "Connect a model provider" group begins at line 129. `/doctor` is the last entry, so the new expectation is the truthful one, not a test bent to pass.
 - `bun test src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts src/commands/help-grouped.test.ts src/commands/help.test.ts` — 43 pass, 0 fail, 2370 expect() calls. No other test in the repository pins the "Start here" order or entry count: `help-groups.test.ts` only asserts `shell`'s group membership, and `commands-by-task.test.ts` is the docs-agreement test, which already agrees — `docs/docs/commands-by-task.md`'s "Start here" table already lists `keryx doctor` and `/doctor` (added in an earlier round of this same flow).
 

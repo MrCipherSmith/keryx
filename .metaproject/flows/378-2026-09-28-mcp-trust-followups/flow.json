@@ -131,7 +131,7 @@
     {
       "at": "2026-09-29T10:00:12.056Z",
       "event": "owner-set",
-      "detail": "not set -> altsay (operator confirmed flow 360 as release 0.3.34)"
+      "detail": "not set -> operator (operator confirmed flow 360 as release 0.3.34)"
     },
     {
       "at": "2026-09-29T10:00:12.208Z",
@@ -233,7 +233,7 @@
     }
   ],
   "owner": {
-    "value": "altsay",
+    "value": "operator",
     "basis": "stated",
     "source": "`--owner` flag on `flow owner set`"
   },
@@ -370,7 +370,7 @@
       "at": "2026-09-29T11:04:27.024Z",
       "kind": "complete",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -406,7 +406,7 @@
         {
           "name": "owner",
           "status": "pass",
-          "detail": "owner: altsay"
+          "detail": "owner: operator"
         },
         {
           "name": "review",

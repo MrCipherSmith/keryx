@@ -1,6 +1,6 @@
 # Flow 317 / PR #702 — review round 2 (narrow verification)
 
-Checkout: /Users/Goodea/goodea/keryx-ape-317-gfu, branch flow/317-grader-fu,
+Checkout: ~/goodea/keryx-ape-317-gfu, branch flow/317-grader-fu,
 HEAD 2a83439e (round 1 was at 153e29f6).
 
 Scope: the single commit after round 1,

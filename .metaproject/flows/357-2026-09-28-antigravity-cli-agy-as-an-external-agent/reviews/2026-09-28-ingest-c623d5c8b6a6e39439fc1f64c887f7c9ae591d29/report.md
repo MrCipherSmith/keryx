@@ -4,7 +4,7 @@ Scope: security (credential/env leakage, consent/block-list bypass, `--dangerous
 logic correctness (event parsing, outcome classification, the widened `agents external run` reaching
 codex-cli/claude-cli, the new `DENIED_CAUSE_MARKERS` entries), test quality, AC1-AC8 conformance.
 
-Read the code at worktree `/home/altsay/keryx-agy` (branch `feat/antigravity-agent`, head
+Read the code at worktree `~/keryx-agy` (branch `feat/antigravity-agent`, head
 `24d8fe42a969dfc31945f3cdc0e6c86bb0253733`, merge-base `c623d5c8b6a6e39439fc1f64c887f7c9ae591d29`).
 Ran the touched test files offline (`bun test`): antigravity codec/runtime/command/capability/env
 suites (115 pass) and the pre-existing codex-cli/claude-cli/runtime/run-external-factory/agents-

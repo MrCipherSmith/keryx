@@ -13,12 +13,12 @@
   ],
   "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "custom", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/process/shell-spawn.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/machine-wrap-up.test.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.test.ts"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/process/shell-spawn.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/sac/machine-wrap-up.test.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/sac/proposal-lifecycle.test.ts"
   ],
   "constraints": [
     "Read exact worktree index and testing context first; use gdgraph/gdctx/keryx ctx rg.",
