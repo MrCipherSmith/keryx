@@ -114,13 +114,13 @@ function objectEnd(raw: string, start: number): { end?: number; claimsResult: bo
   return { claimsResult };
 }
 
-/** How many cut-off-looking fragments are skipped before the reply is read as truncated: every one costs a scan to the end. */
-const MAX_UNCLOSED = 8;
+/** How many cut-off-looking fragments are skipped before the reply is read as truncated (no result, so the reviewer is re-dispatched): every one costs a scan to the end, about 3 ms per MB. */
+const MAX_UNCLOSED = 64;
 
 /**
  * The objects that stand at the top level of a reply. A candidate that fails to parse is skipped whole, never entered.
  * One that never closes ends the scan when it carries the result keys (a result cut off); otherwise it is prose and only
- * its brace is skipped, up to MAX_UNCLOSED times.
+ * its brace is skipped, up to MAX_UNCLOSED times; the next one ends the scan the same way (the reply gives no result).
  */
 function topLevelObjects(raw: string): { found: Array<{ start: number; value: unknown }>; truncated: boolean } {
   const found: Array<{ start: number; value: unknown }> = [];
@@ -154,13 +154,23 @@ function fenceRanges(raw: string): Array<readonly [number, number]> {
   return ranges;
 }
 
+/** Whether a position lies inside a fenced block. Positions must be asked in ascending order: one forward pass over the ranges. */
+function fenceTester(raw: string): (position: number) => boolean {
+  const ranges = fenceRanges(raw);
+  let next = 0;
+  return (position) => {
+    while (next < ranges.length && ranges[next]![1] <= position) next += 1;
+    return next < ranges.length && position >= ranges[next]![0];
+  };
+}
+
 /** Any top-level JSON object with a string `status`: the first rule every kind of result shares. */
 export function hasStatus(value: unknown): value is ParsedResult & { status: string } {
   return value !== null && typeof value === "object" && !Array.isArray(value) && typeof (value as { status?: unknown }).status === "string";
 }
 
 /** A reviewer's own result: a status, and either the reviewer's name or a `findings` array (a slice entry carries neither). */
-function isReviewerResult(value: unknown): value is ParsedResult {
+export function isReviewerResult(value: unknown): value is ParsedResult {
   if (!hasStatus(value)) return false;
   const object = value as Record<string, unknown>;
   return typeof object.reviewer === "string" || Array.isArray(object.findings);
@@ -178,15 +188,20 @@ function labelledFence(raw: string): Decision | undefined {
   } catch { return { result: undefined }; }
 }
 
-/** How many of the last markers are tried: each one whose object never closes costs a scan to the end. */
-const MAX_MARKERS = 8;
+/** How many of the last markers are tried (older ones are not read at all, and the scan of rule 3 follows): each one whose object never closes costs a scan to the end. */
+const MAX_MARKERS = 64;
+
+/** A marker counts where it starts its line, after at most a quote, list or heading prefix: a mention inside a sentence is prose. */
+const MARKER = /(?<![^\n])[ \t>*#-]*REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g;
 
 /**
- * The reviewer result right after the last bare `REVIEW_RESULT` marker that has one. A marker followed by something that
- * is not a reviewer result (prose such as `REVIEW_RESULT {contract}`, a cut-off object) is passed over for the one before it.
+ * The reviewer result right after the last `REVIEW_RESULT` marker that starts a line outside a fenced block and has one.
+ * A marker followed by something that is not a reviewer result (prose such as `REVIEW_RESULT {contract}`, a cut-off
+ * object) is passed over for the one before it.
  */
 function afterMarker(raw: string): ParsedResult | undefined {
-  const markers = [...raw.matchAll(/REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g)].slice(-MAX_MARKERS);
+  const inFence = fenceTester(raw);
+  const markers = [...raw.matchAll(MARKER)].filter((marker) => !inFence(marker.index!)).slice(-MAX_MARKERS);
   for (let at = markers.length - 1; at >= 0; at -= 1) {
     const marker = markers[at]!;
     const start = marker.index! + marker[0].length;
@@ -200,21 +215,19 @@ function afterMarker(raw: string): ParsedResult | undefined {
   return undefined;
 }
 
-/** No label and no marker: the reviewer-shaped objects at the top level, fenced ones first. */
+/** No label, and no marker that gave a reviewer result: the reviewer-shaped objects at the top level, fenced ones first. */
 function scannedResult(raw: string): ParsedResult | undefined {
   const { found, truncated } = topLevelObjects(raw);
   if (truncated) return undefined;
-  const ranges = fenceRanges(raw);
-  let next = 0;
-  const inFence = (start: number): boolean => {
-    while (next < ranges.length && ranges[next]![1] <= start) next += 1;
-    return next < ranges.length && start >= ranges[next]![0];
-  };
+  const inFence = fenceTester(raw);
   const fenced: unknown[] = [];
   const bare: unknown[] = [];
   for (const { start, value } of found) (inFence(start) ? fenced : bare).push(value);
   const fencedResults = fenced.filter(isReviewerResult);
-  if (fencedResults.length > 0) return fencedResults[fencedResults.length - 1];
+  if (fencedResults.length > 0) {
+    const last = fencedResults[fencedResults.length - 1]!;
+    return bare.filter(isReviewerResult).some((value) => value.status !== last.status) ? undefined : last;
+  }
   if (new Set(bare.filter(hasStatus).map((value) => value.status)).size > 1) return undefined;
   const accepted = bare.filter(isReviewerResult);
   return accepted[accepted.length - 1];
@@ -223,12 +236,16 @@ function scannedResult(raw: string): ParsedResult | undefined {
 /**
  * The reviewer's result, in this order; the first rule that applies decides.
  * 1. The last ```REVIEW_RESULT fence: any object with a status.
- * 2. The object after the last bare REVIEW_RESULT marker whose object is a reviewer result: a status plus a reviewer or a
- *    findings array. A marker followed by anything else is passed over for the one before it.
- * 3. Otherwise the top-level objects of the reply: a cut-off object that carries the result keys gives no result (prose
- *    that merely opens a brace is skipped, a few times); the last reviewer-shaped
- *    object inside a fenced block wins; with none, the last reviewer-shaped bare object, unless the bare objects carry
- *    different statuses (then none; the same status twice is not ambiguous).
+ * 2. The object after the last bare REVIEW_RESULT marker (at the start of a line, outside a fence; only the last
+ *    MAX_MARKERS are read) whose object is a reviewer result: a status plus a reviewer or a findings array. A marker
+ *    followed by anything else is passed over for the one before it.
+ * 3. Otherwise the top-level objects of the reply:
+ *    - a cut-off object that carries the result keys gives no result; prose that merely opens a brace is skipped, up to
+ *      MAX_UNCLOSED times, and the next one gives no result either;
+ *    - the last reviewer-shaped object inside a fenced block wins, unless a reviewer-shaped bare object carries a
+ *      different status (then none: a fenced sample cannot be told from the real result);
+ *    - with no fenced one, the last reviewer-shaped bare object, unless the bare objects (any with a status) carry
+ *      different statuses (then none; the same status twice is not ambiguous).
  * Never guessed from prose.
  */
 export function parseReviewResult(raw: string): ParsedResult | undefined {

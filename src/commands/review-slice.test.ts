@@ -79,6 +79,8 @@ test("an unreadable or result-less file is the UnreadableInput exit: code 2, a n
     expect(process.exitCode).toBe(2);
     expect(errors.join("\n")).toContain("holds no usable reviewer result");
     expect(errors.join("\n")).toContain("a truncated or ambiguous reply is refused");
+    expect(errors.join("\n")).toContain("a ```REVIEW_RESULT block with a status");
+    expect(errors.join("\n")).toContain("bare or after a REVIEW_RESULT marker");
   }
   expect(await Bun.file(path.join(root, "out", "retry-state.json")).exists()).toBe(false);
 });
@@ -90,6 +92,38 @@ test("a plain JSON file without a status is refused, and the reason is the exit 
   expect(process.exitCode).toBe(2);
   expect(errors.join("\n")).toContain("holds no usable reviewer result");
 });
+
+test("a status-only result is accepted as a whole file with --reviewer and written, and refused after a bare marker with nothing written (flow 441 AC13)", async () => {
+  const { ids } = await sliceOnce();
+  const statusOnly = JSON.stringify({ status: "DONE", slices: ids });
+  await writeFile(path.join(root, "refused.txt"), `REVIEW_RESULT: ${statusOnly}\n`, "utf8");
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "refused.txt", "--reviewer", "review-style", "--json"]);
+  expect(process.exitCode).toBe(2);
+  expect(errors.join("\n")).toContain("holds no usable reviewer result");
+  expect(await Bun.file(path.join(root, "out", "retry-state.json")).exists()).toBe(false);
+
+  errors = [];
+  process.exitCode = 0;
+  await writeFile(path.join(root, "whole.json"), statusOnly, "utf8");
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "whole.json", "--reviewer", "review-style", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(await Bun.file(path.join(root, "out", "retry-state.json")).exists()).toBe(true);
+});
+
+test("a result is read from stdin when the source is -, and an empty stdin is the unreadable-input exit", async () => {
+  const { ids } = await sliceOnce();
+  const run = async (stdin: string) => {
+    const child = Bun.spawn(["bun", path.join(ORIGINAL_CWD, "src", "cli.ts"), "review", "retry-plan", "--manifest", "out/manifest.json", "--result", "-", "--reviewer", "review-style", "--dry-run", "--json"], { cwd: root, stdin: new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
+    const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    return { out, err, code };
+  };
+  const accepted = await run(JSON.stringify({ status: "DONE", slices: ids }));
+  expect(accepted.code).toBe(0);
+  expect(JSON.parse(accepted.out)).toMatchObject({ decision: "accepted", reviewer: "review-style" });
+  const refused = await run("");
+  expect(refused.code).toBe(2);
+  expect(refused.err).toContain("holds no usable reviewer result");
+}, 60_000);
 
 test("scopeFingerprint changes when a slice file changes without changing its size", async () => {
   const { slicePath } = await sliceOnce();
