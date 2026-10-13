@@ -481,6 +481,6 @@ tui/task-cost-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
-tui/tui-shell.test.ts | tui/tui-shell.ts | 13
+tui/tui-shell.test.ts | tui/tui-shell.ts | 14
 tui/turn-guard-shell-wiring.test.ts | tui/tui-shell.ts | 1
 ```
