@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { classify, outcome, renderReplayReport, replayRaw, replayRepository } from "./replay";
+import { CAUSE_DECISIONS, classify, outcome, renderReplayReport, replayRaw, replayRepository } from "./replay";
 
 const T = "`".repeat(3);
 const result = (extra = "") =>
@@ -90,16 +90,29 @@ describe("outcome", () => {
 });
 
 describe("renderReplayReport", () => {
-  test("lists differences with an undecided decision and counts both groups", () => {
+  test("lists differences with the decision recorded for their cause and counts both groups", () => {
     const rows = [
       replayRaw("same.txt", `${T}REVIEW_RESULT\n${result()}\n${T}\n`),
       replayRaw("diff.txt", `${T}REVIEW_RESULT\n${result(`x ${T}y`)}\n${T}\n`),
+      replayRaw("v.txt", `${T}json\n{"status":"DONE","verifier":"review-verifier"}\n${T}\n`),
     ];
     const report = renderReplayReport(rows);
-    expect(report).toContain("Files replayed: 2. Same: 1. Differences: 1.");
-    expect(report).toMatch(/\| diff\.txt \| [0-9a-f]{12} \| none \| review-logic\|DONE\|f=1\|reviewer-result=true \| fence-inner-backticks \| undecided \|/);
+    expect(report).toContain("Files replayed: 3. Same: 1. Differences: 2.");
+    expect(report).toMatch(/\| diff\.txt \| [0-9a-f]{12} \| none \| review-logic\|DONE\|f=1\|reviewer-result=true \| fence-inner-backticks \| accepted \(operator, poll 161, 2026-10-13\) \|/);
+    expect(report).toMatch(/\| v\.txt \| [0-9a-f]{12} \| -\|DONE\|f=-\|reviewer-result=false \| none \| status-only-fragment \| accepted \(operator, poll 162, 2026-10-13\) \|/);
     expect(report).toContain("- same.txt (");
     expect(report).not.toMatch(/\| same\.txt \|/);
+  });
+
+  test("a difference the classifier does not explain stays undecided", () => {
+    const first = result();
+    const rows = [replayRaw("c.txt", `${first}\n\nand then\n\n${first.replace('"DONE"', '"BLOCKED"')}\n`)];
+    expect(renderReplayReport(rows)).toMatch(/\| c\.txt \| [0-9a-f]{12} \| .* \| unclassified \| undecided \|/);
+    expect(CAUSE_DECISIONS.unclassified).toBe("undecided");
+  });
+
+  test("names the package whose raws are not on main", () => {
+    expect(renderReplayReport([])).toContain("2026-10-13-pr-992-round3-d20089aa");
   });
 });
 

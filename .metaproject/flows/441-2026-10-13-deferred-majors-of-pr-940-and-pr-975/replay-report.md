@@ -2,24 +2,26 @@
 
 Old parser = `legacyParseReviewResult` (`parseReviewResult` as of 249bc59b). New parser = `parseReviewResult` in `src/review/ledger.ts`.
 Outcome format: `reviewer|status|f=<findings>|reviewer-result=<bool>`; `none` = no result, `empty` = empty output.
-Regenerate with `bun src/review/replay.ts --write <path>`. The parser was not tuned to remove any row; every difference awaits an operator decision.
+Regenerate with `bun src/review/replay.ts --write <path>`. The parser was not tuned to remove any row; each difference carries the operator decision that accepted it, or `undecided`.
+
+Only tracked `raw/` directories under `.metaproject/flows` and `.metaproject/data/review` are replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.
 
 Files replayed: 19. Same: 7. Differences: 12.
 
 | File | sha256[:12] | Old | New | Cause | Decision |
 | --- | --- | --- | --- | --- | --- |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-security-code.txt | b852abf6c599 | none | review-security-code|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-style.txt | 22d76e0141da | none | review-style|DONE|f=5|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-testing-practices.txt | 8c0f0b344d6d | none | review-testing-practices|DONE_WITH_CONCERNS|f=8|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-architecture.txt | 5dce5ec75377 | none | review-architecture|DONE|f=4|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-clean-code.txt | ccf906348249 | none | review-clean-code|DONE_WITH_CONCERNS|f=4|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-highload.txt | a70379671abb | none | review-highload|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-logic.txt | f086de40ff96 | none | review-logic|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-performance.txt | 38b52f339c27 | none | review-performance|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-security-code.txt | 5ed15ca8cae1 | none | review-security-code|DONE_WITH_CONCERNS|f=1|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-style.txt | 47607f71e020 | none | review-style|DONE|f=5|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-testing-practices.txt | 7b02605069a1 | none | review-testing-practices|DONE_WITH_CONCERNS|f=3|reviewer-result=true | fence-inner-backticks | undecided |
-| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-verifier.txt | fcbf6b25c7c4 | -|DONE|f=-|reviewer-result=false | none | status-only-fragment | undecided |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-security-code.txt | b852abf6c599 | none | review-security-code|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-style.txt | 22d76e0141da | none | review-style|DONE|f=5|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round2-d5a8cfdc/raw/review-testing-practices.txt | 8c0f0b344d6d | none | review-testing-practices|DONE_WITH_CONCERNS|f=8|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-architecture.txt | 5dce5ec75377 | none | review-architecture|DONE|f=4|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-clean-code.txt | ccf906348249 | none | review-clean-code|DONE_WITH_CONCERNS|f=4|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-highload.txt | a70379671abb | none | review-highload|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-logic.txt | f086de40ff96 | none | review-logic|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-performance.txt | 38b52f339c27 | none | review-performance|DONE_WITH_CONCERNS|f=2|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-security-code.txt | 5ed15ca8cae1 | none | review-security-code|DONE_WITH_CONCERNS|f=1|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-style.txt | 47607f71e020 | none | review-style|DONE|f=5|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-testing-practices.txt | 7b02605069a1 | none | review-testing-practices|DONE_WITH_CONCERNS|f=3|reviewer-result=true | fence-inner-backticks | accepted (operator, poll 161, 2026-10-13) |
+| .metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/raw/review-verifier.txt | fcbf6b25c7c4 | -|DONE|f=-|reviewer-result=false | none | status-only-fragment | accepted (operator, poll 162, 2026-10-13) |
 
 ## Causes
 

@@ -3,7 +3,7 @@ import type { ParsedResult } from "./ledger";
 /**
  * `parseReviewResult` as it stood at 249bc59b, before flow 441 T1 (PR 997) replaced it. Kept byte-for-byte in behaviour so
  * the replay of the closed review rounds (`replay.ts`) can say what the parser used to return for a raw reviewer file.
- * Nothing else may call it: it nests, takes the last object with a string `status`, and accepts a status-only fragment.
+ * Test and replay only: `replay.ts` (and its test) are the sole importers and nothing else may call it: it nests, takes the last object with a string `status`, and accepts a status-only fragment.
  */
 export function legacyParseReviewResult(raw: string): ParsedResult | undefined {
   const labelled = [...raw.matchAll(/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi)];

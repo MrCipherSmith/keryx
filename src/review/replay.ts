@@ -15,7 +15,14 @@ export interface ReplayRow {
   cause: ReplayCause;
 }
 
-const LABELLED = /```REVIEW_RESULT\s*\n([\s\S]*?)```/gi;
+export const CAUSE_DECISIONS: Record<ReplayCause, string> = {
+  "fence-inner-backticks": "accepted (operator, poll 161, 2026-10-13)",
+  "status-only-fragment": "accepted (operator, poll 162, 2026-10-13)",
+  unclassified: "undecided",
+  none: "undecided",
+};
+
+const LABELLED =/```REVIEW_RESULT\s*\n([\s\S]*?)```/gi;
 
 export function outcome(result: ParsedResult | undefined, empty: boolean): string {
   if (empty) return "empty";
@@ -96,13 +103,15 @@ export function renderReplayReport(rows: ReplayRow[]): string {
     "",
     "Old parser = `legacyParseReviewResult` (`parseReviewResult` as of 249bc59b). New parser = `parseReviewResult` in `src/review/ledger.ts`.",
     "Outcome format: `reviewer|status|f=<findings>|reviewer-result=<bool>`; `none` = no result, `empty` = empty output.",
-    "Regenerate with `bun src/review/replay.ts --write <path>`. The parser was not tuned to remove any row; every difference awaits an operator decision.",
+    "Regenerate with `bun src/review/replay.ts --write <path>`. The parser was not tuned to remove any row; each difference carries the operator decision that accepted it, or `undecided`.",
+    "",
+    "Only tracked `raw/` directories under `.metaproject/flows` and `.metaproject/data/review` are replayed. The PR 992 round 3 package (`.metaproject/reviews/2026-10-13-pr-992-round3-d20089aa/`) has no `raw/` directory on main, so its nine replies are not part of this replay.",
     "",
     `Files replayed: ${rows.length}. Same: ${rows.length - differing.length}. Differences: ${differing.length}.`,
     "",
     "| File | sha256[:12] | Old | New | Cause | Decision |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...differing.map((row) => `| ${row.file} | ${row.hash} | ${row.old} | ${row.next} | ${row.cause} | undecided |`),
+    ...differing.map((row) => `| ${row.file} | ${row.hash} | ${row.old} | ${row.next} | ${row.cause} | ${CAUSE_DECISIONS[row.cause]} |`),
     "",
     "## Causes",
     "",
