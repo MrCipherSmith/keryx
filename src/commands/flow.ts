@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
+import { assertGitRevision } from "../lib/git-revision";
 import {
   CONFIRMATION_CAVEAT,
   acCriterionKnown,
@@ -396,6 +397,10 @@ export async function flowCommand(args: string[]): Promise<void> {
   }
 }
 
+function baseBranchOption(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : assertGitRevision(value);
+}
+
 async function runInit(args: string[]): Promise<void> {
   const result = await getService().init({
     cwd: process.cwd(),
@@ -406,7 +411,7 @@ async function runInit(args: string[]): Promise<void> {
     // completion gate has no other way to learn the INTENT: reading the pull
     // request's base when the gate runs asks where it points today, which a
     // retargeted PR answers in its own favour.
-    baseBranch: optionValue(args, "--base"),
+    baseBranch: baseBranchOption(optionValue(args, "--base")),
     // Never inferred (AC1): only an explicit --owner populates it.
     owner: optionValue(args, "--owner"),
     // Flow 299 (AC2): opt this flow into the confirmation gate. The project

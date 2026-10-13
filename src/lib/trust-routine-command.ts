@@ -104,19 +104,38 @@ export function isTrustRoutineTool(name: string): boolean {
   return TRUST_ROUTINE_TOOLS.includes(name);
 }
 
-// The word itself, or a value glued on with `=` (`--ref=--output=/x`): git reads the value of an option it does not know as
-// a revision, and the next layer down may read it as an option, so every `=` value is judged as a word of its own.
+// The word itself, or a value glued on with `=` (`--ref=--output=/x`): the command splits the glued value off and hands it
+// to git, which reads a dash-leading value as an option, so every `=` value is judged as a word of its own.
 function hasExecFlag(words: readonly string[]): boolean {
-  return words.some((w) => {
-    if (w === "-c" || EXEC_FLAGS.some((f) => w === f || w.startsWith(`${f}=`))) return true;
-    const eq = w.indexOf("=");
-    return w.startsWith("-") && eq !== -1 && hasExecFlag([w.slice(eq + 1)]);
-  });
+  return words.some(isExecWord) || words.some(isShellSpelledOption);
 }
 
-/** A `--flag=-...` word: the glued value is an option, not a value. No routine review command is spelled that way. */
+// Walks the `=` chain by index, so a long chain costs no recursion and no copies.
+function isExecWord(word: string): boolean {
+  let at = 0;
+  for (;;) {
+    const rest = word.length - at;
+    if (rest === 2 && word.startsWith("-c", at)) return true;
+    if (EXEC_FLAGS.some((f) => (rest === f.length && word.startsWith(f, at)) || word.startsWith(`${f}=`, at))) return true;
+    const eq = word.indexOf("=", at);
+    if (!word.startsWith("-", at) || eq === -1) return false;
+    at = eq + 1;
+  }
+}
+
+// A word that starts like an option once the shell has removed a backslash or expanded a brace or a `$'...'` string
+// (`\--output=X`, `--out\put=X`, `{--output=X}`, `$'--output'=X`, which the tokenizer leaves as `$--output=X`) is judged by
+// what the shell will make of it, which this table does not compute: it is not routine.
+function isShellSpelledOption(word: string): boolean {
+  return /[\\{}$]/.test(word) && /^[\\{$]*-/.test(word);
+}
+
+/**
+ * A `--flag=-...` word whose glued value is an option, not a value (`--ref=--output=X`). A lone `-` after `=` is the
+ * documented standard-input spelling (`--diff=-`) and stays routine, as the separated `--diff -` does.
+ */
 function hasDashValue(words: readonly string[]): boolean {
-  return words.some((w) => /^--[^=]+=-/.test(w));
+  return words.some((w) => /^--[^=]+=-./s.test(w));
 }
 
 function startsWith(words: readonly string[], prefix: readonly string[]): boolean {

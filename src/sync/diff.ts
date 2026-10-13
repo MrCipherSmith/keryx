@@ -75,7 +75,8 @@ export function parseNameStatus(output: string): SyncDiff {
 // Returns null when git can't answer (not a repo, unknown base). Includes both
 // committed changes since base AND uncommitted working-tree changes.
 export async function diffSince(cwd: string, base: string): Promise<SyncDiff | null> {
-  const output = await gitCmd(cwd, ["diff", "--name-status", base]);
+  if (base.startsWith("-")) return null;
+  const output = await gitCmd(cwd, ["diff", "--name-status", "--end-of-options", base]);
   if (output === null) {
     return null;
   }

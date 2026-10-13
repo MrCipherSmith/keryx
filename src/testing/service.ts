@@ -5,6 +5,7 @@ import path from "node:path";
 import { isPathInside, pathExists } from "../lib/fs";
 import { mkdirContained, writeContained } from "../lib/contained-write";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
+import { revisionOperand } from "../lib/git-revision";
 import { collectGitProvenance } from "../metrics/provenance";
 import { readArtifactPointer } from "../metrics/lifecycle";
 import { guardOutput, redactRaw, formatGuardWarning, prepareOutputForPersistence } from "../security/guard";
@@ -756,7 +757,7 @@ async function getChangedFiles(cwd: string, since: string): Promise<string[]> {
   if (!Bun.which("git")) {
     return [];
   }
-  const result = await runCommand(["git", "diff", "--name-only", since], cwd);
+  const result = await runCommand(["git", "diff", "--name-only", ...revisionOperand(since)], cwd);
   const files = new Set(result.combined
     .split("\n")
     .map((line) => normalizePath(line.trim()))

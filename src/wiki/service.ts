@@ -1618,8 +1618,9 @@ async function changedModules(cwd: string, since: string | undefined): Promise<S
 }
 
 function gitDiffNames(cwd: string, base: string): Promise<string[] | null> {
+  if (base.startsWith("-")) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const child = spawn("git", ["diff", "--name-only", base], { cwd });
+    const child = spawn("git", ["diff", "--name-only", "--end-of-options", base], { cwd });
     let out = "";
     child.stdout.on("data", (chunk) => {
       out += String(chunk);

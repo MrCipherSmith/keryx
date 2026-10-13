@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, writeFileAtomic } from "../lib/fs";
+import { assertNoWritingDiffOption } from "../lib/git-revision";
 import { readJsonFileOr } from "../lib/json";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
@@ -199,6 +200,7 @@ async function printCtxStatus(): Promise<void> {
 // `git diff HEAD` so staged work is included, and list untracked files
 // separately because no diff form can show them.
 async function diffAndSummarize(args: string[], config: CtxConfig): Promise<void> {
+  assertNoWritingDiffOption(args);
   const workingTree = isWorkingTreeDiff(args);
   const base = workingTree ? await defaultDiffBase() : undefined;
   const command = ["git", "diff", ...args, ...(base ? [base] : [])];

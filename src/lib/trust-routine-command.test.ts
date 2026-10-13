@@ -148,11 +148,55 @@ test("F-045: an exec flag glued to another flag with = still prompts, for every 
   }
 });
 
-test("F-045: a review flag glued to a value that starts with - prompts, whatever the option is", () => {
+test("F-045: a review flag glued to a value that starts with - prompts, whatever the flag is", () => {
   const cwd = projectDir();
-  for (const command of ["keryx review slice --ref=-U0", "keryx review slice --ref=--no-index", "keryx review scope --base=-"]) {
-    expect(isTrustRoutineCommand(command, { cwd })).toBe(false);
+  for (const command of [
+    "keryx review slice --ref=-U0",
+    "keryx review slice --ref=--no-index",
+    "keryx review slice --since=-U0",
+    "keryx review slice --diff=--no-index",
+    "keryx review scope --scope=-c1",
+    "keryx review blast-radius --base=-x",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
   }
+});
+
+test("F-059: a lone - glued to a flag is the standard-input spelling and stays routine, as the separated form does", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx review slice --diff=-", "keryx review slice --diff -"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("F-058: a word the shell turns into an exec option (backslash, brace, $'...') prompts", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "git diff \\--output=/tmp/x",
+    "git diff --out\\put=/tmp/x",
+    "git diff {--output=/tmp/x}",
+    "git diff --\\pre=sh",
+    "keryx ctx diff \\--output=/tmp/x",
+    "keryx ctx rg --\\pre=sh foo",
+    "keryx review slice --ref=\\--output=/tmp/x",
+    "keryx review slice --ref={--output=/tmp/x,y}",
+    "git diff $'--output'=/tmp/x",
+    'git diff $"--output"=/tmp/x',
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+});
+
+test("F-058: a backslash, a brace or a quote inside a pattern or a revision does not prompt", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx ctx rg -n \\bfoo src", "git log HEAD@{1}", "keryx ctx rg 'a\\|b' src"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("F-060: a very long chain of glued = signs gets a verdict, not a stack overflow", () => {
+  expect(isTrustRoutineCommand(`keryx review slice --ref=${"-=".repeat(60_000)}`, { cwd: projectDir() })).toBe(false);
+  expect(isTrustRoutineCommand(`git diff ${"-=".repeat(60_000)}--output=x`, { cwd: projectDir() })).toBe(false);
 });
 
 test("F-045: a glued value that is a plain revision, a path or a count stays routine", () => {
@@ -167,8 +211,20 @@ test("F-045: a glued value that is a plain revision, a path or a count stays rou
     "git log -- x=-c",
     "keryx flow status --x=-1",
     "keryx gdgraph context --x=-1",
+    "keryx ctx rg -cn foo src",
+    "keryx ctx rg -e=-foo src",
+    "keryx review slice -x=-1",
+    "keryx ctx rg --pre-glob *.gz foo src",
+    "git diff --output-indicator-new=+",
   ]) {
     expect(isTrustRoutineCommand(command, { cwd })).toBe(true);
+  }
+});
+
+test("F-058: an unbalanced brace, a lone closing brace and a newline in a glued dash value are refused, as the shell spellings are", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx review slice {--a", "keryx review slice --a}b", "keryx review slice '--ref=-\nx'"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
   }
 });
 
