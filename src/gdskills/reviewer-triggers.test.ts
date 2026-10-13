@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   descriptionFlags,
   descriptionPathTriggers,
@@ -7,7 +10,7 @@ import {
   reviewerFlags,
   reviewerPathGate,
 } from "./reviewer-triggers";
-import { globToRegExp } from "../review/coverage";
+import { globToRegExp, requiredReviewers } from "../review/coverage";
 import * as viaReview from "../review/reviewers";
 import * as here from "./reviewer-triggers";
 
@@ -193,6 +196,39 @@ describe("a project reviewer's description gate selects the files it names (flow
       expect(gateMatches(domains, file)).toBe(false);
       expect(gateMatches(core, file)).toBe(false);
     }
+  });
+
+  describe("through requiredReviewers, which is what selects the roster", () => {
+    let root: string;
+    const install = async (name: string, description: string): Promise<void> => {
+      const dir = path.join(root, ".metaproject", "project-skills", "review", name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n`, "utf8");
+    };
+
+    beforeEach(async () => {
+      root = await mkdtemp(path.join(tmpdir(), "keryx-triggers-"));
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), `${JSON.stringify({ modules: { gdskills: {} } })}\n`, "utf8");
+      await install("review-vantage-domains", "Use when reviewing analytics. Dispatched by vantage-review for --vantage-domains, src/analytics/** or src/pipelines/** changes.");
+      await install("review-vantage-core", "Use when reviewing shared infrastructure. Dispatched by vantage-review for --vantage-core, src/core/** changes.");
+    });
+
+    afterEach(async () => {
+      await rm(root, { recursive: true, force: true });
+    });
+
+    test("a file directly under the directory keeps the reviewer in the roster, in diff and all mode", async () => {
+      for (const mode of ["diff", "all"] as const) {
+        const pipelines = await requiredReviewers(root, mode, ["src/pipelines/index.ts"]);
+        expect(pipelines.required).toContain("review-vantage-domains");
+        expect(pipelines.excluded.map((e) => e.reviewer)).toContain("review-vantage-core");
+        const core = await requiredReviewers(root, mode, ["src/core/x.ts"]);
+        expect(core.required).toContain("review-vantage-core");
+        expect(core.excluded.filter((e) => e.reviewer === "review-vantage-core")).toEqual([]);
+        expect(core.excluded.find((e) => e.reviewer === "review-vantage-domains")?.reason).toContain("no-matching-paths");
+      }
+    });
   });
 });
 

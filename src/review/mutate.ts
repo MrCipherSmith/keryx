@@ -22,8 +22,8 @@ export type MutantResult = {
   anchor: string;
   replacement: string;
   status: MutantStatus;
-  /** The test command this row was judged by. */
-  command: string;
+  /** The test command this row was judged by; absent in records written before the field existed. */
+  command?: string | undefined;
   exitCode?: number | undefined;
   ms: number;
   reason?: string | undefined;
@@ -163,7 +163,7 @@ export function renderMutationTable(record: MutationRecord): string {
   const cell = (value: string) => value.replace(/\|/g, "\\|").replace(/\n/g, " ");
   const rows = record.mutants.map(
     (m) =>
-      `| ${cell(m.id)} | ${cell(m.file)}${m.line === undefined ? "" : `:${m.line}`} | \`${cell(m.anchor)}\` → \`${cell(m.replacement)}\` | ${m.status}${m.reason ? ` (${cell(m.reason)})` : ""} | \`${cell(m.command)}\` | ${m.exitCode ?? "-"} |`,
+      `| ${cell(m.id)} | ${cell(m.file)}${m.line === undefined ? "" : `:${m.line}`} | \`${cell(m.anchor)}\` → \`${cell(m.replacement)}\` | ${m.status}${m.reason ? ` (${cell(m.reason)})` : ""} | \`${cell(m.command ?? record.command)}\` | ${m.exitCode ?? "-"} |`,
   );
   const t = record.totals;
   return [
