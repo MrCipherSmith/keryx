@@ -1,7 +1,6 @@
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
-import { terminalSafe } from "../lib/terminal-safe";
 import { resetOperatorDenials } from "../review/review-system";
 // OpenTUI interactive agent shell (flows 060 skeleton + 061 chrome parity).
 //
