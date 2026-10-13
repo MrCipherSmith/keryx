@@ -14,8 +14,8 @@ in a webview (Finding 4), so "its own TUI inside VS Code" is not
 achievable as originally imagined. That discovery paused deliberately
 before a PRD, pending discussion of UI shape and capability scope.
 
-Separately, a comparative research pass ranked "UX/distribution surface"
-(#4, opencode's `acp` pattern) in a gap-closing priority table for keryx
+Separately, a research pass ranked "UX/distribution surface"
+(#4, an ACP-based editor pattern) in a gap-closing priority table for keryx
 overall — that thread and this one converge on the same finding: keryx
 already has a real, tested backend (`serve-server.ts`) that multiple UX
 surfaces (ACP for Zed, a VS Code extension) can be thin clients of.

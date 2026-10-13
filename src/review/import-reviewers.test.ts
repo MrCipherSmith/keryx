@@ -11,7 +11,7 @@ let source: string;
 
 beforeEach(async () => {
   cwd = await mkdtemp(path.join(tmpdir(), "keryx-import-reviewers-"));
-  source = await mkdtemp(path.join(tmpdir(), "keryx-vantage-home-"));
+  source = await mkdtemp(path.join(tmpdir(), "keryx-acme-home-"));
   await mkdir(path.join(cwd, ".metaproject", "data", "gdskills"), { recursive: true });
   await writeFile(
     path.join(cwd, ".metaproject", "metaproject.json"),
@@ -43,10 +43,10 @@ async function writeGeneric(home: string, name: string): Promise<void> {
 
 describe("importOverlayReviewers", () => {
   test("a tree of several packages is refused without --only, in this command's own spelling", async () => {
-    await writeOverlay(source, "review-vantage-frontend");
+    await writeOverlay(source, "review-acme-frontend");
     await writeOverlay(source, "review-house-api");
     await writeGeneric(source, "review-logic");
-    await writeGeneric(source, "vantage-review");
+    await writeGeneric(source, "acme-review");
 
     let message = "";
     try {
@@ -55,17 +55,17 @@ describe("importOverlayReviewers", () => {
       message = error instanceof Error ? error.message : String(error);
     }
     expect(message).toStartWith(`keryx review import: ${source} holds 4 packages`);
-    for (const name of ["review-house-api", "review-logic", "review-vantage-frontend", "vantage-review"]) {
+    for (const name of ["review-house-api", "review-logic", "review-acme-frontend", "acme-review"]) {
       expect(message).toContain(`  - ${name}`);
     }
     // The module is implied by this spelling, so the example does not pass it.
-    expect(message).toContain(`  keryx review import --from ${source} --only 'review-house-api'`);
+    expect(message).toContain(`  keryx review import --from ${source} --only 'review-acme-frontend'`);
     expect((await collectReviewers(cwd)).project).toEqual([]);
   });
 
   test("no package name is special: a tree that uses another naming imports what --only selects", async () => {
     await writeOverlay(source, "review-house-api");
-    await writeOverlay(source, "review-vantage-frontend");
+    await writeOverlay(source, "review-acme-frontend");
     const result = await importOverlayReviewers({ projectRoot: cwd, from: source, only: ["review-house-*"] });
     expect(result.imported.map((row) => `${row.name}:${row.status}`)).toEqual(["review-house-api:imported"]);
   });
@@ -73,32 +73,32 @@ describe("importOverlayReviewers", () => {
   test("the importer source no longer names one overlay's prefix", async () => {
     for (const file of ["import-reviewers.ts", "../gdskills/import-skills.ts", "../gdskills/catalog.ts"]) {
       const text = await readFile(path.join(import.meta.dir, file), "utf8");
-      expect(text).not.toContain("review-vantage-");
+      expect(text).not.toContain("review-acme-");
     }
   });
 
   test("--only imports the selected overlays and leaves generic copies alone", async () => {
-    await writeOverlay(source, "review-vantage-frontend", "frontend overlay");
-    await writeOverlay(source, "review-vantage-styling", "styling overlay");
+    await writeOverlay(source, "review-acme-frontend", "frontend overlay");
+    await writeOverlay(source, "review-acme-styling", "styling overlay");
     await writeGeneric(source, "review-logic");
-    await writeGeneric(source, "vantage-review");
+    await writeGeneric(source, "acme-review");
 
-    const result = await importOverlayReviewers({ projectRoot: cwd, from: source, only: ["review-vantage-*"] });
+    const result = await importOverlayReviewers({ projectRoot: cwd, from: source, only: ["review-acme-*"] });
     expect(result.imported.map((row) => row.name)).toEqual([
-      "review-vantage-frontend",
-      "review-vantage-styling",
+      "review-acme-frontend",
+      "review-acme-styling",
     ]);
     expect(result.imported.every((row) => row.status === "imported")).toBe(true);
 
     const inventory = await collectReviewers(cwd);
     expect(inventory.project.map((row) => row.name).sort()).toEqual([
-      "review-vantage-frontend",
-      "review-vantage-styling",
+      "review-acme-frontend",
+      "review-acme-styling",
     ]);
     expect(inventory.project.every((row) => row.drift === "clean")).toBe(true);
 
     const written = await readFile(
-      path.join(cwd, ".metaproject", "project-skills", "review", "review-vantage-frontend", "SKILL.md"),
+      path.join(cwd, ".metaproject", "project-skills", "review", "review-acme-frontend", "SKILL.md"),
       "utf8",
     );
     expect(written).toContain("frontend overlay");
@@ -108,7 +108,7 @@ describe("importOverlayReviewers", () => {
   });
 
   test("dry-run writes nothing", async () => {
-    await writeOverlay(source, "review-vantage-frontend");
+    await writeOverlay(source, "review-acme-frontend");
     const result = await importOverlayReviewers({ projectRoot: cwd, from: source, dryRun: true });
     expect(result.imported[0]?.status).toBe("would-import");
     // No `.metaproject/skills/gdskills/review` was ever installed in `cwd`, so
@@ -120,14 +120,14 @@ describe("importOverlayReviewers", () => {
   });
 
   test("an existing reviewer is skipped unless --force", async () => {
-    await writeOverlay(source, "review-vantage-frontend", "v1");
+    await writeOverlay(source, "review-acme-frontend", "v1");
     await importOverlayReviewers({ projectRoot: cwd, from: source });
 
-    await writeOverlay(source, "review-vantage-frontend", "v2");
+    await writeOverlay(source, "review-acme-frontend", "v2");
     const skipped = await importOverlayReviewers({ projectRoot: cwd, from: source });
     expect(skipped.imported[0]?.status).toBe("skipped");
     const stillV1 = await readFile(
-      path.join(cwd, ".metaproject", "project-skills", "review", "review-vantage-frontend", "SKILL.md"),
+      path.join(cwd, ".metaproject", "project-skills", "review", "review-acme-frontend", "SKILL.md"),
       "utf8",
     );
     expect(stillV1).toContain("v1");
@@ -136,20 +136,20 @@ describe("importOverlayReviewers", () => {
     const forced = await importOverlayReviewers({ projectRoot: cwd, from: source, force: true });
     expect(forced.imported[0]?.status).toBe("overwritten");
     const nowV2 = await readFile(
-      path.join(cwd, ".metaproject", "project-skills", "review", "review-vantage-frontend", "SKILL.md"),
+      path.join(cwd, ".metaproject", "project-skills", "review", "review-acme-frontend", "SKILL.md"),
       "utf8",
     );
     expect(nowV2).toContain("v2");
   });
 
   test("importing a single overlay package does not pull its siblings", async () => {
-    await writeOverlay(source, "review-vantage-frontend");
-    await writeOverlay(source, "review-vantage-styling");
+    await writeOverlay(source, "review-acme-frontend");
+    await writeOverlay(source, "review-acme-styling");
     const result = await importOverlayReviewers({
       projectRoot: cwd,
-      from: path.join(source, "skills", "review-vantage-frontend"),
+      from: path.join(source, "skills", "review-acme-frontend"),
     });
-    expect(result.imported.map((row) => row.name)).toEqual(["review-vantage-frontend"]);
+    expect(result.imported.map((row) => row.name)).toEqual(["review-acme-frontend"]);
   });
 
   test("a package directory with no letter or digit is refused with advice this command's operator can follow", async () => {
@@ -188,7 +188,7 @@ describe("importOverlayReviewers", () => {
   });
 
   test("the markdown report names every status", async () => {
-    await writeOverlay(source, "review-vantage-frontend");
+    await writeOverlay(source, "review-acme-frontend");
     const result = await importOverlayReviewers({ projectRoot: cwd, from: source, dryRun: true });
     const rendered = renderImportProjectSkillsMarkdown(result);
     expect(rendered).toContain("would-import");

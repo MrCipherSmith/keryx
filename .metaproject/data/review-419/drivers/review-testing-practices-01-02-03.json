@@ -1,0 +1,10 @@
+{
+ "reviewer": "review-testing-practices",
+ "slices": [
+  "slice-01",
+  "slice-02",
+  "slice-03"
+ ],
+ "result": "raw/review-testing-practices-01-02-03.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+}

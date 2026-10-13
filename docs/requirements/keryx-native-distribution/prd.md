@@ -11,7 +11,7 @@ npm path needs npm/Node; `bun`'s own runtime is still required to execute
 `dist/cli.js` (`bin: {"keryx": "./dist/cli.js"}`, built with
 `--target bun`, not a standalone executable). The clone path needs `bun` AND
 `git`, then clones full source and runs it interpreted. Neither matches
-opencode's studied pattern: a single script that detects OS/arch/libc and
+the studied install pattern: a single script that detects OS/arch/libc and
 downloads a prebuilt, dependency-free binary from GitHub Releases — the
 `install` script IS the whole install, no separate runtime required
 afterward.

@@ -30,7 +30,7 @@ below for what landed and what is still a target contract.
 
 ## Current state (with code paths)
 
-Verified against the worktree at `/Users/Goodea/goodea/keryx-agent-platform`
+Verified against the worktree at `~/goodea/keryx-agent-platform`
 (paths below exist; `keryx ctx rg` returns 0 hits where noted):
 
 - **Skill/rule inventory.** `src/gdskills/bundled/skills/` holds 72

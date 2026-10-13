@@ -1,6 +1,6 @@
 # T55 implementation — three defects T39 found beyond T38/T50's exhaustive-mapping rewrites
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files only: `src/commands/security.ts` + `src/commands/security-gate-exit.test.ts`
 + `src/commands/security.check-input.test.ts` (read, unaffected — see below),
 `src/health/service.ts` + `src/health/service-gate-exit.test.ts`.
@@ -8,7 +8,7 @@ files only: `src/commands/security.ts` + `src/commands/security-gate-exit.test.t
 were not touched (owned by concurrent workers this round). Spec written
 before coding: `T55-spec.md` (same directory).
 
-All raw logs below are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs below are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Reviewer's probe, before and after (dispatch-mandated)
 

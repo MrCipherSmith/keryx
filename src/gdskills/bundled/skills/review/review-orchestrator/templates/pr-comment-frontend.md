@@ -16,7 +16,7 @@ React / MobX
 - Disposers run on unmount; an async callback checks them before writing.
 - State that outlives the view lives in the store, not in `useState`.
 
-Vantage conventions (skip a line the repository has no rule for)
+Acme conventions (skip a line the repository has no rule for)
 
 - `t()` only in render, no `defaultValue`.
 - Arabic plurals and FSI/PDI isolates where the catalog has them.

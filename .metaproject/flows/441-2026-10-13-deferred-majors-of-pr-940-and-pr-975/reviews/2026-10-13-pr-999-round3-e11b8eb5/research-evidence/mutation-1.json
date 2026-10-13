@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3",
+  "command": "bun test src/tui/main-queue-drain.test.ts src/tui/main-queue.test.ts src/tui/busy-dispatch.test.ts src/tui/foreground-operation.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-bus.test.ts src/tui/tui-hold.test.ts src/tui/tui-shell.test.ts src/tui/bus-wake.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 551
+  },
+  "mutants": [
+    {
+      "id": "M01-detach-counter-reset-to-zero",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "        detached -= 1;\n        drainWhenIdle();",
+      "replacement": "        detached = 0;\n        drainWhenIdle();",
+      "line": 297,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 529
+    },
+    {
+      "id": "M02-detach-rejection-unhandled",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      work.then(end, end);",
+      "replacement": "      void work.then(end);",
+      "line": 300,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 549
+    },
+    {
+      "id": "M03-detach-counter-not-raised",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      detached += 1;\n",
+      "replacement": "\n",
+      "line": 295,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 532
+    },
+    {
+      "id": "M04-in-flight-ignores-detached",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "const workInFlight = (): boolean => deps.workInFlight() || detached > 0;",
+      "replacement": "const workInFlight = (): boolean => deps.workInFlight();",
+      "line": 268,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 513
+    },
+    {
+      "id": "M05-in-flight-ignores-shell-predicate",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "const workInFlight = (): boolean => deps.workInFlight() || detached > 0;",
+      "replacement": "const workInFlight = (): boolean => detached > 0;",
+      "line": 268,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 506
+    },
+    {
+      "id": "M06-queue-captured-once",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "  let detached = 0;\n",
+      "replacement": "  let detached = 0;\n  const frozenQueue = deps.queue();\n  deps = { ...deps, queue: () => frozenQueue };\n",
+      "line": 267,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 499
+    },
+    {
+      "id": "M07-settle-also-on-exhausted",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (outcome === \"empty\") deps.onSettle();",
+      "replacement": "if (outcome !== \"started\") deps.onSettle();",
+      "line": 277,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 489
+    },
+    {
+      "id": "M08-settle-never-fires",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (outcome === \"empty\") deps.onSettle();\n",
+      "replacement": "\n",
+      "line": 277,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 483
+    },
+    {
+      "id": "M09-settle-fires-on-every-drain",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (outcome === \"empty\") deps.onSettle();",
+      "replacement": "deps.onSettle();",
+      "line": 277,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 474
+    },
+    {
+      "id": "M10-idle-drain-unguarded",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (workInFlight()) return;\n    drain();",
+      "replacement": "    drain();",
+      "line": 281,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 485
+    },
+    {
+      "id": "M11-idle-drain-ignores-detached",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (workInFlight()) return;\n    drain();",
+      "replacement": "    if (deps.workInFlight()) return;\n    drain();",
+      "line": 281,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 474
+    },
+    {
+      "id": "M12-drainnext-busy-ignores-detached",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      isBusy: workInFlight,",
+      "replacement": "      isBusy: deps.workInFlight,",
+      "line": 275,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 502
+    },
+    {
+      "id": "M13-turn-settle-ignores-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onTurnSettle() {\n      if (deps.forced.isAwaitingSettlement) return;\n",
+      "replacement": "    onTurnSettle() {\n",
+      "line": 289,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 470
+    },
+    {
+      "id": "M14-operation-complete-ignores-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onForegroundOperationComplete() {\n      if (deps.forced.isAwaitingSettlement) return;\n",
+      "replacement": "    onForegroundOperationComplete() {\n",
+      "line": 285,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 497
+    },
+    {
+      "id": "M15-lease-release-drains-unguarded",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onLeaseRelease: drainWhenIdle,",
+      "replacement": "    onLeaseRelease: drain,",
+      "line": 293,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 493
+    },
+    {
+      "id": "M16-detach-end-drains-before-lowering",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "        detached -= 1;\n        drainWhenIdle();",
+      "replacement": "        drainWhenIdle();\n        detached -= 1;",
+      "line": 297,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 504
+    },
+    {
+      "id": "M17-queue-before-forced",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "deps.forced.takeNext() ?? deps.queue().shift()",
+      "replacement": "deps.queue().shift() ?? deps.forced.takeNext()",
+      "line": 271,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 540
+    },
+    {
+      "id": "M18-pending-ignores-forced",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "deps.forced.pendingCount + deps.queue().length",
+      "replacement": "deps.queue().length",
+      "line": 272,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 571
+    },
+    {
+      "id": "M19-detach-lowers-counter-synchronously",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      work.then(end, end);",
+      "replacement": "      void work;\n      end();",
+      "line": 300,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 531
+    },
+    {
+      "id": "M20-detach-rejection-never-lowers-counter",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      work.then(end, end);",
+      "replacement": "      work.then(end, () => undefined);",
+      "line": 300,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 547
+    },
+    {
+      "id": "M21-paint-dropped",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "      paint: deps.paint,",
+      "replacement": "      paint: () => {},",
+      "line": 273,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 524
+    },
+    {
+      "id": "M22-detach-end-skips-drain",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "        detached -= 1;\n        drainWhenIdle();",
+      "replacement": "        detached -= 1;",
+      "line": 297,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 563
+    },
+    {
+      "id": "M23-drain-budget-short-by-one",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "for (let budget = options.pending(); budget > 0; budget--)",
+      "replacement": "for (let budget = options.pending() - 1; budget > 0; budget--)",
+      "line": 218,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 653
+    },
+    {
+      "id": "M24-drainnext-empty-reports-started",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (next === undefined) return \"empty\";",
+      "replacement": "    if (next === undefined) return \"started\";",
+      "line": 222,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 818
+    },
+    {
+      "id": "S01-bus-idle-reads-chrome-only",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        !drainSites.workInFlight() &&\n        mainQueue.length === 0 &&",
+      "replacement": "        !chrome.isBusy() &&\n        mainQueue.length === 0 &&",
+      "line": 9993,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1003
+    },
+    {
+      "id": "S02-queue-getter-returns-copy",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "      queue: () => mainQueue,",
+      "replacement": "      queue: () => [...mainQueue],",
+      "line": 7963,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1002
+    },
+    {
+      "id": "S03-shell-in-flight-ignores-handoff",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "workInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "replacement": "workInFlight: () => chrome.isBusy() || foregroundOperation.isActive,",
+      "line": 7966,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 896
+    },
+    {
+      "id": "S04-shell-in-flight-ignores-operation",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "workInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "replacement": "workInFlight: () => chrome.isBusy() || forceHandoff.isAwaitingSettlement,",
+      "line": 7966,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 913
+    },
+    {
+      "id": "S05-detach-helper-does-not-detach",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);",
+      "replacement": "const detachSlashWork = (work: Promise<unknown>): void => void work;",
+      "line": 7971,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 941
+    },
+    {
+      "id": "S06-bus-settle-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "      onSettle: () => busWakeController?.onSettle(),",
+      "replacement": "      onSettle: () => undefined,",
+      "line": 7967,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1004
+    },
+    {
+      "id": "S07-turn-settle-site-deleted",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        drainSites.onTurnSettle();\n",
+      "replacement": "\n",
+      "line": 9935,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 891
+    },
+    {
+      "id": "S08-operation-complete-site-deleted",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "                  drainSites.onForegroundOperationComplete();\n",
+      "replacement": "\n",
+      "line": 9630,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 913
+    },
+    {
+      "id": "S09-lease-release-wired-to-turn-settle",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "      onRelease: () => drainSites.onLeaseRelease(),",
+      "replacement": "      onRelease: () => drainSites.onTurnSettle(),",
+      "line": 10015,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 906
+    },
+    {
+      "id": "S10-bus-idle-ignores-queue",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        !drainSites.workInFlight() &&\n        mainQueue.length === 0 &&\n        leaseView()?.held() !== true,",
+      "replacement": "        !drainSites.workInFlight() &&\n        leaseView()?.held() !== true,",
+      "line": 9993,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 962
+    },
+    {
+      "id": "S11-bus-idle-ignores-lease",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        mainQueue.length === 0 &&\n        leaseView()?.held() !== true,\n      inbox: busInbox,",
+      "replacement": "        mainQueue.length === 0,\n      inbox: busInbox,",
+      "line": 9994,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 896
+    },
+    {
+      "id": "S12-bus-idle-ignores-destroyed",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        !destroyed &&\n        !drainSites.workInFlight() &&",
+      "replacement": "        !drainSites.workInFlight() &&",
+      "line": 9992,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 924
+    }
+  ],
+  "totals": {
+    "killed": 35,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

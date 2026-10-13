@@ -3,7 +3,7 @@
 // "Has this page's code moved since anyone last verified it?" has two answers
 // depending on what the project has, and the package requires BOTH to exist
 // from the start (specification §4.1). Different projects treat
-// `.metaproject/` differently — keryx tracks it, vantage-frontend ignores it,
+// `.metaproject/` differently — keryx tracks it, acme-frontend ignores it,
 // and `src/commands/init.no-git.test.ts` pins a project with no git at all as
 // supported — so a git-only answer serves one case out of three.
 //

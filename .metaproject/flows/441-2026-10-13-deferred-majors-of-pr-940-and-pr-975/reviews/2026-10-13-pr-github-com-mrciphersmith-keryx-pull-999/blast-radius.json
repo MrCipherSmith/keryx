@@ -1,0 +1,640 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    "src/tui/main-queue-drain.test.ts",
+    "src/tui/main-queue.ts",
+    "src/tui/remote-queue-wiring.test.ts",
+    "src/tui/tui-bus.test.ts",
+    "src/tui/tui-hold.test.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 22,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/addressee-queue.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/addressee-queue.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/external-operator.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/main-queue-view.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/main-queue-view.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/remote-queue-wiring.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/remote-queue-wiring.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "fixtures/routing-shell-pty.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/providers.subscription.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-task-tools.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/addressee-queue.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/addressee-queue.test.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/boot-animation.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/connect-provider-buttons.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/custom-provider-wizard.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/main-queue.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/main-queue.test.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/model-picker-notice.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/model-session-picker-modal.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/picker-theme.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/provider-endpoint-retry.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/remote-control-surface.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/session-picker-acp.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/subscription-provider-wizard.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/tui-session-lease.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/tui-shell.test.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/tui/wizard-modal.test.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/acp.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-delivery.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/main-queue.ts",
+      "path": [
+        "src/tui/external-delivery.ts",
+        "src/tui/addressee-queue.ts",
+        "src/tui/main-queue.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/cli.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/acp.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/agent-permission-mode.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/help-grouped.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/select.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-agent-repl.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-bus.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-chat-preservation.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-cli-validation.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-launch.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-lease.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell-preservation-signal.test.ts",
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 49 at hop 2, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 49 at hop 2, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 49 at hop 2, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 49 at hop 2, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 49 at hop 2, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 49 at hop 2, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 49 at hop 2, fan-in 0, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-delivery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 49 at hop 2, fan-in 0, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/main-queue.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 49 at hop 2, fan-in 0, reached via src/tui/main-queue.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 10,
+    "changedFilesResolved": 6,
+    "changedFilesUnresolved": 4,
+    "candidates": 49,
+    "retained": 40,
+    "droppedByCap": 9,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 29,
+    "hopHistogram": {
+      "1": 24,
+      "2": 16
+    }
+  },
+  "graph": {
+    "nodes": 3036,
+    "edges": 10577
+  }
+}

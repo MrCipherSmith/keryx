@@ -23,25 +23,25 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Full independent review: Stage 1 table with executed-probe evidence, residual fail-open verdict (F-001, blocker), exhaustive-mapping verdict (F-002, major), one info finding (F-003), confirmed clean areas, evidence table, routing audit, and the keryx:findings JSON block."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-ac6-ac8.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-ac6-ac8.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Executable probe: AC6 finding+incomplete combined case (not in guard.test.ts), genuine-pass null regression check, and end-to-end enforced/advisory incomplete-engine-evidence checks via an independently built fixture. 10/10 assertions pass."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-failopen.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-failopen.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Executable probe reproducing the disclosed guardOutput fail-open and the undisclosed twin in securityFlowGate, both from a single minimal trigger (security.config.json == 'null'). 4/4 assertions pass, confirming both fail-open outcomes on demand."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-exhaustive-mapping.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T30-probe-exhaustive-mapping.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Executable probe demonstrating securityFlowGate's non-exhaustive status mapping: a stored gate:'needs-approval' report in enforced mode is read as pass end-to-end today, and guard.ts's own ternary has no distinct branch for that status."

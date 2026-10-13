@@ -17,7 +17,7 @@ interview answers.
    claimType: constraint | confidence: high | version: 1.0.0
    scope: module:tasks, entity:flow
    provenance: source=flow 116 (fix duplicate flow ids) link=.metaproject/flows/116-2026-07-22-fix-duplicate-flow-ids-nextflowid-races- author=unknown confirmedBy=unknown
-3. [1.861] SAC: Anchors: root: /Users/tsaitler.aleksandr/goodea/keryx tre… (task-note/accepted) - task-notes/sac-proposal-b051e66aebd74f37.md
+3. [1.861] SAC: Anchors: root: ~/goodea/keryx tre… (task-note/accepted) - task-notes/sac-proposal-b051e66aebd74f37.md
    Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task.
    claimType: task-note | confidence: medium | version: 0.1.0
    scope: unknown
@@ -61,7 +61,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 ## Agent Findings
 
 Research for flow OWNER + SIGNED COMPLETION (phase 1, research/draft only). Every
-path below is relative to the worktree root (`/home/altsay/keryx-owner`).
+path below is relative to the worktree root (`~/keryx-owner`).
 
 ### 1. How flow.json is created and mutated
 

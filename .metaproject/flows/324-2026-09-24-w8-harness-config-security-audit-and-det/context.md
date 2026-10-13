@@ -57,7 +57,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ### Orchestrator findings (Phase 1)
 
-- Worktree `/Users/Goodea/goodea/keryx-ape-308-w8`, branch `flow/308-w8`, cut from `stack/wave0` (PR base).
+- Worktree `~/goodea/keryx-ape-308-w8`, branch `flow/308-w8`, cut from `stack/wave0` (PR base).
   Flow record base: `feat/agent-platform-expansion`.
 - Existing seams: `src/commands/security.ts` (switch l.91-129, `isPassGate` l.700 private, `exitCodeFor`
   l.985, `handleScanMcp` l.384 + `readMcpBaseline`/`mcpBaselinePath`/`extractManifestAndBaseline` helpers);

@@ -22,9 +22,9 @@
  *
  * ## Credit
  *
- * The catalogue of four weakening edits is adapted (MIT) from
- * [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills), where
- * it is a reference snippet a reviewer is asked to apply by hand. Making it an
+ * The catalogue of four weakening edits is adapted (MIT; see
+ * THIRD_PARTY_NOTICES.md) from a reference snippet a reviewer is asked to
+ * apply by hand. Making it an
  * executable check over a {@link ReviewScope} — the skeleton match, the
  * per-region counting, the ceiling-word list and the NOT DETECTED list below —
  * is this repository's work.

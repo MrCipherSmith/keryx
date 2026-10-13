@@ -75,7 +75,7 @@ Painted rows, Status tab:
 | Row | Source | Notes |
 |---|---|---|
 | Title | `summary.title` | |
-| Version | `package.json` version | keryx, not grok |
+| Version | `package.json` version | keryx's own |
 | Session id | `summary.id` | `c` copies this exact string |
 | Project | `summary.projectPath` | |
 | Provider | live selection ?? `summary.provider` | `—` if missing |
@@ -98,7 +98,7 @@ Workspaces / Flow tabs (conditional): formatted lines from
 `inspector-sources`. Omit the tab when the session has no such refs.
 
 Do **not** invent: auth method, API backend name, sandbox profile, model
-hash, SuperGrok hints.
+hash, vendor-subscription hints.
 
 ## Integration points
 
@@ -110,9 +110,9 @@ hash, SuperGrok hints.
 - Clipboard: `c` only on this surface.
 - Footer token label: unchanged; inspector does not replace it.
 
-## Grok reference (map, do not clone blindly)
+## Reference behaviour (map, do not clone blindly)
 
-| Grok | Keryx shipped |
+| Reference agent CLI | Keryx shipped |
 |---|---|
 | `/session-info`, `/status`, `/info` | **`/status` only** |
 | Session info **tab** | Status + Context; optional Workspaces / Flow |

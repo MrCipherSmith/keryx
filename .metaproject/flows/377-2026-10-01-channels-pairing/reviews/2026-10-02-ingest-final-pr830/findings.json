@@ -149,7 +149,7 @@
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "Valid, minor, still reproduces on main 40ecaf07; deferred to follow-ups.md. decided-by: altsay (standing instruction, message 176698: \"Дальше делай все сам до релиза, закрывай все фло\"). This is an inference by the supervisor, not a per-finding decision: poll 34 on flow 377 closure is unanswered."
+      "evidence": "Valid, minor, still reproduces on main 40ecaf07; deferred to follow-ups.md. decided-by: operator (standing instruction, message 176698: \"Дальше делай все сам до релиза, закрывай все фло\"). This is an inference by the supervisor, not a per-finding decision: poll 34 on flow 377 closure is unanswered."
     }
   },
   {
@@ -178,7 +178,7 @@
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "Valid, minor, still reproduces on main 40ecaf07; deferred to follow-ups.md. decided-by: altsay (standing instruction, message 176698: \"Дальше делай все сам до релиза, закрывай все фло\"). This is an inference by the supervisor, not a per-finding decision: poll 34 on flow 377 closure is unanswered."
+      "evidence": "Valid, minor, still reproduces on main 40ecaf07; deferred to follow-ups.md. decided-by: operator (standing instruction, message 176698: \"Дальше делай все сам до релиза, закрывай все фло\"). This is an inference by the supervisor, not a per-finding decision: poll 34 on flow 377 closure is unanswered."
     }
   }
 ]

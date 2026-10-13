@@ -35,7 +35,7 @@
     "src/lib/agent-entrypoint-blocks.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx; read index first",
+    "Root ~/goodea/keryx; read index first",
     "Read-only source; no implementation, installs, commits, or docs package work",
     "CurrentHEAD0bc6418fa1a038f8ec909cf949fecba077acf9a4; graph refreshed; code searches through keryx ctx rg",
     "Write only own review report .metaproject/jobs/audit-2026-09-06/origin-main-logic.md; Version underH1",

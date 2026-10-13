@@ -1,7 +1,7 @@
 # Keryx Review: autonomous review profile for scheduled and triggered runs
 
 Status: draft, awaiting operator approval of the criteria
-Source: operator request helyx 197432, 2026-10-11, after run 19 of flow 417 AC16.
+Source: operator request the chat bot 197432, 2026-10-11, after run 19 of flow 417 AC16.
 
 ## Problem
 
@@ -13,7 +13,7 @@ One command starts an autonomous review of a PR or branch. It never waits for a 
 
 ## Outcome criteria
 
-- Запрос (дословно): «в keryx shell я бы хотел просто ключ, профиль, автономный ревьюер, который гонит прогон автономно, Например, что бы потом добавить в расписание в триггер» (source: helyx 197432, 2026-10-11T07:11Z)
+- Запрос (дословно): «в keryx shell я бы хотел просто ключ, профиль, автономный ревьюер, который гонит прогон автономно, Например, что бы потом добавить в расписание в триггер» (source: the chat bot 197432, 2026-10-11T07:11Z)
 - Эффект (формализация агента): `keryx review run --autonomous` (profile `review-autonomous`) runs a full managed review without a terminal and without input, and ends with a stated status and exit code.
 - Как наблюдать (предложение агента): start it from cron or a trigger on PR 7435 with no TTY, read `summary.json` and the exit code, and see the package accepted by `keryx review complete`.
 

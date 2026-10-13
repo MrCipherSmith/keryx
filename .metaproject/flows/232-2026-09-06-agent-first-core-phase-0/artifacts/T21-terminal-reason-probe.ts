@@ -22,10 +22,10 @@
  * model API call, no filesystem writes, no working-tree edits.
  */
 const agentModuleUrl =
-  process.env.T21_AGENT_MODULE_URL ?? "file:///Users/Goodea/goodea/keryx/src/commands/agent.ts";
+  process.env.T21_AGENT_MODULE_URL ?? "file://~/goodea/keryx/src/commands/agent.ts";
 
 const { runAgentTurn } = (await import(agentModuleUrl)) as typeof import(
-  "/Users/Goodea/goodea/keryx/src/commands/agent"
+  "~/goodea/keryx/src/commands/agent"
 );
 
 type NormalizedEventPartial = Record<string, unknown>;

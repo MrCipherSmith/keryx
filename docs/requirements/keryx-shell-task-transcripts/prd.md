@@ -132,5 +132,5 @@ output path:
 |---|---|---|
 | The notification tail is unredacted today. | Command output containing a credential reaches the provider in a `user`-role message without passing the scrubber that every tool result passes. | F8, brainstorm D-13, metrics M12. Owner decision needed on whether it is fixed here or as a defect in the previous package. |
 | `RETENTION_SCOPE_NOTE` (`src/retention/sweep.ts:86-90`) states the sweep covers `.metaproject/` only. | A transcript target outside `.metaproject/` makes that note false; a wrong scope note is worse than none. | specification §6.3 names the required edit. |
-| No external-harness prior art was surveyed for this package. | The previous package's design was grounded in seven competitor implementations; this one is grounded only in in-repo precedent. | brainstorm §Prior art, marked `unknown`. |
+| No external-harness prior art was surveyed for this package. | The previous package's design was grounded in eight other harness implementations; this one is grounded only in in-repo precedent. | brainstorm §Prior art, marked `unknown`. |
 | Whether the TUI inspector should render a transcript inline or only its path. | An inline render puts raw command output into a UI that has never carried it. | specification §7, marked `planned`; not settled here. |

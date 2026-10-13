@@ -207,7 +207,7 @@ pinned baseline (`coverage: incomplete`)".
 
 ## 6. Verification
 
-All logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 | What | Result | Raw log |
 |---|---|---|

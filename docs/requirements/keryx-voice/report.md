@@ -14,20 +14,20 @@ First follow-up flow: inbound voice in the topic, transcribed locally and delive
 
 - The shell receives only text; voice lives entirely in `keryx serve` (download, transcribe, deliver as a text line).
 - Voice is an optional module of `keryx serve`, which is installed from npm next to the main keryx package. The user chooses at install time whether to have voice. If yes, the module downloads its own Piper and voices.
-- keryx and helyx must not know about each other: no path into helyx's `piper/` folder and no shared code. keryx ships and manages its own, fully independent copy. This replaces the earlier idea of pointing keryx at `/home/altsay/bots/helyx/piper`.
+- keryx and the chat bot must not know about each other: no path into the chat bot's `piper/` folder and no shared code. keryx ships and manages its own, fully independent copy. This replaces the earlier idea of pointing keryx at the chat bot's own `piper/` folder under `~`.
 - The voice module may pull its own npm dependencies (message 177335), but they must be the minimum, and each one must be justified in the follow-up flow with its size. The main keryx package keeps `dependencies` at `{}`.
 - Voices are chosen during an interactive install in the terminal: the user picks which voices to download (for example English only), and nothing else is fetched. The installer must show the size of each voice before downloading.
-- Speakable text (message 177452): helyx runs every reply through a separate model before speech so the voice engine can read it (for Russian: English words and transcriptions rewritten in Cyrillic, text summarised). keryx must do this itself, without an external model: the agent that produces the reply is the one that makes it speakable, so a spoken reply passes through a speakable-text stage before the voice engine. Decided (message 177512): `keryx serve` asks the keryx shell to run a sub-agent, chosen by the model-tier definition (a light tier, not a hard-coded model id), which turns the reply into text for speech using both a dictionary (transliteration, cleanup of code, links and tables) and the model's own knowledge. Decided (message 177529): the model level comes from the existing keryx shell routing, by tier and by availability, so the voice module adds no routing of its own; if the sub-agent is unavailable, the original text is spoken. Open for the follow-up flow only: an acceptance criterion with a fixed set of sample replies.
+- Speakable text (message 177452): the chat bot runs every reply through a separate model before speech so the voice engine can read it (for Russian: English words and transcriptions rewritten in Cyrillic, text summarised). keryx must do this itself, without an external model: the agent that produces the reply is the one that makes it speakable, so a spoken reply passes through a speakable-text stage before the voice engine. Decided (message 177512): `keryx serve` asks the keryx shell to run a sub-agent, chosen by the model-tier definition (a light tier, not a hard-coded model id), which turns the reply into text for speech using both a dictionary (transliteration, cleanup of code, links and tables) and the model's own knowledge. Decided (message 177529): the model level comes from the existing keryx shell routing, by tier and by availability, so the voice module adds no routing of its own; if the sub-agent is unavailable, the original text is spoken. Open for the follow-up flow only: an acceptance criterion with a fixed set of sample replies.
 
-## 1. How helyx does voice today (read)
+## 1. How the operator's chat bot does voice today (read)
 
-- STT: `utils/transcribe.ts` calls Groq `whisper-large-v3` through multipart `fetch`, passing the OGG file as is. The fallback is a local whisper-asr-webservice on :9000; it is commented out in compose and not listening on this machine. helyx's "about 200 ms" claim is unverified.
+- STT: `utils/transcribe.ts` calls Groq `whisper-large-v3` through multipart `fetch`, passing the OGG file as is. The fallback is a local whisper-asr-webservice on :9000; it is commented out in compose and not listening on this machine. The chat bot's "about 200 ms" claim is unverified.
 - TTS: `utils/tts.ts` tries Piper, then Yandex for Russian. For English it tries Piper, then Kokoro, then Groq Orpheus. Delivery is a multipart `sendVoice` in tracks of about 90 s, with an outbound secret scan.
 - Triggers: a spoken recap after a voice message or for 200+ characters of prose; 300+ raw characters on the older path.
 - Weight (measured): Piper runtime 52 MB, three voices 181 MB. The `kokoro-js` chain is hundreds of MB; the Kokoro model was never downloaded here.
-- Suspected defects (unverified): it sends WAV to `sendVoice`, which Telegram only guarantees for OGG/Opus, MP3 and M4A. Groq Orpheus is capped at 200 characters, returns WAV and has no Russian, while helyx passes up to 4000 characters.
+- Suspected defects (unverified): it sends WAV to `sendVoice`, which Telegram only guarantees for OGG/Opus, MP3 and M4A. Groq Orpheus is capped at 200 characters, returns WAV and has no Russian, while the chat bot passes up to 4000 characters.
 - Reusable by keryx: ideas only (the Groq call shape, language switch, chunking, retry on 429, text first).
-- Not reusable: the code itself, helyx as a service (it exposes no STT or TTS endpoint), and the local ASR container.
+- Not reusable: the code itself, the chat bot as a service (it exposes no STT or TTS endpoint), and the local ASR container.
 
 ## 2. keryx today (read, measured)
 
@@ -54,7 +54,7 @@ First follow-up flow: inbound voice in the topic, transcribed locally and delive
 
 | Option | Type | Size | Dependency | Price | RU / EN | Per reply | Output |
 |---|---|---|---|---|---|---|---|
-| Piper (helyx build) | local | 52 MB + about 60 MB per voice (the sherpa int8 export in section 8 is about 21 MB) | spawn a binary | $0 | both | $0 | WAV, needs an encoder |
+| Piper (chat bot build) | local | 52 MB + about 60 MB per voice (the sherpa int8 export in section 8 is about 21 MB) | spawn a binary | $0 | both | $0 | WAV, needs an encoder |
 | Yandex v1 | cloud | 0 | `fetch` | $11 / M chars | RU best, EN available | $0.0033 | `oggopus`, usable directly |
 | OpenAI tts-1 | cloud | 0 | `fetch` | $15 / M chars | both | $0.0045 | `opus`, usable directly |
 | Groq Orpheus | cloud | 0 | `fetch` | $22 / M chars | EN only | $0.0066 | WAV, 200 character cap |
@@ -82,11 +82,11 @@ Answered by the operator: no cloud (local from the first version); "shell" means
 Still open:
 
 1. Recognition model tiers to offer at install: GigaAM v3 (ru, 215 MB), Parakeet v3 (ru+en, 487 MB), the small Russian tier (60 MB)?
-2. Spoken replies: Piper only, or Supertonic 3 as the one-model option too? Which trigger (helyx's 300 character rule, or per topic on request)?
+2. Spoken replies: Piper only, or Supertonic 3 as the one-model option too? Which trigger (the chat bot's 300 character rule, or per topic on request)?
 3. Is the model licence acceptable (Parakeet licence unverified; Supertonic weights OpenRAIL-M; espeak-ng-data GPL-like)?
 4. May the module depend on `sherpa-onnx-node`, `ogg-opus-decoder` and `@evan/opus` (about 50 MB together on a platform)?
 5. Where does the module live: a separate npm package next to `keryx serve`, and how the interactive installer is started?
-6. Fix helyx's two suspected defects, or ignore them (it is a separate project)?
+6. Fix the chat bot's two suspected defects, or ignore them (it is a separate project)?
 
 ## 8. Local-first research (2026-10-02; measured on Linux x64, 16 cores, CPU only, Node 24 and Bun 1.4.2 gave identical results)
 

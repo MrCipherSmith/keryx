@@ -469,19 +469,21 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
   test("every exit path leaves the bus through the shared helper, so none can release the lease first", () => {
     const sites = source.split("leaveBusThenRelease({").length - 1;
     const sequences = source.split("await performSlateExit({").length - 1;
-    // onDestroy + the outer finally go through the bare ordering helper; the
-    // two command-driven exits go through the full sequence, which calls it.
-    expect({ sites, sequences }).toEqual({ sites: 2, sequences: 2 });
+    // Commands await preservation; the finalizer owns bus/lease release.
+    // The helper remains in renderer fallback, finalizer and outer cleanup.
+    expect({ sites, sequences }).toEqual({ sites: 3, sequences: 2 });
+    expect(source.split("closeSlate: async () => { await finalizeShell?.(); },").length - 1).toBe(2);
+    expect(source.split("leaveBus: () => {},").length - 1).toBe(2);
+    expect(source.split("releaseLease: () => {},").length - 1).toBe(2);
   });
-  test("and each of those four sites hands it this session's own bus and lease", () => {
+  test("each ownership-release site hands it this session's own bus and lease", () => {
     // The helper cannot protect anything if a call site passes something
     // else, and that is not visible from the count above.
-    expect(source.split("leaveBus: () => liveBus?.leave()").length - 1).toBe(4);
-    expect(source.split("releaseLease: () => sessionLease.release()").length - 1).toBe(4);
+    expect(source.split("leaveBus: () => liveBus?.leave()").length - 1).toBe(3);
+    expect(source.split("releaseLease: () => sessionLease.release()").length - 1).toBe(3);
   });
   test("BOUNDARY — no exit path still leaves the bus or releases the lease on its own", () => {
-    // The whole point of routing all four through one helper: a fifth path,
-    // or a regression in one of the four, shows up as a bare call again.
+    // A regression bypassing the ordering helper shows up as a bare call.
     expect(source).not.toContain("liveBus?.leave();");
     expect(source).not.toContain("sessionLease.release();");
   });
@@ -494,7 +496,7 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
   });
 
   test("startNewSession (/new, /clear) updates presence.sessionId outside applyOpened, caught (review r1 F10)", () => {
-    const start = source.indexOf("const startNewSession = (");
+    const start = source.indexOf("const startNewSession = async (");
     expect(start).toBeGreaterThanOrEqual(0);
     const body = source.slice(start, source.indexOf("const resumeSessionInteractive", start));
     expect(body).toContain("liveBus?.setSession(liveSession.summary.id).catch(");
@@ -678,8 +680,7 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     const end = source.indexOf("\n    });", start);
     expect(end).toBeGreaterThan(start);
     const block = source.slice(start, end);
-    expect(block).toContain("chrome.isBusy()");
-    expect(block).toContain("foregroundOperation.isActive");
+    expect(block).toContain("drainSites.workInFlight()");
     expect(block).toContain("mainQueue.length === 0");
     expect(block).toContain("inbox: busInbox,");
     expect(block).toContain("consecutiveAutoWakes");
@@ -702,7 +703,7 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     const block = source.slice(start, end);
     expect(block).toContain("isIdle: () =>");
     expect(block).toContain("!destroyed &&");
-    expect(block).toContain("!chrome.isBusy() &&");
+    expect(block).toContain("!drainSites.workInFlight() &&");
   });
 
   // Flow 277 (P2): moved to `BUS_WAKE_CAPPED_NOTICE` (`./bus-wake.ts`),
@@ -710,14 +711,9 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
   // now a plain constant comparison in `bus-wake.test.ts`, which no longer
   // reads `tui-shell.ts`'s source text at all.
 
-  test("turn settle also triggers the bus-wake controller's onSettle, only when no queued operator item ran instead", () => {
-    const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");
-    expect(nextIdx).toBeGreaterThanOrEqual(0);
-    const block = source.slice(nextIdx, nextIdx + 700);
-    expect(block).toContain('remoteQueue.runQueued(next);');
-    expect(block).toContain("busWakeController?.onSettle();");
-    // The queued item wins — bus-wake only runs in the `else` branch.
-    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf('remoteQueue.runQueued(next);'));
+  test("turn settle reaches the bus-wake controller's onSettle through the shared drain sites (behaviour: main-queue-drain.test.ts)", () => {
+    expect(source).toContain("onSettle: () => busWakeController?.onSettle(),");
+    expect(source).toContain("drainSites.onTurnSettle();");
   });
 
   test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {

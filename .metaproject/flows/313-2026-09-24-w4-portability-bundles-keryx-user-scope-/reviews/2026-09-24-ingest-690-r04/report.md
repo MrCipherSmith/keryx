@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- **Worktree:** `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`.
+- **Worktree:** `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`.
   - HEAD was `ca877166` at the start (checked).
   - Mid-review, the orchestrator reported commit `6c781507`: "resolve ownership by canonical key before on-disk lookup" (`src/bundle/plan.ts`, `plan.test.ts`). I read it and treat it as HEAD for choke point 2.
   - Every bundle probe below (`own.ts`, `r4own.ts`, and the case-sensitive runs) was re-run on `6c781507`.

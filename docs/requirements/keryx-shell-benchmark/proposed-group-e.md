@@ -41,7 +41,7 @@ Three properties, none of which a single question exercises:
 |---|---|---|---|
 | E1 | **Eight structural questions in one session**, asked in sequence: dependents of A, cycles, orphans, tests for B, path A→B, dependents of C, what changed, repomap | Amortisation | Per-question cost is paid eight times. Watch total wall-clock and whether accuracy degrades as context fills |
 | E2 | *"I am changing the signature of `<symbol>`. Which tests cover the files in its blast radius, and which of those files have no test at all?"* | Composition | Needs blast radius × test mapping × set difference. Each hop must be complete or the answer is wrong, and brute force cannot check completeness |
-| E3 | **A1, A3, A4 re-run against `keryx` itself** — 649 files, 1873 edges, 2.4× the files and 2.9× the edges of `helyx` | Scale | The point where reading everything stops fitting in a budget. If the naked legs still win here, the graph's case is genuinely weak |
+| E3 | **A1, A3, A4 re-run against `keryx` itself** — 649 files, 1873 edges, 2.4× the files and 2.9× the edges of `<target-project>` | Scale | The point where reading everything stops fitting in a budget. If the naked legs still win here, the graph's case is genuinely weak |
 | E4 | *"What changed in `<file>`'s blast radius between `<commit A>` and `<commit B>`?"* | Incremental reuse | Two graphs and a diff. Brute force must reconstruct both sides from scratch |
 
 ## What each costs to build
@@ -51,7 +51,7 @@ Stated because "add four cases" is not free:
 - **E1 needs a multi-turn driver.** `drive.py` submits exactly one prompt per
   session today. Sequential prompts with per-answer capture is the single
   biggest harness change on this list.
-- **E2 needs a target with test intelligence populated.** `helyx` tracks
+- **E2 needs a target with test intelligence populated.** `<target-project>` tracks
   `data/testing/context.json` at the pinned commit, so it is probably runnable —
   verify before committing to it.
 - **E3 needs `keryx` prepared as a second target**: a pinned commit, a built

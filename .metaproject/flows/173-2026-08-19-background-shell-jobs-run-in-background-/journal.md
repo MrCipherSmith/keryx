@@ -79,7 +79,7 @@ instruction:
   is not even the correct target in that case. `proc.kill()` (direct-pid
   only, no group) left the backgrounded `sleep 100` grandchild running after
   the direct `sh` child was killed — reproducing exactly the bug class this
-  flow's AC3/context.md called out (opencode's FD-inheritance-style
+  flow's AC3/context.md called out (the FD-inheritance-style
   process-ownership loss).
 
 **Conclusion for the implementer**: `createJobRegistry()`'s default

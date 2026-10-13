@@ -1,7 +1,7 @@
 # Keryx Review: arbiter sub-agent answers orchestrator questions by written rules
 
 Status: draft, awaiting operator approval of the criteria
-Source: operator proposal helyx 197442, 2026-10-11; related to the completion judge (decision 196244).
+Source: operator proposal the chat bot 197442, 2026-10-11; related to the completion judge (decision 196244).
 
 ## Problem
 
@@ -13,7 +13,7 @@ A small arbiter sub-agent with a written, numbered rule set answers the orchestr
 
 ## Outcome criteria
 
-- Запрос (дословно): «дать права, что естли у оркестратора возникнет все таки вопрос, он может спросить у этого агента что бы тот дал ответ» (source: helyx 197442, 2026-10-11T07:17Z)
+- Запрос (дословно): «дать права, что естли у оркестратора возникнет все таки вопрос, он может спросить у этого агента что бы тот дал ответ» (source: the chat bot 197442, 2026-10-11T07:17Z)
 - Эффект (формализация агента): in `review-auto` and in the autonomous profile, an orchestrator question of a known kind gets a verdict `allow`, `deny` or `escalate` with the id of the rule it rests on; `escalate` becomes a safe refusal when nobody is present.
 - Как наблюдать (предложение агента): in the PR 7435 autonomous run read `arbiter.log` and see each question, verdict, rule id, model and cost.
 

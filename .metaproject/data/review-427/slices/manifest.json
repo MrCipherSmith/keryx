@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 30000,
+  "waveBytes": 90000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 29216,
+      "contentHash": "38381c2729a36b25862bc5181e25ba2e139eb17543adcb60c14ea367c4681f73",
+      "files": [
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/acceptance-criteria.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/context.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/description.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/implementation-report.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/journal.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/plan.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/tasks.md",
+        ".metaproject/flows/427-2026-10-11-review-autonomy-hardening/flow.json",
+        "src/commands/agent-fewer-prompts.test.ts",
+        "src/commands/review-arbiter.test.ts",
+        "src/commands/review-ledger.test.ts",
+        "src/commands/agent.ts",
+        "src/commands/review-arbiter.ts",
+        "src/commands/review-ledger.ts",
+        "src/commands/review-slice.ts"
+      ],
+      "domain": ".metaproject [docs], .metaproject, src/commands [test] +1 more",
+      "split": "domain"
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 29666,
+      "contentHash": "47b757c7e0c02e6e0bb0b9294dda5b079f3f217eead72e578a7f645522c31704",
+      "files": [
+        "src/review/completion-gate.test.ts",
+        "src/review/ledger.test.ts",
+        "src/review/slice-dispatch.test.ts",
+        "src/review/completion-gate.ts",
+        "src/review/ledger.ts",
+        "src/review/retry-plan.ts",
+        "src/review/slice.ts",
+        "src/tui/ask-user-bridge-arbiter.test.ts",
+        "src/tui/ask-user-bridge.ts"
+      ],
+      "domain": "src/review [test], src/review, src/tui [test] +1 more",
+      "split": "domain"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 2,
+    "bytes": 58882,
+    "files": 24,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  }
+}

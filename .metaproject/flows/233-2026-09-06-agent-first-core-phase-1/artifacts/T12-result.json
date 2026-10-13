@@ -24,49 +24,49 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-implementation-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-implementation-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Pre-code implementation contract for truthful gates, source evidence, parsers, CLI parity, and bounded verification.",
       "hash": "ca5202b300193e7ff46de862a8949d6ef03c6110b3458a250b7d8b30d598b121"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-change-report.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T12-change-report.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Behavior, verification evidence, ownership-bounded concerns, file hashes, and routing audit.",
       "hash": "0ce8e169d041aba8d566d31840636a935972ab622e96fdfa8e20202198bb7e4f"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/health/health-truthful-gate.test.ts",
+      "path": "~/goodea/keryx/src/health/health-truthful-gate.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Required-source completeness, filter, parse, execution and FAIL-dominance runtime tests.",
       "hash": "09af44a1d72770fb6da11b58b85a7832d35a15ddf3b52161ef37822f71501bb8"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/health/dependency-audit-format.test.ts",
+      "path": "~/goodea/keryx/src/health/dependency-audit-format.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Bun/npm audit format, identity, severity, empty, invalid and unknown-shape tests.",
       "hash": "8c9ad4740a98b6f1e6ca7bce259685047ba106326b522586b3158c49ecc15391"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/commands/health-incomplete.test.ts",
+      "path": "~/goodea/keryx/src/commands/health-incomplete.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Stored and live incomplete exit behavior plus strict warning parity.",
       "hash": "4f05983bdffac1a364c3dc3915dbdade6cbc52e543f7181fcfd7575217e996b0"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-49-18-741Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-49-18-741Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Focused acceptance and edge suite: 12 pass, 0 fail, 68 assertions.",
       "hash": "9a2cc956e4d7d05133a97e3af168a1e231065e7cbe5ac1660a058344eb4b0288"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-49-26-004Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-49-26-004Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "All src/health tests: 83 pass, 0 fail, 238 assertions.",

@@ -55,7 +55,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-Phase 1 research, 2026-09-23. Worktree `/home/altsay/keryx-acpc`, branch
+Phase 1 research, 2026-09-23. Worktree `~/keryx-acpc`, branch
 `feat/acp-client`. Nothing below is implemented; it is evidence plus a proposal.
 All paths are relative to the worktree root.
 

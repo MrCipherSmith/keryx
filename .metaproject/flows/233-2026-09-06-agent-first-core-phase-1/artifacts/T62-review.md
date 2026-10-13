@@ -18,7 +18,7 @@ what that mode means and disagrees"), plus two `info`.
 
 ## Scope
 
-- Root: `/Users/Goodea/goodea/keryx` — the main checkout only. No directory
+- Root: `~/goodea/keryx` — the main checkout only. No directory
   under `.claude/worktrees/` was entered; every path below is absolute or
   relative to that root.
 - Branch: `codex/agent-first-core`. Base / merge-base with `main`:
@@ -621,7 +621,7 @@ The dispatch named both and both were live in this review.
 
 ## Evidence
 
-Raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+Raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 Probes were executed **directly** rather than through `bun src/cli.ts ctx run`,
 because gdctx compaction drops the per-case rows that are the evidence itself.
 I observed that concretely in this session and record it rather than inheriting

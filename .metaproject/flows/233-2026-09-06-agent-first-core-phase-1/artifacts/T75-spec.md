@@ -1,6 +1,6 @@
 # T75 spec — closing T70 F-001..F-004
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Written
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Written
 before any edit, per the dispatch's own requirement.
 
 ## Item 1 (blocking) — F-001: three shipped guidance sites stale about `ci`/`enforced`, not only `gateway`

@@ -22,7 +22,7 @@ a live smoke of bare `keryx` against Ollama proves the TTY path.
 | T2/T3/T4 | umbrella | orchestrator | Opus | — |
 
 Orchestrator = Opus. Workers via subagent-dispatch → subagent-result, worktree-guard
-(`cd /Users/Goodea/goodea/keryx`).
+(`cd ~/goodea/keryx`).
 
 ## Steps
 

@@ -1,6 +1,6 @@
 # T37 spec — stop an unusable manifest or config from silently removing the security posture
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Ownership for
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Ownership for
 this task: `src/security/guard.ts` + `src/security/guard.test.ts`,
 `src/security/config.ts`, and only the `runGate`/`runReport`/`readLatestReport`
 region of `src/security/service.ts`, plus additive shapes in

@@ -64,7 +64,7 @@ and limits, reproduce the selection, and improve the system based on the outcome
   cannot become procedural memory or a skill without explicit review.
 - **CO-10.** The CLI and the MCP read surface must return identical normalized
   assembly/trace semantics; write operations remain separate guarded actions.
-- **CO-11.** External adapters (Graphiti, Cognee, OpenViking and the like) are
+- **CO-11.** External adapters (temporal-graph and memory engines and the like) are
   optional read-only — or explicitly approved write — backends, each with its own
   configuration, retention and provenance contract.
 

@@ -26,7 +26,7 @@ license: "MIT"
 
 ## Preflight
 
-Run in the main session: this skill dispatches sub-agents. Without the `Agent` tool, or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+Run in the main session: this skill dispatches sub-agents. Without a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent), or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose
 
@@ -1262,8 +1262,8 @@ Three is the self-fix bound `task-implementer` and this skill share
 most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
 correctness falls **0.820 -> 0.673** across two forced revisions while
 cumulative ever-correct is **0.847**
-([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Aider hardcodes
-`max_reflections = 3`; OpenHands' critic uses 3.
+([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
+hardcode the same bound (`max_reflections = 3`).
 
 The bound is a ceiling, not a target. Repetition ends the loop earlier and
 **regardless of remaining iterations** — a counter cannot tell "converging

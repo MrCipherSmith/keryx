@@ -264,6 +264,33 @@ otuiTest("the row appears with the count once the journal holds a decision, and 
   }
 });
 
+otuiTest("a delayed initial refresh cannot overwrite a newer decisions count", async () => {
+  const h = await mountChrome(OTUI!);
+  let releaseInitial!: (n: number) => void;
+  const initial = new Promise<number>((resolve) => { releaseInitial = resolve; });
+  let calls = 0;
+  const sidebar = mountDecisionsSidebar({
+    otui: OTUI!.core, chrome: h.chrome, parent: h.chrome.sidebarTop,
+    width: SIDEBAR_TEXT_WIDTH, cwd: root,
+    onKeypress: keypressSource(h.renderer),
+    count: () => ++calls === 1 ? initial : Promise.resolve(3),
+    backfilled: async () => 0, annotated: async () => 0,
+    interval: manualInterval().interval,
+  });
+  try {
+    await sidebar.refresh();
+    expect(sidebar.projection().text).toContain("3 decisions");
+    releaseInitial(0);
+    await settle(h);
+    expect(sidebar.projection().text).toContain("3 decisions");
+    expect(textOf(findById(h.chrome.sidebarTop, "sb-decisions-row"))).toContain("3 decisions");
+  } finally {
+    releaseInitial(0);
+    sidebar.dispose();
+    h.destroy();
+  }
+});
+
 test("parseDecisionsCommand: the report, the reason and the change (F-002, F-011)", () => {
   expect(parseDecisionsCommand("/decisions")).toEqual({ kind: "show" });
   expect(parseDecisionsCommand("/decisions reason B is quicker for us")).toEqual({ kind: "reason", text: "B is quicker for us" });

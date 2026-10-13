@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- Worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-close`, cut from `origin/feat/agent-platform-expansion`, which already contains PR #690 merged (squash commit `8b66697c`; PR head `80ae064a27902d8bcdf5cfdacee06864e1ab2e60`).
+- Worktree `~/goodea/keryx-ape-313-w4`, branch `flow/313-close`, cut from `origin/feat/agent-platform-expansion`, which already contains PR #690 merged (squash commit `8b66697c`; PR head `80ae064a27902d8bcdf5cfdacee06864e1ab2e60`).
 - Round 8 (`2026-09-24-ingest-690-r08`) ran its checks against head `7b06de44530f7b4bad9069bbc3718461d67075e3` and found the code clean of blocker/major findings (T21, R7-F1 resolved; R8-F1 the only open item, a test-only minor, deferred by the owner).
 - This round exists solely to satisfy the `head-commit` gate condition: the flow's last review round must have run against the pull request's actual head, `80ae064a`, not an earlier commit.
 - No new source review was performed, because no source changed between `7b06de44` and `80ae064a`.

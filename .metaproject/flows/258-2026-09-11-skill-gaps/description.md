@@ -1,7 +1,7 @@
 # Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done
 
 Status: formalized (not frozen; freezes after flow 257 finishes)
-Source: user request 2026-09-11 after the agent-skills comparison
+Source: user request 2026-09-11 after an external skills-library review
 Program: docs/plans/skills-quality-program.md (flow 3 of 4)
 
 ## Problem

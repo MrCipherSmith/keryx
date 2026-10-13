@@ -56,7 +56,7 @@ export type StartResult = {
 /**
  * How many servers are dialled at once.
  *
- * Grok Build uses 8. This starts at 4 and says so rather than leaving a bare
+ * This starts at 4 and says so rather than leaving a bare
  * number in the code: each connection is a spawned process holding a pipe,
  * and the cost of guessing high is paid at every shell start by operators who
  * configured more servers than they use. Raising it is a measurement, not an

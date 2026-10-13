@@ -253,7 +253,7 @@
       "what": "docker reachable from shell_exec (info probe, no pull)",
       "expected": "docker-in-docker allowed / blocked?",
       "verdict": "INFO",
-      "observed": "isError=true → \"Cannot connect to the Docker daemon at unix:///Users/Goodea/.orbstack/run/docker\"; nothing in keryx filters docker (mode=off)"
+      "observed": "isError=true → \"Cannot connect to the Docker daemon at unix://~/.orbstack/run/docker\"; nothing in keryx filters docker (mode=off)"
     },
     {
       "ms": 77.89245799998753,

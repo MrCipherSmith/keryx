@@ -9,7 +9,7 @@ No model is called. Nothing is written back.
 """
 import subprocess, json, re, collections, sys
 
-REPO = "/home/altsay/keryx"
+REPO = "~/keryx"
 
 def sh(args, **kw):
     return subprocess.run(args, capture_output=True, text=True, cwd=REPO,

@@ -12,11 +12,11 @@ import {
   ENV_AGENT_MAX_ROUNDS,
   MAX_PLAN_FOLLOW_THROUGHS,
   MAX_AGENT_MAX_ROUNDS,
-  TRUST_MODE_MAX_ROUNDS,
   resolveAgentMaxRounds,
   runAgentTurn,
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
+import { TRUST_MAX_ROUNDS as TRUST_MODE_MAX_ROUNDS } from "./round-limit";
 import { callRound, makeDeps, okReply, scriptedProvider } from "./agent.test-helpers";
 import type { Script } from "./agent.test-helpers";
 import type { PermissionMode } from "./permission-mode";
@@ -88,12 +88,12 @@ function longScript(count: number): Script[] {
 
 // AC1
 
-test("AC1: the trust budget is a named 200-round constant; ask and auto keep 40", () => {
+test("AC1: the trust budget is a named 200-round constant; ask keeps 40 and auto is 200 (flow 429)", () => {
   expect(TRUST_MODE_MAX_ROUNDS).toBe(200);
   expect(DEFAULT_MAX_ROUNDS).toBe(40);
   expect(resolveAgentMaxRounds({}, "trust")).toBe(TRUST_MODE_MAX_ROUNDS);
   expect(resolveAgentMaxRounds({}, "ask")).toBe(DEFAULT_MAX_ROUNDS);
-  expect(resolveAgentMaxRounds({}, "auto")).toBe(DEFAULT_MAX_ROUNDS);
+  expect(resolveAgentMaxRounds({}, "auto")).toBe(MAX_AGENT_MAX_ROUNDS);
   expect(resolveAgentMaxRounds({})).toBe(DEFAULT_MAX_ROUNDS);
 });
 

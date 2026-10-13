@@ -358,7 +358,7 @@ export async function enrichPageDeep(input: EnrichPageDeepInput): Promise<DeepEn
 
     const history: NormalizedMessage[] = [];
     const userLine = buildDeepUserPrompt(input.page, input.original, input.extraInstruction);
-    const turn = runAgentTurn(io, deps, history, userLine, { signal: composed.signal });
+    const turn = runAgentTurn(io, deps, history, userLine, { signal: composed.signal, automaticReview: false });
 
     const deadlineMs = spawned.reservation.maxRuntimeMs;
     if (deadlineMs <= 0) {

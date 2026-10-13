@@ -33,97 +33,97 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T40-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T40-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Approach, dual-synthetic-base rationale, surface enumeration method and regression plan, written before any code change, with the measured baseline."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T40-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T40-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Per bypass class with evidence and raw log paths, the auto-fetch surface enumeration and its method, before/after counts at the detector, the MCP dispatch and the persistence materializer, and the routing audit."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-35-04-889Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-35-04-889Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Reviewer's 48-case matrix BEFORE: cases=48 bypasses=17 falsePositives=0."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-51-215Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-51-215Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Reviewer's 48-case matrix AFTER: cases=48 bypasses=0 falsePositives=0."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-42-53-298Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-42-53-298Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Per-case before/after adjudication: 20/20 previously fixed vectors closed, 4/4 benign controls unflagged, 17/17 bypasses closed."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-38-15-652Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-38-15-652Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Boundary probe BEFORE: 8 MCP cases isError=false/state=none/leakHost=true; 3 persistence and 3 seam cases byte-identical with the attacker host intact."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-57-889Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-57-889Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Boundary probe AFTER: all 8 MCP cases state=redacted with leakHost=false; all 3 persistence and 3 seam cases leakHost=false; every control unchanged."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-41-07-763Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-41-07-763Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "RED phase: 7 fail / 13 pass, one failing regression per bypass class plus the two boundary regressions."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-51-077Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-51-077Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "GREEN phase and required focused suites: 252 pass / 3 skip / 0 fail / 1085 expect."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-38-30-264Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-38-30-264Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Required focused suites BEFORE: 239 pass / 3 skip / 0 fail / 906 expect."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-15-863Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-15-863Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Own adversarial sweep, first run: 12 adversarial / 1 bypass (x.namedBsol, the HTML5 named backslash reference) / 14 benign / 0 false positives."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-43-610Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-47-43-610Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Own adversarial sweep after adding bsol: 12 adversarial / 0 bypasses / 14 benign / 0 false positives."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-48-11-585Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-48-11-585Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Wider sweep bun test src/security src/session: 309 pass / 0 fail / 1271 expect."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-48-09-368Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-48-09-368Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "bun run typecheck (tsc --noEmit): exit 0, no output."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-48-10-377Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-48-10-377Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "bunx eslint on both changed files: exit 0, no output."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-38-39-617Z_rg.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T14-38-39-617Z_rg.log",
       "kind": "context",
       "exists": true,
       "summary": "Surface enumeration pass 2: exfil.ts is the only module in src/ carrying an HTML auto-fetch matcher."

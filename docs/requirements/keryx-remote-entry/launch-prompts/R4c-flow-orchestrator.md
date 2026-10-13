@@ -40,7 +40,7 @@ Load-bearing clauses for this slice:
   classified `ask`.
 - specification.md §"Session addressing" — identity-first, exact-match on the
   declared project path. Never infer from recency, arrival order, or the fact
-  that only one session is idle. helyx shipped timing-based pairing first and
+  that only one session is idle. Another agent tool shipped timing-based pairing first and
   had to replace it after transports cross-linked between projects.
 - api-protocol.md §"POST /v1/turns" — the status table, and "An accepted turn is
   not a permitted turn."

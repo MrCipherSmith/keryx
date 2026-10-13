@@ -59,6 +59,6 @@ Use `keryx gdgraph affected <file>` for blast radius.
 - No `/history` command exists in the shell, help or remote command tables, so there is no name collision (`/rewind` takes a `history` argument only).
 - Session messages: `loadArchive` / `loadContext` in `src/session/store.ts`; operator turns by `isOperatorMessage` (`src/session/compact.ts`); shape in `NormalizedMessage` (`src/harness/provider/types.ts`).
 - Outbound: `composeReply` (redaction and a 16,000-character cap), at-least-once queue, a 429 pauses it.
-- Tables: keryx sends `table` blocks (`src/remote/format-rich.ts`, flow 395, spike S3); helyx sends `rich_message.markdown` after a separator rewrite. Whether the markdown form scrolls sideways is unproven: AC1 is a probe.
+- Tables: keryx sends `table` blocks (`src/remote/format-rich.ts`, flow 395, spike S3); the chat bot sends `rich_message.markdown` after a separator rewrite. Whether the markdown form scrolls sideways is unproven: AC1 is a probe.
 - Flow ids: 398 was used by a discarded first `flow init` and is a gap; 396 and 397 are in flight in other worktrees.
 - Operator decisions on record: poll 51 (a) automatic restore on new topic plus manual `/history N`, default 10, both roles; poll 51 (b) native table with shortened cells, superseded by message 179814.

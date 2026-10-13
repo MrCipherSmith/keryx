@@ -3,8 +3,8 @@ Version: 0.1.1
 
 ## Problem
 
-Grok Build's TUI opens most operator surfaces as **one reusable modal** with
-tabs. `/hooks`, `/plugins`, `/marketplace`, and `/skills` are the same
+A common agent-CLI TUI pattern opens most operator surfaces as **one reusable
+modal** with tabs. `/hooks`, `/plugins`, `/marketplace`, and `/skills` are the same
 extensions modal, just a different starting tab. `/status` is a tabbed
 inspector. `/model` and `/settings` are the same overlay class.
 
@@ -35,10 +35,10 @@ Ship a reusable OpenTUI **modal host + tab strip** that:
 |---|---|
 | MT-1 | A modal is a centered (or max-width) panel over a dimmed backdrop. It does not replace the transcript tree; the shell remains mounted. |
 | MT-2 | Opening a modal registers with `shell-chrome` `overlayActive` / `withOverlay` so the `/`-menu router, composer submit, and Ctrl+O block-nav stay inert. |
-| MT-3 | `Esc` (and an explicit Close control if rendered) dismisses the modal, restores composer focus, and unregisters the overlay source. Nested pickers inside a tab may steal Esc first (same steal-Esc order as Grok). |
+| MT-3 | `Esc` (and an explicit Close control if rendered) dismisses the modal, restores composer focus, and unregisters the overlay source. Nested pickers inside a tab may steal Esc first (steal-Esc order: overlays dismiss before composer actions). |
 | MT-4 | A modal may declare an ordered list of tabs `{ id, label }`. Opening may set `initialTab`. Only one tab's body is mounted at a time. |
 | MT-5 | Tab change is `←` / `→` (and `Tab` / `Shift+Tab` when focus is on the strip). Optional `1`…`9` jump to the nth tab when the body is not capturing digits. |
-| MT-6 | A command may open the **same** host on a different initial tab (Grok: `/hooks` vs `/plugins`). Switching tabs does not close the modal. |
+| MT-6 | A command may open the **same** host on a different initial tab (e.g. `/hooks` vs `/plugins`). Switching tabs does not close the modal. |
 | MT-7 | The host API is presentation-only: `openModal({ title, tabs, initialTab, renderTab })`. Feature data fetching lives in the caller. |
 | MT-8 | Zero top-level `@opentui/core` import (same capability gate as `launchTuiAgentShell`). Missing OpenTUI → the host is not offered; readline is unchanged. |
 | MT-9 | Headless tests cover open, initial tab, tab change, Esc dismiss, overlay-guard true-while-open, and focus restore. |
@@ -54,7 +54,7 @@ Ship a reusable OpenTUI **modal host + tab strip** that:
 
 ## Risks
 
-- Copying Grok's mouse/drag selection into the host would over-scope v1;
+- Mouse/drag selection in the host would over-scope v1;
   keep keyboard-first.
 - A full-screen `overlayBox` is easier than a true modal; the host must not
   become another full-screen picker in disguise (panel + backdrop, not

@@ -45,9 +45,9 @@ consumer TUI modal and the Tools-tab caption (P2).
 
 ## The shape that is easy to get wrong
 
-Grok Build exposes a STABLE pair — `search_tool` and `use_tool` — rather than
-dumping every connected MCP tool onto the model's tool list, and this package
-specifies that deliberately. The dump is what OpenCode does; it grows the
+This package exposes a STABLE pair — `search_tool` and `use_tool` — rather than
+dumping every connected MCP tool onto the model's tool list, and specifies that
+deliberately. The dump grows the
 advertised surface with every server the operator adds, and the model pays for
 all of it on every turn. spec AC5 is the guard: the advertised definitions must
 contain the pair and none of the N qualified names.

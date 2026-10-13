@@ -6,8 +6,8 @@ Version: 0.3.0
 Give the interactive agent (`keryx shell` / TUI) a native way to mutate
 project files that is **not** `shell_exec`. Today the agent's only tool set
 capable of changing a file at all is `shell_exec` (heredocs, `sed`, etc.) —
-there is no `write_file`/`edit_file` equivalent to Claude Code's `Edit`,
-OpenCode's `edit`, or Codex's `apply_patch`. Every real edit therefore:
+there is no `write_file`/`edit_file` equivalent to Claude Code's `Edit`
+or Codex's `apply_patch`. Every real edit therefore:
 
 1. Is classified `risk: "shell"` regardless of content, competing with every
    other non-read action (writes, destructive commands, network, subagent
@@ -91,7 +91,7 @@ package.
 
 **Non-goals (this package)**
 
-- A `str_replace`/line-anchored edit tool (Claude Code/OpenCode style) — a
+- A `str_replace`/line-anchored edit tool (Claude Code style) — a
   unified diff already covers single-hunk precision edits; a second tool
   would duplicate surface for no budget benefit.
 - A "remember this pattern" auto-allow mechanic for edits (shell_exec's

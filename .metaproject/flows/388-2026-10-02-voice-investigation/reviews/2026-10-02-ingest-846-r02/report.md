@@ -6,7 +6,7 @@ Documentation-only change: one 144-line investigation report. Read in full again
 
 **F-002. Install-weight table omits Windows.** `docs/requirements/keryx-voice/report.md:133`, in the diff. The table lists four platforms and the Not done section does not name Windows as untested or unsupported. Fix: add one line saying whether Windows is out of scope.
 
-**F-003. Piper voice size differs between sections.** `docs/requirements/keryx-voice/report.md:57`, in the diff. Section 4 says about 60 MB per voice (helyx's own Piper), section 8 says about 21 MB per int8 voice through sherpa. Both are correct for their stack but not reconciled. Fix: one clause naming the stack in section 4.
+**F-003. Piper voice size differs between sections.** `docs/requirements/keryx-voice/report.md:57`, in the diff. Section 4 says about 60 MB per voice (the chat bot's own Piper), section 8 says about 21 MB per int8 voice through sherpa. Both are correct for their stack but not reconciled. Fix: one clause naming the stack in section 4.
 
 ```json keryx:findings
 [
@@ -40,7 +40,7 @@ Documentation-only change: one 144-line investigation report. Read in full again
     "id": "F-003",
     "reviewer": "flow388-docs-consistency",
     "severity": "info",
-    "problem": "Piper voice size is about 60 MB per voice in section 4 and about 21 MB per voice in section 8, without saying the first is helyx's own Piper build and the second is the int8 sherpa export.",
+    "problem": "Piper voice size is about 60 MB per voice in section 4 and about 21 MB per voice in section 8, without saying the first is the chat bot's own Piper build and the second is the int8 sherpa export.",
     "impact": "Two figures for the same product in one report can read as an error; no decision depends on it because section 4 is background.",
     "suggested_fix": "Name the stack next to each figure.",
     "evidence": "Read report.md lines 27, 57 and 120 at b856f1d8.",

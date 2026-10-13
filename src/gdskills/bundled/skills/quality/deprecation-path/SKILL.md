@@ -263,6 +263,6 @@ Do not report the work as done until all of these hold:
   — a guess dressed as a schedule is neither — and the caller has the
   before-and-after to migrate unaided, under behaviour unchanged under them.
 
-Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
-(MIT) is why this set carries a deprecation skill at all; the five stages and
-the notice rule were measured from keryx's own CLI, not taken from there.
+Credit: an MIT-licensed skills library (see THIRD_PARTY_NOTICES.md) is why this
+set carries a deprecation skill at all; the five stages and the notice rule
+were measured from keryx's own CLI, not taken from there.

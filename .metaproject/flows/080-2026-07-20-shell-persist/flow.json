@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "080",
   "slug": "shell-persist",
-  "title": "Persist provider/model + OpenRouter key (opencode-style auth.json 0600), reused on next launch",
+  "title": "Persist provider/model + OpenRouter key (auth.json 0600), reused on next launch",
   "status": "done",
   "createdAt": "2026-07-20T14:07:43.081Z",
   "updatedAt": "2026-08-31T10:39:09.921Z",

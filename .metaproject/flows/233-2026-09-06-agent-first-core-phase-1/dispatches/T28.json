@@ -16,22 +16,22 @@
   ],
   "context_refs": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
       "kind": "custom",
       "exists": true
     }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
-    "/Users/Goodea/goodea/keryx/src/security/service.ts",
-    "/Users/Goodea/goodea/keryx/src/security/types.ts",
-    "/Users/Goodea/goodea/keryx/src/security/schemas.ts",
-    "/Users/Goodea/goodea/keryx/src/security/report.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/security.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts"
+    "~/goodea/keryx/src/security/path-scan.ts",
+    "~/goodea/keryx/src/security/service.ts",
+    "~/goodea/keryx/src/security/types.ts",
+    "~/goodea/keryx/src/security/schemas.ts",
+    "~/goodea/keryx/src/security/report.ts",
+    "~/goodea/keryx/src/commands/security.ts",
+    "~/goodea/keryx/src/commands/security-recursive-scan.test.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first. Local review-logic and review-security-code, testing context/wiki, code searches keryx ctx rg.",
+    "Root ~/goodea/keryx; read .metaproject/index.md first. Local review-logic and review-security-code, testing context/wiki, code searches keryx ctx rg.",
     "Read-only production; write T28 review/result/repro only. No own code review, git/flow/network/global tests/model calls. Stats disabled.",
     "Root changing guard only, functional changing output-validation and serialized helper service.ts only; scanner stable. Synthetic bounded fixtures; no external sensitive data. Stage1 before Stage2."
   ],
@@ -42,7 +42,7 @@
   ],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json"
   },
   "budget": {
     "max_output_tokens": null

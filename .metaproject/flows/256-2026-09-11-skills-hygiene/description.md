@@ -1,7 +1,7 @@
 # Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift
 
 Status: formalized
-Source: user request 2026-09-11 after the agent-skills comparison
+Source: user request 2026-09-11 after an external skills-library review
 Program: docs/plans/skills-quality-program.md (flow 1 of 4)
 
 ## Problem

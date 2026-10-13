@@ -181,7 +181,7 @@ Nothing was resolved by softening a verb.
 | 54 | 5.3 `npm run build-storybook` | **prose-only** — same | **claim corrected** — `<pm> run build-storybook`, `<pm>` being what 5.2 detected |
 | 55 | 5.4 failure table row: "Fix automatically using `npm run lint:fix:changed`" | **prose-only** — a script name from one specific project | **claim deleted** |
 | 56 | 5.4 "Maximum 3 self-fix attempts per verification step" | advisory — a budget for the model, with its evidence stated; `round-bound.test.ts:63` pins the sentence across all builds, which is a documentation guard, not an enforcement | advisory, unchanged (AC4-adjacent: `round-bound.test.ts` still passes) |
-| 57 | 5.4 the evidence paragraph (two arXiv citations, Aider, OpenHands) | advisory | advisory |
+| 57 | 5.4 the evidence paragraph (two arXiv citations, two external tools) | advisory | advisory |
 | 58 | 5.4 "Stop earlier on repetition, whatever the count says" | advisory — pinned as text by `round-bound.test.ts:83` | advisory, unchanged |
 | 59 | 5.4 ROLLBACK POLICY: "you MUST run `git reset --hard`" | advisory (an instruction), but an unscoped destructive one | unchanged — see NOT fixed |
 | 60 | 5.5 re-commit fixes | advisory | advisory |

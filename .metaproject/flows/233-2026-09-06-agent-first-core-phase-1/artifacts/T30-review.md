@@ -9,7 +9,7 @@ only to know what to attack).
 
 ### Scope
 
-- Repo root: `/Users/Goodea/goodea/keryx`
+- Repo root: `~/goodea/keryx`
 - Branch: `codex/agent-first-core`
 - T27's change is uncommitted on this branch (`git log -- src/security/guard.ts` shows no T27
   commit); reviewed against the current working tree via `git diff HEAD -- src/security/guard.ts`.

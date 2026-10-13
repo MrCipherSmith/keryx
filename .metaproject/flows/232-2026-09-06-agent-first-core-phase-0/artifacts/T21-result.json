@@ -24,35 +24,35 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent Stage 1/Stage 2 review of T20's closure of T16-final-review's four findings, with a scratch-copy revert experiment proving the regression's dependency on the production change.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-terminal-reason-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T21-terminal-reason-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "New assertion-bearing probe (4 cases) covering all four emitTerminalState reasons; dual-mode via T21_AGENT_MODULE_URL to run against either the real working tree or a scratch revert copy.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-49-57-791Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-49-57-791Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "The exact unmodified committed F-001 regression run against a scratch copy with only the production line reverted: fails as required, proving genuine dependency on the fix.",
       "hash": "7935b55c832c3b235da58253be69c65ede7a6985a4ae3659864653df97daee83"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-49-15-484Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-49-15-484Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "T21-terminal-reason-probe.ts against the real working tree: all 4 cases pass.",
       "hash": "c9136d5de451ee769388cbda8b21210499056b9564ed43378eca21abc5cfb8ec"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-50-05-811Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-50-05-811Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Focused 3-file suite against the real working tree: 111 pass / 0 fail, 452 assertions.",

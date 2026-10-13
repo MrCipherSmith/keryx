@@ -199,7 +199,7 @@ field evidence contradicts that bet uniformly.
 - Neither market leader converged on our architecture. **Cursor abandoned fixed
   parallel fan-out plus voting for a single adaptive agent and called it their
   largest gain.** Greptile parallelises per *hypothesis*, spawned dynamically.
-  The closest open competitor ships 5 dimensions defaulting to 3. **Nobody runs
+  The closest open tool ships 5 dimensions defaulting to 3. **Nobody runs
   19.**
 
 What works is subtraction: a QA-checker stage took precision **51% → 93%** by
@@ -301,8 +301,8 @@ bare threshold on a self-reported number filters noise with noise.
   correctness falls **0.820 → 0.673** across two forced revisions while
   ever-correct is **0.847** — the agent finds the fix and then destroys it,
   throwing away ~15 percentage points
-  ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Aider hardcodes
-  `max_reflections = 3`; OpenHands' critic uses 3; **our own `job-orchestrator`
+  ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent harnesses
+  hardcode 3 reflection rounds; **our own `job-orchestrator`
   already uses 3.** We currently run four unshared bounds: task-implementer 3,
   job-orchestrator 3, flow-orchestrator 6, `/goal --auto` 8.
 - **Spend:** a token or currency ceiling that stops and asks rather than
@@ -314,7 +314,7 @@ bare threshold on a self-reported number filters noise with noise.
 
 Escalate when the same finding identifier recurs twice, or two consecutive
 attempts produce identical review output — regardless of remaining budget.
-OpenHands ships a stuck detector with five patterns, on by default.
+Another agent harness ships a stuck detector with five patterns, on by default.
 
 **Cost.** Doc-only. **Risk.** None.
 
@@ -500,20 +500,20 @@ that is not there.
 
 Each of these is a plausible next step that the evidence argues against.
 
-**A checkpoint / durable-execution engine (LangGraph, Temporal).** These exist
+**A checkpoint / durable-execution engine (e.g. Temporal).** These exist
 to make *non-idempotent side effects* replay-safe. Our side effects are git
 commits and CLI-owned JSON — already content-addressed. Every such system is
 at-least-once anyway and pushes idempotency back onto the application. What we
 are missing is a counter and a phase marker: **fields, not an engine.**
 
-**Parallel writing agents / swarms.** The cleanest controlled ablation available
+**Parallel writing agents.** The cleanest controlled ablation available
 ([arXiv:2606.05670](https://arxiv.org/abs/2606.05670)) finds **at most one of
 six multi-agent systems beats a matched single-agent anchor; the other five lose
 by 2.56–11.29 points while burning more compute.** Convergent rule across four
 independent sources: parallelise reading, reviewing and candidate generation;
 never parallelise writing.
 
-**More reviewers or more agent roles.** BMAD retired its own Scrum Master and QA
+**More reviewers or more agent roles.** A widely adopted practitioner method retired its own Scrum Master and QA
 agents into Dev in v6 — the most-adopted practitioner reversed the move. Our
 defensible claim is not breadth.
 
@@ -544,7 +544,7 @@ baseline to beat, from the only independent study, is **~12.5% useful
 comments**.
 
 Treat vendor numbers as mutually irreconcilable: one benchmark scores a
-competitor at 11.46% coverage while that competitor reports 78% resolution.
+vendor at 11.46% coverage while that vendor reports 78% resolution.
 Nobody publishes a defensible precision figure. And trust benchmarks last —
 BigVul's labels are 25% correct, and SWE-bench Verified's filtering moved GPT-4o
 from **16% → 33.2% with no model change**.

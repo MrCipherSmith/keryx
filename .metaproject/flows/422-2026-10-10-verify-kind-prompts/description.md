@@ -42,7 +42,7 @@ the kind is unclear.
 - `keryx flow freeze` with `unclassified > 0` prints a visible warning naming the criteria; in an
   interactive terminal it asks whether to freeze without a kind on them; non-interactively it writes
   the warning to the flow's `journal.md`. It never refuses.
-- Flows created through intake (flow 403), `goal`, and helyx/Telegram use the same template.
+- Flows created through intake (flow 403), `goal`, and the chat bot/Telegram use the same template.
 - `sync-status.md` (generator `src/commands/research-sync*.ts`) shows the share of `unclassified`
   among criteria of flows frozen in the last 7 days, with a warning above 20%.
 - `docs/docs/cli-reference.md` (verification kinds, `flow freeze`) and CHANGELOG updated.

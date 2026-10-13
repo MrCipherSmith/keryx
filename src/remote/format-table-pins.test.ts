@@ -1,7 +1,7 @@
 // How a table reaches Telegram, pinned (flow 399, PR 2; AC2 to AC5).
 //
 // The operator read the three probe messages and chose variant A, the native `table` block that
-// keryx already sends (flow 395): it is wide and scrolls sideways, like helyx. So there is no new
+// keryx already sends (flow 395): it is wide and scrolls sideways, like the operator chat bot. So there is no new
 // renderer here. These tests pin what exists, with literal expectations, so a change that makes a
 // table narrower (a shortened cell, a cell turned into markup), drops a row, or sends a part Telegram
 // would refuse fails:

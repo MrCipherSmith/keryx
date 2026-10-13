@@ -1,6 +1,6 @@
 # T34 implementation report — repair per-file coverage rows and the non-recursive scan outcome
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned files
 only: `src/security/path-scan.ts`, `src/commands/security.ts`,
 `src/commands/security-recursive-scan.test.ts`. No other file was touched;
 `src/security/service.ts` (owned by a concurrent worker fixing F-001/F-002)

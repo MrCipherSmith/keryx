@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "scopeFingerprint": "2996a051073206eda9e8abe3fc4b4015e669d0f772174bd6c34ff532d02aac13",
+  "reviewers": {
+    "review-logic": {
+      "attempt": 0,
+      "status": "",
+      "notRun": false,
+      "stalls": 0,
+      "covered": []
+    }
+  }
+}

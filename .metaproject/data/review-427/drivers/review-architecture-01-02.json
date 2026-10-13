@@ -1,0 +1,9 @@
+{
+ "reviewer": "review-architecture",
+ "slices": [
+  "slice-01",
+  "slice-02"
+ ],
+ "result": "raw/review-architecture-01-02.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+}

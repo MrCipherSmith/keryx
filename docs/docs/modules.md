@@ -562,7 +562,7 @@ source of truth; the module reads, ranks, deduplicates, and consolidates them
 **deterministically** by default — pure token/trigram similarity over canonical
 Markdown (never a generated/inverted index), with an optional
 embedding rerank (Block C) that is opt-in and always degrades back to lexical. It is
-a Mem0-style memory layer reimplemented deterministically, and it feeds a "learning
+an ADD/reconcile/consolidate memory layer implemented deterministically, and it feeds a "learning
 signal" (only `accepted` entries) into gdskills.
 
 **CLI surface.** `memoryCommand`:
@@ -595,7 +595,7 @@ a configured transformer-compatible adapter), `check.ts`, `config.ts`, and
 record from `# Title`, `Key: value` header fields, and `##` sections.
 **Deterministic similarity** (`text.ts`): tokenize + jaccard + trigram
 `titleSimilarity`. **Weighted linear ranking** (`search.ts`): score = Σ weight ×
-{relevance, recency (exponential decay), confidence, status, scope}. **Mem0-style
+{relevance, recency (exponential decay), confidence, status, scope}. **Memory
 lifecycle:** `ingest` = ADD new or reconcile (append provenance to) near-duplicates,
 keyed on `(source, link, date)`; `reflect` = CONSOLIDATE tag-clusters into pattern
 drafts (no LLM synthesis). Dedup marks a duplicate at title-similarity ≥ 0.8 or

@@ -1,26 +1,24 @@
-# Keryx P0 Improvements — after the 2026-09-27 competitive review
+# Keryx P0 Improvements — after the 2026-09-27 functional review
 
 Version: 0.1.1
 
 ## Purpose
 
-Five workstreams chosen from a functional review of keryx and a comparison
-with ten coding agents (Claude Code, Codex CLI, Gemini CLI, OpenCode, Aider,
-Goose, Cline, Amp, Cursor, Kiro). The review is in
-[competitive-review.md](competitive-review.md); the items that did not make
+Five workstreams chosen from a functional review of keryx against the
+expectations users bring from other coding agents. The items that did not make
 the cut are in [backlog.md](backlog.md).
 
 The selection rule: a workstream is P0 if it either **proves a capability
 keryx alone has** and currently only claims, or **closes an expectation that
-nearly every competitor already meets** and a first-time user will test in
+nearly every other coding agent already meets** and a first-time user will test in
 their first hour.
 
 | W | Workstream | Why P0 |
 |---|---|---|
 | W1 | External agents run for real | keryx is the only tool with first-party delegation to Claude Code, Codex and Gemini CLI — and its own docs say it "has never been run against a real vendor process". |
-| W2 | `/rewind` — file snapshots per turn | Claude Code, Gemini CLI, Kiro and OpenCode all have it; keryx checkpoints the transcript, not the files. |
-| W3 | Review as a GitHub Action | Claude Code, Cursor Bugbot, OpenCode and Kiro review PRs unattended; keryx's review pipeline — the only one with a verifier — runs only on a developer's machine. |
-| W4 | Remote approval | `keryx serve` and every trigger turn a policy `ask` into a recorded denial; Cursor, Kiro, Codex Cloud and Claude Remote Control let the human answer from wherever they are. |
+| W2 | `/rewind` — file snapshots per turn | Most other coding agents have it; keryx checkpoints the transcript, not the files. |
+| W3 | Review as a GitHub Action | Several other tools review PRs unattended; keryx's review pipeline — the only one with a verifier — runs only on a developer's machine. |
+| W4 | Remote approval | `keryx serve` and every trigger turn a policy `ask` into a recorded denial; other tools let the human answer from wherever they are. |
 | W5 | First hour | `keryx doctor` does not exist, an unknown command prints 100 lines, `mcp list` exits 1 over someone else's config, health cannot see keryx's own tests. |
 
 ## Status
@@ -35,7 +33,7 @@ Updated 2026-09-28. One workstream shipped; four are specification-ready.
 | W3 Review as a GitHub Action | draft — spec ready | — |
 | W4 Remote approval | draft — spec ready | — |
 
-**Agreed order for the rest** (operator, helyx, 2026-09-28): audit-remediation
+**Agreed order for the rest** (operator, via the operator chat channel, 2026-09-28): audit-remediation
 flow 2 (R3 security depth, corpus measurement first) → audit-remediation flow 3
 (R4 architecture, R5 gates) → W1 → W2 → W3 → W4. One flow per workstream,
 frozen AC from [specification.md](specification.md) §8, a verifier-backed
@@ -49,7 +47,6 @@ W2 and W4 carry the most design risk (see the PRD).
 - [README.md](README.md) — this file.
 - [prd.md](prd.md) — problem, goal, users, requirements per workstream, success criteria, risks, recommendation.
 - [specification.md](specification.md) — surfaces, storage, contracts and acceptance criteria per workstream.
-- [competitive-review.md](competitive-review.md) — the review that produced this package: strengths, gaps, matrix, live friction log, sources.
 - [backlog.md](backlog.md) — the P1 and P2 improvements deliberately not in this package, each with the reason.
 
 ## Scope
@@ -61,7 +58,7 @@ W2 and W4 carry the most design risk (see the PRD).
 - W3: `keryx review run` headless, a reusable GitHub Action, inline PR
   comments with verifier status, a "closed before merge" metric.
 - W4: an approval request/response transport for `keryx serve`, triggers and
-  the helyx channel, single-use grants, recorded outcome.
+  the operator chat channel, single-use grants, recorded outcome.
 - W5: `keryx doctor`, did-you-mean for unknown commands, `mcp list` exit
   semantics, `memory search` stemming and the `--semantic` hint, health seeing
   the project's own tests.

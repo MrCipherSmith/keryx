@@ -107,7 +107,7 @@ treatment of every remote prompt, and no self-granting of approvals. See
 | [Specification](specification.md) | Architecture, ownership, lifecycle, state machine, acceptance criteria. |
 | [API protocol](api-protocol.md) | HTTP surface, session semantics, streaming, error contract. |
 | [Security policy](security-policy.md) | Trust model, authentication, remote policy profile, approvals, redaction. |
-| [Brainstorm](brainstorm.md) | Alternatives considered, the helyx and Eggent evidence, why this shape. |
+| [Brainstorm](brainstorm.md) | Alternatives considered and why this shape. |
 | [Metrics and validation](metrics-and-validation.md) | Success metrics, offline fake-transport tests, release evidence. |
 | [Launch prompts](launch-prompts/README.md) | One flow-orchestrator prompt per slice. R4a and R4b predate the directory and have none. |
 | [Remote entry configuration schema](schemas/remote-entry-config.schema.json) | Safe configuration without a raw token. |
@@ -135,10 +135,3 @@ treatment of every remote prompt, and no self-granting of approvals. See
   seam every outbound payload passes through.
 - `src/flow`: Task Manager, read-only projection only.
 - `.metaproject`: graph, wiki, memory, skills, testing, health, evidence.
-
-## Sources
-
-Architectural evidence was collected from two working systems and is recorded in
-[brainstorm.md](brainstorm.md): `helyx`, a private Telegram-fronted agent
-orchestrator running on the same host and studied directly, and the public
-Eggent workspace (`github.com/eggent-ai/eggent`).

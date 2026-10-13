@@ -87,7 +87,7 @@ scratch git repo under the scratchpad directory:
    after `applyModule`'s `gdgraphCommand(["build"])` returns.
 
 Then verified the fix (this session's working tree, uncommitted at the time)
-on a second, fresh scratch repo, driving `bun /home/altsay/keryx/src/cli.ts`:
+on a second, fresh scratch repo, driving `bun ~/keryx/src/cli.ts`:
 
 6. `init --yes`, commit, `gdgraph build` → `.provenance.json` is created on
    the FIRST build now, naming that commit

@@ -785,8 +785,8 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
     // `runOperatorLine` helper (so it can also be called from the held-queue
     // drain path) — same `busWorking = true;` just before it, parameter
     // renamed from `line` to `operatorLine`.
-    const turnIndex = replBody.indexOf("await runAgentTurn(agentIo, deps, history, operatorLine,");
-    const turnBlock = replBody.slice(turnIndex - 300, turnIndex);
+    const turnIndex = replBody.indexOf("const flight = runAgentTurn(agentIo, deps, history, operatorLine,");
+    const turnBlock = replBody.slice(replBody.indexOf("const runOperatorLine = async"), turnIndex);
     expect(turnBlock).toContain("busWorking = true;");
   });
 });

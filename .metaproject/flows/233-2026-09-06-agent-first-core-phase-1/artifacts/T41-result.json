@@ -23,19 +23,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Decision and its justification against policies.md line 20, the congruence rule, the argument that it cannot become a hiding channel, the planned regressions, and the ownership conflict recorded before coding."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Per-defect decision and justification, the rule that replaced the string comparison, the non-regression argument, corpus counts before and after, every raw log path, and the exact unimplemented guard.ts change."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T41-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."

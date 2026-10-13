@@ -387,7 +387,7 @@ test("deterministic lifecycle: dispatch, context, redispatch and completion gate
 describe("severity audit (flow 428 AC6)", () => {
   const record = (statuses: Record<string, "killed" | "survived" | "invalid">, file = "src/a.ts"): MutationRecord => ({
     schemaVersion: 1, worktree: "/w", command: "t", baseline: { exitCode: 0, ms: 1 }, totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
-    mutants: Object.entries(statuses).map(([id, status]) => ({ id, file, anchor: "a", replacement: "b", status, ms: 1 })),
+    mutants: Object.entries(statuses).map(([id, status]) => ({ id, file, anchor: "a", replacement: "b", status, command: "t", ms: 1 })),
   });
   const run = { name: "mutation-1.json", record: record({ M1: "survived", M2: "killed", M3: "invalid" }) };
   const finding = (extra: Record<string, unknown>) => ({ id: "F1", severity: "minor", evidence: "mutant:M1 survives", ...extra });

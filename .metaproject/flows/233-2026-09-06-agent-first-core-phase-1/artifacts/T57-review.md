@@ -20,7 +20,7 @@ fourth disclosed judgement call.
 
 ## Scope
 
-- Root: `/Users/Goodea/goodea/keryx` (the main checkout only; no worktree under
+- Root: `~/goodea/keryx` (the main checkout only; no worktree under
   `.claude/worktrees/` was entered).
 - Branch: `codex/agent-first-core`; base / merge-base with `main`:
   `0bc6418fa1a038f8ec909cf949fecba077acf9a4` (identical to HEAD — the branch
@@ -426,7 +426,7 @@ measures directly, so the service rows carry the verdict.
 
 ## Evidence
 
-Raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+Raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 Every probe was run **directly** rather than through `bun src/cli.ts ctx run`,
 because gdctx compaction drops the per-case rows that are the evidence itself —
 the same escape T39/T54/T55 recorded, and the reason is stated here rather than

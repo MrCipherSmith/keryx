@@ -242,6 +242,22 @@ describe("AC2: one unattended turn, and a report the dispatcher writes", () => {
     expect(record.detail).toContain("throwing_test_tool");
     expect(record.detail).toContain("tool boom");
   });
+
+  test("flow 429 (M1): an unattended run keeps the 40-round limit under trust, however its prompt reads", async () => {
+    await addConfirmedSchedule(root, entry({ mode: "trust" }));
+    const probe: InteractiveTool = {
+      definition: {
+        name: "probe_test_tool",
+        description: "test-only: a harmless read",
+        inputSchema: { type: "object", properties: { n: { type: "number" } } },
+        risk: "read",
+      },
+      invoke: async () => ({ output: "ok", isError: false }),
+    };
+    const provider = scripted(Array.from({ length: 130 }, (_unused, index) => toolCall("probe_test_tool", { n: index }, `c${index}`)));
+    await run(provider, "check-github", { extraTools: [probe] });
+    expect(provider.calls()).toBe(40);
+  });
 });
 
 describe("AC3: granted tools keep credentials out of the model's reach", () => {

@@ -1,7 +1,7 @@
 # Add OpenAI-compatible providers (DeepSeek, Z.AI GLM, Cerebras, Groq, Moonshot)
 
 Status: formalized
-Source: user request (screenshots of opencode's grouped picker + "add DeepSeek, GLM z.ai coding plan, and others via API key")
+Source: user request (screenshots of a grouped provider picker + "add DeepSeek, GLM z.ai coding plan, and others via API key")
 
 ## Problem
 
@@ -22,7 +22,7 @@ adapter, so this generalizes to a registry.
 
 ## Out of Scope
 
-- Migrating the catalog to models.dev (opencode-style groups/Free badges/Recent) —
+- Migrating the catalog to models.dev (groups/Free badges/Recent) —
   a separate, larger follow-up.
 - Anthropic-compatible coding endpoints (Z.AI/Moonshot `/anthropic`); only the
   OpenAI-compat endpoints are wired here.

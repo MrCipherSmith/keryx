@@ -36,5 +36,5 @@ Raw transcript kinds are provider-level; FakeProvider normalizes to the 8 Normal
 ## Operational
 - keryx = `bun ./src/cli.ts`; new worktree needs `bun install`. Never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker must `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it (W4 incident). Verify file locations after each worker.
+- WORKTREE-GUARD: every writing worker must `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it (W4 incident). Verify file locations after each worker.
 - TDD order: F-01 (T5 fixtures → T6 RED → T7 GREEN), F-02 (T8 RED → T9 GREEN), then T10 review.

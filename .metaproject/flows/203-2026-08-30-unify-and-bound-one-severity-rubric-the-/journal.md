@@ -426,7 +426,7 @@ The evidence, cited in each file that carries the bound rather than only here:
 (arXiv:2607.05197); correctness falls **0.820 -> 0.673** across two forced
 revisions while cumulative ever-correct is **0.847** (arXiv:2607.24604) — the
 agent finds the fix and then destroys it, throwing away ~15 points by not
-stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
+stopping. Other agent tools cap reflection rounds at 3.
 Rounds four through six were not buying convergence in `flow-orchestrator`; they
 were buying regressions.
 

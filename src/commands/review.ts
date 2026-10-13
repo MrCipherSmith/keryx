@@ -66,6 +66,7 @@ import { runJevEditGuard } from "./review-jev-edit-guard";
 // registration.
 import { runJevSelect } from "./review-jev-select";
 import { runJevProfile } from "./review-jev-profile";
+import { AUTOMATIC_REVIEW_FLAG } from "./automatic-review";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -302,6 +303,7 @@ export const CREATE_FLAGS = [
   "--tokens-out",
   "--parallel",
   "--outstanding",
+  AUTOMATIC_REVIEW_FLAG,
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -774,6 +776,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
+    ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
@@ -804,6 +807,9 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  if (result.manifest.automatic === true) {
+    console.log("run mode: automatic review");
+  }
   // Printed on every run, and printed as an absence when it is one: the review
   // completion gate compares this against the pull request's head, and a round
   // that recorded none fails that comparison as `unobserved`. An operator who
@@ -1084,7 +1090,7 @@ async function runBudget(args: string[]): Promise<void> {
   console.log(`holds_across_nesting: ${plan.holdsAcrossNesting ? "yes (against the declared count)" : "no"}`);
   if (!plan.holdsAcrossNesting) {
     console.log(
-      "  The cap bounds THIS plan only. Nothing declared what job-orchestrator or flow-orchestrator already had in flight, and keryx cannot observe it. Pass --outstanding <n> to make the cap mean something across the nesting.",
+      "  The cap bounds THIS plan only. Nothing declared how many subagents the main session still has running, and keryx cannot observe them. Pass --outstanding <n> to count them against the cap.",
     );
   }
   plan.waves.forEach((wave, index) => {
@@ -3738,6 +3744,9 @@ async function runStatus(args: string[]): Promise<void> {
   // first would make this reader unreachable on exactly the old packages a
   // recall comparison most wants to group.
   console.log(renderCrossFamilyReviewLine(manifest.cross_family_review));
+  if (manifest.automatic === true) {
+    console.log("run mode: automatic review");
+  }
   reportCrossFamilyReviewProblems(manifest.cross_family_review, `${ref}/manifest.json`);
 
   const stats = manifest.filter_stats;
@@ -4065,10 +4074,11 @@ function reviewHelpText(): string {
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                      [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-                     [--research <ledger.json>] [--review-id <id>]
+                     [--research <ledger.json>] [--review-id <id>] [--automatic]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
-                      [--research <ledger.json>] [--review-id <id>]
+                      [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
@@ -4460,11 +4470,10 @@ budget:
   non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
   orchestrator asks the operator instead of proceeding. Also prints the reviewer
   dispatch waves for the concurrency cap (default ${MAX_REVIEWERS_PER_WAVE_FULL} in flight; split by diff domain, never above ${MAX_REVIEWERS_PER_WAVE_FULL} for a full review).
-  --outstanding <n> is what an enclosing orchestrator already has in flight.
-  WITHOUT it the cap bounds this plan only: keryx cannot observe subagents in
-  another process, so it does NOT bind the total across job-orchestrator ->
-  flow-orchestrator -> review-orchestrator, and it says so rather than implying
-  otherwise.
+  --parallel <n> sets the wave size; with --full it can only lower it, because
+  --full holds the wave to ${MAX_REVIEWERS_PER_WAVE_FULL}. --outstanding <n> is how many subagents the main
+  session still has running. WITHOUT it the cap bounds this plan only: keryx
+  cannot observe those subagents, and it says so rather than implying otherwise.
 
 tier:
   The \`model\` block a dispatch document carries, COMPUTED — run this instead of

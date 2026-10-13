@@ -11,7 +11,7 @@ Next step if picked up: one small flow covering all four.
 
 Round `2026-10-01-ingest-pr830-head` (PR #830 head fd937144, 0.3.52): F-002, F-102, F-107 and F-109 were fixed in 0.3.52. Five new findings.
 
-Closing round `2026-10-02-ingest-final-pr830` (evidence gathered on main 40ecaf07): F-110 (docs, 5ab21a26), F-201, F-202 and F-203 (PR #840, commit e4837ffe, merge 4ba4a568, 0.3.55) are fixed and verified `refuted`. F-204 and F-205 still reproduce (verifier: confirmed) and stay open below. They are recorded as `dismissed-deprioritised` with `decided-by: altsay` taken from the standing instruction in message 176698 ("Дальше делай все сам до релиза, закрывай все фло"). That is the supervisor's inference, not a per-finding decision by the operator; poll 34 on the flow 377 closure was unanswered when the flow was closed.
+Closing round `2026-10-02-ingest-final-pr830` (evidence gathered on main 40ecaf07): F-110 (docs, 5ab21a26), F-201, F-202 and F-203 (PR #840, commit e4837ffe, merge 4ba4a568, 0.3.55) are fixed and verified `refuted`. F-204 and F-205 still reproduce (verifier: confirmed) and stay open below. They are recorded as `dismissed-deprioritised` with `decided-by: operator` taken from the standing instruction in message 176698 ("Дальше делай все сам до релиза, закрывай все фло"). That is the supervisor's inference, not a per-finding decision by the operator; poll 34 on the flow 377 closure was unanswered when the flow was closed.
 
 Fixed (kept for the record):
 

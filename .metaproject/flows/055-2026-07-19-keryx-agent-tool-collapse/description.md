@@ -2,7 +2,7 @@
 
 ## Problem
 Tool results in agent mode show only a one-line summary (`↳ …`) with no signal
-that output was truncated and no way to see the rest. OpenCode/oh-my-claude-code
+that output was truncated and no way to see the rest. Other terminal agents
 render tool output as collapsible panels. Line-based equivalent: collapsed
 summary with a hidden-line count + an `/expand` command to reveal the full last
 output (no alt-screen, no interactive toggle — readline-safe).

@@ -188,7 +188,7 @@ content was stale (it still listed R4c as not started) and fully superseded by
 the roadmap. E4: ten files were translated, and the eleventh — the archived
 harness runbook — keeps its execution log verbatim under a header that says so.
 
-`/Users/Goodea/goodea/keryx` (33 occurrences) is a machine account name, not a
+`~/goodea/keryx` (33 occurrences) is a machine account name, not a
 person, and `/home/u/.ssh`, `/home/u/.netrc`, `/home/u/.aws` are secret-path
 detector fixtures. Neither needs action.
 

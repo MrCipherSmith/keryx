@@ -18,7 +18,7 @@
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: no coverage of |-,|+,>+ spellings). Live parser handles all six AC1 spellings (11-case probe green). Parametrized unit test logged as follow-up; not a defect of this PR."
+      "evidence": "decided-by: operator (interactive, 2026-09-03). Verifier: confirmed (site-check: no coverage of |-,|+,>+ spellings). Live parser handles all six AC1 spellings (11-case probe green). Parametrized unit test logged as follow-up; not a defect of this PR."
     }
   },
   {
@@ -40,7 +40,7 @@
     },
     "disposition": {
       "state": "dismissed-wont-fix",
-      "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: CONTROL_SKILL is a plain scalar, comment says block scalar). Cosmetic comment mismatch; optional wording polish deferred."
+      "evidence": "decided-by: operator (interactive, 2026-09-03). Verifier: confirmed (site-check: CONTROL_SKILL is a plain scalar, comment says block scalar). Cosmetic comment mismatch; optional wording polish deferred."
     }
   },
   {
@@ -62,7 +62,7 @@
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: aleksandr-tsaitler (interactive, 2026-09-03). Verifier: confirmed (site-check: no skill-frontmatter.test.ts). Edges covered via adapter regression test + real-tree bundled-eval gate + manual probe; dedicated unit file logged as follow-up."
+      "evidence": "decided-by: operator (interactive, 2026-09-03). Verifier: confirmed (site-check: no skill-frontmatter.test.ts). Edges covered via adapter regression test + real-tree bundled-eval gate + manual probe; dedicated unit file logged as follow-up."
     }
   }
 ]

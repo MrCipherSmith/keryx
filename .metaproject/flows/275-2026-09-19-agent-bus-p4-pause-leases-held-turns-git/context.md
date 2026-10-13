@@ -21,7 +21,7 @@ interview answers.
    claimType: task-note | confidence: medium | version: 0.1.0
    scope: unknown
    provenance: source=sac-proposal link=./.metaproject/workspaces/workspace-86f1eb7d089b4f1a/session-evidence/b4beb664-6284-457d-bb68-0aaa4a24a760.wrap-up.md (sha256 f64aaf83fbce0bcca89d87b2317bb3278d0fc7a0ec72c6dd11b731ebf4dcef58) author=unknown confirmedBy=unknown
-4. [1.358] SAC: Anchors: root: /Users/tsaitler.aleksandr/goodea/keryx tre… (task-note/accepted) - task-notes/sac-proposal-b051e66aebd74f37.md
+4. [1.358] SAC: Anchors: root: ~/goodea/keryx tre… (task-note/accepted) - task-notes/sac-proposal-b051e66aebd74f37.md
    Flow 188 (count .ts files in src/harness/provider, read-only) completed. Direct child .ts files excluding .test.ts and subfolders: fake-provider.ts, make-provider.ts, provider-port.ts, single-turn.ts, tool-call-linking.ts, types.ts = 6 files. Subfolders (openai/, ollama/, gemini/, anthropic/, compat/, fixtures/) and their contents excluded per the no-subfolders constraint. Task required read-only; rounds T1-T4 (plan/test/PR) are generic placeholders not applicable to this read-only counting task.
    claimType: task-note | confidence: medium | version: 0.1.0
    scope: unknown

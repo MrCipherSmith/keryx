@@ -1,6 +1,6 @@
 # T61 spec — closing T57's F-002 and F-003, and the gateway mode disagreement
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Written
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Written
 before any code change. Extends `T58-implementation.md` (which left F-002's
 live-comparison residual disclosed, not fixed) and `T55-implementation.md`
 (whose `hasGateShape` guard stopped one field short of what `status()`

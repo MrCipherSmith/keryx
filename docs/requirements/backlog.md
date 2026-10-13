@@ -203,8 +203,8 @@ one is planned, it changes `enforcement.kind`, which
 
 ### 9. Flow 257's adapted techniques carry no credit
 
-`docs/plans/skills-quality-program.md` lists what was consciously adapted from
-[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (MIT).
+`docs/plans/skills-quality-program.md` lists what was consciously adapted (MIT; see THIRD_PARTY_NOTICES.md) from
+the external skills library.
 Flows 256 and 258 placed inline credits by the convention
 `docs/skills/rejected-skill-changes.md` established; flow 257 merged without
 them.
@@ -231,7 +231,7 @@ credit a topic rather than an adaptation.
 ### 10. Flow 259 — behavioural evals with a control arm
 
 The last flow of `docs/plans/skills-quality-program.md`, not started. What
-distinguishes it from the source it adapts: a **without-skill control arm** and
+distinguishes it from the external skills library it adapts: a **without-skill control arm** and
 repeated runs, so the effect of a skill is measured rather than asserted. It
 also owes an honest update to the bundled-eval layer status, which still
 describes layers two and three as not built.

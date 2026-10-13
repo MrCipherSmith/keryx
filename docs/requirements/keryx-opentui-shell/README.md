@@ -19,7 +19,7 @@ anything past the first frame.
 
 This package specified migrating the keryx interactive shell/agent UI from the
 line-based `node:readline` renderer to a full-screen **OpenTUI**
-(`@opentui/core`) terminal UI, to gain a live, Pi/grok-style command composer (an
+(`@opentui/core`) terminal UI, to gain a live, full-screen-TUI-style command composer (an
 as-you-type `/` command dropdown), a persistent input area, and a component-based
 rendering model — WITHOUT rewriting the deterministic agent driver or the pure
 render helpers already in place.
@@ -91,11 +91,11 @@ been extended by flow 109, recorded as decision **D-6**.
 
 The line-based `readline` renderer cannot draw a live dropdown under the cursor as
 the user types (it reads whole lines on Enter and delegates echo/editing to the
-terminal). Pi and xAI's grok-build show a live command menu because they are
+terminal). Other coding-agent TUIs show a live command menu because they are
 full-screen TUIs that own the terminal and repaint every keystroke. Matching that
 UX is an **architecture** change (an input/render layer that owns the terminal),
 not a dependency add. OpenTUI is the chosen framework because it is Bun-native
-(keryx runs on Bun) and already proven in a coding-agent TUI (`superagent-ai/grok-cli`).
+(keryx runs on Bun) and already proven in another coding-agent TUI.
 
 ## Scope
 

@@ -10,7 +10,7 @@ start of the session that is exactly what I found:
 
 ```
 $ pwd && git status --porcelain | head -50 && git rev-parse HEAD
-/Users/Goodea/goodea/keryx
+~/goodea/keryx
 65def5156aa8b67233d6c7f91cd93b3d26783fd7
 ```
 

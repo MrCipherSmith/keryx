@@ -185,6 +185,6 @@ A cycle is complete only when all of these hold:
 - If the cycle found nothing, it says so plainly, with what was checked and what
   was left unreached. `STATUS: NO FINDINGS` is a pass, not an incomplete run.
 
-Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
-(MIT) is where the in-flight doubt pass comes from: a reader gets the artifact
+Credit: an MIT-licensed skills library (see THIRD_PARTY_NOTICES.md) is where
+the in-flight doubt pass comes from: a reader gets the artifact
 and the contract, never the author's reasoning. The bar and the bound are ours.

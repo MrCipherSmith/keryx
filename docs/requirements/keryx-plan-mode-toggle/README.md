@@ -7,7 +7,7 @@ for the full record.
 
 ## Motivation
 
-A competitive review of other terminal coding agents found a pattern keryx
+A review of other terminal coding agents found a pattern keryx
 had no equivalent for: a build/plan mode switch that swaps full tool access
 for a read-only allowlisted mode. keryx's existing `/mode ask|trust|auto`
 (`src/commands/permission-mode.ts`) controls whether actions are confirmed,

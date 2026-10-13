@@ -59,7 +59,7 @@ _(flow-init skill appends here)_
 
 ### Orchestrator findings (T1, 2026-09-24)
 
-- Base branch: `feat/agent-platform-expansion`; worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`.
+- Base branch: `feat/agent-platform-expansion`; worktree `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`.
 - Import zones (`src/lib/import-zones.ts`): new `src/bundle/` must be registered as `core`; `src/harness/**` is `client` (core may not import it) — hence a shared `src/lib/keryx-home.ts` instead of importing W6's `resolveHookHomeDir`.
 - W6 `resolveHookHomeDir(env, homeDir?)` (`src/harness/hooks/config.ts:65`): home = explicit arg > `KERYX_HOME` > `os.homedir()`; store = `<home>/.keryx/`. `validateHookConfigDocument(doc, scope, label)` (config.ts:139) validates a hook-config entry.
 - Memory: `src/memory/store.ts` `collectEntries`/`parseEntry` are fully tolerant (never throw; defaults on bad fields); `write.ts` `writeCanonicalEntry` validates + security-guards + atomic write; `templates.ts` `renderMemoryEntry`. Entries are markdown with `Name: value` header fields.

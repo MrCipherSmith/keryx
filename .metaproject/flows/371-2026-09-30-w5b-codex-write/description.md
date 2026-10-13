@@ -1,7 +1,7 @@
 # W5b codex external write mode
 
 Status: formalized
-Source: operator decision 2026-09-30 (option A, helyx 174204) after the live codex probe of the same day
+Source: operator decision 2026-09-30 (option A, operator chat channel 174204) after the live codex probe of the same day
 
 ## Problem
 

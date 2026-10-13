@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "429",
+  "slug": "auto-mode-round-limit",
+  "title": "Auto mode: tool-loop round limit 200, no human prompt",
+  "status": "in-progress",
+  "createdAt": "2026-10-12T14:03:19.701Z",
+  "updatedAt": "2026-10-12T15:47:41.670Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2d2dc0d252634372b2a3742cb74cced72ac19f32d83a97ef122594a74e306f8d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "origin": {
+    "kind": "human-request",
+    "quote": "Согласен, сделай пока идет прогон, маленький фло, с эффектом: в автоматическом режиме лимит на тулы должен быть увеличен до 200.",
+    "source": "helyx chat -1003908750902, message 199560, 2026-10-12T13:59:30Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered; spec revised by operator message 199701"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-12T14:03:19.701Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-12T14:38:28.842Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-12T14:38:43.062Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-12T14:44:42.815Z",
+      "event": "ac-updated",
+      "detail": "operator spec 199701: 200 auto and automatic review, 120 trust, 40 ask"
+    },
+    {
+      "at": "2026-10-12T14:50:49.701Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-12T14:50:49.899Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-12T14:50:50.093Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-12T14:52:10.989Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-12T15:22:09.165Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"Subagents, which is how review waves run, do not go through the shell turn limit, so they get the same split: in `auto` a child's omitted `max_rounds` resolves to 40 and a requested `max_rounds` is honored up to 200; in `ask` and `trust` the 10 default and the 24 cap stay as they are. The mode is read live at each dispatch, a child still makes at most `max_rounds + 1` provider requests, and a test asserts the three mode cases and the request ceiling. [verify: exec `bun test src/harness/tool/builtin/spawn-subagent-tool.test.ts`]\" -> \"Automatic review is a run mode of a turn, separate from the permission mode and from subagents: a review package created with `keryx review start|attach|ingest --automatic` records `manifest.automatic: true` (shown by `review status`), and a turn that the operator opened by asking for an automatic review runs with a 200-round limit in any permission mode (ask, trust, auto), without the round-limit question, and stops at 200 with the same `[budget]` message as `auto`. A line that is not from the operator, a turn without the request, and an unattended trigger runner keep the mode limit (40 in ask). An explicit `deps.maxRounds` in `auto` still falls back to the question. The subagent 40/200 split is dropped: subagents keep 10 and 24 in every mode. Tests assert the 200 limit in ask, the unchanged 40 without the mark, the mark on the manifest and in `review status`, the request detection, and the unchanged subagent limits. [verify: exec `bun test src/commands/agent.test.ts src/commands/automatic-review.test.ts src/commands/review.test.ts src/commands/trigger-agent-task.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts`]\" (operator spec 199772: automatic review is a review run mode, not subagents and not the permission mode; subagent split dropped)"
+    },
+    {
+      "at": "2026-10-12T15:22:09.545Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"(new)\" -> \"In an automatic review the shell approves, without a prompt, the review CLI set (`keryx review status|ledger|retry-plan|ingest|severity-audit|mutate|complete|compare-reference`) for the review package bound in that turn only, and `apply_patch` inside that package directory; before a package exists only the creating command carrying `--automatic` is approved. A command that is not exactly one literal review command (any pipe, `;`, `&&`, redirect, substitution or newline), that names another review or a path outside the package, or that passes `--force` is asked as usual, and the hard floors (destructive, credentials, publish lease, read-only mode, untrusted origin, hook-asked) are never lowered. Tests assert approval for the bound package and refusal for each of those cases. [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" (operator spec 199802 (a): scoped auto-approval of the review CLI set)"
+    },
+    {
+      "at": "2026-10-12T15:22:09.921Z",
+      "event": "ac-updated",
+      "detail": "AC13: \"(new)\" -> \"In an automatic review `ask_user` and the permission menu reach the operator only in an emergency, a closed list: (1) a command outside the review package or outside the review CLI set, (2) a destructive action, (3) a provider authentication failure, (4) a gate refusal that needs the operator quote (a waiver), (5) a decision on a reduced reviewer set, (6) a provider error after the retries. Every other `ask_user` is answered with its recommended option (else the first) and counted; cases (4) and (5) are accepted only after `review complete` has actually refused, and cases (3) and (6) end the turn with the error. The list is shown by `/mode` and written in the docs and CHANGELOG. Tests assert the default answer, the refused early claim and the emergency that reaches the operator. [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" (operator spec 199802 (b): closed list of emergencies)"
+    },
+    {
+      "at": "2026-10-12T15:22:10.302Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"(new)\" -> \"Every automatic-review turn ends with a disclosure counter of manual inputs (the operator answered or approved) against automatic inputs (the shell answered or approved), written to `automatic-run-inputs.json` in the review package with every entry, and said as one line in the session; a test asserts the counts for a run with both kinds (flow 419 AC8 reads it). [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" (operator spec 199802 (c): disclosure counter)"
+    },
+    {
+      "at": "2026-10-12T15:22:10.683Z",
+      "event": "ac-updated",
+      "detail": "AC15: \"(new)\" -> \"No gate bypass: `review complete` and its refusals behave exactly as without the mark, nothing in the shell or the manifest flag completes, waives or skips a review gate, and the existing review tests pass unmodified. [verify: exec `bun test src/commands/review.test.ts`]\" (operator spec 199802: no gate bypass)"
+    },
+    {
+      "at": "2026-10-12T15:22:11.065Z",
+      "event": "ac-updated",
+      "detail": "AC16: \"(new)\" -> \"Every surface names the automatic review run mode: the TUI sidebar Mode row shows `· automatic review` during such a turn, the readline `/mode` output and the TUI mode picker print its limit and emergency list, `/help` for `/mode` names it, and README, the permission-modes guide, the CLI reference (`--automatic`) and the CHANGELOG [Unreleased] are updated in the same change; the doc-link check passes. [verify: exec `bun test src/tui/tui-shell.test.ts src/commands/shell-agent-repl.test.ts src/standard/help-groups.test.ts && bun run check:doc-links`]\" (operator spec 199802: TUI, help, README, docs, CHANGELOG)"
+    },
+    {
+      "at": "2026-10-12T15:47:38.578Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"With `KERYX_AGENT_MAX_ROUNDS` unset, the round limit of a turn resolved for the `auto` permission mode is 200, for `trust` it is 120 and for `ask` it is 40; a unit test asserts all three values. [verify: exec `bun test src/commands/agent.test.ts`]\" -> \"With `KERYX_AGENT_MAX_ROUNDS` unset, the round limit of a turn resolved for the `auto` permission mode is 200, for `trust` it is 200 (flow 418 T5) and for `ask` it is 40; a unit test asserts all three values. [verify: exec `bun test src/commands/agent.test.ts`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    },
+    {
+      "at": "2026-10-12T15:47:39.083Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"`ask` and `trust` keep the question: at the limit \"Increase limit and continue / Cancel\" is still asked, a reset grants one more allotment of the mode (40 in `ask`, 120 in `trust`), and without a wired `askUser` the turn still stops; the existing round-limit tests pass unmodified. [verify: exec `bun test src/commands/agent.test.ts`]\" -> \"`ask` and `trust` keep the question: at the limit \"Increase limit and continue / Cancel\" is still asked, a reset grants one more allotment of the mode (40 in `ask`, 200 in `trust`), and without a wired `askUser` the turn still stops; the existing round-limit tests pass unmodified. [verify: exec `bun test src/commands/agent.test.ts`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    },
+    {
+      "at": "2026-10-12T15:47:39.575Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"The shell reads the permission mode at the start of each turn: after `/mode auto` the next turn runs with 200, after `/mode trust` with 120, after `/mode ask` with 40, without restarting the session; a shell test asserts the round limit applied to a turn in each mode. [verify: exec `bun test src/commands/shell`]\" -> \"The shell reads the permission mode at the start of each turn: after `/mode auto` the next turn runs with 200, after `/mode trust` with 200, after `/mode ask` with 40, without restarting the session; a shell test asserts the round limit applied to a turn in each mode. [verify: exec `bun test src/commands/shell`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    },
+    {
+      "at": "2026-10-12T15:47:40.151Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"README and the docs site page that describes permission modes say that `auto` allows 200 rounds per turn without a question, that `trust` allows 120 and `ask` 40 and both still ask before extending, and that `KERYX_AGENT_MAX_ROUNDS` overrides all three up to 200; both are updated in the same change, and the doc-link check passes. [verify: exec `bun run check:doc-links`]\" -> \"README and the docs site page that describes permission modes say that `auto` allows 200 rounds per turn without a question, that `trust` allows 200 and `ask` 40 and both still ask before extending, and that `KERYX_AGENT_MAX_ROUNDS` overrides all three up to 200; both are updated in the same change, and the doc-link check passes. [verify: exec `bun run check:doc-links`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    },
+    {
+      "at": "2026-10-12T15:47:40.667Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"`bun run typecheck` and `bun run lint` pass, and a CHANGELOG entry under the next version states the change and the 40/120/200 split. [verify: exec `bun run typecheck && bun run lint`]\" -> \"`bun run typecheck` and `bun run lint` pass, and a CHANGELOG entry under the next version states the change and the 40/200/200 split. [verify: exec `bun run typecheck && bun run lint`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    },
+    {
+      "at": "2026-10-12T15:47:41.172Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"In an automatic review the shell approves, without a prompt, the review CLI set (`keryx review status|ledger|retry-plan|ingest|severity-audit|mutate|complete|compare-reference`) for the review package bound in that turn only, and `apply_patch` inside that package directory; before a package exists only the creating command carrying `--automatic` is approved. A command that is not exactly one literal review command (any pipe, `;`, `&&`, redirect, substitution or newline), that names another review or a path outside the package, or that passes `--force` is asked as usual, and the hard floors (destructive, credentials, publish lease, read-only mode, untrusted origin, hook-asked) are never lowered. Tests assert approval for the bound package and refusal for each of those cases. [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" -> \"In an automatic review the shell approves, without a prompt, the review CLI set as `keryx review --help` lists it on main, in its real flag syntax, for the review package bound in that turn only: `start|attach|ingest --automatic` (once, before a package exists), `status|complete <this review>`, `ledger build <dir> --package <pkg>`, `severity-audit|context-collect|compare-reference|mutate --package <pkg>` (`mutate` only with a literal `bun test` as `--test`), `retry-plan --manifest <pkg>/...`, and `scope|blast-radius` writing only inside the package, plus `apply_patch` inside that package directory. A command that is not exactly one literal review command (any pipe, `;`, `&&`, redirect, substitution or newline), that names another review or a path outside the package, or any other `review` subcommand is asked as usual, and the hard floors (destructive, credentials, publish lease, read-only mode, untrusted origin, hook-asked) are never lowered. Tests assert approval for the bound package for each subcommand and refusal for each of those cases. [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    },
+    {
+      "at": "2026-10-12T15:47:41.670Z",
+      "event": "ac-updated",
+      "detail": "AC13: \"In an automatic review `ask_user` and the permission menu reach the operator only in an emergency, a closed list: (1) a command outside the review package or outside the review CLI set, (2) a destructive action, (3) a provider authentication failure, (4) a gate refusal that needs the operator quote (a waiver), (5) a decision on a reduced reviewer set, (6) a provider error after the retries. Every other `ask_user` is answered with its recommended option (else the first) and counted; cases (4) and (5) are accepted only after `review complete` has actually refused, and cases (3) and (6) end the turn with the error. The list is shown by `/mode` and written in the docs and CHANGELOG. Tests assert the default answer, the refused early claim and the emergency that reaches the operator. [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" -> \"In an automatic review `ask_user` and the permission menu reach the operator only in an emergency, a closed list: (1) a command outside the review package or outside the review CLI set, (2) a destructive action, (3) a provider authentication failure, (4) a gate refusal that needs the operator quote (a waiver), (5) a decision on a reduced reviewer set, (6) a provider error after the retries. Every other `ask_user` is answered with its recommended option (else the first) and counted, except a question tagged irreversible/action or with a review `policy`, which passes to the host (the arbiter or the operator) and is counted as manual; cases (4) and (5) are accepted only after `review complete` has actually refused, and cases (3) and (6) end the turn with the error. The list is shown by `/mode` and written in the docs and CHANGELOG. Tests assert the default answer, the pass-through, the refused early claim and the emergency that reaches the operator. [verify: exec `bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts`]\" (rebased on main 4f1b521e: trust is 200 (flow 418 T5), approved set uses the real review subcommands from #982, ask_user passes irreversible/policy questions to the host)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/shell"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/tui/ src/commands/shell"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun run check:doc-links"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun run typecheck && bun run lint"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/commands/agent.test.ts src/commands/automatic-review.test.ts src/commands/review.test.ts src/commands/trigger-agent-task.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/commands/automatic-review.test.ts src/commands/agent.test.ts"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/commands/review.test.ts"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun test src/tui/tui-shell.test.ts src/commands/shell-agent-repl.test.ts src/standard/help-groups.test.ts && bun run check:doc-links"
+    }
+  }
+}

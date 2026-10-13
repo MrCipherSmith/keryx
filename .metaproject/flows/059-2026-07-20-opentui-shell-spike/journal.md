@@ -10,7 +10,7 @@
 
 ## Phase 0 spike — findings (orchestrator)
 - R1 install PASS: @opentui/core@0.4.5, prebuilt libopentui.dylib (darwin-arm64), no Zig; import loads native (257 exports).
-- R2 RESOLVED: screenMode "split-footer" = fixed footer composer + scrolling main (Pi/grok layout) — adopt this.
+- R2 RESOLVED: screenMode "split-footer" = fixed footer composer + scrolling main (conventional terminal-agent layout) — adopt this.
 - R3 MAPPED: InputRenderable/SelectRenderable ({name,description} == our registry)/ScrollBoxRenderable/BoxRenderable/TextRenderable/MarkdownRenderable(bonus)/KeyHandler; createCliRenderer(config).
 - R4 MIT. R5 ~150ms headless incl native init.
 - N2 headless testing PROVEN: @opentui/core/testing createTestRenderer + mockInput + captureCharFrame; 2 spike tests pass (Select renders command menu; Input accepts typed keys → .value).

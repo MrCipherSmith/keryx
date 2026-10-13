@@ -3,14 +3,11 @@ Version: 0.1.0
 
 ## Problem
 
-Six of the seven peer coding-agent harnesses profiled in
-`docs/analysis/keryx-harness-comparison/2026-08-20` already let the operator
+Most peer coding-agent harnesses already let the operator
 add GitHub, Linear, Playwright, Context7, or any other MCP server and have
-those tools available in the agent loop. Grok Build is the reference this
-package copies: `~/.grok/config.toml` `[mcp_servers.<name>]`, stdio and
-remote HTTP, `server__tool` names, model access through `search_tool` /
-`use_tool`, `grok mcp add|list|doctor`, OAuth, and compat import of
-Claude/Cursor/`.mcp.json`.
+those tools available in the agent loop: stdio and remote HTTP servers,
+namespaced tool names, an `mcp add|list|doctor` CLI, OAuth, and compat
+import of Claude/Cursor/`.mcp.json`.
 
 Keryx does not. It **serves** Metaproject over MCP so *other* agents can use
 keryx (`keryx serve-mcp`, `keryx integrate`). Its own shell cannot consume
@@ -25,14 +22,13 @@ mcp-server` as a client so elicitation/approval can flow back into
 request.
 
 The operator consequence is concrete. A keryx session cannot call
-Playwright, GitHub, Linear, or Context7 the way a Grok Build session can,
+Playwright, GitHub, Linear, or Context7 the way other agent CLIs can,
 even when those servers are already in `.cursor/mcp.json` on the same
 machine.
 
 ## Goal
 
-Make `keryx shell` consume user-configured third-party MCP servers with
-**Grok Build behavioral parity**:
+Make `keryx shell` consume user-configured third-party MCP servers:
 
 1. The operator adds a stdio or HTTP server (CLI, TUI, or a committed
    project file).
@@ -59,15 +55,15 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
 ## Requirements
 
 1. **Config.** User-global and project-scoped server lists. Same name:
-   project replaces user (no field merge), matching Grok Build.
+   project replaces user (no field merge).
 2. **Stdio transport.** Spawn `command` + `args` + `env` + optional `cwd`,
    MCP handshake, `tools/list` (paginated).
 3. **HTTP transport.** Streamable HTTP to `url` with optional headers.
    Config `type = "sse"` or a URL ending in `/sse` is the same HTTP client
-   (Grok Build runtime fact: SSE is a label, not a second stack).
+   (SSE is a label, not a second stack).
 4. **Naming.** Internal FQNs are `server__tool`. Invalid names
    (`^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$` on the qualified name, max 64) are
-   skipped and reported, not registered — Grok Build's cross-provider cap.
+   skipped and reported, not registered — a cross-provider cap.
 5. **Model bridge.** Do not add MCP tools to the provider tool list. Add
    exactly two builtins: `search_tool` (search the catalog) and `use_tool`
    (`{ tool_name, tool_input }` → `tools/call`). A short system reminder
@@ -96,7 +92,7 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
     MCP init.
 13. **Lifecycle.** Enable/disable without deleting config. Doctor reports
     config problems and connectivity. Output of `use_tool` is truncated
-    with a documented byte cap (Grok default 20_000 bytes).
+    with a documented byte cap (default 20_000 bytes).
 14. **Boundaries.** `src/mcp/` (inbound) and `gatedSuperviseCodexMcpRun`
     stay. This package must not route Codex elicitation through
     `search_tool`.
@@ -130,19 +126,19 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
   `src/commands/agent-commands.confusable.test.ts`, which fails the build on a
   slash command differing from another only by a trailing `s`.
 - **Scope creep to a full MCP client.** Sampling, elicitation, resources as
-  model tools, MCP Apps. Grok Build itself treats most of these as gaps.
-  Mitigated by copying Grok's *shipped* surface, not the MCP spec.
-- **OAuth and headless.** Grok's OAuth is browser-based and blocks headless
+  model tools, MCP Apps. Mitigated by scoping v1 to the surface other agent
+  CLIs actually ship, not the full MCP spec.
+- **OAuth and headless.** Browser-based OAuth blocks headless runs
   until login. Keryx `unattended` / `keryx serve` must fail closed (named
   `needs_auth`), never hang. Mitigated by treating OAuth as interactive-only
   in v1; headers/env remain the headless path.
-- **Stdio sandbox.** Grok does not special-case MCP children; they inherit
-  the agent process. Keryx's OS sandbox defaults differ for harness vs
+- **Stdio sandbox.** Agent CLIs commonly do not special-case MCP children;
+  they inherit the agent process. Keryx's OS sandbox defaults differ for harness vs
   `shell_exec`. A contained stdio MCP that cannot reach npm cache or the
   network looks "down". Mitigated by D-08: v1 stdio MCP spawn is
   unsandboxed unless the operator opts in; remote HTTP is out of the FS
   sandbox by construction.
-- **64-character FQN cap.** Grok silently skips invalid names. Operators
+- **64-character FQN cap.** Invalid names are skipped. Operators
   will think a server is "up" with zero tools. Mitigated by doctor + `/mcp`
   showing skipped names.
 - **Credential store vs D-01.** MCP OAuth tokens are easy to confuse with
@@ -156,9 +152,9 @@ Specify and implement this as a **new** requirements package and a **new**
 elicitation ACs. Generalize `src/mcp-client/` only as far as transports
 (`listTools`, HTTP) so both consumers share one SDK load path.
 
-Copy Grok Build's model bridge (`search_tool` / `use_tool`) rather than
-OpenCode's per-tool registration: keryx already cares about a stable
-interactive tool list (`InteractiveTool[]` in `AgentDeps`), and Grok's
+Use a two-tool model bridge (`search_tool` / `use_tool`) rather than
+per-tool registration of every MCP tool: keryx already cares about a stable
+interactive tool list (`InteractiveTool[]` in `AgentDeps`), and the
 reason — KV-cache stability when MCP catalogs change — applies here.
 
 Proceed in the phases in [implementation-plan.md](implementation-plan.md).

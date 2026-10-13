@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 978,
+  "headSha": "6824f7776244f3f4db81a488884231ffd45ad88b",
+  "collectedAt": "2026-10-12T20:16:22.021Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "feat(remote): Telegram relays approvals, questions and progress; close archives the topic (flow 419)",
+    "body": "## Summary\n\nFlow 419: a shell with `/remote-control` can be run from Telegram alone.\n\n- Every approval, `ask_user` question and queue dialog is mirrored to the topic with buttons, also for a turn typed in the shell. The first answer wins from either side and closes the other once (`prompt-close`). (AC1, AC2)\n- An unanswered question gets a reminder every 2 minutes, at most 3. (AC3)\n- `/route` joins the topic menu. `/route`, `/external`, `/external-agents` and `/model` are queued with a notice while main is busy and run when it goes idle; `/mode` takes effect at once. (AC4)\n- Progress notes at subagent wave boundaries and after tool-heavy stretches, at most one a minute, counts and names only. (AC5)\n- A short status question is answered from session state while the turn runs, never queued. (AC6)\n- Closing the shell archives the topic (closing note, history stays readable) instead of deleting it; a killed shell is archived after the orphan window. (AC7)\n- Docs: README, guide (new \"What the topic hears\" and \"What happens when the shell closes\"), CLI reference, wiki page, CHANGELOG. `mkdocs build --strict` passes locally. (AC9)\n\n## Evidence\n\n| AC | Tests |\n|----|-------|\n| AC1, AC2 | `src/remote/approval-mirror.test.ts`, `src/tui/approval-mirror.test.ts` |\n| AC3 | `src/remote/prompt-reminder.test.ts` |\n| AC4 | `src/remote/command-queued.test.ts`, `command-gateway` and `command-model` tests |\n| AC5, AC6 | `src/remote/progress-notes.test.ts`, `src/tui/remote-queue-wiring.test.ts` |\n| AC7 | `src/remote/lifecycle.test.ts`, `src/remote/orphan.test.ts` |\n\nTargeted run: `src/remote`, `remote-queue-wiring`, `approval-mirror` — 1331 pass, 0 fail; `tsc --noEmit` clean. Full suite is left to CI.\n\n## Not done\n\nAC8 (a long review completed from Telegram only, with the topic's message log) needs the operator; the steps are in the flow's `plan.md`. Everything here was tested against a fake Bot API.\n\n## Known limits\n\n- Progress notes are driven by tool calls and subagent events only; a long silent model step produces none.\n- Status questions are matched by a short en/ru phrase list; anything else is work.\n- Intervals (reminder 2 min, progress 1 min) are fixed defaults, not settings."
+  },
+  "ci": {
+    "state": "passing",
+    "checks": [
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

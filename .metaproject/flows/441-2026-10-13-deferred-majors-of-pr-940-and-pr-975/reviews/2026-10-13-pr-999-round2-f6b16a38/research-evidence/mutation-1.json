@@ -1,0 +1,497 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3",
+  "command": "bun test src/tui/main-queue-drain.test.ts src/tui/main-queue.test.ts src/tui/tui-bus.test.ts src/tui/tui-hold.test.ts src/tui/remote-queue-wiring.test.ts src/tui/foreground-operation.test.ts src/tui/busy-dispatch.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 742
+  },
+  "mutants": [
+    {
+      "id": "N01-budget-short-by-one",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "for (let budget = options.pending(); budget > 0; budget--)",
+      "replacement": "for (let budget = options.pending() - 1; budget > 0; budget--)",
+      "line": 218,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 738
+    },
+    {
+      "id": "N02-budget-extra-slot",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "for (let budget = options.pending(); budget > 0; budget--)",
+      "replacement": "for (let budget = options.pending() + 1; budget > 0; budget--)",
+      "line": 218,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 857
+    },
+    {
+      "id": "N03-never-stops-on-busy",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (options.isBusy()) return \"started\";\n",
+      "replacement": "\n",
+      "line": 224,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 825
+    },
+    {
+      "id": "N04-no-paint",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    options.paint();\n",
+      "replacement": "\n",
+      "line": 221,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 839
+    },
+    {
+      "id": "N05-empty-take-reports-started",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (next === undefined) return \"empty\";",
+      "replacement": "if (next === undefined) return \"started\";",
+      "line": 222,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 873
+    },
+    {
+      "id": "N07-no-self-requeue-stop",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (options.pending() >= before) return \"exhausted\";\n",
+      "replacement": "\n",
+      "line": 225,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 835
+    },
+    {
+      "id": "N08-self-requeue-stop-strict",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (options.pending() >= before) return \"exhausted\";",
+      "replacement": "if (options.pending() > before) return \"exhausted\";",
+      "line": 225,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 824
+    },
+    {
+      "id": "N09-settle-wakes-always",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (drain() === \"empty\") deps.onSettle();",
+      "replacement": "drain();\n      deps.onSettle();",
+      "line": 274,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 832
+    },
+    {
+      "id": "N10-settle-never-wakes",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (drain() === \"empty\") deps.onSettle();",
+      "replacement": "drain();",
+      "line": 274,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 835
+    },
+    {
+      "id": "N11-settle-wakes-on-exhausted",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "if (drain() === \"empty\") deps.onSettle();",
+      "replacement": "if (drain() !== \"started\") deps.onSettle();",
+      "line": 274,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 844
+    },
+    {
+      "id": "N12-settle-ignores-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onTurnSettle() {\n      if (deps.forced.isAwaitingSettlement) return;\n",
+      "replacement": "    onTurnSettle() {\n",
+      "line": 272,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 842
+    },
+    {
+      "id": "N13-operation-complete-ignores-handoff",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    onForegroundOperationComplete() {\n      if (deps.forced.isAwaitingSettlement) return;\n",
+      "replacement": "    onForegroundOperationComplete() {\n",
+      "line": 268,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 843
+    },
+    {
+      "id": "N14-idle-drain-unguarded",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "    if (deps.workInFlight()) return;\n    drain();",
+      "replacement": "    drain();",
+      "line": 264,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 850
+    },
+    {
+      "id": "N15-detached-done-site-empty",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "onDetachedWorkDone: drainWhenIdle,",
+      "replacement": "onDetachedWorkDone() {},",
+      "line": 277,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 863
+    },
+    {
+      "id": "N16-lease-release-site-empty",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "onLeaseRelease: drainWhenIdle,",
+      "replacement": "onLeaseRelease() {},",
+      "line": 276,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 825
+    },
+    {
+      "id": "N17-queue-before-forced",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "deps.forced.takeNext() ?? deps.queue.shift()",
+      "replacement": "deps.queue.shift() ?? deps.forced.takeNext()",
+      "line": 257,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 817
+    },
+    {
+      "id": "N18-pending-ignores-forced",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "deps.forced.pendingCount + deps.queue.length",
+      "replacement": "deps.queue.length",
+      "line": 258,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 818
+    },
+    {
+      "id": "N19-pending-ignores-queue",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "deps.forced.pendingCount + deps.queue.length",
+      "replacement": "deps.forced.pendingCount",
+      "line": 258,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 808
+    },
+    {
+      "id": "N20-paint-dropped",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "paint: deps.paint,",
+      "replacement": "paint: () => {},",
+      "line": 259,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 819
+    },
+    {
+      "id": "N21-busy-dropped",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "isBusy: deps.workInFlight,",
+      "replacement": "isBusy: () => false,",
+      "line": 261,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 797
+    },
+    {
+      "id": "N22-handoff-count-zero",
+      "file": "src/tui/foreground-operation.ts",
+      "anchor": "get pendingCount(): number {\n    return this.pending.length;",
+      "replacement": "get pendingCount(): number {\n    return 0;",
+      "line": 126,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 835
+    },
+    {
+      "id": "S01-shell-in-flight-ignores-handoff",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;",
+      "replacement": "chrome.isBusy() || foregroundOperation.isActive || detachedSlashWork > 0;",
+      "line": 7963,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 818
+    },
+    {
+      "id": "S02-shell-in-flight-ignores-operation",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;",
+      "replacement": "chrome.isBusy() || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;",
+      "line": 7963,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 956
+    },
+    {
+      "id": "S03-shell-in-flight-ignores-chrome-busy",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;",
+      "replacement": "foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;",
+      "line": 7963,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 730
+    },
+    {
+      "id": "S04-shell-in-flight-ignores-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;",
+      "replacement": "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement;",
+      "line": 7963,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 833
+    },
+    {
+      "id": "S05-shell-forced-stub",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "forced: forceHandoff,",
+      "replacement": "forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },",
+      "line": 7965,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 827
+    },
+    {
+      "id": "S06-shell-queue-stub",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queue: mainQueue,",
+      "replacement": "queue: [],",
+      "line": 7966,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 829
+    },
+    {
+      "id": "S07-shell-paint-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queue: mainQueue,\n      paint: () => paintMainQueue(),",
+      "replacement": "queue: mainQueue,\n      paint: () => {},",
+      "line": 7966,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 810
+    },
+    {
+      "id": "S08-shell-bus-wake-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onSettle: () => busWakeController?.onSettle(),",
+      "replacement": "onSettle: () => undefined,",
+      "line": 7970,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 828
+    },
+    {
+      "id": "S09-shell-turn-settle-site-deleted",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        drainSites.onTurnSettle();\n",
+      "replacement": "\n",
+      "line": 9944,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 845
+    },
+    {
+      "id": "S10-shell-operation-site-deleted",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "                  drainSites.onForegroundOperationComplete();\n",
+      "replacement": "\n",
+      "line": 9639,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 812
+    },
+    {
+      "id": "S11-shell-lease-site-wired-to-settle",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onRelease: () => drainSites.onLeaseRelease(),",
+      "replacement": "onRelease: () => drainSites.onTurnSettle(),",
+      "line": 10025,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 818
+    },
+    {
+      "id": "S12-shell-detach-counter-not-raised",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "      detachedSlashWork += 1;\n",
+      "replacement": "\n",
+      "line": 7975,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 879
+    },
+    {
+      "id": "S13-shell-detach-end-not-drained",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        drainSites.onDetachedWorkDone();\n",
+      "replacement": "\n",
+      "line": 7978,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 806
+    },
+    {
+      "id": "S14-model-not-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "detachSlashWork((async () => {\n            const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;\n            const prov",
+      "replacement": "void ((async () => {\n            const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;\n            const prov",
+      "line": 9306,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 837
+    },
+    {
+      "id": "S15-connect-not-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "detachSlashWork((async () => {\n            const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;\n            const ns",
+      "replacement": "void ((async () => {\n            const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;\n            const ns",
+      "line": 9365,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 841
+    },
+    {
+      "id": "S16-goal-not-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "detachSlashWork((async () => {\n            await runGoalCommand({",
+      "replacement": "void ((async () => {\n            await runGoalCommand({",
+      "line": 8790,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 823
+    },
+    {
+      "id": "S17-schedule-not-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "detachSlashWork(runScheduleSlashCommand(",
+      "replacement": "void (runScheduleSlashCommand(",
+      "line": 8776,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 794
+    },
+    {
+      "id": "S18-search-provider-not-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "detachSlashWork((async () => {\n            const args = parseSearchProviderArgs(line.slice(16));",
+      "replacement": "void ((async () => {\n            const args = parseSearchProviderArgs(line.slice(16));",
+      "line": 8833,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 842
+    },
+    {
+      "id": "S19-search-connect-not-detached",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "detachSlashWork((async () => {\n            const args = parseSearchProviderArgs(line.slice(15));",
+      "replacement": "void ((async () => {\n            const args = parseSearchProviderArgs(line.slice(15));",
+      "line": 8867,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 820
+    },
+    {
+      "id": "N23-final-return-exhausted",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "so the count is now zero\n  return \"empty\";",
+      "replacement": "so the count is now zero\n  return \"exhausted\";",
+      "line": 227,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 836
+    },
+    {
+      "id": "N24-budget-steps-by-two",
+      "file": "src/tui/main-queue.ts",
+      "anchor": "budget > 0; budget--) {\n    const before",
+      "replacement": "budget > 0; budget -= 2) {\n    const before",
+      "line": 218,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 830
+    },
+    {
+      "id": "S20-detach-counter-never-lowered",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        detachedSlashWork -= 1;\n",
+      "replacement": "\n",
+      "line": 7977,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 619
+    },
+    {
+      "id": "S21-detach-end-only-on-success",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "void work.finally(() => {",
+      "replacement": "void work.then(() => {",
+      "line": 7976,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 731
+    },
+    {
+      "id": "S22-set-queue-in-place",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "      setQueue: (next) => {\n        mainQueue = next;\n      },",
+      "replacement": "      setQueue: (next) => {\n        mainQueue.splice(0, mainQueue.length, ...next);\n      },",
+      "line": 4996,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 809
+    },
+    {
+      "id": "S23-force-removes-in-place",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "      mainQueue = removeMainQueueItem(mainQueue, index);\n      paintMainQueue();",
+      "replacement": "      mainQueue.splice(index, 1);\n      paintMainQueue();",
+      "line": 8049,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 801
+    },
+    {
+      "id": "S24-factory-takes-a-copy",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "queue: mainQueue,\n      paint: () => paintMainQueue(),",
+      "replacement": "queue: [...mainQueue],\n      paint: () => paintMainQueue(),",
+      "line": 7966,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 821
+    },
+    {
+      "id": "S25-bus-idle-ignores-queue",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "        mainQueue.length === 0 &&\n        leaseView()?.held() !== true,",
+      "replacement": "        leaseView()?.held() !== true,",
+      "line": 10004,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 804
+    }
+  ],
+  "totals": {
+    "killed": 46,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

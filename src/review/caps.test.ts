@@ -3,6 +3,7 @@ import {
   applyFindingsCap,
   DEFAULT_MAX_FINDINGS_PER_REVIEWER,
   MAX_RATE_HALVINGS,
+  MAX_RETRY_AFTER_SECONDS,
   MAX_REVIEWERS_PER_WAVE_FULL,
   nextAfterRateLimit,
   rateLimitState,
@@ -303,7 +304,7 @@ test("AC7: with no declared outstanding count the plan states plainly that it do
 
   const markdown = renderCapsMarkdown({ concurrency: plan });
   expect(markdown).toContain("holds_across_nesting: no");
-  expect(markdown).toContain("It does not bind the total across");
+  expect(markdown).toContain("The cap bound THIS dispatch plan only.");
   expect(markdown).toContain("outstanding_declared: not recorded");
 });
 
@@ -359,6 +360,16 @@ test("AC9: retry-after is honoured when the reviewer gave one", () => {
     expect(decision.waitSeconds).toBe(42);
   }
   expect(() => nextAfterRateLimit(rateLimitState(10), ["a"], [], -1)).toThrow(/retry-after/);
+});
+
+test("AC9: a retry-after past the ceiling is clamped to 300 seconds", () => {
+  const decision = nextAfterRateLimit(rateLimitState(10), ["review-logic"], [], 86_400);
+
+  expect(decision.action).toBe("requeue");
+  if (decision.action === "requeue") {
+    expect(decision.waitSeconds).toBe(MAX_RETRY_AFTER_SECONDS);
+    expect(decision.waitSeconds).toBe(300);
+  }
 });
 
 test("AC9: three consecutive rate limits halve twice and then stop with BLOCKED rate_limited naming the queue", () => {

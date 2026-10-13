@@ -20,7 +20,7 @@ metadata:
   version: 1.0.0
 ---
 
-**Preflight:** run in the main session. Without the `Agent` tool or depth budget, output only `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`, with no tool calls.
+**Preflight:** run in the main session. Without a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) or depth budget, output only `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`, with no tool calls.
 
 # autodoc-orchestrator
 

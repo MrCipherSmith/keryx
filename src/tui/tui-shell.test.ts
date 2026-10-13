@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import packageJson from "../../package.json" with { type: "json" };
 import {
   composerHeightForLines,
@@ -27,6 +28,7 @@ import {
   freshSlateSessionRef,
   attachUsageIo,
   createTuiAgentIo,
+  describeModePickerOption,
   describeModeRow,
   estimateContextTokens,
   fmtTokens,
@@ -2973,10 +2975,37 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(caseBlock).toContain("runPlanCommand(line);");
   });
 
+  test("flow 429 AC7: the /mode picker names the round limit of each mode", () => {
+    const saved = process.env.KERYX_AGENT_MAX_ROUNDS;
+    delete process.env.KERYX_AGENT_MAX_ROUNDS;
+    try {
+      expect(describeModePickerOption("ask")).toContain("40 rounds per turn, asks before extending");
+      expect(describeModePickerOption("trust")).toContain("200 rounds per turn, asks before extending");
+      expect(describeModePickerOption("auto")).toContain("200 rounds per turn, extends without asking");
+    } finally {
+      if (saved !== undefined) process.env.KERYX_AGENT_MAX_ROUNDS = saved;
+    }
+  });
+
   // Flow 270 AC9: the state is on screen, not only in a toast.
-  test("describeModeRow: the mode alone, and a separate read-only part while /plan is on", () => {
+  test("describeModeRow: the mode alone, a separate read-only part while /plan is on, and an automatic-review part during such a turn", () => {
     expect(describeModeRow("ask", false)).toEqual({ mode: "ask" });
     expect(describeModeRow("auto", true)).toEqual({ mode: "auto", readOnly: "· read-only" });
+    expect(describeModeRow("ask", false, true)).toEqual({ mode: "ask", automaticReview: "· automatic review" });
+    expect(describeModeRow("trust", true, true)).toEqual({
+      mode: "trust",
+      readOnly: "· read-only",
+      automaticReview: "· automatic review",
+    });
+  });
+
+  test("flow 429 AC16: /mode names automatic review, its limit and its emergencies; the sidebar row follows the turn", () => {
+    const text = describeAutomaticReviewMode({});
+    expect(text).toContain("200 rounds per turn, extends without asking");
+    expect(text).toContain("a destructive action");
+    expect(text).toContain("a reduced reviewer set");
+    expect(fnBodyPlan).toContain("io.onAutomaticReview = (active) => {\n      automaticReview = active;\n      paintModeRow();");
+    expect(fnBodyPlan).toContain("describeAutomaticReviewMode()");
   });
 
   test("the sidebar Mode row is repainted by /plan on, /plan off and every /mode change", () => {
@@ -3101,56 +3130,29 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     }
   });
 
-  // Flow 277 (P2): the ORDER these two branches run their steps in used to be
-  // asserted here by comparing character offsets inside a 500-character
-  // window. Both branches now call the extracted `performSlateExit`
-  // (`src/tui/shell-exit.ts`), and `shell-exit.test.ts` asserts the order
-  // against the real function — including that each async step is AWAITED,
-  // which no offset comparison could express. What is left here is the
-  // wiring: that both exit paths go through it, with this session's own
-  // slate, jobs, bus and lease.
-  test("the non-busy /exit branch exits through performSlateExit, with this session's slate, jobs, bus and lease", () => {
-    const exitIdx = tuiSourceAc7.indexOf('if (command.name === "/exit") {');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
-    expect(exitBlock).toContain("await performSlateExit({");
-    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
-    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
-    expect(exitBlock).toContain("jobs.removeAll()");
-    expect(exitBlock).toContain("liveBus?.leave()");
-    expect(exitBlock).toContain("sessionLease.release()");
-  });
-  test("F-002: the busy-dispatch /exit branch (classifyBusyDispatch === 'exit') exits through the SAME helper — the second real exit path, once missing the sweep entirely", () => {
-    const exitIdx = tuiSourceAc7.indexOf('case "exit": {');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
-    expect(exitBlock).toContain("await performSlateExit({");
-    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
-    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
-    expect(exitBlock).toContain("jobs.removeAll()");
-  });
-  test("BOUNDARY — performSlateExit is wired at exactly those two paths, not sprinkled", () => {
-    // The point of the helper is that the two command-driven exits share ONE
-    // sequence. A third call site would be a third exit path nobody reviewed;
-    // zero would mean the two tests above are asserting nothing.
+  // Flow 415: wiring audits only. Executable barrier/failure/timeout checks
+  // live in session/shell-finalizer.test.ts; exit sequencing in shell-exit.test.ts.
+  test("both command exits await the shared preservation barrier", () => {
+    for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
+      const idx = tuiSourceAc7.indexOf(marker);
+      expect(idx).toBeGreaterThanOrEqual(0);
+      const block = tuiSourceAc7.slice(idx, idx + 900);
+      expect(block).toContain("await performSlateExit({");
+      expect(block).toContain("await finalizeShell?.();");
+      expect(block).not.toContain("closeSlateSession(");
+      expect(block).not.toContain("sessionLease.release()");
+    }
     expect(tuiSourceAc7.split("await performSlateExit({").length - 1).toBe(2);
   });
-  test("F-002: onDestroy (Ctrl+C) ALSO sweeps AND purges background jobs, and defers resolveDone() until the sweep settles — the THIRD real exit path that was previously missing it entirely", () => {
-    const onDestroyIdx = tuiSourceAc7.indexOf("onDestroy: () => {");
-    expect(onDestroyIdx).toBeGreaterThanOrEqual(0);
-    const nextTopLevelMarker = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", onDestroyIdx);
-    expect(nextTopLevelMarker).toBeGreaterThan(onDestroyIdx);
-    const onDestroyBlock = tuiSourceAc7.slice(onDestroyIdx, nextTopLevelMarker);
-    const removeIdx = onDestroyBlock.indexOf(onDestroyRemoveAllCall);
-    const sweepIdx = onDestroyBlock.indexOf(onDestroySweepCall);
-    const resolveIdx = onDestroyBlock.indexOf("resolveDone();");
-    expect(removeIdx).toBeGreaterThanOrEqual(0);
-    expect(sweepIdx).toBeGreaterThan(removeIdx);
-    // resolveDone() is called from INSIDE the deferred async IIFE (a
-    // `finally`), after the sweep — never synchronously alongside it — so
-    // nothing downstream of `launchTuiAgentShell()` can observe `done`
-    // resolving before the sweep has actually run.
-    expect(resolveIdx).toBeGreaterThan(sweepIdx);
+  test("renderer destruction waits for preservation before resolving done", () => {
+    const start = tuiSourceAc7.indexOf("onDestroy: () => {");
+    const end = tuiSourceAc7.indexOf("applyThemeId(getThemeId(), r.themeMode);", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const block = tuiSourceAc7.slice(start, end);
+    const finalize = block.indexOf("await finalizeShell()");
+    expect(finalize).toBeGreaterThanOrEqual(0);
+    expect(block.indexOf("resolveDone();")).toBeGreaterThan(finalize);
   });
 
   test("AC9: /clear|/new does NOT sweep or purge background jobs — a running job must survive it", () => {
@@ -3164,23 +3166,24 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     expect(newBlock).not.toContain("removeAll");
   });
 
-  test("sweepBackgroundJobs (OS-level) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    const plainOccurrences = tuiSourceAc7.split(sweepCall).length - 1;
-    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
-    const onDestroyOccurrences = tuiSourceAc7.split(onDestroySweepCall).length - 1;
-    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveDeps` ref, not `deps` directly)
-  });
-
-  test("jobs.removeAll() (store-level purge) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    // Flow 277: the two command-driven purges are now `purgeJobList: () =>
-    // jobs.removeAll()` inside the `performSlateExit` steps, so they carry no
-    // trailing semicolon. onDestroy's own `liveJobs?.removeAll()` does not
-    // contain this substring (capital J, optional chaining), so it is counted
-    // separately below rather than subtracted here.
-    const plainOccurrences = tuiSourceAc7.split("jobs.removeAll()").length - 1;
-    expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
-    const onDestroyOccurrences = tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1;
-    expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveJobs` ref, not `jobs` directly)
+  test("cleanup and ownership release belong to the single finalizer", () => {
+    expect(tuiSourceAc7.split(sweepCall).length - 1).toBe(0);
+    expect(tuiSourceAc7.split("jobs.removeAll()").length - 1).toBe(0);
+    // Second site: startup destruction before the live finalizer exists.
+    // Command exits must not contain their own cleanup or release.
+    expect(tuiSourceAc7.split(onDestroySweepCall).length - 1).toBe(2);
+    expect(tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1).toBe(2);
+    const start = tuiSourceAc7.indexOf("finalizeShell = createShellFinalizer({");
+    const end = tuiSourceAc7.indexOf("io.onHistoryChange =", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = tuiSourceAc7.slice(start, end);
+    // The renderer is already destroyed on the exit path, so the final checkpoint must not repaint.
+    expect(block).toContain("flushSessionCheckpoint(false);");
+    expect(block).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
+    expect(block).toContain(onDestroySweepCall);
+    expect(block).toContain(onDestroyRemoveAllCall);
+    expect(block).toContain('hooks.runtime.fire("SessionEnd"');
+    expect(block).toContain("releaseLease: () => sessionLease.release()");
   });
 });
 
@@ -4009,7 +4012,10 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
   test("the settle handler still drains a queued operator item before anything else", () => {
     // The existing operator-first drain must survive: a queued message is the
     // real next step and beats a pending notification.
-    expect(wakeSource).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
+    expect(wakeSource).toContain("forced: forceHandoff,");
+    expect(wakeSource).toContain("queue: () => mainQueue,");
+    const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
+    expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   });
 
   test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
@@ -4225,7 +4231,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
   const fnBody = tuiSource.slice(tuiSource.indexOf("export async function launchTuiAgentShell(opts: {"));
 
   test("resumeSessionInteractive rebinds the slate after it applies the resumed session", () => {
-    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
     const applied = block.indexOf("applyOpened(opened, true);");
@@ -4234,7 +4240,7 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
   });
 
   test("resumeSessionInteractive refreshes the workspace sidebar from the rebound slate", () => {
-    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
     const bound = block.indexOf("bindSlateToLiveSession();");
     expect(bound).toBeGreaterThanOrEqual(0);

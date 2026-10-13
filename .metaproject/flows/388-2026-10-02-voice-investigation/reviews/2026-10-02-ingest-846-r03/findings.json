@@ -61,7 +61,7 @@
     "id": "F-003",
     "reviewer": "flow388-docs-consistency",
     "severity": "info",
-    "problem": "Piper voice size is about 60 MB per voice in section 4 and about 21 MB per voice in section 8, without saying the first is helyx's own Piper build and the second is the int8 sherpa export.",
+    "problem": "Piper voice size is about 60 MB per voice in section 4 and about 21 MB per voice in section 8, without saying the first is the chat bot's own Piper build and the second is the int8 sherpa export.",
     "impact": "Two figures for the same product in one report can read as an error; no decision depends on it because section 4 is background.",
     "suggested_fix": "Name the stack next to each figure.",
     "evidence": "Read report.md lines 27, 57 and 120 at b856f1d8.",
@@ -83,7 +83,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "Fixed in commit 4d6f962b on chore/flow-388-complete (docs/requirements/keryx-voice/report.md). Supersedes the r02 dismissals, which no human had decided. Section 4 Piper row names the helyx build and the 21 MB sherpa figure."
+      "evidence": "Fixed in commit 4d6f962b on chore/flow-388-complete (docs/requirements/keryx-voice/report.md). Supersedes the r02 dismissals, which no human had decided. Section 4 Piper row names the chat bot's build and the 21 MB sherpa figure."
     }
   }
 ]

@@ -1,7 +1,7 @@
 # PII: second review of the ssn identifier guard (rounds, fixes and verifier)
 
 Status: draft (AC not yet shown to the operator; do not freeze)
-Source: operator request "Тогда сделай строже" (helyx message 186203, 2026-10-05) and polls 96 and 97
+Source: operator request "Тогда сделай строже" (the chat bot message 186203, 2026-10-05) and polls 96 and 97
 
 ## Problem
 
@@ -13,7 +13,7 @@ The guard suppresses an SSN-shaped match only next to an adjacent hex token of e
 
 ## Outcome criteria
 
-- Запрос (дословно): «Тогда сделай строже» (source: helyx message 186203, 2026-10-05); decisions in poll 96 (narrow the exclusion, widen the labels) and poll 97 (new flow, move old defects to flow 409)
+- Запрос (дословно): «Тогда сделай строже» (source: the chat bot message 186203, 2026-10-05); decisions in poll 96 (narrow the exclusion, widen the labels) and poll 97 (new flow, move old defects to flow 409)
 - Эффект (формализация агента): a genuine SSN is redacted unless an exact-length md5/sha1/sha256 hash is adjacent and no SSN label is near it; the review record of this work is real and gate-clean.
 - Как наблюдать (предложение агента): the named tests in `src/security/detect/pii-identifier-sweep.test.ts` on main, mutation results in the review package, and `keryx flow check-complete` for this flow.
 

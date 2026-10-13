@@ -7,7 +7,7 @@ NEEDS_CONTEXT_ADAPTER, EXTENSION_ESCALATION_REQUIRES_POLICY). New `src/harness/e
 execute.ts`; additive-only to prior modules. Reuse W12 child + W15 registry + W11 flow-port
 + W10 approval + W8 immutable-attempts + src/contracts. NO new dep/SDK/network (`deps {}`).
 Deterministic (injected id/clock). Fail-closed escalation. D-02 (no flow.json write). Root
-`/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-extension-exec). Worktree-guard.
+`~/goodea/keryx` (branch feature/keryx-release2-extension-exec). Worktree-guard.
 Commits/PR: NO co-authorship.
 
 | ID | Kind | Model | Title / definition |
