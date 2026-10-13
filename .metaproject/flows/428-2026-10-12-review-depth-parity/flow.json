@@ -11,12 +11,12 @@
   "title": "Review depth parity",
   "status": "in-progress",
   "createdAt": "2026-10-12T10:05:21.195Z",
-  "updatedAt": "2026-10-12T10:09:08.534Z",
+  "updatedAt": "2026-10-13T06:23:11.097Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:e9aea9acf4c67472947746e6f53b3bf343136fac1ef38f6c81e7fbca85313e68",
+  "acChecksum": "sha256:dcd4fed85ba6dfc07befb3a1cf4bf75ea5a52b3534257911e5f72243035f9e1f",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -106,6 +106,11 @@
     {
       "at": "2026-10-12T10:09:08.534Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-13T06:23:11.097Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"`keryx review mutate` runs the mutants proposed by the testing reviewer in a copy of the worktree (never in the original), requires an exact anchor match per mutant, discards the copy in `finally`, runs the targeted tests, and writes one row per mutant (id, anchor, killed|survived|error, test command, exit code) under the package's `research-evidence/`. The original tree is byte-identical before and after. [verify: exec `bun test src/review/mutate.test.ts`]\" -> \"`keryx review mutate` runs the mutants proposed by the testing reviewer in a copy of the worktree (never in the original), requires an exact anchor match per mutant, discards the copy in `finally`, runs the targeted tests, and writes one row per mutant (id, anchor, killed|survived|invalid|timeout, test command, exit code) under the package's `research-evidence/`. The original tree is byte-identical before and after. [verify: exec `bun test src/review/mutate.test.ts`]\" (Operator decision (helyx 201657, 2026-10-13): the code reports invalid and timeout instead of error; the criterion follows the code)"
     }
   ],
   "acKinds": {
