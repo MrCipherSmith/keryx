@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "files": [
+    "src/commands/agent-trust-orchestration.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/review-slice-paths.test.ts",
+    "src/commands/review-slice.ts",
+    "src/harness/tool/builtin/interactive-tools.ts",
+    "src/harness/tool/builtin/shell-exec-tool.ts",
+    "src/lib/contained-path-place.test.ts",
+    "src/lib/contained-path.ts",
+    "src/lib/review-path-flags.ts",
+    "src/lib/trust-routine-command.test.ts",
+    "src/lib/trust-routine-command.ts"
+  ]
+}

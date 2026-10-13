@@ -240,6 +240,24 @@ outside the working tree. This table is the single list; the code reads it from
 | `keryx ctx rg`, `read`, `diff` | |
 | `slate_note`, `slate_trail` (tools) | the session's own notes |
 
+`bun test` is routine only while all of these hold, because a test run executes project
+code: no untrusted content has entered the turn; the command runs in the project root,
+judged after following the chain's `cd`s (a `cd` whose target cannot be known makes it
+ask: an option, `-`, a target the shell may expand, a relative name while `CDPATH` is set,
+or a directory reached through a symlink); its arguments are only `--bail`, `--only`, `--todo`, `--rerun-each N`
+and `--timeout N` with a plain non-negative integer; and the project's `bunfig.toml` is
+byte-for-byte the file the process saw at its first turn for that project, with no
+`preload` anywhere in it. The baseline is per process and first-wins: a later session in
+the same process, on the same project, is judged against the file as the first one saw
+it, not as it is now. A `bunfig.toml` that appears, changes, cannot be read (it is not a
+regular file, or is over 256 KiB) or does not parse makes `bun test` ask again.
+
+The path flags of `keryx review slice` (`--diff`, `--out`), `retry-plan` (`--manifest`,
+`--result`, `--state`) and `dispatch-check` (`--manifest`, `--payload`) are routine only
+when they land inside the project root by their real path, symlinks resolved. `-` is
+standard input for `--diff`, `--payload` and `--result` only. The command refuses an
+outside path itself, too, and opens the path it judged.
+
 A command outside the table still asks. So does a command that chains with `;`, pipes
 to a command that is not listed, redirects outside the working tree, or uses a
 subshell, `$(…)` or backticks: every segment has to be in the table. The hard floors
@@ -274,7 +292,9 @@ carry one to the end without you typing anything after the task.
 - **No prompt for routine commands.** In `trust` and `review-auto`, a short `&&` chain
   of `cd`, the commands in the [routine table](#routine-commands-no-prompt-after-untrusted-content),
   `keryx ctx run --`, read-only `git` subcommands and `bun test` runs without asking,
-  even after the turn has read untrusted content (web or MCP results). Destructive
+  even after the turn has read untrusted content (web or MCP results), except `bun test`,
+  which is routine only under the conditions in the
+  [routine table](#routine-commands-no-prompt-after-untrusted-content). Destructive
   commands, credential access, SAC and publish gates, and every other command still ask.
 - **Open plans do not end the turn.** In `trust`, a turn that would end with open
   plan items continues on its own, at most 8 times in a row, and stops earlier when

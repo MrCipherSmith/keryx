@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t2",
+  "command": "sh /tmp/claude-1000/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/scratchpad/run-tests.sh",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 382
+  },
+  "mutants": [
+    {
+      "id": "bunfigState-preload-regex-alts",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "[\\s.[,{])\"?preload\"?\\s*=",
+      "replacement": "[\\s.[])\"?preload\"?\\s*=",
+      "note": "preload regex loses the comma and brace alternatives (inline-table keys)",
+      "line": 145,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 383
+    },
+    {
+      "id": "bunTestArgsAllowed-eq-isCount-lengthonly",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "&& isCount(arg.slice(eq + 1))) continue;",
+      "replacement": "&& arg.slice(eq + 1).length > 0) continue;",
+      "note": "equals-form count only checked for non-empty",
+      "line": 168,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 359
+    },
+    {
+      "id": "bunTestArgsAllowed-eq-flag-timeout-only",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "BUN_TEST_COUNT_FLAGS.has(arg.slice(0, eq))",
+      "replacement": "arg.slice(0, eq) === \"--timeout\"",
+      "note": "equals-form allows --timeout only, drops --rerun-each=N",
+      "line": 168,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 421
+    },
+    {
+      "id": "agent-latch-untrusted-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "isTrustRoutineCommand(command, { untrustedContent: untrustedOrigin }) &&",
+      "replacement": "isTrustRoutineCommand(command) &&",
+      "note": "untrusted latch site stops passing untrustedContent",
+      "line": 5674,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 402
+    },
+    {
+      "id": "agent-review-auto-untrusted-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "!isTrustRoutineCommand(command, { untrustedContent: untrustedOrigin })) {",
+      "replacement": "!isTrustRoutineCommand(command)) {",
+      "note": "review-auto denial site stops passing untrustedContent",
+      "line": 5642,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 381
+    }
+  ],
+  "totals": {
+    "killed": 0,
+    "survived": 5,
+    "invalid": 0,
+    "timeout": 0
+  }
+}
