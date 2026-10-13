@@ -1,5 +1,5 @@
-# Keryx Metaproject-in-Review PRD
-Version: 0.1.0 (read by the operator on 2026-10-13, no edits; to be registered as flow 431; not frozen yet)
+# Keryx Review Context Pack PRD
+Version: 0.1.0 (read by the operator on 2026-10-13, no edits; DRAFT, not frozen; its own flow, separate from flow 431 - operator's answer in poll 154, 2026-10-13)
 
 ## Origin
 
@@ -128,7 +128,7 @@ A sidebar panel, a modal, a slash command and a settings entry (details in the a
 
 ## Operator answers (poll, 2026-10-12)
 
-Recorded from the operator's poll answers. The operator read the PRD and acceptance criteria on 2026-10-13 (poll 152) and had no edits; the flow is not yet frozen: the draft in the flow 431 directory differs from these criteria and replacing it awaits the operator.
+Recorded from the operator's poll answers. The operator read the PRD and acceptance criteria on 2026-10-13 (poll 152) and had no edits. Poll 154 (2026-10-13) settled the numbering: flow 431 keeps its own draft (layer refresh and chunked passes, package `keryx-review-layer-refresh`), and this package is a separate flow with its own number. It is a draft and not frozen.
 
 - Decision 1 (builder ownership and order): **one flow builds both sections** (see the sibling PRD `keryx-review-depth-parity`, Decision 5). This PRD becomes the metaproject-layer slice of that flow.
 - Decision 2 (default state of each layer): graph, testing and flow default-on; wiki and memory default-on, individually switchable, and reported with their cost.

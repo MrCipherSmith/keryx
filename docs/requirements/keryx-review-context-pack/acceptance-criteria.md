@@ -1,6 +1,6 @@
-# Acceptance Criteria - Metaproject in Review
+# Acceptance Criteria - Review Context Pack
 
-Status: read by the operator on 2026-10-13 with no edits; not yet frozen: the flow 431 directory still holds a different draft, and these criteria become the flow only when it is replaced and frozen.
+Status: DRAFT. Read by the operator on 2026-10-13 with no edits; not frozen. These 30 criteria are their own flow, separate from flow 431 (poll 154); flow 431 carries the 15 criteria of `keryx-review-layer-refresh`.
 
 Rules:
 

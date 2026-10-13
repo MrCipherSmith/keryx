@@ -38,7 +38,7 @@ A keryx review round on a pull request reaches the depth of a Claude-driven revi
 
 - Shell stability and flow-control defects (sections A and D-M of the first note: follow-through of an open plan, slash-command queue, Ctrl+C, hangs, approvals). They are separate tracks.
 - Telegram / remote control (section B of the first note).
-- The metaproject layers as review context (gdgraph, gdwiki, memory, testing context, flow state). That is the sibling package `docs/requirements/keryx-review-metaproject/`. The two packages share one context-pack builder; the boundary is fixed in R5 below.
+- The metaproject layers as review context (gdgraph, gdwiki, memory, testing context, flow state). That is the sibling package `docs/requirements/keryx-review-context-pack/`. The two packages share one context-pack builder; the boundary is fixed in R5 below.
 - A new reviewer taxonomy. The roles are the ones keryx already ships plus the project reviewers.
 - Making Jev part of this flow. Jev triage (`docs/requirements/keryx-jev-review/`) stays additive and advisory.
 - Changing the delete-only discipline of `review-verifier` (see Decision 1: severity audit is a separate pass).
@@ -77,7 +77,7 @@ When the testing reviewer returns "mutation pending" and the tests or the script
 
 ### R5 - One context pack for the reviewers (pull request section)
 
-A deterministic builder (proposed: `keryx review context`) produces a versioned context pack per round and hands each reviewer a slice of it. This package owns the **pull-request section**: full text of every review comment and PR body (no 800-character truncation; if a cap stays it is stated in the pack and in the report), round-1 fix intent and the previous round's findings and decisions, CI status and the failing job summary, and the pins the PR names (for example the backend commit). The sibling package `keryx-review-metaproject` adds the metaproject layer sections to the same builder. The pack has a content hash; reviewers receive references plus the slice they need, not an identical 58 KB blob each (run 11 payloads: 58 KB of `review_context` identical for every reviewer; per-reviewer filtering is T1 measurement and design work).
+A deterministic builder (proposed: `keryx review context`) produces a versioned context pack per round and hands each reviewer a slice of it. This package owns the **pull-request section**: full text of every review comment and PR body (no 800-character truncation; if a cap stays it is stated in the pack and in the report), round-1 fix intent and the previous round's findings and decisions, CI status and the failing job summary, and the pins the PR names (for example the backend commit). The sibling package `keryx-review-context-pack` adds the metaproject layer sections to the same builder. The pack has a content hash; reviewers receive references plus the slice they need, not an identical 58 KB blob each (run 11 payloads: 58 KB of `review_context` identical for every reviewer; per-reviewer filtering is T1 measurement and design work).
 
 ### R6 - Regression reviewer in the required set
 
@@ -143,5 +143,5 @@ Recorded from the operator's poll answers. The PRD and acceptance criteria were 
 - Decision 2 (default mode for a pull request): `all`; `diff` only on an explicit operator quote.
 - Decision 3 (mutation policy): mutations are required; `Not run` only with an operator quote or a recorded environment reason.
 - Decision 4 (parity targets): the note's targets go into the AC as frozen numbers (A = 0, at least 12 of 19, 3-7 raw findings per reviewer, no false major on PR 7840).
-- Decision 5 (ordering and the shared context builder): **one flow builds both sections** (the pull-request section and the metaproject layer sections). This replaces the recommended two-flow order. The sibling PRD `keryx-review-metaproject` becomes the metaproject-layer slice of the same flow; whether it is registered as one flow or two is to be confirmed when the flows are created.
+- Decision 5 (ordering and the shared context builder): **one flow builds both sections** (the pull-request section and the metaproject layer sections). This replaces the recommended two-flow order. The sibling PRD `keryx-review-context-pack` becomes the metaproject-layer slice of the same flow; whether it is registered as one flow or two is to be confirmed when the flows are created.
 - Decisions 6 and 7: not asked; the recommended options stand (a `shallow` reviewer fails the gate; mutant cap 6, 12 on request).
