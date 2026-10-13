@@ -84,6 +84,13 @@ export function restorePreservedHistory(dir: string): boolean {
 }
 export function collectPreservationFiles(dir: string, rawSlate?: string): PreservationFiles {
   const files: PreservationFiles = {};
+  const committed = readPendingHistory(dir);
+  if (committed !== undefined) {
+    Object.assign(files, committed.files);
+    delete files["slate.json"];
+    if (rawSlate !== undefined) files["slate.json"] = rawSlate;
+    return files;
+  }
   for (const name of allowed) {
     if (name === "slate.json") continue;
     const read = readTranscriptFile(path.join(dir, name));

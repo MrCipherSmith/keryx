@@ -593,10 +593,10 @@ describe("/resume composes the leased switch with the slate rebind", () => {
 
   test("tui-shell's /resume rebinds and refreshes only after the refusal branch returned", () => {
     const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
-    const start = source.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const start = source.indexOf("const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = source.slice(start, source.indexOf("\n    };\n", start));
-    const leased = block.indexOf("opened = leasedOpen({ resumeId: found.id });");
+    const leased = block.indexOf("opened = await preservedOpen(signal, { resumeId: found.id });");
     const refused = block.indexOf("Staying in the current session.");
     const bound = block.indexOf("bindSlateToLiveSession();");
     const refreshed = block.indexOf("void refreshWorkspaceSidebar();");
