@@ -3,6 +3,7 @@
 // uncovered; `keryx review complete` refuses while any is uncovered unless the operator waives them in their own words.
 
 import path from "node:path";
+import { shellWord } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
 import { BLAST_RADIUS_SCOPE_REVIEWER } from "./blast-radius";
@@ -218,7 +219,7 @@ export async function coverageGateErrors(packageDir: string, research?: unknown)
   const uncovered = report.files.filter((entry) => entry.status === "uncovered");
   const first = uncovered.slice(0, FIRST_FILES).map((entry) => entry.file);
   const more = uncovered.length > FIRST_FILES ? `, … (+${uncovered.length - FIRST_FILES})` : "";
-  const dir = path.relative(process.cwd(), packageDir) || ".";
+  const dir = shellWord(path.relative(process.cwd(), packageDir) || ".");
   const chunkWork = uncovered.some((entry) => entry.scope === "B");
   const sliceWork = uncovered.some((entry) => entry.scope === "A");
   const commands = [

@@ -6,6 +6,7 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { shellWord } from "../lib/shell-quote";
 import { listReviewPackages, type ListedReview } from "../review/bot/packages";
 import { packageHasBlastRadius, packageScopeFiles, requiredReviewers, type RequiredSet, type ReviewMode } from "../review/coverage";
 import { computeChunkPass, hasChunkPlan, type ChunkPass } from "../review/chunks";
@@ -153,7 +154,7 @@ export function layersLine(view: ReviewLayersView | undefined): string {
 /** The full lines: `layers.json`, who used which layer, the chunk pass, the coverage counts and the waiver. */
 export function layersDepthLines(view: ReviewLayersView | undefined): string[] {
   if (view === undefined) return [];
-  const lines = view.layers === null ? [`layers: not refreshed; run \`keryx review layers refresh --package ${view.dir}\``] : layersDetailLines(view.layers);
+  const lines = view.layers === null ? [`layers: not refreshed; run \`keryx review layers refresh --package ${shellWord(view.dir)}\``] : layersDetailLines(view.layers);
   if (view.usage !== null) {
     const used = view.usage;
     const per = LAYER_NAMES.map((name) => `${name} ${used.perLayer[name]}`).join(", ");

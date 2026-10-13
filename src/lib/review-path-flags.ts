@@ -23,7 +23,7 @@ export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> 
   slice: ["--ref", "--base", "--context", "--max-bytes", "--wave-bytes", "--json", "--help", "-h"],
   "retry-plan": ["--reviewer", "--slices", "--covered", "--next-wave", "--dry-run", "--json", "--help", "-h"],
   "dispatch-check": ["--max-bytes", "--pr-context", "--json", "--help", "-h"],
-  layers: ["--head", "--base", "--write-wiki", "--files", "--max-bytes", "--json", "--help", "-h"],
+  layers: ["--head", "--base", "--write-wiki", "--files", "--max-bytes", "--force", "--json", "--help", "-h"],
   chunks: ["--chunk", "--status", "--mode", "--answer", "--quote", "--json", "--help", "-h"],
   coverage: ["--json", "--help", "-h"],
 };

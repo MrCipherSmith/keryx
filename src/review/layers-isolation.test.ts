@@ -76,7 +76,7 @@ describe("a refresh is atomic and exclusive (R1-02)", () => {
         return buildGraph(root, options);
       },
     };
-    await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir, deps });
+    await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir, deps, force: true });
 
     expect(seen.refused).toBe(true);
     expect(seen.lockHeld).toBe(true);

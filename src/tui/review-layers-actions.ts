@@ -4,6 +4,7 @@
 import { execFile } from "node:child_process";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
+import { shellWord } from "../lib/shell-quote";
 import { chunkModeOf, chunkRunBlocker, estimateChunkRun, recordChunkEstimate, renderChunkEstimate } from "../review/chunks-estimate";
 import type { LayersFile } from "../review/layers";
 import { layersSummaryLine } from "../review/layers-view";
@@ -57,7 +58,7 @@ export function createReviewLayersActions(cwd: string, runRefresh: RunLayersRefr
         if (estimate === null) return `No missing chunks for ${row.reviewId}: no blast-radius file was dropped.`;
         const record = await recordChunkEstimate(dir, estimate, chunkModeOf(dir));
         const blocked = await chunkRunBlocker(dir, root);
-        const next = blocked ?? `Next: keryx review chunks next --package ${dir}`;
+        const next = blocked ?? `Next: keryx review chunks next --package ${shellWord(dir)}`;
         return [...renderChunkEstimate(record), next].join("\n");
       } catch (error) {
         return `Chunk estimate failed for ${row.reviewId}: ${error instanceof Error ? error.message : String(error)}`;

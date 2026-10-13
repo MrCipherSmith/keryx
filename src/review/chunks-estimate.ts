@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { shellWord } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan } from "./chunks";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
@@ -160,7 +161,7 @@ export async function chunkRunBlocker(packageDir: string, projectRoot: string): 
   const record = await readChunkEstimate(packageDir);
   const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;
   if (answered?.value === "yes") return undefined;
-  const dir = path.relative(process.cwd(), packageDir) || ".";
+  const dir = shellWord(path.relative(process.cwd(), packageDir) || ".");
   const size = `${estimate.chunks} passes of at most ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${estimate.files} files) exceed the ceiling of ${estimate.maxPasses} passes (${estimate.ceilingFiles} files)`;
   if (answered?.value === "no") return `${size}, and the operator answered no. Nothing runs.`;
   return `${size}. Run \`keryx review chunks estimate --package ${dir}\` to record the estimate, then \`keryx review chunks estimate --package ${dir} --answer yes --quote "<operator quote>"\` once the operator agrees.`;

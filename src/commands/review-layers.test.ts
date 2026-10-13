@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import { mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLayersFixture, git, type LayersFixture } from "../review/layers.test-helpers";
@@ -100,10 +100,12 @@ describe("blast-radius --package reads the package graph", () => {
   });
 
   test("a graph that failed to build is a refusal, not an empty radius", async () => {
-    await reviewCommand(["layers", "refresh", "--package", fixture.packageDir, "--head", "0123456789abcdef0123456789abcdef01234567"]);
+    const missing = "0123456789abcdef0123456789abcdef01234567";
+    await reviewCommand(["layers", "refresh", "--package", fixture.packageDir, "--head", missing]);
     expect(process.exitCode).toBe(1);
     process.exitCode = 0;
     logs.length = 0;
+    await writeFile(path.join(fixture.packageDir, "manifest.json"), JSON.stringify({ target: { head: missing } }));
     await reviewCommand(["blast-radius", "--package", fixture.packageDir, "--changed", "src/a.ts", "--no-related-tests", "--json"]);
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toMatch(/graph is failed|not computed from a graph/);

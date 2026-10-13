@@ -24,13 +24,14 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { buildGraph } from "../gdgraph/build";
 import { isLockHeld, withFileLock, writeFileAtomic } from "../lib/fs";
 import { assertGitRevision } from "../lib/git-revision";
+import { shellWord } from "../lib/shell-quote";
 import { loadGraph } from "../gdgraph/query";
 import type { GraphData } from "../gdgraph/types";
 import { createMemoryService } from "../memory/service";
@@ -51,7 +52,12 @@ const MEMORY_DIR = "memory";
 const LOCK_NAME = "refresh.lock";
 const MANIFEST_FILE = "manifest.json";
 const LOCK_STALE_MS = 60_000;
-const LOCK_WAIT_MS = 120_000;
+// A refresh scales with the repository and the TUI lets its child run 15 minutes; the lock is
+// heartbeat-based, so a waiter waits as long as the holder is alive instead of failing early.
+const LOCK_WAIT_MS = 16 * 60_000;
+const WORKTREE_PREFIX = "keryx-layers-";
+const WORKTREE_SWEEP_AGE_MS = 30 * 60_000;
+const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 const WIKI_PATH_PREFIX = ".metaproject/wiki";
 const MEMORY_PATH_PREFIX = ".metaproject/memory";
 
@@ -153,8 +159,10 @@ export interface RefreshLayersInput {
   reviewRoot?: string;
   /** The commit reviewed. Defaults to HEAD of `reviewRoot`. */
   prHead?: string;
-  /** Base of the PR; the wiki staleness range is `base..prHead`. Defaults to `prHead~1`. */
+  /** Base of the PR; the wiki staleness range is `base..prHead`. Defaults to the manifest's target ref, else `prHead~1`. */
   base?: string;
+  /** Rebuild the graph even when the recorded one is intact and at this head. */
+  force?: boolean;
   /** Let the wiki refresh rewrite pages in the working copy. Default: a dry run. */
   writeWiki?: boolean;
   deps?: Partial<LayerDeps>;
@@ -191,15 +199,53 @@ export async function waitForLayersRefresh(packageDir: string, timeoutMs = LOCK_
   return true;
 }
 
+const COMMIT_ID = /^[0-9a-f]{7,64}$/i;
+
+async function manifestTarget(packageDir: string): Promise<{ head: string | null; ref: string | null }> {
+  const manifest = await readJsonFileOr<{ target?: { head?: unknown; ref?: unknown } } | null>(path.join(packageDir, MANIFEST_FILE), null);
+  const head = manifest?.target?.head;
+  const ref = manifest?.target?.ref;
+  return {
+    head: typeof head === "string" && COMMIT_ID.test(head) ? head : null,
+    ref: typeof ref === "string" && ref !== "" ? ref : null,
+  };
+}
+
 /** The commit the package reviews, from its manifest's `target.head`; `null` when it records none. */
 export async function manifestHead(packageDir: string): Promise<string | null> {
+  return (await manifestTarget(packageDir)).head;
+}
+
+/** The full commit `rev` names in `projectRoot`, or `null` when it names none (or looks like an option). */
+export async function resolveCommit(projectRoot: string, rev: string, deps: Pick<LayerDeps, "git"> = defaultLayerDeps): Promise<string | null> {
   try {
-    const manifest = JSON.parse(await readFile(path.join(packageDir, MANIFEST_FILE), "utf8")) as { target?: { head?: unknown } };
-    const head = manifest.target?.head;
-    return typeof head === "string" && /^[0-9a-f]{7,64}$/i.test(head) ? head : null;
+    assertGitRevision(rev);
   } catch {
     return null;
   }
+  const full = await deps.git(projectRoot, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${rev}^{commit}`]);
+  return full !== null && /^[0-9a-f]{40,64}$/.test(full) ? full : null;
+}
+
+/** True when `layers` records a graph built at its own head whose directory is still there and complete. */
+async function graphIntact(packageDir: string, layers: LayersFile): Promise<boolean> {
+  if (layers.graph.status !== "ok" || layers.graphCommit === null) return false;
+  const dataDir = packageGraphDir(packageDir);
+  const build = await readJsonFileOr<{ commit?: unknown } | null>(path.join(dataDir, GRAPH_BUILD_FILE), null);
+  if (build?.commit !== layers.graphCommit) return false;
+  if (layers.graph.nodes === 0) return true;
+  try {
+    return (await stat(path.join(dataDir, "storage", "nodes.jsonl"))).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** True when `existing` can be used as is for `head` (any head when undefined): graph ok at that commit, directory intact. */
+export async function layersCurrent(packageDir: string, existing: LayersFile | null, head?: string | null): Promise<boolean> {
+  if (existing === null || existing.graph.status !== "ok") return false;
+  if (head !== undefined && existing.prHead !== head) return false;
+  return existing.graphCommit === existing.prHead && (await graphIntact(packageDir, existing));
 }
 
 export async function readLayers(packageDir: string): Promise<LayersFile | null> {
@@ -257,6 +303,84 @@ export async function publishDirectory(staging: string, finalDir: string): Promi
   if (hadPrevious) await rm(previous, { recursive: true, force: true });
 }
 
+/** A publish killed between its two renames leaves the graph under `graph.old.*`; put it back and drop other leftovers. */
+async function recoverGraphDirectory(packageDir: string): Promise<void> {
+  const finalDir = packageGraphDir(packageDir);
+  const parent = path.dirname(finalDir);
+  const name = path.basename(finalDir);
+  const leftovers = (await readdir(parent).catch(() => [] as string[])).filter((entry) => entry.startsWith(`${name}.`));
+  let missing = await stat(finalDir).then(() => false, () => true);
+  for (const entry of leftovers.sort()) {
+    const full = path.join(parent, entry);
+    if (missing && entry.startsWith(`${name}.old.`)) {
+      await rename(full, finalDir).then(() => { missing = false; }, () => {});
+    } else {
+      await rm(full, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
+
+/** Remove checkouts a killed refresh left behind: keryx's own temp worktrees of this repository, older than any live build. */
+async function sweepStaleWorktrees(deps: LayerDeps, projectRoot: string): Promise<void> {
+  const listing = await deps.git(projectRoot, ["worktree", "list", "--porcelain"]);
+  if (listing === null) return;
+  const temp = await realpath(tmpdir()).catch(() => tmpdir());
+  const registered = listing
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length))
+    .slice(1);
+  for (const worktree of registered) {
+    if (path.dirname(worktree) !== temp || !path.basename(worktree).startsWith(WORKTREE_PREFIX)) continue;
+    const age = await stat(worktree).then((entry) => Date.now() - entry.mtimeMs, () => 0);
+    if (age < WORKTREE_SWEEP_AGE_MS) continue;
+    await deps.git(projectRoot, ["worktree", "remove", "--force", "--end-of-options", worktree]);
+    await rm(worktree, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * A clean detached checkout of `rev` for the duration of `use`. The checkout never runs the operator's
+ * post-checkout hook; a SIGINT or SIGTERM removes the checkout, its registration, the extra cleanup and
+ * the lock before the signal is re-raised.
+ */
+async function withDetachedWorktree<T>(
+  deps: LayerDeps,
+  input: { projectRoot: string; packageDir: string },
+  rev: string,
+  cleanupExtra: () => Promise<void>,
+  use: (worktree: string, checkedOutAt: string | null) => Promise<T>,
+): Promise<T> {
+  const worktree = await mkdtemp(path.join(tmpdir(), WORKTREE_PREFIX));
+  const cleanup = async (): Promise<void> => {
+    await cleanupExtra().catch(() => {});
+    await deps.git(input.projectRoot, ["worktree", "remove", "--force", "--end-of-options", worktree]);
+    await rm(worktree, { recursive: true, force: true }).catch(() => {});
+  };
+  const onSignal = (signal: NodeJS.Signals): void => {
+    for (const name of SIGNALS) process.off(name, onSignal);
+    void cleanup()
+      .then(() => rm(layersLockPath(input.packageDir), { recursive: true, force: true }))
+      .catch(() => {})
+      .finally(() => process.kill(process.pid, signal));
+  };
+  for (const name of SIGNALS) process.on(name, onSignal);
+  try {
+    const add = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "worktree", "add", "--detach", "--force", "--end-of-options", worktree, rev];
+    let added = await deps.git(input.projectRoot, add);
+    if (added === null) {
+      // Only a failed add prunes: a registered checkout whose directory vanished blocks the path.
+      await deps.git(input.projectRoot, ["worktree", "prune"]);
+      added = await deps.git(input.projectRoot, add);
+    }
+    if (added === null) throw new Error(`could not check out ${rev} to build its graph`);
+    return await use(worktree, await deps.git(worktree, ["rev-parse", "HEAD"]));
+  } finally {
+    for (const name of SIGNALS) process.off(name, onSignal);
+    await cleanup();
+  }
+}
+
 async function buildPackageGraph(
   deps: LayerDeps,
   input: RefreshLayersInput,
@@ -274,37 +398,23 @@ async function buildPackageGraph(
 
   const dataDir = packageGraphDir(input.packageDir);
   const staging = `${dataDir}.${randomUUID()}`;
-  let worktree: string | null = null;
+  const dropStaging = (): Promise<void> => rm(staging, { recursive: true, force: true }).catch(() => {});
   try {
-    // Always a clean detached checkout of the PR head: the live working copy may hold
-    // uncommitted edits or untracked files that are not part of the commit reviewed.
-    await deps.git(input.projectRoot, ["worktree", "prune"]);
-    worktree = await mkdtemp(path.join(tmpdir(), "keryx-layers-"));
-    const added = await deps.git(input.projectRoot, ["worktree", "add", "--detach", "--force", "--end-of-options", worktree, prHead]);
-    if (added === null) return failed(`could not check out ${prHead} to build its graph`);
-    const builtFrom = await deps.git(worktree, ["rev-parse", "HEAD"]);
-    if (builtFrom !== prHead) {
-      return failed(`graph would be built at ${builtFrom ?? "an unknown commit"}, not the PR head ${prHead}`);
-    }
-
-    await mkdir(staging, { recursive: true });
-    const built = await deps.buildGraph(worktree, { dataDir: staging });
-    const builtAt = deps.now().toISOString();
-    await writeFile(
-      path.join(staging, GRAPH_BUILD_FILE),
-      `${JSON.stringify({ commit: builtFrom, builtAt }, null, 2)}\n`,
-      "utf8",
-    );
-    await publishDirectory(staging, dataDir);
-    return { status: "ok", commit: builtFrom, builtAt, nodes: built.nodes, edges: built.edges };
+    return await withDetachedWorktree(deps, input, prHead, dropStaging, async (worktree, builtFrom) => {
+      if (builtFrom !== prHead) {
+        return failed(`graph would be built at ${builtFrom ?? "an unknown commit"}, not the PR head ${prHead}`);
+      }
+      await mkdir(staging, { recursive: true });
+      const built = await deps.buildGraph(worktree, { dataDir: staging });
+      const builtAt = deps.now().toISOString();
+      await writeFile(path.join(staging, GRAPH_BUILD_FILE), `${JSON.stringify({ commit: builtFrom, builtAt }, null, 2)}\n`, "utf8");
+      await publishDirectory(staging, dataDir);
+      return { status: "ok", commit: builtFrom, builtAt, nodes: built.nodes, edges: built.edges } satisfies GraphLayerRecord;
+    });
   } catch (error) {
     return failed(errorMessage(error));
   } finally {
-    await rm(staging, { recursive: true, force: true }).catch(() => {});
-    if (worktree !== null) {
-      await deps.git(input.projectRoot, ["worktree", "remove", "--force", "--end-of-options", worktree]);
-      await rm(worktree, { recursive: true, force: true });
-    }
+    await dropStaging();
   }
 }
 
@@ -402,23 +512,46 @@ export async function refreshLayers(input: RefreshLayersInput): Promise<LayersFi
   if (input.prHead !== undefined) assertGitRevision(input.prHead);
   if (input.base !== undefined) assertGitRevision(input.base);
   const reviewRoot = input.reviewRoot ?? input.projectRoot;
+  const target = await manifestTarget(input.packageDir);
   let headSource: HeadSource = "input";
   let prHead: string | null = input.prHead ?? null;
   if (prHead === null) {
-    prHead = await manifestHead(input.packageDir);
+    prHead = target.head;
     headSource = "manifest";
   }
   if (prHead === null) {
     prHead = await deps.git(reviewRoot, ["rev-parse", "HEAD"]);
     headSource = "checkout";
   }
-  const base = input.base ?? (prHead === null ? null : `${prHead}~1`);
+  // One spelling of the head everywhere: the full commit, so a short sha or a branch name compares equal to the graph's commit.
+  if (prHead !== null) prHead = (await resolveCommit(input.projectRoot, prHead, deps)) ?? prHead;
+  let base: string | null = null;
+  if (input.base !== undefined) {
+    base = (await resolveCommit(input.projectRoot, input.base, deps)) ?? input.base;
+  } else if (prHead !== null) {
+    const fromTarget = target.ref === null ? null : await resolveCommit(input.projectRoot, target.ref, deps);
+    base = fromTarget ?? `${prHead}~1`;
+  }
 
   await writeSelfIgnoringDir(path.join(input.packageDir, LAYERS_DIR));
   return withFileLock(
     layersLockPath(input.packageDir),
     async () => {
-      const graph = await buildPackageGraph(deps, input, prHead);
+      await recoverGraphDirectory(input.packageDir);
+      await sweepStaleWorktrees(deps, input.projectRoot);
+      // Another refresh may have finished while this one waited for the lock: the same head needs no second build.
+      const existing = await readLayers(input.packageDir);
+      const sameHead = prHead !== null && existing?.prHead === prHead;
+      let graph: GraphLayerRecord;
+      if (input.force !== true && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {
+        graph = (existing as LayersFile).graph;
+      } else {
+        graph = await buildPackageGraph(deps, input, prHead);
+        // A failed rebuild leaves the previous graph in place (publish puts it back): keep its record while it is still the right one.
+        if (graph.status === "failed" && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {
+          graph = (existing as LayersFile).graph;
+        }
+      }
       const wiki = await refreshWikiLayer(deps, input, graph, prHead, base);
       const memory = await indexMemoryLayer(deps, input, prHead);
 
@@ -455,9 +588,12 @@ export async function loadPackageGraph(
     throw new PackageGraphError(`the package layers are being refreshed in ${packageDir}; try again when it finishes`);
   }
   const layers = await readLayers(packageDir);
-  if (layers === null) throw new PackageGraphError(`no ${LAYERS_FILE} in ${packageDir}; run \`keryx review layers refresh --package ${packageDir}\``);
+  if (layers === null) throw new PackageGraphError(`no ${LAYERS_FILE} in ${packageDir}; run \`keryx review layers refresh --package ${shellWord(packageDir)}\``);
   if (layers.graph.status !== "ok") {
     throw new PackageGraphError(`the package graph is ${layers.graph.status}${layers.graph.error ? `: ${layers.graph.error}` : ""}`);
+  }
+  if (!(await graphIntact(packageDir, layers))) {
+    throw new PackageGraphError(`the package graph directory is missing or does not match ${LAYERS_FILE}; run \`keryx review layers refresh --package ${shellWord(packageDir)}\``);
   }
   const expected = prHead ?? layers.prHead;
   if (expected === null || layers.graphCommit !== expected) {

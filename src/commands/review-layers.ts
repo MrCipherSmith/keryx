@@ -1,9 +1,10 @@
 import { existsSync, statSync } from "node:fs";
 import { optionValue } from "../lib/args";
+import { shellWord } from "../lib/shell-quote";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { computeCoverage, coverageLine } from "../review/coverage-complete";
-import { type LayersFile, manifestHead, readLayers, refreshLayers, waitForLayersRefresh } from "../review/layers";
+import { type LayersFile, layersCurrent, manifestHead, readLayers, refreshLayers, resolveCommit, waitForLayersRefresh } from "../review/layers";
 import { buildLayersBlock, layersBlockLines } from "../review/layers-payload";
 import { layersDetailLines } from "../review/layers-view";
 
@@ -11,7 +12,7 @@ export type LayersDeps = {
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
 };
 
-export const LAYERS_REFRESH_FLAGS = ["--package", "--head", "--base", "--write-wiki", "--json", "--help", "-h"] as const;
+export const LAYERS_REFRESH_FLAGS = ["--package", "--head", "--base", "--write-wiki", "--force", "--json", "--help", "-h"] as const;
 export const LAYERS_STATUS_FLAGS = ["--package", "--json", "--help", "-h"] as const;
 
 export const LAYERS_BLOCK_FLAGS = ["--package", "--files", "--max-bytes", "--json", "--help", "-h"] as const;
@@ -19,7 +20,7 @@ export const LAYERS_BLOCK_FLAGS = ["--package", "--files", "--max-bytes", "--jso
 export function printLayersHelp(): void {
   console.log(`keryx review layers — usage:
 
-  keryx review layers refresh --package <dir> [--head <sha>] [--base <ref>] [--write-wiki] [--json]
+  keryx review layers refresh --package <dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
   keryx review layers status  --package <dir> [--json]
   keryx review layers block   --package <dir> --files <a,b,...> [--max-bytes <n>] [--json]
 
@@ -36,7 +37,8 @@ and is never run from here.
 The graph is built at the PR head into <dir>/layers/graph; the tracked graph artifacts of
 the working tree are not touched. The wiki and the memory are read from the project's
 working copy, and layers.json marks how far that is from the PR head. The wiki refresh is a
-dry run unless --write-wiki is given.`);
+dry run unless --write-wiki is given. A graph that is already built at this head and intact is
+kept (the wiki and the memory are still refreshed); --force rebuilds it.`);
 }
 
 export function wantsHelp(args: readonly string[]): boolean {
@@ -55,8 +57,8 @@ export function resolvePackageDir(args: readonly string[], cwd: string = process
 }
 
 /**
- * The package's layers, refreshing them first when `layers.json` is absent or was
- * built for another PR head. The head is the caller's, else the package manifest's
+ * The package's layers, refreshing them first when `layers.json` is absent, was
+ * built for another PR head, or holds a failed or missing graph. The head is the caller's, else the package manifest's
  * `target.head`, so a checkout that moved on since the package was made does not
  * pick the head. A refresh already running for the package is waited for.
  */
@@ -67,11 +69,13 @@ export async function ensurePackageLayers(
   if (!(await waitForLayersRefresh(packageDir))) {
     throw new Error(`the layers of ${packageDir} are still being refreshed; try again when it finishes`);
   }
-  const head = options.prHead ?? (await manifestHead(packageDir)) ?? undefined;
+  const projectRoot = options.projectRoot ?? resolveProjectRoot(process.cwd());
+  const wanted = options.prHead ?? (await manifestHead(packageDir)) ?? undefined;
+  const head = wanted === undefined ? undefined : ((await resolveCommit(projectRoot, wanted)) ?? wanted);
   const existing = await readLayers(packageDir);
-  if (existing !== null && (head === undefined || existing.prHead === head)) return existing;
+  if (existing !== null && (await layersCurrent(packageDir, existing, head))) return existing;
   return refreshLayers({
-    projectRoot: options.projectRoot ?? resolveProjectRoot(process.cwd()),
+    projectRoot,
     packageDir,
     ...(head === undefined ? {} : { prHead: head }),
     ...(options.base === undefined ? {} : { base: options.base }),
@@ -99,6 +103,7 @@ export async function runLayers(args: string[], deps: LayersDeps): Promise<void>
       ...(head === undefined ? {} : { prHead: head }),
       ...(base === undefined ? {} : { base }),
       writeWiki: rest.includes("--write-wiki"),
+      force: rest.includes("--force"),
     });
     print(layers, rest.includes("--json"));
     if (layers.graph.status !== "ok") process.exitCode = 1;
@@ -109,7 +114,7 @@ export async function runLayers(args: string[], deps: LayersDeps): Promise<void>
     const packageDir = resolvePackageDir(rest);
     const layers = await readLayers(packageDir);
     if (layers === null) {
-      console.log(`no layers.json in ${packageDir}; run \`keryx review layers refresh --package ${packageDir}\``);
+      console.log(`no layers.json in ${packageDir}; run \`keryx review layers refresh --package ${shellWord(packageDir)}\``);
       process.exitCode = 1;
       return;
     }

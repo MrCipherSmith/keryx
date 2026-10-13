@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PackageGraphError, refreshLayers } from "./layers";
-import { buildLayersBlock, LAYERS_BLOCK_SECTIONS, MAX_BLOCK_FILES, shellQuote } from "./layers-payload";
+import { shellQuote } from "../lib/shell-quote";
+import { buildLayersBlock, LAYERS_BLOCK_SECTIONS, MAX_BLOCK_FILES } from "./layers-payload";
 import { createLayersFixture, git, writeProjectFile, type LayersFixture } from "./layers.test-helpers";
 
 let fixture: LayersFixture;

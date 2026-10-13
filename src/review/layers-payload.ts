@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { computeAffected } from "../gdgraph/affected";
 import type { GraphData } from "../gdgraph/types";
+import { shellQuote } from "../lib/shell-quote";
 import { collectEntries } from "../memory/store";
 import { relatedByNamingAndDirectory, TEST_FILE_RE, normalizePath } from "../testing/selection";
 import { collectPages, computeModuleKeyFiles } from "../wiki/collect";
@@ -181,11 +182,6 @@ async function memoryFor(
     if (byModule || byFile) out.push({ path: entry.relativePath, title: entry.title, status: entry.status, module: module ?? "" });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-/** One POSIX shell word: single-quoted, so a file name cannot add a second command. */
-export function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 // eslint-disable-next-line no-control-regex -- the point is to refuse exactly these bytes
