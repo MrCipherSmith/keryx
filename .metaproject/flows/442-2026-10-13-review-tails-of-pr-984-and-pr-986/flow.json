@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "442",
+  "slug": "review-tails-of-pr-984-and-pr-986",
+  "title": "Review tails of PR 984 and PR 986",
+  "status": "initializing",
+  "createdAt": "2026-10-13T08:21:57.588Z",
+  "updatedAt": "2026-10-13T08:22:56.500Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 (one implement task per PRD task)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9 (tests are part of each PRD task)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "T1 of the PRD: hook template and git readers (C1, C2), including the non-ASCII hook test",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "T2 of the PRD: one test-file predicate, whole-word rule categories, generated build output (C3, C4, C5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "T3 of the PRD: startup replay tests and transcript placement (P984-1, P984-2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "T4 of the PRD: close phrase negation, host-side irreversibility, help summary (P986-1 to P986-3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "T5 of the PRD: repair duplicate flow id 352 and add the CI check (F-ID)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-13T08:21:57.588Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-13T08:22:23.315Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"Долги и 2 фло, последнее про использование metaproject в ревью.\"; source: helyx channel message 200493, 2026-10-12; polls 143, 146, 150 (operator request, quoted verbatim)"
+    },
+    {
+      "at": "2026-10-13T08:22:37.679Z",
+      "event": "task-added",
+      "detail": "T5: T1 of the PRD: hook template and git readers (C1, C2), including the non-ASCII hook test"
+    },
+    {
+      "at": "2026-10-13T08:22:38.169Z",
+      "event": "task-added",
+      "detail": "T6: T2 of the PRD: one test-file predicate, whole-word rule categories, generated build output (C3, C4, C5)"
+    },
+    {
+      "at": "2026-10-13T08:22:38.654Z",
+      "event": "task-added",
+      "detail": "T7: T3 of the PRD: startup replay tests and transcript placement (P984-1, P984-2)"
+    },
+    {
+      "at": "2026-10-13T08:22:39.109Z",
+      "event": "task-added",
+      "detail": "T8: T4 of the PRD: close phrase negation, host-side irreversibility, help summary (P986-1 to P986-3)"
+    },
+    {
+      "at": "2026-10-13T08:22:39.599Z",
+      "event": "task-added",
+      "detail": "T9: T5 of the PRD: repair duplicate flow id 352 and add the CI check (F-ID)"
+    },
+    {
+      "at": "2026-10-13T08:22:56.012Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-13T08:22:56.500Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "Долги и 2 фло, последнее про использование metaproject в ревью.",
+    "source": "helyx channel message 200493, 2026-10-12; polls 143, 146, 150"
+  }
+}
