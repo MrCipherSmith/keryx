@@ -1,0 +1,607 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t4",
+  "command": "bun test src/review/replay.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 488
+  },
+  "mutants": [
+    {
+      "id": "N01-decision-161-undecided",
+      "file": "src/review/replay.ts",
+      "anchor": "const POLL_161 = \"accepted (operator, poll 161, 2026-10-13)\";",
+      "replacement": "const POLL_161 = \"undecided\";",
+      "line": 23,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 495
+    },
+    {
+      "id": "N02-decision-162-163-undecided",
+      "file": "src/review/replay.ts",
+      "anchor": "const POLL_162_163 = \"accepted (operator, polls 162 and 163, 2026-10-13)\";",
+      "replacement": "const POLL_162_163 = \"undecided\";",
+      "line": 24,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 478
+    },
+    {
+      "id": "N03-decision-fallback-accepted",
+      "file": "src/review/replay.ts",
+      "anchor": "(decisions[decisionKey(row)] ?? \"undecided\")",
+      "replacement": "(decisions[decisionKey(row)] ?? \"accepted\")",
+      "line": 47,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 468
+    },
+    {
+      "id": "N04-decision-key-separator",
+      "file": "src/review/replay.ts",
+      "anchor": "return `${row.file}@${row.hash}`;",
+      "replacement": "return `${row.file}#${row.hash}`;",
+      "line": 27,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 474
+    },
+    {
+      "id": "N05-decision-key-file-only",
+      "file": "src/review/replay.ts",
+      "anchor": "return `${row.file}@${row.hash}`;",
+      "replacement": "return row.file;",
+      "line": 27,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 476
+    },
+    {
+      "id": "N06-labelled-greedy",
+      "file": "src/review/replay.ts",
+      "anchor": "([\\s\\S]*?)```/gi;",
+      "replacement": "([\\s\\S]*)```/gi;",
+      "line": 50,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 480
+    },
+    {
+      "id": "N07-outcome-no-empty",
+      "file": "src/review/replay.ts",
+      "anchor": "  if (empty) return \"empty\";\n",
+      "replacement": "\n",
+      "line": 53,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 483
+    },
+    {
+      "id": "N08-outcome-none-as-empty",
+      "file": "src/review/replay.ts",
+      "anchor": "if (result === undefined) return \"none\";",
+      "replacement": "if (result === undefined) return \"empty\";",
+      "line": 54,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 480
+    },
+    {
+      "id": "N09-outcome-findings-dash",
+      "file": "src/review/replay.ts",
+      "anchor": "? String(result.findings.length) : \"-\";",
+      "replacement": "? \"-\" : \"-\";",
+      "line": 55,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 479
+    },
+    {
+      "id": "N10-outcome-reviewer-result-true",
+      "file": "src/review/replay.ts",
+      "anchor": "reviewer-result=${isReviewerResult(result)}`",
+      "replacement": "reviewer-result=${true}`",
+      "line": 56,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 479
+    },
+    {
+      "id": "N11-broken-no-labelled-true",
+      "file": "src/review/replay.ts",
+      "anchor": "if (labelled.length === 0) return false;",
+      "replacement": "if (labelled.length === 0) return true;",
+      "line": 61,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 477
+    },
+    {
+      "id": "N12-broken-first-fence",
+      "file": "src/review/replay.ts",
+      "anchor": "JSON.parse(labelled[labelled.length - 1]![1]!);\n    return false;",
+      "replacement": "JSON.parse(labelled[0]![1]!);\n    return false;",
+      "line": 63,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 466
+    },
+    {
+      "id": "N13-broken-catch-false",
+      "file": "src/review/replay.ts",
+      "anchor": "  } catch {\n    return true;\n  }",
+      "replacement": "  } catch {\n    return false;\n  }",
+      "line": 65,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 465
+    },
+    {
+      "id": "N14-classify-old-undefined-only",
+      "file": "src/review/replay.ts",
+      "anchor": "if (old === undefined && next !== undefined) return",
+      "replacement": "if (old === undefined) return",
+      "line": 71,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 474
+    },
+    {
+      "id": "N15-classify-fence-swap",
+      "file": "src/review/replay.ts",
+      "anchor": "labelledCaptureBroken(raw) ? \"fence-inner-backticks\" : \"unclassified\"",
+      "replacement": "labelledCaptureBroken(raw) ? \"unclassified\" : \"fence-inner-backticks\"",
+      "line": 71,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 469
+    },
+    {
+      "id": "N16-classify-fragment-any-old",
+      "file": "src/review/replay.ts",
+      "anchor": "if (old !== undefined && !isReviewerResult(old) && next === undefined)",
+      "replacement": "if (old !== undefined && next === undefined)",
+      "line": 72,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 468
+    },
+    {
+      "id": "N17-classify-fragment-any-next",
+      "file": "src/review/replay.ts",
+      "anchor": "if (old !== undefined && !isReviewerResult(old) && next === undefined)",
+      "replacement": "if (old !== undefined && !isReviewerResult(old))",
+      "line": 72,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 476
+    },
+    {
+      "id": "N18-same-always-true",
+      "file": "src/review/replay.ts",
+      "anchor": "const same = before === after && isDeepStrictEqual(old, next);",
+      "replacement": "const same = true;",
+      "line": 89,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 468
+    },
+    {
+      "id": "N19-same-outcome-only",
+      "file": "src/review/replay.ts",
+      "anchor": "const same = before === after && isDeepStrictEqual(old, next);",
+      "replacement": "const same = before === after;",
+      "line": 89,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 486
+    },
+    {
+      "id": "N20-hash-8",
+      "file": "src/review/replay.ts",
+      "anchor": ".digest(\"hex\").slice(0, 12),",
+      "replacement": ".digest(\"hex\").slice(0, 8),",
+      "line": 92,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 484
+    },
+    {
+      "id": "N21-cause-always-classify",
+      "file": "src/review/replay.ts",
+      "anchor": "cause: same ? \"none\" : classify(raw, old, next),",
+      "replacement": "cause: classify(raw, old, next),",
+      "line": 96,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 478
+    },
+    {
+      "id": "N22-replayable-txt-off",
+      "file": "src/review/replay.ts",
+      "anchor": "return name.endsWith(\".txt\") && ",
+      "replacement": "return true && ",
+      "line": 106,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 472
+    },
+    {
+      "id": "N23-replayable-raw-name",
+      "file": "src/review/replay.ts",
+      "anchor": "parts[parts.length - 2] === \"raw\"",
+      "replacement": "parts[parts.length - 2] === \"rawx\"",
+      "line": 106,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 446
+    },
+    {
+      "id": "N24-replayable-keeps-nested-raw",
+      "file": "src/review/replay.ts",
+      "anchor": "SKIPPED_DIRS.has(part) || part === \"raw\"",
+      "replacement": "SKIPPED_DIRS.has(part)",
+      "line": 106,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 487
+    },
+    {
+      "id": "N25-ancestors-include-parent",
+      "file": "src/review/replay.ts",
+      "anchor": "parts.slice(0, -2)",
+      "replacement": "parts.slice(0, -1)",
+      "line": 105,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 452
+    },
+    {
+      "id": "N26-skip-keeps-node-modules",
+      "file": "src/review/replay.ts",
+      "anchor": "new Set([\"node_modules\", \"research-evidence\", \"drivers\"])",
+      "replacement": "new Set([\"research-evidence\", \"drivers\"])",
+      "line": 100,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 473
+    },
+    {
+      "id": "N27-skip-keeps-research-evidence",
+      "file": "src/review/replay.ts",
+      "anchor": "new Set([\"node_modules\", \"research-evidence\", \"drivers\"])",
+      "replacement": "new Set([\"node_modules\", \"drivers\"])",
+      "line": 100,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 480
+    },
+    {
+      "id": "N28-skip-keeps-drivers",
+      "file": "src/review/replay.ts",
+      "anchor": "new Set([\"node_modules\", \"research-evidence\", \"drivers\"])",
+      "replacement": "new Set([\"node_modules\", \"research-evidence\"])",
+      "line": 100,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 478
+    },
+    {
+      "id": "N29-walk-no-existsSync-guard",
+      "file": "src/review/replay.ts",
+      "anchor": "  if (!existsSync(path.join(root, relative))) return files;\n",
+      "replacement": "\n",
+      "line": 111,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 478
+    },
+    {
+      "id": "N30-walk-skips-directories",
+      "file": "src/review/replay.ts",
+      "anchor": "if (entry.isDirectory()) stack.push(child);",
+      "replacement": "if (false) stack.push(child);",
+      "line": 117,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 378
+    },
+    {
+      "id": "N31-walk-skips-files",
+      "file": "src/review/replay.ts",
+      "anchor": "else if (entry.isFile()) files.push(child);",
+      "replacement": "else if (false) files.push(child);",
+      "line": 118,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 446
+    },
+    {
+      "id": "N32-toplevel-guard-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)) return undefined;",
+      "replacement": "if (top.status !== 0) return undefined;",
+      "line": 126,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 473
+    },
+    {
+      "id": "N33-ls-files-not-nul",
+      "file": "src/review/replay.ts",
+      "anchor": "return listed.stdout.split(\"\\0\").filter((entry) => entry !== \"\");",
+      "replacement": "return listed.stdout.split(\"\\n\").filter((entry) => entry !== \"\");",
+      "line": 129,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 478
+    },
+    {
+      "id": "N34-ls-files-status-ignored",
+      "file": "src/review/replay.ts",
+      "anchor": "if (listed.status !== 0) return undefined;\n",
+      "replacement": "\n",
+      "line": 128,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 474
+    },
+    {
+      "id": "N35-symlink-filter-off",
+      "file": "src/review/replay.ts",
+      "anchor": "    .filter((relative) => !lstatSync(path.join(root, relative)).isSymbolicLink())\n",
+      "replacement": "\n",
+      "line": 136,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 476
+    },
+    {
+      "id": "N36-candidates-unsorted",
+      "file": "src/review/replay.ts",
+      "anchor": "    .sort()\n    .map((relative) => replayRaw(",
+      "replacement": "    .map((relative) => replayRaw(",
+      "line": 137,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 483
+    },
+    {
+      "id": "N37-fallback-to-data-review",
+      "file": "src/review/replay.ts",
+      "anchor": "trackedFiles(root, \".metaproject/flows\") ?? walkFiles(root, \".metaproject/flows\")",
+      "replacement": "trackedFiles(root, \".metaproject\") ?? walkFiles(root, \".metaproject\")",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 499
+    },
+    {
+      "id": "N38-zero-rows-allowed",
+      "file": "src/review/replay.ts",
+      "anchor": "if (rows.length === 0) throw",
+      "replacement": "if (false) throw",
+      "line": 175,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 476
+    },
+    {
+      "id": "N39-cli-root-cwd",
+      "file": "src/review/replay.ts",
+      "anchor": "replayReport(path.resolve(import.meta.dir, \"..\", \"..\"))",
+      "replacement": "replayReport(process.cwd())",
+      "line": 180,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 437
+    },
+    {
+      "id": "N40-cli-target-guard-off",
+      "file": "src/review/replay.ts",
+      "anchor": "    if (!target) throw new Error(\"--write needs a target path\");\n",
+      "replacement": "\n",
+      "line": 185,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 479
+    },
+    {
+      "id": "N41-cli-write-ignored",
+      "file": "src/review/replay.ts",
+      "anchor": "await Bun.write(path.resolve(target), report);",
+      "replacement": "process.stdout.write(report);",
+      "line": 186,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 448
+    },
+    {
+      "id": "N42-legacy-greedy-fence",
+      "file": "src/review/legacy-result-parser.ts",
+      "anchor": "([\\s\\S]*?)```/gi",
+      "replacement": "([\\s\\S]*)```/gi",
+      "line": 9,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 486
+    },
+    {
+      "id": "N43-legacy-nested-skip-off",
+      "file": "src/review/legacy-result-parser.ts",
+      "anchor": "          start = end;\n",
+      "replacement": "\n",
+      "line": 35,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 468
+    },
+    {
+      "id": "N44-legacy-first-labelled",
+      "file": "src/review/legacy-result-parser.ts",
+      "anchor": "JSON.parse(labelled[labelled.length - 1]![1]!)",
+      "replacement": "JSON.parse(labelled[0]![1]!)",
+      "line": 12,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 472
+    },
+    {
+      "id": "N45-legacy-last-status-first",
+      "file": "src/review/legacy-result-parser.ts",
+      "anchor": "if (typeof parsed.status === \"string\") result = parsed as ParsedResult;",
+      "replacement": "if (typeof parsed.status === \"string\" && result === undefined) result = parsed as ParsedResult;",
+      "line": 34,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 474
+    },
+    {
+      "id": "R01-decisionfor-same-undecided",
+      "file": "src/review/replay.ts",
+      "anchor": "return row.same ? \"none\" : (decisions",
+      "replacement": "return row.same ? \"undecided\" : (decisions",
+      "line": 47,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 470
+    },
+    {
+      "id": "R02-hash-of-file-name",
+      "file": "src/review/replay.ts",
+      "anchor": ".update(raw).digest",
+      "replacement": ".update(file).digest",
+      "line": 92,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 476
+    },
+    {
+      "id": "R03-same-deepequal-only",
+      "file": "src/review/replay.ts",
+      "anchor": "const same = before === after && isDeepStrictEqual(old, next);",
+      "replacement": "const same = isDeepStrictEqual(old, next);",
+      "line": 89,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 483
+    },
+    {
+      "id": "R04-ancestor-skip-never",
+      "file": "src/review/replay.ts",
+      "anchor": "!ancestors.some((part) => SKIPPED_DIRS.has(part) || part === \"raw\")",
+      "replacement": "true",
+      "line": 106,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 479
+    },
+    {
+      "id": "R05-toplevel-realpath-dropped",
+      "file": "src/review/replay.ts",
+      "anchor": "top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)",
+      "replacement": "top.status !== 0 || false",
+      "line": 126,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 488
+    },
+    {
+      "id": "R06-lsfiles-pathspec-dropped",
+      "file": "src/review/replay.ts",
+      "anchor": "\"ls-files\", \"-z\", \"--\", relative]",
+      "replacement": "\"ls-files\", \"-z\"]",
+      "line": 127,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 468
+    },
+    {
+      "id": "R07-symlink-check-dir-instead",
+      "file": "src/review/replay.ts",
+      "anchor": "path.join(root, relative)).isSymbolicLink())",
+      "replacement": "path.join(root, relative)).isDirectory())",
+      "line": 136,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 473
+    },
+    {
+      "id": "R08-walk-always-empty",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!existsSync(path.join(root, relative))) return files;",
+      "replacement": "return files;",
+      "line": 111,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 381
+    },
+    {
+      "id": "R09-render-same-section-dropped",
+      "file": "src/review/replay.ts",
+      "anchor": "...rows.filter((row) => row.same).map((row) => `- ${row.file} (${row.hash}): ${row.old}`),",
+      "replacement": "",
+      "line": 167,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 476
+    },
+    {
+      "id": "R10-render-counts-swapped",
+      "file": "src/review/replay.ts",
+      "anchor": "Same: ${rows.length - differing.length}. Differences: ${differing.length}.",
+      "replacement": "Same: ${differing.length}. Differences: ${rows.length - differing.length}.",
+      "line": 152,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 481
+    },
+    {
+      "id": "R11-render-decision-constant",
+      "file": "src/review/replay.ts",
+      "anchor": "| ${row.cause} | ${decisionFor(row, decisions)} |`",
+      "replacement": "| ${row.cause} | undecided |`",
+      "line": 156,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 474
+    },
+    {
+      "id": "R12-cli-flag-index",
+      "file": "src/review/replay.ts",
+      "anchor": "process.argv[flag + 1]",
+      "replacement": "process.argv[flag]",
+      "line": 184,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 459
+    },
+    {
+      "id": "R13-outcome-reviewer-default",
+      "file": "src/review/replay.ts",
+      "anchor": "${result.reviewer ?? \"-\"}",
+      "replacement": "${result.reviewer ?? \"x\"}",
+      "line": 56,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 477
+    },
+    {
+      "id": "R14-zero-rows-never-throws",
+      "file": "src/review/replay.ts",
+      "anchor": "if (rows.length === 0) throw new Error",
+      "replacement": "if (rows.length < 0) throw new Error",
+      "line": 175,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 478
+    }
+  ],
+  "totals": {
+    "killed": 56,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}
