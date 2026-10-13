@@ -70,14 +70,16 @@ In `auto` the model is told `[auto mode] chose this without asking the user`, so
 it cannot present the choice as yours, and the shell prints a
 `◇ answered without asking (auto):` line with the question and the chosen
 label. Such a question uses no tool-call budget and is not remembered as an answer
-of yours.
+of yours. Because it is not an invocation, hooks and `maxToolCalls` are skipped for
+it; the cap of 3 identical calls still applies. An automatic review does not use
+this path: its own rules decide what is answered and what goes to a person.
 
 The question still goes to you when it decides an irreversible action
 (`irreversible` or `action`), when the turn holds untrusted external content, or
 when it asks for permission after you refused an action. An unattended run
 stops at a question as before.
 
-A session with no way to show a question (no dock, no host) now tells the model
+A session with no way to show a question (no dock, no host) tells the model
 "No one was asked" instead of "User cancelled the question (Esc)", so it does not
 report a cancellation nobody made.
 

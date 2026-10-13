@@ -219,7 +219,7 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
       if (!parsed.ok) {
         return { output: parsed.output, isError: true };
       }
-      const { question, options } = parsed.request;
+      const { options } = parsed.request;
       try {
         const given = await ask({
           ...parsed.request,

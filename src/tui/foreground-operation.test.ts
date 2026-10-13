@@ -222,6 +222,21 @@ test("flow 268 T17: an accepted foreground facade forwards onReasoningDelta and 
   ]);
 });
 
+test("a self-answered question reaches the shell while the turn is current and never after it settled", () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const received: string[] = [];
+  const io: AgentIO = { write: () => {}, onQuestionSelfAnswered: (question, label) => received.push(`${question}->${label}`) };
+  const facade = createForegroundAgentIoFacade(owner, operation, io);
+
+  facade.onQuestionSelfAnswered?.("Which scope?", "Full");
+  owner.settle(operation);
+  owner.begin();
+  facade.onQuestionSelfAnswered?.("Which scope?", "Small");
+
+  expect(received).toEqual(["Which scope?->Full"]);
+});
+
 test("flow 219: an approval resolved after disposal remains denied", async () => {
   const owner = createForegroundOperationOwner();
   const operation = owner.begin();

@@ -2497,18 +2497,25 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
 /**
  * Under `auto` the model answers its own `ask_user` question (see `resolveQuestionAnswerer`). Not for a question the
  * floor keeps for a human: an irreversible or action-tagged one, one shaped by untrusted content, or a permission-style
- * one after the operator refused something. An invalid call is left to `executeCall`, which reports the error.
+ * one after the operator refused something. An invalid call, by the tool's own schema, is left to `executeCall`, which
+ * reports the error. A turn of an automatic review is left to it too: `AutomaticReviewRun.answerAskUser` decides what
+ * that run answers and what goes on to a person (policy-tagged questions, the two emergencies).
  */
 function selfAnsweredQuestion(
   call: PendingCall,
   toolByName: Map<string, InteractiveTool>,
   mode: PermissionMode,
   untrustedContentSeen: boolean,
+  reviewRun: AutomaticReviewRun | undefined,
 ): { question: string; label: string; result: InteractiveToolResult } | undefined {
-  if (call.name !== "ask_user" || !toolByName.has("ask_user") || resolveQuestionAnswerer(mode) !== "model") {
+  if (reviewRun !== undefined || call.name !== "ask_user" || resolveQuestionAnswerer(mode) !== "model") {
     return undefined;
   }
-  const parsed = parseAskUserInput(parseToolInput(call.input));
+  const tool = toolByName.get("ask_user");
+  if (tool === undefined) return undefined;
+  const input = parseToolInput(call.input);
+  if (!validateAgainstSchemaObject(tool.definition.inputSchema, input).valid) return undefined;
+  const parsed = parseAskUserInput(input);
   if (!parsed.ok) return undefined;
   const request = untrustedContentSeen ? { ...parsed.request, untrustedContent: true } : parsed.request;
   if (askFloor(request) !== undefined) return undefined;
@@ -4383,7 +4390,7 @@ async function runAgentTurnCore(
       // tool never reaches the latter) are skipped, as for the automatic review's own answers.
       const selfAnswered =
         precomputedResult === undefined && storedAnswer === undefined
-          ? selfAnsweredQuestion(call, toolByName, io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE, untrustedContentSeen)
+          ? selfAnsweredQuestion(call, toolByName, io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE, untrustedContentSeen, reviewRun)
           : undefined;
       if (precomputedResult !== undefined) {
         result = precomputedResult;
@@ -5558,15 +5565,17 @@ async function executeCallUnbounded(
   // "refused earlier" rather than the generic denial text.
   let refusedEarlier = false;
   const denialOutput = (generic: string): string => (refusedEarlier ? REFUSED_EARLIER : generic);
-  if (requestApproval !== undefined && reviewAutoActive()) {
+  if (requestApproval !== undefined) {
     const askHuman = requestApproval;
+    // The refusal is remembered in every mode, so the `auto` question floor sees it; only review-auto answers from the memory and grants.
+    const reviewAuto = reviewAutoActive();
     requestApproval = async (name, toolInput, meta) => {
       const spelled = meta === undefined ? undefined : refusalFingerprint(name, toolInput, meta.fingerprint);
-      if (meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {
+      if (reviewAuto && meta !== undefined && (operatorDenied(meta.fingerprint) || operatorDenied(spelled!))) {
         refusedEarlier = true;
         return false;
       }
-      if (!reviewAutoGrants(name, meta)) {
+      if (!reviewAuto || !reviewAutoGrants(name, meta)) {
         const response = await askHuman(name, toolInput, meta);
         if (meta !== undefined && !isApprovalFor(response, meta.fingerprint)) {
           recordOperatorDenial(meta.fingerprint);
