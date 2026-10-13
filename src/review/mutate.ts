@@ -22,6 +22,8 @@ export type MutantResult = {
   anchor: string;
   replacement: string;
   status: MutantStatus;
+  /** The test command this row was judged by; absent in records written before the field existed. */
+  command?: string | undefined;
   exitCode?: number | undefined;
   ms: number;
   reason?: string | undefined;
@@ -125,7 +127,7 @@ export async function runMutation(options: {
 
     const results: MutantResult[] = [];
     for (const mutant of options.mutants) {
-      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note };
+      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command };
       const target = insideRoot(copy, mutant.file);
       if (target === undefined || !existsSync(target)) {
         results.push({ ...base, status: "invalid", ms: 0, reason: target === undefined ? "file is outside the worktree" : "file does not exist in the worktree" });
@@ -158,10 +160,19 @@ export async function runMutation(options: {
 }
 
 export function renderMutationTable(record: MutationRecord): string {
-  const cell = (value: string) => value.replace(/\|/g, "\\|").replace(/\n/g, " ");
-  const rows = record.mutants.map(
-    (m) => `| ${cell(m.id)} | ${cell(m.file)}${m.line === undefined ? "" : `:${m.line}`} | \`${cell(m.anchor)}\` → \`${cell(m.replacement)}\` | ${m.status}${m.reason ? ` (${cell(m.reason)})` : ""} |`,
-  );
+  // A backtick would end a code span early and cannot be escaped inside one, so it becomes a quote.
+  const cell = (value: string) => value.replace(/\|/g, "\\|").replace(/[\r\n]/g, " ").replace(/`/g, "'");
+  const code = (value: string) => `\`${cell(value)}\``;
+  const columns: { header: string; render: (m: MutantResult) => string }[] = [
+    { header: "Mutant", render: (m) => cell(m.id) },
+    { header: "Where", render: (m) => `${cell(m.file)}${m.line === undefined ? "" : `:${m.line}`}` },
+    { header: "Change", render: (m) => `${code(m.anchor)} → ${code(m.replacement)}` },
+    { header: "Result", render: (m) => `${m.status}${m.reason ? ` (${cell(m.reason)})` : ""}` },
+    { header: "Test command", render: (m) => code(m.command ?? record.command) },
+    { header: "Exit", render: (m) => String(m.exitCode ?? "-") },
+  ];
+  const line = (cells: string[]) => `| ${cells.join(" | ")} |`;
+  const rows = record.mutants.map((m) => line(columns.map((c) => c.render(m))));
   const t = record.totals;
   return [
     `# Mutation pass`,
@@ -170,8 +181,8 @@ export function renderMutationTable(record: MutationRecord): string {
     "",
     `Killed ${t.killed}, survived ${t.survived}, timeout ${t.timeout}, invalid ${t.invalid}.`,
     "",
-    "| Mutant | Where | Change | Result |",
-    "|---|---|---|---|",
+    line(columns.map((c) => c.header)),
+    `|${columns.map(() => "---|").join("")}`,
     ...rows,
     "",
     t.survived > 0 ? "A survivor means no assertion pins that behaviour: the severity audit reads it as evidence." : "No survivor.",

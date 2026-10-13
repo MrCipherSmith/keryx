@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "OB-F-001",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-001 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-001",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-002",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-002 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-002",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-003",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-003 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-003",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-004",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-004 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-004",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-005",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-005 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-005",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-006",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-006 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-006",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-007",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-007 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-007",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-F-008",
+      "source": "consolidated reviewer findings",
+      "question": "Is F-008 a real defect at the cited site?",
+      "status": "finding",
+      "finding": "F-008",
+      "evidence": "see the finding's evidence field in report.md",
+      "reason": "reported by the reviewer named on the finding"
+    },
+    {
+      "id": "OB-G4",
+      "source": "mutation pass",
+      "question": "Mutant G4 on src/review/coverage.ts:50 survived; does it indicate an unpinned behaviour introduced by this PR?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/428-2026-10-12-review-depth-parity/reviews/2026-10-13-pr-993/research-evidence/mutation-1.json: G4 survived; coverage.ts is not in the changed-file set of 9f7f7368",
+      "reason": "the function is unchanged by this PR; the survivor is a pre-existing gap in coverage.test.ts and does not block"
+    },
+    {
+      "id": "OB-G5",
+      "source": "mutation pass",
+      "question": "Mutant G5 on src/review/coverage.ts:47 survived; does it indicate an unpinned behaviour introduced by this PR?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/428-2026-10-12-review-depth-parity/reviews/2026-10-13-pr-993/research-evidence/mutation-1.json: G5 survived; coverage.ts is not in the changed-file set of 9f7f7368",
+      "reason": "the function is unchanged by this PR; the survivor is a pre-existing gap in coverage.test.ts and does not block"
+    },
+    {
+      "id": "OB-R11",
+      "source": "mutation pass",
+      "question": "Mutant R11 on src/review/coverage.ts:126 survived; does it indicate an unpinned behaviour introduced by this PR?",
+      "status": "out-of-scope",
+      "evidence": ".metaproject/flows/428-2026-10-12-review-depth-parity/reviews/2026-10-13-pr-993/research-evidence/mutation-1.json: R11 survived; coverage.ts is not in the changed-file set of 9f7f7368",
+      "reason": "the function is unchanged by this PR; the survivor is a pre-existing gap in coverage.test.ts and does not block"
+    },
+    {
+      "id": "OB-AC4-wording",
+      "source": "operator brief",
+      "question": "AC4 lists killed|survived|error while the code uses invalid and timeout.",
+      "status": "out-of-scope",
+      "evidence": "operator stated this is a known open point that needs the operator to change the AC",
+      "reason": "not a defect of this PR; excluded by the task brief"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:a15a64a9c50fbdd33",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-a15a64a9c50fbdd33.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:aca4797e85f280ddc",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-aca4797e85f280ddc.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:ad3c6302b5af2d7b0",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-ad3c6302b5af2d7b0.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:a7790ca03ef1e7350",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-a7790ca03ef1e7350.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:a7cf3126852686d68",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-a7cf3126852686d68.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:ad888e8e28fd4675a",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-ad888e8e28fd4675a.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:a2c8133ff4d1c1dbc",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-a2c8133ff4d1c1dbc.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "the one probe it ran (renderMutationTable with a backtick/CR command) is recorded in F-008; the remaining scope is source-only"
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:afa3482f89ab5aca5",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-afa3482f89ab5aca5.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": false,
+        "executionReason": "source-only review: the scope is a table renderer, test pins, a package script and one doc sentence; nothing required a command beyond reading the diff"
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:a3636f54cb5c06743",
+        "status": "complete",
+        "scopeComplete": true,
+        "rawEvidence": "/home/altsay/.claude/projects/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/subagents/agent-a3636f54cb5c06743.jsonl",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+          "scratchpad brief.md (review brief handed to every reviewer: scope A diff, ACs, severity rubric)"
+        ],
+        "executionRequired": true,
+        "executionEvidence": [
+          ".metaproject/flows/428-2026-10-12-review-depth-parity/reviews/2026-10-13-pr-993/research-evidence/mutation-1.json"
+        ]
+      }
+    ]
+  }
+}
