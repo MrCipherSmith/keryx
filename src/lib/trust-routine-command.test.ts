@@ -128,6 +128,50 @@ test("AC2: an exec flag on a listed command still prompts", () => {
   expect(isTrustRoutineCommand("keryx help -c x")).toBe(false);
 });
 
+// Flow 441 F-045: git reads an option glued on with `=` as a revision's value, and the next layer reads the value as an option.
+test("F-045: an exec flag glued to another flag with = still prompts, for every review row that hands a revision to git", () => {
+  for (const command of [
+    "keryx review slice --ref=--output=/tmp/x",
+    "keryx review slice --base=--output=/tmp/x",
+    "keryx review scope --ref=--output=/tmp/x",
+    "keryx review blast-radius --base=--output=/tmp/x",
+    "keryx review floor --ref=--output=/tmp/x",
+    "keryx review slice --ref=--ext-diff",
+    "keryx review slice --ref=--exec=./evil",
+    "keryx review slice --ref=-c",
+    "keryx review slice --ref=--x=--output=/tmp/x",
+    "keryx ctx run -- keryx review slice --ref=--output=/tmp/x",
+    "keryx flow status --x=--output=/tmp/x",
+    "git diff --relative=--output=/tmp/x",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd: projectDir() })).toBe(false);
+  }
+});
+
+test("F-045: a review flag glued to a value that starts with - prompts, whatever the option is", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx review slice --ref=-U0", "keryx review slice --ref=--no-index", "keryx review scope --base=-"]) {
+    expect(isTrustRoutineCommand(command, { cwd })).toBe(false);
+  }
+});
+
+test("F-045: a glued value that is a plain revision, a path or a count stays routine", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "keryx review slice --ref=origin/main",
+    "keryx review slice --ref=HEAD~1 --context=3",
+    "keryx review slice --ref origin/main",
+    "keryx review blast-radius --base=a=b",
+    "git diff --stat=100",
+    "git log --format=--oneline",
+    "git log -- x=-c",
+    "keryx flow status --x=-1",
+    "keryx gdgraph context --x=-1",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd })).toBe(true);
+  }
+});
+
 // Flow 441 (F-007, F-008): `bun test` and the review path flags.
 
 const madeDirs: string[] = [];

@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+import { assertGitRevision } from "../lib/git-revision";
 // Through the security facade, not `security/redact` directly — same
 // discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
 import { redactSensitiveText } from "../security/service";
@@ -3541,7 +3542,7 @@ async function readPreviousRadius(source: string): Promise<BlastRadius> {
 
 /** The changed-file list scope B is seeded from. Deleted paths are excluded. */
 async function gitChangedFiles(ref: string | undefined): Promise<string[]> {
-  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : ["--end-of-options", assertGitRevision(ref)])];
   return (await gitLines(command)).filter(Boolean);
 }
 
@@ -3594,7 +3595,7 @@ const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, reje
  * than the configured bound.
  */
 async function gitDiff(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : ["--end-of-options", assertGitRevision(ref)])];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -3670,7 +3671,7 @@ async function isShallowClone(): Promise<boolean> {
 }
 
 async function mergeBaseWithHead(ref: string): Promise<string> {
-  const { stdout, stderr, exitCode } = await gitOutput(["merge-base", "HEAD", ref]);
+  const { stdout, stderr, exitCode } = await gitOutput(["merge-base", "--end-of-options", "HEAD", assertGitRevision(ref)]);
   const base = stdout.trim();
   if (exitCode !== 0 || base.length === 0) {
     // Refused rather than silently falling back to `ref`: the fallback IS the

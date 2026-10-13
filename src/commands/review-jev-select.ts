@@ -11,6 +11,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
+import { assertGitRevision } from "../lib/git-revision";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { collectReviewers, PROJECT_REVIEWER_MODULE } from "../review/reviewers";
 import { DEFAULT_CONTEXT_LINES, buildReviewScope } from "../review/scope";
@@ -117,7 +118,7 @@ async function fixtureCandidates(dir: string): Promise<ReviewerCandidate[] | und
 }
 
 async function gitDiffForJevSelect(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : ["--end-of-options", assertGitRevision(ref)])];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (exitCode !== 0) {

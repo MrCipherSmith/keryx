@@ -104,8 +104,19 @@ export function isTrustRoutineTool(name: string): boolean {
   return TRUST_ROUTINE_TOOLS.includes(name);
 }
 
+// The word itself, or a value glued on with `=` (`--ref=--output=/x`): git reads the value of an option it does not know as
+// a revision, and the next layer down may read it as an option, so every `=` value is judged as a word of its own.
 function hasExecFlag(words: readonly string[]): boolean {
-  return words.some((w) => w === "-c" || EXEC_FLAGS.some((f) => w === f || w.startsWith(`${f}=`)));
+  return words.some((w) => {
+    if (w === "-c" || EXEC_FLAGS.some((f) => w === f || w.startsWith(`${f}=`))) return true;
+    const eq = w.indexOf("=");
+    return w.startsWith("-") && eq !== -1 && hasExecFlag([w.slice(eq + 1)]);
+  });
+}
+
+/** A `--flag=-...` word: the glued value is an option, not a value. No routine review command is spelled that way. */
+function hasDashValue(words: readonly string[]): boolean {
+  return words.some((w) => /^--[^=]+=-/.test(w));
 }
 
 function startsWith(words: readonly string[], prefix: readonly string[]): boolean {
@@ -285,6 +296,7 @@ function isRoutineKeryx(words: readonly string[], walk: Walk): boolean {
   }
   if (hasExecFlag(words)) return false;
   if (!TRUST_ROUTINE_KEYRYX.some((entry) => matchesEntry(entry, args))) return false;
+  if (args[0] === "review" && hasDashValue(args)) return false;
   const sub = args[1];
   if (args[0] === "review" && sub !== undefined && confinedPathFlags(sub).length > 0) {
     return areReviewPathFlagsInside(sub, args.slice(2), walk);

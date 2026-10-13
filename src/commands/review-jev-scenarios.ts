@@ -10,6 +10,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { optionValue } from "../lib/args";
+import { assertGitRevision } from "../lib/git-revision";
 import { buildReviewScope } from "../review/scope";
 import type { ScopedRegion } from "../review/scope";
 import { touchedExportedSymbols } from "../review/jev-risk";
@@ -343,7 +344,7 @@ export async function runJevScenarios(args: string[]): Promise<void> {
 }
 
 async function gitDiffForJevScenarios(ref: string | undefined): Promise<string> {
-  const command = ["git", "diff", "--no-color", "-U0", ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--no-color", "-U0", ...(ref === undefined ? [] : ["--end-of-options", assertGitRevision(ref)])];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (exitCode !== 0) {
