@@ -238,6 +238,12 @@ Recompute when the changed-file set moves, and always on the final round:
 keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 ```
 
+### The layers every reviewer reads, and the files the cap dropped
+
+Before a round dispatches, the review refreshes the graph, the wiki and the memory for the PR head and writes `layers.json` into the package. **No model is called**, and `wiki enrich` — the only model step in the wiki — is never run automatically. The graph is built at the PR head in a fresh worktree, so its recorded commit equals the head; the wiki and the memory come from your working copy, and `layers.json` says how far that copy is from the head. Each reviewer payload carries a bounded `layers` block, and the package records per reviewer how many graph, wiki, memory and ctx calls it made (`unknown`, never zero, when it left no tool-call log).
+
+The blast radius is capped at 40 files a pass. The files beyond the cap are not skipped silently: `keryx review chunks plan` splits them into chunks, `chunks estimate` states the cost before you spend it (the ceiling is 25 passes of 40 files, set by `reviewChunks.maxPasses` in `routing.config.json`), and the chunks run one at a time through `review-regression` on the middle tier. `keryx review coverage` counts what is covered, covered by a named omission, and uncovered. `keryx review complete` refuses while a file is uncovered and names the command that runs the missing chunks; the only way past is `--waive-coverage "<operator quote>"`, recorded with the time and the files not reviewed. See [`review layers`, `review chunks` and `review coverage`](../cli-reference.md#review-layers-review-chunks-and-review-coverage).
+
 ## Answer the humans — once, at the end
 
 ```bash
