@@ -121,6 +121,8 @@ const MAX_UNCLOSED = 64;
  * The objects that stand at the top level of a reply. A candidate that fails to parse is skipped whole, never entered.
  * One that never closes ends the scan when it carries the result keys (a result cut off); otherwise it is prose and only
  * its brace is skipped, up to MAX_UNCLOSED times; the next one ends the scan the same way (the reply gives no result).
+ * A cut-off fragment is entered again at each of its own braces, so a result key anywhere in it, even in an object nested
+ * inside the cut-off one, ends the scan as truncated.
  */
 function topLevelObjects(raw: string): { found: Array<{ start: number; value: unknown }>; truncated: boolean } {
   const found: Array<{ start: number; value: unknown }> = [];
@@ -134,23 +136,43 @@ function topLevelObjects(raw: string): { found: Array<{ start: number; value: un
       start += 1;
       continue;
     }
-    try { found.push({ start, value: JSON.parse(raw.slice(start, end + 1)) }); } catch { /* not JSON: skipped whole */ }
+    const value = tryParse(raw.slice(start, end + 1));
+    if (value !== undefined) found.push({ start, value });
     start = end + 1;
   }
   return { found, truncated: false };
 }
 
-/** `from` inclusive, `to` exclusive, of each ``` block that has an opening line and a closing ```. One forward pass, so a reply of many fences costs no more than its length. */
+/** An opening line: up to 3 spaces, 3 or more backticks, and no further backtick (an inline mention is not a fence). */
+const FENCE_OPEN = /^ {0,3}(`{3,})[^`]*$/;
+/** A closing line: up to 3 spaces and a run of backticks, nothing else on the line. */
+const FENCE_CLOSE = /^ {0,3}(`{3,})[ \t]*$/;
+
+/**
+ * `from` inclusive, `to` exclusive, of each fenced block, read line by line as CommonMark does: an opening line starts it, a
+ * line holding only a run of at least as many backticks ends it, and an opening that never closes runs to the end of the reply.
+ * A triple backtick inside a sentence therefore never changes which lines are fenced. One forward pass over the lines.
+ */
 function fenceRanges(raw: string): Array<readonly [number, number]> {
   const ranges: Array<readonly [number, number]> = [];
-  for (let open = raw.indexOf("```"); open !== -1; ) {
-    const lineEnd = raw.indexOf("\n", open + 3);
-    if (lineEnd === -1) break;
-    const close = raw.indexOf("```", lineEnd + 1);
-    if (close === -1) break;
-    ranges.push([open, close + 3] as const);
-    open = raw.indexOf("```", close + 3);
+  let opened: { from: number; length: number } | undefined;
+  for (let lineStart = 0; lineStart < raw.length; ) {
+    const newline = raw.indexOf("\n", lineStart);
+    const lineEnd = newline === -1 ? raw.length : newline;
+    const line = raw.slice(lineStart, raw.charCodeAt(lineEnd - 1) === 13 ? lineEnd - 1 : lineEnd);
+    if (opened === undefined) {
+      const open = FENCE_OPEN.exec(line);
+      if (open !== null) opened = { from: lineStart, length: open[1]!.length };
+    } else {
+      const close = FENCE_CLOSE.exec(line);
+      if (close !== null && close[1]!.length >= opened.length) {
+        ranges.push([opened.from, lineEnd] as const);
+        opened = undefined;
+      }
+    }
+    lineStart = lineEnd + 1;
   }
+  if (opened !== undefined) ranges.push([opened.from, raw.length] as const);
   return ranges;
 }
 
@@ -178,14 +200,30 @@ export function isReviewerResult(value: unknown): value is ParsedResult {
 
 type Decision = { result: ParsedResult | undefined };
 
-/** The last ```REVIEW_RESULT block. It keeps the status-only rule: the label already says what the block is. */
+/** A line that only closes a fence. A JSON string cannot hold a raw newline, so such a line is never inside the object. */
+const LINE_CLOSE = /^ {0,3}```[ \t]*\r?$/gm;
+
+/**
+ * The last ```REVIEW_RESULT block. It keeps the status-only rule: the label already says what the block is.
+ * The block ends at the first triple backtick; when that cuts the object short (a triple backtick written inside a JSON
+ * string) it is read again up to the first line that holds only a closing fence.
+ */
 function labelledFence(raw: string): Decision | undefined {
   const labelled = [...raw.matchAll(/```REVIEW_RESULT[ \t]*\r?\n([\s\S]*?)```/gi)];
   if (labelled.length === 0) return undefined;
-  try {
-    const parsed = JSON.parse(labelled[labelled.length - 1]![1]!);
-    return { result: hasStatus(parsed) ? parsed : undefined };
-  } catch { return { result: undefined }; }
+  const last = labelled[labelled.length - 1]!;
+  let parsed = tryParse(last[1]!);
+  if (parsed === undefined) {
+    const bodyStart = last.index! + last[0].length - last[1]!.length - 3;
+    LINE_CLOSE.lastIndex = bodyStart;
+    const close = LINE_CLOSE.exec(raw);
+    if (close !== null) parsed = tryParse(raw.slice(bodyStart, close.index));
+  }
+  return { result: hasStatus(parsed) ? parsed : undefined };
+}
+
+function tryParse(source: string): unknown {
+  try { return JSON.parse(source); } catch { return undefined; }
 }
 
 /** How many of the last markers are tried (older ones are not read at all, and the scan of rule 3 follows): each one whose object never closes costs a scan to the end. */
@@ -207,10 +245,8 @@ function afterMarker(raw: string): ParsedResult | undefined {
     const start = marker.index! + marker[0].length;
     const { end } = objectEnd(raw, start);
     if (end === undefined) continue;
-    try {
-      const parsed = JSON.parse(raw.slice(start, end + 1));
-      if (isReviewerResult(parsed)) return parsed;
-    } catch { /* prose after the word: try the marker before */ }
+    const parsed = tryParse(raw.slice(start, end + 1));
+    if (isReviewerResult(parsed)) return parsed;
   }
   return undefined;
 }

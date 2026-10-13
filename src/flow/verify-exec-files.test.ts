@@ -1,5 +1,5 @@
 // Flow 441 AC18: every `[verify: exec ...]` line in a flow's acceptance-criteria.md must name test files that exist.
-// A command naming a missing file passes vacuously in `bun test`, so the gate proves nothing.
+// `bun test` skips a missing file when the command also names other test files, so the gate passes without running it.
 
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";

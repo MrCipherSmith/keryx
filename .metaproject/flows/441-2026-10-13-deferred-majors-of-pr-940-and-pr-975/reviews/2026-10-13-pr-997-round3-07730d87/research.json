@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-architecture:ARCH-R3-1",
+      "source": "raw/review-architecture.txt",
+      "question": "Is review-architecture finding ARCH-R3-1 (fenceRanges pairs any two triple backticks as a fenced block: it does not require the delimiter to s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-architecture.txt",
+      "reason": "same defect as F-001: fenceRanges pairs any triple backtick",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-architecture:ARCH-R3-2",
+      "source": "raw/review-architecture.txt",
+      "question": "Is review-architecture finding ARCH-R3-2 (Round-2 F-010 / ARCH-3 (a) is still open. AC18 (acceptance-criteria.md:55) says the test fails when ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-architecture.txt",
+      "reason": "AC18 deviation; the operator decision is recorded in the PR text",
+      "finding": "F-007"
+    },
+    {
+      "id": "review-architecture:ARCH-R3-3",
+      "source": "raw/review-architecture.txt",
+      "question": "Is review-architecture finding ARCH-R3-3 (The now exported name isReviewerResult is also a private function in src/review/managed.ts:1676 with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-architecture.txt",
+      "reason": "info: exported name shared with a private function in managed.ts",
+      "finding": "F-012"
+    },
+    {
+      "id": "review-architecture:ARCH-R3-4",
+      "source": "raw/review-architecture.txt",
+      "question": "Is review-architecture finding ARCH-R3-4 (The prefix class is strict for real forms: an emphasis or code span around the marker (`**REVIEW_RES) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-architecture.txt",
+      "reason": "info: merged with the MARKER prefix wording",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-clean-code:F-001",
+      "source": "raw/review-clean-code.txt",
+      "question": "Is review-clean-code finding F-001 (The docs of afterMarker (l.199), parseReviewResult rule 2 (l.239) and MARKER promise a marker 'outsi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-clean-code.txt",
+      "reason": "merged with the fenceRanges finding",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-clean-code:F-002",
+      "source": "raw/review-clean-code.txt",
+      "question": "Is review-clean-code finding F-002 (Carried round-2 F-004, unchanged by round 3. objectEnd documents claimsResult as 'the object itself ) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-002",
+      "evidence": "raw/review-clean-code.txt#sha256:ccf906348249",
+      "reason": "reported by review-clean-code as F-002; the same finding is canonical 2026-10-13-pr-997-round3-07730d87#F-002"
+    },
+    {
+      "id": "review-clean-code:F-003",
+      "source": "raw/review-clean-code.txt",
+      "question": "Is review-clean-code finding F-003 (Carried round-2 F-008, unchanged. objectEnd is a brace matcher plus a result-key detector; afterMark) real, and where is it reported?",
+      "status": "finding",
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-003",
+      "evidence": "raw/review-clean-code.txt#sha256:ccf906348249",
+      "reason": "reported by review-clean-code as F-003; the same finding is canonical 2026-10-13-pr-997-round3-07730d87#F-003"
+    },
+    {
+      "id": "review-clean-code:F-004",
+      "source": "raw/review-clean-code.txt",
+      "question": "Is review-clean-code finding F-004 (Two one-line comments understate the code. MARKER says 'after at most a quote, list or heading prefi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-clean-code.txt",
+      "reason": "info: comment wording, merged with the MARKER prefix wording",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-highload:HL3-1",
+      "source": "raw/review-highload.txt",
+      "question": "Is review-highload finding HL3-1 (fenceRanges pairs an opening ``` with the first ``` after the END OF THE OPENING LINE. A line that h) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-highload.txt",
+      "reason": "merged with the fenceRanges finding",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-highload:HL3-2",
+      "source": "raw/review-highload.txt",
+      "question": "Is review-highload finding HL3-2 (Cost is linear but the constant is large for a hostile 1 MB+ reply: up to MAX_MARKERS (64) objectEnd) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-highload.txt",
+      "reason": "info: cost constant, merged",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-logic:F-018",
+      "source": "raw/review-logic.txt",
+      "question": "Is review-logic finding F-018 (fenceRanges pairs any ``` as a delimiter (inline, mid-line, any length) and closes at the next ``` a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-logic.txt",
+      "reason": "merged with the fenceRanges finding",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-logic:F-019",
+      "source": "raw/review-logic.txt",
+      "question": "Is review-logic finding F-019 (MARKER allows only [ \\t>*#-] before REVIEW_RESULT and nothing between the word and the colon, so the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-logic.txt",
+      "reason": "info: marker prefix wording, merged",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-performance:PERF-R3-1",
+      "source": "raw/review-performance.txt",
+      "question": "Is review-performance finding PERF-R3-1 (fenceRanges pairs any triple backtick (an inline code span included) with the next one after the end) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-performance.txt",
+      "reason": "merged with the fenceRanges finding",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-performance:PERF-R3-2",
+      "source": "raw/review-performance.txt",
+      "question": "Is review-performance finding PERF-R3-2 (Worst-case latency scales with MAX_UNCLOSED + MAX_MARKERS = 64 + 64 scans to the end of the reply. M) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-performance.txt",
+      "reason": "info: worst-case latency, merged",
+      "finding": "F-013"
+    },
+    {
+      "id": "review-security-code:F-018",
+      "source": "raw/review-security-code.txt",
+      "question": "Is review-security-code finding F-018 (fenceRanges pairs any ``` it finds, wherever it stands in a line, with the next ``` after the end of) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-security-code.txt",
+      "reason": "merged with the fenceRanges finding (fail-open case)",
+      "finding": "F-001"
+    },
+    {
+      "id": "review-style:STY-R3-1",
+      "source": "raw/review-style.txt",
+      "question": "Is review-style finding STY-R3-1 (Added in 44bed779. A snake_case helper in a camelCase codebase, declared at file level after the des) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-style.txt",
+      "reason": "good_json helper",
+      "finding": "F-005"
+    },
+    {
+      "id": "review-style:STY-R3-2",
+      "source": "raw/review-style.txt",
+      "question": "Is review-style finding STY-R3-2 (Titles at lines 388 and 392 name a rule the assertion cannot fail on. Both inputs hold two reviewer-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-style.txt",
+      "reason": "two titles that cannot fail",
+      "finding": "F-004"
+    },
+    {
+      "id": "review-style:STY-R3-3",
+      "source": "raw/review-style.txt",
+      "question": "Is review-style finding STY-R3-3 (Round-2 STY-4, unchanged. The comment is false for a command that names one missing file.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-style.txt",
+      "reason": "verify-exec-files header comment",
+      "finding": "F-006"
+    },
+    {
+      "id": "review-style:STY-R3-4",
+      "source": "raw/review-style.txt",
+      "question": "Is review-style finding STY-R3-4 (Three small title/assertion drifts. Line 376: the third input ({\"verdict\":\"DONE\"}) is valid JSON wit) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-style.txt",
+      "reason": "info: title and assertion drifts",
+      "finding": "F-014"
+    },
+    {
+      "id": "review-style:STY-R3-5",
+      "source": "raw/review-style.txt",
+      "question": "Is review-style finding STY-R3-5 (Doc precision. Rule 2 says 'at the start of a line' but MARKER also accepts a quote, list or heading) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-style.txt",
+      "reason": "info: doc precision, merged with the MARKER prefix wording",
+      "finding": "F-011"
+    },
+    {
+      "id": "review-testing-practices:F-101",
+      "source": "raw/review-testing-practices.txt",
+      "question": "Is review-testing-practices finding F-101 (Unpinned behaviour: the truncation test (a cut-off object that claims a result key means no result) ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-testing-practices.txt",
+      "reason": "surviving mutants O08, O09, O11",
+      "finding": "F-008"
+    },
+    {
+      "id": "review-testing-practices:F-102",
+      "source": "raw/review-testing-practices.txt",
+      "question": "Is review-testing-practices finding F-102 (Unpinned behaviour in two round-3 branches. B06 (compare the bare status with fencedResults[0] inste) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-testing-practices.txt",
+      "reason": "surviving mutants B06, N03",
+      "finding": "F-009"
+    },
+    {
+      "id": "review-testing-practices:F-103",
+      "source": "raw/review-testing-practices.txt",
+      "question": "Is review-testing-practices finding F-103 (Unpinned behaviour: F05 (closing-fence search starting at open + 3 instead of the next line) and H01) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md of review 2026-10-13-pr-997-round3-07730d87, raw/review-testing-practices.txt",
+      "reason": "surviving mutants F05, H01",
+      "finding": "F-010"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-backend",
+      "review-clean-code",
+      "review-frontend",
+      "review-frontend-conventions",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [
+      "review-backend",
+      "review-frontend",
+      "review-frontend-conventions"
+    ],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:5dce5ec75377",
+        "rawEvidence": "raw/review-architecture.txt#sha256:5dce5ec75377",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-backend",
+        "executionId": "review-backend:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:ccf906348249",
+        "rawEvidence": "raw/review-clean-code.txt#sha256:ccf906348249",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-frontend",
+        "executionId": "review-frontend:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-frontend-conventions",
+        "executionId": "review-frontend-conventions:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:a70379671abb",
+        "rawEvidence": "raw/review-highload.txt#sha256:a70379671abb",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:f086de40ff96",
+        "rawEvidence": "raw/review-logic.txt#sha256:f086de40ff96",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:38b52f339c27",
+        "rawEvidence": "raw/review-performance.txt#sha256:38b52f339c27",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:b7a7e1ac6093",
+        "rawEvidence": "raw/review-regression.txt#sha256:b7a7e1ac6093",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:5ed15ca8cae1",
+        "rawEvidence": "raw/review-security-code.txt#sha256:5ed15ca8cae1",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:47607f71e020",
+        "rawEvidence": "raw/review-style.txt#sha256:47607f71e020",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:7b02605069a1",
+        "rawEvidence": "raw/review-testing-practices.txt#sha256:7b02605069a1",
+        "executionRequired": false,
+        "ruleEvidence": [
+          "../../../keryx-fdm-t1/.metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  }
+}

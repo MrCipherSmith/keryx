@@ -1,0 +1,53 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "summary": "Scope B, round 3 (final), PR 997 head 07730d87. No regression at the dependents of the changed T1 files. Corpus parity: 36 stored replies, base and head parsers agree on all 36 (0 differences). Dependents' tests pass. Radius caveat: 104 of 144 candidates were cut by the 40-file cap, and most of the 40 retained belong to src/tui and src/session, not to this PR.",
+  "findings": []
+}
+```
+
+## Summary (scope B, regression, round 3)
+
+Lanes in order: findings, Questions, Pre-existing, Verified clean.
+
+### Findings
+None at major or above. Nothing filed.
+
+### Questions
+Q1. Same-status fenced sample plus a bare real result, attribution flips to the sample. Input (no label, no marker):
+`` ```json\n{"status":"DONE","reviewer":"review-logic","findings":[]}\n```\n{"status":"DONE","reviewer":"review-x","findings":[{...}]} ``
+BASE `parseReviewResult` returns review-x (the last status-bearing object). HEAD returns review-logic (the fenced one wins when no bare reviewer-shaped object has a different status). This is pinned on purpose at `src/review/ledger.test.ts:226` and F-002 decided only the differing-status case, so I did not file it. The ask: should `scannedResult` (`src/review/ledger.ts:227-230`) also treat a differing `reviewer` as ambiguous? Impact if yes-needed: `buildLedger` credits review-logic's slot from review-x's file. All 36 stored replies are labelled, so the path is only reachable from an off-contract unlabelled reply.
+
+### Pre-existing
+- F-016, 3 of the stored round-2 replies (review-security-code, review-style, review-testing-practices) parse to none in BASE and HEAD alike (triple backtick inside a JSON string of the labelled fence). Known, carried.
+- F-017 class unchanged.
+
+### Verified clean
+Corpus parity (required test). Ran the BASE `parseReviewResult` (extracted from 01e0dbfe) and the HEAD one over every `raw/*.txt` and `raw/*.md` under all /home/altsay/keryx* trees: 36 files, 28 give a result in both, 8 give none in both (3 are the F-016 replies above, 2 are non-reply journals), status, reviewer and findings count identical on every file. Max HEAD time 0.6 ms. The named corpus globs (`.metaproject/flows/*/reviews/*/raw`, `.metaproject/reviews/*/raw`) hold only 18 files here (9 per worktree, all this PR's round-2 replies); I widened to the pr-776 slice replies in the release-0.3.110 worktree. The corpus is thin and all labelled, so it exercises rule 1 only; hence the two differential runs below.
+
+Differential runs (base vs head, scratch folder, 100k generated replies from prose, brace prose, inline and fenced backticks, markers, CRLF, slice entries, fenced samples). Where BASE returned the real result and the status was the same everywhere, HEAD differs only in: (a) a fenced or quoted-marker sample next to the real result (Q1, and the accepted AC15 residual), (b) a prose fragment `{"findings": [ unterminated` (cut-off carrying a result key: truncated = none, AC11 by design). CRLF, 4-backtick fences, an unclosed fence, an inline ``` in prose, a `**REVIEW_RESULT**:` bold marker, a mid-sentence marker and a BOM all agree with BASE. Where BASE returned a status-only or sample object, HEAD fails closed (improvement: BASE mis-attributed).
+
+Round-3 specifics. MARKER is linear: 1 MB single line of spaces or dashes 7 ms, 300k "- - -" lines 15 ms, 2000 markers each followed by 1000 spaces 23 ms. Worst case measured, 64 unclosed markers over 5 MB, 1.7 s (BASE is quadratic on the same shape). `fenceTester` is only asked ascending positions in both callers (`afterMarker` over ascending matches, `scannedResult` over ascending `found`). One contrived flip: an inline ``` in prose pairs with the next fence and inverts the ranges, so a real marker can be classed as fenced while a competing sample marker in a diff fence counts; it needs an inline ```, a diff fence holding a line-start `- REVIEW_RESULT:` sample and another inline ```, so info at most.
+
+Dependents. `src/commands/review-ledger.ts` `loadRaws` now ignores any non-`isReviewerResult` result; the one behaviour change from BASE is a result with `"reviewer": null` and no findings array, which BASE turned into a "names no reviewer" gap and HEAD lists as ignored (pinned by the new test at review-ledger.test.ts:215). A bare status-only reply saved under a reviewer's name is now a "no parseable REVIEW_RESULT block" gap (before: silently ignored); documented in the PR body, both outcomes block the ledger. `src/commands/review-slice.ts` `readResult`: a whole-file JSON with a status (the documented plain-JSON input, `--reviewer` optional) is still accepted via `wholeFileResult`; a status-only object inside prose is refused (AC14, tested). `buildLedger`, retry-plan, dispatch-check, coverage, research and waves consume `ParsedResult` unchanged.
+
+Tests: the 4 PR test files 120 pass; 173 pass across review.test, review-run, review-result-contract, retry-plan, dispatch, dispatch-check, coverage, research, slice, waves, completion-gate; 51 pass across review-ac-check-cli, review-help, review-floor-cli, review-conform-cli, import-only, cli-registry. `git status` unchanged after the test runs. `keryx ctx rg` wrote its artifacts under the worktree's `.metaproject/data/gdctx/`, as the project routing requires.
+
+First-round F-001 (fenced non-result objects do not hide the real result): holds (ledger.test.ts:233-246 pass; differential run agrees on fenceTs, slice entries and non-result fences).
+
+Prior findings in my domain, checked against the code:
+- F-001 closed (MARKER needs a line start, `fenceTester` drops fenced markers; mid-sentence and fenced markers no longer replace the result).
+- F-002 closed (fenced plus differing bare status gives none; test 219).
+- F-006 closed (`isReviewerResult` exported and used in `loadRaws`).
+- F-011 closed (review-ledger.test.ts new tests, behaviour asserted end to end).
+- F-012 closed (review-slice.test.ts whole-file, bare-marker refusal and stdin cases).
+- F-014, F-015 closed (tests 308-430 pin marker forms, labelled fence and pairing shapes).
+- F-003, F-013 closed (caps 64, boundaries 64 pass and 65 none, tests 332-356).
+- F-016, F-017 carried, out of scope.
+
+Radius record: 144 candidates, 40 retained, 104 dropped by the cap (among them `src/cli-registry.ts`, reached through review-ledger.ts, and `src/session/**` dependents); 76 of 93 changed files had no graph node (`.metaproject/**` JSON and Markdown). The retained set is dominated by tui-shell and preservation dependents that PR 997 does not touch; the T1 dependents that matter (review.ts, the review-*-cli tests, the callers named above) were checked directly with `keryx ctx rg` and the test runs.
+
+Routing audit: graph_used no (blast-radius record read directly; callers found with `keryx ctx rg`), wiki_used not-relevant, ctx_used yes (`keryx ctx rg`, a few raw runs with a stated reason for diff/find/test output), raw_rg_used no.

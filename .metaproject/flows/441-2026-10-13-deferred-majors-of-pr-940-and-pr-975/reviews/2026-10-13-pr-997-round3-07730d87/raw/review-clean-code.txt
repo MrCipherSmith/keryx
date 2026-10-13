@@ -1,0 +1,91 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Round-3 delta reads cleanly: the numbers (64/64), the rule order, the 'start of a line' rule and the ambiguity rule in the comments match the code, and F-007 is closed. Two carried minors (F-004, F-008) are unchanged; one new minor: 'outside a fenced block' is stronger than fenceRanges delivers.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 144,
+      "problem": "The docs of afterMarker (l.199), parseReviewResult rule 2 (l.239) and MARKER promise a marker 'outside a fenced block', but fenceRanges pairs ANY two ``` occurrences by parity: an inline mention counts as an opener, fence length is ignored, a closer need not start a line. Its own doc ('each ``` block that has an opening line and a closing ```') does not say so.",
+      "impact": "Two wrong outcomes on realistic replies. (a) fail closed: an inline ```json mention in prose flips parity, a real marker result is read as fenced and skipped. (b) fail open (the F-001 hole in a fence shape): a quoted marker inside a 4-backtick fence is read as outside, so the quote replaces the real bare result.",
+      "evidence": "bun against exported parseReviewResult, ok(S)={\"status\":S,\"reviewer\":\"r\",\"findings\":[]}. (a) 'the ```json convention\\nREVIEW_RESULT: ok(DONE)\\n```json\\nok(BLOCKED)\\n```' -> undefined; same text without the inline ``` -> DONE. (b) '````\\n```text\\nREVIEW_RESULT: ok(DONE)\\n```\\n````\\nok(BLOCKED)' -> DONE (the bare real result is BLOCKED; with the quote removed the answer is BLOCKED). Scripts: scratchpad/review-clean-code/t2.ts.",
+      "suggested_fix": "Either say it in the docs ('fences are paired by counting ``` occurrences; an inline or longer fence can shift the pairing') or make the ranges honest: open only at a ``` that starts a line (after blanks), close at the first line-start fence of at least the opener's length. fenceTester and the ascending-position contract stay as they are.",
+      "confidence": "high",
+      "class_scope": { "sites": ["src/review/ledger.ts:144 fenceRanges", "src/review/ledger.ts:202-204 afterMarker", "src/review/ledger.ts:219-225 scannedResult (pre-existing use)"], "enumeration_method": "keyed on fenceRanges/fenceTester callers via keryx ctx rg; two callers, both pair by the same function" }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 105,
+      "problem": "Carried round-2 F-004, unchanged by round 3. objectEnd documents claimsResult as 'the object itself (not an object nested in it)'; that is true of the function, but topLevelObjects re-enters every unclosed fragment (start += 1), so a nested cut-off object carrying a result key still ends the scan as truncated. Neither the topLevelObjects doc nor a test says so. The depth === 1 test is load-bearing for the other direction (test at ledger.test.ts:99 pins it).",
+      "impact": "A genuine complete bare result followed by prose like {\"meta\":{\"status\":\"ok\" gives no result (re-dispatch); with {\"meta\":{\"x\":1 it is read. Fails closed, never a wrong result.",
+      "evidence": "bun: 'ok(DONE)\\n{\"meta\":{\"status\":\"ok\"' -> undefined; 'ok(DONE)\\n{\"meta\":{\"x\":1' -> r. Scripts: scratchpad/review-clean-code/t3.ts.",
+      "suggested_fix": "Add one sentence to the topLevelObjects doc ('a nested cut-off object is met again at its own brace, so a result key anywhere in a cut-off fragment ends the scan') and pin it with the first case above.",
+      "confidence": "high",
+      "class_scope": { "sites": ["src/review/ledger.ts:88-91 objectEnd doc", "src/review/ledger.ts:120-124 topLevelObjects doc"], "enumeration_method": "the two comments that describe claimsResult; one behaviour" }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 208,
+      "problem": "Carried round-2 F-008, unchanged. objectEnd is a brace matcher plus a result-key detector; afterMarker discards claimsResult (const { end } = objectEnd(...)) yet the detector runs for every marker candidate. KEY_COLON (l.86) and OBJECT_START (l.83) are module-level sticky regexes whose lastIndex every caller must set before use. The try { JSON.parse } catch pair is written three times (l.137, l.188, l.210-213).",
+      "impact": "Maintainability only: a fourth caller can forget to reset lastIndex; changing the parse-failure policy means three edits. No behaviour defect found.",
+      "evidence": "ledger.ts lines 83, 86, 105-107, 137, 186-188, 208-213 read at head 07730d87.",
+      "suggested_fix": "Keep objectEnd for the brace and pass the key detector as an optional callback (or split it); add a tryParse(raw, from, to) helper; build the colon test as a local regex or a slice+trim.",
+      "confidence": "high",
+      "class_scope": { "sites": ["l.83", "l.86", "l.137", "l.188", "l.210-213"], "enumeration_method": "read of the whole file; no other sticky regexes or JSON.parse try pairs in ledger.ts" }
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 195,
+      "problem": "Two one-line comments understate the code. MARKER says 'after at most a quote, list or heading prefix' while the class [ \\t>*#-]* takes any run of blanks and > * # -; an ordered-list prefix '1. ' or bold '**REVIEW_RESULT:** {' is not a marker. scannedResult's summary ('fenced ones first') leaves out that a differing bare reviewer-shaped object cancels the fenced one (the parseReviewResult doc has it).",
+      "impact": "A reader may expect numbered lists or bold markers to count. Both fall through to the scan and, with a differing bare object, give no result (fail closed).",
+      "evidence": "bun: '1. REVIEW_RESULT: ok(DONE)\\nok(BLOCKED)' -> undefined; '**REVIEW_RESULT:** ok(DONE)\\nok(BLOCKED)' -> undefined; '- > # * REVIEW_RESULT: ok(DONE)\\nok(BLOCKED)' -> DONE.",
+      "suggested_fix": "Word it 'any run of blanks and > * # -'; end scannedResult's line with 'see parseReviewResult rule 3 for the ambiguity rule'.",
+      "confidence": "high",
+      "class_scope": { "sites": ["src/review/ledger.ts:194", "src/review/ledger.ts:218"], "enumeration_method": "comments of the round-3 delta compared with code, line by line" }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+## Clean Code review, round 3 (head 07730d87, delta d5a8cfdc..44bed779, whole PR in scope)
+
+### Findings (by severity)
+- minor F-001 ledger.ts:144 fence pairing is weaker than the 'outside a fenced block' docs (inline ```, 4-backtick fence; both repros above).
+- minor F-002 ledger.ts:105 carried F-004: nested cut-off key truncates; undocumented, untested.
+- minor F-003 ledger.ts:208 carried F-008: dual-purpose objectEnd, shared sticky regexes, try-parse x3.
+- info F-004 ledger.ts:195 MARKER prefix wording; scannedResult one-liner.
+
+### Questions
+- None. (W01 not re-argued; no input found that separates it.)
+
+### Pre-existing (not blocking)
+- F-016 and F-017 carried as decided, not re-raised.
+- fenceRanges predates the PR for scannedResult; round 3 widened its use to markers (hence F-001).
+
+### Verified clean
+- MAX_UNCLOSED=64 and MAX_MARKERS=64: comments, code and tests agree. 64 skipped, the 65th gives no result (`(unclosed += 1) > MAX_UNCLOSED`, tests ledger.test.ts:335-351 pin 64/65 and 63/64). The cap on markers is applied after the fence filter, as the comments say.
+- '3 ms per MB' holds per scan: one unclosed scan over 10 MB = 35 ms; 64 scans over 1 MB = 116 ms (1.8 ms each). Worst case measured: 64 marker candidates plus 64 prose fragments over 1 MB = 235 ms (not stated; fine). No quadratic growth seen: 200 markers = 64 markers; 1.08 MB of marker lines 12 ms; 100k fences 9 ms. CRLF marker lines work.
+- 'start of a line': (?<![^\n]) anchors at line start, prefix included in marker.index, which is what inFence is asked. Rule order in the parseReviewResult doc equals `labelledFence`, `afterMarker ?? scannedResult`; the `??` fallthrough is reachable (marker present, no reviewer result -> scan).
+- No dead branches in the delta. `Decision` is a live three-state carrier (no label vs label decided undefined); its name says little, noted only. Positions asked of fenceTester are ascending in both callers.
+- scannedResult ambiguity code (l.226-233) matches the rule-3 bullets, including the asymmetry (fenced branch compares reviewer-shaped bare objects, bare-only branch compares any status).
+
+### Prior findings, my domain (checked against the code)
+- F-004 (r2): open, unchanged -> F-002 above.
+- F-007 (r2): closed. scannedResult header, rule-3 bullets, MAX_UNCLOSED 'next one gives no result', MAX_MARKERS 'older ones not read', fenceTester ascending contract are all now in the comments and true; residue is only F-004 (info).
+- F-008 (r2): open, unchanged -> F-003 above.
+- F-001 (r2): partial. Line-start and fence filter are in; fence pairing leaves the F-001 residuals above.
+- F-002 (r2): closed (l.227-230, tests ledger.test.ts:219-231). F-003/F-013: closed (caps 64, boundaries pinned). F-014, F-015: closed (tests 311-329, 361-389; mutants not re-run). F-011, F-012: command-test lane, not examined here. F-005, F-006, F-009, F-010: other lanes.
+
+routing audit: graph_used no (not-relevant, one file); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg/diff); raw_rg_used no.

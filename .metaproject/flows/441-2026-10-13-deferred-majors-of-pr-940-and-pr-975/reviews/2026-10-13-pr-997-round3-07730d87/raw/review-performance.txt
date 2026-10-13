@@ -1,0 +1,69 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-performance",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "No super-linear path in the round-3 parser delta: every pass is linear, worst case about 122 ms per MB at the 64 caps (15.7 ms at the old 8), 0.3 ms for an adversarial 11 KB reply. One minor fence-pairing defect reachable from a realistic reply (inline triple backtick in prose), cross-domain with review-logic.",
+  "findings": [
+    {
+      "id": "PERF-R3-1",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 144,
+      "problem": "fenceRanges pairs any triple backtick (an inline code span included) with the next one after the end of its line, so one inline triple backtick in prose shifts every later pairing and a real marker lands 'inside a fence'. The F-001 marker filter then drops the real marker and a fenced sample marker later in the reply wins.",
+      "impact": "Wrong result (the sample's reviewer and status are ledgered instead of the real one) for a reply that mentions an inline triple backtick in prose, has the real bare marker, then closes with a fenced sample containing a marker. Same outcome as before the F-001 fix (the old parser also took the last marker), so not a new regression, but F-001 is only partly closed.",
+      "evidence": "bun probe against the exported parseReviewResult. Input: 'use ```x``` here\\nREVIEW_RESULT {real: reviewer \"real\", DONE}\\n```\\nREVIEW_RESULT {sample: reviewer \"sample\", DONE_WITH_CONCERNS}\\n```\\n' returns reviewer \"sample\". The range [inline open, third triple backtick] swallows the real marker line; the sample marker line falls outside. Without the inline triple backtick the same reply returns \"real\". Script: scratchpad/review-performance/probe.ts.",
+      "suggested_fix": "Count a fence opener only where the triple backtick starts a line (after up to 3 spaces) and a closer only where it starts a line; or ignore a triple backtick that has another on the same line. Keep the forward pass so it stays linear.",
+      "confidence": 0.85,
+      "class_scope": "fence pairing in fenceRanges/fenceTester: ledger.ts:144-165, consumers afterMarker:203 and scannedResult:222"
+    },
+    {
+      "id": "PERF-R3-2",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 118,
+      "problem": "Worst-case latency scales with MAX_UNCLOSED + MAX_MARKERS = 64 + 64 scans to the end of the reply. Measured per call: 1 MB with 64 unclosed prose braces 122 ms (8 braces 15.7 ms, one scan 3.1 ms); 64 unclosed markers 236 ms at 1 MB and 941 ms at 4 MB (linear, 4.0x). An adversarial 11 KB reply (64 + 64 unclosed fragments) takes 0.29 ms.",
+      "impact": "Visible only at 1 MB+ on a reviewer reply, which is not a real reply size (5-10 KB typical). The 64 caps cost 8x the old 8 only in that regime.",
+      "evidence": "bench.ts and probe.ts in scratchpad/review-performance; sizes 8 KB, 100 KB, 1 MB, 4 MB; scaling 8 KB 2.3 ms, 100 KB 23 ms, 1 MB 232 ms (x10 per x10).",
+      "suggested_fix": "None needed. Optional: reword the comment at line 117 to '3 ms per MB per scan' (measured 3.1 ms) and note the product with 64.",
+      "confidence": 0.9,
+      "class_scope": "caps MAX_UNCLOSED and MAX_MARKERS"
+    }
+  ]
+}
+```
+
+## Performance review, round 3 (head 07730d87, delta d5a8cfdc..44bed779)
+
+### Findings
+- PERF-R3-1 (minor): an inline triple backtick in prose misaligns fenceRanges; input and output are in the REVIEW_RESULT block. Cross-domain with review-logic (the fence-pairing question named in the brief).
+- PERF-R3-2 (info): cost of the 64 caps, below.
+
+### Measured passes per call (bun, parseReviewResult from ledger.ts)
+Passes over the reply: labelledFence (1 regex pass), MARKER matchAll (1), fenceRanges + fenceTester in afterMarker (2), objectEnd per kept marker (at most 64, each only to its own close, to the end when unclosed), topLevelObjects (1 pass, plus at most 65 rescans to the end for unclosed fragments), fenceRanges + fenceTester again in scannedResult (2). The fence work is built twice but each build is linear and costs 0.5-17 ms at 1 MB (many fences 16.9 ms, many inline triple backticks 6.2 ms, many labelled fences 2 ms). Not worth caching.
+- Prose-only 1 MB: 0.9 ms. Real marker result after 1 MB prose: 0.8 ms.
+- 1 MB, worst shapes: 64 unclosed prose braces 122 ms; 200 unclosed markers 232 ms; marker plus candidate unclosed 232 ms; dense unclosed 117 ms. 4 MB, 64 markers: 941 ms (4.0x for 4x size: linear, no quadratic term). 8 KB: 0.9-2.3 ms; 11 KB adversarial: 0.29 ms.
+- Comment claim 'about 3 ms per MB': one unclosed scan over 1 MB measured 3.08 ms. Accurate for one scan; 64 scans are 122 ms.
+- MARKER backtracking: no catastrophic case. The lookbehind limits attempts to line starts; the prefix class cannot cross a newline; the trailing whitespace-then-brace lookahead backs off once per marker. 1 MB of dashes on one line 1.5 ms; 1 MB of spaces after a marker 3.2 ms; 1 MB of 'REVIEW_RESULT   ' lines 1.5 ms; 1 MB of 'REVIEW_RESULT:' plus blank lines 1.9 ms.
+- Labelled-fence regex: an unclosed labelled opener with 1 MB after it 2.4 ms (the next triple backtick closes the previous opener, so no repeated full scans).
+- matchAll materialisation: 47k markers in 1 MB cost 115 ms total including the scans; slice(-64) after the filter is fine; MAX_MARKERS applied after the fence filter is correct.
+- The ascending-position assumption of fenceTester holds: markers from matchAll and `found` from topLevelObjects (start increases) are both ascending.
+
+### Prior findings in my domain (checked against the code)
+- Round-2 PERF-1 (cost of the cap): closed. The caps are 64 now; the cost is linear, 122-236 ms per MB worst case, info only.
+- F-003 (cap treated as truncation): partial by design; the 64 and 65 boundaries behave as pinned (probe: 64 unclosed + real = real, 65 = none; real marker + 63/64/65 later invalid markers = real). Tests at ledger.test.ts:335-350 exist.
+- F-001: partial. Closed for line-start and fenced samples (CRLF, 4-backtick fence, unclosed fence, fenced-only sample all behave); open for a reply with an inline triple backtick (PERF-R3-1).
+- F-002: closed. A fenced reviewer-shaped sample plus a differing bare real result returns undefined (probe).
+- F-011, F-012, F-014, F-015: test pins, not performance; not re-verified here.
+
+### Questions
+- None.
+
+### Pre-existing
+- None found in my domain. The accepted residual (a plain '> REVIEW_RESULT {sample}' line after a real result returns the sample) reproduced and is out of scope per the brief.
+
+### Verified clean
+No N+1, memory growth, quadratic regex or unbounded work: all loops are bounded by reply length times about 130 at most; JSON.parse failures skip whole candidates.
+
+Routing audit: graph_used no (not-relevant: one-file algorithmic review); wiki_used no (not-relevant); ctx_used yes (rg, read); raw_rg_used no. Note: keryx ctx rg/read wrote its raw logs under /home/altsay/keryx-fdm-t1/.metaproject/data/gdctx/ (tool side effect, no edits to tracked files).
