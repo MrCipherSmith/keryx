@@ -10,7 +10,7 @@ Rules:
 - Completion requires every ACn to be confirmed via
   `keryx flow ac confirm <id> <ACn>`.
 - "Red before, green after" means the named test is added in the same change and fails on `origin/main` at `0ca99fb1`.
-- The operator answered Decisions 1 to 5 of the PRD in poll 143 (2026-10-13), all with the recommended option; the criteria below are written for those answers. One cell is still open for the operator's read before freeze: AC8 keeps `e2e/` and the non-TypeScript script extensions from today's `src/testing/selection.ts` on top of the definition the poll named.
+- The operator answered Decisions 1 to 5 of the PRD in poll 143 (2026-10-13), all with the recommended option; the criteria below are written for those answers. Poll 146 (2026-10-13) settled AC8: `e2e/` and the non-TypeScript script extensions from today's `src/testing/selection.ts` stay on top of the definition poll 143 named.
 
 ## Criteria
 
@@ -26,7 +26,7 @@ Rules:
 ### One test-file predicate (R2)
 
 - AC7: `src/testing/selection.ts` exports the one predicate; `src/testing/service.ts`, `src/review/coverage.ts`, `src/review/jev-risk.ts` and `src/review/jev-contract.ts` use it and none keeps its own pattern - a repository test fails when a second test-file pattern appears in those files.
-- AC8: The one definition is: a file named `*.test.*` or `*.spec.*` with a TypeScript or JavaScript extension (`ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`), or any such script file under a directory named `test`, `tests`, `__tests__` or `e2e` (poll 143, 2026-10-13: "*.test.ts(x), *.spec.ts(x), test/tests/__tests__"; `e2e` and the extra extensions are kept from the current `src/testing/selection.ts`, open for the operator's read). A table-driven test pins one answer per path and runs through each of the five call sites: true for `tests/api.ts`, `e2e/login.ts`, `src/test/a.ts`, `test/a.ts`, `src/__tests__/a.ts`, `foo.test.ts`, `foo.spec.tsx`, `foo.spec.mjs`; false for `foo.test.md`, `latest/a.ts`, `contest/a.ts`, `src/attests.ts` - red before for the paths on which the old patterns disagree.
+- AC8: The one definition is: a file named `*.test.*` or `*.spec.*` with a TypeScript or JavaScript extension (`ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`), or any such script file under a directory named `test`, `tests`, `__tests__` or `e2e` (poll 143, 2026-10-13: "*.test.ts(x), *.spec.ts(x), test/tests/__tests__"; `e2e` and the extra extensions are kept from the current `src/testing/selection.ts`, confirmed in poll 146). A table-driven test pins one answer per path and runs through each of the five call sites: true for `tests/api.ts`, `e2e/login.ts`, `src/test/a.ts`, `test/a.ts`, `src/__tests__/a.ts`, `foo.test.ts`, `foo.spec.tsx`, `foo.spec.mjs`; false for `foo.test.md`, `latest/a.ts`, `contest/a.ts`, `src/attests.ts` - red before for the paths on which the old patterns disagree.
 - AC9: `requiredReviewers` adds `review-testing-practices` for `tests/api.ts` - red before, green after.
 
 ### Rule category (R3)
