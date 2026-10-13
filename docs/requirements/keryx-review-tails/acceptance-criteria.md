@@ -10,7 +10,7 @@ Rules:
 - Completion requires every ACn to be confirmed via
   `keryx flow ac confirm <id> <ACn>`.
 - "Red before, green after" means the named test is added in the same change and fails on `origin/main` at `0ca99fb1`.
-- Criteria for R2 (AC7 to AC9), R5 (AC13) and R9 (AC24 to AC25) depend on the operator's answers to Decisions 1 to 4 of the PRD; they are written for the recommended answer and are re-worded before freeze if the answer differs.
+- The operator answered Decisions 1 to 5 of the PRD in poll 143 (2026-10-13), all with the recommended option; the criteria below are written for those answers. One cell is still open for the operator's read before freeze: AC8 keeps `e2e/` and the non-TypeScript script extensions from today's `src/testing/selection.ts` on top of the definition the poll named.
 
 ## Criteria
 
@@ -26,7 +26,7 @@ Rules:
 ### One test-file predicate (R2)
 
 - AC7: `src/testing/selection.ts` exports the one predicate; `src/testing/service.ts`, `src/review/coverage.ts`, `src/review/jev-risk.ts` and `src/review/jev-contract.ts` use it and none keeps its own pattern - a repository test fails when a second test-file pattern appears in those files.
-- AC8: A table-driven test over `tests/api.ts`, `e2e/login.ts`, `src/test/a.ts`, `test/a.ts`, `src/__tests__/a.ts`, `foo.test.ts`, `foo.spec.mjs`, `foo.test.md`, `latest/a.ts` pins one answer per path and runs through each of the five call sites - red before for the paths on which the old patterns disagree.
+- AC8: The one definition is: a file named `*.test.*` or `*.spec.*` with a TypeScript or JavaScript extension (`ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`), or any such script file under a directory named `test`, `tests`, `__tests__` or `e2e` (poll 143, 2026-10-13: "*.test.ts(x), *.spec.ts(x), test/tests/__tests__"; `e2e` and the extra extensions are kept from the current `src/testing/selection.ts`, open for the operator's read). A table-driven test pins one answer per path and runs through each of the five call sites: true for `tests/api.ts`, `e2e/login.ts`, `src/test/a.ts`, `test/a.ts`, `src/__tests__/a.ts`, `foo.test.ts`, `foo.spec.tsx`, `foo.spec.mjs`; false for `foo.test.md`, `latest/a.ts`, `contest/a.ts`, `src/attests.ts` - red before for the paths on which the old patterns disagree.
 - AC9: `requiredReviewers` adds `review-testing-practices` for `tests/api.ts` - red before, green after.
 
 ### Rule category (R3)
@@ -37,7 +37,7 @@ Rules:
 
 ### Startup replay and transcript (R4, R5)
 
-- AC13: By the operator's answer to Decision 1, the wrap-up of a preserved session does not write `archive.jsonl` into the project tree by default; the evidence record names the transcript by path and hash, and a test asserts no `*.archive.jsonl` exists under `.metaproject/workspaces/` after a wrap-up - red before, green after. (If the operator keeps the copy, this criterion becomes: the copy is behind an explicit flag, and a test asserts both states.)
+- AC13: The wrap-up of a preserved session does not write `archive.jsonl` into the project tree by default (poll 143, Decision 1: outside the tree, by default); the evidence record names the transcript by path and hash, the reference outside the project passes the same containment check project files get, and a test asserts no `*.archive.jsonl` exists under `.metaproject/workspaces/` after a wrap-up - red before, green after. Evidence already written stays where it is.
 - AC14: A test makes `replayProjectPreservationOutboxes` throw in the readline shell; the shell reaches its normal end, the lease is released and no unhandled rejection is raised.
 - AC15: The same test exists for the TUI shell.
 - AC16: Each test of AC14 and AC15 is red against a build with the `try/catch` removed (one mutation per site, recorded in the PR).
@@ -56,6 +56,11 @@ Rules:
 - AC23: `.metaproject/flows/` holds no two directories with the same numeric id, or every shared id has an entry in `.metaproject/flows/id-map.json`; `keryx flow list` on a fresh checkout shows 352 once.
 - AC24: The repair of 352 uses the renumber path from PR 205; the renumbered flow keeps its history and its `id-map.json` entry names both old and new directory.
 - AC25: A repository test fails when two flow directories share an id and no `id-map.json` entry accounts for it - red on `origin/main` at `0ca99fb1`, green after AC23.
+
+### Generated build output (C5)
+
+- AC29: `classifyPath` marks build output as generated (poll 143, Decision 3: "generated, not reviewed") for `packages/app/dist/a.js`, `apps/web/build/x.js`, `lib/target/x.rs` and `build/out.js`, and does not mark `packages/app/src/index.ts`, `src/build.ts` or `src/target.ts`; the paths classified today (`docs/out/index.html`, `packages/core/generated/types.ts`) keep their class - table-driven test, red before for the first four paths.
+- AC30: A generated-classified path is not sent to a reviewer and is not counted as uncovered in `review complete`; a test over a changed-file list that holds one source file and one `build/` file shows the reviewer set and the coverage ledger ignore the second.
 
 ### Process
 

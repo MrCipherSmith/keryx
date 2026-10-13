@@ -16,7 +16,7 @@ Version: 0.1.0 (draft, awaiting the operator's review before the flow is registe
 | C2 | `src/commands/review.ts:3538`, `:3544` | `gitChangedFiles` and `gitTestFiles` read quoted git output; `gitChangedFiles` without a ref lists unstaged changes only | yes |
 | C3 | `src/review/coverage.ts:29`, `src/review/jev-risk.ts:170-171`, `src/review/jev-contract.ts:235`, `src/testing/selection.ts:12`, `src/testing/service.ts:49` | Five definitions of "is a test file" that disagree | yes |
 | C4 | `src/review/jev-rules.ts:185-199`, `:224-244` | Process/code rule category is chosen by substring match on the file path and title | yes |
-| C5 | `src/review/scope.ts` (`classifyPath`) | Build output under a workspace package or under `build/`, `target/` is not classified as generated | question, see Decision 3 |
+| C5 | `src/review/scope.ts` (`classifyPath`) | Build output under a workspace package or under `build/`, `target/` is not classified as generated | yes, to be treated as generated (Decision 3, poll 143) |
 | P984-1 | `src/commands/shell.ts:2611-2613`, `src/tui/tui-shell.ts:6806-6808` | The startup replay in `try/catch` has no test that proves a throwing replay does not end the shell or hold the lease | yes |
 | P984-2 | `src/sac/preserved-wrap-up.ts:30-31`, `:41` | The whole session transcript (`archive.jsonl`) is written into the project tree by default | yes |
 | P986-1 | `src/session/slate-lifecycle.ts:420-436` | The close-phrase matcher has no negation handling | yes |
@@ -146,10 +146,20 @@ These were named in the brief and could not be established from the code and rec
 4. **How far to go on flow ids (R9).** Recommended: repair 352 and add the CI check. Larger: also make the allocator consult `origin/main` so an untracked local folder cannot reuse a number; that touches `flow init` and needs its own review.
 5. **Flow shape.** Recommended: one flow, five task groups (T1 to T5), one pull request chain, because each item is small and local. Alternative: split the hook and git-output work (R1) from the rest.
 
+### Operator answers (poll 143, 2026-10-13)
+
+All five with the recommended option.
+
+1. **Transcript (R5):** outside the project tree, by default. Copying into the tree is not offered here. Written into AC13.
+2. **Test files (R2):** one shared definition: `*.test.ts(x)`, `*.spec.ts(x)`, directories `test`, `tests`, `__tests__`. The draft AC8 keeps `e2e/` and the other script extensions (`js`, `jsx`, `mjs`, `cjs`) from today's `selection.ts`; the operator reads that cell before freeze.
+3. **Build output (C5):** treated as generated and not reviewed. C5 is now a requirement, not a question: AC29 and AC30, task T2.
+4. **Flow ids (R9):** repair 352 and add the CI check. The allocator is not changed.
+5. **Shape:** one flow, five task groups.
+
 ## Tasks
 
 - T1: R1 (hook template and `review.ts` git readers), including the test of the hook with a non-ASCII file name.
-- T2: R2 and R3 (one test-file predicate, whole-word rule categories), including the replay over the rule corpus.
+- T2: R2, R3 and C5 (one test-file predicate, whole-word rule categories, generated build output), including the replay over the rule corpus.
 - T3: R4 and R5 (startup replay tests, transcript placement).
 - T4: R6, R7 and R8 (close phrase negation, host-side irreversibility, help summary).
 - T5: R9 (repair flow 352, duplicate-id check) and the release note.
