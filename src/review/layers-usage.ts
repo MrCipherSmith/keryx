@@ -1,8 +1,7 @@
 // Which project layers a reviewer actually consulted, counted from the log of its tool calls.
 // A reviewer with no log is `unknown`, never zero: zero would claim "looked and used nothing".
 
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 export const LAYER_NAMES = ["graph", "wiki", "memory", "ctx"] as const;
@@ -53,9 +52,9 @@ export function countLayerUsage(log: string): Record<LayerName, number> {
   return counts;
 }
 
-/** `undefined` (no log) is unknown; a log that exists and holds no layer call is a real zero. */
+/** `undefined` (no log) and a log with no line at all (a driver that failed before writing) are unknown; a log with calls but none into a layer is a real zero. */
 export function layersUsedFrom(log: string | undefined): LayersUsed {
-  return log === undefined ? { ...UNKNOWN_LAYERS_USED } : countLayerUsage(log);
+  return log === undefined || log.trim() === "" ? { ...UNKNOWN_LAYERS_USED } : countLayerUsage(log);
 }
 
 export const TOOL_LOG_DIR = "tool-calls";
@@ -65,8 +64,16 @@ export async function readToolLog(inputDir: string, reviewer: string, named?: st
   const candidate = named === undefined ? path.join(inputDir, TOOL_LOG_DIR, `${path.basename(reviewer)}.jsonl`) : path.resolve(inputDir, named);
   const inside = path.relative(inputDir, candidate);
   if (inside.startsWith("..") || path.isAbsolute(inside)) return undefined;
-  if (!existsSync(candidate)) return undefined;
-  return readFile(candidate, "utf8").catch(() => undefined);
+  try {
+    // A symlink inside the input directory can point out of it, and a FIFO would block the read: resolve first, then require a regular file.
+    const [real, realInput] = await Promise.all([realpath(candidate), realpath(inputDir)]);
+    const realInside = path.relative(realInput, real);
+    if (realInside.startsWith("..") || path.isAbsolute(realInside)) return undefined;
+    if (!(await stat(real)).isFile()) return undefined;
+    return await readFile(real, "utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 export type LayersUsageSummary = {

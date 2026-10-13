@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
+import { mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLayersFixture, git, type LayersFixture } from "../review/layers.test-helpers";
 import { readLayers } from "../review/layers";
@@ -56,6 +58,36 @@ describe("keryx review layers", () => {
     expect(process.exitCode).toBe(1);
     expect(existsSync(path.join(fixture.packageDir, "layers.json"))).toBe(false);
   });
+});
+
+describe("--package of the layers, chunks and coverage commands stays inside the project (AC8)", () => {
+  let outside: string;
+  beforeEach(async () => {
+    outside = await mkdtemp(path.join(tmpdir(), "keryx-package-outside-"));
+    await symlink(outside, path.join(fixture.root, "linked-out"));
+  });
+  afterEach(async () => {
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  const commands: Array<[string, string[]]> = [
+    ["layers refresh", ["layers", "refresh"]],
+    ["layers status", ["layers", "status"]],
+    ["chunks plan", ["chunks", "plan"]],
+    ["coverage", ["coverage"]],
+  ];
+
+  for (const [name, head] of commands) {
+    for (const where of ["outside", "linked-out", "../escape"] as const) {
+      test(`${name} refuses --package ${where} and writes nothing`, async () => {
+        const target = where === "outside" ? outside : where;
+        await reviewCommand([...head, "--package", target]);
+        expect(process.exitCode).toBe(1);
+        expect(errors.join("\n")).toMatch(/outside|inside|contain|not a directory|within/i);
+        expect(await readdir(outside)).toEqual([]);
+      });
+    }
+  }
 });
 
 describe("blast-radius --package reads the package graph", () => {

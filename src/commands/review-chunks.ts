@@ -1,4 +1,3 @@
-import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
@@ -16,6 +15,7 @@ import {
 } from "../review/chunks-estimate";
 import { coverageLine, writeCoverage } from "../review/coverage-complete";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
+import { resolvePackageDir, wantsHelp } from "./review-layers";
 
 export type ChunksDeps = {
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
@@ -66,17 +66,6 @@ refusal names the first files and the command that runs the missing chunks. The 
 \`--waive-coverage "<operator quote>"\`, which records the quote, the time and the files not reviewed.`);
 }
 
-const wantsHelp = (args: readonly string[]): boolean => args.includes("--help") || args.includes("-h");
-
-function resolveDir(command: string, args: readonly string[], cwd: string = process.cwd()): string {
-  const raw = optionValue([...args], "--package");
-  if (raw === undefined) throw new Error(`Missing --package <dir>. See \`keryx review ${command} --help\`.`);
-  const placed = placeReviewPath(command, "--package", raw, { projectRoot: resolveProjectRoot(cwd), cwd });
-  if (!placed.ok) throw new Error(placed.message);
-  if (!existsSync(placed.path) || !statSync(placed.path).isDirectory()) throw new Error(`--package ${raw} is not a directory.`);
-  return placed.path;
-}
-
 async function readResult(args: readonly string[], cwd: string = process.cwd()): Promise<{ status: string; findings?: unknown } | undefined> {
   const raw = optionValue([...args], "--result");
   if (raw === undefined) return undefined;
@@ -113,7 +102,7 @@ export async function runChunks(args: string[], deps: ChunksDeps): Promise<void>
     return;
   }
   deps.rejectUnknownFlags(rest, CHUNKS_FLAGS, `chunks ${sub}`);
-  const packageDir = resolveDir("chunks", rest);
+  const packageDir = resolvePackageDir(rest, process.cwd(), "chunks");
   const projectRoot = resolveProjectRoot(process.cwd());
   const json = rest.includes("--json");
 
@@ -195,6 +184,6 @@ export async function runCoverage(args: string[], deps: ChunksDeps): Promise<voi
     return;
   }
   deps.rejectUnknownFlags(args, COVERAGE_FLAGS, "coverage");
-  const report = await writeCoverage(resolveDir("coverage", args));
+  const report = await writeCoverage(resolvePackageDir(args, process.cwd(), "coverage"));
   out(args.includes("--json"), report, [coverageLine(report)]);
 }

@@ -38,6 +38,7 @@ import { refreshPages, type RefreshInput, type RefreshResult } from "../wiki/ref
 import { HEAD_NOT_REQUESTED } from "../wiki/staleness";
 import { previewFreshness, type PreviewFreshnessInput } from "../wiki/freshness/run";
 import type { FreshnessReport } from "../wiki/freshness/report";
+import { readJsonFileOr } from "../lib/json";
 
 const execFileAsync = promisify(execFile);
 
@@ -202,12 +203,8 @@ export async function manifestHead(packageDir: string): Promise<string | null> {
 }
 
 export async function readLayers(packageDir: string): Promise<LayersFile | null> {
-  try {
-    const parsed = JSON.parse(await readFile(layersFilePath(packageDir), "utf8")) as LayersFile;
-    return parsed.version === LAYERS_VERSION ? parsed : null;
-  } catch {
-    return null;
-  }
+  const parsed = await readJsonFileOr<LayersFile | null>(layersFilePath(packageDir), null);
+  return parsed !== null && parsed.version === LAYERS_VERSION ? parsed : null;
 }
 
 function errorMessage(error: unknown): string {
@@ -222,15 +219,15 @@ async function divergenceOf(
 ): Promise<Divergence> {
   const workingCopyCommit = await deps.git(projectRoot, ["rev-parse", "HEAD"]);
   const head = prHead ?? "";
-  const base = { workingCopyCommit, prHead: head, commitsBetween: null, changedPaths: [] as string[] };
-  if (workingCopyCommit === null || prHead === null) return { state: "unknown", ...base };
-  if (workingCopyCommit === prHead) return { state: "none", ...base, commitsBetween: 0 };
+  const partial = { workingCopyCommit, prHead: head, commitsBetween: null, changedPaths: [] as string[] };
+  if (workingCopyCommit === null || prHead === null) return { state: "unknown", ...partial };
+  if (workingCopyCommit === prHead) return { state: "none", ...partial, commitsBetween: 0 };
   const count = await deps.git(projectRoot, ["rev-list", "--count", "--end-of-options", `${workingCopyCommit}...${prHead}`]);
   const names = await deps.git(projectRoot, ["diff", "--name-only", "--end-of-options", workingCopyCommit, prHead, "--", prefix]);
-  if (count === null || names === null) return { state: "unknown", ...base };
+  if (count === null || names === null) return { state: "unknown", ...partial };
   return {
     state: "differs",
-    ...base,
+    ...partial,
     commitsBetween: Number.parseInt(count, 10),
     changedPaths: names === "" ? [] : names.split("\n").sort(),
   };

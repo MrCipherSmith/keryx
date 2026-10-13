@@ -35,6 +35,7 @@ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/co
 import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
+import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -3876,8 +3877,8 @@ async function runComplete(args: string[]): Promise<void> {
     coverageWaiver,
   } = await completeManagedReview(process.cwd(), ref, { dispositions, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }) });
   if (coverageWaiver !== undefined) {
-    const shown = coverageWaiver.files.slice(0, 5).join(", ");
-    console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > 5 ? ", …" : ""}`);
+    const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
+    console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > FIRST_FILES ? ", …" : ""}`);
   }
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
@@ -4229,9 +4230,10 @@ Usage:
                      still scanned, with or without --ref.
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                            [--json | --brief] [--out <file>]
-  keryx review layers refresh|status|block --package <review-dir> [--head <sha>] [--base <ref>]
-                      [--write-wiki] [--files a,b] [--max-bytes <n>] [--json]
+                            [--package <review-dir>] [--json | --brief] [--out <file>]
+  keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--json]
+  keryx review layers status  --package <review-dir> [--json]
+  keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
                       Graph, wiki and memory for one review; no model is called.
   keryx review chunks plan|estimate|next|record|merge --package <review-dir>
                       [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]

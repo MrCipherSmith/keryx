@@ -35,7 +35,7 @@ Usage:
                      [--json | --scoped-diff] [--append <file>]
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                            [--json | --brief] [--out <file>]
+                            [--package <review-dir>] [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>

@@ -39,14 +39,15 @@ working copy, and layers.json marks how far that is from the PR head. The wiki r
 dry run unless --write-wiki is given.`);
 }
 
-function wantsHelp(args: readonly string[]): boolean {
+export function wantsHelp(args: readonly string[]): boolean {
   return args.includes("--help") || args.includes("-h");
 }
 
-export function resolvePackageDir(args: readonly string[], cwd: string = process.cwd()): string {
+/** The confined `--package` directory of a `review <command>` call (layers, chunks, coverage). */
+export function resolvePackageDir(args: readonly string[], cwd: string = process.cwd(), command: string = "layers"): string {
   const raw = optionValue([...args], "--package");
-  if (raw === undefined) throw new Error("Missing --package <dir>. See `keryx review layers --help`.");
-  const placed = placeReviewPath("layers", "--package", raw, { projectRoot: resolveProjectRoot(cwd), cwd });
+  if (raw === undefined) throw new Error(`Missing --package <dir>. See \`keryx review ${command} --help\`.`);
+  const placed = placeReviewPath(command, "--package", raw, { projectRoot: resolveProjectRoot(cwd), cwd });
   if (!placed.ok) throw new Error(placed.message);
   const dir = placed.path;
   if (!existsSync(dir) || !statSync(dir).isDirectory()) throw new Error(`--package ${raw} is not a directory.`);

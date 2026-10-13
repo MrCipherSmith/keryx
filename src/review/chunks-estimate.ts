@@ -8,6 +8,7 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan } from "./chunks";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
+import { readJsonFileOr } from "../lib/json";
 
 export const CHUNK_ESTIMATE_FILE = "chunk-estimate.json";
 /** The file automatic review mode (flow 429) leaves in its package; `commands/automatic-review.ts` takes its name from here. */
@@ -123,11 +124,7 @@ export function decisionFor(estimate: Pick<ChunkEstimate, "overCeiling">, mode: 
 }
 
 export async function readChunkEstimate(packageDir: string): Promise<ChunkEstimateRecord | undefined> {
-  try {
-    return JSON.parse(await readFile(path.join(packageDir, CHUNK_ESTIMATE_FILE), "utf8")) as ChunkEstimateRecord;
-  } catch {
-    return undefined;
-  }
+  return readJsonFileOr<ChunkEstimateRecord | undefined>(path.join(packageDir, CHUNK_ESTIMATE_FILE), undefined);
 }
 
 /** Records the estimate and the decision it leads to. An answer survives only while the estimate covers the same chunks. */

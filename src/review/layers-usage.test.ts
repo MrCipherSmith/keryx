@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { classifyToolCall, countLayerUsage, layersUsedFrom, readToolLog, summarizeLayersUsage } from "./layers-usage";
@@ -37,9 +37,14 @@ describe("layers used by a reviewer run, counted from its tool-call log (AC7)", 
     expect(countLayerUsage(log)).toEqual({ graph: 2, wiki: 1, memory: 0, ctx: 1 });
   });
 
-  test("a log that exists and holds no layer call is a real zero", () => {
-    expect(layersUsedFrom("")).toEqual({ graph: 0, wiki: 0, memory: 0, ctx: 0 });
+  test("a log with calls but none into a layer is a real zero", () => {
     expect(layersUsedFrom(JSON.stringify({ name: "Read" }))).toEqual({ graph: 0, wiki: 0, memory: 0, ctx: 0 });
+  });
+
+  test("an empty or blank log is unknown, never a claim that nothing was used", () => {
+    const unknown = { graph: "unknown", wiki: "unknown", memory: "unknown", ctx: "unknown" } as const;
+    expect(layersUsedFrom("")).toEqual(unknown);
+    expect(layersUsedFrom(" \n\t\n")).toEqual(unknown);
   });
 
   test("a missing log is unknown on every layer, never zero", () => {
@@ -61,6 +66,19 @@ describe("layers used by a reviewer run, counted from its tool-call log (AC7)", 
       await writeFile(path.join(outside, "secret.log"), "keryx ctx rg x\n", "utf8");
       expect(await readToolLog(dir, "review-logic", path.join(outside, "secret.log"))).toBeUndefined();
       expect(await readToolLog(dir, "review-logic", "../escape.log")).toBeUndefined();
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("a driver-named log that is a symlink out of the input directory, or not a regular file, is not read", async () => {
+    const outside = await mkdtemp(path.join(tmpdir(), "keryx-layers-outside-"));
+    try {
+      await writeFile(path.join(outside, "secret.log"), "keryx ctx rg x\n", "utf8");
+      await symlink(path.join(outside, "secret.log"), path.join(dir, "link.log"));
+      await mkdir(path.join(dir, "a-directory.log"));
+      expect(await readToolLog(dir, "review-logic", "link.log")).toBeUndefined();
+      expect(await readToolLog(dir, "review-logic", "a-directory.log")).toBeUndefined();
     } finally {
       await rm(outside, { recursive: true, force: true });
     }

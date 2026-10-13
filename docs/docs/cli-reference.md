@@ -3287,7 +3287,7 @@ keryx gdgraph find "<terms>"
 keryx gdgraph symbol "<name>" [--impact] [--depth N]
 keryx gdgraph symbols <enable|disable|status>
 keryx gdgraph path "<A>" "<B>"
-keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
+keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json] [--data-dir <dir>]
 keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
 keryx gdgraph context
 keryx gdgraph assets list | verify [<id>] | pull <id>
@@ -4782,13 +4782,15 @@ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--json|--brief] [--out <file>]
+                          [--package <review-dir>] [--json|--brief] [--out <file>]
 keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
-keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--json]
+keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
 keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
                         [--state <file>] [--dry-run] [--json]
 keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
-keryx review layers refresh|status|block --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--files a,b] [--max-bytes <n>] [--json]
+keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--json]
+keryx review layers status  --package <review-dir> [--json]
+keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
 keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
 keryx review coverage --package <review-dir> [--json]
 keryx review complete ... [--waive-coverage "<operator quote>"]
@@ -5281,7 +5283,7 @@ why that carve-out exists.
 
 ### `review layers`, `review chunks` and `review coverage`
 
-A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; every managed review start or dispatch does it for you, so no operator step stands between a review and fresh layers. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`.
+A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; a managed review start, attach or ingest does it for you, and so does any `dispatch-check` or `blast-radius` given `--package`. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`.
 
 - The graph is built at the PR head into `<dir>/layers/graph`, in a fresh worktree; the tracked graph artifacts, the working tree and the PR are not touched. `layers.json` records the commit it was built from, and `graph@<sha7> = head` means it equals the PR head.
 - The wiki and the memory are read from the project's working copy. `layers.json` marks how far that copy is from the PR head (`differs`, with the commits and wiki/memory paths between).
@@ -5311,6 +5313,7 @@ a depth and a file cap, closest first.
 | `--depth <n>` | Edge distance kept. Default **2**. |
 | `--max-files <n>` | File cap, closest first. Default **40**. |
 | `--no-related-tests` | Skip the naming-related tests of the changed files. |
+| `--package <review-dir>` | Read the graph built for that review at its PR head (refreshed first when the package has none), not the working tree's. |
 | `--previous <file>` | The previous round's `--json` record; decides whether this round must recompute. |
 | `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
 | `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |

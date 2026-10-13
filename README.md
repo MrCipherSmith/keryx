@@ -1146,7 +1146,7 @@ package. See
 
 ### Layers and coverage in a review
 
-Every managed review start or dispatch refreshes the graph, the wiki and the memory index for the PR head and writes `layers.json`, with **no model call**; `wiki enrich` is the only model step and is never automatic (`keryx review layers refresh --package <dir> [--write-wiki]`). Blast-radius files beyond the 40-file cap are reviewed in chunks (`keryx review chunks estimate|next|record|merge`; the ceiling is 25 passes of 40 files, `reviewChunks.maxPasses` in `routing.config.json`), `keryx review coverage` counts what is covered, omitted by name, and uncovered, and `keryx review complete` refuses while a file is uncovered unless you pass `--waive-coverage "<your words>"`. `/reviews` and `/review layers` in the shell show it.
+Every managed review start, attach or ingest (and any `dispatch-check` or `blast-radius` given `--package`) refreshes the graph, the wiki and the memory index for the PR head and writes `layers.json`, with **no model call**; `wiki enrich` is the only model step and is never automatic (`keryx review layers refresh --package <dir> [--write-wiki]`). Blast-radius files beyond the 40-file cap are reviewed in chunks (`keryx review chunks estimate|next|record|merge`; the ceiling is 25 passes of 40 files, `reviewChunks.maxPasses` in `routing.config.json`), `keryx review coverage` counts what is covered, omitted by name, and uncovered, and `keryx review complete` refuses while a file is uncovered unless you pass `--waive-coverage "<your words>"`. `/reviews` and `/review layers` in the shell show it.
 
 ### Review bot on pull requests
 

@@ -3,13 +3,14 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { type BlastRadius, BLAST_RADIUS_SCOPE_REVIEWER, DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
 import { type RetryDecision, type RetryState, emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest } from "./slice";
 import { sliceGraph } from "./waves";
+import { readJsonFileOr } from "../lib/json";
 
 export const CHUNKS_FILE = "chunks.json";
 export const CHUNK_STATE_FILE = "chunk-state.json";
@@ -103,13 +104,7 @@ export function planChunks(input: PlanChunksInput): ChunkEntry[] {
   return groups.map((group, index) => ({ id: `chunk-${String(index + 1).padStart(width, "0")}`, files: group.files, bytes: group.bytes }));
 }
 
-async function readJson<T>(file: string): Promise<T | undefined> {
-  try {
-    return JSON.parse(await readFile(file, "utf8")) as T;
-  } catch {
-    return undefined;
-  }
-}
+const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
 
 const droppedKeyOf = (files: readonly string[]): string => createHash("sha256").update([...new Set(files)].sort().join("\n")).digest("hex").slice(0, 16);
 
@@ -288,6 +283,7 @@ async function recordChunkLocked(packageDir: string, chunkId: string, result: Ch
   const manifest = chunkManifest(plan, state.derived);
   const read = readText(manifest);
   const status = result.status.toUpperCase();
+  const finished = status === "DONE" || status === "DONE_WITH_CONCERNS";
   const fingerprint = scopeFingerprint(manifest, read);
   const decision = planRetry({
     manifest,
@@ -295,7 +291,7 @@ async function recordChunkLocked(packageDir: string, chunkId: string, result: Ch
       reviewer: CHUNK_REVIEWER,
       status,
       ...(fingerprint === undefined ? {} : { scopeFingerprint: fingerprint }),
-      slices: status === "DONE" || status === "DONE_WITH_CONCERNS" ? [chunkId] : [],
+      slices: finished ? [chunkId] : [],
     },
     reviewer: CHUNK_REVIEWER,
     sliceIds: plan.chunks.map((entry) => entry.id),
@@ -309,10 +305,10 @@ async function recordChunkLocked(packageDir: string, chunkId: string, result: Ch
     decision: decision.decision,
     attempts: (prior?.attempts ?? 0) + 1,
     seq: Math.max(0, ...Object.values(state.outcomes).map((o) => o.seq)) + 1,
-    findings: status === "DONE" || status === "DONE_WITH_CONCERNS" ? findingsOf(result.findings) : (prior?.findings ?? []),
+    findings: finished ? findingsOf(result.findings) : (prior?.findings ?? []),
   };
-  const failed = status !== "DONE" && status !== "DONE_WITH_CONCERNS";
-  if (failed && decision.decision === "retry" && !decision.progress && chunk.files.length > 1 && !state.derived.some((d) => d.retryOf?.includes(chunkId))) {
+  const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunkId));
+  if (!finished && decision.decision === "retry" && !decision.progress && chunk.files.length > 1 && !alreadySplit) {
     next.derived.push(...halves(chunk, decision.priorAttempts + 1));
   }
   await writeChunkState(packageDir, next);

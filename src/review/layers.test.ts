@@ -99,6 +99,9 @@ describe("refreshLayers (AC1)", () => {
   });
 });
 
+// The wiki enrich step and its deep variant call a model. gdgraph/enrich is tree-sitter symbol extraction, build.ts imports it, and it calls none.
+const MODEL_STEPS = /[\\/]wiki[\\/](deep-)?enrich/;
+
 describe("the refresh reaches no model (AC1)", () => {
   test("no module in the review layer import closure imports wiki enrich", async () => {
     const { readFileSync, existsSync } = await import("node:fs");
@@ -106,7 +109,10 @@ describe("the refresh reaches no model (AC1)", () => {
     const srcRoot = path.join(import.meta.dir, "..");
     const seen = new Set<string>();
     const offenders: string[] = [];
-    const queue = [path.join(import.meta.dir, "layers.ts")];
+    const queue = [
+      ...["layers", "layers-payload", "layers-usage", "layers-view", "chunks", "chunks-estimate", "coverage-complete"].map((name) => path.join(import.meta.dir, `${name}.ts`)),
+      ...["review-layers", "review-chunks"].map((name) => path.join(srcRoot, "commands", `${name}.ts`)),
+    ];
     while (queue.length > 0) {
       const file = queue.pop()!;
       if (seen.has(file)) continue;
@@ -117,19 +123,19 @@ describe("the refresh reaches no model (AC1)", () => {
         const resolved = path.resolve(path.dirname(file), entry.path);
         const candidate = [`${resolved}.ts`, path.join(resolved, "index.ts")].find((c) => existsSync(c));
         if (candidate === undefined) continue;
-        if (/[\\/]wiki[\\/]enrich/.test(candidate)) offenders.push(`${path.relative(srcRoot, file)} -> ${path.relative(srcRoot, candidate)}`);
+        if (MODEL_STEPS.test(candidate)) offenders.push(`${path.relative(srcRoot, file)} -> ${path.relative(srcRoot, candidate)}`);
         queue.push(candidate);
       }
     }
     expect(offenders).toEqual([]);
-    expect(seen.size).toBeGreaterThan(5);
+    expect(seen.size).toBeGreaterThan(20);
   });
 
   test("the review modules do not mention wiki enrich in an import", async () => {
     const { readdirSync, readFileSync } = await import("node:fs");
     const reviewFiles = readdirSync(import.meta.dir).filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
     const importers = reviewFiles.filter((name) =>
-      /from\s+["'][^"']*wiki\/enrich/.test(readFileSync(path.join(import.meta.dir, name), "utf8")),
+      /from\s+["'][^"']*wiki\/(deep-)?enrich/.test(readFileSync(path.join(import.meta.dir, name), "utf8")),
     );
     expect(importers).toEqual([]);
   });

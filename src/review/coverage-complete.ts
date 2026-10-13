@@ -2,13 +2,13 @@
 // blast radius, including the files the cap dropped). Every file ends up covered, omitted under a named reason, or
 // uncovered; `keryx review complete` refuses while any is uncovered unless the operator waives them in their own words.
 
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
 import { BLAST_RADIUS_SCOPE_REVIEWER } from "./blast-radius";
 import { packageScopeFiles } from "./coverage";
 import type { SliceManifest } from "./slice";
+import { readJsonFileOr } from "../lib/json";
 
 export const COVERAGE_FILE = "coverage.json";
 /** Where the ledger build leaves a copy of the slice manifest when the input directory is not the package. */
@@ -41,13 +41,7 @@ export type CoverageReport = {
   waived: boolean;
 };
 
-async function readJson<T>(file: string): Promise<T | undefined> {
-  try {
-    return JSON.parse(await readFile(file, "utf8")) as T;
-  } catch {
-    return undefined;
-  }
-}
+const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
 
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
@@ -215,7 +209,7 @@ export async function recordCoverageWaiver(packageDir: string, operatorQuote: st
   return waiver;
 }
 
-const FIRST_FILES = 5;
+export const FIRST_FILES = 5;
 
 /** What stops `review complete`: empty when nothing is uncovered, or a valid waiver names every uncovered file. */
 export async function coverageGateErrors(packageDir: string, research?: unknown): Promise<string[]> {
