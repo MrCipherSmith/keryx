@@ -411,7 +411,7 @@ describe("parseReviewResult: marker, caps and fence shapes", () => {
       const withTicks = (summary: string) => `\`\`\`REVIEW_RESULT\n${JSON.stringify({ status: "DONE", reviewer: "r", findings: [], summary })}\n\`\`\``;
 
       test("the block ends at the first line that holds only a closing fence, not at the backticks in the string", () => {
-        const parsed = parseReviewResult(`Notes.\n${withTicks("the \`\`\`json fence and \`\`\` again")}\n`);
+        const parsed = parseReviewResult(`Notes.\n${withTicks("the ```json fence and ``` again")}\n`);
         expect(parsed?.reviewer).toBe("r");
         expect(parsed?.summary).toBe("the ```json fence and ``` again");
       });
