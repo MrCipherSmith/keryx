@@ -1,0 +1,177 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "vantage-review (deep pass)",
+    "severity": "major",
+    "problem": "`replayRepository` walks `.metaproject/data/review` besides `.metaproject/flows`, and `rawDirs` reads whatever directories exist on disk. `.gitignore` line 115 (`.metaproject/data/**/raw/`) ignores that path, and the review-orchestrator skill tells shell-host reviewers to save their replies to `.metaproject/data/review/raw/<reviewer>.txt`. Reproduced: a temp repository with only `.metaproject/data/review/raw/r.txt` yields that file as a replayed row. The repository test `every tracked raw reply is replayed and the checked-in report lists exactly the differences` compares the checked-in report to the rendered one, so any local file there changes `Files replayed` and the same-file list and fails the test. The test title and the report text (`Only tracked raw/ directories ... are replayed`) say tracked.",
+    "impact": "The test is green in CI and red on every checkout that has run a shell-host review round, until the raws are deleted. A developer chasing it will regenerate the report, which commits a file list that depends on one machine and makes the report disagree with CI.",
+    "suggested_fix": "Replay tracked files only: list them with `git ls-files` (fall back to the walk only inside a test fixture), or drop `.metaproject/data/review` from `parents` (two tracked directories remain, so the AC16 set is unchanged). Add a test with an untracked or ignored raw that expects it to be left out, and keep the report text and test title true.",
+    "evidence": "reproduction: replayRepository on a temp root holding .metaproject/data/review/raw/r.txt returns [\".metaproject/data/review/raw/r.txt\"]; git check-ignore -v reports .gitignore:115 for that path; git ls-files shows raw/ only under the two PR 997 round directories",
+    "confidence": "high",
+    "file": "src/review/replay.ts",
+    "line": 70,
+    "quote": "const parents = [\".metaproject/flows\", \".metaproject/data/review\"];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "replay.ts rawDirs parents list",
+        "replay.test.ts walk test that puts .metaproject/data/review/r3/raw in the fixture and expects it replayed",
+        "replay.test.ts repository test title 'every tracked raw reply'",
+        "replay-report.md line 7 'Only tracked raw/ directories'"
+      ],
+      "enumeration_method": "keryx ctx rg for `data/review` and `tracked` in src/review/replay.ts, replay.test.ts and replay-report.md; reproduction on a temp root."
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-001"
+  },
+  {
+    "id": "F-002",
+    "reviewer": "vantage-review (mutation pass)",
+    "severity": "major",
+    "problem": "The CLI of replay.ts has no test. `const root = process.cwd();` is the replayed root; mutant M37 (`path.resolve(process.cwd(), \"..\")`) survived all 20 tests. Run from a subdirectory (or from anywhere but the repository root) the documented `bun src/review/replay.ts --write <path>` finds no `raw/` directory, renders `Files replayed: 0`, and writes that report. The repository test derives its root from `import.meta.dir`, so it does not cover the CLI. M38 (no `--write` target guard) and M39 (`Bun.write(target, ...)`) also survive and are equivalent: the guard's absence still throws a TypeError from `path.resolve`, and `root` equals the cwd.",
+    "impact": "The regenerate command named in the report header is the maintenance path of the file the repository test compares against; a wrong cwd silently produces a bad report that is then committed to match a different tree.",
+    "suggested_fix": "Derive `root` from `import.meta.dir` as the test does (or from `git rev-parse --show-toplevel`), refuse to write a report with zero files, and add one test that spawns `bun src/review/replay.ts --write <tmp>` from a temp cwd and checks the output file.",
+    "evidence": "mutant:M37-cli-root-parent",
+    "confidence": "high",
+    "file": "src/review/replay.ts",
+    "line": 131,
+    "quote": "const root = process.cwd();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "replay.ts CLI root: `const root = process.cwd();` (M37)",
+        "replay.ts CLI write: `--write` target guard and `Bun.write(path.resolve(root, target), report)` (M38, M39, both equivalent)"
+      ],
+      "enumeration_method": "mutation pass: M37 to M39 on the import.meta.main block survived (mutation-1.json); no test in replay.test.ts spawns the file."
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-002"
+  },
+  {
+    "id": "F-003",
+    "reviewer": "vantage-review (mutation pass)",
+    "severity": "major",
+    "problem": "Two branches no assertion reaches. In `legacy-result-parser.ts`, `start = end;` (skip the matched object so a nested object is not read again) survived as M40: no test and none of the 19 replayed files has a status-bearing object nested in another. The file header names 'it nests' as one of the three behaviours the replay depends on. In `replay.ts`, `entry !== \"node_modules\" &&` survived as M24; drivers and research-evidence skips are tested, node_modules is not.",
+    "impact": "The only property the legacy file has is that it equals the old parser. A later edit to the nesting rule changes the old side of the replay for any future raw without a test failing; the report equality test stays green because no current file exercises it.",
+    "suggested_fix": "Add one legacy-parser test with a bare object that nests a status-bearing object (expects the outer one, then the next sibling), and a walk test with `node_modules/raw/x.txt`. Consider a pinned hash of the function text so the verbatim property itself is tested.",
+    "evidence": "mutant:M40-legacy-nested-last-status",
+    "confidence": "high",
+    "file": "src/review/legacy-result-parser.ts",
+    "line": 35,
+    "quote": "start = end;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "legacy-result-parser.ts nested-object skip `start = end;` (M40)",
+        "replay.ts rawDirs `entry !== \"node_modules\"` skip (M24)"
+      ],
+      "enumeration_method": "mutation pass: M40 and M24 survived, M41, M25 and M26 killed (mutation-1.json)."
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-003"
+  },
+  {
+    "id": "F-004",
+    "reviewer": "vantage-review (deep pass)",
+    "severity": "minor",
+    "problem": "The stated reason for the `status-only-fragment` row is incomplete. The report says the file holds a verifier envelope 'which `loadRaws` already ignored as a non-reviewer result. The new parser returns none.' Under the new parser `loadRaws` keeps PR 997 round 3 `raw/review-verifier.txt` with no result (its body contains REVIEW_RESULT, so `isReviewerReply` is true) instead of listing it in `ignored`, and `buildLedger` reports `raw/review-verifier.txt: no parseable REVIEW_RESULT block` as a gap. Reproduced with `loadRaws` on that package: raws include `raw/review-verifier.txt (NO RESULT)`, ignored is empty.",
+    "impact": "This is the one row where an old result is lost, which is the case AC16 exists for. The operator accepted it in poll 162 on a reason that says nothing changed downstream, when the ledger of a closed round now carries a gap it did not before.",
+    "suggested_fix": "State the downstream effect in the cause text (kept with no result, one ledger gap) and tell the operator before the merge; if that is unwanted, the fix belongs to the parser or `loadRaws` in a separate PR, not here.",
+    "evidence": "loadRaws run on 2026-10-13-pr-997-round3-07730d87; src/commands/review-ledger.ts lines 92-103; src/review/ledger.ts line 331",
+    "confidence": "high",
+    "file": "src/review/replay.ts",
+    "line": null,
+    "quote": "which `loadRaws` already ignored as a non-reviewer result",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-004"
+  },
+  {
+    "id": "F-005",
+    "reviewer": "vantage-review (deep pass)",
+    "severity": "minor",
+    "problem": "The PR body disagrees with the head. It says 18 tests (the file has 20), 'every row's decision stays `undecided` until the operator rules file by file' (the head records the two causes as accepted by polls 161 and 162), keeps the checkbox 'Operator decisions on the 12 rows' unchecked, says 'every tracked raw/ reviewer reply' (see F-001), and reports 28 killed and 1 survived on a mutation spec that is not in the repository. A fresh 41-mutant spec gives 34 killed and 7 survived, of which M04, M33, M38 and M39 are equivalent and M24, M37 and M40 are gaps.",
+    "impact": "The reader who merges on the PR text believes the report still has undecided rows and the test count, mutation total and equivalence claim they were told.",
+    "suggested_fix": "Update the PR body to the head: 20 tests, decisions recorded with their polls, the unchecked box resolved, and the mutation spec committed beside the report or the figures restated.",
+    "evidence": "gh pr view 1004 body against replay.test.ts (20 tests) and mutation-1.md (41 mutants)",
+    "confidence": "high",
+    "file": "src/review/replay.test.ts",
+    "line": 119,
+    "quote": "describe(\"replayRepository\", () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-005"
+  },
+  {
+    "id": "F-006",
+    "reviewer": "vantage-review (deep pass)",
+    "severity": "minor",
+    "problem": "`CAUSE_DECISIONS` maps a cause to a decision string and `renderReplayReport` writes `CAUSE_DECISIONS[row.cause]` for every differing row. Any future raw that the classifier assigns to `fence-inner-backticks` or `status-only-fragment` is printed `accepted (operator, poll 161, ...)` without a poll, and the repository test (it only rejects `unclassified`) stays green. AC16 says every difference is decided file by file and the report has no undecided row.",
+    "impact": "The gate AC16 describes cannot fire for the two known causes. The classifier's predicates are broad enough (an old parse failure plus a broken last capture) to cover a file that failed for another reason.",
+    "suggested_fix": "Key the decision by file and sha256 (the row already carries both) in a checked-in table, render `undecided` for any row not in it, and have the test fail on undecided.",
+    "evidence": "replay.ts lines 18-23 and 114; replay.test.ts 'a difference the classifier does not explain stays undecided' tests only the unclassified path",
+    "confidence": "medium",
+    "file": "src/review/replay.ts",
+    "line": 19,
+    "quote": "\"fence-inner-backticks\": \"accepted (operator, poll 161, 2026-10-13)\",",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-006"
+  },
+  {
+    "id": "F-007",
+    "reviewer": "vantage-review (deep pass)",
+    "severity": "minor",
+    "problem": "`replayRaw` decides same or different by comparing two outcome strings (`reviewer|status|f=<n>|reviewer-result=<bool>`). AC16 says 'returns the same result as before'. A new parser that returned different findings with the same count, or a different `status` in one finding, would be counted as same. For the 19 files on this head the 7 same rows are deep-equal (checked), so the report is right today.",
+    "impact": "The replay is the evidence for AC16 and for any later parser change; it cannot detect a change of content.",
+    "suggested_fix": "Compare `JSON.stringify` of the two parsed results (or a deep equality) for `same`, and keep the outcome string only for display.",
+    "evidence": "replay.ts lines 27-32 and 55-57; deep-equal check of the 7 same rows run on this head",
+    "confidence": "medium",
+    "file": "src/review/replay.ts",
+    "line": 57,
+    "quote": "const same = before === after;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-007"
+  },
+  {
+    "id": "F-008",
+    "reviewer": "vantage-review (deep pass)",
+    "severity": "info",
+    "problem": "`rawDirs` follows symlinks (`statSync`) with no cycle guard, so a symlink to an ancestor under `.metaproject/flows` ends in `ELOOP` or an unbounded walk. `const LABELLED =/```REVIEW_RESULT...` lacks a space after `=`. The legacy file header says `replay.ts` (and its test) are the sole importers; nothing enforces it.",
+    "impact": "Low: the walk is a developer tool over a tree the repository controls.",
+    "suggested_fix": "Use `lstatSync` or `readdirSync(..., { withFileTypes: true })` and skip symbolic links; format the constant; add a source-audit test that only replay.ts and replay.test.ts import legacy-result-parser.",
+    "evidence": "replay.ts lines 25 and 79; keryx ctx rg legacy-result-parser over src shows replay.ts and replay.test.ts only",
+    "confidence": "medium",
+    "file": "src/review/replay.ts",
+    "line": 79,
+    "quote": "if (!statSync(full).isDirectory()) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1004-round1-fc480545#F-008"
+  }
+]
