@@ -238,30 +238,47 @@ interface ForcedItems<T> {
 /**
  * The shell's whole queue drain in one place, so the shell and its test build the same wiring
  * (flow 441, R1). The sites differ in what surrounds the drain: a finished foreground operation
- * and a settled turn wait for a pending force hand-off; a settled turn wakes the bus when the
- * drain left nothing; a released lease and the end of a detached slash command stay out while
- * queue work is in flight, because that work's own end drains.
+ * and a settled turn wait for a pending force hand-off; a released lease and the end of a detached
+ * slash command stay out while queue work is in flight, because that work's own end drains. Every
+ * site that ends with nothing queued and nothing started calls `onSettle`, so the bus wake is
+ * never starved by the site that happened to be last.
+ *
+ * `queue` is a getter: the shell replaces its queue array on `/queue remove`, `/queue edit` and
+ * Force, so a reference taken once would drain a queue nobody shows any more.
  */
 export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {
   forced: ForcedItems<T>;
-  queue: T[];
+  queue: () => T[];
   paint: () => void;
   run: (item: T) => void;
-  /** A turn, a foreground operation, a pending hand-off or a detached slash command is in flight. */
+  /** A turn, a foreground operation or a pending hand-off is in flight. Detached slash work is counted by `detach`. */
   workInFlight: () => boolean;
   /** The drain left nothing queued and started nothing, so the bus may wake. */
   onSettle: () => void;
-}): { onForegroundOperationComplete(): void; onTurnSettle(): void; onLeaseRelease(): void; onDetachedWorkDone(): void } {
-  const drain = (): DrainOutcome =>
-    drainNext({
-      take: () => deps.forced.takeNext() ?? deps.queue.shift(),
-      pending: () => deps.forced.pendingCount + deps.queue.length,
+}): {
+  onForegroundOperationComplete(): void;
+  onTurnSettle(): void;
+  onLeaseRelease(): void;
+  /** Hold the queue until `work` settles (either way), then drain what waited behind it. */
+  detach(work: Promise<unknown>): void;
+  /** Everything the drain waits on: `deps.workInFlight` plus detached slash work. */
+  workInFlight(): boolean;
+} {
+  let detached = 0;
+  const workInFlight = (): boolean => deps.workInFlight() || detached > 0;
+  const drain = (): DrainOutcome => {
+    const outcome = drainNext({
+      take: () => deps.forced.takeNext() ?? deps.queue().shift(),
+      pending: () => deps.forced.pendingCount + deps.queue().length,
       paint: deps.paint,
       run: deps.run,
-      isBusy: deps.workInFlight,
+      isBusy: workInFlight,
     });
+    if (outcome === "empty") deps.onSettle();
+    return outcome;
+  };
   const drainWhenIdle = (): void => {
-    if (deps.workInFlight()) return;
+    if (workInFlight()) return;
     drain();
   };
   return {
@@ -271,10 +288,18 @@ export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {
     },
     onTurnSettle() {
       if (deps.forced.isAwaitingSettlement) return;
-      if (drain() === "empty") deps.onSettle();
+      drain();
     },
     onLeaseRelease: drainWhenIdle,
-    onDetachedWorkDone: drainWhenIdle,
+    detach(work) {
+      detached += 1;
+      const end = (): void => {
+        detached -= 1;
+        drainWhenIdle();
+      };
+      work.then(end, end);
+    },
+    workInFlight,
   };
 }
 

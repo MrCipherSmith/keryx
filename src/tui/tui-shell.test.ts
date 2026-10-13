@@ -4013,9 +4013,9 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
     // The existing operator-first drain must survive: a queued message is the
     // real next step and beats a pending notification.
     expect(wakeSource).toContain("forced: forceHandoff,");
-    expect(wakeSource).toContain("queue: mainQueue,");
+    expect(wakeSource).toContain("queue: () => mainQueue,");
     const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
-    expect(drain).toContain("deps.forced.takeNext() ?? deps.queue.shift()");
+    expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   });
 
   test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {

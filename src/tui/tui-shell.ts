@@ -7958,26 +7958,17 @@ export async function launchTuiAgentShell(opts: {
     };
     // Flow 441 (R1): the one drain the operation-complete, turn-settle, lease-release and
     // detached-slash-command sites share.
-    let detachedSlashWork = 0;
-    const queueWorkInFlight = (): boolean =>
-      chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0;
     const drainSites = createMainQueueDrain({
       forced: forceHandoff,
-      queue: mainQueue,
+      queue: () => mainQueue,
       paint: () => paintMainQueue(),
       run: (next) => remoteQueue.runQueued(next),
-      workInFlight: queueWorkInFlight,
+      workInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,
       onSettle: () => busWakeController?.onSettle(),
     });
     // A slash command whose work outlives its handler (it returns before the work ends) holds the
     // queue until the work ends, then drains what waited behind it.
-    const detachSlashWork = (work: Promise<unknown>): void => {
-      detachedSlashWork += 1;
-      void work.finally(() => {
-        detachedSlashWork -= 1;
-        drainSites.onDetachedWorkDone();
-      });
-    };
+    const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);
     const paintMainQueue = (): void => {
       // Remove stale blocks (same "remove stale, rebuild all" strategy as before).
       for (const entry of mainQueueBlocks) {
@@ -9999,8 +9990,7 @@ export async function launchTuiAgentShell(opts: {
       // blocks every other route into a new main-agent turn.
       isIdle: () =>
         !destroyed &&
-        !chrome.isBusy() &&
-        !foregroundOperation.isActive &&
+        !drainSites.workInFlight() &&
         mainQueue.length === 0 &&
         leaseView()?.held() !== true,
       inbox: busInbox,
@@ -10018,8 +10008,8 @@ export async function launchTuiAgentShell(opts: {
 
     // Flow 275 (agent bus P4, T7; specification §5.2 step 5, AC4): drains the
     // queue the moment a `turns` lease releases this instance, and skipped
-    // outright while a turn is still busy (that turn's own settle drains the
-    // queue once it finishes; draining here too would double-dispatch).
+    // while any queue work is in flight (a turn, an operation, a hand-off or a detached slash
+    // command: that work's own end drains, and draining here too would double-dispatch).
     leaseHoldController = createLeaseHoldController({
       isHeld: () => leaseView()?.held() === true,
       onRelease: () => drainSites.onLeaseRelease(),

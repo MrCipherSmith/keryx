@@ -20,14 +20,19 @@ interface ModelShell {
   settles: number;
   busy: boolean;
   awaitingSettlement: boolean;
-  detached: number;
+  /** The work of the detached slash commands still running, oldest first. */
+  detachedWork: Array<{ resolve(): void; reject(error: Error): void }>;
   /** The turn finished: the shell goes idle and the settle site runs. */
   settleTurn(): void;
   /** The foreground operation finished. */
   completeOperation(): void;
   releaseLease(): void;
-  /** A detached slash command's work ended. */
-  endDetached(): void;
+  /** A detached slash command starts work that outlives its handler. */
+  startDetached(): void;
+  /** The oldest detached work ends; resolves once the drain it triggers has run. */
+  endDetached(): Promise<void>;
+  /** The oldest detached work rejects. */
+  failDetached(): Promise<void>;
 }
 
 function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelShell {
@@ -40,22 +45,33 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
     settles: 0,
     busy: false,
     awaitingSettlement: false,
-    detached: 0,
+    detachedWork: [],
     settleTurn: () => {
       shell.busy = false;
       sites.onTurnSettle();
     },
     completeOperation: () => sites.onForegroundOperationComplete(),
     releaseLease: () => sites.onLeaseRelease(),
-    endDetached: () => {
-      shell.detached -= 1;
-      sites.onDetachedWorkDone();
+    startDetached: () => {
+      sites.detach(
+        new Promise<void>((resolve, reject) => {
+          shell.detachedWork.push({ resolve, reject });
+        }),
+      );
+    },
+    endDetached: async () => {
+      shell.detachedWork.shift()!.resolve();
+      await new Promise((done) => setTimeout(done, 0));
+    },
+    failDetached: async () => {
+      shell.detachedWork.shift()!.reject(new Error("detached work failed"));
+      await new Promise((done) => setTimeout(done, 0));
     },
   };
   const runLine = (line: string): void => {
     shell.ran.push(line);
     if (line === "/model" || line === "/connect") {
-      shell.detached += 1;
+      shell.startDetached();
       return;
     }
     if (line.startsWith("/")) {
@@ -76,12 +92,12 @@ function modelShell(onSlash?: (line: string, shell: ModelShell) => void): ModelS
   };
   const sites = createMainQueueDrain({
     forced,
-    queue: shell.queue,
+    queue: () => shell.queue,
     paint: () => {
       shell.paints += 1;
     },
     run: (next) => runLine(next.question),
-    workInFlight: () => shell.busy || shell.awaitingSettlement || shell.detached > 0,
+    workInFlight: () => shell.busy || shell.awaitingSettlement,
     onSettle: () => {
       shell.settles += 1;
     },
@@ -119,7 +135,7 @@ describe("AC1/AC2: a slash line queued before a question no longer strands it", 
 
 describe("F-001: a slash command whose work outlives its handler holds the queue", () => {
   for (const command of ["/model", "/connect"]) {
-    test(`${command} then a question: the question waits for the command's work, then runs`, () => {
+    test(`${command} then a question: the question waits for the command's work, then runs`, async () => {
       const shell = modelShell();
       shell.busy = true;
       shell.queue.push(item("a", command), item("b", "question"));
@@ -130,7 +146,7 @@ describe("F-001: a slash command whose work outlives its handler holds the queue
       expect(shell.queue.map((i) => i.question)).toEqual(["question"]);
       expect(shell.turns).toEqual([]);
 
-      shell.endDetached();
+      await shell.endDetached();
 
       expect(shell.ran).toEqual([command, "question"]);
       expect(shell.queue).toEqual([]);
@@ -138,25 +154,25 @@ describe("F-001: a slash command whose work outlives its handler holds the queue
     });
   }
 
-  test("the end of the work stays out while a turn is running, and the turn's settle drains", () => {
+  test("the end of the work stays out while a turn is running, and the turn's settle drains", async () => {
     const shell = modelShell();
-    shell.detached = 1;
+    shell.startDetached();
     shell.queue.push(item("a", "question"));
     shell.busy = true;
-    shell.endDetached();
+    await shell.endDetached();
     expect(shell.ran).toEqual([]);
     shell.settleTurn();
     expect(shell.turns).toEqual(["question"]);
   });
 
-  test("a forced item and a queued slash command with detached work: the forced one runs first, the rest wait", () => {
+  test("a forced item and a queued slash command with detached work: the forced one runs first, the rest wait", async () => {
     const shell = modelShell();
     shell.busy = true;
     shell.forced.push(item("f", "/model"));
     shell.queue.push(item("a", "question"));
     shell.settleTurn();
     expect(shell.ran).toEqual(["/model"]);
-    shell.endDetached();
+    await shell.endDetached();
     expect(shell.turns).toEqual(["question"]);
   });
 });
@@ -193,16 +209,18 @@ describe("AC3: the three sites share one drain and keep what differs between the
     expect(waiting.settles).toBe(0);
   });
 
-  test("foreground operation complete: drains one line that starts a turn and stops; never calls onSettle", () => {
+  test("foreground operation complete: drains one line that starts a turn and stops; wakes the bus only when nothing was left", () => {
     const shell = modelShell();
     shell.queue.push(item("a", "first"), item("b", "second"));
     shell.completeOperation();
     expect(shell.turns).toEqual(["first"]);
     expect(shell.queue.map((i) => i.question)).toEqual(["second"]);
 
+    expect(shell.settles).toBe(0);
+
     const empty = modelShell();
     empty.completeOperation();
-    expect(empty.settles).toBe(0);
+    expect(empty.settles).toBe(1);
 
     const waiting = modelShell();
     waiting.queue.push(item("a", "queued"));
@@ -226,7 +244,119 @@ describe("AC3: the three sites share one drain and keep what differs between the
       held.releaseLease();
       expect(held.ran).toEqual([]);
       expect(held.queue).toHaveLength(1);
+      expect(held.settles).toBe(0);
     }
+
+    const empty = modelShell();
+    empty.releaseLease();
+    expect(empty.settles).toBe(1);
+  });
+});
+
+describe("F-018: the end of detached work wakes the bus when it leaves nothing", () => {
+  test("detached work ends with an empty queue: onSettle fires once", async () => {
+    const shell = modelShell();
+    shell.startDetached();
+    shell.releaseLease();
+    expect(shell.settles).toBe(0);
+    await shell.endDetached();
+    expect(shell.settles).toBe(1);
+  });
+
+  test("detached work ends while a turn runs: no wake, the turn's settle gives it", async () => {
+    const shell = modelShell();
+    shell.startDetached();
+    shell.busy = true;
+    await shell.endDetached();
+    expect(shell.settles).toBe(0);
+    shell.settleTurn();
+    expect(shell.settles).toBe(1);
+  });
+});
+
+describe("F-016: the drain follows the shell's current queue, not the array it started with", () => {
+  test("a line removed by replacing the queue is not run, and a line queued afterwards is", () => {
+    const shell = modelShell();
+    shell.busy = true;
+    shell.queue.push(item("a", "removed"), item("b", "kept"));
+    shell.queue = shell.queue.filter((queued) => queued.id !== "a");
+    shell.queue.push(item("c", "later"));
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["kept"]);
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["kept", "later"]);
+  });
+
+  test("a forced line taken out of the queue does not run a second time", () => {
+    const shell = modelShell();
+    shell.busy = true;
+    shell.queue.push(item("a", "first"), item("b", "second"));
+    const [forcedLine, ...rest] = shell.queue;
+    shell.queue = rest;
+    shell.forced.push(forcedLine!);
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["first"]);
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["first", "second"]);
+  });
+
+  for (const site of ["releaseLease", "completeOperation"] as const) {
+    test(`${site} drains the replaced queue`, () => {
+      const shell = modelShell();
+      shell.queue = [item("n", "after replacement")];
+      shell[site]();
+      expect(shell.ran).toEqual(["after replacement"]);
+    });
+  }
+
+  test("a queue replaced between two drains is counted afresh: three slash lines behind a drained one all run", () => {
+    const shell = modelShell();
+    shell.busy = true;
+    shell.queue.push(item("a", "/first"));
+    shell.settleTurn();
+    shell.queue = [item("b", "/b"), item("c", "/c"), item("d", "/d")];
+    shell.busy = true;
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["/first", "/b", "/c", "/d"]);
+  });
+
+  test("the end of detached work drains the replaced queue", async () => {
+    const shell = modelShell();
+    shell.startDetached();
+    shell.queue = [item("n", "after replacement")];
+    await shell.endDetached();
+    expect(shell.ran).toEqual(["after replacement"]);
+  });
+});
+
+describe("F-017: detached work that rejects still releases the queue", () => {
+  test("a rejected detached promise ends the hold, drains, and leaves no unhandled rejection", async () => {
+    const shell = modelShell();
+    shell.busy = true;
+    shell.queue.push(item("a", "/model"), item("b", "question"));
+    shell.settleTurn();
+    expect(shell.ran).toEqual(["/model"]);
+    await shell.failDetached();
+    expect(shell.ran).toEqual(["/model", "question"]);
+    expect(shell.turns).toEqual(["question"]);
+  });
+
+  test("workInFlight counts the detached work until it ends, whichever way", async () => {
+    const sites = createMainQueueDrain({
+      forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },
+      queue: () => [],
+      paint: () => {},
+      run: () => {},
+      workInFlight: () => false,
+      onSettle: () => {},
+    });
+    expect(sites.workInFlight()).toBe(false);
+    let resolve!: () => void;
+    sites.detach(new Promise<void>((done) => (resolve = done)));
+    expect(sites.workInFlight()).toBe(true);
+    resolve();
+    await new Promise((done) => setTimeout(done, 0));
+    expect(sites.workInFlight()).toBe(false);
   });
 });
 

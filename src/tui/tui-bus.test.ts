@@ -680,8 +680,7 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     const end = source.indexOf("\n    });", start);
     expect(end).toBeGreaterThan(start);
     const block = source.slice(start, end);
-    expect(block).toContain("chrome.isBusy()");
-    expect(block).toContain("foregroundOperation.isActive");
+    expect(block).toContain("drainSites.workInFlight()");
     expect(block).toContain("mainQueue.length === 0");
     expect(block).toContain("inbox: busInbox,");
     expect(block).toContain("consecutiveAutoWakes");
@@ -704,7 +703,7 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     const block = source.slice(start, end);
     expect(block).toContain("isIdle: () =>");
     expect(block).toContain("!destroyed &&");
-    expect(block).toContain("!chrome.isBusy() &&");
+    expect(block).toContain("!drainSites.workInFlight() &&");
   });
 
   // Flow 277 (P2): moved to `BUS_WAKE_CAPPED_NOTICE` (`./bus-wake.ts`),

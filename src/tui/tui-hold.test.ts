@@ -126,17 +126,25 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     const body = source.slice(factory, source.indexOf("\n    });", factory));
     for (const field of [
       "forced: forceHandoff,",
-      "queue: mainQueue,",
+      // a getter: the shell replaces its queue array, so a reference taken once drains a dead queue (F-016)
+      "queue: () => mainQueue,",
       "paint: () => paintMainQueue(),",
       "run: (next) => remoteQueue.runQueued(next),",
-      "workInFlight: queueWorkInFlight,",
+      "workInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
       "onSettle: () => busWakeController?.onSettle(),",
     ]) {
       expect(body).toContain(field);
     }
-    expect(source).toContain(
-      "chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement || detachedSlashWork > 0",
-    );
+    expect(body).not.toContain("queue: mainQueue,");
+  });
+
+  test("the bus wake is idle only when the shared in-flight predicate is clear (flow 441 F-019)", () => {
+    const start = source.indexOf("busWakeController = createBusWakeController({");
+    expect(start).toBeGreaterThan(0);
+    const isIdle = source.slice(start, source.indexOf("inbox: busInbox,", start));
+    expect(isIdle).toContain("!drainSites.workInFlight() &&");
+    expect(isIdle).toContain("mainQueue.length === 0 &&");
+    expect(isIdle).toContain("leaseView()?.held() !== true");
   });
 
   test("every slash command whose work outlives its handler is held in the queue (flow 441 F-001)", () => {
@@ -147,12 +155,9 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
       expect(source.slice(at, at + 400)).toContain("detachSlashWork(");
     }
     expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length);
-    const helper = source.indexOf("const detachSlashWork = ");
-    expect(helper).toBeGreaterThan(0);
-    const helperBody = source.slice(helper, source.indexOf("\n    };", helper));
-    expect(helperBody).toContain("detachedSlashWork += 1;");
-    expect(helperBody).toContain("detachedSlashWork -= 1;");
-    expect(helperBody).toContain("drainSites.onDetachedWorkDone();");
+    // the counter and the end-of-work drain live in the factory (behaviour: main-queue-drain.test.ts)
+    expect(source).toContain("const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);");
+    expect(source).not.toContain("detachedSlashWork")
   });
 
   test("a finished foreground operation drains the queue (flow 441)", () => {

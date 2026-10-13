@@ -275,9 +275,9 @@ test("tui-shell.ts's busy 'deferred' case pushes the slash line onto mainQueue, 
 test("a queued slash line is drained through runLine as a command once the turn settles", () => {
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   expect(source).toContain("forced: forceHandoff,");
-  expect(source).toContain("queue: mainQueue,");
+  expect(source).toContain("queue: () => mainQueue,");
   const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
-  expect(drain).toContain("deps.forced.takeNext() ?? deps.queue.shift()");
+  expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   const wiring = readFileSync(join(import.meta.dir, "remote-queue-wiring.ts"), "utf8");
   expect(wiring).toContain("deps.runLine(item.question");
 });
