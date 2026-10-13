@@ -4230,6 +4230,15 @@ Usage:
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
+  keryx review layers refresh|status|block --package <review-dir> [--head <sha>] [--base <ref>]
+                      [--write-wiki] [--files a,b] [--max-bytes <n>] [--json]
+                      Graph, wiki and memory for one review; no model is called.
+  keryx review chunks plan|estimate|next|record|merge --package <review-dir>
+                      [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]
+                      [--answer yes|no --quote "<words>"] [--json]
+                      The blast-radius files the per-pass cap dropped, one chunk at a time.
+  keryx review coverage --package <review-dir> [--json]
+                      In scope, covered, omitted, uncovered; writes coverage.json.
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
@@ -4330,6 +4339,7 @@ ${COMMENTS_USAGE}
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
+                        [--waive-coverage "<operator quote>"]
   keryx review lightweight
 
 An unrecognised option is REFUSED, not ignored. A flag that is silently dropped
