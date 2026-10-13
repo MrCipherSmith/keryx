@@ -30,8 +30,8 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     // defensive no-op for task-notification/bus-message) just returns.
     expect(between).toContain('if (origin === "operator")');
     // Flow 376: a Telegram line keeps its `tg` label through the hold queue.
-    expect(between).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });");
-    expect(between).toContain("paintMainQueue();");
+    // (`enqueue` repaints; the position it returns goes into the notice.)
+    expect(between).toContain("turnLoop.enqueue(line, displayLine, source);");
     expect(between).toContain("return;");
     // And it must return BEFORE the echo ever runs — i.e. this whole gate
     // sits ahead of `appendUserEcho`, not the other way around.
@@ -46,7 +46,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     expect(pendingEditIdx).toBeLessThan(choiceIdx);
     const block = source.slice(pendingEditIdx, choiceIdx);
     expect(block).toContain("leaseView()?.held() === true");
-    expect(block).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });");
+    expect(block).toContain("turnLoop.enqueue(line, displayLine, source);");
     expect(block).toContain("no side worker while held");
     // The held branch must return BEFORE the composer-choice IIFE below it.
     const heldIdx = block.indexOf("leaseView()?.held() === true");
@@ -64,13 +64,13 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     // queue and handed to `forceForegroundQueueItem` — else it would already
     // be gone by the time the guard ran.
     const heldIdx = body.indexOf("leaseView()?.held() === true");
-    const removeIdx = body.indexOf("removeMainQueueItem(mainQueue, index)");
+    const removeIdx = body.indexOf("removeMainQueueItem(turnLoop.queue, index)");
     expect(heldIdx).toBeGreaterThan(0);
     expect(removeIdx).toBeGreaterThan(heldIdx);
   });
 
   test("the task-notification wake's idle test includes \"not held\", alongside busy and the queue", () => {
-    const idx = source.indexOf("const idle = !busy && mainQueue.length === 0 && leaseView()?.held() !== true;");
+    const idx = source.indexOf("const idle = !busy && turnLoop.queue.length === 0 && leaseView()?.held() !== true;");
     expect(idx).toBeGreaterThan(0);
   });
 });
@@ -121,21 +121,36 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     expect(block).toContain("onRelease: () => drainSites.onLeaseRelease()");
     // Flow 441 (F-002/F-003): the shell builds the same factory the behaviour test builds, from the
     // real objects, with every field in place. Dropping or swapping one turns this red.
-    const factory = source.indexOf("const drainSites = createMainQueueDrain({");
-    expect(factory).toBeGreaterThan(0);
-    const body = source.slice(factory, source.indexOf("\n    });", factory));
+    // Flow 441 (AC1): the factory is built in `turn-loop.ts` (behaviour: turn-loop.test.ts); the shell
+    // builds that loop from the real objects.
+    const loop = source.indexOf("const turnLoop = createTurnLoop({");
+    expect(loop).toBeGreaterThan(0);
+    const loopBody = source.slice(loop, source.indexOf("\n    });", loop));
     for (const field of [
       "forced: forceHandoff,",
-      // a getter: the shell replaces its queue array, so a reference taken once drains a dead queue (F-016)
-      "queue: () => mainQueue,",
       "paint: () => paintMainQueue(),",
-      "run: (next) => remoteQueue.runQueued(next),",
       "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
       "onSettle: () => busWakeController?.onSettle(),",
     ]) {
+      expect(loopBody).toContain(field);
+    }
+    expect(source).toContain("const drainSites = turnLoop.drain;");
+    const moduleSource = readFileSync(path.join(import.meta.dir, "turn-loop.ts"), "utf8");
+    const factory = moduleSource.indexOf("const drain = createMainQueueDrain({");
+    expect(factory).toBeGreaterThan(0);
+    const body = moduleSource.slice(factory, moduleSource.indexOf("\n  });", factory));
+    for (const field of [
+      "forced: deps.forced,",
+      // a getter: the loop replaces its queue array, so a reference taken once drains a dead queue (F-016)
+      "queue: () => queue,",
+      "paint: deps.paint,",
+      "run: (next) => remote.runQueued(next),",
+      "turnWorkInFlight: deps.turnWorkInFlight,",
+      "onSettle: deps.onSettle,",
+    ]) {
       expect(body).toContain(field);
     }
-    expect(body).not.toContain("queue: mainQueue,");
+    expect(body).not.toContain("queue: queue,");
   });
 
   test("the bus wake is idle only when the shared in-flight predicate is clear (flow 441 F-019)", () => {
@@ -143,7 +158,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     expect(start).toBeGreaterThan(0);
     const isIdle = source.slice(start, source.indexOf("inbox: busInbox,", start));
     expect(isIdle).toContain("!drainSites.workInFlight() &&");
-    expect(isIdle).toContain("mainQueue.length === 0 &&");
+    expect(isIdle).toContain("turnLoop.queue.length === 0 &&");
     expect(isIdle).toContain("leaseView()?.held() !== true");
   });
 

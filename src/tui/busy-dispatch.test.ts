@@ -258,24 +258,24 @@ test("the queued-command notice names its qN position and when it runs", () => {
   expect(queuedCommandNotice(1)).toContain("runs when the turn ends");
 });
 
-test("tui-shell.ts's busy 'deferred' case pushes the slash line onto mainQueue, repaints and tells the user", () => {
+test("tui-shell.ts's busy 'deferred' case queues the slash line through the turn loop (behaviour: turn-loop.test.ts)", () => {
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   const caseIdx = source.indexOf('case "deferred": {');
   const endIdx = source.indexOf('case "not-a-command":', caseIdx);
   expect(caseIdx).toBeGreaterThan(-1);
   expect(endIdx).toBeGreaterThan(caseIdx);
   const body = source.slice(caseIdx, endIdx);
-  expect(body).toContain('deferredBusyAction(line, command?.name) === "queue"');
-  expect(body).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine");
-  expect(body).toContain("paintMainQueue();");
-  expect(body).toContain("queuedCommandNotice(mainQueue.length)");
+  expect(body).toContain("turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)");
+  const loop = readFileSync(join(import.meta.dir, "turn-loop.ts"), "utf8");
+  expect(loop).toContain('deferredBusyAction(line, commandName) !== "queue"');
+  expect(loop).toContain("queuedCommandNotice(position)");
   expect(body).not.toContain("command deferred");
 });
 
 test("a queued slash line is drained through runLine as a command once the turn settles", () => {
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   expect(source).toContain("forced: forceHandoff,");
-  expect(source).toContain("queue: () => mainQueue,");
+  expect(readFileSync(join(import.meta.dir, "turn-loop.ts"), "utf8")).toContain("queue: () => queue,");
   const drain = readFileSync(join(import.meta.dir, "main-queue.ts"), "utf8");
   expect(drain).toContain("deps.forced.takeNext() ?? deps.queue().shift()");
   const wiring = readFileSync(join(import.meta.dir, "remote-queue-wiring.ts"), "utf8");

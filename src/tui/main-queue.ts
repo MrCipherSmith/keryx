@@ -229,7 +229,7 @@ export function drainNext<T extends QueuedMainQuestion>(options: {
 }
 
 /** The part of `ForegroundForceHandoff` the drain reads. */
-interface ForcedItems<T> {
+export interface ForcedItems<T> {
   takeNext(): T | undefined;
   readonly pendingCount: number;
   readonly isAwaitingSettlement: boolean;

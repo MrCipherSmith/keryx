@@ -681,7 +681,7 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     expect(end).toBeGreaterThan(start);
     const block = source.slice(start, end);
     expect(block).toContain("drainSites.workInFlight()");
-    expect(block).toContain("mainQueue.length === 0");
+    expect(block).toContain("turnLoop.queue.length === 0");
     expect(block).toContain("inbox: busInbox,");
     expect(block).toContain("consecutiveAutoWakes");
     expect(block).toContain("resolveMaxAutoWake()");
