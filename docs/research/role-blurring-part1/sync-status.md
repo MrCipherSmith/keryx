@@ -1,17 +1,17 @@
 # Текущее состояние / Live status
 
-Запуск (run, UTC): 2026-10-13 11:51 UTC
+Запуск (run, UTC): 2026-10-13 12:50 UTC
 
 Состояние (status): ok
-HEAD: 9449cd8cc9ffaad887b2844220b98a1b11ea5e95
+HEAD: f0ad228a6e8eb93f62167a97152958f34e9805fd
 Строк в contribution-log.md (rows): 48
 
 ## Счётчики: снимок 04809f4f / сейчас (counts: snapshot / now)
 
 | Ключ (key) | снимок 04809f4f | сейчас |
 | --- | --- | --- |
-| commit | 04809f4f | 9449cd8cc |
-| generated_at | 2026-10-04T13:17Z | 2026-10-13T11:51Z |
+| commit | 04809f4f | f0ad228a6 |
+| generated_at | 2026-10-04T13:17Z | 2026-10-13T12:51Z |
 | flows | 383 | 413 |
 | flows_by_status | done: 339, blocked: 2, in-progress: 25, ready: 3, initializing: 3, implemented: 11 | done: 347, blocked: 3, in-progress: 35, ready: 4, initializing: 5, implemented: 19 |
 | acceptance_criteria | 3175 | 3479 |
@@ -38,8 +38,8 @@ HEAD: 9449cd8cc9ffaad887b2844220b98a1b11ea5e95
 - Исключено как необратимые (excluded-irreversible): 57
 - Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 15/150, B 9/150, C 6/150, D 9/150; порог достигнут (met): нет (no)
 - Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 97/20, слепых 9/5; числа достигнуты (numeric targets met)
-- Машин в журнале (machines in the journal): 2; записей по машинам (records per machine): 1932608c 134, fa7c0ca1 98
-- Решений во всех машинах (decisions, all machines): 232; с рекомендацией (with a recommendation): 194; живых, не backfilled (live, not backfilled): 159
+- Машин в журнале (machines in the journal): 3; записей по машинам (records per machine): 142cd74e 26, 1932608c 134, fa7c0ca1 98
+- Решений во всех машинах (decisions, all machines): 258; с рекомендацией (with a recommendation): 216; живых, не backfilled (live, not backfilled): 185
 
 ## Виды проверки (verification kinds)
 
