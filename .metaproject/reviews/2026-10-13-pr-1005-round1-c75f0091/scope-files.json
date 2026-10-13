@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    "src/commands/review-jev-contract.ts",
+    "src/commands/review-jev-docs.ts",
+    "src/commands/review-jev-risk.ts",
+    "src/commands/review-jev-rules.ts",
+    "src/commands/review-jev-scenarios.ts",
+    "src/commands/review-jev-select.ts",
+    "src/commands/review-revision-operand.test.ts",
+    "src/commands/review.ts",
+    "src/lib/git-revision.ts",
+    "src/lib/trust-routine-command.test.ts",
+    "src/lib/trust-routine-command.ts"
+  ]
+}

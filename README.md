@@ -40,7 +40,7 @@ the completion itself signed.
 
 ## Quick start
 
-**Requirements:** `git` and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
+**Requirements:** `git` (>= 2.24) and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
 
 ```bash
 npm install -g @mrciphersmith/keryx
@@ -858,7 +858,7 @@ next.
 | Requirement | Status |
 |-------------|--------|
 | Bun | >= 1.3.14 |
-| Git | Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
+| Git | >= 2.24 (`--end-of-options`, used wherever a typed revision reaches git). Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
 | ripgrep | Required only for `keryx ctx rg` and the agent's `search_code` tool |
 | Model provider credential | Required only for the optional AI commands below |
 | macOS | Full support, including the complete policy sandbox |

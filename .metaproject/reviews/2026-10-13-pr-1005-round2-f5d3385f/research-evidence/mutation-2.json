@@ -1,0 +1,427 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f045",
+  "command": "bun test src/commands/review-revision-operand.test.ts src/lib/trust-routine-command.test.ts src/commands/flow-check-ac.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 28397
+  },
+  "mutants": [
+    {
+      "id": "B2-c-flag-prefix",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "rest === 2 &&",
+      "replacement": "rest >= 2 &&",
+      "line": 118,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20800
+    },
+    {
+      "id": "B3-flag-prefix-match",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "(rest === f.length && word.startsWith(f, at))",
+      "replacement": "word.startsWith(f, at)",
+      "line": 119,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13247
+    },
+    {
+      "id": "B12-no-open-brace-char",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/[\\\\{}$]/.test(word) && /^",
+      "replacement": "/[\\\\}$]/.test(word) && /^",
+      "line": 130,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12637
+    },
+    {
+      "id": "B13-no-close-brace-char",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/[\\\\{}$]/.test(word) && /^",
+      "replacement": "/[\\\\{$]/.test(word) && /^",
+      "line": 130,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12516
+    },
+    {
+      "id": "B16-dot-all-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^--[^=]+=-./.test(w)",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 23079
+    },
+    {
+      "id": "B17-short-flag-prefix",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^-[^=]+=-./s.test(w)",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 24615
+    },
+    {
+      "id": "C13-sync-guard",
+      "file": "src/sync/diff.ts",
+      "anchor": "if (base.startsWith(\"-\")) return null;",
+      "replacement": "",
+      "line": 78,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 20076
+    },
+    {
+      "id": "G1-shell-spelled-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": " || words.some(isShellSpelledOption)",
+      "replacement": "",
+      "line": 110,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16613
+    },
+    {
+      "id": "G2-shell-spelled-no-dollar-lead",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^[\\\\{$]*-/.test(word)",
+      "replacement": "/^[\\\\{]*-/.test(word)",
+      "line": 130,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16479
+    },
+    {
+      "id": "G3-shell-spelled-no-backslash-lead",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^[\\\\{$]*-/.test(word)",
+      "replacement": "/^[{$]*-/.test(word)",
+      "line": 130,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16452
+    },
+    {
+      "id": "G4-shell-spelled-any-dash-word",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/[\\\\{}$]/.test(word) && /^",
+      "replacement": "true && /^",
+      "line": 130,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13629
+    },
+    {
+      "id": "G5-dashvalue-lone-dash-blocked",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^--[^=]+=-/s.test(w)",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13419
+    },
+    {
+      "id": "G6-dashvalue-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "words.some((w) => /^--[^=]+=-./s.test(w))",
+      "replacement": "false",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22854
+    },
+    {
+      "id": "G7-dashvalue-call-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "args[0] === \"review\" && hasDashValue(args)",
+      "replacement": "false",
+      "line": 318,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 23685
+    },
+    {
+      "id": "G8-eq-chain-glued-sep",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "word.startsWith(`${f}=`, at)",
+      "replacement": "word.startsWith(`${f}:`, at)",
+      "line": 119,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21654
+    },
+    {
+      "id": "G9-eq-chain-dash-gate-dropped",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (!word.startsWith(\"-\", at) || eq === -1) return false;",
+      "replacement": "if (eq === -1) return false;",
+      "line": 121,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 15690
+    },
+    {
+      "id": "G10-eq-chain-one-level",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "    at = eq + 1;\n  }\n}",
+      "replacement": "    if (at > 0) return false;\n    at = eq + 1;\n  }\n}",
+      "line": 122,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12752
+    },
+    {
+      "id": "G11-c-flag-off",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (rest === 2 && word.startsWith(\"-c\", at)) return true;",
+      "replacement": "",
+      "line": 118,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12574
+    },
+    {
+      "id": "R1-assert-off",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "if (ref.startsWith(\"-\")) throw",
+      "replacement": "if (false) throw",
+      "line": 7,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12301
+    },
+    {
+      "id": "R2-assert-only-double-dash",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "ref.startsWith(\"-\")) throw",
+      "replacement": "ref.startsWith(\"--\")) throw",
+      "line": 7,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21921
+    },
+    {
+      "id": "R3-operand-no-eoo",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "return [\"--end-of-options\", assertGitRevision(ref)];",
+      "replacement": "return [assertGitRevision(ref)];",
+      "line": 23,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 23421
+    },
+    {
+      "id": "R4-no-writing-output-eq",
+      "file": "src/lib/git-revision.ts",
+      "anchor": " || a.startsWith(\"--output=\")",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19937
+    },
+    {
+      "id": "R5-no-writing-output-bare",
+      "file": "src/lib/git-revision.ts",
+      "anchor": "a === \"--output\" || ",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12581
+    },
+    {
+      "id": "R6-no-writing-ext-diff",
+      "file": "src/lib/git-revision.ts",
+      "anchor": " || a === \"--ext-diff\"",
+      "replacement": "",
+      "line": 13,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12499
+    },
+    {
+      "id": "S1-ctx-diff-guard-off",
+      "file": "src/commands/ctx.ts",
+      "anchor": "  assertNoWritingDiffOption(args);",
+      "replacement": "",
+      "line": 203,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12509
+    },
+    {
+      "id": "S2-flow-base-unchecked",
+      "file": "src/commands/flow.ts",
+      "anchor": "return value === undefined ? undefined : assertGitRevision(value);",
+      "replacement": "return value;",
+      "line": 401,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12804
+    },
+    {
+      "id": "S3-checkac-mergebase-bare",
+      "file": "src/commands/flow-check-ac.ts",
+      "anchor": "[\"git\", \"merge-base\", \"HEAD\", ...revisionOperand(refName)]",
+      "replacement": "[\"git\", \"merge-base\", \"HEAD\", refName]",
+      "line": 168,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13747
+    },
+    {
+      "id": "S4-checkac-diff-bare",
+      "file": "src/commands/flow-check-ac.ts",
+      "anchor": "\"-U20\", ...revisionOperand(ref)]",
+      "replacement": "\"-U20\", ref]",
+      "line": 171,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12548
+    },
+    {
+      "id": "S5-ingest-mergebase-unchecked",
+      "file": "src/commands/flow-check-ac.ts",
+      "anchor": "\"--end-of-options\", assertGitRevision(head), assertGitRevision(refName)]",
+      "replacement": "\"--end-of-options\", head, refName]",
+      "line": 192,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12523
+    },
+    {
+      "id": "S6-ingest-diff-no-eoo",
+      "file": "src/commands/flow-check-ac.ts",
+      "anchor": "\"-U20\", \"--end-of-options\", ref, head]",
+      "replacement": "\"-U20\", ref, head]",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12803
+    },
+    {
+      "id": "S7-health-bare",
+      "file": "src/health/run.ts",
+      "anchor": "[\"git\", \"diff\", \"--name-only\", ...revisionOperand(ref)]",
+      "replacement": "[\"git\", \"diff\", \"--name-only\", ref]",
+      "line": 622,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12197
+    },
+    {
+      "id": "S8-testing-bare",
+      "file": "src/testing/service.ts",
+      "anchor": "[\"git\", \"diff\", \"--name-only\", ...revisionOperand(since)]",
+      "replacement": "[\"git\", \"diff\", \"--name-only\", since]",
+      "line": 760,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12121
+    },
+    {
+      "id": "S9-wiki-freshness-assert-off",
+      "file": "src/wiki/freshness/run.ts",
+      "anchor": "\"--end-of-options\", assertGitRevision(fromRev), \"HEAD\"]",
+      "replacement": "fromRev, \"HEAD\"]",
+      "line": 117,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 12072
+    },
+    {
+      "id": "S10-wiki-freshness-guard-off",
+      "file": "src/wiki/freshness/run.ts",
+      "anchor": "if (fromRev.startsWith(\"-\")) return [];",
+      "replacement": "",
+      "line": 116,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12116
+    },
+    {
+      "id": "S11-wiki-service-eoo-off",
+      "file": "src/wiki/service.ts",
+      "anchor": "\"--name-only\", \"--end-of-options\", base]",
+      "replacement": "\"--name-only\", base]",
+      "line": 1623,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12099
+    },
+    {
+      "id": "S12-wiki-service-guard-off",
+      "file": "src/wiki/service.ts",
+      "anchor": "if (base.startsWith(\"-\")) return Promise.resolve(null);",
+      "replacement": "",
+      "line": 1621,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 12174
+    },
+    {
+      "id": "S13-sync-diff-eoo-off",
+      "file": "src/sync/diff.ts",
+      "anchor": "\"--name-status\", \"--end-of-options\", base]",
+      "replacement": "\"--name-status\", base]",
+      "line": 79,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13700
+    },
+    {
+      "id": "S14-review-changedfiles-bare",
+      "file": "src/commands/review.ts",
+      "anchor": "\"--diff-filter=d\", ...(ref === undefined ? [] : revisionOperand(ref))]",
+      "replacement": "\"--diff-filter=d\", ...(ref === undefined ? [] : [ref])]",
+      "line": 3545,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16859
+    },
+    {
+      "id": "S15-review-gitdiff-bare",
+      "file": "src/commands/review.ts",
+      "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+      "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]",
+      "line": 3598,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12894
+    },
+    {
+      "id": "S16-review-mergebase-bare",
+      "file": "src/commands/review.ts",
+      "anchor": "[\"merge-base\", \"HEAD\", ...revisionOperand(ref)]",
+      "replacement": "[\"merge-base\", \"HEAD\", ref]",
+      "line": 3674,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12812
+    },
+    {
+      "id": "S17-jev-select-bare",
+      "file": "src/commands/review-jev-select.ts",
+      "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+      "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]",
+      "line": 121,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12785
+    }
+  ],
+  "totals": {
+    "killed": 38,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

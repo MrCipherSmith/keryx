@@ -85,8 +85,8 @@ describe("resolveDiffAgainstBase", () => {
     const spawn = fakeGitSpawn(DIFF_WITH_CHECK_AC);
     const diff = await resolveDiffAgainstBase(spawn, "origin/main");
     expect(diff).toBe(DIFF_WITH_CHECK_AC);
-    expect(spawn.calls[0]).toEqual(["git", "merge-base", "HEAD", "origin/main"]);
-    expect(spawn.calls[1]).toEqual(["git", "diff", "--no-color", "-U20", "deadbeef"]);
+    expect(spawn.calls[0]).toEqual(["git", "merge-base", "HEAD", "--end-of-options", "origin/main"]);
+    expect(spawn.calls[1]).toEqual(["git", "diff", "--no-color", "-U20", "--end-of-options", "deadbeef"]);
   });
 
   test("falls back to the ref itself when merge-base fails, and throws when diff fails", async () => {

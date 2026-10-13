@@ -18,6 +18,7 @@
 
 import { readFile } from "node:fs/promises";
 import { optionValue } from "../lib/args";
+import { revisionOperand } from "../lib/git-revision";
 import { buildReviewScope } from "../review/scope";
 import { createFixtureConformPrPort, createGhConformPrPort, type ConformPrInfo, type ConformPrPort } from "../review/conform-pr-port";
 import { readJevContractEnabled } from "../review/jev-contract-config";
@@ -275,7 +276,7 @@ export async function jevContractGateRefusal(cwd: string): Promise<string | unde
 }
 
 async function gitDiffForJevContract(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (exitCode !== 0) {

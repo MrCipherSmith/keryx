@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f045",
+  "command": "bun test src/lib/trust-routine-command.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 642
+  },
+  "mutants": [
+    {
+      "id": "B17-short-flag-prefix",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "/^--[^=]+=-./s.test(w)",
+      "replacement": "/^-[^=]+=-./s.test(w)",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 552
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

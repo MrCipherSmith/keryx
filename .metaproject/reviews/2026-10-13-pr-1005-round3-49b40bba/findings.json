@@ -1,0 +1,96 @@
+[
+  {
+    "id": "R3-01",
+    "reviewer": "vantage-review (single-agent deep pass)",
+    "severity": "major",
+    "problem": "hasUnquotedExpansion refuses an unquoted backslash, dollar and braces but not unquoted glob characters (`*`, `?`, `[`) or a word-initial `~`. The shell expands a glob against the working directory before git runs, so a file named `--output=injected` turns into a git option while the gate judged the command routine.",
+    "impact": "A command typed by a model or an operator that carries a glob (`git log --o*`) is auto-approved as a read, and git writes the file `injected`; the precondition is a matching file in the working directory, which a cloned repository can supply. `git log *` is judged routine but git exits 128 and writes nothing; `keryx ctx diff *` is judged routine but assertNoWritingDiffOption refuses it at runtime, so the keryx rows are protected only by the second layer.",
+    "suggested_fix": "Refuse `*`, `?`, `[` and a word-initial `~` in hasUnquotedExpansion, the way isExpandable already does, and keep quoted globs routine. Add tests for the git read row and the keryx rows, both unquoted (refused) and quoted (routine).",
+    "evidence": "Reproduced: with a file named `--output=injected` in the cwd, `git log --o*` was judged routine by trust-routine-command and, run through a shell, wrote the file `injected`. A 23-spelling probe of word-building shell features found the glob and tilde spellings as the only gaps left after the round-2 fixes.",
+    "confidence": "high",
+    "file": "src/lib/shell-syntax.ts",
+    "line": 125,
+    "quote": "else if (ch === \"\\\\\" || ch === \"$\" || ch === \"{\" || ch === \"}\") return true;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/shell-syntax.ts:125 (hasUnquotedExpansion character set)",
+        "src/lib/trust-routine-command.ts:354 (the git/keryx words-judged gate that calls it)",
+        "the git read row and the keryx review/ctx diff rows that rely on that gate",
+        "isExpandable in the same module (the model: it already refuses glob characters)"
+      ],
+      "enumeration_method": "Code read of every word-building shell feature (parameter expansion, command substitution, backslash, brace expansion, glob, tilde, ANSI-C quoting, IFS splitting) against the character set, plus a 23-spelling probe run through the gate and a shell; only glob characters and a leading tilde passed the gate."
+    },
+    "global_id": "2026-10-13-pr-1005-round3-49b40bba#R3-01"
+  },
+  {
+    "id": "R3-02",
+    "reviewer": "vantage-review (mutation pass)",
+    "severity": "minor",
+    "problem": "Nothing pins the anchors of the commit regex in readProvenance. With the end anchor dropped (mutant N22) or the start anchor dropped (mutant N23) every test still passes.",
+    "impact": "A provenance commit with a leading dash, a trailing non-hex character or an embedded space would be accepted if an anchor regressed. The revisionOperand guard downstream still stops git from reading the value as an option, so there is no exploit today. It is a test gap on a covered operation, major only because it cites surviving mutants.",
+    "suggested_fix": "Add provenance tests for a leading dash, a trailing non-hex character and an embedded space, each expecting null.",
+    "evidence": "mutant:N22-end-anchor-dropped and mutant:N23-start-anchor-dropped survived (mutation-3.json, research-evidence/mutants.json).",
+    "confidence": "high",
+    "file": "src/sync/provenance.ts",
+    "line": 243,
+    "quote": "if (typeof commit === \"string\" && /^[0-9a-f]{4,64}$/i.test(commit)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/sync/provenance.ts:243 (the only commit regex in readProvenance)"
+      ],
+      "enumeration_method": "Searched src/sync and src/gdgraph with keryx ctx rg for every read of provenance.commit and every hex validation; the regex at provenance.ts:243 is the single validation site."
+    },
+    "global_id": "2026-10-13-pr-1005-round3-49b40bba#R3-02",
+    "labels": [
+      "unproven"
+    ]
+  },
+  {
+    "id": "R3-03",
+    "reviewer": "vantage-review (single-agent deep pass)",
+    "severity": "minor",
+    "problem": "The fail-closed expansion gate now asks for approval for harmless commands such as `git show HEAD@{1}` and `keryx ctx rg foo \\.ts`, because braces and backslashes are refused whatever they build. The quoted spellings stay routine.",
+    "impact": "Extra approval prompts for two common spellings; no safety impact. A trade-off of failing closed, noted so the release notes can say to quote such arguments.",
+    "suggested_fix": "Accept as is and mention it in the release notes, or allow a brace or backslash only where it cannot build a word starting with a dash.",
+    "evidence": "Probe of `git show HEAD@{1}` and `keryx ctx rg foo \\.ts` through the gate: both refused; the quoted forms routine.",
+    "confidence": "medium",
+    "file": "src/lib/trust-routine-command.ts",
+    "line": 354,
+    "quote": "!(isJudgedByWords(seg.words) && hasUnquotedExpansion(seg.raw)) &&",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1005-round3-49b40bba#R3-03"
+  },
+  {
+    "id": "R3-04",
+    "reviewer": "vantage-review (single-agent deep pass)",
+    "severity": "info",
+    "problem": "The revisionOperand doc comment says every git call that takes a ref a person, a model or a repository file supplied puts it there. That is broader than the code: commitsAheadOfMain builds `${mainBranch}..HEAD` from a parameter whose default is \"main\" and does not go through it.",
+    "impact": "None today: the value is the literal default or comes from the caller, and a range string cannot start with a dash unless mainBranch does. A future reader may trust the claim.",
+    "suggested_fix": "Narrow the comment to the call sites that use the helper, or route the range through assertGitRevision.",
+    "evidence": "git-worktrees.ts:224 spawns git rev-list with `${mainBranch}..HEAD` and no --end-of-options.",
+    "confidence": "medium",
+    "file": "src/lib/git-revision.ts",
+    "line": null,
+    "quote": "Every git call that takes a ref a person, a model or a repository file supplied puts this where the revision",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-13-pr-1005-round3-49b40bba#R3-04"
+  }
+]

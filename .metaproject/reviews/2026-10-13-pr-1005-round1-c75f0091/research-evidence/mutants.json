@@ -1,0 +1,76 @@
+{
+ "mutants": [
+  {
+   "id": "G1",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "hasExecFlag([w.slice(eq + 1)])",
+   "replacement": "(w.slice(eq + 1) === \"-c\" || EXEC_FLAGS.some((f) => w.slice(eq + 1) === f || w.slice(eq + 1).startsWith(`${f}=`)))"
+  },
+  {
+   "id": "G2-no-recursion",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "hasExecFlag([w.slice(eq + 1)])",
+   "replacement": "false"
+  },
+  {
+   "id": "G6",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-/",
+   "replacement": "/^--(ref|base)=-/"
+  },
+  {
+   "id": "G7-dashvalue-off",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (args[0] === \"review\" && hasDashValue(args)) return false;",
+   "replacement": "if (false) return false;"
+  },
+  {
+   "id": "G8-dashvalue-never",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-/",
+   "replacement": "/^--[^=]+=-x-never/"
+  },
+  {
+   "id": "R1-assert-off",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "if (ref.startsWith(\"-\"))",
+   "replacement": "if (false)"
+  },
+  {
+   "id": "R2-gitdiff-no-eoo",
+   "file": "src/commands/review.ts",
+   "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : [\"--end-of-options\", assertGitRevision(ref)])];",
+   "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])];"
+  },
+  {
+   "id": "R3-namesonly-no-eoo",
+   "file": "src/commands/review.ts",
+   "anchor": "\"--diff-filter=d\", ...(ref === undefined ? [] : [\"--end-of-options\", assertGitRevision(ref)])];",
+   "replacement": "\"--diff-filter=d\", ...(ref === undefined ? [] : [ref])];"
+  },
+  {
+   "id": "R4-mergebase-no-eoo",
+   "file": "src/commands/review.ts",
+   "anchor": "gitOutput([\"merge-base\", \"--end-of-options\", \"HEAD\", assertGitRevision(ref)])",
+   "replacement": "gitOutput([\"merge-base\", \"HEAD\", assertGitRevision(ref)])"
+  },
+  {
+   "id": "R8",
+   "file": "src/commands/review-jev-docs.ts",
+   "anchor": "...(ref === undefined ? [] : [\"--end-of-options\", assertGitRevision(ref)])];",
+   "replacement": "...(ref !== undefined ? [] : [\"--end-of-options\", assertGitRevision(ref ?? \"HEAD\")])];"
+  },
+  {
+   "id": "R9",
+   "file": "src/commands/review-jev-docs.ts",
+   "anchor": "...(ref === undefined ? [] : [\"--end-of-options\", assertGitRevision(ref)])];",
+   "replacement": "...(ref === undefined ? [] : [ref])]; // \"--end-of-options\", assertGitRevision(ref)"
+  },
+  {
+   "id": "R10-jev-select-no-assert",
+   "file": "src/commands/review-jev-select.ts",
+   "anchor": "[\"--end-of-options\", assertGitRevision(ref)]",
+   "replacement": "[\"--end-of-options\", ref]"
+  }
+ ]
+}

@@ -239,7 +239,8 @@ export async function readProvenance(cwd: string, module: string): Promise<Prove
   }
   try {
     const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
-    if (parsed && typeof parsed === "object" && typeof (parsed as Provenance).commit === "string") {
+    const commit = parsed && typeof parsed === "object" ? (parsed as Provenance).commit : undefined;
+    if (typeof commit === "string" && /^[0-9a-f]{4,64}$/i.test(commit)) {
       return parsed as Provenance;
     }
   } catch {

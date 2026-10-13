@@ -18,7 +18,7 @@ import { optionValues } from "./args";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "./command-risk";
 import { realOrResolved, resolveProjectRoot } from "./contained-path";
 import { confinedPathFlags, reviewPathFlagRefusal } from "./review-path-flags";
-import { hasUnquotedMetacharacter, splitSegments, stripAssignments } from "./shell-syntax";
+import { hasUnquotedExpansion, hasUnquotedMetacharacter, splitSegments, stripAssignments } from "./shell-syntax";
 
 const MAX_CHAIN_SEGMENTS = 4;
 const MAX_HELP_WORDS = 4;
@@ -104,8 +104,34 @@ export function isTrustRoutineTool(name: string): boolean {
   return TRUST_ROUTINE_TOOLS.includes(name);
 }
 
-function hasExecFlag(words: readonly string[]): boolean {
-  return words.some((w) => w === "-c" || EXEC_FLAGS.some((f) => w === f || w.startsWith(`${f}=`)));
+const EXEC_FLAG_PREFIXES: readonly string[] = EXEC_FLAGS.map((f) => `${f}=`);
+
+function hasExecWord(words: readonly string[]): boolean {
+  return words.some(isExecWord);
+}
+
+// The word itself, or a value glued on with `=` (`--ref=--output=/x`): the command splits the glued value off and hands it
+// to git, which reads a dash-leading value as an option, so every `=` value is judged as a word of its own.
+// Walks the `=` chain by index, so a long chain costs no recursion and no copies.
+function isExecWord(word: string): boolean {
+  let at = 0;
+  for (;;) {
+    const rest = word.length - at;
+    if (rest === 2 && word.startsWith("-c", at)) return true;
+    if (EXEC_FLAGS.some((f) => rest === f.length && word.startsWith(f, at))) return true;
+    if (EXEC_FLAG_PREFIXES.some((prefix) => word.startsWith(prefix, at))) return true;
+    const eq = word.indexOf("=", at);
+    if (!word.startsWith("-", at) || eq === -1) return false;
+    at = eq + 1;
+  }
+}
+
+/**
+ * A `--flag=-...` word whose glued value is an option, not a value (`--ref=--output=X`). A lone `-` after `=` is the
+ * documented standard-input spelling (`--diff=-`) and stays routine, as the separated `--diff -` does.
+ */
+function hasDashValue(words: readonly string[]): boolean {
+  return words.some((w) => /^--[^=]+=-./s.test(w));
 }
 
 function startsWith(words: readonly string[], prefix: readonly string[]): boolean {
@@ -283,8 +309,9 @@ function isRoutineKeryx(words: readonly string[], walk: Walk): boolean {
     // A copy of the walk: a `cd` inside `keryx ctx run --` runs in the child and must not move the segments after it.
     return dashes >= 3 && isRoutineSegment(words.slice(dashes + 1), { ...walk });
   }
-  if (hasExecFlag(words)) return false;
+  if (hasExecWord(words)) return false;
   if (!TRUST_ROUTINE_KEYRYX.some((entry) => matchesEntry(entry, args))) return false;
+  if (args[0] === "review" && hasDashValue(args)) return false;
   const sub = args[1];
   if (args[0] === "review" && sub !== undefined && confinedPathFlags(sub).length > 0) {
     return areReviewPathFlagsInside(sub, args.slice(2), walk);
@@ -304,7 +331,7 @@ function isRoutineSegment(words: readonly string[], walk: Walk): boolean {
     case "bun":
       return words[1] === "test" && isRoutineBunTest(words, walk);
     case "git":
-      return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecFlag(words);
+      return words[1] !== undefined && GIT_READ_SUBCOMMANDS.has(words[1]) && !hasExecWord(words);
     default:
       return false;
   }
@@ -324,6 +351,13 @@ export function isTrustRoutineCommand(command: string, context: TrustRoutineCont
     (seg) =>
       (seg.precededBy === undefined || seg.precededBy === "&&") &&
       !hasUnquotedMetacharacter(seg.raw) &&
+      !(isJudgedByWords(seg.words) && hasUnquotedExpansion(seg.raw)) &&
       isRoutineSegment(seg.words, walk),
   );
+}
+
+// A git or keryx segment is judged by its words; an unquoted `$`, backslash or brace makes the shell build different
+// words (`HEAD$IFS--output=X`, `{HEAD,--output=X}`, `$'\x2d\x2doutput=X'`), so such a segment is not routine.
+function isJudgedByWords(words: readonly string[]): boolean {
+  return words[0] === "git" || words[0] === "keryx";
 }

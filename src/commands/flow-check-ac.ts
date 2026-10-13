@@ -12,6 +12,7 @@
 // diff acquisition or the Jev call.
 
 import { readFile } from "node:fs/promises";
+import { assertGitRevision, revisionOperand } from "../lib/git-revision";
 import type { FlowState } from "../flow/types";
 // Through the flow facade (`src/flow/service.ts`), not `./store`/`./check-ac`
 // directly — the import-policy ratchet (rule 2, `client-imports-core-internal`)
@@ -164,10 +165,10 @@ export async function defaultGitSpawn(argv: readonly string[], opts?: GitSpawnOp
  * same reason.
  */
 export async function resolveDiffAgainstBase(spawn: GitSpawn, refName: string, opts?: GitSpawnOpts): Promise<string> {
-  const mergeBase = await spawn(["git", "merge-base", "HEAD", refName], opts);
+  const mergeBase = await spawn(["git", "merge-base", "HEAD", ...revisionOperand(refName)], opts);
   const base = mergeBase.exitCode === 0 ? mergeBase.stdout.trim() : "";
   const ref = base.length > 0 ? base : refName;
-  const diff = await spawn(["git", "diff", "--no-color", "-U20", ref], opts);
+  const diff = await spawn(["git", "diff", "--no-color", "-U20", ...revisionOperand(ref)], opts);
   if (diff.exitCode !== 0) {
     throw new Error(`flow check-ac: \`git diff ${ref}\` failed: ${diff.stderr.trim() || `exit ${diff.exitCode}`}`);
   }
@@ -188,10 +189,10 @@ export async function resolveDiffAgainstBase(spawn: GitSpawn, refName: string, o
  * stale.
  */
 export async function resolveIngestDiff(spawn: GitSpawn, refName: string, head: string, opts?: GitSpawnOpts): Promise<string> {
-  const mergeBase = await spawn(["git", "merge-base", head, refName], opts);
+  const mergeBase = await spawn(["git", "merge-base", ...revisionOperand(head), assertGitRevision(refName)], opts);
   const base = mergeBase.exitCode === 0 ? mergeBase.stdout.trim() : "";
   const ref = base.length > 0 ? base : refName;
-  const diff = await spawn(["git", "diff", "--no-color", "-U20", ref, head], opts);
+  const diff = await spawn(["git", "diff", "--no-color", "-U20", ...revisionOperand(ref), assertGitRevision(head)], opts);
   if (diff.exitCode !== 0) {
     throw new Error(`review ingest ac-check: \`git diff ${ref} ${head}\` failed: ${diff.stderr.trim() || `exit ${diff.exitCode}`}`);
   }

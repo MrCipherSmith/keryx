@@ -1,0 +1,1 @@
+{"mutants": [{"id": "B17-short-flag-prefix", "file": "src/lib/trust-routine-command.ts", "anchor": "/^--[^=]+=-./s.test(w)", "replacement": "/^-[^=]+=-./s.test(w)"}]}

@@ -12,6 +12,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { optionValue } from "../lib/args";
+import { revisionOperand } from "../lib/git-revision";
 import { hunkRegionsFromDiff } from "../review/conform-state";
 import { DEFAULT_CONTEXT_LINES } from "../review/scope";
 import type { ScopedRegion } from "../review/scope";
@@ -468,7 +469,7 @@ export async function jevDocsGateRefusal(cwd: string): Promise<string | undefine
 
 /** The diff this run checks — a minimal copy of `review-jev-rules.ts`'s own `gitDiffForJevRules`, same reasoning (that helper lives in a file this flow was told to touch only additively). */
 async function gitDiffForJevDocs(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : [ref])];
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
   if (exitCode !== 0) {

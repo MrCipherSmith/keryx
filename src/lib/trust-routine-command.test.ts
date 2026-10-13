@@ -13,6 +13,7 @@ import {
   isTrustRoutineTool,
   recordBunfigBaseline,
 } from "./trust-routine-command";
+import { hasUnquotedExpansion, splitWords } from "./shell-syntax";
 
 test("AC1: the table names the read-only keryx commands of the frozen criteria", () => {
   const ids = TRUST_ROUTINE_KEYRYX.map((entry) => entry.id);
@@ -126,6 +127,203 @@ test("AC2: a subshell or substitution still prompts", () => {
 test("AC2: an exec flag on a listed command still prompts", () => {
   expect(isTrustRoutineCommand("keryx review ledger build --exec ./evil")).toBe(false);
   expect(isTrustRoutineCommand("keryx help -c x")).toBe(false);
+});
+
+// Flow 441 F-045: git reads an option glued on with `=` as a revision's value, and the next layer reads the value as an option.
+test("F-045: an exec flag glued to another flag with = still prompts, for every review row that hands a revision to git", () => {
+  for (const command of [
+    "keryx review slice --ref=--output=/tmp/x",
+    "keryx review slice --base=--output=/tmp/x",
+    "keryx review scope --ref=--output=/tmp/x",
+    "keryx review blast-radius --base=--output=/tmp/x",
+    "keryx review floor --ref=--output=/tmp/x",
+    "keryx review slice --ref=--ext-diff",
+    "keryx review slice --ref=--exec=./evil",
+    "keryx review slice --ref=-c",
+    "keryx review slice --ref=--x=--output=/tmp/x",
+    "keryx ctx run -- keryx review slice --ref=--output=/tmp/x",
+    "keryx flow status --x=--output=/tmp/x",
+    "git diff --relative=--output=/tmp/x",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd: projectDir() })).toBe(false);
+  }
+});
+
+test("F-045: a review flag glued to a value that starts with - prompts, whatever the flag is", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "keryx review slice --ref=-U0",
+    "keryx review slice --ref=--no-index",
+    "keryx review slice --since=-U0",
+    "keryx review slice --diff=--no-index",
+    "keryx review scope --scope=-c1",
+    "keryx review blast-radius --base=-x",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+});
+
+test("F-059: a lone - glued to a flag is the standard-input spelling and stays routine, as the separated form does", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx review slice --diff=-", "keryx review slice --diff -"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("F-058: a word the shell turns into an exec option (backslash, brace, $'...') prompts", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "git diff \\--output=/tmp/x",
+    "git diff --out\\put=/tmp/x",
+    "git diff {--output=/tmp/x}",
+    "git diff --\\pre=sh",
+    "keryx ctx diff \\--output=/tmp/x",
+    "keryx ctx rg --\\pre=sh foo",
+    "keryx review slice --ref=\\--output=/tmp/x",
+    "keryx review slice --ref={--output=/tmp/x,y}",
+    "git diff $'--output'=/tmp/x",
+    'git diff $"--output"=/tmp/x',
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+});
+
+test("F-066: the five spellings the shell turns into an exec option prompt", () => {
+  const cwd = projectDir();
+  for (const command of [
+    'git log -S "\\"" --output=/tmp/x',
+    "git diff HEAD$IFS--output=/tmp/x",
+    'git diff "HEAD"$IFS"--output=/tmp/x"',
+    "git diff $'\\x2d\\x2doutput=/tmp/x'",
+    "git diff {HEAD,--output=/tmp/x}",
+    "git diff --output=/tmp/x",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+});
+
+test("F-066: an unquoted backslash, brace or $ in a git or keryx segment prompts, a quoted one does not", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx ctx rg -n \\bfoo src", "git log HEAD@{1}", "keryx ctx diff HEAD$X", "git log -n 1 \\-p"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+  for (const command of [
+    "keryx ctx rg 'a\\|b' src",
+    "keryx ctx rg -n '\\bfoo' src",
+    "git log 'HEAD@{1}'",
+    "git log --pretty=format:'%h'",
+    "keryx ctx rg --glob='*.{ts,tsx}' foo",
+    'git log --grep="a\\"b"',
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("R3-01: an unquoted glob character or a word-initial ~ in a git or keryx segment prompts, a quoted or mid-word one does not", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "git log --o*",
+    "git log --o?tput=x",
+    "git log --[o]utput=x",
+    "git log *",
+    "keryx ctx diff *",
+    "keryx ctx diff --o*",
+    "keryx review slice --ref=--o*",
+    "keryx review slice --ref ~/x",
+    "git diff ~root",
+    "keryx ctx rg foo ~/src",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+  for (const command of [
+    "git log '--o*'",
+    'git log "--o*"',
+    "keryx ctx diff '*'",
+    "keryx ctx rg --glob '*.ts' foo",
+    "keryx ctx rg 'a?b' src",
+    "keryx ctx rg '[a-z]+' src",
+    "git log '~root'",
+    "git log HEAD~1",
+    "keryx review slice --ref=HEAD~2",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("R3-01: the glob in `git log --o*` never reaches git, so the planted --output=injected file is not written", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "r3-01-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "x"], { cwd: dir });
+    writeFileSync(path.join(dir, "--output=injected"), "");
+    expect(isTrustRoutineCommand("git log --o*", { cwd: dir })).toBe(false);
+    expect(hasUnquotedExpansion("git log --o*")).toBe(true);
+    expect(existsSync(path.join(dir, "injected"))).toBe(false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("R3-01: glob characters and ~ are refused unquoted and allowed quoted, one per character", () => {
+  for (const ch of ["*", "?", "["]) {
+    expect(hasUnquotedExpansion(`git log a${ch}b`), ch).toBe(true);
+    expect(hasUnquotedExpansion(`git log 'a${ch}b'`), ch).toBe(false);
+  }
+  expect(hasUnquotedExpansion("git log ~x")).toBe(true);
+  expect(hasUnquotedExpansion("~x")).toBe(true);
+  expect(hasUnquotedExpansion("git log a~x")).toBe(false);
+  expect(hasUnquotedExpansion("git log '~x'")).toBe(false);
+});
+
+test("F-066: an unterminated quote counts as an expansion, a balanced one does not", () => {
+  expect(hasUnquotedExpansion("git log 'abc")).toBe(true);
+  expect(hasUnquotedExpansion('git log "abc')).toBe(true);
+  expect(hasUnquotedExpansion("git log 'abc' \"def\"")).toBe(false);
+});
+
+test("F-066: a backslash inside double quotes does not end the quote for the word split", () => {
+  expect(splitWords('git log -S "\\"" --output=x')).toEqual(["git", "log", "-S", '\\"', "--output=x"]);
+});
+
+test("F-077: an exec flag after any number of = and a -c tail prompt, straight from the word check", () => {
+  const cwd = projectDir();
+  for (const command of ["git diff --x=-c", "git diff --x=--ext-diff", "git diff --x=--y=--exec=sh", "keryx review slice --ref=--x=-c"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+});
+
+test("F-060: a very long chain of glued = signs gets a verdict, not a stack overflow", () => {
+  expect(isTrustRoutineCommand(`keryx review slice --ref=${"-=".repeat(60_000)}`, { cwd: projectDir() })).toBe(false);
+  expect(isTrustRoutineCommand(`git diff ${"-=".repeat(60_000)}--output=x`, { cwd: projectDir() })).toBe(false);
+});
+
+test("F-045: a glued value that is a plain revision, a path or a count stays routine", () => {
+  const cwd = projectDir();
+  for (const command of [
+    "keryx review slice --ref=origin/main",
+    "keryx review slice --ref=HEAD~1 --context=3",
+    "keryx review slice --ref origin/main",
+    "keryx review blast-radius --base=a=b",
+    "git diff --stat=100",
+    "git log --format=--oneline",
+    "git log -- x=-c",
+    "keryx flow status --x=-1",
+    "keryx gdgraph context --x=-1",
+    "keryx ctx rg -cn foo src",
+    "keryx ctx rg -e=-foo src",
+    "keryx review slice -x=-1",
+    "keryx ctx rg --pre-glob '*.gz' foo src",
+    "git diff --output-indicator-new=+",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd })).toBe(true);
+  }
+});
+
+test("F-058: an unbalanced brace, a lone closing brace and a newline in a glued dash value are refused, as the shell spellings are", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx review slice {--a", "keryx review slice --a}b", "keryx review slice '--ref=-\nx'"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
 });
 
 // Flow 441 (F-007, F-008): `bun test` and the review path flags.
