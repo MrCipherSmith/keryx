@@ -1,3 +1,4 @@
+import { revisionOperand } from "../lib/git-revision";
 import { gitCmd } from "./provenance";
 
 // What changed between a recorded build commit and now. `added`/`modified`/
@@ -76,7 +77,7 @@ export function parseNameStatus(output: string): SyncDiff {
 // committed changes since base AND uncommitted working-tree changes.
 export async function diffSince(cwd: string, base: string): Promise<SyncDiff | null> {
   if (base.startsWith("-")) return null;
-  const output = await gitCmd(cwd, ["diff", "--name-status", "--end-of-options", base]);
+  const output = await gitCmd(cwd, ["diff", "--name-status", ...revisionOperand(base)]);
   if (output === null) {
     return null;
   }

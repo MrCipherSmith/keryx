@@ -7,7 +7,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { assertGitRevision, assertNoWritingDiffOption, revisionOperand } from "../lib/git-revision";
+import { checkGraphStaleness } from "../gdgraph/staleness";
 import { diffSince } from "../sync/diff";
+import { readProvenance } from "../sync/provenance";
 import { resolveDiffAgainstBase, resolveIngestDiff } from "./flow-check-ac";
 
 const CLI = path.join(import.meta.dir, "..", "cli.ts");
@@ -77,11 +79,36 @@ for (const build of HOSTILE) {
   }, 60_000);
 }
 
-test("F-045: wiki freshness reads a dash-leading --since as no changes and writes no file", () => {
+test("F-068: wiki freshness refuses a dash-leading --since by name and writes no file", () => {
   const result = run("wiki", "freshness", `--since=--output=${outside}`);
   expect(existsSync(outside)).toBe(false);
-  expect(result.exitCode).toBe(0);
+  expect(result.exitCode).not.toBe(0);
+  expect(result.output).toContain("Refusing the revision");
 }, 60_000);
+
+test("F-069: wiki collect --changed with a dash-leading --since writes no file", () => {
+  const result = run("wiki", "collect", "--changed", `--since=--output=${outside}`);
+  expect(existsSync(outside)).toBe(false);
+  expect(result.output).not.toContain("Refusing the git diff option");
+}, 60_000);
+
+test("F-067: a provenance file whose commit reads as an option is treated as absent and writes no file", async () => {
+  const provenance = path.join(repo, ".metaproject", "data", "gdgraph", ".provenance.json");
+  const nodes = path.join(repo, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
+  mkdirSync(path.dirname(nodes), { recursive: true });
+  writeFileSync(nodes, "");
+  writeFileSync(provenance, JSON.stringify({ commit: `--output=${outside}`, branch: "main", builtAt: "2026-01-01T00:00:00Z" }));
+  try {
+    expect(await readProvenance(repo, "gdgraph")).toBeNull();
+    const check = await checkGraphStaleness(repo);
+    expect(check.status).not.toBe("fresh");
+    expect(existsSync(outside)).toBe(false);
+    writeFileSync(provenance, JSON.stringify({ commit: "0123abcd", branch: "main", builtAt: "2026-01-01T00:00:00Z" }));
+    expect((await readProvenance(repo, "gdgraph"))?.commit).toBe("0123abcd");
+  } finally {
+    rmSync(path.join(repo, ".metaproject", "data"), { recursive: true, force: true });
+  }
+});
 
 test("F-045: diffSince answers null for a dash-leading base and runs git for a real one", async () => {
   expect(await diffSince(repo, `--output=${outside}`)).toBeNull();
@@ -121,13 +148,13 @@ test("F-045: a revision that starts with - is refused by name, before git runs",
   const result = run("review", "slice", "--ref=-U0");
   expect(result.exitCode).not.toBe(0);
   expect(result.output).toContain('Refusing the revision "-U0"');
-});
+}, 60_000);
 
 test("F-045: a real revision still slices the diff", () => {
   const result = run("review", "slice", "--ref=HEAD", "--json");
   expect(result.exitCode).toBe(0);
   expect(result.output).toContain("a.ts");
-});
+}, 60_000);
 
 test("assertGitRevision returns a plain revision and refuses one that starts with -", () => {
   expect(assertGitRevision("origin/main")).toBe("origin/main");
@@ -152,40 +179,48 @@ test("assertNoWritingDiffOption refuses the options that write a file or run a p
   expect(() => assertNoWritingDiffOption([])).not.toThrow();
 });
 
-// Every non-test source file that builds a git argv from a value it did not write must either route that value through
-// `revisionOperand` / `--end-of-options` or be listed here with the reason its operand cannot be a typed option.
-const VERBS = ["diff", "merge-base", "log", "show", "rev-list", "diff-tree", "name-rev", "rev-parse", "cat-file", "ls-tree", "blame"];
+// Every git argv built in a non-test source file from a value the file did not write must route that value through
+// `revisionOperand` / `--end-of-options`, or its file is listed here with the number of such call sites and the reason their
+// operands cannot be a typed option. The count is per call site: a new unguarded argv in a listed file fails the scan.
+const VERBS = [
+  "diff", "merge-base", "log", "show", "rev-list", "diff-tree", "name-rev", "rev-parse", "cat-file", "ls-tree", "blame",
+  "worktree", "checkout", "switch", "fetch", "reset", "merge", "rebase", "cherry-pick", "describe", "format-patch", "archive",
+  "for-each-ref", "ls-remote", "show-ref", "restore", "branch", "tag",
+];
 
-const ALLOWED: Readonly<Record<string, string>> = {
-  "metrics/provenance.ts": "answerCommit is a recorded sha followed by ^{commit}, not typed",
-  "commands/trigger-dispatch.ts": "operand is refs/heads/<branch>, never dash-leading",
-  "harness/external/write-land.ts": "operand is refs/heads/<branch>, never dash-leading",
-  "commands/review-jev-comments.ts": "ref defaults to HEAD; no caller passes a typed value",
-  "commands/ctx.ts": "ctx diff runs assertNoWritingDiffOption first; base comes from defaultDiffBase",
-  "commands/agent.ts": "a word list, not git",
-  "gdgraph/treesitter/extract.ts": "a word list, not git",
-  "commands/review-jev-edit-guard.ts": "HEAD followed by --, or --no-index with fixed paths",
-  "wiki/freshness/page-freshness.ts": "verifiedAt is probed by cat-file -e (which fails on a dash-leading value) before log and diff run",
-  "wiki/freshness/run.ts": "fromRev is refused when dash-leading at the top of collectChanges before showFile",
-  "health/metrics/churn.ts": "--since=<days> ago, a number",
-  "lib/git-head.ts": "operands are HEAD:<path> or follow --",
-  "lib/git-worktrees.ts": "mainBranch comes from git itself",
-  "flow/review-gate.ts": "operands are shas read from the ledger",
-  "flow/remote-flows.ts": "ref is built from a remote name git listed",
-  "flow/folder-committed.ts": "HEAD, paths follow --",
-  "flow/service.ts": "operands are recorded commits and origin/main",
-  "harness/external/write-run.ts": "baseCommit is a sha the harness recorded",
-  "review/managed.ts": "operand is <sha>:<path> of a recorded commit",
-  "review/conform-pr-port.ts": "gh, not git; the PR number is numeric",
-  "review/bot/run.ts": "baseSha is the PR's base sha from the API",
-  "review/ci-triage.ts": "operand is <sha>:<path> of a CI-reported commit",
-  "rewind/snapshot.ts": "operands are tree-ish ids the snapshot recorded",
-  "rewind/restore.ts": "operands are tree ids the snapshot recorded",
-  "gdgraph/staleness.ts": "operands are commits recorded in the graph provenance",
-  "tui/jev-contract-command.ts": "no revision operand",
-  "tui/jev-docs-command.ts": "no revision operand",
-  "tui/jev-rules-command.ts": "no revision operand",
-  "tui/jev-risk-command.ts": "no revision operand",
+const ALLOWED: Readonly<Record<string, readonly [sites: number, reason: string]>> = {
+  "commands/agent.ts": [1, "a word list, not git"],
+  "commands/ctx.ts": [1, "ctx diff runs assertNoWritingDiffOption first; base comes from defaultDiffBase"],
+  "commands/research-sync.ts": [1, "git archive writes keryx's own temp file; the revision is the literal HEAD"],
+  "commands/review-jev-comments.ts": [1, "ref defaults to HEAD; no caller passes a typed value"],
+  "commands/review-jev-edit-guard.ts": [2, "HEAD followed by --, or --no-index with fixed paths"],
+  "commands/trigger-dispatch.ts": [5, "operand is refs/heads/<branch>, never dash-leading"],
+  "decisions/blind.ts": [2, "a word list of blocked git subcommands, not git"],
+  "flow/folder-committed.ts": [1, "HEAD, paths follow --"],
+  "flow/remote-flows.ts": [1, "ref is built from a remote name git listed"],
+  "flow/review-gate.ts": [2, "operands are shas read from the ledger"],
+  "flow/service.ts": [3, "operands are recorded commits and origin/main"],
+  "gdgraph/treesitter/extract.ts": [1, "a word list, not git"],
+  "harness/child/git-worktree-port.ts": [2, "ref is the base commit the harness recorded, or HEAD; the path is a harness-made directory"],
+  "harness/external/write-land.ts": [4, "operand is refs/heads/<branch>, never dash-leading"],
+  "harness/external/write-run.ts": [3, "baseCommit is a sha the harness recorded"],
+  "health/metrics/churn.ts": [1, "--since=<days> ago, a number"],
+  "lib/git-head.ts": [7, "operands are HEAD:<path> or follow --"],
+  "lib/git-worktrees.ts": [2, "mainBranch comes from git itself"],
+  "lib/shell-permissions.ts": [1, "a word list of network commands, not git"],
+  "metrics/provenance.ts": [1, "answerCommit is a recorded sha followed by ^{commit}, not typed"],
+  "review/bot/run.ts": [1, "baseSha is the PR's base sha from the API"],
+  "review/ci-triage.ts": [1, "operand is <sha>:<path> of a CI-reported commit"],
+  "review/conform-pr-port.ts": [1, "gh, not git; the PR number is numeric"],
+  "review/managed.ts": [1, "operand is <sha>:<path> of a recorded commit"],
+  "rewind/restore.ts": [1, "operands are tree ids the snapshot recorded"],
+  "rewind/snapshot.ts": [1, "operands are tree-ish ids the snapshot recorded"],
+  "tui/jev-contract-command.ts": [1, "no revision operand"],
+  "tui/jev-docs-command.ts": [1, "no revision operand"],
+  "tui/jev-risk-command.ts": [1, "no revision operand"],
+  "tui/jev-rules-command.ts": [1, "no revision operand"],
+  "wiki/freshness/page-freshness.ts": [3, "verifiedAt is probed by cat-file -e (which fails on a dash-leading value) before log and diff run"],
+  "wiki/freshness/run.ts": [2, "operands are <rev>:<path> after collectChanges passed rev through revisionOperand, or HEAD:<path>"],
 };
 
 function sourceFiles(dir: string, out: string[]): string[] {
@@ -197,7 +232,7 @@ function sourceFiles(dir: string, out: string[]): string[] {
   return out;
 }
 
-function enclosingArray(text: string, from: number): string {
+function enclosingArray(text: string, from: number): { begin: number; text: string } {
   let depth = 0;
   let begin = from;
   for (let i = from; i >= 0; i--) {
@@ -222,36 +257,44 @@ function enclosingArray(text: string, from: number): string {
       }
     }
   }
-  return text.slice(begin, end + 1);
+  return { begin, text: text.slice(begin, end + 1) };
 }
 
-function hasUnguardedArgv(text: string): boolean {
+/** Number of git argv arrays in `text` that carry a non-literal operand and no revisionOperand / --end-of-options. */
+function unguardedArgvSites(text: string): number {
   const verbRe = new RegExp(`(?:\\[|,)\\s*"(${VERBS.join("|")})"\\s*,`, "g");
-  return [...text.matchAll(verbRe)].some((match) => {
+  const sites = new Set<number>();
+  for (const match of text.matchAll(verbRe)) {
     const argv = enclosingArray(text, match.index ?? 0);
-    if (argv.includes("--end-of-options") || argv.includes("revisionOperand")) return false;
-    return /[A-Za-z_`]/.test(argv.replace(/"(?:[^"\\$]|\\.)*"/g, '""').replace(/[[\],\s"]/g, ""));
-  });
+    if (argv.text.includes("--end-of-options") || argv.text.includes("revisionOperand")) continue;
+    if (/[A-Za-z_`]/.test(argv.text.replace(/"(?:[^"\\$]|\\.)*"/g, '""').replace(/[[\],\s"]/g, ""))) sites.add(argv.begin);
+  }
+  return sites.size;
 }
 
-/** Files holding a git argv with a value that is not a string literal and carries no revisionOperand / --end-of-options. */
-function unguardedGitArgvFiles(): string[] {
-  return sourceFiles(SRC, [])
-    .filter((file) => hasUnguardedArgv(readFileSync(file, "utf8")))
-    .map((file) => path.relative(SRC, file).split(path.sep).join("/"))
-    .sort();
+function unguardedGitArgvSites(): Record<string, number> {
+  const found: Record<string, number> = {};
+  for (const file of sourceFiles(SRC, []).sort()) {
+    const sites = unguardedArgvSites(readFileSync(file, "utf8"));
+    if (sites > 0) found[path.relative(SRC, file).split(path.sep).join("/")] = sites;
+  }
+  return found;
 }
 
-test("no git argv takes a non-literal operand without revisionOperand or an entry in ALLOWED", () => {
-  const found = unguardedGitArgvFiles();
-  expect(found.filter((file) => !(file in ALLOWED))).toEqual([]);
-  expect(Object.keys(ALLOWED).filter((file) => !found.includes(file))).toEqual([]);
+test("no git argv takes a non-literal operand without revisionOperand or an entry in ALLOWED, site for site", () => {
+  const found = unguardedGitArgvSites();
+  const allowed = Object.fromEntries(Object.entries(ALLOWED).map(([file, [sites]]) => [file, sites]));
+  expect(found).toEqual(allowed);
 });
 
 test("the guard scan notices an unguarded argv and passes a guarded one", () => {
-  expect(hasUnguardedArgv('run(["git", "diff", "--no-color", ref]);')).toBe(true);
-  expect(hasUnguardedArgv('run(["git", "diff", "--no-color", `${ref}..HEAD`]);')).toBe(true);
-  expect(hasUnguardedArgv('run(["git", "diff", "--no-color", ...revisionOperand(ref)]);')).toBe(false);
-  expect(hasUnguardedArgv('run(["git", "diff", "--no-color", "--end-of-options", ref]);')).toBe(false);
-  expect(hasUnguardedArgv('run(["git", "diff", "--no-color", "HEAD"]);')).toBe(false);
+  expect(unguardedArgvSites('run(["git", "diff", "--no-color", ref]);')).toBe(1);
+  expect(unguardedArgvSites('run(["git", "diff", "--no-color", `${ref}..HEAD`]);')).toBe(1);
+  expect(unguardedArgvSites('run(["git", "worktree", "add", dir, ref]);')).toBe(1);
+  expect(unguardedArgvSites('run(["git", "checkout", ref]);')).toBe(1);
+  expect(unguardedArgvSites('run(["git", "diff", "--no-color", ...revisionOperand(ref)]);')).toBe(0);
+  expect(unguardedArgvSites('run(["git", "diff", "--no-color", "--end-of-options", ref]);')).toBe(0);
+  expect(unguardedArgvSites('run(["git", "diff", "--no-color", "HEAD"]);')).toBe(0);
+  expect(unguardedArgvSites('run(["git", "diff", a]); run(["git", "log", b]);')).toBe(2);
+  expect(unguardedArgvSites('run(["git", "diff", "--no-color", ref]); run(["git", "log", "--end-of-options", b]);')).toBe(1);
 });

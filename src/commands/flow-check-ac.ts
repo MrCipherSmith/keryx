@@ -189,10 +189,10 @@ export async function resolveDiffAgainstBase(spawn: GitSpawn, refName: string, o
  * stale.
  */
 export async function resolveIngestDiff(spawn: GitSpawn, refName: string, head: string, opts?: GitSpawnOpts): Promise<string> {
-  const mergeBase = await spawn(["git", "merge-base", "--end-of-options", assertGitRevision(head), assertGitRevision(refName)], opts);
+  const mergeBase = await spawn(["git", "merge-base", ...revisionOperand(head), assertGitRevision(refName)], opts);
   const base = mergeBase.exitCode === 0 ? mergeBase.stdout.trim() : "";
   const ref = base.length > 0 ? base : refName;
-  const diff = await spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", ref, head], opts);
+  const diff = await spawn(["git", "diff", "--no-color", "-U20", ...revisionOperand(ref), assertGitRevision(head)], opts);
   if (diff.exitCode !== 0) {
     throw new Error(`review ingest ac-check: \`git diff ${ref} ${head}\` failed: ${diff.stderr.trim() || `exit ${diff.exitCode}`}`);
   }

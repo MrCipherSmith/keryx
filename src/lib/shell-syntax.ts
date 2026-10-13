@@ -107,6 +107,27 @@ export function hasUnquotedMetacharacter(command: string): boolean {
 }
 
 /**
+ * True when `command` has a backslash, `$`, `{` or `}` OUTSIDE quotes, or cannot be analysed (unbalanced quotes). The
+ * shell rewrites such a word (`$IFS`, a brace list, `$'..'`, an escape) into words this module does not compute, so a
+ * caller that judges the words by their text must not approve the command.
+ */
+export function hasUnquotedExpansion(command: string): boolean {
+  let quote: '"' | "'" | undefined;
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (quote !== undefined) {
+      const step = stepInsideQuote(ch, command[i + 1], quote);
+      quote = step.quote;
+      if (step.skipNext) i++;
+      continue;
+    }
+    if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === "\\" || ch === "$" || ch === "{" || ch === "}") return true;
+  }
+  return quote !== undefined;
+}
+
+/**
  * Split a command line into simple-command segments, honouring quotes and
  * backslash escapes so a separator inside a quoted argument never splits.
  */
@@ -194,6 +215,12 @@ export function splitWords(text: string): string[] {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;
     if (quote !== undefined) {
+      const next = text[i + 1];
+      if (quote === '"' && ch === "\\" && next !== undefined) {
+        buf += ch + next;
+        i++;
+        continue;
+      }
       if (ch === quote) quote = undefined;
       else buf += ch;
       continue;

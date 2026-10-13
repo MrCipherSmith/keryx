@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
+import { revisionOperand } from "../lib/git-revision";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { wikiAsk } from "./ask";
 import { backlinksFor, buildBacklinkIndex } from "./backlinks";
@@ -1620,7 +1621,7 @@ async function changedModules(cwd: string, since: string | undefined): Promise<S
 function gitDiffNames(cwd: string, base: string): Promise<string[] | null> {
   if (base.startsWith("-")) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const child = spawn("git", ["diff", "--name-only", "--end-of-options", base], { cwd });
+    const child = spawn("git", ["diff", "--name-only", ...revisionOperand(base)], { cwd });
     let out = "";
     child.stdout.on("data", (chunk) => {
       out += String(chunk);

@@ -11,7 +11,7 @@ import { loadGraph } from "../../gdgraph/query";
 import { runCapabilityOrFallback } from "../../capability/seam";
 import { resolveTreesitterCapability } from "../../gdgraph/treesitter/adapter";
 import type { SymbolLayer } from "../../gdgraph/types";
-import { assertGitRevision } from "../../lib/git-revision";
+import { revisionOperand } from "../../lib/git-revision";
 import { gitCmdResult } from "../../sync/provenance";
 import { classifyChanges, type FileChange, type SymbolExtractor } from "./classify-change";
 import { clearQueue, drainQueue, earliestRev } from "./queue";
@@ -113,8 +113,7 @@ async function collectChanges(
   // WORKING TREE, so uncommitted edits would land in a report whose header
   // says "fromRev → <sha>" — a range label that quietly does not describe
   // what was measured. The queue is commit-driven; the report matches it.
-  if (fromRev.startsWith("-")) return [];
-  const status = await git(cwd, ["diff", "--name-status", "-M", "--end-of-options", assertGitRevision(fromRev), "HEAD"]);
+  const status = await git(cwd, ["diff", "--name-status", "-M", ...revisionOperand(fromRev), "HEAD"]);
   if (status.kind !== "ok") {
     // A range that could not be read yields no changes. The report's own
     // git-availability limitation (`report.ts`) is what says so; this

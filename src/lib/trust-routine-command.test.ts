@@ -13,6 +13,7 @@ import {
   isTrustRoutineTool,
   recordBunfigBaseline,
 } from "./trust-routine-command";
+import { hasUnquotedExpansion, splitWords } from "./shell-syntax";
 
 test("AC1: the table names the read-only keryx commands of the frozen criteria", () => {
   const ids = TRUST_ROUTINE_KEYRYX.map((entry) => entry.id);
@@ -187,10 +188,51 @@ test("F-058: a word the shell turns into an exec option (backslash, brace, $'...
   }
 });
 
-test("F-058: a backslash, a brace or a quote inside a pattern or a revision does not prompt", () => {
+test("F-066: the five spellings the shell turns into an exec option prompt", () => {
   const cwd = projectDir();
-  for (const command of ["keryx ctx rg -n \\bfoo src", "git log HEAD@{1}", "keryx ctx rg 'a\\|b' src"]) {
+  for (const command of [
+    'git log -S "\\"" --output=/tmp/x',
+    "git diff HEAD$IFS--output=/tmp/x",
+    'git diff "HEAD"$IFS"--output=/tmp/x"',
+    "git diff $'\\x2d\\x2doutput=/tmp/x'",
+    "git diff {HEAD,--output=/tmp/x}",
+    "git diff --output=/tmp/x",
+  ]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+});
+
+test("F-066: an unquoted backslash, brace or $ in a git or keryx segment prompts, a quoted one does not", () => {
+  const cwd = projectDir();
+  for (const command of ["keryx ctx rg -n \\bfoo src", "git log HEAD@{1}", "keryx ctx diff HEAD$X", "git log -n 1 \\-p"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
+  }
+  for (const command of [
+    "keryx ctx rg 'a\\|b' src",
+    "keryx ctx rg -n '\\bfoo' src",
+    "git log 'HEAD@{1}'",
+    "git log --pretty=format:'%h'",
+    "keryx ctx rg --glob='*.{ts,tsx}' foo",
+    'git log --grep="a\\"b"',
+  ]) {
     expect(isTrustRoutineCommand(command, { cwd }), command).toBe(true);
+  }
+});
+
+test("F-066: an unterminated quote counts as an expansion, a balanced one does not", () => {
+  expect(hasUnquotedExpansion("git log 'abc")).toBe(true);
+  expect(hasUnquotedExpansion('git log "abc')).toBe(true);
+  expect(hasUnquotedExpansion("git log 'abc' \"def\"")).toBe(false);
+});
+
+test("F-066: a backslash inside double quotes does not end the quote for the word split", () => {
+  expect(splitWords('git log -S "\\"" --output=x')).toEqual(["git", "log", "-S", '\\"', "--output=x"]);
+});
+
+test("F-077: an exec flag after any number of = and a -c tail prompt, straight from the word check", () => {
+  const cwd = projectDir();
+  for (const command of ["git diff --x=-c", "git diff --x=--ext-diff", "git diff --x=--y=--exec=sh", "keryx review slice --ref=--x=-c"]) {
+    expect(isTrustRoutineCommand(command, { cwd }), command).toBe(false);
   }
 });
 
