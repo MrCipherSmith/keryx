@@ -375,7 +375,8 @@ import {
   type SessionHandle,
 } from "../session";
 import { REWIND_LEASE_REFUSAL } from "../rewind/history";
-import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, whilePersisting } from "../session/lease";
+import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, switchPreservedSession, whilePersisting } from "../session/lease";
+import { SessionSwitchOwner, assertSessionSwitchActive } from "./session-switch";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
   createTuiLeaseHolder,
@@ -3591,7 +3592,9 @@ export function pickSessionInTui(
   rOrChrome: Renderer | ModalChrome,
   sessions: SessionSummary[],
   leaseState?: LeaseStateLookup,
+  signal?: AbortSignal,
 ): Promise<string | undefined> {
+  if (signal?.aborted === true) return Promise.resolve(undefined);
   const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
   const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
   const all: SessionPickerOption[] = sessionPickerOptions(sessions, leaseState);
@@ -3610,6 +3613,7 @@ export function pickSessionInTui(
   if (chrome !== undefined) {
     return new Promise((resolve) => {
       let chosen: string | undefined;
+      const abort = (): void => { chosen = undefined; handle?.close(); };
       const handle = openModal(otui, chrome, {
         title: "Session Switcher",
         tabs: [{ id: "sessions", label: "Sessions" }],
@@ -3632,11 +3636,12 @@ export function pickSessionInTui(
           });
           return onKeypress(r, list.onKey);
         },
-        onClose: () => resolve(chosen),
+        onClose: () => { signal?.removeEventListener("abort", abort); resolve(chosen); },
       });
       if (handle === undefined) {
         resolve(undefined);
-      }
+      } else signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted === true) abort();
     });
   }
 
@@ -3645,7 +3650,12 @@ export function pickSessionInTui(
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "sp-title", content: otui.t`${boldChunk(otui, "Open session")} ${dimChunk(otui, "↑/↓ Enter · Esc to cancel")}` }));
     let unsub = (): void => {};
+    let finished = false;
+    const abort = (): void => finish(undefined);
     const finish = (row: SessionPickerOption | undefined): void => {
+      if (finished) return;
+      finished = true;
+      signal?.removeEventListener("abort", abort);
       unsub();
       r.root.remove(box);
       resolve(row?.value);
@@ -3666,6 +3676,8 @@ export function pickSessionInTui(
       }
       list.onKey(key);
     });
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted === true) abort();
   });
 }
 
@@ -6313,14 +6325,15 @@ export async function launchTuiAgentShell(opts: {
       void liveBus?.setSession(opened.handle.summary.id).catch(() => {}); // review r1 F10: setSession never throws, but never trust that from the call site either
     };
 
-    const pickRecentSession = async (): Promise<SessionSummary | undefined> => {
+    const pickRecentSession = async (signal?: AbortSignal): Promise<SessionSummary | undefined> => {
       const rows = listSessions(sessionCwd);
       if (rows.length === 0) {
         io.onSystem?.("No saved sessions in this project.\n");
         return undefined;
       }
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, chrome, rows, leaseState));
+      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, chrome, rows, leaseState, signal));
+      if (signal?.aborted === true) return undefined;
       input.focus();
       if (pickId === undefined) {
         return undefined;
@@ -6763,11 +6776,13 @@ export async function launchTuiAgentShell(opts: {
     };
 
     const preservationAbort = new AbortController();
+    const sessionSwitches = new SessionSwitchOwner();
     finalizeShell = createShellFinalizer({
       stop: async () => {
         preservationAbort.abort();
         foregroundOperation.cancel("shell exit");
         foregroundOperation.dispose();
+        await sessionSwitches.stop();
         await foregroundOperation.settled();
       },
       checkpoint: () => {
@@ -6866,10 +6881,26 @@ export async function launchTuiAgentShell(opts: {
      * session's lease is taken before the current one is released; if the open
      * fails, the current session stays open and held, and this returns false.
      */
-    const startNewSession = (note?: string): boolean => {
+    const preservedOpen = async (
+      signal: AbortSignal,
+      target: { resumeId?: string } = {},
+    ): Promise<ReturnType<typeof openLeasedSession>> => {
+      assertSessionSwitchActive(signal, sessionLease.canPersist());
+      const opened = await switchPreservedSession(sessionLease.current, () => openLeasedSession({
+        cwd: sessionCwd, ...target, provider: currentSel.provider, model: currentSel.model,
+      }), async () => {
+        flushSessionCheckpoint();
+        await closeSlateSession(slateSession, mintTimestampAttemptId);
+        assertSessionSwitchActive(signal, sessionLease.canPersist());
+      });
+      sessionLease.hold(opened.lease);
+      return opened;
+    };
+
+    const startNewSession = async (signal: AbortSignal, note?: string): Promise<boolean> => {
       let opened: ReturnType<typeof openLeasedSession>;
       try {
-        opened = leasedOpen();
+        opened = await preservedOpen(signal);
       } catch (cause) {
         io.onSystem?.(
           `Could not start a new session: ${cause instanceof Error ? cause.message : String(cause)}\n` +
@@ -6901,11 +6932,10 @@ export async function launchTuiAgentShell(opts: {
     };
 
     // `/resume` and `/sessions`. The Telegram topic's picker (flow 387, AC17) reaches the same body
-    // with the chosen session pre-selected through `pendingResumeTarget`, so there is one resume path.
-    let pendingResumeTarget: SessionSummary | undefined;
-    const resumeSessionInteractive = async (): Promise<void> => {
-      const found = pendingResumeTarget ?? (await pickRecentSession());
-      pendingResumeTarget = undefined;
+    // with the chosen session passed explicitly, so there is one serialized resume path.
+    const resumeSessionInteractive = async (target?: SessionSummary): Promise<void> => sessionSwitches.run(async (signal) => {
+      const found = target ?? (await pickRecentSession(signal));
+      if (signal.aborted) return;
       if (found === undefined) {
         return;
       }
@@ -6921,7 +6951,7 @@ export async function launchTuiAgentShell(opts: {
       // and its lease stay exactly as they were.
       let opened: ReturnType<typeof openLeasedSession>;
       try {
-        opened = leasedOpen({ resumeId: found.id });
+        opened = await preservedOpen(signal, { resumeId: found.id });
       } catch (cause) {
         const hint =
           cause instanceof SessionLeasedError
@@ -6935,9 +6965,7 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       applyOpened(opened, true);
-      // The previous session's slate is left as it is, not closed: this
-      // switch has already moved off it, and an unclosed slate is archived
-      // the next time that session opens one (see `freshSlateSessionRef`).
+      // Outgoing history and Slate were preserved before ownership transfer.
       bindSlateToLiveSession();
       // After the rebind: it reads the bound workspace from the slate ref.
       void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
@@ -6948,7 +6976,7 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(
         `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
       );
-    };
+    });
 
     paintSessionHeader();
 
@@ -8717,10 +8745,9 @@ export async function launchTuiAgentShell(opts: {
           // SLATE-5 close trigger: `/new`/`/clear` abandon the current session
           // dir for a fresh one — archive whatever slate it was building
           // before switching away (parity with runAgentRepl in shell.ts).
-          void (async () => {
-            await closeSlateSession(slateSession, mintTimestampAttemptId);
+          void sessionSwitches.run(async (signal) => {
             // Creates a NEW session id; previous transcript stays on disk for /resume.
-            if (!startNewSession()) {
+            if (!await startNewSession(signal)) {
               return;
             }
             bindSlateToLiveSession();
@@ -8744,7 +8771,7 @@ export async function launchTuiAgentShell(opts: {
             io.onSystem?.(
               `New session ${shortSessionId(liveSession.summary.id)} (previous kept on disk · /resume)\n`,
             );
-          })();
+          });
           return;
         }
         if (command.name === "/schedule") {
@@ -10259,9 +10286,7 @@ export async function launchTuiAgentShell(opts: {
         resumeSession: async (id) => {
           const found = findSession(sessionCwd, id);
           if (found === undefined) return { output: "Session not found in this project.", ok: false };
-          pendingResumeTarget = found;
-          const outcome = await captureShellOutput(() => resumeSessionInteractive());
-          pendingResumeTarget = undefined;
+          const outcome = await captureShellOutput(() => resumeSessionInteractive(found));
           // The switch happened when the live session is now the one asked for.
           return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
         },

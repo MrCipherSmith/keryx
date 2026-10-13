@@ -496,7 +496,7 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
   });
 
   test("startNewSession (/new, /clear) updates presence.sessionId outside applyOpened, caught (review r1 F10)", () => {
-    const start = source.indexOf("const startNewSession = (");
+    const start = source.indexOf("const startNewSession = async (");
     expect(start).toBeGreaterThanOrEqual(0);
     const body = source.slice(start, source.indexOf("const resumeSessionInteractive", start));
     expect(body).toContain("liveBus?.setSession(liveSession.summary.id).catch(");
