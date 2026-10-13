@@ -1,14 +1,15 @@
-// Flow 441 (AC1): the turn loop, mounted headlessly. `tui-shell.ts` cannot be mounted by a unit
-// test, so until now AC1 was held by source text and by `main-queue-drain.test.ts`, which pushes into
-// its own array. Here the lines arrive through the production enqueue step (`enqueueWhileBusy`,
-// `enqueue`), and the real `createMainQueueDrain` and `createRemoteQueueWiring` (both built by
-// `createTurnLoop`, the same call the shell makes) run them. Only the turn runner is fake: it plays
-// `runLine` as the shell's does, an inline slash command returns with no turn started, a plain line
-// starts a turn and leaves the shell busy until `settleTurn`.
+// Flow 441 (AC1): the extracted turn loop (`createTurnLoop`) driven with a MODELLED `runLine`. This is
+// not the mounted shell: `tui-shell.ts` cannot be mounted by a unit test. Here the lines arrive through
+// the production enqueue steps (`enqueueWhileBusy`, `enqueue`, `remote.enqueueTelegramLine`), and the
+// real `createMainQueueDrain` and `createRemoteQueueWiring` (built by `createTurnLoop`, the call the shell
+// makes) run them. Only the turn runner is fake: an inline slash command returns with no turn started, a
+// plain line starts a turn and leaves the shell busy until `settleTurn`, `/model` starts detached work.
 //
-// What stays pinned by source text (tui-bus.test.ts, tui-hold.test.ts, remote-queue-wiring.test.ts):
-// that the shell's `runLine` calls `turnLoop.enqueueWhileBusy` / `turnLoop.enqueue` at its busy sites,
-// and that the three drain sites call `drainSites.*`.
+// The boundary: the fake models only the happy busy branch of the shell's `runLine` (not
+// `classifyBusyDispatch`, the lease-held branch or the recipient dock). What the shell passes into
+// `createTurnLoop` (`runLine`, `getBridge`, `say`, `onDetachedFailure`, the idle predicate) and the call
+// sites of `turnLoop.*` / `drainSites.*` are pinned as source text in tui-hold.test.ts, tui-bus.test.ts
+// and remote-queue-wiring.test.ts.
 
 import { describe, expect, test } from "bun:test";
 import { TG_SOURCE } from "../remote/shell-bridge";
@@ -21,6 +22,8 @@ interface Harness {
   /** Lines the fake turn runner was asked to run, with the source they carried. */
   ran: Array<{ line: string; source?: typeof TG_SOURCE }>;
   turns: string[];
+  /** Painted queue length at each repaint, interleaved with `run:<line>` for each line handed to `runLine`. */
+  events: string[];
   settles: number;
   failures: string[];
   busy: boolean;
@@ -31,12 +34,16 @@ interface Harness {
   settleTurn(): void;
 }
 
+/** The label the shell shows for a line: never the line itself, so a swap of the two is visible. */
+const shown = (line: string): string => `«${line}»`;
+
 function harness(): Harness {
   const h: Harness = {
     loop: undefined as unknown as TurnLoop,
     said: [],
     ran: [],
     turns: [],
+    events: [],
     settles: 0,
     failures: [],
     busy: false,
@@ -52,13 +59,14 @@ function harness(): Harness {
     if (h.busy) {
       const name = line.startsWith("/") ? line.split(/\s+/)[0] : undefined;
       if (name !== undefined) {
-        h.loop.enqueueWhileBusy(line, line, name, source);
+        h.loop.enqueueWhileBusy(line, shown(line), name, source);
       } else {
-        h.loop.enqueue(line, line, source);
+        h.loop.enqueue(line, shown(line), source);
       }
       return;
     }
     h.ran.push({ line, ...(source !== undefined ? { source } : {}) });
+    h.events.push(`run:${line}`);
     if (line === "/model") {
       h.loop.drain.detach(
         new Promise<void>((resolve, reject) => {
@@ -81,10 +89,10 @@ function harness(): Harness {
     },
     remote: {
       getBridge: () => undefined,
-      summarize: (text) => text,
+      summarize: (text) => `sum:${text}`,
       composer: { setText: () => {}, focus: () => {} },
     },
-    paint: () => {},
+    paint: () => h.events.push(`paint:${h.loop.queue.length}`),
     say: (text) => h.said.push(text),
     runLine,
     turnWorkInFlight: () => h.busy,
@@ -206,9 +214,9 @@ describe("AC1: a slash command queued behind a turn does not strand the question
 
   test("the recipient choice after the turn already settled runs the line at once", () => {
     const h = harness();
-    h.loop.enqueue("late", "late");
+    h.loop.enqueue("late", shown("late"));
 
-    h.loop.drainWhenIdle(() => !h.busy);
+    h.loop.drainAfterRecipientChoice(() => !h.busy);
 
     expect(h.turns).toEqual(["late"]);
     expect(h.loop.queue).toEqual([]);
@@ -219,5 +227,133 @@ describe("AC1: a slash command queued behind a turn does not strand the question
     h.busy = true;
     h.settleTurn();
     expect(h.settles).toBe(1);
+  });
+});
+
+describe("the queue as the panel and the next drain see it", () => {
+  test("items keep the line and its label apart, with one fresh id each, across all three producers", () => {
+    const h = harness();
+    h.busy = true;
+    h.submit("/compact");
+    h.loop.remote.enqueueTelegramLine("from the topic");
+    h.submit("question");
+
+    expect(h.loop.queue.map((item) => ({ id: item.id, question: item.question, display: item.displayQuestion, source: item.source }))).toEqual([
+      { id: "mq0", question: "/compact", display: shown("/compact"), source: undefined },
+      { id: "mq1", question: "from the topic", display: "sum:from the topic", source: TG_SOURCE },
+      { id: "mq2", question: "question", display: shown("question"), source: undefined },
+    ]);
+  });
+
+  test("each queued slash command is told its own position", () => {
+    const h = harness();
+    h.busy = true;
+    h.submit("/compact");
+    h.submit("/plan");
+    h.submit("/mode auto");
+
+    expect(h.said).toEqual([
+      "◇ main is busy — queued as q1 (runs when the turn ends).\n",
+      "◇ main is busy — queued as q2 (runs when the turn ends).\n",
+      "◇ main is busy — queued as q3 (runs when the turn ends).\n",
+    ]);
+  });
+
+  test("enqueue returns the 1-based position and repaints with the line already in the queue", () => {
+    const h = harness();
+    expect(h.loop.enqueue("a", shown("a"))).toBe(1);
+    expect(h.loop.enqueue("b", shown("b"))).toBe(2);
+    expect(h.events).toEqual(["paint:1", "paint:2"]);
+  });
+
+  test("a line from the topic is queued with its source, told its position, and runs after the settle", () => {
+    const h = harness();
+    h.busy = true;
+    h.submit("first");
+    h.loop.remote.enqueueTelegramLine("from the topic");
+
+    expect(h.said).toEqual(["◇ a line from Telegram is queued as q2.\n"]);
+    h.settleTurn();
+    expect(h.ran).toEqual([{ line: "first" }]);
+    h.settleTurn();
+    expect(h.ran).toEqual([{ line: "first" }, { line: "from the topic", source: TG_SOURCE }]);
+  });
+
+  test("replaceQueue swaps the array the drain reads: a removed line never runs, the kept one does", () => {
+    const h = harness();
+    h.busy = true;
+    h.submit("/compact");
+    h.submit("kept");
+    const [, second] = h.loop.queue;
+
+    h.loop.replaceQueue([second!]);
+    expect(h.loop.queue.map((item) => item.question)).toEqual(["kept"]);
+    h.settleTurn();
+
+    expect(h.ran.map((r) => r.line)).toEqual(["kept"]);
+  });
+
+  test("a Telegram line queued after replaceQueue is pushed onto the new array and still runs with its source", () => {
+    const h = harness();
+    h.busy = true;
+    h.submit("/compact");
+    h.loop.replaceQueue([]);
+    h.loop.remote.enqueueTelegramLine("late topic line");
+
+    expect(h.loop.queue.map((item) => item.question)).toEqual(["late topic line"]);
+    h.settleTurn();
+    expect(h.ran).toEqual([{ line: "late topic line", source: TG_SOURCE }]);
+  });
+});
+
+describe("detached slash work", () => {
+  test("a rejected detached run is reported once and the line behind it still runs", async () => {
+    const h = harness();
+    h.busy = true;
+    h.submit("/model");
+    h.submit("question");
+    h.settleTurn();
+
+    h.detachedWork.shift()!.reject(new Error("model list unavailable"));
+    await new Promise((done) => setTimeout(done, 0));
+
+    expect(h.failures).toEqual(["model list unavailable"]);
+    expect(h.turns).toEqual(["question"]);
+  });
+});
+
+describe("drainAfterRecipientChoice", () => {
+  test("repaints with the head already taken, then runs it", () => {
+    const h = harness();
+    h.loop.enqueue("late", shown("late"));
+    h.events.length = 0;
+
+    h.loop.drainAfterRecipientChoice(() => !h.busy);
+
+    expect(h.events).toEqual(["paint:0", "run:late"]);
+  });
+
+  test("dispatches nothing while the caller's predicate says the shell is busy", () => {
+    const h = harness();
+    h.busy = true;
+    h.loop.enqueue("late", shown("late"));
+    h.events.length = 0;
+
+    h.loop.drainAfterRecipientChoice(() => !h.busy);
+
+    expect(h.ran).toEqual([]);
+    expect(h.events).toEqual([]);
+    expect(h.loop.queue.map((item) => item.question)).toEqual(["late"]);
+  });
+
+  test("a forced item goes first and the queue keeps its head", () => {
+    const h = harness();
+    h.loop.enqueue("queued", shown("queued"));
+    h.forced.push({ id: "f", question: "forced", displayQuestion: "forced" });
+
+    h.loop.drainAfterRecipientChoice(() => !h.busy);
+
+    expect(h.ran.map((r) => r.line)).toEqual(["forced"]);
+    expect(h.loop.queue.map((item) => item.question)).toEqual(["queued"]);
   });
 });

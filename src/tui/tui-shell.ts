@@ -3866,7 +3866,7 @@ export async function launchTuiAgentShell(opts: {
   let liveReviewsPanel: ReviewsPanelHandle | undefined;
   // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
   // `busWakeController` below: the bridge's host closes over `runLine` and
-  // `mainQueue`, which do not exist yet, while `onDestroy` and the approval/reply
+  // `turnLoop`, which do not exist yet, while `onDestroy` and the approval/reply
   // wraps near the top of the shell already need to reach it. Off until the
   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
   // topic) on every exit path.
@@ -3910,7 +3910,7 @@ export async function launchTuiAgentShell(opts: {
   // receives a push).
   const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });
   // Flow 274 T7 (review r1 F11: now `createBusWakeController`, from
-  // `./bus-wake.ts`) — the actual bus-wake check needs `runLine`, `mainQueue`
+  // `./bus-wake.ts`) — the actual bus-wake check needs `runLine`, `turnLoop`
   // and `consecutiveAutoWakes`, all declared much further down this
   // function — but `onPeers` (which must trigger it once per poll,
   // specification §5.3) is wired into `joinBus` right below, long before any
@@ -3923,7 +3923,7 @@ export async function launchTuiAgentShell(opts: {
   let busWakeController: BusWakeController | undefined;
   // Flow 275 (agent bus P4, T7; specification §4.3, §5.2): same nullable-ref/
   // TDZ idiom as `busWakeController` right above — the real implementation is
-  // built once `mainQueue`/`runLine`/`forceHandoff` exist, further down; a
+  // built once `turnLoop`/`runLine`/`forceHandoff` exist, further down; a
   // poll landing before that is a safe no-op via optional chaining.
   let leaseHoldController: LeaseHoldController | undefined;
   // review r1 F1: whether the poll CURRENTLY being processed delivered at
@@ -8666,7 +8666,7 @@ export async function launchTuiAgentShell(opts: {
             // The recipient choice is asynchronous. The turn may have settled
             // while its dock was open, before the settle handler saw this item.
             // Drain now if idle; otherwise the usual settle/release path owns it.
-            turnLoop.drainWhenIdle(
+            turnLoop.drainAfterRecipientChoice(
               () =>
                 !destroyed &&
                 !chrome.isBusy() &&
@@ -9979,7 +9979,7 @@ export async function launchTuiAgentShell(opts: {
     // `consecutiveAutoWakes` counter/cap as the task-notification wake
     // immediately above. Assigned here (not inline where `onPeers`/the
     // turn-settle site call it) for the SAME reason that wake is subscribed
-    // here rather than earlier: `runLine`, `mainQueue` and
+    // here rather than earlier: `runLine`, `turnLoop` and
     // `consecutiveAutoWakes` are all declared above this point, in scope now.
     //
     // review r1 F11: the decision/print/wake wiring itself now lives in
@@ -10142,7 +10142,7 @@ export async function launchTuiAgentShell(opts: {
     // --- flow 376: remote control (the Telegram topic) -----------------------
     //
     // Created here, like `busWakeController`, because the host closes over `runLine` and
-    // `mainQueue`, which exist only now. Creating the bridge starts nothing: remote control
+    // `turnLoop`, which exist only now. Creating the bridge starts nothing: remote control
     // is OFF until `/remote-control <name>` (or the modal's `o`) calls `enable()`. A line
     // from Telegram enters the session exactly like a typed one: idle, `runLine`; busy, the
     // ordinary main queue (the same `qN` rows, labelled `[tg]`).

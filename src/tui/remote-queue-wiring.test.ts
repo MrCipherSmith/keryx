@@ -442,8 +442,6 @@ test("flow 399 T-2: tui-shell.ts still feeds the session entry and the history i
   ];
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
   expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
-  const loop = readFileSync(new URL("./turn-loop.ts", import.meta.url), "utf8");
-  expect(shellOccurrences(loop, "remote.runQueued(")).toBe(2);
 });
 
 // Flow 397 review T-1: a session switch drops the remote bridge and the queued Telegram lines of the old
@@ -472,6 +470,4 @@ test("flow 397 L-1: tui-shell.ts hands the modal a change subscription and notif
   ];
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
   expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
-  const loop = readFileSync(new URL("./turn-loop.ts", import.meta.url), "utf8");
-  expect(shellOccurrences(loop, "remote.runQueued(")).toBe(2);
 });

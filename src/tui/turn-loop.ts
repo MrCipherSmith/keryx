@@ -1,11 +1,14 @@
-// The main turn loop's queue, built once (flow 441, AC1).
+// The main turn loop's queue, as one module (flow 441, AC1).
 //
-// The queue array, its id counter, the busy-time enqueue step, the remote-control wiring and the
-// four drain sites used to be loose closures inside `launchTuiAgentShell`, where the OpenTUI renderer
-// cannot be mounted by a unit test: AC1 ("a slash command queued behind a turn does not strand the
-// lines behind it") was guarded by source text alone. They are here now behind injected dependencies,
-// and `turn-loop.test.ts` drives the real `createMainQueueDrain` and `createRemoteQueueWiring` with a
-// fake turn runner. `tui-shell.ts` builds one loop and calls it; it keeps no second copy.
+// The queue array, its id counter, the busy-time enqueue step, the idle dispatch after the recipient
+// choice and the wiring of `createRemoteQueueWiring` and `createMainQueueDrain` (already factories since
+// PR 999) used to be `let` bindings and closures inside `launchTuiAgentShell`. They sit here behind
+// injected dependencies, and `turn-loop.test.ts` drives this module with a modelled `runLine`.
+//
+// The seam stops at `createTurnLoop`'s dependencies. What the shell passes in (`runLine`, `getBridge`,
+// `say`, `onDetachedFailure`, the idle predicate) and the busy branch of the shell's own `runLine` are not
+// run by that test; they are pinned as source text in tui-hold.test.ts and remote-queue-wiring.test.ts.
+// The OpenTUI renderer is still not mounted by any unit test.
 
 import { deferredBusyAction, queuedCommandNotice } from "./busy-dispatch";
 import {
@@ -35,18 +38,24 @@ export interface TurnLoopDeps {
 }
 
 export interface TurnLoop {
-  /** The live queue. It is replaced by `/queue remove`, `/queue edit` and Force, so read it each time. */
-  readonly queue: QueuedMainQuestion[];
+  /** The live queue, read-only here. `/queue remove`, `/queue edit` and Force replace it, so read it each time. */
+  readonly queue: readonly QueuedMainQuestion[];
+  /** Swap the queue array for `next`; the drain and the remote wiring read the new one from the next call on. */
   replaceQueue(next: QueuedMainQuestion[]): void;
   /** Append a line and repaint; returns its 1-based position. */
   enqueue(line: string, displayLine: string, source?: QueuedMainQuestion["source"]): number;
   /**
-   * A slash line typed while a turn runs. Queues it behind the turn and says so, unless it would
-   * replace the session under the turn; false then, and the caller refuses it.
+   * A slash line typed while a turn runs. Unlike `enqueue` it asks `deferredBusyAction` first: a command
+   * that would replace the session under the turn is not queued and this returns false (the caller
+   * refuses it). Otherwise it queues the line behind the turn, says "queued as q<N>" and returns true.
    */
   enqueueWhileBusy(line: string, displayLine: string, commandName: string | undefined, source?: QueuedMainQuestion["source"]): boolean;
-  /** Run the head of the queue now when `isIdle`, the way the recipient choice does after its dock closes. */
-  drainWhenIdle(isIdle: () => boolean): void;
+  /**
+   * After the recipient choice closes its dock: when `isIdle()`, run one item (a forced one first) and
+   * repaint before it. It asks the caller's predicate only; it does not consult detached slash work
+   * (`drain.workInFlight()`), unlike the drain's own idle drain. Not that function.
+   */
+  drainAfterRecipientChoice(isIdle: () => boolean): void;
   readonly remote: RemoteQueueWiring;
   readonly drain: ReturnType<typeof createMainQueueDrain<QueuedMainQuestion>>;
 }
@@ -54,9 +63,10 @@ export interface TurnLoop {
 export function createTurnLoop(deps: TurnLoopDeps): TurnLoop {
   let queue: QueuedMainQuestion[] = [];
   let seq = 0;
+  const nextId = (): string => `mq${seq++}`;
 
   const enqueue: TurnLoop["enqueue"] = (line, displayLine, source) => {
-    queue.push({ id: `mq${seq++}`, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
+    queue.push({ id: nextId(), question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
     deps.paint();
     return queue.length;
   };
@@ -67,7 +77,7 @@ export function createTurnLoop(deps: TurnLoopDeps): TurnLoop {
     setQueue: (next) => {
       queue = next;
     },
-    nextId: () => `mq${seq++}`,
+    nextId,
     paint: deps.paint,
     say: deps.say,
     runLine: deps.runLine,
@@ -97,7 +107,7 @@ export function createTurnLoop(deps: TurnLoopDeps): TurnLoop {
       deps.say(`${queuedCommandNotice(position)}\n`);
       return true;
     },
-    drainWhenIdle(isIdle) {
+    drainAfterRecipientChoice(isIdle) {
       drainIdleMainQueue(queue, {
         isIdle,
         takeForced: () => deps.forced.takeNext(),

@@ -159,8 +159,8 @@ test("the busy recipient choice wires the idle drain after adding to the main qu
   const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
   const choice = source.slice(source.indexOf('if (chosen === "main")'), source.indexOf('} else {', source.indexOf('if (chosen === "main")')));
   expect(choice).toContain("turnLoop.enqueue(line, displayLine);");
-  expect(choice).toContain("turnLoop.drainWhenIdle(");
-  expect(choice.indexOf("turnLoop.enqueue(")).toBeLessThan(choice.indexOf("turnLoop.drainWhenIdle("));
+  expect(choice).toContain("turnLoop.drainAfterRecipientChoice(");
+  expect(choice.indexOf("turnLoop.enqueue(")).toBeLessThan(choice.indexOf("turnLoop.drainAfterRecipientChoice("));
   for (const guard of ["!destroyed", "!chrome.isBusy()", "!foregroundOperation.isActive", "!forceHandoff.isAwaitingSettlement", "leaseView()?.held() !== true"]) {
     expect(choice).toContain(guard);
   }

@@ -131,6 +131,16 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
       "paint: () => paintMainQueue(),",
       "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
       "onSettle: () => busWakeController?.onSettle(),",
+      // The inputs turn-loop.test.ts cannot reach (it models them): the reply path to the topic, the
+      // label of a queued line, the composer, the transcript line, the Telegram source on a drained
+      // line and the report of a failed detached command.
+      "getBridge: () => remoteBridge,",
+      "summarize: summarizeSubmittedLine,",
+      "setText: (text) => {\n            input.value = text;\n          },",
+      "focus: () => input.focus(),",
+      "say: (text) => io.onSystem?.(text),",
+      "runLine: (line, origin, source) => runLine(line, origin, source),",
+      "onDetachedFailure: (error) => {\n        const reason = error instanceof Error ? error.message : String(error);\n        io.onSystem?.(`◇ a slash command failed: ${terminalSafe(reason).text}\\n`);\n      },",
     ]) {
       expect(loopBody).toContain(field);
     }

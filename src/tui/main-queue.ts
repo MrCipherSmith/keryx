@@ -1,7 +1,7 @@
 // Pure main-queue helpers for the TUI busy-input router (flow 167),
 // GENERALISED to a queue per addressee (flow 176, T16).
 //
-// The interactive shell keeps `mainQueue` state + rendering inside
+// The interactive shell keeps the queue in `createTurnLoop` (src/tui/turn-loop.ts) and renders it inside
 // `launchTuiAgentShell` (src/tui/tui-shell.ts); this module holds the PURE,
 // unit-testable part — marker formatting and the remove/edit/reinsert
 // moves — so the queue behaviour is pinned by tests without mounting a whole
