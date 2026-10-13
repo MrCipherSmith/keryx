@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t1",
+  "command": "bun test src/review/ledger.test.ts src/commands/review-slice.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 623
+  },
+  "mutants": [
+    {
+      "id": "N01-claimsResult-never",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult = KEY_COLON.test(raw);",
+      "replacement": "claimsResult = false;",
+      "line": 107,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 643
+    },
+    {
+      "id": "N02-key-at-any-depth",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (depth === 1 && !claimsResult",
+      "replacement": "if (depth >= 1 && !claimsResult",
+      "line": 105,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 601
+    },
+    {
+      "id": "N03-unclosed-cap-removed",
+      "file": "src/review/ledger.ts",
+      "anchor": "(unclosed += 1) > MAX_UNCLOSED",
+      "replacement": "false",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17948
+    },
+    {
+      "id": "N04-claims-ignored-in-scan",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (claimsResult || (unclosed",
+      "replacement": "if ((unclosed",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 610
+    },
+    {
+      "id": "N05-marker-falls-no-further",
+      "file": "src/review/ledger.ts",
+      "anchor": "    if (end === undefined) continue;\n    try {",
+      "replacement": "    if (end === undefined) return undefined;\n    try {",
+      "line": 194,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 519
+    },
+    {
+      "id": "N06-marker-first-not-last",
+      "file": "src/review/ledger.ts",
+      "anchor": "for (let at = markers.length - 1; at >= 0; at -= 1) {",
+      "replacement": "for (let at = 0; at < markers.length; at += 1) {",
+      "line": 190,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 627
+    },
+    {
+      "id": "N07-marker-unchecked-shape",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (isReviewerResult(parsed)) return parsed;",
+      "replacement": "return parsed as ParsedResult;",
+      "line": 197,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 575
+    },
+    {
+      "id": "N08-label-regex-quadratic",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT\\s*\\n([\\s\\S]*?)```/gi",
+      "line": 173,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 26110
+    },
+    {
+      "id": "N09-key-colon-not-required",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult = KEY_COLON.test(raw);",
+      "replacement": "claimsResult = true;",
+      "line": 107,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 593
+    }
+  ],
+  "totals": {
+    "killed": 7,
+    "survived": 2,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

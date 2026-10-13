@@ -212,6 +212,37 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
     }
   });
 
+  test("a ```REVIEW_RESULT fence with a status only (or a null reviewer) is ignored by name, not turned into a raw or a gap (flow 441 AC13)", async () => {
+    const { pkg, cleanup } = await fixture({
+      "review-a.txt": '```REVIEW_RESULT\n{"status":"DONE"}\n```',
+      "review-b.txt": '```REVIEW_RESULT\n{"status":"DONE","reviewer":null}\n```',
+      "review-c.txt": '```REVIEW_RESULT\n{"status":"DONE","reviewer":"review-c"}\n```',
+    });
+    try {
+      const loaded = await loadRaws(pkg, { files: new Set(), reviewers: [] });
+      expect(loaded.ignored).toEqual(["raw/review-a.txt", "raw/review-b.txt"]);
+      expect(loaded.raws.map((raw) => raw.name)).toEqual(["raw/review-c.txt"]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a bare status-only reply saved under a reviewer's name makes the ledger NOT READY with a named gap (flow 441 AC13)", async () => {
+    const { pkg, cleanup } = await fixture(
+      { "review-logic.txt": '{"status":"DONE"}' },
+      { "review-logic.json": { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt" } },
+    );
+    try {
+      const loaded = await loadRaws(pkg, { files: new Set(["review-logic.txt"]), reviewers: [] });
+      expect(loaded.raws.map((raw) => [raw.name, raw.result])).toEqual([["raw/review-logic.txt", undefined]]);
+      const out = await build(pkg);
+      expect(out.ready).toBe(false);
+      expect(out.gaps.map((gap) => gap.detail)).toContain("raw/review-logic.txt: no parseable REVIEW_RESULT block");
+    } finally {
+      await cleanup();
+    }
+  });
+
   test("a driver with an entry that has no usable id is reported by count and hands over none of its slices", async () => {
     const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: ["S1", { coverage: "no id" }, ""], result: "raw/review-logic.txt" } });
     try {

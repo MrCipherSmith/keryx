@@ -1,0 +1,98 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "summary": "No blocker or major. Layering and dependency direction are sound (commands import the parser; src/review/ledger.ts imports nothing from commands; the exported hasStatus, isReviewerResult and parseReviewResult are used consistently by the two callers). Two minors: a round-3 regression in fence detection that turns a stray inline triple backtick into a false gap, and the carried F-010 exemption.",
+  "findings": [
+    {
+      "id": "ARCH-R3-1",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/review/ledger.ts",
+      "line": 144,
+      "quote": "const lineEnd = raw.indexOf(\"\\n\", open + 3);",
+      "problem": "fenceRanges pairs any two triple backticks as a fenced block: it does not require the delimiter to start a line, nor the closing fence to start a line or match the opener's length. Round 3 now also drives afterMarker (line 203) from it, so a real REVIEW_RESULT marker that lies between two stray inline triple backticks is treated as fenced and skipped; the scan then sees the real result as fenced and a quoted bare sample with another status as bare, which is ambiguous (line 229) and gives no result.",
+      "impact": "A genuine reply becomes a gap and the reviewer is re-dispatched (fail closed, so no wrong result). It is a regression: the same input parsed to the real result at d5a8cfdc and at the base. Needs a quoted bare reviewer-shaped sample with a different status plus an odd inline ``` around the marker, so it is narrow.",
+      "evidence": "bun probe against exported parseReviewResult. Input: `Quoted: {\"status\":\"BLOCKED\",\"reviewer\":\"sample\",\"findings\":[]}\\nsee ``` here\\nREVIEW_RESULT {\"status\":\"DONE\",\"reviewer\":\"real\",\"findings\":[]}\\nand ``` there\\n`. HEAD: undefined. d5a8cfdc: DONE/real. Same input without the two inline ticks: DONE/real. Second form: an inline span ```x``` on one line before the marker, with a real fence after it, also gives undefined at HEAD, DONE/real at d5a8cfdc.",
+      "suggested_fix": "Count a fence delimiter only where it starts a line (up to 3 spaces), and close it only at a line-start run of at least the opener's length: match /^ {0,3}(`{3,})/gm once, pair opener and closer in one forward pass. Keep fenceTester as is. Add one test with the input above.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:146-153 fenceRanges", "src/review/ledger.ts:203 afterMarker via fenceTester", "src/review/ledger.ts:222 scannedResult via fenceTester"],
+        "enumeration_method": "keryx ctx rg fenceTester|fenceRanges over src: defined at ledger.ts:144 and 158, called only at 203 and 222 (the 3 sites are the whole class; src/review/managed.ts has its own embeddedBlockBody that already requires a line-start closing fence)."
+      }
+    },
+    {
+      "id": "ARCH-R3-2",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/flow/verify-exec-files.test.ts",
+      "line": 15,
+      "quote": "const KNOWN_MISSING: Record<string, readonly string[]> = {",
+      "problem": "Round-2 F-010 / ARCH-3 (a) is still open. AC18 (acceptance-criteria.md:55) says the test fails when a named *.test.ts file does not exist; the four flow-375 exemptions make it pass for files that do not exist. The PR body states the list and that F-010 was 'Not done', but no operator decision on the AC18 deviation is recorded (not in the PR body, not in the flow journal).",
+      "impact": "AC18 is satisfied only through an unsigned exemption; the frozen criterion and the test disagree.",
+      "evidence": "acceptance-criteria.md:55; PR 997 body 'Not done: F-008 (refactor), F-010 (KNOWN_MISSING kept as is)'; journal.md of flow 441 holds no entry for the exemption. ARCH-3 (b), the whitespace-bound TEST_FILE, is latent only: a loose scan (.test/.spec, .js/.ts, no whitespace bound) over all 301 exec lines under .metaproject/flows finds no missing file the strict regex skips.",
+      "suggested_fix": "Record the operator's decision on flow 375 (write the four tests, or re-seal with keryx flow ac update) before merge, or state in the PR body that AC18 is met with the named exemption by operator decision.",
+      "confidence": "high"
+    },
+    {
+      "id": "ARCH-R3-3",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/review/ledger.ts",
+      "line": 173,
+      "quote": "export function isReviewerResult(value: unknown): value is ParsedResult {",
+      "problem": "The now exported name isReviewerResult is also a private function in src/review/managed.ts:1676 with a different contract (findings array only, no status). Same directory, same name, two meanings.",
+      "impact": "Auto-import or a copy between the files picks the wrong guard; nothing wrong today.",
+      "evidence": "keryx ctx rg isReviewerResult src: ledger.ts:173 (status plus reviewer string or findings array), managed.ts:1676 (findings array).",
+      "suggested_fix": "Optional: name the exported one isAttributableResult or isReviewerReply, or rename the managed.ts guard.",
+      "confidence": "high",
+      "publication": "finding"
+    },
+    {
+      "id": "ARCH-R3-4",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/review/ledger.ts",
+      "line": 195,
+      "quote": "const MARKER = /(?<![^\\n])[ \\t>*#-]*REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g;",
+      "problem": "The prefix class is strict for real forms: an emphasis or code span around the marker (`**REVIEW_RESULT:** {`, `` `REVIEW_RESULT` {``), an em dash, or an ordered-list number (`1.`) before it is not a marker. Linear in time (probed), and fail closed.",
+      "impact": "Such a marker is only seen by the scan, so with a differing bare object elsewhere in the reply the result is a gap instead of the marker's object. Same outcome as d5a8cfdc for the bold and code-span forms; the em dash and same-line `STATUS: DONE REVIEW_RESULT {` forms are new gaps (contrived).",
+      "evidence": "bun probe: `**REVIEW_RESULT:** {real}` then a differing bare object: undefined at HEAD and d5a8cfdc; `— REVIEW_RESULT {real}` then a differing bare object: undefined at HEAD, DONE/real at d5a8cfdc.",
+      "suggested_fix": "No change needed unless reviewers are seen to emit these forms; if so allow [*`_] and `\\d+[.)]` in the prefix and a closing `**`/backtick after the word.",
+      "confidence": "medium",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+## Architecture Review, round 3 (head 07730d87, range 01e0dbfe..HEAD, scope A: 7 files)
+
+Stack: generic TypeScript (CLI command layer plus pure review module). Routing audit: graph_used yes (`keryx gdgraph affected src/review/ledger.ts`, note: graph built at 44bed779), wiki_used not-relevant, ctx_used yes (ctx rg, diff, read, run), raw_rg_used no.
+
+### Findings by severity
+- Minor ARCH-R3-1: fenceRanges pairs stray inline triple backticks, so a real marker between them is skipped and a differing quoted bare sample makes the reply a gap (regression since d5a8cfdc).
+- Minor ARCH-R3-2: carried F-010, the flow-375 KNOWN_MISSING exemption deviates from AC18 with no recorded operator decision.
+- Info ARCH-R3-3: two different isReviewerResult functions in src/review. Info ARCH-R3-4: marker prefix class is strict (bold, code span, em dash, ordered list).
+
+### Questions
+- None. On W01: I agree it is equivalent. A whole file that is one JSON object has no real newline inside a string, so no marker can start a line inside it, and the scan returns that same object or nothing; the order of `wholeFileResult` and `parseReviewResult` cannot change the outcome.
+
+### Pre-existing
+- F-016 and F-017 stay carried (out of scope per brief). The parser still lives in ledger.ts beside buildLedger (ledger.ts is 435 lines, parsing has no ledger dependency); that placement is from the base, not this PR, so it is a note, not a finding.
+
+### Verified clean
+- Layering and direction: `keryx gdgraph affected` dependents of ledger.ts are review-ledger.ts, review-slice.ts and the two test files; ledger.ts imports only src/review modules. No cycle, no import from commands.
+- Surface use: review-slice.ts uses hasStatus and parseReviewResult; review-ledger.ts uses isReviewerResult and parseReviewResult; no other caller. The decision chain (labelledFence, afterMarker, scannedResult) is cohesive and parseReviewResult stays 3 lines of ordering.
+- Complexity (round-2 regressions asked about): no quadratic path. Bun probes, 5 MB replies: 250k cut-off marker lines 609 ms, 64 cut-off markers followed by 5 MB 1.05 s (about 128 scans, the documented cap), 200k inline ticks 38 ms, 500k fences 60 ms, 400 KB of whitespace and prefix characters 0 to 1 ms. fenceTester ascending order holds: matchAll and `found` are ascending, the filter runs before the MAX_MARKERS slice. CRLF, unclosed fence (treated as outside), 4-backtick outer fence and a closing fence in mid-line text all give the expected result.
+- Probes on the pinned decisions: fenced reviewer-shaped sample plus a bare real result with another status gives undefined (F-002 as decided), same status gives the real one; a quoted line-start marker before the real marker, a mid-sentence mention, and a fenced marker after the real result all give the real result (F-001).
+- `bun test` of the 4 test files: 120 pass, 0 fail.
+
+### Prior-finding dispositions (my domain, checked against the code)
+- F-006 closed: review-ledger.ts:99 uses the exported isReviewerResult; ledger.ts:296 keeps a non-empty check (`text`) that raises a named gap, so a null or empty reviewer is not lost. ARCH-1 closed the same way. A test (review-ledger.test.ts, +31 lines) pins both outcomes.
+- ARCH-2 closed: review-slice.test.ts pins the divergence (status-only whole file accepted with --reviewer, refused after a bare marker, nothing written).
+- F-010 / ARCH-3: open (a) as ARCH-R3-2; (b) latent, no hidden miss today; (c) not addressed in the file header.
+- F-001, F-002 closed in code (probes above). F-011 closed (asserted no-op plus the NOT READY gap test). F-012 closed (whole-file, marker and error text cases present). F-014, F-015: tests present, I did not re-run the mutant sweep. Caps are 64 with 64/65 boundary tests (ledger.test.ts:335). F-003 closed.

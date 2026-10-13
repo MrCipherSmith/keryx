@@ -1,0 +1,32 @@
+STATUS: DONE_WITH_CONCERNS
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-performance",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "The parser is linear and fast on every hostile 2 MB input: worst case 133 ms at 2 MB (584 ms at 8 MB), no RangeError escapes. The pre-PR parser was quadratic on every unclosed-fragment and marker shape and the PR removes that. F-003 is closed. One minor item remains: MAX_UNCLOSED = 8 is much tighter than the measured cost requires.",
+  "findings": [
+    {
+      "id": "PERF-1",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "if (claimsResult || (unclosed += 1) > MAX_UNCLOSED) return { found, truncated: true };",
+      "problem": "MAX_UNCLOSED = 8 is a count cap justified by 'every one costs a scan to the end', but a scan costs about 3 ms per MB. The ninth unclosed fragment turns the whole reply into truncated=true, so a complete bare reviewer object elsewhere in the reply is discarded. The old parser returned it.",
+      "impact": "A reply with no REVIEW_RESULT fence and no marker (a bare result) holding 9 or more unclosed {\" fragments in prose, before or after the result, gives undefined: loadRaws raises the 'no parseable REVIEW_RESULT block' gap and the reviewer is re-dispatched, or retry-plan --result exits 2. Fails closed. Measured: 8 fragments then a genuine object returns the result; 9 and 12 return undefined (old returned it). The same cap shape exists in afterMarker (MAX_MARKERS = 8).",
+      "suggested_fix": "Bound the work by scanned characters instead of fragment count (return truncated only above about 32M scanned characters), or a flat MAX_UNCLOSED of about 64. Apply the same budget to the marker loop.",
+      "evidence": "probe.ts: 1 / 8 unclosed prose frags then genuine bare -> reviewer r; 9 / 12 -> undefined, old returned reviewer r. 02a ({\" x 2 MB, 9 scans) 55.7 ms, about 6 ms per 2 MB scan.",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0},
+  "prior_dispositions": [
+    {"id": "F-003", "state": "closed", "evidence": "'REVIEW_RESULT' + 100 KB spaces 12.7 s -> 1.5 ms; + 300 KB (did not finish) -> 2.7 ms; 32,000 fenced one-line objects 4.0 s -> 28 ms; 2 MB of interleaved fences and objects 90 ms. Regexes cross-checked in V8 (node 24): 300 KB of spaces 61 ms and 18 ms."}
+  ],
+  "answers": {
+    "Q2_performance": "No input exceeds 1 s and none is superlinear up to 8 MB. At 2 MB the new parser ranges from 4 ms to 133 ms; growth about 2x per doubling. Before the PR the parser was quadratic on all unclosed-fragment and marker shapes (not finishing in 12 s at 300 KB for several).",
+    "Q2_caps": "The caps can drop a genuine result only into undefined (a gap), never a wrong result. Nine or more unclosed prose fragments make a bare genuine object undefined; a genuine fence or marker result is unaffected.",
+    "Q1_Q3": "Not in my domain."
+  }
+}
+```

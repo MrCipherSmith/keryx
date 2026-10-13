@@ -1,0 +1,14 @@
+[
+  {
+    "id": "M03-objectEnd-escape-never-set",
+    "file": "src/review/ledger.ts",
+    "anchor": "else if (char === \"\\\\\") escaped = true;",
+    "replacement": "else if (char === \"\\\\\") escaped = false;"
+  },
+  {
+    "id": "M30-fence-pointer-ignores-range-start",
+    "file": "src/review/ledger.ts",
+    "anchor": "return next < ranges.length && start >= ranges[next]![0];",
+    "replacement": "return next < ranges.length;"
+  }
+]

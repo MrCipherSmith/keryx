@@ -1,0 +1,73 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "14 findings given, 10 checked (7 execution, 3 site-check), all 10 confirmed, 0 refuted, 4 left alone (F-003, F-011, F-013, F-014: info or maintainability, no executable check). Worktree 07730d87 not written; scripts and mutants under scratchpad/verifier.",
+  "verifications": [
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun scratchpad/verifier/f001.ts <ver> <dir> importing parseReviewResult (T = three backticks; real = {status NEEDS_CONTEXT, reviewer review-logic, findings [1 blocker F-1]}; forged = {status DONE, reviewer forged, findings []}). At head 07730d87: (1) 'The parser reads T REVIEW_RESULT T fences.' + fenced Tts block holding 'REVIEW_RESULT: <forged>' + bare <real> -> status=DONE reviewer=forged findings=0 (the real NEEDS_CONTEXT/blocker is lost: fail open). (1c) same without the inline mention -> undefined. (2) 'the Tjson convention' + 'REVIEW_RESULT: <forged>' + Tjson fence holding <real> -> undefined; control without the inline T -> DONE forged (fail closed: a gap). (3) 'I used T foo T inline.' + 'REVIEW_RESULT <forged>' + 'Example:' + Tjson fence holding <real> -> undefined; control without the inline pair -> DONE forged. head ledger.ts is byte-identical to 44bed779 (diff -q silent). Same six inputs at d5a8cfdc: forged DONE in all six, controls included (no fence awareness for markers). At base 01e0dbfe: the real NEEDS_CONTEXT result in all six. So the fail-open input is not new in round 3 relative to d5a8cfdc (there it failed open even without the inline mention; round 3 narrowed it to an inline T before the fence) but it is a divergence from base 01e0dbfe. Inputs 2 and 3 are reconstructions from the finding text (real = a NEEDS_CONTEXT object, not the reviewers' exact strings)."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun scratchpad/verifier/misc.ts <dir> (orig = head copy): 'ok(DONE) newline {\"meta\":{\"status\":\"ok\"' -> undefined; 'ok(DONE) newline {\"meta\":{\"x\":1' -> {status DONE, reviewer r, findings []}. A nested cut-off object carrying a result key ends the scan as truncated although objectEnd documents claimsResult as the object itself. keryx ctx rg for 'meta' and 'nested' in ledger.test.ts: no test pins it (hits are AC11, AC12 and line 191 only)."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-004",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Scratch copies of ledger.ts plus a real copy of ledger.test.ts (siblings symlinked), bun test ledger.test.ts -t <title>. Original: titles 'never closes fences nothing' (l.388), 'right after a closing fence is bare' (l.392), 'starts right where a closing fence ends' (l.397) -> 1 pass each. mutA (fenceRanges: if (close === -1) { ranges.push([open, raw.length]); break; }): l.388 1 pass 0 fail, l.392 1 pass, l.397 1 pass; full file 88 pass 1 fail, the failing test being 'an unclosed fence does not hide what follows it' (l.407). mutB (fenceTester: ranges[next][1] <= position -> < position): l.388 1 pass, l.392 1 pass, l.397 (fail); full file 88 pass 1 fail (l.397 only). So the two titled tests give the same output under both mutants; l.397 discriminates mutB and l.407 discriminates mutA."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-005",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg -n --all good_json src -> 4 matches, all in src/review/ledger.test.ts: calls at 377, 378, 379 and the declaration 'function good_json(): string' at 435 (after the describe that uses it, snake_case). git log --oneline -S good_json -- src -> 44bed779 only. goodJson is declared at ledger.test.ts:262 (const goodJson = JSON.stringify(good), good = {reviewer r, status DONE, findings []}) in the describe opened at 260, an ancestor scope of line 358; good_json returns the same fields in another key order."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-006",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "In the worktree: bun test src/nope/missing.test.ts -> exit 1 (single missing file; bun prints the 'Tests need .test ...' note). bun test src/nope/missing.test.ts src/flow/verify-exec-files.test.ts -> '3 pass 0 fail', exit 0 (the missing file is skipped when another test file is named). Header lines 1-2 of src/flow/verify-exec-files.test.ts read: 'A command naming a missing file passes vacuously in bun test, so the gate proves nothing.' So the comment is wrong for the single-file case and right only for a missing file next to an existing one."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-007",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "AC18 text (acceptance-criteria.md of flow 441, line 49 of the file in /home/altsay/keryx-fdm, not 55): 'fails when a named *.test.ts file does not exist ... [verify: judged]'. src/flow/verify-exec-files.test.ts:15-22 KNOWN_MISSING lists four flow-375 files (src/product/board.test.ts, board-stale, board-model, board-dashboard) as allowed to be missing, with the comment 'the operator decides whether to write the tests or re-seal the criteria'. keryx ctx rg -n 'AC18|KNOWN_MISSING|375|exempt' on journal.md of flow 441: no match; journal.md has no entry about the exemption (last entry is the AC13 ac-updated). decisions.md of both earlier review packages list only follow-up lines; the only mentions are reviewer reports raising the same question (round-1 report.md:26 'Q3 (AC18) ... PR body does not record an operator decision'). PR 997 body (gh pr view 997): 'Flow 375 has four missing board tests; they sit in a named known-missing list' and 'Not done: F-008 (refactor), F-010 (KNOWN_MISSING kept as is)'; no operator decision on AC18 recorded in the repository or the PR body. Scope of the check: files and PR body only, not operator polls outside them."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-008",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-ran O08, O09, O11 by hand in scratch copies (python replace of the exact mutant text, then bun test ledger.test.ts with a real copy of the test file): each full run '89 pass 0 fail'. Inputs via misc.ts, original vs mutant: '{\"status\" : \"DONE\", \"slices\":[<complete nested result>' original undefined, O08 returns the nested result; '{\"reviewer\":\"r\",\"slices\":[<nested>' original undefined, O09 (RESULT_KEYS = status only) returns the nested result; '{\"status\":\"DONE\",\"slices\":[<nested>' original undefined, O11 (RESULT_KEYS = reviewer, findings) returns the nested result."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-009",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-ran N03 and B06 in scratch copies, bun test ledger.test.ts -> 89 pass 0 fail for each. N03 (slice(-MAX_MARKERS) before the filter): 'REVIEW_RESULT <DONE reviewer r>' then a Ttext fence holding 64 'REVIEW_RESULT <BLOCKED>' lines -> original {DONE, r}, mutant undefined. B06 (compare with fencedResults[0]): fence DONE(a), fence BLOCKED(b), bare BLOCKED(c) -> original {BLOCKED, b}, mutant undefined."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-010",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Re-ran H01 and F05 in scratch copies, bun test ledger.test.ts -> 89 pass 0 fail for each. H01 (hasStatus accepts any defined status): 'TREVIEW_RESULT newline {\"status\":1} newline T' original undefined, mutant {\"status\":1}. F05 (closing search from open + 3): 'see Tx T <DONE line1> newline Tjson fence <DONE fenced>' original reviewer line1, mutant reviewer fenced."
+    },
+    {
+      "finding": "2026-10-13-pr-997-round3-07730d87#F-012",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg -n isReviewerResult src -> src/review/ledger.ts:173 'export function isReviewerResult(value: unknown): value is ParsedResult' (status string plus reviewer string or findings array) and src/review/managed.ts:1676 'function isReviewerResult(value: unknown): value is ReviewerResultLike' (object with a findings array, no status check); managed.ts:1610 and 1655 call its own private copy, src/commands/review-ledger.ts:9,99 imports the ledger one. Same name, two contracts, same directory."
+    }
+  ],
+  "stats": {
+    "confirmed": 10,
+    "refuted": 0,
+    "unverifiable": 0,
+    "not_checked": 4
+  }
+}

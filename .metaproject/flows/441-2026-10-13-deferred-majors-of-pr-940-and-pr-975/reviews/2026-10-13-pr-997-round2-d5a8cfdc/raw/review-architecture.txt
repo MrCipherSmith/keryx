@@ -1,0 +1,62 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "ARCH-1",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/commands/review-ledger.ts",
+      "line": 99,
+      "quote": "if (result !== undefined && result.reviewer === undefined && !Array.isArray(result.findings)) {",
+      "problem": "loadRaws restates the attribution test inline as a looser inverse of isReviewerResult (reviewer === undefined instead of typeof reviewer === 'string'). The attribution half is written three times, and the copies differ: isReviewerResult (ledger.ts:163), this line, and ledger.ts:279 (!text(raw.result.reviewer)).",
+      "impact": "A fence of {\"status\":\"DONE\"} is dropped silently into ignored; a fence of {\"status\":\"DONE\",\"reviewer\":null} becomes a raw with a result, then the gap 'names no reviewer'. Maintenance cost and an unexplained inconsistency; both outcomes are non-passing.",
+      "suggested_fix": "Export isReviewerResult (or isAttributable) and use !isReviewerResult(result) here, or add a sentence saying the line deliberately tolerates a non-string reviewer.",
+      "evidence": "Probe scratchpad r2/review-architecture/probe.ts: fencedStatusOnly: parse=result, ledger=ignored; fencedReviewerNull: parse=result, ledger=raw+result, later gap at ledger.ts:279.",
+      "confidence": "high"
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "info",
+      "reviewer": "review-architecture",
+      "file": "src/commands/review-slice.ts",
+      "line": 177,
+      "quote": "function wholeFileResult(raw: string): ReviewerResult | undefined {",
+      "problem": "The rule for the plain-JSON input of retry-plan --result lives in the command layer; ledger.ts has no name for it. No test pins that the same file is a gap in ledger build and valid input for retry-plan.",
+      "impact": "None today; the exception is deliberate.",
+      "suggested_fix": "Optional: move the decision to src/review as parseResultInput, or add one divergence test.",
+      "evidence": "Probe row wholeStatusOnly: wholeFile(cmd)=true, parse=undef, ledger=raw no-result.",
+      "confidence": "high"
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "minor",
+      "reviewer": "review-architecture",
+      "file": "src/flow/verify-exec-files.test.ts",
+      "line": 15,
+      "quote": "const KNOWN_MISSING: Record<string, readonly string[]> = {",
+      "problem": "F-009 only partly closed. (a) The four flow-375 exemptions deviate from the frozen AC18 text and no operator decision is recorded. (b) TEST_FILE is unchanged: it needs whitespace on both sides, so a quoted, glob, .spec, .test.js or punctuation-adjacent path is skipped without a trace. (c) Every historical frozen AC is now a dependency of src: 415 git-tracked flow directories cannot be edited, so deleting or renaming a test file named by an old verify line fails this test.",
+      "impact": "(a) AC18 satisfied only with an unsigned exemption. (b) latent today. (c) lasting cost of AC18's design.",
+      "suggested_fix": "(a) Record the operator's decision on flow 375 before merge. (b) Assert that every [verify: exec line yields at least one token or has no .test. text. (c) Say in the file header that renaming needs a KNOWN_MISSING entry.",
+      "evidence": "bun test src/flow/verify-exec-files.test.ts: 3 pass, 54 ms; git ls-files shows 415 tracked flow directories; AC18 text read at acceptance-criteria.md:49.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "F-007", "state": "closed", "evidence": "hasStatus exported and used by labelledFence, scan, wholeFileResult; residual restatement in loadRaws is ARCH-1."},
+    {"id": "F-009", "state": "partial", "evidence": "KNOWN_MISSING and TEST_FILE unchanged; see ARCH-3."},
+    {"id": "F-005", "state": "closed", "evidence": "Error text names both shapes."},
+    {"id": "F-006", "state": "closed", "evidence": "Doc matches code."},
+    {"id": "F-008", "state": "closed", "evidence": "parseReviewResult is 4 lines over three named strategies."},
+    {"id": "F-001", "state": "closed", "evidence": "Code read only: scannedResult pools fenced objects only when fenced.filter(isReviewerResult) is non-empty."},
+    {"id": "F-002", "state": "closed", "evidence": "Code read only: objectEnd reports claimsResult; unclosed fragment truncates only with a result key."},
+    {"id": "F-010", "state": "open", "evidence": "Not my domain; a same-status echo after the real result replaces it; same class as Q1."}
+  ],
+  "answers": {
+    "Q3": "Parser, tests and wording agree: a status-only object after a bare marker gives undefined and the ledger raises 'no parseable REVIEW_RESULT block'; a fenced status-only block gives a result. loadRaws puts a fenced status-only result in ignored (predates the PR, commented). wholeFileResult accepts a status-only whole file for retry-plan because --reviewer supplies identity; coherent, documented only in JSDoc (ARCH-2)."
+  }
+}
+```
