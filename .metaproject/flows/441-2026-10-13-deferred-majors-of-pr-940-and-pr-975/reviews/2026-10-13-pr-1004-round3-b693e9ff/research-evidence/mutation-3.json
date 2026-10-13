@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t4",
+  "command": "bun test src/review/replay.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1692
+  },
+  "mutants": [
+    {
+      "id": "P34-ls-files-throw-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (listed.status !== 0) {",
+      "replacement": "if (false) {",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1678
+    },
+    {
+      "id": "P35-plain-file-filter-off",
+      "file": "src/review/replay.ts",
+      "anchor": "    .filter((relative) => isPlainFileUnder(realRoot, relative))\n",
+      "replacement": "\n",
+      "line": 154,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1688
+    },
+    {
+      "id": "P07-containment-leaf-only",
+      "file": "src/review/replay.ts",
+      "anchor": "return realpathSync(path.join(realRoot, relative)) === path.join(realRoot, relative);",
+      "replacement": "return realpathSync(path.join(realRoot, relative)).length > 0;",
+      "line": 143,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1728
+    },
+    {
+      "id": "S01-toplevel-compare-off",
+      "file": "src/review/replay.ts",
+      "anchor": " || realpathSync(top.stdout.trim()) !== realpathSync(root)",
+      "replacement": "",
+      "line": 132,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1579
+    },
+    {
+      "id": "S02-revparse-status-ignored",
+      "file": "src/review/replay.ts",
+      "anchor": "top.status !== 0 ||",
+      "replacement": "false ||",
+      "line": 132,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1428
+    },
+    {
+      "id": "S04-below-top-throws",
+      "file": "src/review/replay.ts",
+      "anchor": "!== realpathSync(root)) return undefined;",
+      "replacement": "!== realpathSync(root)) throw new Error(\"x\");",
+      "line": 132,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1256
+    },
+    {
+      "id": "S05-ls-files-no-z",
+      "file": "src/review/replay.ts",
+      "anchor": "\"ls-files\", \"-z\", \"--\", relative",
+      "replacement": "\"ls-files\", \"--\", relative",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1686
+    },
+    {
+      "id": "S06-pathspec-widened",
+      "file": "src/review/replay.ts",
+      "anchor": "\"ls-files\", \"-z\", \"--\", relative",
+      "replacement": "\"ls-files\", \"-z\", \"--\", \".\"",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1694
+    },
+    {
+      "id": "S07-maxbuffer-tiny",
+      "file": "src/review/replay.ts",
+      "anchor": "maxBuffer: 64 * 1024 * 1024",
+      "replacement": "maxBuffer: 1000",
+      "line": 133,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1721
+    },
+    {
+      "id": "S09-env-scrub-off",
+      "file": "src/review/replay.ts",
+      "anchor": "env: withoutGitDiscoveryOverrides(process.env)",
+      "replacement": "env: process.env",
+      "line": 127,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1586
+    },
+    {
+      "id": "S10-sort-off",
+      "file": "src/review/replay.ts",
+      "anchor": "    .sort()\n",
+      "replacement": "\n",
+      "line": 155,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1394
+    },
+    {
+      "id": "S11-cell-identity",
+      "file": "src/review/replay.ts",
+      "anchor": "value.replaceAll(\"|\", \"\\\\|\")",
+      "replacement": "value",
+      "line": 159,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1811
+    },
+    {
+      "id": "S12-same-count-wrong",
+      "file": "src/review/replay.ts",
+      "anchor": "${rows.length - differing.length}",
+      "replacement": "${rows.length}",
+      "line": 172,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1820
+    },
+    {
+      "id": "S13-decisionfor-same-ignored",
+      "file": "src/review/replay.ts",
+      "anchor": "row.same ? \"none\"",
+      "replacement": "false ? \"none\"",
+      "line": 48,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1665
+    },
+    {
+      "id": "S14-undecided-default-accepted",
+      "file": "src/review/replay.ts",
+      "anchor": "?? \"undecided\"",
+      "replacement": "?? \"accepted\"",
+      "line": 48,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2081
+    },
+    {
+      "id": "S15-realroot-unresolved",
+      "file": "src/review/replay.ts",
+      "anchor": "const realRoot = realpathSync(root);",
+      "replacement": "const realRoot = root;",
+      "line": 150,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 2250
+    },
+    {
+      "id": "S17-parent-raw-check-off",
+      "file": "src/review/replay.ts",
+      "anchor": "parts[parts.length - 2] === \"raw\"",
+      "replacement": "true",
+      "line": 109,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1513
+    },
+    {
+      "id": "S18-nested-raw-allowed",
+      "file": "src/review/replay.ts",
+      "anchor": "|| part === \"raw\")",
+      "replacement": "|| false)",
+      "line": 109,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1560
+    },
+    {
+      "id": "S19-drivers-not-skipped",
+      "file": "src/review/replay.ts",
+      "anchor": "\"research-evidence\", \"drivers\"",
+      "replacement": "\"research-evidence\"",
+      "line": 103,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1713
+    },
+    {
+      "id": "S21-walk-exists-guard-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!existsSync(path.join(root, relative))) return files;",
+      "replacement": "",
+      "line": 114,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1659
+    },
+    {
+      "id": "S22-classify-always-fence",
+      "file": "src/review/replay.ts",
+      "anchor": "return labelledCaptureBroken(raw) ? \"fence-inner-backticks\" : \"unclassified\";",
+      "replacement": "return \"fence-inner-backticks\";",
+      "line": 72,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1620
+    },
+    {
+      "id": "S23-empty-guard-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (rows.length === 0) throw",
+      "replacement": "if (false) throw",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1475
+    },
+    {
+      "id": "S24-hash-11",
+      "file": "src/review/replay.ts",
+      "anchor": ".slice(0, 12)",
+      "replacement": ".slice(0, 11)",
+      "line": 95,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1452
+    },
+    {
+      "id": "S25-root-from-cwd",
+      "file": "src/review/replay.ts",
+      "anchor": "path.resolve(import.meta.dir, \"..\", \"..\")",
+      "replacement": "process.cwd()",
+      "line": 200,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1313
+    },
+    {
+      "id": "S26-write-target-guard-off",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!target) throw",
+      "replacement": "if (false) throw",
+      "line": 205,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1417
+    },
+    {
+      "id": "S27-catch-returns-true",
+      "file": "src/review/replay.ts",
+      "anchor": "} catch {\n    return false;\n  }\n}\n\nexport function replayRepository",
+      "replacement": "} catch {\n    return true;\n  }\n}\n\nexport function replayRepository",
+      "line": 144,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1401
+    },
+    {
+      "id": "S28-empty-entry-kept",
+      "file": "src/review/replay.ts",
+      "anchor": ".filter((entry) => entry !== \"\")",
+      "replacement": "",
+      "line": 137,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1437
+    },
+    {
+      "id": "S30-reviewer-result-const",
+      "file": "src/review/replay.ts",
+      "anchor": "reviewer-result=${isReviewerResult(result)}",
+      "replacement": "reviewer-result=true",
+      "line": 57,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1384
+    },
+    {
+      "id": "S31-no-git-mode",
+      "file": "src/review/replay.ts",
+      "anchor": "trackedFiles(root, \".metaproject/flows\") ?? walkFiles(root, \".metaproject/flows\")",
+      "replacement": "walkFiles(root, \".metaproject/flows\")",
+      "line": 151,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1318
+    },
+    {
+      "id": "S32-stderr-dropped",
+      "file": "src/review/replay.ts",
+      "anchor": ": ${listed.stderr.trim()}`",
+      "replacement": "`",
+      "line": 135,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1300
+    },
+    {
+      "id": "S33-skipped-dirs-not-applied",
+      "file": "src/review/replay.ts",
+      "anchor": "ancestors.some((part) => SKIPPED_DIRS.has(part) ||",
+      "replacement": "ancestors.some((part) => false ||",
+      "line": 109,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1381
+    }
+  ],
+  "totals": {
+    "killed": 26,
+    "survived": 5,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

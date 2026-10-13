@@ -1,0 +1,38 @@
+[
+{
+"id": "M11-table-decision-unescaped",
+"file": "src/review/replay.ts",
+"anchor": "${cell(decisionFor(row, decisions))}",
+"replacement": "${decisionFor(row, decisions)}"
+},
+{
+"id": "S07-maxbuffer-tiny",
+"file": "src/review/replay.ts",
+"anchor": "maxBuffer: 64 * 1024 * 1024",
+"replacement": "maxBuffer: 1000"
+},
+{
+"id": "M20-env-scrub-off",
+"file": "src/review/replay.ts",
+"anchor": "env: withoutGitDiscoveryOverrides(process.env)",
+"replacement": "env: process.env"
+},
+{
+"id": "M21-scrub-drops-git-dir",
+"file": "src/lib/git-env.ts",
+"anchor": "  \"GIT_DIR\",\n",
+"replacement": ""
+},
+{
+"id": "M22-scrub-drops-index-file",
+"file": "src/lib/git-env.ts",
+"anchor": "  \"GIT_INDEX_FILE\",\n",
+"replacement": ""
+},
+{
+"id": "M23-scrub-drops-work-tree",
+"file": "src/lib/git-env.ts",
+"anchor": "  \"GIT_WORK_TREE\",\n",
+"replacement": ""
+}
+]

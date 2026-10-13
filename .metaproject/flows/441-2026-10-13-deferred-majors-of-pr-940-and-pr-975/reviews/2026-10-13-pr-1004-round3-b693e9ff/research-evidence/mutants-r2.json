@@ -1,0 +1,356 @@
+[
+  {
+    "id": "N01-decision-161-undecided",
+    "file": "src/review/replay.ts",
+    "anchor": "const POLL_161 = \"accepted (operator, poll 161, 2026-10-13)\";",
+    "replacement": "const POLL_161 = \"undecided\";"
+  },
+  {
+    "id": "N02-decision-162-163-undecided",
+    "file": "src/review/replay.ts",
+    "anchor": "const POLL_162_163 = \"accepted (operator, polls 162 and 163, 2026-10-13)\";",
+    "replacement": "const POLL_162_163 = \"undecided\";"
+  },
+  {
+    "id": "N03-decision-fallback-accepted",
+    "file": "src/review/replay.ts",
+    "anchor": "(decisions[decisionKey(row)] ?? \"undecided\")",
+    "replacement": "(decisions[decisionKey(row)] ?? \"accepted\")"
+  },
+  {
+    "id": "N04-decision-key-separator",
+    "file": "src/review/replay.ts",
+    "anchor": "return `${row.file}@${row.hash}`;",
+    "replacement": "return `${row.file}#${row.hash}`;"
+  },
+  {
+    "id": "N05-decision-key-file-only",
+    "file": "src/review/replay.ts",
+    "anchor": "return `${row.file}@${row.hash}`;",
+    "replacement": "return row.file;"
+  },
+  {
+    "id": "N06-labelled-greedy",
+    "file": "src/review/replay.ts",
+    "anchor": "([\\s\\S]*?)```/gi;",
+    "replacement": "([\\s\\S]*)```/gi;"
+  },
+  {
+    "id": "N07-outcome-no-empty",
+    "file": "src/review/replay.ts",
+    "anchor": "  if (empty) return \"empty\";\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "N08-outcome-none-as-empty",
+    "file": "src/review/replay.ts",
+    "anchor": "if (result === undefined) return \"none\";",
+    "replacement": "if (result === undefined) return \"empty\";"
+  },
+  {
+    "id": "N09-outcome-findings-dash",
+    "file": "src/review/replay.ts",
+    "anchor": "? String(result.findings.length) : \"-\";",
+    "replacement": "? \"-\" : \"-\";"
+  },
+  {
+    "id": "N10-outcome-reviewer-result-true",
+    "file": "src/review/replay.ts",
+    "anchor": "reviewer-result=${isReviewerResult(result)}`",
+    "replacement": "reviewer-result=${true}`"
+  },
+  {
+    "id": "N11-broken-no-labelled-true",
+    "file": "src/review/replay.ts",
+    "anchor": "if (labelled.length === 0) return false;",
+    "replacement": "if (labelled.length === 0) return true;"
+  },
+  {
+    "id": "N12-broken-first-fence",
+    "file": "src/review/replay.ts",
+    "anchor": "JSON.parse(labelled[labelled.length - 1]![1]!);\n    return false;",
+    "replacement": "JSON.parse(labelled[0]![1]!);\n    return false;"
+  },
+  {
+    "id": "N13-broken-catch-false",
+    "file": "src/review/replay.ts",
+    "anchor": "  } catch {\n    return true;\n  }",
+    "replacement": "  } catch {\n    return false;\n  }"
+  },
+  {
+    "id": "N14-classify-old-undefined-only",
+    "file": "src/review/replay.ts",
+    "anchor": "if (old === undefined && next !== undefined) return",
+    "replacement": "if (old === undefined) return"
+  },
+  {
+    "id": "N15-classify-fence-swap",
+    "file": "src/review/replay.ts",
+    "anchor": "labelledCaptureBroken(raw) ? \"fence-inner-backticks\" : \"unclassified\"",
+    "replacement": "labelledCaptureBroken(raw) ? \"unclassified\" : \"fence-inner-backticks\""
+  },
+  {
+    "id": "N16-classify-fragment-any-old",
+    "file": "src/review/replay.ts",
+    "anchor": "if (old !== undefined && !isReviewerResult(old) && next === undefined)",
+    "replacement": "if (old !== undefined && next === undefined)"
+  },
+  {
+    "id": "N17-classify-fragment-any-next",
+    "file": "src/review/replay.ts",
+    "anchor": "if (old !== undefined && !isReviewerResult(old) && next === undefined)",
+    "replacement": "if (old !== undefined && !isReviewerResult(old))"
+  },
+  {
+    "id": "N18-same-always-true",
+    "file": "src/review/replay.ts",
+    "anchor": "const same = before === after && isDeepStrictEqual(old, next);",
+    "replacement": "const same = true;"
+  },
+  {
+    "id": "N19-same-outcome-only",
+    "file": "src/review/replay.ts",
+    "anchor": "const same = before === after && isDeepStrictEqual(old, next);",
+    "replacement": "const same = before === after;"
+  },
+  {
+    "id": "N20-hash-8",
+    "file": "src/review/replay.ts",
+    "anchor": ".digest(\"hex\").slice(0, 12),",
+    "replacement": ".digest(\"hex\").slice(0, 8),"
+  },
+  {
+    "id": "N21-cause-always-classify",
+    "file": "src/review/replay.ts",
+    "anchor": "cause: same ? \"none\" : classify(raw, old, next),",
+    "replacement": "cause: classify(raw, old, next),"
+  },
+  {
+    "id": "N22-replayable-txt-off",
+    "file": "src/review/replay.ts",
+    "anchor": "return name.endsWith(\".txt\") && ",
+    "replacement": "return true && "
+  },
+  {
+    "id": "N23-replayable-raw-name",
+    "file": "src/review/replay.ts",
+    "anchor": "parts[parts.length - 2] === \"raw\"",
+    "replacement": "parts[parts.length - 2] === \"rawx\""
+  },
+  {
+    "id": "N24-replayable-keeps-nested-raw",
+    "file": "src/review/replay.ts",
+    "anchor": "SKIPPED_DIRS.has(part) || part === \"raw\"",
+    "replacement": "SKIPPED_DIRS.has(part)"
+  },
+  {
+    "id": "N25-ancestors-include-parent",
+    "file": "src/review/replay.ts",
+    "anchor": "parts.slice(0, -2)",
+    "replacement": "parts.slice(0, -1)"
+  },
+  {
+    "id": "N26-skip-keeps-node-modules",
+    "file": "src/review/replay.ts",
+    "anchor": "new Set([\"node_modules\", \"research-evidence\", \"drivers\"])",
+    "replacement": "new Set([\"research-evidence\", \"drivers\"])"
+  },
+  {
+    "id": "N27-skip-keeps-research-evidence",
+    "file": "src/review/replay.ts",
+    "anchor": "new Set([\"node_modules\", \"research-evidence\", \"drivers\"])",
+    "replacement": "new Set([\"node_modules\", \"drivers\"])"
+  },
+  {
+    "id": "N28-skip-keeps-drivers",
+    "file": "src/review/replay.ts",
+    "anchor": "new Set([\"node_modules\", \"research-evidence\", \"drivers\"])",
+    "replacement": "new Set([\"node_modules\", \"research-evidence\"])"
+  },
+  {
+    "id": "N29-walk-no-existsSync-guard",
+    "file": "src/review/replay.ts",
+    "anchor": "  if (!existsSync(path.join(root, relative))) return files;\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "N30-walk-skips-directories",
+    "file": "src/review/replay.ts",
+    "anchor": "if (entry.isDirectory()) stack.push(child);",
+    "replacement": "if (false) stack.push(child);"
+  },
+  {
+    "id": "N31-walk-skips-files",
+    "file": "src/review/replay.ts",
+    "anchor": "else if (entry.isFile()) files.push(child);",
+    "replacement": "else if (false) files.push(child);"
+  },
+  {
+    "id": "N32-toplevel-guard-off",
+    "file": "src/review/replay.ts",
+    "anchor": "if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)) return undefined;",
+    "replacement": "if (top.status !== 0) return undefined;"
+  },
+  {
+    "id": "N33-ls-files-not-nul",
+    "file": "src/review/replay.ts",
+    "anchor": "return listed.stdout.split(\"\\0\").filter((entry) => entry !== \"\");",
+    "replacement": "return listed.stdout.split(\"\\n\").filter((entry) => entry !== \"\");"
+  },
+  {
+    "id": "N34-ls-files-status-ignored",
+    "file": "src/review/replay.ts",
+    "anchor": "if (listed.status !== 0) return undefined;\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "N35-symlink-filter-off",
+    "file": "src/review/replay.ts",
+    "anchor": "    .filter((relative) => !lstatSync(path.join(root, relative)).isSymbolicLink())\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "N36-candidates-unsorted",
+    "file": "src/review/replay.ts",
+    "anchor": "    .sort()\n    .map((relative) => replayRaw(",
+    "replacement": "    .map((relative) => replayRaw("
+  },
+  {
+    "id": "N37-fallback-to-data-review",
+    "file": "src/review/replay.ts",
+    "anchor": "trackedFiles(root, \".metaproject/flows\") ?? walkFiles(root, \".metaproject/flows\")",
+    "replacement": "trackedFiles(root, \".metaproject\") ?? walkFiles(root, \".metaproject\")"
+  },
+  {
+    "id": "N38-zero-rows-allowed",
+    "file": "src/review/replay.ts",
+    "anchor": "if (rows.length === 0) throw",
+    "replacement": "if (false) throw"
+  },
+  {
+    "id": "N39-cli-root-cwd",
+    "file": "src/review/replay.ts",
+    "anchor": "replayReport(path.resolve(import.meta.dir, \"..\", \"..\"))",
+    "replacement": "replayReport(process.cwd())"
+  },
+  {
+    "id": "N40-cli-target-guard-off",
+    "file": "src/review/replay.ts",
+    "anchor": "    if (!target) throw new Error(\"--write needs a target path\");\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "N41-cli-write-ignored",
+    "file": "src/review/replay.ts",
+    "anchor": "await Bun.write(path.resolve(target), report);",
+    "replacement": "process.stdout.write(report);"
+  },
+  {
+    "id": "N42-legacy-greedy-fence",
+    "file": "src/review/legacy-result-parser.ts",
+    "anchor": "([\\s\\S]*?)```/gi",
+    "replacement": "([\\s\\S]*)```/gi"
+  },
+  {
+    "id": "N43-legacy-nested-skip-off",
+    "file": "src/review/legacy-result-parser.ts",
+    "anchor": "          start = end;\n",
+    "replacement": "\n"
+  },
+  {
+    "id": "N44-legacy-first-labelled",
+    "file": "src/review/legacy-result-parser.ts",
+    "anchor": "JSON.parse(labelled[labelled.length - 1]![1]!)",
+    "replacement": "JSON.parse(labelled[0]![1]!)"
+  },
+  {
+    "id": "N45-legacy-last-status-first",
+    "file": "src/review/legacy-result-parser.ts",
+    "anchor": "if (typeof parsed.status === \"string\") result = parsed as ParsedResult;",
+    "replacement": "if (typeof parsed.status === \"string\" && result === undefined) result = parsed as ParsedResult;"
+  },
+  {
+    "id": "R01-decisionfor-same-undecided",
+    "file": "src/review/replay.ts",
+    "anchor": "return row.same ? \"none\" : (decisions",
+    "replacement": "return row.same ? \"undecided\" : (decisions"
+  },
+  {
+    "id": "R02-hash-of-file-name",
+    "file": "src/review/replay.ts",
+    "anchor": ".update(raw).digest",
+    "replacement": ".update(file).digest"
+  },
+  {
+    "id": "R03-same-deepequal-only",
+    "file": "src/review/replay.ts",
+    "anchor": "const same = before === after && isDeepStrictEqual(old, next);",
+    "replacement": "const same = isDeepStrictEqual(old, next);"
+  },
+  {
+    "id": "R04-ancestor-skip-never",
+    "file": "src/review/replay.ts",
+    "anchor": "!ancestors.some((part) => SKIPPED_DIRS.has(part) || part === \"raw\")",
+    "replacement": "true"
+  },
+  {
+    "id": "R05-toplevel-realpath-dropped",
+    "file": "src/review/replay.ts",
+    "anchor": "top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(root)",
+    "replacement": "top.status !== 0 || false"
+  },
+  {
+    "id": "R06-lsfiles-pathspec-dropped",
+    "file": "src/review/replay.ts",
+    "anchor": "\"ls-files\", \"-z\", \"--\", relative]",
+    "replacement": "\"ls-files\", \"-z\"]"
+  },
+  {
+    "id": "R07-symlink-check-dir-instead",
+    "file": "src/review/replay.ts",
+    "anchor": "path.join(root, relative)).isSymbolicLink())",
+    "replacement": "path.join(root, relative)).isDirectory())"
+  },
+  {
+    "id": "R08-walk-always-empty",
+    "file": "src/review/replay.ts",
+    "anchor": "if (!existsSync(path.join(root, relative))) return files;",
+    "replacement": "return files;"
+  },
+  {
+    "id": "R09-render-same-section-dropped",
+    "file": "src/review/replay.ts",
+    "anchor": "...rows.filter((row) => row.same).map((row) => `- ${row.file} (${row.hash}): ${row.old}`),",
+    "replacement": ""
+  },
+  {
+    "id": "R10-render-counts-swapped",
+    "file": "src/review/replay.ts",
+    "anchor": "Same: ${rows.length - differing.length}. Differences: ${differing.length}.",
+    "replacement": "Same: ${differing.length}. Differences: ${rows.length - differing.length}."
+  },
+  {
+    "id": "R11-render-decision-constant",
+    "file": "src/review/replay.ts",
+    "anchor": "| ${row.cause} | ${decisionFor(row, decisions)} |`",
+    "replacement": "| ${row.cause} | undecided |`"
+  },
+  {
+    "id": "R12-cli-flag-index",
+    "file": "src/review/replay.ts",
+    "anchor": "process.argv[flag + 1]",
+    "replacement": "process.argv[flag]"
+  },
+  {
+    "id": "R13-outcome-reviewer-default",
+    "file": "src/review/replay.ts",
+    "anchor": "${result.reviewer ?? \"-\"}",
+    "replacement": "${result.reviewer ?? \"x\"}"
+  },
+  {
+    "id": "R14-zero-rows-never-throws",
+    "file": "src/review/replay.ts",
+    "anchor": "if (rows.length === 0) throw new Error",
+    "replacement": "if (rows.length < 0) throw new Error"
+  }
+]
