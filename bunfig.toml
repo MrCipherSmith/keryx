@@ -6,4 +6,4 @@
 # for the measurement that motivated it.
 
 [test]
-preload = ["./src/lib/test-preload.ts"]
+preload = ["./src/lib/test-preload.ts", "./src/lib/test-preload-hooks.ts"]
