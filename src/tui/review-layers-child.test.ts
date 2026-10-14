@@ -86,6 +86,17 @@ describe("the production runner behind the /reviews layers refresh", () => {
     }
   }, 20_000);
 
+  test("a child that floods stdout past the buffer limit is reported as too much output, not as a timeout", async () => {
+    const entry = await stub(`process.stdout.write("x".repeat(17 * 1024 * 1024)); setInterval(() => {}, 1000);`);
+    const error = await makeLayersRefreshRunner(entry, 60_000)(dir, "/p").then(
+      () => null,
+      (reason: unknown) => reason as Error,
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(error?.message).toMatch(/more output than the limit/);
+    expect(error?.message).not.toMatch(/did not finish within/);
+  }, 30_000);
+
   test("a child that exits early without JSON is not mistaken for a timeout", async () => {
     const entry = await stub(`process.exit(0);`);
     const error = await makeLayersRefreshRunner(entry, 5000)(dir, "/p").then(

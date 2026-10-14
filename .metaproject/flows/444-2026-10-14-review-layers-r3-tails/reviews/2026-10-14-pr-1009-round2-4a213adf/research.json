@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": false,
+  "obligations": [],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-clean-code",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-testing-practices"
+    ]
+  }
+}

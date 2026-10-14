@@ -51,8 +51,8 @@ export function makeLayersRefreshRunner(entry: string | undefined, timeoutMs = R
         { cwd: projectRoot, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
         (error, stdout, stderr) => {
           liveChildren.delete(child);
-          if (error?.killed === true) {
-            const timedOut = Date.now() - startedAt >= timeoutMs - 100;
+          if (error?.killed === true || /maxBuffer/i.test(error?.message ?? "")) {
+            const timedOut = error?.killed === true && Date.now() - startedAt >= timeoutMs - 100;
             reject(new Error(timedOut ? `the layers refresh did not finish within ${Math.round(timeoutMs / 1000)}s and was stopped` : "the layers refresh printed more output than the limit allows and was stopped"));
             return;
           }

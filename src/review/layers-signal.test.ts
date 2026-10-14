@@ -31,6 +31,44 @@ const registered = (): string[] =>
     .split("\n")
     .filter((line) => line.startsWith("worktree "));
 
+describe("a cleanup that never finishes does not hold the process or the lock past the bound", () => {
+  test("SIGTERM with a checkout removal that hangs still frees the lock and ends the process by the signal", async () => {
+    const ready = path.join(fixture.root, "ready.flag");
+    const script = path.join(fixture.root, "child.ts");
+    await writeFile(
+      script,
+      [
+        `import { writeFileSync } from "node:fs";`,
+        `import { defaultLayerDeps, refreshLayers } from ${JSON.stringify(path.resolve(import.meta.dir, "layers.ts"))};`,
+        `const READY = ${JSON.stringify(ready)};`,
+        `await refreshLayers({ projectRoot: ${JSON.stringify(fixture.root)}, packageDir: ${JSON.stringify(fixture.packageDir)}, deps: {`,
+        `  git: async (cwd, args) => { if (args.includes("remove")) { ${HANG} } return defaultLayerDeps.git(cwd, args); },`,
+        `  buildGraph: async () => { writeFileSync(READY, "1"); ${HANG} },`,
+        `} });`,
+      ].join("\n"),
+    );
+    const child = spawn(process.execPath, ["run", script], { stdio: "ignore" });
+    const exited = new Promise<NodeJS.Signals | null | "late">((resolve) => {
+      child.on("exit", (_code, killedBy) => resolve(killedBy));
+      setTimeout(() => resolve("late"), 20_000).unref();
+    });
+    try {
+      const deadline = Date.now() + 30_000;
+      while (!existsSync(ready) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(existsSync(ready)).toBe(true);
+
+      child.kill("SIGTERM");
+      expect(await exited).toBe("SIGTERM");
+      expect(existsSync(layersLockPath(fixture.packageDir))).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+      for (const line of registered().slice(1)) {
+        git(fixture.root, ["worktree", "remove", "--force", line.slice("worktree ".length)]);
+      }
+    }
+  }, 60_000);
+});
+
 describe("a signal at any phase of a refresh leaves nothing behind", () => {
   for (const [phase, hook] of Object.entries(PHASES)) {
     for (const signal of ["SIGTERM", "SIGINT"] as const) {
