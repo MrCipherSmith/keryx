@@ -48,6 +48,18 @@ test("a cited path that climbs out of the tree or is absolute is never looked up
 
 test("a rebuttal that cites only a URL cites no path", () => {
   expect(citedPaths("see https://example.com/rules/a.md")).toEqual([]);
+  expect(citedPaths("see https://example.com/view?doc=docs/a.md")).toEqual([]);
+});
+
+test("a cited file that exists outside the tree is still reported missing", async () => {
+  const outside = path.join(path.dirname(dir), `keryx-outside-${path.basename(dir)}.md`);
+  await writeFile(outside, "# outside\n");
+  try {
+    const [kept] = await recorded(`see ../${path.basename(outside)}`);
+    expect(kept!.disposition?.evidence).toContain(`citation not found: ../${path.basename(outside)}`);
+  } finally {
+    await rm(outside, { force: true });
+  }
 });
 
 test("a cited document that is not in the tree gets a 'citation not found' line; the finding stays", async () => {

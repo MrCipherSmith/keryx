@@ -11,7 +11,7 @@
 | R1-06 | minor | fixed | A recorded head that is not a 7–40 digit hex SHA skips the moved-head check with a warning instead of matching every PR head. |
 | R1-07 | minor | fixed | Fenced `Evidence level:` lines are ignored, and placeholder items (`none`, `nothing`, `n/a`, `-`) are not items. |
 | R1-08 | minor | fixed | Dismissed and external findings are exempt from the unlocatable refusal, now with tests. Kills r1-loc-external-asked and r1-loc-dismissed-asked. |
-| R1-09 | minor | fixed | `lexicalRelativePath` (`..`, absolute) and URL-only rebuttals are tested. Kills r1-lex-dotdot-ok, r1-lex-absolute-ok and r1-cite-url-kept. |
+| R1-09 | minor | fixed | `lexicalRelativePath` (`..`, absolute) and URL-only rebuttals are tested. Kills r1-lex-dotdot-ok and r1-lex-absolute-ok; r1-cite-url-kept was not killed by this test (round 2, R2-02, fixed there). |
 | R1-10 | minor | deferred | The review-orchestrator SKILL.md sits at its length ceiling; the unwrapping of three paragraphs and a ceiling change are an operator decision. |
 | R1-11 | minor | fixed | The unlocatable-quote refusal names its causes (quote absent, ambiguous, file or commit not in this checkout) and the `git cat-file -e` check. |
 | R1-12 | minor | deferred | Reading the head through a lighter adapter call (`prHead`) instead of `gh pr checks` is a follow-up. |

@@ -84,7 +84,8 @@ test("the refusal names the possible causes and the way out", async () => {
   const message = (error as Error).message;
   expect(message).toContain("appears in it more than once");
   expect(message).toContain(`git cat-file -e ${head.slice(0, 12)}`);
-  expect(message).toContain("ingest without --head");
+  expect(message).toContain("dismiss the finding with evidence");
+  expect(message).not.toContain("without --head");
 });
 
 test("with no reviewed SHA the ingest does not refuse, as before", async () => {

@@ -1237,7 +1237,7 @@ function refuseUnresolvedLocators(
     return `  - ${finding.id ?? finding.summary} (${finding.file}${line === null ? "" : `:${line}`}): ${locator?.reason ?? ""}`;
   });
   throw new Error(
-    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that does not resolve at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`). Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\`, dismiss the finding with evidence, or ingest without --head.`,
+    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that does not resolve at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`). Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
   );
 }
 
