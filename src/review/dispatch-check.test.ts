@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { checkDispatch, loadReviewerInputSchema } from "./dispatch-check";
 
 function payload(model: Record<string, unknown>): Record<string, unknown> {
@@ -55,7 +56,7 @@ describe("checkDispatch model block", () => {
       ".metaproject/core/gdskills/contracts/subagent-dispatch.schema.json",
     ];
     for (const file of files) {
-      const schema = JSON.parse(readFileSync(file, "utf8")) as { properties: { model: { properties: Record<string, { type?: string }> } } };
+      const schema = JSON.parse(readFileSync(path.resolve(import.meta.dir, "..", "..", file), "utf8")) as { properties: { model: { properties: Record<string, { type?: string }> } } };
       expect({ file, routed: schema.properties.model.properties.routed?.type }).toEqual({ file, routed: "boolean" });
     }
     const loaded = (await loadReviewerInputSchema()) as unknown as { properties: { model: { properties: Record<string, unknown> } } };

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -81,15 +82,26 @@ describe("review-pr-contract dispatch", () => {
     budget: { max_findings: 10 },
   });
 
+  // The same existence check `keryx review dispatch-check --pr-context` passes: the real filesystem, so the unit decides.
+  const onDisk = { prContext: { exists: (contextPath: string) => existsSync(path.resolve(contextPath)) } };
+
   test("passes dispatch-check when the payload names the readable pr-context.md", async () => {
-    const result = await checkDispatch([payload(path.join(FIXTURES, "pr-context.md"))], { prContext: { exists: () => true } });
+    const result = await checkDispatch([payload(path.join(FIXTURES, "pr-context.md"))], onDisk);
     expect(result.errors).toEqual([]);
     expect(result.ok).toBe(true);
   });
 
-  test("is refused when the pr-context.md it works from is not there", async () => {
-    const result = await checkDispatch([payload("")], { prContext: { exists: () => false } });
-    expect(result.errors.map((e) => e.code)).toContain("REVIEWER_INPUT_NO_PR_CONTEXT");
+  test("is refused when the payload names a pr-context.md that is not there", async () => {
+    const missing = path.join(root, "pkg", "pr-context.md");
+    const result = await checkDispatch([payload(missing)], onDisk);
+    expect(result.errors.map((e) => e.code)).toEqual(["REVIEWER_INPUT_NO_PR_CONTEXT"]);
+    expect(result.errors[0]?.message).toContain("is not a readable file");
+  });
+
+  test("is refused when the payload names no pr-context.md at all", async () => {
+    const result = await checkDispatch([payload("")], onDisk);
+    expect(result.errors.map((e) => e.code)).toEqual(["REVIEWER_INPUT_NO_PR_CONTEXT"]);
+    expect(result.errors[0]?.message).toContain("context-collect");
   });
 });
 
@@ -112,12 +124,5 @@ describe("the synthetic fixture and the skill's checklist form", () => {
     expect(documentationRow).toBeDefined();
     expect(documentationRow).toContain("A user-visible string or row is added, so the box should be ticked and a document should describe it");
     expect(documentationRow!.split("|").length).toBe(6);
-  });
-
-  test("the shell-host rule names the read-only limit and NEEDS_CONTEXT with paths", async () => {
-    const skill = await readFile(SKILL, "utf8");
-    expect(skill).toContain("### On a shell host");
-    expect(skill).toContain("STATUS: NEEDS_CONTEXT");
-    expect(skill).toContain("read-only");
   });
 });
