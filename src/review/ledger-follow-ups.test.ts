@@ -91,6 +91,17 @@ describe("Parent follow-up: lines", () => {
     expect(parentFollowUps(body)).toEqual(["check the retry cap in queue.ts", "rerun the e2e suite", "confirm the flag default"]);
   });
 
+  test("a later mention of REVIEW_RESULT, even inside a follow-up line, does not drop the earlier follow-ups", () => {
+    const body = [block, "Parent follow-up: check the retry cap", "Parent follow-up: compare against the REVIEW_RESULT above", "Notes: the REVIEW_RESULT block is final.", "Parent follow-up: rerun the e2e suite"].join("\n");
+    expect(parentFollowUps(body)).toEqual(["check the retry cap", "compare against the REVIEW_RESULT above", "rerun the e2e suite"]);
+  });
+
+  test("a bare-marker result is the anchor too, and a later mention does not move it", () => {
+    const marker = `REVIEW_RESULT ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "s", findings: [] })}`;
+    const body = ["Parent follow-up: quoted in prose before", marker, "Parent follow-up: first", "see REVIEW_RESULT", "Parent follow-up: second"].join("\n");
+    expect(parentFollowUps(body)).toEqual(["first", "second"]);
+  });
+
   test("text that only mentions the phrase is not a follow-up", () => {
     expect(parentFollowUps(`${block}\nThere is no Parent follow-up: needed here.\nParent follow-up:   \n`)).toEqual([]);
   });

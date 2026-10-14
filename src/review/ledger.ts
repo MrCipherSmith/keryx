@@ -205,7 +205,8 @@ export function isReviewerResult(value: unknown): value is ParsedResult {
   return typeof object.reviewer === "string" || Array.isArray(object.findings);
 }
 
-type Decision = { result: ParsedResult | undefined };
+/** `at` is where the label that starts the result begins in the reply. */
+type Decision = { result: ParsedResult | undefined; at: number };
 
 /** A line that only closes a fence. A JSON string cannot hold a raw newline, so such a line is never inside the object. */
 const LINE_CLOSE = /^ {0,3}```[ \t]*\r?$/gm;
@@ -226,7 +227,7 @@ function labelledFence(raw: string): Decision | undefined {
     const close = LINE_CLOSE.exec(raw);
     if (close !== null) parsed = tryParse(raw.slice(bodyStart, close.index));
   }
-  return { result: hasStatus(parsed) ? parsed : undefined };
+  return { result: hasStatus(parsed) ? parsed : undefined, at: last.index! };
 }
 
 function tryParse(source: string): unknown {
@@ -244,7 +245,7 @@ const MARKER = /(?<![^\n])[ \t>*#-]*REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g;
  * A marker followed by something that is not a reviewer result (prose such as `REVIEW_RESULT {contract}`, a cut-off
  * object) is passed over for the one before it.
  */
-function afterMarker(raw: string): ParsedResult | undefined {
+function afterMarker(raw: string): { result: ParsedResult; at: number } | undefined {
   const inFence = fenceTester(raw);
   const markers = [...raw.matchAll(MARKER)].filter((marker) => !inFence(marker.index!)).slice(-MAX_MARKERS);
   for (let at = markers.length - 1; at >= 0; at -= 1) {
@@ -253,7 +254,7 @@ function afterMarker(raw: string): ParsedResult | undefined {
     const { end } = objectEnd(raw, start);
     if (end === undefined) continue;
     const parsed = tryParse(raw.slice(start, end + 1));
-    if (isReviewerResult(parsed)) return parsed;
+    if (isReviewerResult(parsed)) return { result: parsed, at: marker.index! };
   }
   return undefined;
 }
@@ -294,23 +295,23 @@ function scannedResult(raw: string): ParsedResult | undefined {
 export function parseReviewResult(raw: string): ParsedResult | undefined {
   const labelled = labelledFence(raw);
   if (labelled !== undefined) return labelled.result;
-  return afterMarker(raw) ?? scannedResult(raw);
+  return afterMarker(raw)?.result ?? scannedResult(raw);
 }
 
 /** A line that starts with `Parent follow-up:` (after at most a quote, list or emphasis prefix); the rest of the line is the follow-up. */
 const PARENT_FOLLOW_UP = /^[ \t>*_-]*Parent follow-up[ \t]*\**:\**[ \t]*(.*\S)[ \t]*$/i;
 
 /**
- * The `Parent follow-up:` lines a reviewer wrote after its REVIEW_RESULT block. Only lines below the last result label
- * count, so a line quoted in the reviewer's own prose before the block is not read as an obligation. A reply with no
- * label (a bare result object) is read whole.
+ * The `Parent follow-up:` lines a reviewer wrote after its REVIEW_RESULT block. Only lines below the label that starts
+ * the parsed result count (the last ```REVIEW_RESULT fence, else the marker the result was read after), so a line quoted
+ * in the reviewer's own prose before the block is not read as an obligation, and a later mention of the word does not
+ * move the start. A reply with no such label (a bare result object) is read whole.
  */
 export function parentFollowUps(raw: string): string[] {
-  const labels = [...raw.matchAll(/REVIEW_RESULT/gi)];
-  const from = labels.length === 0 ? 0 : labels[labels.length - 1]!.index!;
-  const lines = raw.slice(from).split(/\r?\n/);
+  const label = labelledFence(raw) ?? afterMarker(raw);
+  const lines = (label === undefined ? raw : raw.slice(label.at)).split(/\r?\n/);
   const found: string[] = [];
-  for (const line of labels.length === 0 ? lines : lines.slice(1)) {
+  for (const line of label === undefined ? lines : lines.slice(1)) {
     const hit = PARENT_FOLLOW_UP.exec(line);
     if (hit !== null) found.push(hit[1]!);
   }
