@@ -729,6 +729,20 @@ run executed stays minor (a major is capped at minor) and gets the label `unprov
 never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
 which can only delete. `--dry-run` prints the changes without writing `findings.json`.
 
+Each mutant in `mutants.json` carries a `kind`: `behavior` (the default, and what a record written
+before the field reads as) or `presentation` (it changes only what a reader sees: a label, a
+column, copy, spacing). A behavior survivor raises as above. When the only survivors a finding
+cites are `presentation`, the severity stays, and the finding gets
+`severity_audit {held: {severity, mutant, kind: "presentation", evidence, reason}}` instead of
+`{from, to}`. A held note is not a raise and not a deletion; it is the record that a survivor was
+seen and did not move the severity, so the report must say so.
+
+`keryx review report-parity <review-dir>` prints what the round left behind as Markdown to paste
+into `report.md`: the `Not run: N candidates` line, each held note, and each follow-up still open
+as `Not verified: <text>`. The same lines show in `keryx review status`, in the shell
+`/review parity` view and in the sidebar. `keryx review complete` warns, and does not refuse, when
+any of them exists and the report names none.
+
 ### Layout measurements on a shell host
 
 A shell reviewer cannot start a browser. Before dispatching `review-layout` the main session runs

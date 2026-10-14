@@ -15,6 +15,7 @@ import { readLayers, type LayersFile } from "../review/layers";
 import { layersDetailLines, layersSummaryLine } from "../review/layers-view";
 import { LAYER_NAMES, summarizeLayersUsage, type LayersUsageSummary } from "../review/layers-usage";
 import { EVIDENCE_DIR, pendingMutants, type MutantStatus, type MutationRecord } from "../review/mutate";
+import { parityIsEmpty, parityLines, readReviewParity, type ReviewParityView } from "../review/parity";
 
 export const REVIEW_DEPTH_EMPTY = "No managed review has recorded a dispatch yet.";
 
@@ -59,6 +60,8 @@ export type ReviewDepthRow = {
   /** The operator's recorded waiver of the mutation pass, when there is one. */
   mutationWaived: boolean;
   layersView?: ReviewLayersView;
+  /** Not run candidates, held severity notes and open follow-ups; absent when the package has none. */
+  parity?: ReviewParityView;
 };
 
 const ZERO: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
@@ -116,7 +119,8 @@ export async function loadReviewDepth(cwd: string, listed?: readonly ListedRevie
     const selected = Array.isArray(dispatch?.selected) ? dispatch.selected.filter((s): s is string => typeof s === "string") : [];
     const waiver = dispatch?.mutationWaiver;
     const mutationWaived = waiver !== null && typeof waiver === "object" && typeof (waiver as { operatorQuote?: unknown }).operatorQuote === "string";
-    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch) };
+    const parity = await readReviewParity(review.dir);
+    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch), ...(parityIsEmpty(parity) ? {} : { parity }) };
     if (mode === undefined) {
       rows.push({ ...base, mode: "unrecorded", required: [], excluded: [], missing: [], filesKnown: false });
       continue;
@@ -173,7 +177,7 @@ export function layersDepthLines(view: ReviewLayersView | undefined): string[] {
 export function formatReviewDepthRowLines(row: ReviewDepthRow): string[] {
   const head = `${row.pull}  ${row.reviewId}  mode ${row.mode}`;
   const lines = [head];
-  const layers = layersDepthLines(row.layersView).map((line) => `  ${line}`);
+  const layers = [...layersDepthLines(row.layersView), ...parityLines(row.parity)].map((line) => `  ${line}`);
   if (row.mode === "unrecorded") {
     lines.push("  no dispatch record: the reviewer set is not known", `  ${mutationLine(row.mutation, row.mutationWaived)}`, ...layers);
     return lines;
@@ -202,4 +206,11 @@ export function formatReviewDepthLines(rows: readonly ReviewDepthRow[]): string[
 /** The readline shell's depth block, printed under the `/reviews` metrics. */
 export function renderReviewDepthText(rows: readonly ReviewDepthRow[]): string {
   return `Review depth\n${formatReviewDepthLines(rows).join("\n")}\n`;
+}
+
+/** `/review parity` and the readline text: what each review left behind, one block per review that left anything. */
+export function renderReviewParityText(rows: readonly ReviewDepthRow[]): string {
+  if (rows.length === 0) return `${REVIEW_DEPTH_EMPTY}\n`;
+  const blocks = rows.filter((row) => row.parity !== undefined).map((row) => [`${row.pull}  ${row.reviewId}`, ...parityLines(row.parity).map((line) => `  ${line}`)].join("\n"));
+  return `Review parity\n${blocks.length === 0 ? "No Not run candidates, held severity notes or open follow-ups." : blocks.join("\n\n")}\n`;
 }

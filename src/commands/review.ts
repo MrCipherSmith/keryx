@@ -24,10 +24,12 @@ import {
   createManagedReviewPackage,
   getManagedReviewStatus,
   resolveGitHead,
+  resolveReviewPackagePath,
   upsertPreFilterScopeBlock,
   type FindingDispositionRecord,
   type ManagedReviewIngestInput,
 } from "../review/managed";
+import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
 import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
@@ -776,6 +778,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "status") {
       await runStatus(args.slice(1));
+      return;
+    }
+    if (command === "report-parity") {
+      await runReportParity(args.slice(1));
       return;
     }
     if (command === "complete") {
@@ -3770,6 +3776,15 @@ async function mergeBaseWithHead(ref: string): Promise<string> {
   return base;
 }
 
+/** `keryx review report-parity <review>`: the Markdown to paste into report.md so the leftovers of a round are named. */
+async function runReportParity(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, [], "report-parity <review-id-or-path>");
+  const ref = args[0];
+  if (!ref) throw new Error("Usage: keryx review report-parity <review-id-or-path>");
+  const markdown = renderParityReport(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)));
+  console.log(markdown === "" ? "Nothing to carry into the report: no Not run candidates, held severity notes or open follow-ups." : markdown.trimEnd());
+}
+
 async function runStatus(args: string[]): Promise<void> {
   rejectUnknownFlags(args, [], "status <review-id-or-path>");
   const ref = args[0];
@@ -3785,6 +3800,8 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
   console.log(`coverage: ${manifest.coverage.length}`);
+  // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
+  for (const line of parityLines(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
 
   // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
   // manifest on disk, by a different invocation from the one that wrote it — and
@@ -4368,6 +4385,7 @@ ${COMMENTS_USAGE}
   keryx review reviewers [--json]
   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
+  keryx review report-parity <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
                         [--waive-coverage "<operator quote>"]

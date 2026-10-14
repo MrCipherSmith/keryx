@@ -2,7 +2,8 @@
 // and the readline text are all built from one `BotMetrics`, so no surface states a number the
 // CLI does not. Read-only: opening it reads the managed review packages and changes nothing.
 
-import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, type ReviewDepthRow } from "./review-panel";
+import { paritySummary } from "../review/parity";
+import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, type ReviewDepthRow } from "./review-panel";
 import { createReviewLayersActions, type ReviewLayersActions } from "./review-layers-actions";
 import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -34,7 +35,23 @@ export function isReviewLayersCommand(line: string): boolean {
   return token === "/review" && sub === "layers";
 }
 
-export { renderReviewLayersText };
+/** `/review parity`: Not run candidates, held severities and open follow-ups of every managed review, as text. */
+export function isReviewParityCommand(line: string): boolean {
+  const [token, sub] = line.trim().split(/\s+/);
+  return token === "/review" && sub === "parity";
+}
+
+export { renderReviewLayersText, renderReviewParityText };
+
+/** One sidebar line per review that left something behind: `Not run 3, held 1, follow-ups 2`, wrapped to the sidebar width. */
+export function projectReviewsParityLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
+  if (depth === undefined) return [];
+  return depth
+    .map((row) => paritySummary(row.parity))
+    .filter((line) => line !== "")
+    .slice(0, limit)
+    .map((line) => line.split(", ").map((part) => wrapLines(part, width)).join("\n"));
+}
 
 /** One sidebar line per review that has anything to say about its layers, wrapped to the sidebar width. */
 export function projectReviewsLayerLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
@@ -260,6 +277,8 @@ export interface ReviewsPanelHandle {
   activate(): ReviewsRowAction;
   /** The per-review layer lines the sidebar paints under the count. */
   layerLines(): string[];
+  /** The per-review leftovers (Not run, held, follow-ups) the sidebar paints under the layer lines. */
+  parityLines(): string[];
   dispose(): void;
 }
 
@@ -285,6 +304,8 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
   box.add(value as never);
   const layerNode = new core.TextRenderable(renderer as never, { id: "sb-reviews-layers", content: "" }) as unknown as TextNode;
   box.add(layerNode as never);
+  const parityNode = new core.TextRenderable(renderer as never, { id: "sb-reviews-parity", content: "" }) as unknown as TextNode;
+  box.add(parityNode as never);
 
   const currentRow = (): ReviewsRow => projectReviewsRow(latest, options.width, { failed });
   const draw = (): void => {
@@ -293,6 +314,7 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     label.content = core.t`${dimChunk(core, "Reviews")}`;
     value.content = core.t`${roleChunk(core, row.role, row.text)}`;
     layerNode.content = projectReviewsLayerLines(depth, options.width).join("\n");
+    parityNode.content = projectReviewsParityLines(depth, options.width).join("\n");
   };
   const activate = (): ReviewsRowAction => {
     const action = currentRow().action;
@@ -332,6 +354,7 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     row: currentRow,
     activate,
     layerLines: () => projectReviewsLayerLines(depth, options.width),
+    parityLines: () => projectReviewsParityLines(depth, options.width),
     dispose() {
       disposed = true;
       generation += 1;
