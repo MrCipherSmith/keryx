@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- **Review parity (flow 446).** A round now states what it left undone. `keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`; the rest print as `Not run: N candidates (cap C)`, stay pending and still block `review complete`. Reviewers propose a mutant for every changed branch, and on a shell host the main session writes them to `mutants.json`. A mutant has a `kind`, `behavior` (the default) or `presentation`; `severity-audit` raises a finding only on a behavior survivor and holds the severity, with `severity_audit.held`, on a presentation-only one. A reviewer's `Parent follow-up:` lines and `follow_ups` become ledger obligations `<reviewer>:fu<n>` that only a disposition closes (`narrowed` needs `remains`). `keryx review status` prints the leftovers, `keryx review report-parity <review>` prints them as Markdown for `report.md`, `/review parity` and the sidebar show them, and `review complete` warns (never refuses) when the report names none of a kind. `report-parity` runs without a prompt in an automatic review, for its own package.
+- **`review-pr-contract` reviewer.** A pull-request package that holds `pr-context.md` requires it in both modes (`keryx review required --pr-context <file>`); it checks the diff against the PR's stated contract, is read-only on a shell host and answers `NEEDS_CONTEXT` there.
+- **Comment rules keep comment-only blocks.** When `CLAUDE.md`, `AGENTS.md` or `.metaproject/rules/**` limits comments, `review scope` keeps a comment-only block that adds comments (`kept:comment-rule`, listed in `scope.md` under "Kept past a drop rule") instead of dropping it. `retainCommentBlocks` is `true`, `false` or a pattern; with no rule the scope is unchanged.
+
+### Changed
+- **A second `NEEDS_CONTEXT` is Not run.** A role that asks for context twice is recorded as Not run (`layout: no engine` for `review-layout`, `no engine` otherwise) and reported as such, never as a clean pass; on a shell host the main session supplies browser measurements as `context_files`.
+- **`dispatch-check` accepts `model.routed`.** The model block takes the boolean `routed` that `review tier --json` prints; a non-boolean or any other unknown key is still refused.
+- **In-flight packages are grandfathered for `review-pr-contract`.** `review ledger build` stamps `dispatch.roles`. A package whose dispatch has no stamp predates the role: it is not refused for lacking `review-pr-contract`, and `review complete` warns `review-pr-contract not run (package predates the role)`.
+
 ## [0.3.115] - 2026-10-14
 
 ### Fixed
