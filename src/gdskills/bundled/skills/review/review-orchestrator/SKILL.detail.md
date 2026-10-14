@@ -729,6 +729,18 @@ run executed stays minor (a major is capped at minor) and gets the label `unprov
 never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
 which can only delete. `--dry-run` prints the changes without writing `findings.json`.
 
+### Layout measurements on a shell host
+
+A shell reviewer cannot start a browser. Before dispatching `review-layout` the main session runs
+the browser measurements itself (Playwright, or Storybook with its test runner) for the changed
+components and passes the output files as `context_files` in the **first** dispatch. A measurement
+counts as evidence for `review-layout` when it names the command and the viewport it ran at; one
+without them is context, not evidence.
+
+`src/review/retry-plan.ts` treats `NEEDS_CONTEXT` as one refill: the first one re-dispatches the
+role with what it asked for. A second `NEEDS_CONTEXT` from the same role is `notRun`, reason
+`layout: no engine` for `review-layout` and `no engine` for any other role, and the round goes on.
+
 ### Pull request context — `keryx review context-collect`
 
 A pull-request review starts with `keryx review context-collect --repo <o/r> --pr <n> --package <review-dir>`.

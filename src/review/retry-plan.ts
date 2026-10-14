@@ -83,6 +83,11 @@ export function safeReviewerName(reviewer: string): string {
   return reviewer.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "reviewer";
 }
 
+/** The reason a role that asked for context twice is `not-run`: the host cannot supply what it needs. `review-layout` needs a browser. */
+export function noEngineReason(reviewer: string): string {
+  return reviewer === "review-layout" ? "layout: no engine" : "no engine";
+}
+
 export function notRunLine(reviewer: string, status: string): string {
   return `- **Not run:** ${reviewer} — ${status} after a smaller-slice retry; never counted as a clean pass`;
 }
@@ -243,6 +248,14 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     return plan("wave", `${status || "no result"}; ${summary.slices} slice(s) are uncovered — dispatch the next wave (${summary.waves} left), no attempt is spent`);
   }
 
+  const asksForContext = status === "NEEDS_CONTEXT" || hasContext;
+  if (asksForContext && known?.status === "NEEDS_CONTEXT" && !known.notRun) {
+    // One refill is the contract. A second NEEDS_CONTEXT means the host cannot supply it (a shell host has no browser for
+    // review-layout): record the gap as Not run instead of looping on the same question.
+    const reason = noEngineReason(reviewer);
+    remember({ notRun: true });
+    return plan("not-run", reason, { reportLine: `- **Not run:** ${reviewer} — ${reason}; it asked for context twice and the host could not supply it, never counted as a clean pass`, wave: [], remaining: summarizeWaves([]) });
+  }
   if (stalls >= MAX_STALLED_RESULTS) {
     return notRun(`${status} again with no new slice covered (${stalls} results in a row)`);
   }
