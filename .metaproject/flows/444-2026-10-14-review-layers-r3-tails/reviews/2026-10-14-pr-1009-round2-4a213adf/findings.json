@@ -1,0 +1,102 @@
+[
+  {
+    "id": "R2-00",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "A refresh child killed for exceeding maxBuffer is classified as a timeout by wall clock only. Replacing the line with `const timedOut = true;` leaves the focused suite green (mutant r2-maxbuffer-misreported-as-timeout survived). Under Bun a maxBuffer overflow does not set `killed`, so the \"too much output\" message was unreachable and the operator saw the raw `stdout maxBuffer length exceeded`.",
+    "impact": "Trigger: a refresh that prints more than 16 MiB. Outcome: the TUI reports a timeout or an engine string instead of the intended \"printed more output than the limit allows\" message; no test notices.",
+    "suggested_fix": "Treat a maxBuffer error as its own case independent of `killed`, and pin it with a child that floods stdout.",
+    "evidence": "Mutation pass at head: r2-maxbuffer-misreported-as-timeout survived (research-evidence/mutation-1.md). Source: review-layers-actions.ts:54-56.",
+    "confidence": "high",
+    "file": "src/tui/review-layers-actions.ts",
+    "line": 55,
+    "quote": "const timedOut = Date.now() - startedAt >= timeoutMs - 100;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/review-layers-actions.ts:54"
+      ],
+      "enumeration_method": "One classification site."
+    },
+    "global_id": "2026-10-14-pr-1009-round2-4a213adf#R2-00"
+  },
+  {
+    "id": "R2-01",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The 5 s bound on signal cleanup is untested. Removing the race (`settled` alone) leaves every test green (mutant r2-signal-bound-removed survived), because no test has a cleanup that never returns.",
+    "impact": "Trigger: a hung `git worktree remove` at SIGINT/SIGTERM. Outcome without the bound: the process never dies by the signal and the lock stays; the regression the bound was added to prevent would pass CI.",
+    "suggested_fix": "Add a signal test whose checkout removal hangs and assert the process still ends by the signal and the lock is gone within the bound.",
+    "evidence": "Mutation pass at head: r2-signal-bound-removed survived. Source: layers.ts:363-373.",
+    "confidence": "high",
+    "file": "src/review/layers.ts",
+    "line": null,
+    "quote": "Promise.race([settled, bound])",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/layers.ts:369"
+      ],
+      "enumeration_method": "One bounded wait in withSignalCleanup."
+    },
+    "global_id": "2026-10-14-pr-1009-round2-4a213adf#R2-01"
+  },
+  {
+    "id": "R2-02",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The failed-graph retry hint printed by layersDetailLines has no test. Dropping the whole suffix leaves the suite green (mutant r2-view-failed-hint-dropped survived).",
+    "impact": "Trigger: a later edit of the line. Outcome: the operator loses the only pointer to `refresh --force` after a failed build, unnoticed.",
+    "suggested_fix": "Assert the hint on a failed graph and its absence on other statuses.",
+    "evidence": "Mutation pass at head: r2-view-failed-hint-dropped survived. Source: layers-view.ts:37.",
+    "confidence": "high",
+    "file": "src/review/layers-view.ts",
+    "line": null,
+    "quote": "not retried automatically for a few minutes at the same head",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/layers-view.ts:37"
+      ],
+      "enumeration_method": "One line; the other projections print the summary line only."
+    },
+    "global_id": "2026-10-14-pr-1009-round2-4a213adf#R2-02"
+  },
+  {
+    "id": "R2-03",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The main usage text still lacks `--force` on the `layers block` line, while printLayersHelp, the flag allow-list and docs/cli-reference.md accept it.",
+    "impact": "Trigger: `keryx review --help`. Outcome: the flag is accepted but not listed in the main help.",
+    "suggested_fix": "Add `[--force]` to the usage line.",
+    "evidence": "Source: review.ts:4247 against review-layers.ts:137 (`force: rest.includes(\"--force\")`).",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": null,
+    "quote": "--files a,b [--max-bytes <n>] [--json]",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts:4247"
+      ],
+      "enumeration_method": "Compared the three places that list the layers flags."
+    },
+    "global_id": "2026-10-14-pr-1009-round2-4a213adf#R2-03"
+  }
+]

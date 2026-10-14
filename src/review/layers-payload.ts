@@ -14,6 +14,7 @@ export const LAYERS_BLOCK_VERSION = 1;
 export const DEFAULT_LAYERS_BLOCK_MAX_BYTES = 8192;
 const MAX_SYMBOLS_PER_FILE = 6;
 const MAX_NEIGHBOURS_PER_SYMBOL = 4;
+const MAX_REASON_CHARS = 160;
 /** The block names the reviewer's files; a slice larger than this lists the first ones and records the rest. */
 export const MAX_BLOCK_FILES = 100;
 
@@ -37,6 +38,12 @@ export interface LayersBlockTruncation {
   command: string;
 }
 
+/** A section that could not be read: empty because the reader failed, which is not the same as nothing found. */
+export interface LayersBlockUnavailable {
+  section: "affected" | "wiki" | "memory";
+  reason: string;
+}
+
 export interface LayersBlock {
   version: typeof LAYERS_BLOCK_VERSION;
   files: string[];
@@ -49,6 +56,7 @@ export interface LayersBlock {
   wiki: Array<{ page: string; title: string }>;
   memory: Array<{ path: string; title: string; status: string; module: string }>;
   truncated: LayersBlockTruncation[];
+  unavailable: LayersBlockUnavailable[];
 }
 
 export interface BuildLayersBlockInput {
@@ -58,29 +66,45 @@ export interface BuildLayersBlockInput {
   /** The reviewer's files, repository-relative. */
   files: readonly string[];
   maxBytes?: number;
+  /** Reads one wiki page's text; a test replaces it to fail one page after the collection step has read it. */
+  readPage?: (absolutePath: string) => Promise<string>;
 }
 
 function sizeOf(block: LayersBlock): number {
   return Buffer.byteLength(JSON.stringify(block), "utf8");
 }
 
+function reasonOf(error: unknown): string {
+  const first = (error instanceof Error ? error.message : String(error)).split("\n")[0] ?? "unknown error";
+  return first.length > MAX_REASON_CHARS ? `${first.slice(0, MAX_REASON_CHARS)}…` : first;
+}
+
 function unique(values: Iterable<string>): string[] {
   return [...new Set(values)].sort();
 }
 
-function affectedFor(graph: GraphData, files: readonly string[], depth: 1 | 2): string[] {
+const MAX_NAMED_FAILURES = 3;
+
+function affectedFor(graph: GraphData, files: readonly string[], depth: 1 | 2): { files: string[]; unavailable: string | null } {
   const own = new Set(files);
   const found = new Set<string>();
+  const failures: string[] = [];
   for (const file of files) {
     let result;
     try {
       result = computeAffected(graph, file, { depth });
-    } catch {
+    } catch (error) {
+      failures.push(`${file}: ${reasonOf(error)}`);
       continue;
     }
     for (const dependent of result.dependents) if (!own.has(dependent)) found.add(dependent);
   }
-  return [...found].sort();
+  const named = failures.slice(0, MAX_NAMED_FAILURES).join("; ");
+  const more = failures.length > MAX_NAMED_FAILURES ? ` (and ${failures.length - MAX_NAMED_FAILURES} more)` : "";
+  return {
+    files: [...found].sort(),
+    unavailable: failures.length === 0 ? null : `not computed for ${failures.length} of ${files.length} file(s) — ${named}${more}`,
+  };
 }
 
 function symbolsFor(graph: GraphData, files: readonly string[]): LayersBlockSymbol[] {
@@ -129,28 +153,43 @@ function relatedTestsFor(graph: GraphData, files: readonly string[], affected: r
   return [...found].sort();
 }
 
-async function wikiFor(projectRoot: string, graph: GraphData, files: readonly string[]): Promise<Array<{ page: string; title: string }>> {
+interface Read<T> {
+  items: T[];
+  unavailable: string | null;
+}
+
+async function wikiFor(
+  projectRoot: string,
+  graph: GraphData,
+  files: readonly string[],
+  readPage: (absolutePath: string) => Promise<string> = (absolutePath) => readFile(absolutePath, "utf8"),
+): Promise<Read<{ page: string; title: string }>> {
   let pages;
   try {
     pages = await collectPages(projectRoot);
-  } catch {
-    return [];
+  } catch (error) {
+    return { items: [], unavailable: `the wiki could not be read — ${reasonOf(error)}` };
   }
   const knownPaths = new Set(graph.nodes.map((node) => node.path));
   const keyFilesIndex = computeModuleKeyFiles(graph);
   const wanted = new Set(files);
   const out: Array<{ page: string; title: string }> = [];
+  const unreadable: string[] = [];
   for (const page of pages) {
     let content: string;
     try {
-      content = await readFile(page.absolutePath, "utf8");
+      content = await readPage(page.absolutePath);
     } catch {
+      unreadable.push(page.relativePath);
       continue;
     }
     const set = resolveDescribeSet({ page, content, knownPaths, keyFilesIndex });
     if (set.paths.some((candidate) => wanted.has(candidate))) out.push({ page: page.relativePath, title: page.title });
   }
-  return out.sort((a, b) => a.page.localeCompare(b.page));
+  return {
+    items: out.sort((a, b) => a.page.localeCompare(b.page)),
+    unavailable: unreadable.length === 0 ? null : `${unreadable.length} of ${pages.length} wiki page(s) could not be read — ${unreadable.slice(0, MAX_NAMED_FAILURES).join(", ")}`,
+  };
 }
 
 function modulesOf(file: string): string[] {
@@ -164,12 +203,12 @@ function modulesOf(file: string): string[] {
 async function memoryFor(
   projectRoot: string,
   files: readonly string[],
-): Promise<Array<{ path: string; title: string; status: string; module: string }>> {
+): Promise<Read<{ path: string; title: string; status: string; module: string }>> {
   let entries;
   try {
     entries = await collectEntries(projectRoot);
-  } catch {
-    return [];
+  } catch (error) {
+    return { items: [], unavailable: `the memory could not be read — ${reasonOf(error)}` };
   }
   const modules = new Set(files.flatMap(modulesOf));
   const wanted = new Set(files);
@@ -181,7 +220,7 @@ async function memoryFor(
     const byFile = entry.scopes.files.some((file) => wanted.has(normalizePath(file)));
     if (byModule || byFile) out.push({ path: entry.relativePath, title: entry.title, status: entry.status, module: module ?? "" });
   }
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  return { items: out.sort((a, b) => a.path.localeCompare(b.path)), unavailable: null };
 }
 
 // eslint-disable-next-line no-control-regex -- the point is to refuse exactly these bytes
@@ -225,18 +264,25 @@ export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<La
 
   const base = async (depth: 1 | 2): Promise<LayersBlock> => {
     const affected = affectedFor(graph, files, depth);
+    const wiki = await wikiFor(input.projectRoot, graph, files, input.readPage);
+    const memory = await memoryFor(input.projectRoot, files);
+    const unavailable: LayersBlockUnavailable[] = [];
+    if (affected.unavailable !== null) unavailable.push({ section: "affected", reason: affected.unavailable });
+    if (wiki.unavailable !== null) unavailable.push({ section: "wiki", reason: wiki.unavailable });
+    if (memory.unavailable !== null) unavailable.push({ section: "memory", reason: memory.unavailable });
     return {
       version: LAYERS_BLOCK_VERSION,
       files,
       prHead: layers.prHead,
       graphCommit: layers.graphCommit,
       maxBytes,
-      affected: { depth, files: affected },
+      affected: { depth, files: affected.files },
       symbols: symbolsFor(graph, files),
-      relatedTests: relatedTestsFor(graph, files, affected),
-      wiki: await wikiFor(input.projectRoot, graph, files),
-      memory: await memoryFor(input.projectRoot, files),
+      relatedTests: relatedTestsFor(graph, files, affected.files),
+      wiki: wiki.items,
+      memory: memory.items,
       truncated: [],
+      unavailable,
     };
   };
 
@@ -311,6 +357,7 @@ export function layersBlockLines(block: LayersBlock): string[] {
     `  wiki pages: ${block.wiki.length}`,
     `  memory entries: ${block.memory.length}`,
   ];
+  for (const gap of block.unavailable) lines.push(`  ${gap.section}: unavailable (${gap.reason})`);
   for (const cut of block.truncated) lines.push(`  truncated ${cut.section}: ${cut.shown}/${cut.total} — ${cut.command}`);
   return lines;
 }

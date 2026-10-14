@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ensurePackageLayers } from "../commands/review-layers";
@@ -13,7 +13,6 @@ import {
   layersLockPath,
   loadPackageGraph,
   packageGraphDir,
-  readLayers,
   refreshLayers,
   type LayerDeps,
 } from "./layers";
@@ -40,7 +39,7 @@ const countingBuild = (): { deps: Partial<LayerDeps>; builds: () => number } => 
   };
 };
 
-describe("the graph directory is verified, not assumed (R2-02)", () => {
+describe("the graph directory is verified, not assumed", () => {
   test("layers.json says ok but the graph directory is gone: the reader refuses and ensure rebuilds", async () => {
     await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir });
     await rm(packageGraphDir(fixture.packageDir), { recursive: true, force: true });
@@ -77,7 +76,7 @@ describe("the graph directory is verified, not assumed (R2-02)", () => {
   });
 });
 
-describe("one spelling of the head (R2-03, R2-35)", () => {
+describe("one spelling of the head", () => {
   test("a short sha and a branch name are resolved to the full commit and the graph builds", async () => {
     for (const head of [fixture.second.slice(0, 8), "main"]) {
       const layers = await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir, prHead: head, force: true });
@@ -97,7 +96,7 @@ describe("one spelling of the head (R2-03, R2-35)", () => {
   });
 });
 
-describe("reuse, force and failures (R2-12, R2-23, R2-25)", () => {
+describe("reuse, force and failures", () => {
   test("a second refresh at the same head keeps the graph and still refreshes the other layers; force rebuilds", async () => {
     const counted = countingBuild();
     const run = (force?: boolean) =>
@@ -111,7 +110,7 @@ describe("reuse, force and failures (R2-12, R2-23, R2-25)", () => {
     expect(counted.builds()).toBe(2);
   });
 
-  test("a failed graph at the same head is retried by ensure, not returned as sticky", async () => {
+  test("a failed graph at the same head is retried by ensure once the retry window has passed", async () => {
     await refreshLayers({
       projectRoot: fixture.root,
       packageDir: fixture.packageDir,
@@ -121,7 +120,11 @@ describe("reuse, force and failures (R2-12, R2-23, R2-25)", () => {
         },
       },
     });
-    expect((await readLayers(fixture.packageDir))?.graph.status).toBe("failed");
+    const file = path.join(fixture.packageDir, "layers.json");
+    const record = JSON.parse(await readFile(file, "utf8")) as { graph: { status: string; failedAt: string } };
+    expect(record.graph.status).toBe("failed");
+    record.graph.failedAt = new Date(Date.now() - 6 * 60_000).toISOString();
+    await writeFile(file, JSON.stringify(record));
     const layers = await ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root });
     expect(layers.graph.status).toBe("ok");
   });
@@ -143,7 +146,7 @@ describe("reuse, force and failures (R2-12, R2-23, R2-25)", () => {
   });
 });
 
-describe("the base of the wiki mark (R2-27)", () => {
+describe("the base of the wiki mark", () => {
   test("defaults to the manifest's target ref, else the parent of the head", async () => {
     const noManifest = await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir });
     expect(noManifest.base).toBe(`${fixture.second}~1`);
@@ -155,7 +158,7 @@ describe("the base of the wiki mark (R2-27)", () => {
   });
 });
 
-describe("the checkout in the operator's repository (R2-14, R2-15)", () => {
+describe("the checkout in the operator's repository", () => {
   test("a failed add prunes and retries once; a successful one never prunes", async () => {
     const calls: string[][] = [];
     let failures = 1;
@@ -187,7 +190,7 @@ describe("the checkout in the operator's repository (R2-14, R2-15)", () => {
   });
 });
 
-describe("a killed refresh leaves nothing behind (R2-08)", () => {
+describe("a killed refresh leaves nothing behind", () => {
   const registered = (): string[] =>
     git(fixture.root, ["worktree", "list", "--porcelain"])
       .split("\n")
@@ -281,7 +284,7 @@ describe("a killed refresh leaves nothing behind (R2-08)", () => {
   });
 });
 
-describe("shell-quoted package directories in hints (R2-13)", () => {
+describe("shell-quoted package directories in hints", () => {
   test("shellWord keeps a plain path and quotes anything a shell would split or run", () => {
     expect(shellWord("/tmp/pkg-1/a.b")).toBe("/tmp/pkg-1/a.b");
     expect(shellWord("/tmp/my pkg")).toBe("'/tmp/my pkg'");

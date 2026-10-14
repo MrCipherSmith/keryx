@@ -86,14 +86,14 @@ describe("layers used by a reviewer run, counted from its tool-call log (AC7)", 
     expect(await readToolLog(dir, "review-security-code")).toBeUndefined();
   });
 
-  test("a log over the size cap is unknown, and one at the cap is read (R2-36)", async () => {
+  test("a log over the size cap is unknown, and one at the cap is read", async () => {
     await writeFile(path.join(dir, "big.log"), Buffer.alloc(MAX_TOOL_LOG_BYTES + 1, 97));
     await writeFile(path.join(dir, "edge.log"), Buffer.alloc(MAX_TOOL_LOG_BYTES, 97));
     expect(await readToolLog(dir, "review-logic", "big.log")).toBeUndefined();
     expect((await readToolLog(dir, "review-logic", "edge.log"))?.length).toBe(MAX_TOOL_LOG_BYTES);
   });
 
-  test("a named pipe in place of the log does not block the read (R2-36)", async () => {
+  test("a named pipe in place of the log does not block the read", async () => {
     execFileSync("mkfifo", [path.join(dir, "pipe.log")]);
     expect(await readToolLog(dir, "review-logic", "pipe.log")).toBeUndefined();
   });

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f444",
+  "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 13317
+  },
+  "mutants": [
+    {
+      "id": "ac2-unreadable-page-dropped",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "unreadable.push(page.relativePath);",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 183,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19488
+    },
+    {
+      "id": "r1-failedat-ignored",
+      "file": "src/review/layers.ts",
+      "anchor": "Date.parse(existing.graph.failedAt ?? existing.refreshedAt)",
+      "replacement": "Date.parse(existing.refreshedAt)",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 198,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13368
+    },
+    {
+      "id": "r1-failedat-not-persisted",
+      "file": "src/review/layers.ts",
+      "anchor": "failedAt: deps.now().toISOString(),",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 437,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13504
+    },
+    {
+      "id": "r1-window-never-expires",
+      "file": "src/review/layers.ts",
+      "anchor": "return age >= 0 && age < FAILED_RETRY_WINDOW_MS;",
+      "replacement": "return age >= 0;",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 199,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13113
+    }
+  ],
+  "totals": {
+    "killed": 4,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

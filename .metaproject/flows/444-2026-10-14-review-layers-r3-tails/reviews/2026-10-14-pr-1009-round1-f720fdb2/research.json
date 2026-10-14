@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": false,
+  "obligations": [],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "selected": [
+      "review-architecture",
+      "review-highload",
+      "review-logic",
+      "review-style",
+      "review-testing-practices"
+    ]
+  }
+}
