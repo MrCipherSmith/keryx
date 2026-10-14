@@ -77,6 +77,30 @@ test("a tracker that cannot be reached warns instead of blocking the close", asy
   expect(done.warnings.join(" ")).toContain("PR state");
 });
 
+const gateManifest = (head?: string) => ({ target: { kind: "pr", ref: PR, ...(head === undefined ? {} : { head }) } }) as never;
+
+test("a tracker answer that is empty, not found or a rejection is one warning naming the PR, never a refusal", async () => {
+  for (const answer of [async () => null, async () => ({ exists: false }), async () => { throw new Error("offline"); }] as PrLookup[]) {
+    const { warnings } = await completeHeadGate({ manifest: gateManifest(HEAD), report: "# R", lookup: answer });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(PR);
+    expect(warnings[0]).toContain("skipped");
+  }
+});
+
+test("a first line that uses a moved-word for something else does not count as saying the PR moved", async () => {
+  const report = `Reviewed ${HEAD.slice(0, 7)} — closed loop on the cache.\nNo findings.`;
+  await expect(completeHeadGate({ manifest: gateManifest(HEAD), report, lookup: lookup({ headSha: MOVED }) })).rejects.toThrow(/first line/);
+});
+
+test("a recorded head that is not a usable SHA is a warning, and an empty one never matches every PR head", async () => {
+  for (const head of ["", "0e", "not-a-sha"]) {
+    const { warnings } = await completeHeadGate({ manifest: gateManifest(head), report: "# R", lookup: lookup({ headSha: MOVED }) });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("not a commit SHA");
+  }
+});
+
 test("completeHeadGate compares by prefix, so a short recorded SHA matches the full PR head", async () => {
   const manifest = { target: { kind: "pr", ref: PR, head: HEAD.slice(0, 7) } } as never;
   expect((await completeHeadGate({ manifest, report: "# R", lookup: lookup({ headSha: HEAD }) })).warnings).toEqual([]);

@@ -60,6 +60,18 @@ test("a package ingested before the field existed completes with a warning, not 
   expect(done.warnings.join(" ")).toContain("evidence level");
 });
 
+test("a template line quoted inside a code fence is not the report's evidence level", () => {
+  const quoted = "# Review\n```\nEvidence level: ran — tests\n```\n";
+  expect(parseEvidenceLevel(quoted).ok).toBe(false);
+  expect(parseEvidenceLevel(`${quoted}${STATIC}\n`)).toEqual({ ok: true, level: "static-only", items: ["tests", "typecheck"] });
+});
+
+test("a list that only says nothing is not a list", () => {
+  for (const value of ["ran — nothing", "ran — none", "ran: n/a", "static only — did not run: none"]) {
+    expect(parseEvidenceLevel(`Evidence level: ${value}`).ok).toBe(false);
+  }
+});
+
 test("a legacy package that does carry the line completes without a warning", async () => {
   const { pkg, ref } = await ingest(`# Review\n${RAN}\n`);
   const manifestPath = path.join(pkg, "manifest.json");

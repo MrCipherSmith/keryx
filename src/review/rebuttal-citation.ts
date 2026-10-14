@@ -3,10 +3,16 @@ import type { StructuredReviewFinding } from "./types";
 const URL = /\bhttps?:\/\/\S+/gi;
 const CITED = /(?<![\w./-])((?:\.\.?\/)*(?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|txt|json|ya?ml|toml))(?![\w-])/g;
 
+// A bare file name is a citation only for a root document (README.md, AGENTS.md); research.json, v1.2.json or i.e.md are not.
+const ROOT_DOCUMENT = /^[A-Z][A-Z0-9_-]*\.(?:md|mdx|txt)$/;
+
 /** Rule and document paths named in `text`; URLs are not tree paths and are left out. */
 export function citedPaths(text: string): string[] {
   const found = new Set<string>();
-  for (const match of text.replace(URL, " ").matchAll(CITED)) found.add(match[1]!);
+  for (const match of text.replace(URL, " ").matchAll(CITED)) {
+    const cited = match[1]!;
+    if (cited.includes("/") || ROOT_DOCUMENT.test(cited)) found.add(cited);
+  }
   return [...found];
 }
 

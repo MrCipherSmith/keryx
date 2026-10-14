@@ -3,7 +3,10 @@ import type { ManagedReviewManifest } from "./types";
 export type PrSnapshot = { exists: boolean; state?: string | null | undefined; headSha?: string | null | undefined };
 export type PrLookup = (ref: string) => Promise<PrSnapshot | null>;
 
-const SAYS_SO = /\b(merged|moved|advanced|stale|superseded|closed|force-pushed|no longer)\b/i;
+const MOVE_WORD = "(?:merged|moved|advanced|superseded|closed|force-pushed)";
+const PR_WORD = "(?:pr|pull request|head)";
+const SAYS_SO = new RegExp(`\\b${PR_WORD}\\b.{0,40}\\b${MOVE_WORD}\\b|\\b${MOVE_WORD}\\b.{0,40}\\b${PR_WORD}\\b`, "i");
+const USABLE_SHA = /^[0-9a-f]{7,40}$/i;
 
 const sameCommit = (a: string, b: string): boolean => {
   const [x, y] = [a.toLowerCase(), b.toLowerCase()];
@@ -32,16 +35,18 @@ export async function completeHeadGate(input: {
   catch (error) { return { warnings: [`could not read the PR state for ${target.ref} (${error instanceof Error ? error.message : String(error)}); the head and merge check was skipped`] }; }
   if (pr === null || !pr.exists) return { warnings: [`could not read the PR state for ${target.ref}; the head and merge check was skipped`] };
 
-  const reviewed = target.head ?? null;
+  const recorded = target.head ?? null;
+  const reviewed = recorded !== null && USABLE_SHA.test(recorded) ? recorded : null;
+  const unusable = recorded !== null && reviewed === null ? [`the reviewed head recorded for ${target.ref} ("${recorded}") is not a commit SHA; the moved-head check was skipped`] : [];
   const merged = typeof pr.state === "string" && pr.state.toUpperCase() === "MERGED";
   const prHead = typeof pr.headSha === "string" && pr.headSha !== "" ? pr.headSha : null;
   const moved = reviewed !== null && prHead !== null && !sameCommit(reviewed, prHead);
-  if (!merged && !moved) return { warnings: [] };
+  if (!merged && !moved) return { warnings: unusable };
 
   const what = [merged ? "the PR is merged" : undefined, moved ? `the PR head moved (reviewed ${reviewed!.slice(0, 7)}, now ${prHead!.slice(0, 7)})` : undefined].filter(Boolean).join(" and ");
   const first = input.report.split(/\r?\n/).find((line) => line.trim() !== "" && !/^\s*<!--.*-->\s*$/.test(line)) ?? "";
   const names = reviewed === null ? /\b[0-9a-f]{7,40}\b/i.test(first) : first.toLowerCase().includes(reviewed.slice(0, 7).toLowerCase());
-  if (names && SAYS_SO.test(first)) return { warnings: [] };
+  if (names && SAYS_SO.test(first)) return { warnings: unusable };
   throw new Error(
     `Cannot complete managed review; ${what}. The report's first line must name the reviewed SHA${reviewed === null ? "" : ` (${reviewed.slice(0, 7)})`} and say the PR moved, for example: "Reviewed ${(reviewed ?? "<sha>").slice(0, 7)} — the PR has since ${merged ? "merged" : "moved on"}."`,
   );

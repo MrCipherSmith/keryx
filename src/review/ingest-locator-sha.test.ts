@@ -67,6 +67,26 @@ test("a finding the round dismissed is recorded rather than refused", async () =
   expect(kept.disposition.state).toBe("dismissed-incorrect");
 });
 
+test("a dismissed finding and an external comment are not asked to resolve, even among the reported findings", async () => {
+  const stale = "  return `howdy ${trimmed}`;";
+  const result = await ingest({
+    findings: [
+      finding({ id: "F-001", quote: stale, disposition: { state: "dismissed-incorrect", evidence: "the reviewer misread the file" } }),
+      finding({ id: "F-002", quote: stale, source: "external", external_ref: { id: "review-comment:12", author: "someone", url: "https://github.com/acme/app/pull/7#discussion_r12", submitted_at: "2026-10-14T00:00:00Z" } }),
+    ],
+  });
+  const kept = JSON.parse(await readFile(path.join(dir, result.path, "findings.json"), "utf8"));
+  expect(kept).toHaveLength(2);
+});
+
+test("the refusal names the possible causes and the way out", async () => {
+  const error = await ingest({ findings: [finding({ quote: "  return `howdy ${trimmed}`;" })] }).catch((e: Error) => e);
+  const message = (error as Error).message;
+  expect(message).toContain("appears in it more than once");
+  expect(message).toContain(`git cat-file -e ${head.slice(0, 12)}`);
+  expect(message).toContain("ingest without --head");
+});
+
 test("with no reviewed SHA the ingest does not refuse, as before", async () => {
   const bare = await mkdtemp(path.join(os.tmpdir(), "keryx-locator-nosha-"));
   try {

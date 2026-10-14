@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { citedPaths, flagMissingCitations } from "./rebuttal-citation";
-import { createManagedReviewPackage } from "./managed";
+import { createManagedReviewPackage, lexicalRelativePath } from "./managed";
 import type { StructuredReviewFinding } from "./types";
 
 let dir = "";
@@ -31,6 +31,23 @@ async function recorded(evidence: string): Promise<StructuredReviewFinding[]> {
 test("paths a rebuttal cites are picked out of prose, backticks and links, and URLs are not paths", () => {
   expect(citedPaths("per `docs/style.md` and rules/core/naming.mdc:12, see https://example.com/a/b.md and (docs/x.md#anchor).").sort()).toEqual(["docs/style.md", "docs/x.md", "rules/core/naming.mdc"]);
   expect(citedPaths("the author said it is fine, commit 1a2b3c4")).toEqual([]);
+});
+
+test("a bare package-file name, a version or an abbreviation is not a citation, a root document is", () => {
+  expect(citedPaths("per research.json and findings.json, v1.2.json, e.g. i.e.md")).toEqual([]);
+  expect(citedPaths("see README.md:12 and AGENTS.md")).toEqual(["README.md", "AGENTS.md"]);
+});
+
+test("a cited path that climbs out of the tree or is absolute is never looked up", () => {
+  expect(lexicalRelativePath("../x.md")).toBeNull();
+  expect(lexicalRelativePath("docs/../../x.md")).toBeNull();
+  expect(lexicalRelativePath("/etc/passwd.md")).toBeNull();
+  expect(lexicalRelativePath("..")).toBeNull();
+  expect(lexicalRelativePath("docs/./style.md")).toBe("docs/style.md");
+});
+
+test("a rebuttal that cites only a URL cites no path", () => {
+  expect(citedPaths("see https://example.com/rules/a.md")).toEqual([]);
 });
 
 test("a cited document that is not in the tree gets a 'citation not found' line; the finding stays", async () => {

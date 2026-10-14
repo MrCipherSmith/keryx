@@ -8,8 +8,26 @@ export type EvidenceLevelParse =
 const LINE = /^\s*(?:[-*+]\s+)?(?:\*\*|__)?evidence level\s*:?\s*(?:\*\*|__)?\s*:?\s*(.*)$/i;
 const SEPARATORS = /^[\s:\u2014\u2013-]+/;
 
+const PLACEHOLDER = /^(?:none|nothing|n\/a|na|nil|-|—|–)\.?$/i;
+
 function itemsOf(text: string): string[] {
-  return text.split(/[,;]/).map((item) => item.trim()).filter((item) => item.length > 0);
+  return text.split(/[,;]/).map((item) => item.trim()).filter((item) => item.length > 0 && !PLACEHOLDER.test(item));
+}
+
+/** Lines of the report outside fenced code blocks: a quoted template line is not the report's own. */
+function withoutFences(report: string): string[] {
+  let fence: string | null = null;
+  const kept: string[] = [];
+  for (const line of report.split(/\r?\n/)) {
+    const marker = /^\s*(```+|~~~+)/.exec(line)?.[1];
+    if (marker !== undefined) {
+      if (fence === null) fence = marker[0]!;
+      else if (marker[0] === fence) fence = null;
+      continue;
+    }
+    if (fence === null) kept.push(line);
+  }
+  return kept;
 }
 
 /**
@@ -20,7 +38,7 @@ function itemsOf(text: string): string[] {
  * exists to close.
  */
 export function parseEvidenceLevel(report: string): EvidenceLevelParse {
-  const line = report.split(/\r?\n/).map((l) => LINE.exec(l)).find((m) => m !== null);
+  const line = withoutFences(report).map((l) => LINE.exec(l)).find((m) => m !== null);
   if (!line) return { ok: false, reason: "the report has no `Evidence level:` line" };
   const value = line[1]!.replace(/(?:\*\*|__)\s*$/, "").trim();
   const staticOnly = /^static[ -]only\b/i.exec(value);
