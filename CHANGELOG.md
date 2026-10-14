@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Review quality gates (flow 445).** `keryx review complete` on a PR-bound package refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so (a package with no PR binding is unaffected; an unreachable tracker warns). The report has a required `Evidence level:` line, `static only — did not run: <what>` or `ran — <what>`, and `complete` refuses a report without it; a package ingested before the field existed (no `report_fields` in its manifest) completes with a warning. `review ingest` adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree, and never deletes the finding. A research obligation can close as `narrowed` with a `remains` text, and counts as closed only with it. `review ingest` now reads a finding's quote at its `path` at the reviewed SHA (not the working tree, so a file changed or deleted since no longer reads as missing) and refuses an internal finding whose quote does not resolve there. The report template gains the evidence-level line, the PR-state first line and a "Refuted and narrowed" section; the review-orchestrator skill names the gates in four lines and stays at its length ceiling.
+
 ## [0.3.113] - 2026-10-14
 
 ### Added

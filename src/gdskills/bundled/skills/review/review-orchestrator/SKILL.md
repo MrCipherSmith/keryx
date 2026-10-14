@@ -207,8 +207,7 @@ keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 ```
 
-**An unrecognised option is refused, not ignored** — a misspelled flag exits
-non-zero rather than printing `status: closed` and writing nothing at all.
+**An unrecognised option is refused, not ignored** — a misspelled flag exits non-zero rather than printing `status: closed` and writing nothing at all.
 
 `--verifications` takes what `review-verifier` returned. `--scope` takes the
 whole `--json` output of `keryx review scope`, so the package records what the
@@ -234,9 +233,7 @@ Two channels, and both work:
   it: it is copied into the package it screened and removed from the slot, so a
   later round cannot be screened against a set nobody recomputed.
 
-Do **not** write the record inside the package directory before the ingest. A
-round that names no `--review-id` has not allocated that directory yet, and
-creating it makes the ingest take the next free name instead.
+Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
 
 `--refuted` takes the findings this round **raised and then dismissed**, in the
 same finding shape, each carrying `disposition: {state, evidence}` with one of
@@ -252,9 +249,12 @@ Everything except `unknown` must cite where the outcome is written down — the
 commit, the test, the decision. A recorded state and its citation cannot be
 overwritten by a later close; record a correction as a new round.
 
-**Closing a fix round without dispositions leaves every finding reading
-`unknown`.** That is not "the reviewers were right"; it is "nobody wrote down
-what happened", and it is the single reason the precision figure cannot be read.
+`review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
+`review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
+`review ingest` refuses an internal finding whose `quote` is not at its `path` at the reviewed SHA, and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
+A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".
+
+**Closing a fix round without dispositions leaves every finding reading `unknown`.** That is not "the reviewers were right"; it is "nobody wrote down what happened", and it is the single reason the precision figure cannot be read.
 
 Managed modes:
 

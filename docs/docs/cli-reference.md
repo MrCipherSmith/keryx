@@ -4808,6 +4808,8 @@ will merge *fails* the gate instead of passing it. With no checkout to ask and a
 `pr` target, the pull request's head is used instead; with neither, the head is
 left off and the gate reports it as unobserved.
 
+`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+
 | Subcommand | Description |
 |---|---|
 | `attach` | Create a managed package linked to an existing Task Manager flow. |
