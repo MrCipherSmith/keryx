@@ -70,6 +70,26 @@ test("a package with no PR binding never asks the tracker", async () => {
   expect(probe.calls).toEqual([]);
 });
 
+test("a package whose ref is a PR URL is PR-bound whatever kind it was ingested under: a stale head still refuses", async () => {
+  const ref = await ingest("# Review\nNo findings.", { kind: "report", ref: PR, head: MOVED });
+  const probe = lookup({ headSha: HEAD });
+  const error = await completeManagedReview(dir, ref, { prLookup: probe }).catch((e: Error) => e);
+  expect(error).toBeInstanceOf(Error);
+  expect((error as Error).message).toContain(MOVED.slice(0, 7));
+  expect((error as Error).message).toContain(HEAD.slice(0, 7));
+  expect(probe.calls).toEqual([PR]);
+  const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
+  expect(onDisk.status).not.toBe("closed");
+});
+
+test("a PR URL under a non-pr kind completes once the report names the reviewed SHA, or --head names the PR's head", async () => {
+  const named = await ingest(`Reviewed ${MOVED.slice(0, 7)} — the PR has since moved on.\nNo findings.`, { kind: "report", ref: PR, head: MOVED });
+  expect((await completeManagedReview(dir, named, { prLookup: lookup({ headSha: HEAD }) })).manifest.status).toBe("closed");
+  const fixed = await ingest("# Review\nNo findings.", { kind: "report", ref: PR, head: MOVED });
+  const done = await completeManagedReview(dir, fixed, { prLookup: lookup({ headSha: HEAD }), head: HEAD });
+  expect(done.manifest.target.head).toBe(HEAD);
+});
+
 test("a tracker that cannot be reached warns instead of blocking the close", async () => {
   const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
   const done = await completeManagedReview(dir, ref, { prLookup: async () => { throw new Error("offline"); } });

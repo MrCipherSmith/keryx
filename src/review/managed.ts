@@ -1,6 +1,6 @@
 import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
 import { flagMissingCitations } from "./rebuttal-citation";
-import { completeHeadGate, type PrLookup } from "./complete-head-gate";
+import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
 import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
@@ -832,7 +832,7 @@ export async function completeManagedReview(
   const warnings: string[] = [];
   let manifest = stored;
   if (options.head !== undefined) {
-    if (stored.target.kind !== "pr") {
+    if (!isPrBound(stored.target)) {
       throw new Error(`--head applies to a pull request package; ${stored.reviewId} targets a ${stored.target.kind}.`);
     }
     const head = options.head.trim().toLowerCase();

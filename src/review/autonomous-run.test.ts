@@ -152,6 +152,25 @@ describe("exit codes", () => {
     expect(run.summary.reason).toContain("floor");
   });
 
+  test("3b: when the loop guard ended the run after a floor refusal, the reason names the loop guard first", async () => {
+    const run = await runAutonomousReview(
+      options(
+        scripted(async (c) => {
+          writePackage("rv-1", "reviewed");
+          c.emit(call("gh pr merge 7"));
+          c.emit(result("command not approved by the user; not executed", true));
+          c.emit(call("read_file x"));
+          c.emit(result("same tool call already tried 3× (hash budget); change the arguments or a different tool", true));
+          c.emit({ type: "turn_end", text: "stopped", toolCalls: 2 });
+          return 0;
+        }),
+      ),
+    );
+    expect(run.status).toBe("floor");
+    expect(run.summary.reason).toMatch(/^the loop guard stopped a repeated call/);
+    expect(run.summary.reason).toContain("floor refused 1 call");
+  });
+
   test("a refusal that the run routed around does not fail a closed package", async () => {
     const run = await runAutonomousReview(
       options(
