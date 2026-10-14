@@ -202,7 +202,7 @@ export function coverageLine(report: Pick<CoverageReport, "counts" | "omissionRe
 }
 
 /** Characters, not words, of the operator's own text (the flag's name does not count). */
-export const MIN_WAIVER_QUOTE_CHARS = 8;
+const MIN_WAIVER_QUOTE_CHARS = 8;
 
 /**
  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape

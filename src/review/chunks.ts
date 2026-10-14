@@ -289,7 +289,7 @@ export function recordChunk(packageDir: string, chunkId: string, result: ChunkRe
   return withChunkStateLock(packageDir, () => recordChunkLocked(packageDir, chunkId, result));
 }
 
-export type ChunkRecordResult = { decision: RetryDecision; reason: string; state: ChunkRunState };
+type ChunkRecordResult = { decision: RetryDecision; reason: string; state: ChunkRunState };
 
 async function recordChunkLocked(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<ChunkRecordResult> {
   const plan = await readChunkPlan(packageDir);

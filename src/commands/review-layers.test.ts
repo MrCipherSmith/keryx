@@ -63,14 +63,16 @@ describe("keryx review layers", () => {
 
 describe("--package of the layers, chunks and coverage commands stays inside the project (AC8)", () => {
   let outside: string;
+  let escapeName: string;
   beforeEach(async () => {
     outside = await mkdtemp(path.join(tmpdir(), "keryx-package-outside-"));
+    escapeName = `escape-${path.basename(fixture.root)}`;
     await symlink(outside, path.join(fixture.root, "linked-out"));
-    await mkdir(path.join(path.dirname(fixture.root), "escape"), { recursive: true });
+    await mkdir(path.join(path.dirname(fixture.root), escapeName), { recursive: true });
   });
   afterEach(async () => {
     await rm(outside, { recursive: true, force: true });
-    await rm(path.join(path.dirname(fixture.root), "escape"), { recursive: true, force: true });
+    await rm(path.join(path.dirname(fixture.root), escapeName), { recursive: true, force: true });
   });
 
   const commands: Array<[string, string[]]> = [
@@ -81,9 +83,9 @@ describe("--package of the layers, chunks and coverage commands stays inside the
   ];
 
   for (const [name, head] of commands) {
-    for (const where of ["outside", "linked-out", "../escape"] as const) {
+    for (const where of ["outside", "linked-out", "sibling"] as const) {
       test(`${name} refuses --package ${where} and writes nothing`, async () => {
-        const target = where === "outside" ? outside : where;
+        const target = where === "outside" ? outside : where === "sibling" ? `../${escapeName}` : where;
         await reviewCommand([...head, "--package", target]);
         expect(process.exitCode).toBe(1);
         expect(errors.join("\n")).toMatch(/outside|inside|contain|within/i);

@@ -4242,10 +4242,11 @@ Usage:
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--package <review-dir>] [--json | --brief] [--out <file>]
-  keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--json]
+  keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
   keryx review layers status  --package <review-dir> [--json]
   keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
-                      Graph, wiki and memory for one review; no model is called.
+                      Graph, wiki and memory for one review; no model is called. An intact graph at
+                      the same head is reused (--force rebuilds); a second refresh waits up to 16 min.
   keryx review chunks plan|estimate|next|record|merge --package <review-dir>
                       [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]
                       [--answer yes|no --quote "<words>"] [--json]

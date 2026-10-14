@@ -209,20 +209,24 @@ describe("a killed refresh leaves nothing behind (R2-08)", () => {
     );
     const child = spawn(process.execPath, ["run", script], { stdio: "ignore" });
     const exited = new Promise<NodeJS.Signals | null>((resolve) => child.on("exit", (_code, signal) => resolve(signal)));
-    const deadline = Date.now() + 30_000;
-    while (!existsSync(ready) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(existsSync(ready)).toBe(true);
-    expect(registered()).toHaveLength(2);
-    expect(existsSync(layersLockPath(fixture.packageDir))).toBe(true);
+    try {
+      const deadline = Date.now() + 30_000;
+      while (!existsSync(ready) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(existsSync(ready)).toBe(true);
+      expect(registered()).toHaveLength(2);
+      expect(existsSync(layersLockPath(fixture.packageDir))).toBe(true);
 
-    child.kill("SIGTERM");
-    expect(await exited).toBe("SIGTERM");
+      child.kill("SIGTERM");
+      expect(await exited).toBe("SIGTERM");
 
-    expect(registered()).toHaveLength(1);
-    expect(existsSync(layersLockPath(fixture.packageDir))).toBe(false);
-    const names = await readdir(path.join(fixture.packageDir, "layers"));
-    expect(names.filter((name) => name.startsWith("graph."))).toEqual([]);
-  });
+      expect(registered()).toHaveLength(1);
+      expect(existsSync(layersLockPath(fixture.packageDir))).toBe(false);
+      const names = await readdir(path.join(fixture.packageDir, "layers"));
+      expect(names.filter((name) => name.startsWith("graph."))).toEqual([]);
+    } finally {
+      child.kill("SIGKILL");
+    }
+  }, 60_000);
 
   test("the next refresh sweeps an old keryx checkout a SIGKILL left, and keeps a fresh one", async () => {
     const temp = await realpath(tmpdir());
