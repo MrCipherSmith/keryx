@@ -254,6 +254,15 @@ describe("a reader that failed is reported as unavailable, not as empty", () => 
     expect(layersBlockLines(block).join("\n")).toContain("unavailable wiki:");
   });
 
+  test.skipIf(!canLock)("a single wiki page file that cannot be read makes the wiki unavailable, naming the file", async () => {
+    await refresh();
+    await lockDown(".metaproject/wiki/architecture/alpha.md");
+    const block = await buildLayersBlock(input());
+    const gap = block.unavailable.find((entry) => entry.section === "wiki");
+    expect(gap?.reason).toContain("alpha.md");
+    expect(block.wiki).toEqual([]);
+  });
+
   test.skipIf(!canLock)("a memory that cannot be read is unavailable with the reason, not an empty list", async () => {
     await writeProjectFile(fixture.root, ".metaproject/memory/lessons/src-lesson.md", MEMORY_ENTRY);
     await refresh();

@@ -13,7 +13,6 @@ import {
   layersLockPath,
   loadPackageGraph,
   packageGraphDir,
-  readLayers,
   refreshLayers,
   type LayerDeps,
 } from "./layers";
