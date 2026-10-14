@@ -12,6 +12,7 @@ import {
   renderReviewerInventoryMarkdown,
 } from "./reviewers";
 import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
+import { requiredReviewers } from "./coverage";
 
 let cwd: string;
 
@@ -672,5 +673,18 @@ describe("descriptionPathTriggers", () => {
 
   test("descriptionFlags lists a repeated flag once", () => {
     expect(descriptionFlags("for --x, (--x) or --y, --x")).toEqual(["--x", "--y"]);
+  });
+});
+
+describe("review-pr-contract in the bundled inventory", () => {
+  test("is listed, and selected only when the package carries pr-context.md", async () => {
+    await installBundledReviewer("review-pr-contract");
+    await installBundledReviewer("review-logic");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.bundled.find((r) => r.name === "review-pr-contract")).toBeDefined();
+    const withContext = await requiredReviewers(cwd, "all", ["src/admin/ExamplePage.tsx"], { prContext: true });
+    const without = await requiredReviewers(cwd, "all", ["src/admin/ExamplePage.tsx"]);
+    expect(withContext.required).toContain("review-pr-contract");
+    expect(without.required).not.toContain("review-pr-contract");
   });
 });

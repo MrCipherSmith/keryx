@@ -619,6 +619,18 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
+    skill: "review-pr-contract",
+    positives: [
+      "does the diff match what the PR description checklist says",
+      "the documentation needed box is unticked but the change adds a user visible row",
+      "check the PR body claims against the diff and find docs it left stale",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "does this change break anything else", owner: "review-regression" },
+    ],
+  },
+  {
     skill: "review-regression",
     positives: [
       "does this change break anything else",

@@ -872,6 +872,7 @@ If the repository has local convention docs such as `CLAUDE.md`, `AGENTS.md`,
 | `src/core/**`, `core/**`, `shared/**`, `foundation/**` | `review-core-boundaries` |
 | `src/core/flow/**`, `src/graph/**`, `src/shared/flow/**` | `review-flow-graph` |
 | A `.tsx`/`.jsx`/`.css`/`.scss` hunk that adds or changes a sizing or spacing utility on a rendered element — `w-*`, `min-w-*`, `max-w-*`, `flex-*`, `basis-*`, `grid-cols-*`, `truncate`, `line-clamp-*`, `overflow-*`, `p*`/`m*`/`gap-*` and their logical `ps-*`/`pe-*`/`ms-*`/`me-*` forms, or an inline `style` carrying a dimension | `review-layout` |
+| `pr-context.md` is in the package | `review-pr-contract` |
 
 These convention reviewers are additive: keep the generic reviewers selected by normal detection,
 then add the matching convention pass. Deduplicate reviewer names before dispatch.
@@ -1058,6 +1059,7 @@ Skipped reviewers:
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
 | `--layout` | `review-layout` |
+| `--pr-contract` | `review-pr-contract` |
 | `--all` | all reviewers above (including `review-clean-code`, `review-highload`, applicable legacy/profile reviewers, and project convention reviewers when local convention docs exist) |
 | `--verify` | `review-verifier`, AFTER all others; checks the consolidated findings by running something. Delete-only. |
 | (auto) | detected from diff file extensions — see Auto-detection table |

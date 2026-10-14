@@ -111,6 +111,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-orchestrator`: Route review requests to specialized reviewers and consolidate findings.
 - `review-performance`: Review hot paths, unnecessary work, bundle/perf regressions, blocking operations, and memory risk.
 - `review-pr-feedback`: Analyze existing PR review comments, validate them against the code, plan the fix, and — with --fix — drive it to merged and answer every reviewer.
+- `review-pr-contract`: Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale.
 - `review-regression`: Review the blast radius of a change — the code it can break — rather than the change itself. Scope B of a deep round.
 - `review-security-code`: Review code-level security risks, injections, authorization gaps, unsafe secrets, and data exposure.
 - `review-style`: Review naming, readability, duplication, dead code, and maintainability.

@@ -8,7 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
 import { listReviewPackages, type ListedReview } from "../review/bot/packages";
-import { packageHasBlastRadius, packageScopeFiles, requiredReviewers, type RequiredSet, type ReviewMode } from "../review/coverage";
+import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type RequiredSet, type ReviewMode } from "../review/coverage";
 import { computeChunkPass, hasChunkPlan, type ChunkPass } from "../review/chunks";
 import { computeCoverage, coverageLine, readCoverageWaiver, type CoverageWaiver } from "../review/coverage-complete";
 import { readLayers, type LayersFile } from "../review/layers";
@@ -121,7 +121,7 @@ export async function loadReviewDepth(cwd: string, listed?: readonly ListedRevie
       rows.push({ ...base, mode: "unrecorded", required: [], excluded: [], missing: [], filesKnown: false });
       continue;
     }
-    const need = await requiredReviewers(cwd, mode, await packageScopeFiles(review.dir), { blastRadius: await packageHasBlastRadius(review.dir) });
+    const need = await requiredReviewers(cwd, mode, await packageScopeFiles(review.dir), { blastRadius: await packageHasBlastRadius(review.dir), prContext: packageHasPrContext(review.dir) });
     const named = new Set(selected);
     rows.push({ ...base, mode, required: need.required, excluded: need.excluded, missing: need.required.filter((r) => !named.has(r)), filesKnown: need.filesKnown });
   }

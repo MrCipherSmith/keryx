@@ -35,7 +35,7 @@ import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
+import { packageHasBlastRadius, packageHasPrContext, requiredReviewers } from "../review/coverage";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -522,7 +522,7 @@ const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"
 const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -3012,8 +3012,10 @@ async function runRequired(args: string[]): Promise<void> {
     throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
   const radiusFile = optionValue(args, "--blast-radius");
+  const prContextFile = optionValue(args, "--pr-context");
   const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
     blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
+    prContext: prContextFile !== undefined && packageHasPrContext(path.dirname(path.resolve(prContextFile)), path.basename(prContextFile)),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(set, null, 2));

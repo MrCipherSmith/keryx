@@ -114,8 +114,9 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // review jev-docs`/`jev-comments` command rather than an LLM sub-agent.
     // Plus `review-jev-contract` (flow 335): one more, dispatched as a
     // `keryx review jev-contract` command rather than an LLM sub-agent.
+    // Plus `review-pr-contract` (flow 446): one more, an LLM reviewer.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(78);
+    expect(files.length).toBe(79);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
