@@ -96,6 +96,7 @@ test("R2-06: the flow review gate reads a closed round without the completeness 
       cpSync(pkg, dir, { recursive: true });
       writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: name, status, createdAt: name, artifacts, target: { head: "abc" } }));
       writeFileSync(path.join(dir, "findings.json"), "[]");
+      writeFileSync(path.join(dir, "coverage.json"), JSON.stringify({ schemaVersion: 1 }));
     }
     const rounds = await readReviewRounds(cwd, "f1");
     const closed = rounds.find((round) => round.reviewId === "closed-round");

@@ -163,7 +163,7 @@ test("a yes covers the whole plan: recording a chunk DONE does not ask again (R1
 test("the estimate and the answer are recorded in the package", async () => {
   dropFiles(1200);
   await runChunks(["estimate", "--package", pkg], { rejectUnknownFlags: () => {} });
-  await runChunks(["estimate", "--package", pkg, "--answer", "yes", "--quote", "go ahead"], { rejectUnknownFlags: () => {} });
+  await runChunks(["estimate", "--package", pkg, "--answer", "yes", "--quote", "go ahead"], { rejectUnknownFlags: () => {} }, { isTerminal: () => true });
   const saved = JSON.parse(readFileSync(path.join(pkg, "chunk-estimate.json"), "utf8"));
   expect(saved.estimate.chunks).toBe(30);
   expect(saved.answer).toMatchObject({ value: "yes", quote: "go ahead" });
