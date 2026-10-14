@@ -5,7 +5,7 @@ import path from "node:path";
 import { commentRuleScopeConfig, detectRepositoryCommentRule, findCommentRuleLine } from "./comment-rule";
 import { buildReviewScope, renderReviewScopeMarkdown } from "./scope";
 
-const FILE = "src/admin/AdminQueryLogPage.tsx";
+const FILE = "src/admin/ExamplePage.tsx";
 
 /** A two-line `//` comment added between statements: the shape the pre-filter calls comment-only. */
 const COMMENT_DIFF = [
@@ -13,7 +13,7 @@ const COMMENT_DIFF = [
   "index 1111111..2222222 100644",
   `--- a/${FILE}`,
   `+++ b/${FILE}`,
-  "@@ -10,4 +10,6 @@ export function AdminQueryLogPage() {",
+  "@@ -10,4 +10,6 @@ export function ExamplePage() {",
   "   const rows = useRows();",
   "+  // The table is virtualised, so the row count is only an estimate here.",
   "+  // Keep it in step with the page size used by the loader.",
