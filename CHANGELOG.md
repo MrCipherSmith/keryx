@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.116] - 2026-10-14
+
 ### Added
 - **Review parity (flow 446).** A round now states what it left undone. `keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`; the rest print as `Not run: N candidates (cap C)`, stay pending and still block `review complete`. Reviewers propose a mutant for every changed branch, and on a shell host the main session writes them to `mutants.json`. A mutant has a `kind`, `behavior` (the default) or `presentation`; `severity-audit` raises a finding only on a behavior survivor and holds the severity, with `severity_audit.held`, on a presentation-only one. A reviewer's `Parent follow-up:` lines and `follow_ups` become ledger obligations `<reviewer>:fu<n>` that only a disposition closes (`narrowed` needs `remains`). `keryx review status` prints the leftovers, `keryx review report-parity <review>` prints them as Markdown for `report.md`, `/review parity` and the sidebar show them, and `review complete` warns (never refuses) when the report names none of a kind. `report-parity` runs without a prompt in an automatic review, for its own package.
 - **`review-pr-contract` reviewer.** A pull-request package that holds `pr-context.md` requires it in both modes (`keryx review required --pr-context <file>`); it checks the diff against the PR's stated contract, is read-only on a shell host and answers `NEEDS_CONTEXT` there.
