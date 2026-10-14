@@ -790,3 +790,21 @@ test("R2-07: the layers, chunks and coverage verbs are routine, the operator-ans
     expect(isTrustRoutineCommand(command)).toBe(false);
   }
 });
+
+test("R3-02: --write-wiki rewrites tracked wiki pages, so a layers refresh that carries it asks", () => {
+  expect(isTrustRoutineCommand("keryx review layers refresh --package .metaproject/reviews/r1")).toBe(true);
+  for (const command of [
+    "keryx review layers refresh --package .metaproject/reviews/r1 --write-wiki",
+    "keryx review layers refresh --write-wiki --package .metaproject/reviews/r1",
+    "keryx review layers refresh --package .metaproject/reviews/r1 --write-wiki=true",
+    "keryx review layers --write-wiki",
+  ]) {
+    expect(isTrustRoutineCommand(command)).toBe(false);
+  }
+});
+
+test("R3-02: a chunks command that carries --answer or --quote is not routine on the table's own account", () => {
+  for (const flag of ["--answer yes", "--answer=yes", "--quote x", "--quote=x"]) {
+    expect(isTrustRoutineCommand(`keryx review chunks next --package .metaproject/reviews/r1 ${flag}`)).toBe(false);
+  }
+});

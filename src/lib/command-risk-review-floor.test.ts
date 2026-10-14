@@ -92,3 +92,53 @@ describe("chunk estimate answer floor (R2-16)", () => {
     }
   });
 });
+
+describe("the floor asks for a keryx command, not for prose that names it (R3-04)", () => {
+  const notAsked: Array<[string, string]> = [
+    ["a search for the flag", 'keryx ctx rg -n -- "--waive-coverage" src'],
+    ["a commit message about the flag", 'git commit -m "docs: explain --waive-coverage"'],
+    ["a PR body naming the command and a variable", 'gh pr create --body "see keryx review complete then $VAR"'],
+    ["a plain complete", "keryx review complete --package p"],
+    ["a complete whose package is a variable", 'keryx review complete --package "$PKG"'],
+    ["an echo of the flag", 'echo "pass --waive-coverage to keryx"'],
+    ["a layers refresh with a variable", 'keryx review layers refresh --package "$PKG"'],
+    ["a chunks next with a variable", 'keryx review chunks next --package "$PKG"'],
+  ];
+  for (const [name, command] of notAsked) {
+    test(`does not ask: ${name}`, () => {
+      expect(touchesCoverageWaiver(command)).toBe(false);
+      expect(touchesChunkEstimateAnswer(command)).toBe(false);
+      expect(touchesHumanConfirmation(command)).toBe(false);
+    });
+  }
+
+  test("a keryx command behind a program the parser does not unwrap still asks", () => {
+    expect(touchesCoverageWaiver('find . -exec keryx review complete p --waive-coverage "a real operator quote" \;')).toBe(true);
+  });
+});
+
+describe("a verb or flag the shell assembles asks too (R3-01)", () => {
+  const assembled: Array<[string, string]> = [
+    ["answer from an assignment", "A=--answer; keryx review chunks estimate --package p $A yes --quote x"],
+    ["answer split by an expansion", "keryx review chunks estimate --package p --ans${X}wer yes --quote x"],
+    ["answer behind brace expansion", "keryx review chunks estimate --package p --{answer,x} yes --quote x"],
+    ["opaque chunks verb", "keryx review $V estimate --package p --answer yes --quote x"],
+    ["opaque subcommand slot", "keryx review chunks $S --package p --quote x"],
+  ];
+  for (const [name, command] of assembled) {
+    test(`chunk answer: ${name}`, () => {
+      expect(touchesChunkEstimateAnswer(command)).toBe(true);
+    });
+  }
+  const waiver: Array<[string, string]> = [
+    ["opaque complete", "keryx review $C p ${F}coverage q"],
+    ["brace-expanded flag", 'keryx review complete p --waive-{coverage,x} "a real operator quote"'],
+    ["opaque complete, literal flag", 'keryx review $C p --waive-coverage "a real operator quote"'],
+    ["opaque head", 'KERYX=keryx; $KERYX review complete p ${F}coverage "a real operator quote"'],
+  ];
+  for (const [name, command] of waiver) {
+    test(`waiver: ${name}`, () => {
+      expect(touchesCoverageWaiver(command)).toBe(true);
+    });
+  }
+});

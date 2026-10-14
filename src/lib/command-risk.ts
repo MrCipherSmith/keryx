@@ -498,7 +498,7 @@ function drivesKeryxTerminal(words: readonly string[], depth: number): boolean {
     const w = rest[i]!;
     const commandFlag = /^-[a-z]*c$/i.test(w) || w === "--command";
     const value = commandFlag ? rest[i + 1] : w.startsWith("--command=") ? w.slice("--command=".length) : /\s/.test(w) ? w : undefined;
-    if (value !== undefined && depth < 4 && parsedSchedulerControl(value, depth + 1)) return true;
+    if (value !== undefined && depth < MAX_SHELL_NESTING && parsedSchedulerControl(value, depth + 1)) return true;
   }
   // The rest of the line as a program and its arguments (`screen keryx shell`, BSD
   // `script -q /dev/null keryx`, `unbuffer bun src/cli.ts shell`).
@@ -559,7 +559,7 @@ function peelWrappers(input: readonly string[]): { words: string[]; inner?: stri
 /** One parsed segment: does it control a schedule or the OS scheduler? */
 function segmentControlsScheduler(input: readonly string[], cwdHint: string, depth: number): boolean {
   const peeled = peelWrappers(input);
-  if (peeled.inner !== undefined) return depth < 4 && parsedSchedulerControl(peeled.inner, depth + 1);
+  if (peeled.inner !== undefined) return depth < MAX_SHELL_NESTING && parsedSchedulerControl(peeled.inner, depth + 1);
   const words = peeled.words;
   if (words.length === 0) return false;
   const cmd = (words[0]!.split("/").pop() ?? "").toLowerCase();
@@ -664,63 +664,113 @@ function segmentsOfBothSpellings(raw: string): ReturnType<typeof splitSegments> 
   return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];
 }
 
-/** A word the shell will still rewrite (parameter or command substitution), so its text is not its value. */
+/** A word the shell will still rewrite (parameter or command substitution, brace expansion), so its text is not its value. */
 function wordIsOpaque(word: string): boolean {
-  return /[$`]/.test(word);
+  return /[$`{]/.test(word);
+}
+
+/** How deep a `bash -c`/`eval` body or a word that is itself a command line is followed. */
+const MAX_SHELL_NESTING = 4;
+
+/**
+ * The arguments after the keryx entry of a simple command, or undefined when the command is not keryx. A head the
+ * shell has yet to expand (`$K review complete`) counts as keryx: it may be.
+ */
+function keryxArgs(words: readonly string[]): string[] | undefined {
+  if (words.length === 0) return undefined;
+  if (wordIsOpaque(words[0]!)) return words.slice(1);
+  let at = 0;
+  if (JS_RUNNERS.has(baseName(words[0]))) {
+    at = words.findIndex((w, i) => i > 0 && !w.startsWith("-") && !["run", "x", "exec"].includes(w));
+    if (at < 0) return undefined;
+  }
+  return KERYX_ENTRY_NAMES.has(baseName(words[at])) ? words.slice(at + 1) : undefined;
+}
+
+/** Words the shell will expand, leaving out the value of a `--package` flag (a path, never a flag). */
+function opaqueArgs(args: readonly string[]): boolean {
+  return args.some((w, i) => wordIsOpaque(w) && args[i - 1] !== "--package");
+}
+
+/** Run `visit` over every simple command, descending into `bash -c`/`eval` bodies and any word that is itself a command line. */
+function anySimpleCommand(command: string, visit: (words: string[]) => boolean, depth = 0): boolean {
+  for (const seg of segmentsOfBothSpellings(command)) {
+    const words = seg.words.map(unescapeWord);
+    const peeled = peelWrappers(words);
+    if (visit(peeled.words)) return true;
+    if (depth < MAX_SHELL_NESTING) {
+      if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, depth + 1)) return true;
+      if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, depth + 1))) return true;
+    }
+  }
+  return false;
 }
 
 /**
- * Parsed check: does any simple command (recursing into `bash -c`, `eval` and any word that is itself a
- * command line) carry the waiver flag once quoting and escapes are resolved, or run `review complete` with
- * a word the shell has yet to expand?
+ * Parsed check: does a keryx command (found through wrappers, `bash -c`, `eval` and any word that is itself a
+ * command line) carry the waiver flag once quoting and escapes are resolved, or run `review complete` with a word
+ * the shell has yet to expand? Prose that merely names the flag (a commit message, a search pattern) is not a keryx
+ * command and does not match.
  */
-function parsedCoverageWaiver(command: string, depth = 0): boolean {
-  for (const seg of segmentsOfBothSpellings(command)) {
-    const words = seg.words.map(unescapeWord);
-    if (words.some((w) => w.toLowerCase().includes(COVERAGE_WAIVER_FLAG))) return true;
-    const review = words.findIndex((w) => w.toLowerCase() === "review");
-    if (review >= 0 && words.slice(review + 1).some((w) => w.toLowerCase() === "complete")) {
-      if (words.slice(review + 1).some(wordIsOpaque)) return true;
-    }
-    if (depth < 4 && words.some((w) => /\s/.test(w) && parsedCoverageWaiver(w, depth + 1))) return true;
-  }
-  return false;
+function parsedCoverageWaiver(command: string): boolean {
+  return anySimpleCommand(command, (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    if (lower.some((w) => w.includes(COVERAGE_WAIVER_FLAG))) return true;
+    const review = lower.indexOf("review");
+    if (review < 0) return false;
+    const rest = args.slice(review + 1);
+    const completeLike = lower.slice(review + 1).includes("complete") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+    return completeLike && opaqueArgs(rest);
+  });
 }
 
 /**
  * Flow 431 (AC10): `keryx review complete --waive-coverage "<quote>"` is the operator accepting that in-scope files
  * went unreviewed. The quote has to be theirs, so the command asks in every permission mode, like `flow confirm`.
  *
- * Matched on PARSED words like {@link touchesSchedulerControl}: split quotes (`--waive-""coverage`), `$'\x2d…'`
- * ANSI-C words, backslash escapes, environment prefixes and `bash -c`/`eval` bodies are resolved first, and a
- * `review complete` whose words hold an expansion (`$X`, `$(…)`, a backtick, a glob) asks too, because the flag could
- * be inside it. The raw text and the quote-collapsed text stay as extra nets. HONEST LIMIT: a script file or an
- * interpreter one-liner is out of reach; `runComplete` therefore also requires a terminal for the waiver. Pure.
+ * Matched on PARSED words like {@link touchesSchedulerControl}, for a keryx command only: split quotes
+ * (`--waive-""coverage`), `$'\x2d…'` ANSI-C words, backslash escapes, environment prefixes and `bash -c`/`eval`
+ * bodies are resolved first, and a `review complete` whose arguments hold an expansion (`$X`, `$(…)`, a backtick, a
+ * brace) asks too, because the flag could be inside it. Globs are left out on purpose: they expand to existing file
+ * names, never to a flag. The quote-collapsed text is one more net, for nesting beyond {@link MAX_SHELL_NESTING} and
+ * for a keryx command behind a program the parser does not unwrap (`find -exec`); it needs `review` and `complete`
+ * beside the flag, so a search for the flag or a commit message about it is not caught. HONEST LIMIT: a script file
+ * or an interpreter one-liner is out of reach; `runComplete` therefore also requires a terminal for the waiver. Pure.
  */
 export function touchesCoverageWaiver(raw: string): boolean {
   const command = joinContinuations(raw);
-  if (command.toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;
-  if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;
+  const collapsed = collapseQuoting(command).toLowerCase();
+  if (collapsed.includes(COVERAGE_WAIVER_FLAG) && /\breview\b/.test(collapsed) && /\bcomplete\b/.test(collapsed)) return true;
   return parsedCoverageWaiver(command);
 }
 
 /**
  * Flow 431 (R2-16): `keryx review chunks estimate --answer …` lifts the pass ceiling on the operator's word, so it
- * asks like the waiver. Parsed words, so a split or escaped spelling is seen too.
+ * asks like the waiver. Parsed words, so a split or escaped spelling is seen too, and so is a verb or flag the shell
+ * assembles (`$A`, `--ans${X}wer`) in a keryx command. `runChunks` also requires a terminal for the answer.
  */
 export function touchesChunkEstimateAnswer(raw: string): boolean {
-  const scan = (text: string, depth: number): boolean => {
-    for (const seg of segmentsOfBothSpellings(text)) {
-      const plain = seg.words.map(unescapeWord);
-      const words = plain.map((w) => w.toLowerCase());
-      const chunks = words.indexOf("chunks");
-      const after = chunks >= 0 ? words.slice(chunks + 1) : [];
-      if (after.includes("estimate") && after.some((w) => w === "--answer" || w.startsWith("--answer="))) return true;
-      if (depth < 4 && plain.some((w) => /\s/.test(w) && scan(w, depth + 1))) return true;
-    }
-    return false;
-  };
-  if (scan(raw, 0)) return true;
+  const isAnswer = (w: string): boolean => w === "--answer" || w.startsWith("--answer=");
+  const found = anySimpleCommand(joinContinuations(raw), (words) => {
+    const lower = words.map((w) => w.toLowerCase());
+    const chunks = lower.indexOf("chunks");
+    const after = chunks >= 0 ? lower.slice(chunks + 1) : [];
+    if (after.includes("estimate") && after.some(isAnswer)) return true;
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lowerArgs = args.map((w) => w.toLowerCase());
+    if (lowerArgs[0] === "ctx" && lowerArgs[1] === "rg") return false;
+    if (lowerArgs.includes("estimate") && lowerArgs.some(isAnswer)) return true;
+    if (lowerArgs.some(isAnswer) && opaqueArgs(args)) return true;
+    const verb = lowerArgs.indexOf("chunks");
+    if (verb < 0) return false;
+    const rest = args.slice(verb + 1);
+    return (rest[0] !== undefined && wordIsOpaque(rest[0])) || (lowerArgs.slice(verb + 1).includes("estimate") && opaqueArgs(rest));
+  });
+  if (found) return true;
   // Past the recursion limit the quoting of a deeply nested `bash -c` is all that hides the flag.
   return /chunks\s+estimate\b[^;&|]*--answer/i.test(collapseQuoting(joinContinuations(raw)));
 }

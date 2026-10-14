@@ -95,13 +95,20 @@ async function ensureEstimateRecorded(packageDir: string, estimate: ChunkEstimat
   await recordChunkEstimate(packageDir, estimate, chunkModeOf(packageDir));
 }
 
-export async function runChunks(args: string[], deps: ChunksDeps): Promise<void> {
+export type ChunksSeams = { isTerminal?: () => boolean };
+
+export async function runChunks(args: string[], deps: ChunksDeps, seams?: ChunksSeams): Promise<void> {
   const [sub, ...rest] = args;
   if (sub === undefined || wantsHelp(args)) {
     printChunksHelp();
     return;
   }
   deps.rejectUnknownFlags(rest, CHUNKS_FLAGS, `chunks ${sub}`);
+  // The command-risk floor is a text match; this is the check behind it. The answer lifts the pass ceiling on the operator's word.
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (sub === "estimate" && optionValue(rest, "--answer") !== undefined && !isTerminal()) {
+    throw new Error("--answer needs a terminal: the answer is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+  }
   const packageDir = resolvePackageDir(rest, process.cwd(), "chunks");
   const projectRoot = resolveProjectRoot(process.cwd());
   const json = rest.includes("--json");

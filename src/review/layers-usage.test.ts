@@ -15,15 +15,39 @@ afterEach(async () => {
 
 describe("layers used by a reviewer run, counted from its tool-call log (AC7)", () => {
   test("classifies CLI commands and MCP tools into the four layers", () => {
-    expect(classifyToolCall("keryx gdgraph affected src/a.ts")).toBe("graph");
-    expect(classifyToolCall("mcp__keryx__graph_symbol")).toBe("graph");
-    expect(classifyToolCall('keryx wiki ask "why"')).toBe("wiki");
-    expect(classifyToolCall("mcp__keryx__read_wiki")).toBe("wiki");
-    expect(classifyToolCall('keryx memory search "x"')).toBe("memory");
-    expect(classifyToolCall("keryx ctx rg foo")).toBe("ctx");
-    expect(classifyToolCall("mcp__keryx__search_code")).toBe("ctx");
-    expect(classifyToolCall("git diff HEAD")).toBeUndefined();
-    expect(classifyToolCall("Read src/a.ts")).toBeUndefined();
+    expect(classifyToolCall("keryx gdgraph affected src/a.ts")).toEqual(["graph"]);
+    expect(classifyToolCall("mcp__keryx__graph_symbol")).toEqual(["graph"]);
+    expect(classifyToolCall('keryx wiki ask "why"')).toEqual(["wiki"]);
+    expect(classifyToolCall("mcp__keryx__read_wiki")).toEqual(["wiki"]);
+    expect(classifyToolCall('keryx memory search "x"')).toEqual(["memory"]);
+    expect(classifyToolCall("keryx ctx rg foo")).toEqual(["ctx"]);
+    expect(classifyToolCall("mcp__keryx__search_code")).toEqual(["ctx"]);
+    expect(classifyToolCall("git diff HEAD")).toEqual([]);
+    expect(classifyToolCall("Read src/a.ts")).toEqual([]);
+  });
+
+  test("a call is judged by its command word, not by the text of its arguments (R3-03)", () => {
+    expect(classifyToolCall('keryx ctx rg "keryx wiki"')).toEqual(["ctx"]);
+    expect(classifyToolCall('git commit -m "ran keryx gdgraph affected"')).toEqual([]);
+    expect(classifyToolCall('echo "keryx memory search"')).toEqual([]);
+    expect(classifyToolCall("keryx flow status --graph")).toEqual([]);
+    expect(classifyToolCall("cat notes-about-search_code.md")).toEqual([]);
+  });
+
+  test("a chained call credits every layer it runs, once each (R3-03)", () => {
+    expect(classifyToolCall("keryx gdgraph affected x && keryx wiki ask y")).toEqual(["graph", "wiki"]);
+    expect(classifyToolCall("keryx ctx rg a; keryx ctx rg b | head")).toEqual(["ctx"]);
+    expect(classifyToolCall("FOO=1 env keryx memory search q || bash -c 'keryx gdgraph affected z'")).toEqual(["graph", "memory"]);
+    expect(classifyToolCall("bun src/cli.ts wiki ask q")).toEqual(["wiki"]);
+  });
+
+  test("an MCP call is credited by its tool name, never by its arguments (R3-03)", () => {
+    const log = [
+      JSON.stringify({ name: "Read", arguments: { file_path: "docs/read_wiki-notes.md", note: "keryx wiki ask, graph_symbol" } }),
+      JSON.stringify({ name: "mcp__keryx__wiki_query", arguments: { q: "keryx ctx rg" } }),
+      JSON.stringify({ name: "Bash", input: { command: "keryx gdgraph affected a && keryx memory search b" } }),
+    ].join("\n");
+    expect(countLayerUsage(log)).toEqual({ graph: 1, wiki: 1, memory: 1, ctx: 0 });
   });
 
   test("counts JSON lines and plain command lines, one call each", () => {
