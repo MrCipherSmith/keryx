@@ -341,6 +341,31 @@ describe("mountStartupIndicator (AC14)", () => {
     setup.renderer.destroy();
   });
 
+  otuiTest("every timer tick requests a frame and late ticks after removal do nothing", async () => {
+    const otui = requireOtui();
+    const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });
+    let tick: (() => void) | undefined;
+    let requests = 0;
+    const original = setup.renderer.requestRender.bind(setup.renderer);
+    setup.renderer.requestRender = () => { requests++; original(); };
+    const handle = mountStartupIndicator(otui.core, setup.renderer, "Loading…", {
+      setInterval: (fn) => { tick = fn; return 1; }, clearInterval: () => {},
+    });
+    await setup.flush();
+    for (let i = 0; i < 8; i++) {
+      const before = requests;
+      tick?.();
+      expect(requests).toBeGreaterThan(before);
+      await setup.flush();
+    }
+    handle.remove();
+    const afterRemoval = requests;
+    tick?.();
+    handle.setStep("Too late");
+    expect(requests).toBe(afterRemoval);
+    setup.renderer.destroy();
+  });
+
   otuiTest("setStep replaces the label", async () => {
     const otui = requireOtui();
     const setup = await otui.testing.createTestRenderer({ width: 60, height: 20 });

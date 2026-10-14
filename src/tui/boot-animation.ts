@@ -188,6 +188,8 @@ export function mountStartupIndicator(
       return;
     }
     text.content = otui.t`${dimChunk(otui, `${SPINNER_FRAMES[frame % SPINNER_FRAMES.length]} ${label}`)}`;
+    // Timer updates must paint even when the renderer has no live widgets.
+    r.requestRender();
   };
   paint();
 
@@ -211,6 +213,7 @@ export function mountStartupIndicator(
       removed = true;
       unschedule(timer);
       r.root.remove(box);
+      r.requestRender();
     },
   };
 }

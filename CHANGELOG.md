@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.3.115] - 2026-10-14
+
+### Fixed
+- **Shell startup no longer waits for model limits.** Each model selection owns a background probe, and context-compaction guards read its live result through dependency copies. Failed probes leave the context window unknown; late responses cannot update another selection.
+- **Overlapping Codex catalogue requests are shared.** Only in-flight requests with the same account directory, fetch implementation, timeout and refresh option are shared. Settled results are not cached.
+- **Startup spinner ticks explicitly request a render.** Removal requests a frame and late callbacks cannot repaint a removed indicator. This fixes missing repaint requests, not synchronous event-loop blocking.
+
 ## [0.3.114] - 2026-10-14
 
 ### Added

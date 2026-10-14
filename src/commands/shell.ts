@@ -132,7 +132,7 @@ import {
   formatSessionInfoText,
   isSessionInfoCommand,
 } from "../tui/session-info";
-import { loadSessionLimits } from "./model-limits";
+import { loadSessionLimits, startSessionLimits } from "./model-limits";
 import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
 import { parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
@@ -4147,26 +4147,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           steerable: true,
         }),
       });
-      // Flow 267: fetch the provider's real context window for the auto-
-      // compaction guard (`AgentDeps.contextWindow`). This runs on every
-      // `makeAgentDeps` call — the initial launch AND every `/model`/
-      // `/connect` rebuild (see this function's own doc comment above) — so
-      // the guard's window always matches the CURRENTLY selected model,
-      // never a stale one from before a switch. Best-effort: an unreachable
-      // gateway or unrecognized provider just leaves `contextWindow`
-      // undefined, same as `loadSessionLimits`'s own "never invent a window"
-      // contract for `/status`.
-      let contextWindow: number | undefined;
-      try {
-        const limits = await loadSessionLimits({
-          provider: sel.provider,
-          model: sel.model,
-          ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
-        });
-        contextWindow = limits.contextWindow;
-      } catch {
-        // best-effort — the guard simply stays off.
-      }
+      // A rebuild owns its probe, so late responses cannot change another model.
+      // Do not wait for a network request behind the TUI startup indicator.
+      const limits = startSessionLimits({
+        provider: sel.provider,
+        model: sel.model,
+        ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
+        ...(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {}),
+      });
       const deps = {
         provider: agentProvider,
         providerId: sel.provider,
@@ -4230,7 +4218,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
-        ...(contextWindow !== undefined ? { contextWindow } : {}),
+        getContextWindow: limits.getContextWindow,
         ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
         ...((): { hooks: ShellHookContext } | Record<string, never> => {
           const h = getShellHooks();

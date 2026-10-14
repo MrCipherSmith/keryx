@@ -7,6 +7,8 @@ import { refreshProviderCatalogFromDetected } from "../harness/provider-catalog"
 import { filterConnectedDetectedProviders } from "../tui/tui-shell";
 import { configuredProviders, connectionProviderByName, resolveModelsForPicker, testProviderConnection } from "./providers";
 
+import { fetchOpenAiCodexCatalog, fetchOpenAiCodexModels } from "./subscription-models";
+
 const registryUrl = "https://registry.npmjs.org/@openai%2Fcodex/latest";
 
 const roots: string[] = [];
@@ -152,4 +154,41 @@ test("connection Test refreshes the catalog version even while the picker cache 
   expect(urls.filter((url) => url === registryUrl)).toHaveLength(2);
   expect((await resolveModelsForPicker(fetch, subscription, {}, { configDir: dir })).models).toEqual(["0.200.0"]);
   expect(urls.filter((url) => url === registryUrl)).toHaveLength(2);
+});
+
+
+test("overlapping picker and limits share a catalogue, but settled results are not cached", async () => {
+  const dir = root(); login(dir);
+  let resolve!: (response: Response) => void;
+  const pending = new Promise<Response>((done) => { resolve = done; });
+  let calls = 0;
+  const fetch = (async (input: string | URL | Request) => {
+    if (String(input) === registryUrl) return Response.json({ name: "@openai/codex", version: "0.159.2" });
+    calls++;
+    if (calls === 1) return pending;
+    return Response.json({ models: [{ slug: "fresh", visibility: "list" }] });
+  }) as typeof globalThis.fetch;
+  const catalog = fetchOpenAiCodexCatalog(fetch, { configDir: dir });
+  const picker = fetchOpenAiCodexModels(fetch, { configDir: dir });
+  await Bun.sleep(20);
+  expect(calls).toBe(1);
+  resolve(Response.json({ models: [{ slug: "shared", visibility: "list", context_window: 128000 }] }));
+  expect((await catalog).contextWindows.shared).toBe(128000);
+  expect((await picker).models).toEqual(["shared"]);
+  expect((await fetchOpenAiCodexCatalog(fetch, { configDir: dir })).models).toEqual(["fresh"]);
+  expect(calls).toBe(2);
+});
+
+test("catalogue sharing is isolated by account directory, fetch, and request options", async () => {
+  const first = root(); login(first);
+  const second = root(); login(second);
+  const fetch = liveFetch([]);
+  const one = fetchOpenAiCodexCatalog(fetch, { configDir: first });
+  expect(fetchOpenAiCodexCatalog(fetch, { configDir: first })).toBe(one);
+  const otherAccount = fetchOpenAiCodexCatalog(fetch, { configDir: second });
+  const otherFetch = fetchOpenAiCodexCatalog(liveFetch([]), { configDir: first });
+  const otherTimeout = fetchOpenAiCodexCatalog(fetch, { configDir: first, timeoutMs: 1000 });
+  const refresh = fetchOpenAiCodexCatalog(fetch, { configDir: first, refreshCatalogVersion: true });
+  for (const request of [otherAccount, otherFetch, otherTimeout, refresh]) expect(request).not.toBe(one);
+  await Promise.all([one, otherAccount, otherFetch, otherTimeout, refresh]);
 });
