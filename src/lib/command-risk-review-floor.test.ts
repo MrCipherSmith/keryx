@@ -113,7 +113,7 @@ describe("the floor asks for a keryx command, not for prose that names it (R3-04
   }
 
   test("a keryx command behind a program the parser does not unwrap still asks", () => {
-    expect(touchesCoverageWaiver('find . -exec keryx review complete p --waive-coverage "a real operator quote" \;')).toBe(true);
+    expect(touchesCoverageWaiver('find . -exec keryx review complete p --waive-coverage "a real operator quote" \\;')).toBe(true);
   });
 });
 
