@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { coverageErrors, type ReviewMode } from "./coverage";
+import { DISPATCH_KNOWN_ROLES, coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
@@ -442,7 +442,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, selected: input.selected, unresolvedRules, runs };
+  const dispatch = { version: 1, mode: input.mode, selected: input.selected, roles: [...DISPATCH_KNOWN_ROLES], unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();

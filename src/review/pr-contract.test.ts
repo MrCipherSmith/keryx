@@ -45,7 +45,7 @@ describe("review-pr-contract selection", () => {
 
   test("a dispatch that skips it is refused when the package holds pr-context.md and passes when it does not", async () => {
     const withoutIt = (await requiredReviewers(root, "all", frontendFiles)).required;
-    const dispatch = { mode: "all", selected: withoutIt };
+    const dispatch = { mode: "all", selected: withoutIt, roles: ["review-pr-contract"] };
     expect(await coverageErrors(dispatch, { root, files: frontendFiles, prContext: true })).toEqual([
       expect.stringContaining("missing: review-pr-contract"),
     ]);

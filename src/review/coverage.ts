@@ -85,6 +85,36 @@ export type RequiredOptions = {
 const REGRESSION = "review-regression";
 const PR_CONTRACT = "review-pr-contract";
 
+/**
+ * Written to `dispatch.roles` by the ledger builder: the roles added after the original roster that the writer knew
+ * about. A dispatch without the mark was recorded before the role existed, so a package already in flight is not newly
+ * refused for a reviewer nobody could have dispatched.
+ */
+export const DISPATCH_KNOWN_ROLES: readonly string[] = [PR_CONTRACT];
+
+function dispatchKnowsRole(dispatch: Record<string, unknown>, role: string): boolean {
+  return Array.isArray(dispatch.roles) && dispatch.roles.includes(role);
+}
+
+/** Warnings the coverage gate does not refuse for: `review-pr-contract` not run on a package that predates the role. */
+export function coverageWarnings(dispatch: unknown, options: Pick<CoverageOptions, "prContext">): string[] {
+  if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
+  const record = dispatch as Record<string, unknown>;
+  if (options.prContext !== true || dispatchKnowsRole(record, PR_CONTRACT)) return [];
+  const selected = Array.isArray(record.selected) ? record.selected : [];
+  return selected.includes(PR_CONTRACT) ? [] : [`${PR_CONTRACT} not run (package predates the role)`];
+}
+
+/** The same warnings, read from a package directory's `research.json`. */
+export async function packageCoverageWarnings(packageDir: string): Promise<string[]> {
+  try {
+    const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
+    return coverageWarnings(ledger?.dispatch, { prContext: packageHasPrContext(packageDir) });
+  } catch {
+    return [];
+  }
+}
+
 export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
   const stack = await detectProjectStack(root);
@@ -203,7 +233,10 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): P
   }
   if (record.mode === "diff" && options.files === undefined)
     return ["diff mode needs the scope-A file list: pass `--scope <scope.json>` to `keryx review start|ingest`, or run mode all"];
-  const need = await requiredReviewers(options.root, record.mode, options.files, { blastRadius: options.blastRadius, prContext: options.prContext });
+  const need = await requiredReviewers(options.root, record.mode, options.files, {
+    blastRadius: options.blastRadius,
+    prContext: options.prContext === true && dispatchKnowsRole(record, PR_CONTRACT),
+  });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];

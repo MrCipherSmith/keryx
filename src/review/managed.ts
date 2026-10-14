@@ -2,6 +2,7 @@ import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
+import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
@@ -834,6 +835,7 @@ export async function completeManagedReview(
   }
   // A warning, never a refusal: leftovers (Not run candidates, held severities, open follow-ups) the report does not name.
   warnings.push(...(await packageParityWarnings(packageDir, reportText).catch(() => [])));
+  warnings.push(...(await packageCoverageWarnings(packageDir)));
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
   // so the next run does not pass the same gate without the flag.
