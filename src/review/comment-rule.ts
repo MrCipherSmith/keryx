@@ -20,6 +20,14 @@ import type { ReviewScopeConfig } from "./scope";
 
 const MENTIONS_COMMENT = /\bcomments?\b/i;
 
+/** Comments left on a pull request or in a review thread, which are not comments in source: "review comments", "PR comments", "comments per PR". */
+const REVIEW_COMMENTS = /\b(?:code[- ]review|review(?:er)?|pr|pull[- ]request|github|issue|bot|greptile|thread)(?:'s)?[- ]comments?\b|\bcomments?\b[^.\n]{0,40}\bper (?:pr|pull request|review(?:er)?|round|thread)\b/gi;
+
+/** Whether the line is about comments in source: it mentions comments once the pull-request and review kind is set aside. */
+function mentionsCodeComment(line: string): boolean {
+  return MENTIONS_COMMENT.test(line.replace(REVIEW_COMMENTS, " "));
+}
+
 /** Wording that turns a mention of comments into a limit or a gate. */
 const LIMITING_WORDING = [
   /\b(?:limit(?:ed|s)?|max(?:imum)?|cap(?:ped)?|at most|no more than|not exceed|never exceed|shorter than|too long)\b/i,
@@ -27,6 +35,7 @@ const LIMITING_WORDING = [
   /\bgate\b/i,
   /\b(?:one|1)[- ]liners?\b/i,
   /\bmulti[- ]?line\b/i,
+  /\bnarrat(?:e|es|ed|ing|ion)\b/i,
   /\b(?:forbid(?:den|s)?|prohibit(?:ed|s)?|ban(?:ned|s)?)\b/i,
 ];
 
@@ -37,7 +46,7 @@ export function findCommentRuleLine(text: string): { line: number; text: string 
   const lines = text.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
     const raw = lines[index] ?? "";
-    if (!MENTIONS_COMMENT.test(raw)) {
+    if (!mentionsCodeComment(raw)) {
       continue;
     }
     if (LIMITING_WORDING.some((pattern) => pattern.test(raw))) {

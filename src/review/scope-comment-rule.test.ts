@@ -90,6 +90,7 @@ describe("findCommentRuleLine", () => {
       "Limit comments to two lines; explain why, not what.",
       "A comment longer than 1 line is a defect.",
       "Do not exceed the comment max length of 80.",
+      "Avoid comments that narrate the code.",
     ]) {
       expect(findCommentRuleLine(text)).not.toBeNull();
     }
@@ -101,6 +102,9 @@ describe("findCommentRuleLine", () => {
       "Reply to every review comment before merging.",
       "The line limit for functions is 40.",
       "Keep the changelog up to date.",
+      "Code review comments are limited to 5 per PR.",
+      "PR comments: at most 3 per reviewer.",
+      "Post no more than 3 comments per pull request.",
     ]) {
       expect(findCommentRuleLine(text)).toBeNull();
     }
