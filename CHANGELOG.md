@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Tails of the layers refresh (flow 444).** A `SIGTERM` or `SIGINT` in any phase of `keryx review layers refresh` (the sweep after the lock, the graph build, the wiki refresh, the memory index) now releases the lock, removes the detached checkout and the staging directory, and re-raises the signal; before, only part of the phases cleaned up. A graph that failed at the same head is not rebuilt for 5 minutes after the failure (`graph.failedAt`, so repeated polling does not extend the window); `--force` or a new head rebuilds it at once. A reader that failed is reported under `unavailable` (section and reason) in the layers block, its text lines and the reviewer-input schema, instead of looking like an empty result: the wiki, the memory, unreadable wiki pages and the affected-files computation. A TUI refresh that hits its timeout says "did not finish within Ns and was stopped" instead of a parse error.
+- **Tests are named after behaviour.** `layers-round2.test.ts` became `layers-refresh-lifecycle.test.ts` and the `R2-nn` tags are gone from the layers tests. New tests cover the signal at every phase, the retry window, `unavailable`, the child timeout (the process is gone) and one refresh guard shared by every open view of a package.
+
 ## [0.3.113] - 2026-10-14
 
 ### Added
