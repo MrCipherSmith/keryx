@@ -752,8 +752,10 @@ counts as evidence for `review-layout` when it names the command and the viewpor
 without them is context, not evidence.
 
 `src/review/retry-plan.ts` treats `NEEDS_CONTEXT` as one refill: the first one re-dispatches the
-role with what it asked for. A second `NEEDS_CONTEXT` from the same role is `notRun`, reason
-`layout: no engine` for `review-layout` and `no engine` for any other role, and the round goes on.
+role with what it asked for. A second `NEEDS_CONTEXT` from the same role that covered no new slice and
+asks nothing new is `notRun`; the reason is `layout: no engine` for `review-layout` and `no engine` for any other
+role when its questions ask for a browser or engine and name no route without one, else `no progress after one
+context refill`, and the round goes on. A second one that covered a new slice or asked a new question still gets its refill.
 
 ### Pull request context — `keryx review context-collect`
 

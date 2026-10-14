@@ -19,6 +19,8 @@ export type ReviewerRetryState = {
   stalls?: number;
   /** Slice ids this reviewer has reported covering, across every result. */
   covered?: string[];
+  /** The open questions of the last NEEDS_CONTEXT this reviewer sent, normalised; a second one that repeats them shows no progress. */
+  questions?: string[];
 };
 
 export type RetryState = {
@@ -86,6 +88,19 @@ export function safeReviewerName(reviewer: string): string {
 /** The reason a role that asked for context twice is `not-run`: the host cannot supply what it needs. `review-layout` needs a browser. */
 export function noEngineReason(reviewer: string): string {
   return reviewer === "review-layout" ? "layout: no engine" : "no engine";
+}
+
+/** Words that say a question needs a browser or a rendering engine, and words that say the reviewer can do without one. */
+const ENGINE_TERMS = /\b(browser|playwright|chromium|puppeteer|headless|screenshot|rendered?|rendering|storybook|dev server|engine)\b/i;
+const ENGINE_FREE = /\b(without|no need for|instead of)\b[^.\n]{0,24}\b(browser|engine|render\w*)\b|\bsource[- ]only\b|\bstatic(ally)?\b/i;
+
+/**
+ * Why a second NEEDS_CONTEXT with nothing new is `not-run`. The host-has-no-engine reason is kept only when the questions
+ * ask for a browser or engine and name no route that works without one; anything else is a plain lack of progress.
+ */
+export function stalledContextReason(reviewer: string, questions: string[]): string {
+  const text = questions.join("\n");
+  return ENGINE_TERMS.test(text) && !ENGINE_FREE.test(text) ? noEngineReason(reviewer) : "no progress after one context refill";
 }
 
 export function notRunLine(reviewer: string, status: string): string {
@@ -194,7 +209,11 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   const covered = new Set([...priorCovered, ...reported]);
   const progress = reported.some((id) => !priorCovered.has(id));
   const evaluated = status !== "";
-  const stalls = !evaluated ? priorStalls : progress ? 0 : priorStalls + 1;
+  const questions = [...new Set(asStrings(result.needs_context).map((item) => item.trim().replace(/\s+/g, " ").toLowerCase()).filter((item) => item !== ""))].sort();
+  const asksForContext = status === "NEEDS_CONTEXT" || questions.length > 0;
+  // A NEEDS_CONTEXT with a question it has not asked before moves the dispatch forward as a new slice does.
+  const newQuestion = asksForContext && questions.some((item) => !(known?.questions ?? []).includes(item));
+  const stalls = !evaluated ? priorStalls : progress || newQuestion ? 0 : priorStalls + 1;
 
   const graph = sliceGraph(manifest, reviewer);
   const wanted = input.sliceIds ?? requiredSlices(manifest, reviewer);
@@ -202,7 +221,8 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   const budget = waveBytesOf(manifest);
 
   const remember = (over: Partial<ReviewerRetryState>): void => {
-    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...over };
+    const asked = asksForContext ? questions : known?.questions;
+    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...(asked === undefined ? {} : { questions: asked }), ...over };
   };
   const plan = (decision: RetryDecision, reason: string, extra: Partial<RetryPlan> = {}): RetryPlan => {
     const waves = packWaves(open, budget);
@@ -248,13 +268,13 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     return plan("wave", `${status || "no result"}; ${summary.slices} slice(s) are uncovered — dispatch the next wave (${summary.waves} left), no attempt is spent`);
   }
 
-  const asksForContext = status === "NEEDS_CONTEXT" || hasContext;
-  if (asksForContext && known?.status === "NEEDS_CONTEXT" && !known.notRun) {
-    // One refill is the contract. A second NEEDS_CONTEXT means the host cannot supply it (a shell host has no browser for
-    // review-layout): record the gap as Not run instead of looping on the same question.
-    const reason = noEngineReason(reviewer);
+  if (asksForContext && known?.status === "NEEDS_CONTEXT" && !known.notRun && !progress && !newQuestion) {
+    // One refill is the contract. A second NEEDS_CONTEXT that covered no new slice and asks nothing new means the host
+    // cannot supply it (a shell host has no browser for review-layout): record the gap as Not run instead of looping on
+    // the same question. One that moved the scope or asked something new still gets its refill, within the usual bounds.
+    const reason = stalledContextReason(reviewer, asStrings(result.needs_context));
     remember({ notRun: true });
-    return plan("not-run", reason, { reportLine: `- **Not run:** ${reviewer} — ${reason}; it asked for context twice and the host could not supply it, never counted as a clean pass`, wave: [], remaining: summarizeWaves([]) });
+    return plan("not-run", reason, { reportLine: `- **Not run:** ${reviewer} — ${reason}; it asked for context twice and nothing was supplied that moved it, never counted as a clean pass`, wave: [], remaining: summarizeWaves([]) });
   }
   if (stalls >= MAX_STALLED_RESULTS) {
     return notRun(`${status} again with no new slice covered (${stalls} results in a row)`);

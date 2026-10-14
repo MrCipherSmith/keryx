@@ -48,6 +48,44 @@ describe("NEEDS_CONTEXT is one refill", () => {
     expect(noEngineReason("review-layout")).toBe("layout: no engine");
   });
 
+  test("a second NEEDS_CONTEXT with nothing new and no browser ask is Not run for lack of progress, not for a missing engine", () => {
+    const first = ask("review-logic", emptyRetryState(), ["which module owns the retry cap?"]);
+    const second = ask("review-logic", first.state, ["Which module owns the retry cap?"]);
+    expect(second.decision).toBe("not-run");
+    expect(second.reason).toBe("no progress after one context refill");
+    expect(second.reportLine).not.toContain("no engine");
+  });
+
+  test("a browser ask that names a route without a browser is not read as a missing engine", () => {
+    const first = ask("review-layout", emptyRetryState(), ["measure at 1280px, or source-only is fine if no browser is available"]);
+    const second = ask("review-layout", first.state, ["measure at 1280px, or source-only is fine if no browser is available"]);
+    expect(second.reason).toBe("no progress after one context refill");
+  });
+
+  test("a second NEEDS_CONTEXT that asks something new still gets its refill", () => {
+    const first = ask("review-logic", emptyRetryState(), ["which module owns the retry cap?"]);
+    const second = ask("review-logic", first.state, ["which module owns the retry cap?", "what does the caller pass for timeoutMs?"]);
+    expect(second.decision).toBe("context");
+    expect(second.needsContext).toEqual(["which module owns the retry cap?", "what does the caller pass for timeoutMs?"]);
+    expect(second.stalls).toBe(0);
+    const third = ask("review-logic", second.state, ["what does the caller pass for timeoutMs?"]);
+    expect(third.decision).toBe("not-run");
+  });
+
+  test("a second NEEDS_CONTEXT that covered a new slice still gets its refill", () => {
+    const first = ask("review-layout", emptyRetryState());
+    const id = built.manifest.slices[0]!.id;
+    const second = planRetry({
+      manifest: built.manifest,
+      reviewer: "review-layout",
+      result: { reviewer: "review-layout", status: "NEEDS_CONTEXT", needs_context: ["browser measurements at 1280px"], slices: [id] },
+      state: first.state,
+      readSliceText: (entry) => textOf(entry.id),
+    });
+    expect(second.decision).toBe("context");
+    expect(second.progress).toBe(true);
+  });
+
   test("the refill count is per role: a second role's first question is still a refill", () => {
     const layout = ask("review-layout", emptyRetryState());
     const other = ask("review-logic", layout.state);
