@@ -145,7 +145,10 @@ A pull-request round runs **every available reviewer** by default (`mode: all`):
 the bundled `review-*` roles and the project's own reviewers, minus the ones the
 stack rules out and the ones whose path triggers no changed file matches.
 `review-regression` joins the set only when a blast radius was computed for the
-package. `keryx review required` prints the set, and prints each excluded reviewer
+package, and `review-pr-contract` (the reviewer that reads the diff against the
+pull request's own stated contract: title, description, linked issue, CI) only when
+`pr-context.md` is in the package. `keryx review required --pr-context <file>`
+prints the set, and prints each excluded reviewer
 with its reason. A narrower set (`mode: diff`, the roles derived from the changed
 files) is the operator's call and the dispatch records their own words as
 `operatorQuote`; `review complete` refuses a smaller dispatch without them.
@@ -158,15 +161,38 @@ keryx review mutate --test "bun test" --package <review-dir>
 keryx review severity-audit --package <review-dir>
 ```
 
+Reviewers propose a mutant for every changed branch, not a sample. On a shell host
+the reviewers cannot write files, so the main session writes their candidates to
+`research-evidence/mutants.json` as they are. A mutant says what kind of change it
+is: `behavior` (the default) or `presentation` (copy, class names, display order).
+
 `mutate` applies each proposed mutant in a scratch copy of the worktree (the
 worktree is never written) and records whether the tests failed. The table in
 `research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
 test command it was judged by and that command's exit code. A mutant that
 **survived** means no test pins that behaviour. `severity-audit` raises a finding
 that cites a surviving mutant (`mutant:<id>` in its `evidence`) from minor to major
-and records why; it never deletes a finding. For an attended run `review complete`
+and records why; it never deletes a finding. A survivor of kind `presentation`
+does not raise anything: the severity is held and the finding records
+`severity_audit.held`, because a test that does not pin copy is not a missing test.
+For an attended run `review complete`
 refuses a package with proposed mutants nobody ran, unless the dispatch carries a
 `mutationWaiver` with the operator's own words.
+
+A long list can be run in part: `keryx review mutate --cap 20 …` runs the first 20
+and prints `Not run: N candidates (cap 20)`. The rest stay pending, still block
+`review complete` and are named in the report, so a cap changes the order of work,
+not what the round claims.
+
+A reviewer that answers `NEEDS_CONTEXT` is asked once more with what it named. If it
+asks again it is recorded as **Not run** (`layout: no engine` for `review-layout`,
+which needs a browser; `no engine` for any other role), never as a clean pass. On a
+shell host the main session takes the browser measurements first and hands them to
+`review-layout` as `context_files`.
+
+A reviewer's `Parent follow-up:` lines and `follow_ups` are work handed back to you.
+`review ledger build` turns each into an obligation `<reviewer>:fu<n>` that stays a
+gap until a disposition closes it (`narrowed` needs a `remains` note).
 
 Before dispatch, `keryx review context-collect` writes the pull request's
 comments in full, its intent, its CI status and the backend pins it names into
@@ -190,7 +216,12 @@ keryx review scope --ref "$(git merge-base HEAD main)" --json > scope.json
 
 Deterministic, no model call: lockfiles, generated and vendored paths, binaries,
 whitespace-only and comment-only hunks are dropped, and what remains is bounded
-to the changed hunks plus 20 lines of context. **Every drop is recorded with its
+to the changed hunks plus 20 lines of context. If the repository has a rule that
+limits comments (in `CLAUDE.md`, `AGENTS.md` or `.metaproject/rules/**`), a
+comment-only block that adds comments is **kept**, not dropped, because for that
+repository a comment is something that can be wrong; the scope lists it under
+"Kept past a drop rule" with the reason `kept:comment-rule`. Set `retainCommentBlocks`
+to `false` to switch that off, or to a pattern to keep only matching comments. **Every drop is recorded with its
 reason** — a scope that shrank silently reads afterwards as "we reviewed
 everything".
 
@@ -584,6 +615,16 @@ counting them is caught on the next status call rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.
+
+What a round leaves behind that no finding count shows is printed under the same
+header: `Not run: N candidates`, `held: F-003 stays minor (mutant m2)`, and
+`follow-up open: <reviewer>:fu1 …`. `keryx review report-parity <review>` prints the
+same as Markdown to paste into `report.md`; `/review parity` in the shell and the
+sidebar show it too. `review complete` warns, and does not refuse, when the report
+names none of a kind of leftover. A package built before this existed shows no such
+lines, and a package whose ledger predates `review-pr-contract` is not refused for
+lacking it; `review complete` warns `review-pr-contract not run (package predates
+the role)`.
 
 ## Complete it — and say what became of each finding
 

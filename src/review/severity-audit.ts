@@ -8,7 +8,22 @@ export const UNPROVEN = "unproven";
 
 export type SeverityAuditNote = { from: string; to: string; evidence: string };
 
-export type AuditChange = { id: string; from: string; to: string; evidence?: string | undefined; label?: string | undefined; reason: string };
+/**
+ * Written instead of a raise when the only survivors are presentation mutants: the severity stays, and the
+ * note names the mutant so a reader of the report sees why a survivor did not move it.
+ */
+export type SeverityAuditHeld = { severity: string; mutant: string; kind: "presentation"; evidence: string; reason: string };
+
+export type AuditChange = {
+  id: string;
+  from: string;
+  to: string;
+  evidence?: string | undefined;
+  label?: string | undefined;
+  /** Set when the severity was deliberately left alone; `from` and `to` are then equal. */
+  held?: boolean | undefined;
+  reason: string;
+};
 
 export type NamedMutationRecord = { name: string; record: MutationRecord };
 
@@ -58,7 +73,17 @@ export function auditSeverity(
     const survivors = runs.filter((r) => r.run?.result.status === "survived" && (changed === undefined || changed.has(r.run.result.file)));
     if (survivors.length > 0) {
       if (!RAISE_FROM.has(severity)) return finding;
-      const first = survivors[0]!;
+      // A record written before `kind` existed has none, and reads as `behavior`: it raises as it always did.
+      const behavioral = survivors.filter((r) => r.run!.result.kind !== "presentation");
+      if (behavioral.length === 0) {
+        const first = survivors[0]!;
+        const evidence = `${first.run!.name}#${first.id}`;
+        const reason = `mutant ${first.id} survived but only changes presentation: severity held`;
+        changes.push({ id: label, from: severity, to: severity, evidence, held: true, reason });
+        const held = { severity, mutant: first.id, kind: "presentation", evidence, reason } satisfies SeverityAuditHeld;
+        return { ...finding, severity_audit: { held } };
+      }
+      const first = behavioral[0]!;
       const evidence = `${first.run!.name}#${first.id}`;
       changes.push({ id: label, from: severity, to: "major", evidence, reason: `mutant ${first.id} survived: no assertion pins the changed behaviour` });
       return { ...finding, severity: "major", severity_audit: { from: severity, to: "major", evidence } satisfies SeverityAuditNote };

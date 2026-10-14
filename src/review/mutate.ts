@@ -4,6 +4,14 @@ import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+/**
+ * What a mutant changes. `behavior` alters what the code does; `presentation` alters only how it
+ * looks or reads (copy, class names, ordering of display rows). A survivor of the second kind is not
+ * evidence that behaviour is unpinned, so the severity audit does not raise a finding on it.
+ */
+export type MutantKind = "behavior" | "presentation";
+export const MUTANT_KINDS: readonly MutantKind[] = ["behavior", "presentation"];
+
 export type MutantSpec = {
   id: string;
   file: string;
@@ -11,6 +19,8 @@ export type MutantSpec = {
   anchor: string;
   replacement: string;
   note?: string | undefined;
+  /** Absent means `behavior`. */
+  kind?: MutantKind | undefined;
 };
 
 export type MutantStatus = "killed" | "survived" | "invalid" | "timeout";
@@ -28,6 +38,8 @@ export type MutantResult = {
   ms: number;
   reason?: string | undefined;
   note?: string | undefined;
+  /** Absent in records written before the field existed, and means `behavior`. */
+  kind?: MutantKind | undefined;
 };
 
 export type MutationRecord = {
@@ -37,6 +49,10 @@ export type MutationRecord = {
   baseline: { exitCode: number; ms: number };
   mutants: MutantResult[];
   totals: Record<MutantStatus, number>;
+  /** The most candidates this pass was allowed to run; absent when the pass ran with no cap. */
+  cap?: number | undefined;
+  /** Candidates the pass was given but did not run (they stay pending). Present only when a cap was set. */
+  not_reached?: number | undefined;
 };
 
 export const MUTANTS_SPEC = "mutants.json";
@@ -56,7 +72,15 @@ export function parseMutantSpec(raw: unknown): MutantSpec[] {
     if (ids.has(id)) throw new Error(`mutant id "${id}" appears twice`);
     ids.add(id);
     if (m.anchor === m.replacement) throw new Error(`mutant ${id}: replacement equals the anchor, so nothing changes`);
-    return { id, file: m.file as string, anchor: m.anchor as string, replacement: m.replacement as string, note: typeof m.note === "string" ? m.note : undefined };
+    if (m.kind !== undefined && !MUTANT_KINDS.includes(m.kind as MutantKind)) throw new Error(`mutant ${id}: "kind" must be one of ${MUTANT_KINDS.join(", ")}`);
+    return {
+      id,
+      file: m.file as string,
+      anchor: m.anchor as string,
+      replacement: m.replacement as string,
+      note: typeof m.note === "string" ? m.note : undefined,
+      ...(m.kind === undefined ? {} : { kind: m.kind as MutantKind }),
+    };
   });
 }
 
@@ -114,6 +138,8 @@ export async function runMutation(options: {
   mutants: readonly MutantSpec[];
   timeoutMs?: number | undefined;
   scratchRoot?: string | undefined;
+  /** Run at most this many candidates; the rest, and any that came out invalid, are counted in `not_reached` and stay pending. */
+  cap?: number | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
   const timeoutMs = options.timeoutMs ?? 300_000;
@@ -126,8 +152,13 @@ export async function runMutation(options: {
       throw new Error(`the baseline run of \`${options.command}\` ${baseline.timedOut ? "timed out" : `exited ${baseline.exitCode}`} on an unmodified copy; mutants would all read as killed, so none were run`);
 
     const results: MutantResult[] = [];
+    const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
+    // The cap bounds the mutants that actually run. An invalid candidate costs nothing and stays pending
+    // (see `pendingMutants`), so it neither uses up the cap nor counts as reached.
+    let ran = 0;
     for (const mutant of options.mutants) {
-      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command };
+      if (cap !== undefined && ran >= cap) break;
+      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command, ...(mutant.kind === undefined ? {} : { kind: mutant.kind }) };
       const target = insideRoot(copy, mutant.file);
       if (target === undefined || !existsSync(target)) {
         results.push({ ...base, status: "invalid", ms: 0, reason: target === undefined ? "file is outside the worktree" : "file does not exist in the worktree" });
@@ -144,6 +175,7 @@ export async function runMutation(options: {
         continue;
       }
       await writeFile(target, original.slice(0, first) + mutant.replacement + original.slice(first + mutant.anchor.length), "utf8");
+      ran += 1;
       try {
         const run = await runCommand(options.command, copy, timeoutMs);
         results.push({ ...base, line: lineOf(original, first), status: run.timedOut ? "timeout" : run.exitCode === 0 ? "survived" : "killed", exitCode: run.exitCode, ms: run.ms });
@@ -153,7 +185,7 @@ export async function runMutation(options: {
     }
     const totals: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
     for (const r of results) totals[r.status] += 1;
-    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals };
+    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals, ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - ran }) };
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
@@ -167,7 +199,7 @@ export function renderMutationTable(record: MutationRecord): string {
     { header: "Mutant", render: (m) => cell(m.id) },
     { header: "Where", render: (m) => `${cell(m.file)}${m.line === undefined ? "" : `:${m.line}`}` },
     { header: "Change", render: (m) => `${code(m.anchor)} → ${code(m.replacement)}` },
-    { header: "Result", render: (m) => `${m.status}${m.reason ? ` (${cell(m.reason)})` : ""}` },
+    { header: "Result", render: (m) => `${m.status}${m.reason ? ` (${cell(m.reason)})` : ""}${m.kind === "presentation" ? " [presentation]" : ""}` },
     { header: "Test command", render: (m) => code(m.command ?? record.command) },
     { header: "Exit", render: (m) => String(m.exitCode ?? "-") },
   ];
@@ -185,6 +217,7 @@ export function renderMutationTable(record: MutationRecord): string {
     `|${columns.map(() => "---|").join("")}`,
     ...rows,
     "",
+    ...(record.not_reached !== undefined && record.not_reached > 0 ? [`Not run: ${record.not_reached} candidates${record.cap === undefined ? "" : ` (cap ${record.cap})`}. They stay pending and block the coverage gate until a pass runs them.`, ""] : []),
     t.survived > 0 ? "A survivor means no assertion pins that behaviour: the severity audit reads it as evidence." : "No survivor.",
     "",
   ].join("\n");
@@ -203,6 +236,28 @@ export async function writeMutationEvidence(packageDir: string, record: Mutation
   return { json, md };
 }
 
+/** Ids of the mutants a recorded pass has judged. An invalid row judged nothing, so it does not count. */
+export async function doneMutantIds(packageDir: string): Promise<Set<string>> {
+  const dir = path.join(packageDir, EVIDENCE_DIR);
+  const done = new Set<string>();
+  if (!existsSync(dir)) return done;
+  for (const name of (await readdir(dir)).filter((n) => /^mutation-\d+\.json$/.test(n))) {
+    try {
+      const record = JSON.parse(await readFile(path.join(dir, name), "utf8")) as MutationRecord;
+      for (const m of record.mutants) if (m.status !== "invalid") done.add(m.id);
+    } catch {
+      continue;
+    }
+  }
+  return done;
+}
+
+/** The given specs minus those a recorded pass in this package has already judged, in their original order. */
+export async function unjudgedMutants(packageDir: string, specs: MutantSpec[]): Promise<MutantSpec[]> {
+  const done = await doneMutantIds(packageDir);
+  return specs.filter((s) => !done.has(s.id));
+}
+
 /** Mutants the reviewers proposed (`research-evidence/mutants.json`) that no recorded mutation pass has run yet. A spec with `"runnable": false` says the tests cannot be run here, so nothing is pending. */
 export async function pendingMutants(packageDir: string): Promise<MutantSpec[]> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
@@ -216,14 +271,5 @@ export async function pendingMutants(packageDir: string): Promise<MutantSpec[]> 
   } catch {
     return [];
   }
-  const done = new Set<string>();
-  for (const name of (await readdir(dir)).filter((n) => /^mutation-\d+\.json$/.test(n))) {
-    try {
-      const record = JSON.parse(await readFile(path.join(dir, name), "utf8")) as MutationRecord;
-      for (const m of record.mutants) if (m.status !== "invalid") done.add(m.id);
-    } catch {
-      continue;
-    }
-  }
-  return specs.filter((s) => !done.has(s.id));
+  return unjudgedMutants(packageDir, specs);
 }

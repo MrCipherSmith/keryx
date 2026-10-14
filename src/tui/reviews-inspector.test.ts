@@ -254,6 +254,48 @@ describe("sidebar row", () => {
     }
   });
 
+  otuiTest("the mounted section paints the Not run, held and follow-up counts of a review under the layer lines", async () => {
+    const otui = OTUI!;
+    const h = await mountChrome(otui);
+    try {
+      const parent = new otui.core.BoxRenderable(h.renderer, { id: "host-parity", flexDirection: "column" });
+      h.chrome.sidebarTop.add(parent);
+      const row = {
+        reviewId: "r1",
+        pull: "acme/app#7",
+        mode: "all",
+        selected: [],
+        required: [],
+        excluded: [],
+        missing: [],
+        filesKnown: true,
+        mutation: { passes: 1, totals: { killed: 0, survived: 1, invalid: 0, timeout: 0 }, pending: 2 },
+        mutationWaived: false,
+        parity: {
+          notRun: 2,
+          cap: 1,
+          notRunIds: ["m2", "m3"],
+          held: [{ finding: "F-010", severity: "minor", mutant: "m1", reason: "held" }],
+          followUps: [{ id: "review-testing-practices:fu1", text: "not read", state: "open" }],
+        },
+      } as never;
+      const panel = mountReviewsPanel(otui.core, h.renderer, parent, {
+        cwd: "/nonexistent",
+        width: SIDEBAR_TEXT_WIDTH,
+        onOpen: () => {},
+        read: async () => metrics(),
+        readDepth: async () => [row],
+      });
+      await panel.refresh();
+      await settle(h);
+      expect(panel.parityLines()).toEqual(["Not run 2\nheld 1\nfollow-ups 1"]);
+      expect(textOf(findById(parent, "sb-reviews-parity"))).toBe("Not run 2\nheld 1\nfollow-ups 1");
+      panel.dispose();
+    } finally {
+      h.destroy();
+    }
+  });
+
   otuiTest("a read that fails paints an unreadable state rather than a count", async () => {
     const otui = OTUI!;
     const h = await mountChrome(otui);

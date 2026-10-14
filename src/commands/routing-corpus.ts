@@ -221,8 +221,8 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 332;
-export const RANK1_TOTAL = 334;
+export const RANK1_FIRST = 334;
+export const RANK1_TOTAL = 337;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -616,6 +616,18 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
       { prompt: "give me a risk map of this diff before I look at it myself", owner: "review-jev-risk" },
+    ],
+  },
+  {
+    skill: "review-pr-contract",
+    positives: [
+      "does the diff match what the PR description checklist says",
+      "the documentation needed box is unticked but the change adds a user visible row",
+      "check the PR body claims against the diff and find docs it left stale",
+    ],
+    negatives: [
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "does this change break anything else", owner: "review-regression" },
     ],
   },
   {

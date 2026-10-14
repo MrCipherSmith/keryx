@@ -20,6 +20,7 @@ const NOT_ROSTER = new Set([
   "review-orchestrator",
   "review-verifier",
   "review-regression",
+  "review-pr-contract",
   "review-pr-feedback",
   "review-greptile",
   "review-strict",
@@ -77,9 +78,43 @@ async function readSkill(root: string, relativePath: string): Promise<string | u
 export type RequiredOptions = {
   /** Whether a blast-radius record exists for the package: scope B exists, so the regression reviewer has a set to review. */
   blastRadius?: boolean | undefined;
+  /** Whether the package holds `pr-context.md`: there is a PR body checklist for `review-pr-contract` to compare with the diff. */
+  prContext?: boolean | undefined;
 };
 
 const REGRESSION = "review-regression";
+const PR_CONTRACT = "review-pr-contract";
+
+/**
+ * Written to `dispatch.roles` by `ledger build` only when the package shows the role was dispatched (a driver for it) or
+ * already carries the stamp: the roles added after the original roster that the dispatch knew about. A dispatch without
+ * the mark was recorded before the role existed, so a package already in flight, rebuilt or not, is not newly refused for
+ * a reviewer nobody could have dispatched.
+ */
+export const DISPATCH_KNOWN_ROLES: readonly string[] = [PR_CONTRACT];
+
+function dispatchKnowsRole(dispatch: Record<string, unknown>, role: string): boolean {
+  return Array.isArray(dispatch.roles) && dispatch.roles.includes(role);
+}
+
+/** Warnings the coverage gate does not refuse for: `review-pr-contract` not run on a package that predates the role. */
+export function coverageWarnings(dispatch: unknown, options: Pick<CoverageOptions, "prContext">): string[] {
+  if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
+  const record = dispatch as Record<string, unknown>;
+  if (options.prContext !== true || dispatchKnowsRole(record, PR_CONTRACT)) return [];
+  const selected = Array.isArray(record.selected) ? record.selected : [];
+  return selected.includes(PR_CONTRACT) ? [] : [`${PR_CONTRACT} not run (package predates the role)`];
+}
+
+/** The same warnings, read from a package directory's `research.json`. */
+export async function packageCoverageWarnings(packageDir: string): Promise<string[]> {
+  try {
+    const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
+    return coverageWarnings(ledger?.dispatch, { prContext: packageHasPrContext(packageDir) });
+  } catch {
+    return [];
+  }
+}
 
 export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
@@ -123,6 +158,10 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (options.blastRadius === true) required.push(REGRESSION);
     else excluded.push({ reviewer: REGRESSION, reason: "no blast radius computed for the package: there is no scope B to review" });
   }
+  if (inventory.bundled.some((r) => r.name === PR_CONTRACT)) {
+    if (options.prContext === true) required.push(PR_CONTRACT);
+    else excluded.push({ reviewer: PR_CONTRACT, reason: "no pr-context.md in the package: there is no PR body checklist to compare with the diff" });
+  }
   return { mode, required: required.sort(), excluded, filesKnown };
 }
 
@@ -132,6 +171,8 @@ export type CoverageOptions = {
   files?: readonly string[] | undefined;
   /** Whether the package holds a blast-radius record. */
   blastRadius?: boolean | undefined;
+  /** Whether the package holds `pr-context.md`. */
+  prContext?: boolean | undefined;
   /** Proposed mutants no recorded mutation pass has run (`pendingMutants`). */
   pendingMutants?: number | undefined;
   /** False for `keryx review run --autonomous`; defaults to the environment the process runs in. */
@@ -166,6 +207,11 @@ export async function packageHasBlastRadius(packageDir: string, name = "blast-ra
   }
 }
 
+/** Whether `keryx review context-collect` wrote `pr-context.md` into the package. */
+export function packageHasPrContext(packageDir: string, name = "pr-context.md"): boolean {
+  return existsSync(path.join(packageDir, name));
+}
+
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
   return [...(await reviewerSetErrors(dispatch, options)), ...(record === undefined ? [] : mutationErrors(record, options))];
@@ -188,7 +234,10 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): P
   }
   if (record.mode === "diff" && options.files === undefined)
     return ["diff mode needs the scope-A file list: pass `--scope <scope.json>` to `keryx review start|ingest`, or run mode all"];
-  const need = await requiredReviewers(options.root, record.mode, options.files, { blastRadius: options.blastRadius });
+  const need = await requiredReviewers(options.root, record.mode, options.files, {
+    blastRadius: options.blastRadius,
+    prContext: options.prContext === true && dispatchKnowsRole(record, PR_CONTRACT),
+  });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];

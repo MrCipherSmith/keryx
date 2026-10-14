@@ -173,6 +173,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "context-collect",
       "import",
       "status",
+      "report-parity",
       "complete",
       "lightweight",
     ],

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, coverageWarnings, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 
 let root: string;
 
@@ -227,5 +227,34 @@ describe("package helpers", () => {
     await writeFile(path.join(dir, "scope-files.json"), JSON.stringify({ files: [1] }), "utf8");
     expect(await packageScopeFiles(dir)).toBeUndefined();
     expect(projectRootOfPackage(dir)).toBe(root);
+  });
+});
+
+describe("review-pr-contract on packages already in flight", () => {
+  const prFiles = ["src/app/page.tsx"];
+
+  async function withoutIt(): Promise<string[]> {
+    await install("review-pr-contract");
+    return (await requiredReviewers(root, "all", prFiles)).required;
+  }
+
+  test("a dispatch that does not name the role is not refused, and warns that the package predates it", async () => {
+    const dispatch = { mode: "all", selected: await withoutIt() };
+    expect(await coverageErrors(dispatch, { root, files: prFiles, prContext: true })).toEqual([]);
+    expect(coverageWarnings(dispatch, { prContext: true })).toEqual(["review-pr-contract not run (package predates the role)"]);
+  });
+
+  test("a dispatch written by a version that knows the role must cover it", async () => {
+    const dispatch = { mode: "all", selected: await withoutIt(), roles: ["review-pr-contract"] };
+    expect(await coverageErrors(dispatch, { root, files: prFiles, prContext: true })).toEqual([expect.stringContaining("missing: review-pr-contract")]);
+    expect(coverageWarnings(dispatch, { prContext: true })).toEqual([]);
+    const covered = { ...dispatch, selected: [...dispatch.selected, "review-pr-contract"] };
+    expect(await coverageErrors(covered, { root, files: prFiles, prContext: true })).toEqual([]);
+  });
+
+  test("no warning without pr-context.md, or when the role was dispatched anyway", async () => {
+    const selected = await withoutIt();
+    expect(coverageWarnings({ mode: "all", selected }, { prContext: false })).toEqual([]);
+    expect(coverageWarnings({ mode: "all", selected: [...selected, "review-pr-contract"] }, { prContext: true })).toEqual([]);
   });
 });

@@ -24,18 +24,20 @@ import {
   createManagedReviewPackage,
   getManagedReviewStatus,
   resolveGitHead,
+  resolveReviewPackagePath,
   upsertPreFilterScopeBlock,
   type FindingDispositionRecord,
   type ManagedReviewIngestInput,
 } from "../review/managed";
+import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
 import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
-import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
+import { packageHasBlastRadius, packageHasPrContext, requiredReviewers } from "../review/coverage";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -103,6 +105,7 @@ import {
   type ReviewScope,
   type ScopedRegion,
 } from "../review/scope";
+import { commentRuleScopeConfig } from "../review/comment-rule";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
@@ -518,10 +521,10 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-cov
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -775,6 +778,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "status") {
       await runStatus(args.slice(1));
+      return;
+    }
+    if (command === "report-parity") {
+      await runReportParity(args.slice(1));
       return;
     }
     if (command === "complete") {
@@ -3011,8 +3018,10 @@ async function runRequired(args: string[]): Promise<void> {
     throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
   const radiusFile = optionValue(args, "--blast-radius");
+  const prContextFile = optionValue(args, "--pr-context");
   const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
     blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
+    prContext: prContextFile !== undefined && packageHasPrContext(path.dirname(path.resolve(prContextFile)), path.basename(prContextFile)),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(set, null, 2));
@@ -3046,8 +3055,13 @@ async function runMutate(args: string[]): Promise<void> {
   const timeout = optionValue(args, "--timeout-ms");
   const timeoutMs = timeout === undefined ? undefined : Number(timeout);
   if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout-ms must be a positive number");
-  const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
-  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs });
+  const capArg = optionValue(args, "--cap");
+  const cap = capArg === undefined ? undefined : Number(capArg);
+  if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) throw new Error("--cap must be a non-negative integer");
+  const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
+  const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
+  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap });
   const written = await writeMutationEvidence(packageDir, record);
   if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
@@ -3099,8 +3113,9 @@ async function runSeverityAudit(args: string[]): Promise<void> {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""} - ${c.reason}`);
-  console.log(`${result.changes.length} of ${result.findings} finding(s) changed${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
+  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""}${c.held ? " [held]" : ""} - ${c.reason}`);
+  const held = result.changes.filter((c) => c.held).length;
+  console.log(`${result.changes.length - held} of ${result.findings} finding(s) changed${held > 0 ? `, ${held} held (presentation-only survivor)` : ""}${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
 }
 
 async function runStack(args: string[]): Promise<void> {
@@ -3354,7 +3369,7 @@ async function runScope(args: string[]): Promise<void> {
     scope = buildPathScope(paths, { contextLines });
   } else {
     const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
-    scope = buildReviewScope(diff, { contextLines });
+    scope = buildReviewScope(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) });
   }
 
   if (args.includes("--json")) {
@@ -3763,6 +3778,15 @@ async function mergeBaseWithHead(ref: string): Promise<string> {
   return base;
 }
 
+/** `keryx review report-parity <review>`: the Markdown to paste into report.md so the leftovers of a round are named. */
+async function runReportParity(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, [], "report-parity <review-id-or-path>");
+  const ref = args[0];
+  if (!ref) throw new Error("Usage: keryx review report-parity <review-id-or-path>");
+  const markdown = renderParityReport(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)));
+  console.log(markdown === "" ? "Nothing to carry into the report: no Not run candidates, held severity notes or open follow-ups." : markdown.trimEnd());
+}
+
 async function runStatus(args: string[]): Promise<void> {
   rejectUnknownFlags(args, [], "status <review-id-or-path>");
   const ref = args[0];
@@ -3778,6 +3802,8 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
   console.log(`coverage: ${manifest.coverage.length}`);
+  // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
+  for (const line of parityLines(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
 
   // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
   // manifest on disk, by a different invocation from the one that wrote it — and
@@ -4361,6 +4387,7 @@ ${COMMENTS_USAGE}
   keryx review reviewers [--json]
   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
+  keryx review report-parity <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
                         [--waive-coverage "<operator quote>"]

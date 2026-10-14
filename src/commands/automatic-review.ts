@@ -21,14 +21,14 @@ export const AUTOMATIC_REVIEW_FLAG = "--automatic";
  * `review complete` itself: nothing here is a way around it.
  *
  * - create: `start`, `attach`, `ingest` (only with `--automatic`, once per run)
- * - positional package ref: `status`, `complete`
+ * - positional package ref: `status`, `report-parity`, `complete`
  * - `--package <dir>`: `ledger build`, `severity-audit`, `mutate`, `compare-reference`, `context-collect`
  * - files inside the package: `retry-plan --manifest`
  * - read-only analysis, output only inside the package: `scope`, `blast-radius`
  * Everything else under `review` (the other subcommands) keeps its normal approval.
  */
 export const AUTOMATIC_REVIEW_CREATE_SUBCOMMANDS = ["start", "attach", "ingest"] as const;
-export const AUTOMATIC_REVIEW_POSITIONAL_SUBCOMMANDS = ["status", "complete"] as const;
+export const AUTOMATIC_REVIEW_POSITIONAL_SUBCOMMANDS = ["status", "report-parity", "complete"] as const;
 export const AUTOMATIC_REVIEW_PACKAGE_FLAG_SUBCOMMANDS = [
   "ledger",
   "severity-audit",
@@ -382,6 +382,7 @@ export class AutomaticReviewRun {
     const first = args[0];
     switch (sub) {
       case "status":
+      case "report-parity":
       case "complete":
         return first !== undefined && !first.startsWith("-") && this.isBoundRef(first);
       case "ledger":

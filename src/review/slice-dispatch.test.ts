@@ -194,7 +194,7 @@ describe("planRetry", () => {
     expect(first.needsContext).toEqual(["which slices were unread?"]);
     expect(first.reason).toContain("scope is not closed");
     expect(first.newSlices).toEqual([]);
-    expect(first.state.reviewers["review-logic"]).toEqual({ attempt: 1, status: "NEEDS_CONTEXT", notRun: false, stalls: 1, covered: [] });
+    expect(first.state.reviewers["review-logic"]).toEqual({ attempt: 1, status: "NEEDS_CONTEXT", notRun: false, stalls: 1, covered: [], questions: ["which slices were unread?"] });
     const second = planRetry({ ...base, result: { status: "NEEDS_CONTEXT" }, state: first.state });
     expect(second.decision).toBe("not-run");
     expect(second.state.reviewers["review-logic"]?.notRun).toBe(true);
