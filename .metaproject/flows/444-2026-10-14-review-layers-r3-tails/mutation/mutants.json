@@ -1,0 +1,136 @@
+{
+ "mutants": [
+  {
+   "id": "ac1-exit-not-by-signal",
+   "file": "src/review/layers.ts",
+   "anchor": ".finally(() => process.kill(process.pid, signal));",
+   "replacement": ".finally(() => process.exit(0));"
+  },
+  {
+   "id": "ac1-lock-left",
+   "file": "src/review/layers.ts",
+   "anchor": ".then(() => rm(layersLockPath(packageDir), { recursive: true, force: true }))",
+   "replacement": ".then(() => undefined)"
+  },
+  {
+   "id": "ac1-cleanups-skipped",
+   "file": "src/review/layers.ts",
+   "anchor": ".map((cleanup) => cleanup().catch(() => {}))",
+   "replacement": ".map(() => Promise.resolve())"
+  },
+  {
+   "id": "ac1-worktree-not-registered",
+   "file": "src/review/layers.ts",
+   "anchor": "const unregister = register(cleanup);",
+   "replacement": "const unregister = (): void => {};"
+  },
+  {
+   "id": "ac1-no-handler",
+   "file": "src/review/layers.ts",
+   "anchor": "for (const name of SIGNALS) process.on(name, onSignal);",
+   "replacement": ""
+  },
+  {
+   "id": "ac2-wiki-error-empty",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "return { items: [], unavailable: `the wiki could not be read \u2014 ${reasonOf(error)}` };",
+   "replacement": "return { items: [], unavailable: null };"
+  },
+  {
+   "id": "ac2-memory-error-empty",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "return { items: [], unavailable: `the memory could not be read \u2014 ${reasonOf(error)}` };",
+   "replacement": "return { items: [], unavailable: null };"
+  },
+  {
+   "id": "ac2-affected-failure-dropped",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "failures.push(`${file}: ${reasonOf(error)}`);",
+   "replacement": ""
+  },
+  {
+   "id": "ac2-affected-not-listed",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "if (affected.unavailable !== null) unavailable.push({ section: \"affected\", reason: affected.unavailable });",
+   "replacement": ""
+  },
+  {
+   "id": "ac2-text-line-dropped",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "for (const gap of block.unavailable) lines.push(`  unavailable ${gap.section}: ${gap.reason}`);",
+   "replacement": ""
+  },
+  {
+   "id": "ac2-unreadable-page-dropped",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "unreadable.push(page.relativePath);",
+   "replacement": ""
+  },
+  {
+   "id": "ac3-window-never",
+   "file": "src/review/layers.ts",
+   "anchor": "return age >= 0 && age < FAILED_RETRY_WINDOW_MS;",
+   "replacement": "return false;"
+  },
+  {
+   "id": "ac3-window-forever",
+   "file": "src/review/layers.ts",
+   "anchor": "return age >= 0 && age < FAILED_RETRY_WINDOW_MS;",
+   "replacement": "return age >= 0;"
+  },
+  {
+   "id": "ac3-force-ignored",
+   "file": "src/review/layers.ts",
+   "anchor": "input.force !== true && sameHead && failedRecently(",
+   "replacement": "sameHead && failedRecently("
+  },
+  {
+   "id": "ac3-new-head-ignored",
+   "file": "src/review/layers.ts",
+   "anchor": "sameHead && failedRecently(",
+   "replacement": "existing !== null && failedRecently("
+  },
+  {
+   "id": "ac3-window-slides",
+   "file": "src/review/layers.ts",
+   "anchor": "    failedAt: deps.now().toISOString(),\n",
+   "replacement": ""
+  },
+  {
+   "id": "ac4-no-timeout",
+   "file": "src/tui/review-layers-actions.ts",
+   "anchor": "{ cwd: projectRoot, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }",
+   "replacement": "{ cwd: projectRoot, maxBuffer: 16 * 1024 * 1024 }"
+  },
+  {
+   "id": "ac4-timeout-unreported",
+   "file": "src/tui/review-layers-actions.ts",
+   "anchor": "if (error?.killed === true) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "ac5-guard-off",
+   "file": "src/tui/reviews-inspector.ts",
+   "anchor": "if (pendingActions.has(actionKey)) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "ac5-one-key-for-all",
+   "file": "src/tui/reviews-inspector.ts",
+   "anchor": "const actionKey = newest.layersView?.dir ?? newest.reviewId;",
+   "replacement": "const actionKey = \"any\";"
+  },
+  {
+   "id": "ac5-never-released",
+   "file": "src/tui/reviews-inspector.ts",
+   "anchor": "pendingActions.delete(actionKey);",
+   "replacement": ""
+  },
+  {
+   "id": "ac5-guard-per-view",
+   "file": "src/tui/reviews-inspector.ts",
+   "anchor": "if (pendingActions.has(actionKey)) {",
+   "replacement": "if (new Set<string>().has(actionKey)) {"
+  }
+ ]
+}

@@ -34,7 +34,7 @@ export function layersDetailLines(layers: LayersFile): string[] {
   lines.push(
     graph.status === "ok"
       ? `graph: ok @${shortSha(graph.commit)} = ${graphHeadState(layers)} (PR head ${shortSha(layers.prHead)}), ${graph.nodes} nodes, ${graph.edges} edges, built ${graph.builtAt ?? "?"}`
-      : `graph: ${graph.status}${graph.error ? ` — ${graph.error}` : ""}`,
+      : `graph: ${graph.status}${graph.error ? ` — ${graph.error}` : ""}${graph.status === "failed" ? " (not retried automatically for a few minutes at the same head; refresh --force retries now)" : ""}`,
   );
   const wiki = layers.wiki;
   lines.push(

@@ -4254,7 +4254,7 @@ Usage:
                             [--package <review-dir>] [--json | --brief] [--out <file>]
   keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
   keryx review layers status  --package <review-dir> [--json]
-  keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
+  keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
                       Graph, wiki and memory for one review; no model is called. An intact graph at
                       the same head is reused (--force rebuilds); a second refresh waits up to 16 min.
   keryx review chunks plan|estimate|next|record|merge --package <review-dir>

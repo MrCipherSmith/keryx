@@ -107,6 +107,10 @@ bench/jev-review/fixtures/conform-project/.metaproject/data/
 # `keryx integrate opencode` writes a machine-specific absolute --cwd path.
 opencode.json
 
+# Security runtime secrets stay local even when commands run in nested projects.
+# Outside the managed block so `keryx update` cannot remove this protection.
+**/.metaproject/data/security/raw/
+
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
 .metaproject/runtime/

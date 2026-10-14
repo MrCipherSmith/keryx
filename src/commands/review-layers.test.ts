@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test, type Mock } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLayersFixture, git, type LayersFixture } from "../review/layers.test-helpers";
-import { layersLockPath, layersRefreshInFlight, readLayers, refreshLayers } from "../review/layers";
+import { defaultLayerDeps, layersLockPath, layersRefreshInFlight, loadPackageGraph, readLayers, refreshLayers } from "../review/layers";
 import { ensurePackageLayers } from "./review-layers";
 import { reviewCommand } from "./review";
 
@@ -119,7 +119,7 @@ describe("blast-radius --package reads the package graph", () => {
   });
 });
 
-describe("the refresh lock (R2-10, R2-11)", () => {
+describe("the refresh lock", () => {
   const holdLock = async (ageMs: number, pid: number): Promise<string> => {
     const lock = layersLockPath(fixture.packageDir);
     await mkdir(lock, { recursive: true });
@@ -134,7 +134,7 @@ describe("the refresh lock (R2-10, R2-11)", () => {
     return child.pid;
   };
 
-  test("ensurePackageLayers refuses while a live refresh holds the lock, and goes on once it is released (R2-10)", async () => {
+  test("ensurePackageLayers refuses while a live refresh holds the lock, and goes on once it is released", async () => {
     const lock = await holdLock(0, process.pid);
     expect(await layersRefreshInFlight(fixture.packageDir)).toBe(true);
     await expect(ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, waitMs: 120 })).rejects.toThrow(/still being refreshed/);
@@ -145,14 +145,14 @@ describe("the refresh lock (R2-10, R2-11)", () => {
     expect(layers.graph.status).toBe("ok");
   });
 
-  test("ensurePackageLayers picks the result up when the holder finishes within the wait (R2-10)", async () => {
+  test("ensurePackageLayers picks the result up when the holder finishes within the wait", async () => {
     const lock = await holdLock(0, process.pid);
     setTimeout(() => void rm(lock, { recursive: true, force: true }), 150);
     const layers = await ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, waitMs: 5000 });
     expect(layers.graph.status).toBe("ok");
   });
 
-  test("a lock that is old and whose owner is dead is not in flight, and a refresh takes it over (R2-11)", async () => {
+  test("a lock that is old and whose owner is dead is not in flight, and a refresh takes it over", async () => {
     await holdLock(10 * 60_000, await deadPid());
     expect(await layersRefreshInFlight(fixture.packageDir)).toBe(false);
     const layers = await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir });
@@ -160,7 +160,7 @@ describe("the refresh lock (R2-10, R2-11)", () => {
     expect(existsSync(layersLockPath(fixture.packageDir))).toBe(false);
   });
 
-  test("an old lock whose owner is still alive stays in flight, and a fresh one does too (R2-11)", async () => {
+  test("an old lock whose owner is still alive stays in flight, and a fresh one does too", async () => {
     await holdLock(10 * 60_000, process.pid);
     expect(await layersRefreshInFlight(fixture.packageDir)).toBe(true);
     await rm(layersLockPath(fixture.packageDir), { recursive: true, force: true });
@@ -189,5 +189,89 @@ describe("layers block --max-bytes floor (R3-21)", () => {
     await block("100000");
     expect(process.exitCode).toBe(0);
     expect(said()).not.toContain("--max-bytes must be an integer");
+  });
+});
+
+describe("a graph that keeps failing is not rebuilt on every call", () => {
+  let builds: Mock<typeof defaultLayerDeps.buildGraph>;
+  let gits: Mock<typeof defaultLayerDeps.git>;
+  const worktreeAdds = (): number => gits.mock.calls.filter(([, args]) => args.includes("worktree") && args.includes("add")).length;
+  const ensure = () => ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root });
+
+  beforeEach(() => {
+    builds = spyOn(defaultLayerDeps, "buildGraph").mockImplementation(async () => {
+      throw new Error("disk full");
+    });
+    gits = spyOn(defaultLayerDeps, "git");
+  });
+  afterEach(() => {
+    builds.mockRestore();
+    gits.mockRestore();
+  });
+
+  test("a second ensure at the same head inside the window creates no worktree and runs no build", async () => {
+    const first = await ensure();
+    expect(first.graph.status).toBe("failed");
+    expect(builds).toHaveBeenCalledTimes(1);
+    expect(worktreeAdds()).toBe(1);
+
+    const second = await ensure();
+    expect(second.graph.status).toBe("failed");
+    expect(second.graph.error).toBe(first.graph.error);
+    expect(builds).toHaveBeenCalledTimes(1);
+    expect(worktreeAdds()).toBe(1);
+  });
+
+  test("polling inside the window does not extend it", async () => {
+    await ensure();
+    const failedAt = (await readLayers(fixture.packageDir))?.graph.failedAt;
+    expect(failedAt).toBeDefined();
+    await ensure();
+    expect((await readLayers(fixture.packageDir))?.graph.failedAt).toBe(failedAt);
+  });
+
+  test("--force rebuilds inside the window", async () => {
+    await ensure();
+    await reviewCommand(["layers", "refresh", "--package", fixture.packageDir, "--force"]);
+    expect(builds).toHaveBeenCalledTimes(2);
+    expect(worktreeAdds()).toBe(2);
+  });
+
+  test("the refusal that serves the cached failure names the window and the command that retries now", async () => {
+    await ensure();
+    const error = await loadPackageGraph(fixture.packageDir).then(
+      () => null,
+      (reason: unknown) => reason as Error,
+    );
+    expect(error?.message).toContain("the package graph is failed: disk full");
+    expect(error?.message).toContain("5 minutes");
+    expect(error?.message).toContain("layers refresh --package");
+    expect(error?.message).toContain("--force");
+  });
+
+  test("ensurePackageLayers with force rebuilds inside the window, and layers block takes the flag", async () => {
+    await ensure();
+    await ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, force: true });
+    expect(builds).toHaveBeenCalledTimes(2);
+
+    await reviewCommand(["layers", "block", "--package", fixture.packageDir, "--files", "src/a.ts", "--force"]).catch(() => {});
+    expect(builds).toHaveBeenCalledTimes(3);
+  });
+
+  test("a new head rebuilds inside the window", async () => {
+    await ensure();
+    await refreshLayers({ projectRoot: fixture.root, packageDir: fixture.packageDir, prHead: fixture.first });
+    expect(builds).toHaveBeenCalledTimes(2);
+    expect(worktreeAdds()).toBe(2);
+  });
+
+  test("a failure older than the window is retried", async () => {
+    await ensure();
+    const file = path.join(fixture.packageDir, "layers.json");
+    const record = JSON.parse(await readFile(file, "utf8")) as { graph: { failedAt: string } };
+    record.graph.failedAt = new Date(Date.now() - 6 * 60_000).toISOString();
+    await writeFile(file, JSON.stringify(record));
+    builds.mockRestore();
+    expect((await ensure()).graph.status).toBe("ok");
   });
 });

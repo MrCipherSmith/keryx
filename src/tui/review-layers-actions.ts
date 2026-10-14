@@ -22,7 +22,7 @@ const REFRESH_TIMEOUT_MS = 15 * 60_000;
 
 /** The argument vector of the child that refreshes one package's layers. */
 export function layersRefreshArgv(entry: string, packageDir: string): string[] {
-  return [...SAFE_BUN_SPAWN_ARGS, entry, "review", "layers", "refresh", "--package", packageDir, "--json"];
+  return [...SAFE_BUN_SPAWN_ARGS, entry, "review", "layers", "refresh", "--package", packageDir, "--force", "--json"];
 }
 
 const liveChildren = new Set<ChildProcess>();
@@ -44,12 +44,18 @@ export function makeLayersRefreshRunner(entry: string | undefined, timeoutMs = R
         exitHookInstalled = true;
         process.once("exit", killLiveChildren);
       }
+      const startedAt = Date.now();
       const child = execFile(
         process.execPath,
         layersRefreshArgv(entry, packageDir),
         { cwd: projectRoot, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
         (error, stdout, stderr) => {
           liveChildren.delete(child);
+          if (error?.killed === true || /maxBuffer/i.test(error?.message ?? "")) {
+            const timedOut = error?.killed === true && Date.now() - startedAt >= timeoutMs - 100;
+            reject(new Error(timedOut ? `the layers refresh did not finish within ${Math.round(timeoutMs / 1000)}s and was stopped` : "the layers refresh printed more output than the limit allows and was stopped"));
+            return;
+          }
           try {
             resolve(JSON.parse(stdout) as LayersFile);
           } catch {

@@ -15,14 +15,14 @@ export type LayersDeps = {
 export const LAYERS_REFRESH_FLAGS = ["--package", "--head", "--base", "--write-wiki", "--force", "--json", "--help", "-h"] as const;
 export const LAYERS_STATUS_FLAGS = ["--package", "--json", "--help", "-h"] as const;
 
-export const LAYERS_BLOCK_FLAGS = ["--package", "--files", "--max-bytes", "--json", "--help", "-h"] as const;
+export const LAYERS_BLOCK_FLAGS = ["--package", "--files", "--max-bytes", "--force", "--json", "--help", "-h"] as const;
 
 export function printLayersHelp(): void {
   console.log(`keryx review layers — usage:
 
   keryx review layers refresh --package <dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
   keryx review layers status  --package <dir> [--json]
-  keryx review layers block   --package <dir> --files <a,b,...> [--max-bytes <n>] [--json]
+  keryx review layers block   --package <dir> --files <a,b,...> [--max-bytes <n>] [--force] [--json]
 
 \`block\` prints the bounded \`layers\` block a reviewer payload carries for those files: files
 the graph says are affected (depth 1, then 2 while under the cap), symbol neighbours, related
@@ -38,7 +38,8 @@ The graph is built at the PR head into <dir>/layers/graph; the tracked graph art
 the working tree are not touched. The wiki and the memory are read from the project's
 working copy, and layers.json marks how far that is from the PR head. The wiki refresh is a
 dry run unless --write-wiki is given. A graph that is already built at this head and intact is
-kept (the wiki and the memory are still refreshed); --force rebuilds it.`);
+kept (the wiki and the memory are still refreshed); --force rebuilds it. A graph that failed at
+this head is not rebuilt for 5 minutes after the failure; --force or a new head rebuilds it.`);
 }
 
 export function wantsHelp(args: readonly string[]): boolean {
@@ -64,7 +65,7 @@ export function resolvePackageDir(args: readonly string[], cwd: string = process
  */
 export async function ensurePackageLayers(
   packageDir: string,
-  options: { projectRoot?: string; prHead?: string; base?: string; waitMs?: number } = {},
+  options: { projectRoot?: string; prHead?: string; base?: string; waitMs?: number; force?: boolean } = {},
 ): Promise<LayersFile> {
   if (!(await waitForLayersRefresh(packageDir, options.waitMs))) {
     throw new Error(`the layers of ${packageDir} are still being refreshed; try again when it finishes`);
@@ -79,6 +80,7 @@ export async function ensurePackageLayers(
     packageDir,
     ...(head === undefined ? {} : { prHead: head }),
     ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.force === true ? { force: true } : {}),
   });
 }
 
@@ -132,7 +134,7 @@ export async function runLayers(args: string[], deps: LayersDeps): Promise<void>
     const maxBytes = rawMax === undefined ? undefined : Number(rawMax);
     if (maxBytes !== undefined && (!Number.isInteger(maxBytes) || maxBytes < 256)) throw new Error("--max-bytes must be an integer of at least 256; a block with every list empty needs more than that, and the refusal names how much.");
     const projectRoot = resolveProjectRoot(process.cwd());
-    await ensurePackageLayers(packageDir, { projectRoot });
+    await ensurePackageLayers(packageDir, { projectRoot, force: rest.includes("--force") });
     const block = await buildLayersBlock({ projectRoot, packageDir, files, ...(maxBytes === undefined ? {} : { maxBytes }) });
     console.log(rest.includes("--json") ? JSON.stringify(block, null, 2) : layersBlockLines(block).join("\n"));
     return;

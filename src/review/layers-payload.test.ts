@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { chmod, readFile } from "node:fs/promises";
 import path from "node:path";
 import { PackageGraphError, refreshLayers } from "./layers";
 import { shellQuote } from "../lib/shell-quote";
-import { buildLayersBlock, LAYERS_BLOCK_SECTIONS, MAX_BLOCK_FILES } from "./layers-payload";
+import { buildLayersBlock, layersBlockLines, LAYERS_BLOCK_SECTIONS, MAX_BLOCK_FILES } from "./layers-payload";
 import { createLayersFixture, git, writeProjectFile, type LayersFixture } from "./layers.test-helpers";
 
 let fixture: LayersFixture;
@@ -168,7 +168,7 @@ describe("the layers block of a reviewer payload (AC5)", () => {
   });
 });
 
-describe("the byte cap holds for every list the block carries (R2-04, R2-22)", () => {
+describe("the byte cap holds for every list the block carries", () => {
   test("a hundred long file names are cut too, and the cut is recorded", async () => {
     await refresh();
     const files = Array.from({ length: MAX_BLOCK_FILES }, (_, index) => `src/${"deeply-nested-directory/".repeat(4)}file-${String(index).padStart(3, "0")}.ts`);
@@ -203,5 +203,87 @@ describe("the byte cap holds for every list the block carries (R2-04, R2-22)", (
     expect(size).toBeGreaterThan(maxBytes - 120);
     const cut = block.truncated.find((entry) => entry.section === "affected");
     expect(cut?.total).toBeGreaterThanOrEqual(150);
+  });
+});
+
+describe("a reader that failed is reported as unavailable, not as empty", () => {
+  const input = () => ({ projectRoot: fixture.root, packageDir: fixture.packageDir, files: ["src/a.ts"] });
+  const restore: string[] = [];
+  afterEach(async () => {
+    for (const dir of restore.splice(0)) await chmod(dir, 0o755);
+  });
+  const lockDown = async (relative: string): Promise<void> => {
+    const dir = path.join(fixture.root, relative);
+    await chmod(dir, 0o000);
+    restore.push(dir);
+  };
+  const canLock = process.getuid?.() !== 0;
+
+  test("a block that read everything lists nothing as unavailable, and an empty section stays empty", async () => {
+    await refresh();
+    const block = await buildLayersBlock({ ...input(), files: ["src/c.ts"] });
+    expect(block.unavailable).toEqual([]);
+    expect(block.memory).toEqual([]);
+    expect(layersBlockLines(block).join("\n")).not.toContain("unavailable");
+  });
+
+  test("a file name the graph cannot resolve makes affected unavailable with the reason, in the block, the lines and the JSON", async () => {
+    await commitMore(async (root) => {
+      await writeProjectFile(root, "src/x/util.ts", "export const x = 1;\n");
+      await writeProjectFile(root, "src/y/util.ts", "export const y = 1;\n");
+    });
+    await refresh();
+    const block = await buildLayersBlock({ ...input(), files: ["src/a.ts", "util.ts"] });
+    expect(block.unavailable).toHaveLength(1);
+    expect(block.unavailable[0]).toMatchObject({ section: "affected" });
+    expect(block.unavailable[0]?.reason).toContain("1 of 2 file(s)");
+    expect(block.unavailable[0]?.reason).toContain("util.ts: Graph target");
+    expect(block.affected.files).toContain("src/b.ts");
+    expect(layersBlockLines(block).join("\n")).toContain("affected: unavailable (not computed for 1 of 2 file(s)");
+    expect((JSON.parse(JSON.stringify(block)) as { unavailable: unknown[] }).unavailable).toHaveLength(1);
+  });
+
+  test.skipIf(!canLock)("a wiki that cannot be read is unavailable with the reason, not an empty list", async () => {
+    await refresh();
+    await lockDown(".metaproject/wiki/architecture");
+    const block = await buildLayersBlock(input());
+    const gap = block.unavailable.find((entry) => entry.section === "wiki");
+    expect(gap).toBeDefined();
+    expect(gap?.reason.length).toBeGreaterThan(0);
+    expect(block.wiki).toEqual([]);
+    expect(layersBlockLines(block).join("\n")).toContain("wiki: unavailable (");
+  });
+
+  test("a wiki page that cannot be read after the collection step is named, not dropped from the list", async () => {
+    await refresh();
+    const block = await buildLayersBlock({
+      ...input(),
+      readPage: async (absolutePath) => {
+        if (absolutePath.endsWith("alpha.md")) throw new Error("EACCES: permission denied");
+        return "";
+      },
+    });
+    const gap = block.unavailable.find((entry) => entry.section === "wiki");
+    expect(gap?.reason).toMatch(/^1 of \d+ wiki page\(s\) could not be read — .*alpha\.md/);
+    expect(layersBlockLines(block).join("\n")).toContain("wiki: unavailable (1 of");
+  });
+
+  test.skipIf(!canLock)("a single wiki page file that cannot be read makes the wiki unavailable, naming the file", async () => {
+    await refresh();
+    await lockDown(".metaproject/wiki/architecture/alpha.md");
+    const block = await buildLayersBlock(input());
+    const gap = block.unavailable.find((entry) => entry.section === "wiki");
+    expect(gap?.reason).toContain("alpha.md");
+    expect(block.wiki).toEqual([]);
+  });
+
+  test.skipIf(!canLock)("a memory that cannot be read is unavailable with the reason, not an empty list", async () => {
+    await writeProjectFile(fixture.root, ".metaproject/memory/lessons/src-lesson.md", MEMORY_ENTRY);
+    await refresh();
+    await lockDown(".metaproject/memory/lessons");
+    const block = await buildLayersBlock(input());
+    const gap = block.unavailable.find((entry) => entry.section === "memory");
+    expect(gap?.reason).toContain("the memory could not be read");
+    expect(block.memory).toEqual([]);
   });
 });

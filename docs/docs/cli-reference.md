@@ -4790,7 +4790,7 @@ keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] 
 keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
 keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
 keryx review layers status  --package <review-dir> [--json]
-keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
+keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
 keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
 keryx review coverage --package <review-dir> [--json]
 keryx review complete ... [--waive-coverage "<operator quote>"]
@@ -5285,7 +5285,7 @@ why that carve-out exists.
 
 ### `review layers`, `review chunks` and `review coverage`
 
-A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; a managed review start, attach or ingest does it for you, and so does any `dispatch-check` or `blast-radius` given `--package`. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`. A graph that is intact at the same head is reused and `--force` rebuilds it. One refresh runs per package at a time, and a second one waits for the first for up to 16 minutes.
+A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; a managed review start, attach or ingest does it for you, and so does any `dispatch-check` or `blast-radius` given `--package`. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`. A graph that is intact at the same head is reused and `--force` rebuilds it. A graph that failed at the same head is not rebuilt for 5 minutes (counted from the failure, so polling does not extend it); `--force` or a new head rebuilds it at once. A reader that failed (the wiki, the memory, or the affected-files computation) is reported under `unavailable` in the layers block with its reason, not as an empty result. A `SIGTERM` or `SIGINT` during any phase releases the lock and removes the checkout and the staging directory. One refresh runs per package at a time, and a second one waits for the first for up to 16 minutes.
 
 - The graph is built at the PR head into `<dir>/layers/graph`, in a fresh worktree; the tracked graph artifacts, the working tree and the PR are not touched. `layers.json` records the commit it was built from, and `graph@<sha7> = head` means it equals the PR head.
 - The wiki and the memory are read from the project's working copy. `layers.json` marks how far that copy is from the PR head (`differs`, with the commits and wiki/memory paths between).
