@@ -103,6 +103,7 @@ import {
   type ReviewScope,
   type ScopedRegion,
 } from "../review/scope";
+import { commentRuleScopeConfig } from "../review/comment-rule";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
@@ -3354,7 +3355,7 @@ async function runScope(args: string[]): Promise<void> {
     scope = buildPathScope(paths, { contextLines });
   } else {
     const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
-    scope = buildReviewScope(diff, { contextLines });
+    scope = buildReviewScope(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) });
   }
 
   if (args.includes("--json")) {

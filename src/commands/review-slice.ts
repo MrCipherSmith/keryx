@@ -11,6 +11,7 @@ import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { commentRuleScopeConfig } from "../review/comment-rule";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
 export type SliceDeps = {
@@ -154,7 +155,7 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = rawWave === undefined ? undefined : validateWaveBytes(Number(rawWave), maxBytes);
-  const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
+  const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
   const outDir = placed("--out", DEFAULT_SLICE_DIR) as string;
