@@ -46,6 +46,7 @@ describe("layers used by a reviewer run, counted from its tool-call log (AC7)", 
       JSON.stringify({ name: "Read", arguments: { file_path: "docs/read_wiki-notes.md", note: "keryx wiki ask, graph_symbol" } }),
       JSON.stringify({ name: "mcp__keryx__wiki_query", arguments: { q: "keryx ctx rg" } }),
       JSON.stringify({ name: "Bash", input: { command: "keryx gdgraph affected a && keryx memory search b" } }),
+      JSON.stringify({ name: "Read", arguments: "mcp__keryx__search_code" }),
     ].join("\n");
     expect(countLayerUsage(log)).toEqual({ graph: 1, wiki: 1, memory: 1, ctx: 0 });
   });

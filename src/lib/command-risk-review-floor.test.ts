@@ -124,6 +124,7 @@ describe("a verb or flag the shell assembles asks too (R3-01)", () => {
     ["answer behind brace expansion", "keryx review chunks estimate --package p --{answer,x} yes --quote x"],
     ["opaque chunks verb", "keryx review $V estimate --package p --answer yes --quote x"],
     ["opaque subcommand slot", "keryx review chunks $S --package p --quote x"],
+    ["opaque group and verb beside the flag", "keryx review $G $V --answer yes --quote x"],
   ];
   for (const [name, command] of assembled) {
     test(`chunk answer: ${name}`, () => {
