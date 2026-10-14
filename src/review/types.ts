@@ -118,6 +118,12 @@ export type ManagedReviewManifest = {
    */
   repairs?: FindingRepair[] | undefined;
   /**
+   * Report fields this package's report is required to carry. Written by every
+   * ingest from the release that introduced `evidence-level`; absent means the
+   * package predates the field, and `complete` warns instead of refusing.
+   */
+  report_fields?: string[] | undefined;
+  /**
    * What the round reported having used. Absent means nobody reported —
    * never zero. See {@link module:review/cost}.
    */

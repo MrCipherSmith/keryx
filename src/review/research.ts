@@ -23,8 +23,9 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
     if (!nonempty(o.id) || ids.has(id)) errors.push(`${id}: missing or duplicate obligation id`);
     ids.add(id);
     if (!nonempty(o.source) || !nonempty(o.question)) errors.push(`${id}: source and question are required`);
-    if (!["finding", "refuted", "out-of-scope"].includes(String(o.status))) errors.push(`${id}: unresolved research (${String(o.status)})`);
+    if (!["finding", "refuted", "out-of-scope", "narrowed"].includes(String(o.status))) errors.push(`${id}: unresolved research (${String(o.status)})`);
     if (!nonempty(o.evidence) || !nonempty(o.reason)) errors.push(`${id}: closure needs evidence and reason`);
+    if (o.status === "narrowed" && !nonempty(o.remains)) errors.push(`${id}: narrowed needs a "what remains" text`);
     if (o.status === "finding") {
       const matches = findings.filter(f => f && typeof f === "object" && (f.id === o.finding || f.global_id === o.finding));
       if (!nonempty(o.finding) || matches.length !== 1) errors.push(`${id}: finding link must resolve uniquely in canonical findings`);

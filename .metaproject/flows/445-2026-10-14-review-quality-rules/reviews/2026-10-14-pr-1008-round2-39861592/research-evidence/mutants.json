@@ -1,0 +1,160 @@
+{
+ "mutants": [
+  {
+   "id": "r2-gate-offline-throws",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "if (pr === null || !pr.exists) return { warnings: [`could not read the PR state for ${target.ref}; the head and merge check was skipped`] };",
+   "replacement": "if (pr === null || !pr.exists) throw new Error(\"offline\");"
+  },
+  {
+   "id": "r2-gate-rejection-throws",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "catch (error) { return { warnings: [`could not read the PR state for ${target.ref} (${error instanceof Error ? error.message : String(error)}); the head and merge check was skipped`] }; }",
+   "replacement": "catch (error) { throw error; }"
+  },
+  {
+   "id": "r2-cli-lookup-off",
+   "file": "src/commands/review.ts",
+   "anchor": "prLookup: seams?.prLookup ?? trackerPrLookup, ",
+   "replacement": ""
+  },
+  {
+   "id": "r2-cli-warnings-silent",
+   "file": "src/commands/review.ts",
+   "anchor": "for (const warning of warnings) console.error(`warning: ${warning}`);",
+   "replacement": ""
+  },
+  {
+   "id": "r2-cli-detect-off",
+   "file": "src/commands/review.ts",
+   "anchor": "if (!(await githubAdapter.detect())) return null;",
+   "replacement": ""
+  },
+  {
+   "id": "r2-cli-status-null",
+   "file": "src/commands/review.ts",
+   "anchor": "return githubAdapter.prStatus(ref);",
+   "replacement": "return null;"
+  },
+  {
+   "id": "r2-loc-external-asked",
+   "file": "src/review/managed.ts",
+   "anchor": "finding.source !== \"external\" && finding.disposition === undefined",
+   "replacement": "finding.disposition === undefined"
+  },
+  {
+   "id": "r2-loc-dismissed-asked",
+   "file": "src/review/managed.ts",
+   "anchor": "finding.source !== \"external\" && finding.disposition === undefined",
+   "replacement": "finding.source !== \"external\""
+  },
+  {
+   "id": "r2-lex-dotdot-ok",
+   "file": "src/review/managed.ts",
+   "anchor": "normalised === \"..\" || normalised.startsWith(\"../\") || ",
+   "replacement": "normalised === \"..\" || "
+  },
+  {
+   "id": "r2-lex-absolute-ok",
+   "file": "src/review/managed.ts",
+   "anchor": " || path.posix.isAbsolute(normalised)",
+   "replacement": ""
+  },
+  {
+   "id": "r2-lex-guard-off",
+   "file": "src/review/managed.ts",
+   "anchor": "const relative = lexicalRelativePath(cited);",
+   "replacement": "const relative: string | null = cited;"
+  },
+  {
+   "id": "r2-cite-url-kept",
+   "file": "src/review/rebuttal-citation.ts",
+   "anchor": "text.replace(URL, \" \")",
+   "replacement": "text"
+  },
+  {
+   "id": "r2-gate-sha-usable-off",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "const reviewed = recorded !== null && USABLE_SHA.test(recorded) ? recorded : null;",
+   "replacement": "const reviewed = recorded;"
+  },
+  {
+   "id": "r2-gate-usable-len",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "const USABLE_SHA = /^[0-9a-f]{7,40}$/i;",
+   "replacement": "const USABLE_SHA = /^[0-9a-f]{1,40}$/i;"
+  },
+  {
+   "id": "r2-gate-unusable-dropped-unmoved",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "if (!merged && !moved) return { warnings: unusable };",
+   "replacement": "if (!merged && !moved) return { warnings: [] };"
+  },
+  {
+   "id": "r2-gate-unusable-dropped-sayso",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "if (names && SAYS_SO.test(first)) return { warnings: unusable };",
+   "replacement": "if (names && SAYS_SO.test(first)) return { warnings: [] };"
+  },
+  {
+   "id": "r2-gate-sayso-no-pr-word",
+   "file": "src/review/complete-head-gate.ts",
+   "anchor": "const SAYS_SO = new RegExp(`\\\\b${PR_WORD}\\\\b.{0,40}\\\\b${MOVE_WORD}\\\\b|\\\\b${MOVE_WORD}\\\\b.{0,40}\\\\b${PR_WORD}\\\\b`, \"i\");",
+   "replacement": "const SAYS_SO = new RegExp(`\\\\b${MOVE_WORD}\\\\b`, \"i\");"
+  },
+  {
+   "id": "r2-ev-placeholder-off",
+   "file": "src/review/evidence-level.ts",
+   "anchor": "item.length > 0 && !PLACEHOLDER.test(item)",
+   "replacement": "item.length > 0"
+  },
+  {
+   "id": "r2-ev-placeholder-narrow",
+   "file": "src/review/evidence-level.ts",
+   "anchor": "const PLACEHOLDER = /^(?:none|nothing|n\\/a|na|nil|-|—|–)\\.?$/i;",
+   "replacement": "const PLACEHOLDER = /^(?:none|nothing|n\\/a)\\.?$/i;"
+  },
+  {
+   "id": "r2-ev-fence-content-kept",
+   "file": "src/review/evidence-level.ts",
+   "anchor": "if (fence === null) kept.push(line);",
+   "replacement": "kept.push(line);"
+  },
+  {
+   "id": "r2-ev-fence-char-off",
+   "file": "src/review/evidence-level.ts",
+   "anchor": "else if (marker[0] === fence) fence = null;",
+   "replacement": "else fence = null;"
+  },
+  {
+   "id": "r2-cite-root-only-slash",
+   "file": "src/review/rebuttal-citation.ts",
+   "anchor": "if (cited.includes(\"/\") || ROOT_DOCUMENT.test(cited)) found.add(cited);",
+   "replacement": "if (cited.includes(\"/\")) found.add(cited);"
+  },
+  {
+   "id": "r2-cite-root-only-root",
+   "file": "src/review/rebuttal-citation.ts",
+   "anchor": "if (cited.includes(\"/\") || ROOT_DOCUMENT.test(cited)) found.add(cited);",
+   "replacement": "if (ROOT_DOCUMENT.test(cited)) found.add(cited);"
+  },
+  {
+   "id": "r2-cite-all-bare",
+   "file": "src/review/rebuttal-citation.ts",
+   "anchor": "if (cited.includes(\"/\") || ROOT_DOCUMENT.test(cited)) found.add(cited);",
+   "replacement": "found.add(cited);"
+  },
+  {
+   "id": "r2-cite-root-lowercase",
+   "file": "src/review/rebuttal-citation.ts",
+   "anchor": "const ROOT_DOCUMENT = /^[A-Z][A-Z0-9_-]*\\.(?:md|mdx|txt)$/;",
+   "replacement": "const ROOT_DOCUMENT = /^[A-Za-z][A-Za-z0-9_-]*\\.(?:md|mdx|txt)$/;"
+  },
+  {
+   "id": "r2-msg-causes-off",
+   "file": "src/review/managed.ts",
+   "anchor": "Causes: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout",
+   "replacement": "Causes: unknown"
+  }
+ ]
+}

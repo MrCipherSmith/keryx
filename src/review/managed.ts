@@ -1,6 +1,9 @@
 import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+import { flagMissingCitations } from "./rebuttal-citation";
+import { completeHeadGate, type PrLookup } from "./complete-head-gate";
+import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
-import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -243,6 +246,7 @@ export async function createManagedReviewPackage(
   // checked. A finding with no quote is untouched — it keeps whatever it said,
   // and says so by carrying no locator.
   await anchorFindings(reported, input, head);
+  refuseUnresolvedLocators(reported, input, head);
 
   // Minted BEFORE the verifier runs, because a claim names a finding by
   // `global_id` and the key has to exist for it to be resolvable. Round N+1
@@ -312,6 +316,10 @@ export async function createManagedReviewPackage(
     ...roundDismissed,
   ];
   assignGlobalIds(findings, reviewId);
+
+  // A rebuttal that cites a rule or document gets that citation looked up. A missing one
+  // is said on the finding; the finding itself is never removed.
+  await flagMissingCitations(findings, (cited) => citationExists(input.cwd, head, cited));
 
   // Read BEFORE the write, because the write is what used to destroy it. The
   // orchestrator is told to run `keryx review scope --append <package>/scope.md`
@@ -758,6 +766,8 @@ export type CompleteManagedReviewOptions = {
   now?: Date | undefined;
   /** The operator's own words waiving every file the coverage gate finds uncovered (`--waive-coverage`). */
   waiveCoverage?: string | undefined;
+  /** Reads a PR's state and head. Absent means the head and merge check is not made (a library caller with no tracker). */
+  prLookup?: PrLookup | undefined;
 };
 
 export type CompleteManagedReviewResult = {
@@ -778,6 +788,8 @@ export type CompleteManagedReviewResult = {
   dispositions: FindingDispositionTally;
   /** The waiver this close recorded for files no reviewer covered; absent when none was passed or nothing was uncovered. */
   coverageWaiver?: CoverageWaiver;
+  /** Things the close let through that a current package would have been refused for. */
+  warnings: string[];
 };
 
 /**
@@ -807,6 +819,17 @@ export async function completeManagedReview(
   const missing = await missingArtifacts(packageDir);
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
+  }
+  const warnings: string[] = [];
+  const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
+  if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: reportText, lookup: options.prLookup })).warnings);
+  const evidence = parseEvidenceLevel(reportText);
+  if (!evidence.ok) {
+    const problem = `the report's evidence level is missing or invalid: ${evidence.reason}`;
+    if (manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {
+      throw new Error(`Cannot complete managed review; ${problem}. Add a line \`Evidence level: static only — did not run: <what>\` or \`Evidence level: ran — <what>\` to report.md`);
+    }
+    warnings.push(`${problem} (this package predates the field, so it is a warning)`);
   }
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
@@ -860,7 +883,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), ...(coverageWaiver === undefined ? {} : { coverageWaiver }) };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(coverageWaiver === undefined ? {} : { coverageWaiver }) };
 }
 
 export async function validateManagedReviewManifest(
@@ -992,6 +1015,8 @@ function buildManifest(args: {
     // distinction never arose — the same rule `cross_family_review` above
     // follows, and for the same reason.
     ...(args.repairs.length === 0 ? {} : { repairs: args.repairs }),
+    // Marks a package whose report must carry an evidence level; one without the mark predates the field and only gets a warning.
+    report_fields: [REPORT_FIELD_EVIDENCE_LEVEL],
     // Same rule: absent means nobody reported, which is not the same as zero.
     ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
@@ -1146,7 +1171,10 @@ async function anchorFindings(
     (head === null
       ? readFromWorkingTree(input)
       : async (relative: string): Promise<string | null> => {
-          const contained = await containedRelativePath(input.cwd, relative);
+          // Contained by spelling, not by the working tree: the file only has to exist
+          // at the head, and `git show` reads a blob without following a link, so a
+          // symlink in the tree cannot lead the read outside it.
+          const contained = lexicalRelativePath(relative);
           return contained === null ? null : readFileAtCommit(input.cwd, head, contained);
         });
   for (const finding of findings) {
@@ -1182,24 +1210,63 @@ async function anchorFindings(
 }
 
 /**
- * `relative` as an absolute path inside `cwd`, or null when it is not.
- *
- * `realpath` on both sides, because a lexical comparison is what a symlink
- * defeats — see the round that found it.
+ * A round is a claim about a commit. Where the commit is known and an internal
+ * finding's quote is not at its `path:line` there, the finding cites something the
+ * reviewer did not read at that SHA — refuse the ingest and name each one, rather
+ * than record a locator that points nowhere. Findings the round already dismissed,
+ * external comments and findings without a quote are not asked to resolve.
  */
-async function containedRelativePath(cwd: string, relative: string): Promise<string | null> {
-  const root = await realpath(cwd).catch(() => path.resolve(cwd));
-  const resolved = path.resolve(root, relative);
-  const real = await realpath(resolved).catch(() => null);
-  if (real === null || (real !== root && !real.startsWith(`${root}${path.sep}`))) {
+function refuseUnresolvedLocators(
+  findings: ReadonlyArray<StructuredReviewFinding & { summary: string }>,
+  input: ManagedReviewInput,
+  head: string | null,
+): void {
+  if (head === null || input.readTreeFile !== undefined) {
+    return;
+  }
+  const unresolved = findings.filter(
+    (finding) =>
+      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable",
+  );
+  if (unresolved.length === 0) {
+    return;
+  }
+  const lines = unresolved.map((finding) => {
+    const locator = finding.locator?.state === "unlocatable" ? finding.locator : undefined;
+    const line = locator?.reported_line ?? null;
+    return `  - ${finding.id ?? finding.summary} (${finding.file}${line === null ? "" : `:${line}`}): ${locator?.reason ?? ""}`;
+  });
+  throw new Error(
+    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that does not resolve at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`). Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
+  );
+}
+
+/** Whether a cited document is in the tree at the reviewed commit or as the tree stands. */
+async function citationExists(cwd: string, head: string | null, cited: string): Promise<boolean> {
+  const relative = lexicalRelativePath(cited);
+  if (relative === null) {
+    return false;
+  }
+  if (head !== null && (await readFileAtCommit(cwd, head, relative)) !== null) {
+    return true;
+  }
+  return lstat(path.resolve(cwd, relative)).then(
+    () => true,
+    () => false,
+  );
+}
+
+/** `relative` normalised to a path inside the tree, or null when it climbs out or is absolute. */
+export function lexicalRelativePath(relative: string): string | null {
+  const normalised = path.posix.normalize(relative.replace(/\\/g, "/"));
+  if (normalised === "." || normalised === ".." || normalised.startsWith("../") || path.posix.isAbsolute(normalised)) {
     return null;
   }
-  return real;
+  return normalised;
 }
 
 /** One file as it stood at `commit`, or null. */
-async function readFileAtCommit(cwd: string, commit: string, absolute: string): Promise<string | null> {
-  const relative = path.relative(await realpath(cwd).catch(() => path.resolve(cwd)), absolute);
+async function readFileAtCommit(cwd: string, commit: string, relative: string): Promise<string | null> {
   try {
     const proc = Bun.spawn(["git", "show", `${commit}:${relative}`], {
       cwd,

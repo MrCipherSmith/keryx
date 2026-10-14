@@ -150,6 +150,12 @@
         }
       }
     },
+    "report_fields": {
+      "description": "Report fields this package's report is required to carry at `review complete`. Written by every ingest since `evidence-level` was introduced (the report must say `Evidence level: static only — did not run: …` or `Evidence level: ran — …`). Absent means the package predates the field: `complete` then warns instead of refusing.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["evidence-level"] }
+    },
     "cost": {
       "description": "What the round reported having used. Absent means nobody reported it, which is NOT zero — the same distinction `filter_stats` draws between a count and a stage that never ran. `keryx review complete` divides whichever of these is present by the findings the round retained, so that the price of a fan-out is a number somebody can weigh rather than an argument. Every property is independent: a caller that knows its token counts but not its rates records the tokens alone.",
       "type": "object",

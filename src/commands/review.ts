@@ -28,6 +28,7 @@ import {
   type FindingDispositionRecord,
   type ManagedReviewIngestInput,
 } from "../review/managed";
+import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
@@ -569,6 +570,13 @@ function rejectUnknownFlags(args: readonly string[], allowed: readonly string[],
 /** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
 export interface ReviewCommandSeams {
   isTerminal?: () => boolean;
+  /** Test seam: reads a PR's state and head for `complete`. Default: the GitHub tracker adapter. */
+  prLookup?: PrLookup;
+}
+
+async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
+  if (!(await githubAdapter.detect())) return null;
+  return githubAdapter.prStatus(ref);
 }
 
 export async function reviewCommand(args: string[], seams?: ReviewCommandSeams): Promise<void> {
@@ -3886,7 +3894,9 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     reviewNotes,
     dispositions: tally,
     coverageWaiver,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }) });
+    warnings,
+  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }) });
+  for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
     console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > FIRST_FILES ? ", …" : ""}`);

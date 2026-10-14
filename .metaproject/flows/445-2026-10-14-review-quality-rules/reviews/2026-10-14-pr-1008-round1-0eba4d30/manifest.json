@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-14-pr-1008-round1-0eba4d30",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "060701ca",
+    "head": "0eba4d308e30f32aa16eacc0c47e682d77d44bc1"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/445-2026-10-14-review-quality-rules/reviews/2026-10-14-pr-1008-round1-0eba4d30/scope.md",
+    "coverage": ".metaproject/flows/445-2026-10-14-review-quality-rules/reviews/2026-10-14-pr-1008-round1-0eba4d30/coverage.md",
+    "report": ".metaproject/flows/445-2026-10-14-review-quality-rules/reviews/2026-10-14-pr-1008-round1-0eba4d30/report.md",
+    "findings": ".metaproject/flows/445-2026-10-14-review-quality-rules/reviews/2026-10-14-pr-1008-round1-0eba4d30/findings.json",
+    "learning": ".metaproject/flows/445-2026-10-14-review-quality-rules/reviews/2026-10-14-pr-1008-round1-0eba4d30/learning.md",
+    "decisions": ".metaproject/flows/445-2026-10-14-review-quality-rules/reviews/2026-10-14-pr-1008-round1-0eba4d30/decisions.md",
+    "research": "research.json",
+    "reviewerDispatch": "research.json"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 13,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 1,
+    "dropped_findings_cap": 0,
+    "retained": 12,
+    "dismissed_by_round": null,
+    "by_reason": {
+      "scope_b:outside-set": 1
+    },
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "createdAt": "2026-10-14T06:30:12.050Z",
+  "updatedAt": "2026-10-14T06:30:12.050Z",
+  "flow": {
+    "id": "445",
+    "path": ".metaproject/flows/445-2026-10-14-review-quality-rules"
+  }
+}

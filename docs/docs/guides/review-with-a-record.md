@@ -618,6 +618,14 @@ keryx review ingest --report round7.md --ref round7 --refuted refuted.json
 Closing with no dispositions is allowed. It leaves every finding reading
 `unknown`, which means "nobody wrote down what happened".
 
+### Five gates that keep a report honest
+
+- **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, completion is refused until the first line of `report.md` names the reviewed SHA and says so ("Reviewed `1a2b3c4` — the PR has since merged."). A package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.
+- **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
+- **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
+- **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
+- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree, and refuses the ingest, naming the finding, when it does not resolve there. The report links the blob at that SHA.
+
 ### The one dismissal that teaches something
 
 `dismissed-incorrect` — and only that state — writes a note into

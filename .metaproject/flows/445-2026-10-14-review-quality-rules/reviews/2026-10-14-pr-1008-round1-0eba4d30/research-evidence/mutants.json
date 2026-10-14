@@ -1,0 +1,30 @@
+{
+ "mutants": [
+  {"id":"r1-gate-moved-off","file":"src/review/complete-head-gate.ts","anchor":"const moved = reviewed !== null && prHead !== null && !sameCommit(reviewed, prHead);","replacement":"const moved = false;"},
+  {"id":"r1-gate-merged-off","file":"src/review/complete-head-gate.ts","anchor":"pr.state.toUpperCase() === \"MERGED\"","replacement":"false"},
+  {"id":"r1-gate-says-so-off","file":"src/review/complete-head-gate.ts","anchor":"if (names && SAYS_SO.test(first)) return { warnings: [] };","replacement":"if (names) return { warnings: [] };"},
+  {"id":"r1-gate-sha-name-off","file":"src/review/complete-head-gate.ts","anchor":"if (names && SAYS_SO.test(first)) return { warnings: [] };","replacement":"if (SAYS_SO.test(first)) return { warnings: [] };"},
+  {"id":"r1-gate-nonpr-off","file":"src/review/complete-head-gate.ts","anchor":"if (target.kind !== \"pr\") return { warnings: [] };","replacement":""},
+  {"id":"r1-gate-offline-throws","file":"src/review/complete-head-gate.ts","anchor":"if (pr === null || !pr.exists) return { warnings: [`could not read the PR state for ${target.ref}; the head and merge check was skipped`] };","replacement":"if (pr === null || !pr.exists) throw new Error(\"offline\");"},
+  {"id":"r1-evidence-legacy-refuses","file":"src/review/managed.ts","anchor":"if (manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {","replacement":"if (true) {"},
+  {"id":"r1-evidence-never-refuses","file":"src/review/managed.ts","anchor":"if (manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {","replacement":"if (false) {"},
+  {"id":"r1-evidence-stamp-off","file":"src/review/managed.ts","anchor":"report_fields: [REPORT_FIELD_EVIDENCE_LEVEL],","replacement":""},
+  {"id":"r1-evidence-static-empty-ok","file":"src/review/evidence-level.ts","anchor":"return items.length > 0 ? { ok: true, level: \"static-only\", items }","replacement":"return true ? { ok: true, level: \"static-only\", items }"},
+  {"id":"r1-evidence-ran-empty-ok","file":"src/review/evidence-level.ts","anchor":"return items.length > 0 ? { ok: true, level: \"ran\", items }","replacement":"return true ? { ok: true, level: \"ran\", items }"},
+  {"id":"r1-cite-url-kept","file":"src/review/rebuttal-citation.ts","anchor":"text.replace(URL, \" \")","replacement":"text"},
+  {"id":"r1-cite-dedupe-off","file":"src/review/rebuttal-citation.ts","anchor":"if (disposition.evidence.includes(marker(cited))) continue;","replacement":""},
+  {"id":"r1-cite-exists-inverted","file":"src/review/rebuttal-citation.ts","anchor":"if (!(await exists(cited))) missing.push(cited);","replacement":"if (await exists(cited)) missing.push(cited);"},
+  {"id":"r1-cite-worktree-off","file":"src/review/managed.ts","anchor":"return lstat(path.resolve(cwd, relative)).then(","replacement":"return Promise.resolve(false).then("},
+  {"id":"r1-cite-head-off","file":"src/review/managed.ts","anchor":"if (head !== null && (await readFileAtCommit(cwd, head, relative)) !== null) {","replacement":"if (false) {"},
+  {"id":"r1-narrowed-remains-off","file":"src/review/ledger.ts","anchor":"if (given.status === \"narrowed\" && !text(given.remains)) return undefined;","replacement":""},
+  {"id":"r1-narrowed-research-remains-off","file":"src/review/research.ts","anchor":"if (o.status === \"narrowed\" && !nonempty(o.remains))","replacement":"if (false)"},
+  {"id":"r1-narrowed-not-closed","file":"src/review/ledger.ts","anchor":"const CLOSED = new Set([\"finding\", \"refuted\", \"out-of-scope\", \"narrowed\"]);","replacement":"const CLOSED = new Set([\"finding\", \"refuted\", \"out-of-scope\"]);"},
+  {"id":"r1-loc-external-asked","file":"src/review/managed.ts","anchor":"finding.source !== \"external\" && finding.disposition === undefined","replacement":"finding.disposition === undefined"},
+  {"id":"r1-loc-dismissed-asked","file":"src/review/managed.ts","anchor":"finding.source !== \"external\" && finding.disposition === undefined","replacement":"finding.source !== \"external\""},
+  {"id":"r1-loc-refusal-off","file":"src/review/managed.ts","anchor":"  refuseUnresolvedLocators(reported, input, head);\n","replacement":"\n"},
+  {"id":"r1-lex-dotdot-ok","file":"src/review/managed.ts","anchor":"normalised === \"..\" || normalised.startsWith(\"../\") || ","replacement":"normalised === \"..\" || "},
+  {"id":"r1-lex-absolute-ok","file":"src/review/managed.ts","anchor":" || path.posix.isAbsolute(normalised)","replacement":""},
+  {"id":"r1-cli-warnings-silent","file":"src/commands/review.ts","anchor":"for (const warning of warnings) console.error(`warning: ${warning}`);","replacement":""},
+  {"id":"r1-cli-lookup-off","file":"src/commands/review.ts","anchor":"prLookup: seams?.prLookup ?? trackerPrLookup, ","replacement":""}
+ ]
+}
