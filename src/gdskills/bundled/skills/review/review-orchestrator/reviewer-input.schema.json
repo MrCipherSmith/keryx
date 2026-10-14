@@ -89,6 +89,10 @@
           "type": "boolean",
           "description": "Run this dispatch on the caller's own model. Present in place of `provider`/`model`, never alongside them, when `keryx review tier` could not resolve a concrete model."
         },
+        "routed": {
+          "type": "boolean",
+          "description": "True when the provider/model were set by the routing table's `review` category (`keryx review tier` emits it on a routed pick) rather than tier-ranked discovery. Additive to `tier_resolution`, which still records how the tier resolved a model; the two questions are independent."
+        },
         "tier_resolution": {
           "type": "string",
           "enum": [
