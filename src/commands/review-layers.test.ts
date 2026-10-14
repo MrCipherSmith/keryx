@@ -166,3 +166,26 @@ describe("the refresh lock (R2-10, R2-11)", () => {
     expect(await layersRefreshInFlight(fixture.packageDir)).toBe(true);
   });
 });
+
+describe("layers block --max-bytes floor (R3-21)", () => {
+  const block = (maxBytes: string) => reviewCommand(["layers", "block", "--package", fixture.packageDir, "--files", "src/a.ts", "--max-bytes", maxBytes]);
+  const said = () => [...logs, ...errors].join("\n");
+
+  test("255 is refused by the option check", async () => {
+    await block("255");
+    expect(process.exitCode).toBe(1);
+    expect(said()).toContain("--max-bytes must be an integer of at least 256");
+  });
+
+  test("256 passes the option check; a block that cannot fit says how many bytes it needs", async () => {
+    await block("256");
+    expect(said()).not.toContain("--max-bytes must be an integer");
+    expect(said()).toContain("The layers block needs");
+  });
+
+  test("a cap the block fits in prints it", async () => {
+    await block("100000");
+    expect(process.exitCode).toBe(0);
+    expect(said()).not.toContain("--max-bytes must be an integer");
+  });
+});

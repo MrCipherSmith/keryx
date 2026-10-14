@@ -1,3 +1,4 @@
+import { packageRecordsCoverage } from "../review/coverage-complete";
 import { packageResearchErrors } from "../review/research";
 /**
  * The review gate (flow 204, AC5-AC7 / specification §2).
@@ -442,8 +443,10 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
     const scopePath = path.join(packageDir, "scope.md");
     const scope = (await pathExists(scopePath)) ? await readScopeMarkdown(scopePath) : null;
 
-    // A closed round passed the close-time gate of its day; the coverage-completeness gate decides open rounds only.
-    problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings, { completeness: readString(manifest?.["status"]) !== "closed" }));
+    // A closed round passed the close-time gate of its day, and a round cut before the coverage accounting existed
+    // records none of it; the coverage-completeness gate decides open rounds that kept the record.
+    const completeness = readString(manifest?.["status"]) !== "closed" && (await packageRecordsCoverage(packageDir));
+    problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings, { completeness }));
     rounds.push({
       reviewId,
       dir: path.relative(cwd, packageDir),

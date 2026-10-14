@@ -81,6 +81,19 @@ function scopeBRunComplete(dispatch: Record<string, unknown> | undefined): boole
   });
 }
 
+/**
+ * True when the package carries any record written by the coverage accounting: a chunk plan, `coverage.json`, or a
+ * dispatch run that names `coveredSlices`. A package cut before that accounting existed holds none of them, and the
+ * completeness gate has nothing to hold it against.
+ */
+export async function packageRecordsCoverage(packageDir: string, research?: unknown): Promise<boolean> {
+  if (hasChunkPlan(packageDir)) return true;
+  if ((await readJson<unknown>(path.join(packageDir, COVERAGE_FILE))) !== undefined) return true;
+  const ledger = research ?? (await readJson<unknown>(path.join(packageDir, "research.json")));
+  const runs = record(record(ledger)?.dispatch)?.runs;
+  return Array.isArray(runs) && runs.some((entry) => Array.isArray(record(entry)?.coveredSlices));
+}
+
 export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefined {
   const waiver = record(record(dispatch)?.coverageWaiver);
   if (waiver === undefined || !text(waiver.operatorQuote) || !text(waiver.time)) return undefined;

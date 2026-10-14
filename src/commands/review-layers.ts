@@ -130,7 +130,7 @@ export async function runLayers(args: string[], deps: LayersDeps): Promise<void>
     if (files.length === 0) throw new Error("Missing --files <a,b,...>. See `keryx review layers --help`.");
     const rawMax = optionValue(rest, "--max-bytes");
     const maxBytes = rawMax === undefined ? undefined : Number(rawMax);
-    if (maxBytes !== undefined && (!Number.isInteger(maxBytes) || maxBytes < 256)) throw new Error("--max-bytes must be an integer of at least 256.");
+    if (maxBytes !== undefined && (!Number.isInteger(maxBytes) || maxBytes < 256)) throw new Error("--max-bytes must be an integer of at least 256; a block with every list empty needs more than that, and the refusal names how much.");
     const projectRoot = resolveProjectRoot(process.cwd());
     await ensurePackageLayers(packageDir, { projectRoot });
     const block = await buildLayersBlock({ projectRoot, packageDir, files, ...(maxBytes === undefined ? {} : { maxBytes }) });
