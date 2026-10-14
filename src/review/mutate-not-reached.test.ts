@@ -98,6 +98,6 @@ describe("a capped mutation pass", () => {
     expect(record.mutants.map((m) => `${m.id}:${m.status}`)).toEqual(["X:invalid", "A:killed", "B:survived"]);
     expect(record.not_reached).toBe(2);
     await writeMutationEvidence(pkg, record);
-    expect((await pendingMutants(pkg)).length).toBe(record.not_reached);
+    expect((await pendingMutants(pkg)).length).toBe(2);
   });
 });

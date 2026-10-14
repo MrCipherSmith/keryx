@@ -212,7 +212,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   const questions = [...new Set(asStrings(result.needs_context).map((item) => item.trim().replace(/\s+/g, " ").toLowerCase()).filter((item) => item !== ""))].sort();
   const asksForContext = status === "NEEDS_CONTEXT" || questions.length > 0;
   // A NEEDS_CONTEXT with a question it has not asked before moves the dispatch forward as a new slice does.
-  const newQuestion = asksForContext && questions.some((item) => !(known?.questions ?? []).includes(item));
+  const newQuestion = asksForContext && known?.questions !== undefined && questions.some((item) => !known.questions!.includes(item));
   const stalls = !evaluated ? priorStalls : progress || newQuestion ? 0 : priorStalls + 1;
 
   const graph = sliceGraph(manifest, reviewer);
