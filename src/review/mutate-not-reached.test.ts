@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { EVIDENCE_DIR, MUTANTS_SPEC, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, writeMutationEvidence } from "./mutate";
+import { EVIDENCE_DIR, MUTANTS_SPEC, parseMutantSpec, pendingMutants, renderMutationTable, runMutation, unjudgedMutants, writeMutationEvidence } from "./mutate";
 import { coverageErrors } from "./coverage";
 
 let base: string;
@@ -75,5 +75,29 @@ describe("a capped mutation pass", () => {
     const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, cap: 0, mutants: parseMutantSpec(SPECS) });
     expect(record.mutants).toEqual([]);
     expect(record.not_reached).toBe(3);
+  });
+
+  test("a second capped pass takes the next pending candidates instead of re-running the first ones", async () => {
+    const pkg = path.join(base, "pkg");
+    await mkdir(path.join(pkg, EVIDENCE_DIR), { recursive: true });
+    const specs = parseMutantSpec([...SPECS, { id: "D", file: "calc.js", anchor: "exports.neg", replacement: "exports.neg2" }, { id: "E", file: "calc.js", anchor: "\"neg\"", replacement: "\"nope\"" }, { id: "F", file: "calc.js", anchor: "\"pos\"", replacement: "\"nop\"" }]);
+    const first = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, cap: 3, mutants: await unjudgedMutants(pkg, specs) });
+    await writeMutationEvidence(pkg, first);
+    expect(first.mutants.map((m) => m.id)).toEqual(["A", "B", "C"]);
+    const second = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, cap: 3, mutants: await unjudgedMutants(pkg, specs) });
+    expect(second.mutants.map((m) => m.id)).toEqual(["D", "E", "F"]);
+    expect(second.not_reached).toBe(0);
+  });
+
+  test("an invalid candidate does not use up the cap and counts as not reached, as the gate counts it pending", async () => {
+    const pkg = path.join(base, "pkg");
+    await mkdir(path.join(pkg, EVIDENCE_DIR), { recursive: true });
+    const specs = parseMutantSpec([{ id: "X", file: "calc.js", anchor: "no such text", replacement: "y" }, ...SPECS]);
+    await writeFile(path.join(pkg, EVIDENCE_DIR, MUTANTS_SPEC), JSON.stringify({ mutants: specs }));
+    const record = await runMutation({ worktree: tree, command: command(), scratchRoot: scratch, cap: 2, mutants: specs });
+    expect(record.mutants.map((m) => `${m.id}:${m.status}`)).toEqual(["X:invalid", "A:killed", "B:survived"]);
+    expect(record.not_reached).toBe(2);
+    await writeMutationEvidence(pkg, record);
+    expect((await pendingMutants(pkg)).length).toBe(record.not_reached);
   });
 });

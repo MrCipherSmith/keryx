@@ -138,7 +138,7 @@ export async function runMutation(options: {
   mutants: readonly MutantSpec[];
   timeoutMs?: number | undefined;
   scratchRoot?: string | undefined;
-  /** Run at most this many candidates; the rest are counted in `not_reached` and stay pending. */
+  /** Run at most this many candidates; the rest, and any that came out invalid, are counted in `not_reached` and stay pending. */
   cap?: number | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
@@ -153,8 +153,11 @@ export async function runMutation(options: {
 
     const results: MutantResult[] = [];
     const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
-    const candidates = cap === undefined ? options.mutants : options.mutants.slice(0, cap);
-    for (const mutant of candidates) {
+    // The cap bounds the mutants that actually run. An invalid candidate costs nothing and stays pending
+    // (see `pendingMutants`), so it neither uses up the cap nor counts as reached.
+    let ran = 0;
+    for (const mutant of options.mutants) {
+      if (cap !== undefined && ran >= cap) break;
       const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command, ...(mutant.kind === undefined ? {} : { kind: mutant.kind }) };
       const target = insideRoot(copy, mutant.file);
       if (target === undefined || !existsSync(target)) {
@@ -172,6 +175,7 @@ export async function runMutation(options: {
         continue;
       }
       await writeFile(target, original.slice(0, first) + mutant.replacement + original.slice(first + mutant.anchor.length), "utf8");
+      ran += 1;
       try {
         const run = await runCommand(options.command, copy, timeoutMs);
         results.push({ ...base, line: lineOf(original, first), status: run.timedOut ? "timeout" : run.exitCode === 0 ? "survived" : "killed", exitCode: run.exitCode, ms: run.ms });
@@ -181,7 +185,7 @@ export async function runMutation(options: {
     }
     const totals: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
     for (const r of results) totals[r.status] += 1;
-    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals, ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - candidates.length }) };
+    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals, ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - ran }) };
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
@@ -232,6 +236,28 @@ export async function writeMutationEvidence(packageDir: string, record: Mutation
   return { json, md };
 }
 
+/** Ids of the mutants a recorded pass has judged. An invalid row judged nothing, so it does not count. */
+export async function doneMutantIds(packageDir: string): Promise<Set<string>> {
+  const dir = path.join(packageDir, EVIDENCE_DIR);
+  const done = new Set<string>();
+  if (!existsSync(dir)) return done;
+  for (const name of (await readdir(dir)).filter((n) => /^mutation-\d+\.json$/.test(n))) {
+    try {
+      const record = JSON.parse(await readFile(path.join(dir, name), "utf8")) as MutationRecord;
+      for (const m of record.mutants) if (m.status !== "invalid") done.add(m.id);
+    } catch {
+      continue;
+    }
+  }
+  return done;
+}
+
+/** The given specs minus those a recorded pass in this package has already judged, in their original order. */
+export async function unjudgedMutants(packageDir: string, specs: MutantSpec[]): Promise<MutantSpec[]> {
+  const done = await doneMutantIds(packageDir);
+  return specs.filter((s) => !done.has(s.id));
+}
+
 /** Mutants the reviewers proposed (`research-evidence/mutants.json`) that no recorded mutation pass has run yet. A spec with `"runnable": false` says the tests cannot be run here, so nothing is pending. */
 export async function pendingMutants(packageDir: string): Promise<MutantSpec[]> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
@@ -245,14 +271,5 @@ export async function pendingMutants(packageDir: string): Promise<MutantSpec[]> 
   } catch {
     return [];
   }
-  const done = new Set<string>();
-  for (const name of (await readdir(dir)).filter((n) => /^mutation-\d+\.json$/.test(n))) {
-    try {
-      const record = JSON.parse(await readFile(path.join(dir, name), "utf8")) as MutationRecord;
-      for (const m of record.mutants) if (m.status !== "invalid") done.add(m.id);
-    } catch {
-      continue;
-    }
-  }
-  return specs.filter((s) => !done.has(s.id));
+  return unjudgedMutants(packageDir, specs);
 }

@@ -35,7 +35,7 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
-import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, packageHasPrContext, requiredReviewers } from "../review/coverage";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -3058,7 +3058,9 @@ async function runMutate(args: string[]): Promise<void> {
   const capArg = optionValue(args, "--cap");
   const cap = capArg === undefined ? undefined : Number(capArg);
   if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) throw new Error("--cap must be a non-negative integer");
-  const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
+  const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
   const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap });
   const written = await writeMutationEvidence(packageDir, record);
   if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
