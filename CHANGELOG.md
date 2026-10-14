@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- **`shell_exec` says when it clamps `idle_timeout_ms`.** A value outside 1000-1800000 was clamped silently, so a command meant to wait an hour was killed after 30 minutes with no hint why. The result now states the requested and the effective value, and the tool description gives the range and the way out: print progress, or start the command detached (`setsid nohup <command> > <log> 2>&1 &`) and read its log.
+- **`keryx review run --autonomous` names the pull request head.** The resolved head goes into the child's prompt with the instruction to review exactly that commit and pass `--head <sha>` to `review start`, `attach` and `ingest`; with no resolvable head the prompt is unchanged.
+
+### Added
+- **Heartbeat on stderr for an autonomous review.** `keryx review run --autonomous` writes `heartbeat: phase <phase>, <n> round(s), <n> tokens` when the phase, the rounds or the tokens change (at most once a minute), also with `--json`, whose stdout stays the summary alone.
+
 ## [0.3.116] - 2026-10-14
 
 ### Added

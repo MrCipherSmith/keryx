@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "447",
+  "slug": "review-run-hardening",
+  "title": "Autonomous review run hardening: visible idle clamp, heartbeat, PR head in prompt",
+  "status": "in-progress",
+  "createdAt": "2026-10-14T17:57:46.478Z",
+  "updatedAt": "2026-10-14T18:01:53.453Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:890fed6cb550a08db29e9cdf6dda076316eb5ab16462d073766492358c4afd53",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "agent-finding",
+    "source": "investigation of a stalled autonomous review run, operator poll 173 on 2026-10-14"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-14T17:57:46.478Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-14T18:01:48.997Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-14T18:01:51.016Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-14T18:01:53.021Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-14T18:01:53.236Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-14T18:01:53.453Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/harness/tool/builtin/shell-exec-background.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/tool/builtin/shell-exec-background.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-run.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-run.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/autonomous-profile.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/autonomous-profile.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/autonomous-run.test.ts"
+    },
+    "AC8": {
+      "kind": "judged"
+    }
+  }
+}

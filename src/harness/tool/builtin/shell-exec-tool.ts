@@ -18,7 +18,12 @@ import type { JobRegistry, StartTaskOptions } from "./background-job-registry";
 // Value import, one-way: the registry imports only `../../process/shell-spawn`,
 // never this module (see its `ENV_SHELL_TIMEOUT_MS_FALLBACK` comment), so this
 // edge closes no cycle.
-import { ENV_SHELL_IDLE_MS, clampTaskIdleTimeoutMs } from "./background-job-registry";
+import {
+  ENV_SHELL_IDLE_MS,
+  MAX_TASK_IDLE_TIMEOUT_MS,
+  MIN_TASK_IDLE_TIMEOUT_MS,
+  clampTaskIdleTimeoutMs,
+} from "./background-job-registry";
 import {
   SHELL_INLINE_CAP,
   overInlineCap,
@@ -433,7 +438,10 @@ export function shellExecTool(
         "for a dev server or a watch build you know you will not read inline); it changes nothing else. " +
         "description is a short label for the task list. idle_timeout_ms is for a command that is deliberately " +
         "SILENT for a long time (a sleep, a slow poll) — a task that produces no output for its idle timeout " +
-        "is killed, so raise it rather than lose the command. Output over 20,000 characters is saved in full to a " +
+        "is killed, so raise it rather than lose the command. The accepted range is 1000 to 1800000 (30 minutes); " +
+        "a value outside it is clamped and the result says so. A command that stays silent for longer than 30 " +
+        "minutes cannot be kept alive this way: make it print progress, or start it detached from the shell " +
+        "(`setsid nohup <command> > <log> 2>&1 &`) and read its log. Output over 20,000 characters is saved in full to a " +
         "file: you see the head, the tail, the last lines of stderr, the line and byte counts of both streams " +
         "and the file's path, and read the rest with read_file or search_code on that path. Do not use " +
         "sed/grep/cat/awk here to locate code; use search_code or graph_symbol instead, which are built " +
@@ -471,6 +479,8 @@ export function shellExecTool(
       }
 
       const startOpts: StartTaskOptions = { phase: background ? "background" : "foreground" };
+      let clampNote: string | undefined;
+      const withClamp = (notice: string): string => (clampNote === undefined ? notice : `${notice}; ${clampNote}`);
       if (typeof input.description === "string" && input.description.length > 0) {
         startOpts.description = input.description;
       }
@@ -478,7 +488,16 @@ export function shellExecTool(
         // Clamped HERE, not in the registry: the clamp has a floor, so a model
         // cannot disable the idle rail on its own task (an internal caller
         // still may, by passing 0 to the registry directly).
-        startOpts.idleTimeoutMs = clampTaskIdleTimeoutMs(input.idle_timeout_ms);
+        const effective = clampTaskIdleTimeoutMs(input.idle_timeout_ms);
+        startOpts.idleTimeoutMs = effective;
+        const requested = input.idle_timeout_ms;
+        if (requested > MAX_TASK_IDLE_TIMEOUT_MS || requested < MIN_TASK_IDLE_TIMEOUT_MS || Number.isNaN(requested)) {
+          clampNote =
+            `idle_timeout_ms ${requested} was clamped to ${effective} (allowed ${MIN_TASK_IDLE_TIMEOUT_MS}-${MAX_TASK_IDLE_TIMEOUT_MS}); ` +
+            (requested > MAX_TASK_IDLE_TIMEOUT_MS
+              ? `a command silent for longer than ${MAX_TASK_IDLE_TIMEOUT_MS}ms is killed, so make it print progress or start it detached from the shell`
+              : `a command silent for longer than ${effective}ms is killed`);
+        }
       }
 
       const started = await jobRegistry.start(command, startOpts);
@@ -494,7 +513,9 @@ export function shellExecTool(
           taskId,
           pid: started.pid,
           output: started.output,
-          notice: `running as a background task; read new output with shell_job_output("${taskId}") and stop it with shell_job_kill("${taskId}")`,
+          notice: withClamp(
+            `running as a background task; read new output with shell_job_output("${taskId}") and stop it with shell_job_kill("${taskId}")`,
+          ),
         });
       }
 
@@ -542,7 +563,7 @@ export function shellExecTool(
           taskId,
           pid: started.pid,
           output: collected,
-          notice,
+          notice: withClamp(notice),
           ...(promoted.overCap !== undefined ? { overCap: promoted.overCap } : {}),
         });
       }
@@ -569,15 +590,16 @@ export function shellExecTool(
       const idleNotice = idleKilled
         ? `shell_exec: no output for ${info.idleTimeoutMs}ms, so the command was killed (raise it for this command with idle_timeout_ms, or change the default with ${ENV_SHELL_IDLE_MS})`
         : undefined;
+      const resultNotice = clampNote === undefined ? idleNotice : idleNotice === undefined ? `shell_exec: ${clampNote}` : `${idleNotice}; ${clampNote}`;
       // Flow 393 AC11: the registry hands over the whole transcript of a foreground task with its
       // stdout/stderr tallies, so an output over the inline cap is saved rather than cut.
       const transcript = jobRegistry.takeTranscript?.(taskId);
       if (transcript !== undefined) {
-        return transcriptResult(transcript, info.status !== "completed", idleNotice, `(no output; exit ${exitCode})`);
+        return transcriptResult(transcript, info.status !== "completed", resultNotice, `(no output; exit ${exitCode})`);
       }
       const bounded = boundOutput((info.outputHead ?? collected).trim());
       const body = bounded.length > 0 ? bounded : `(no output; exit ${exitCode})`;
-      const output = idleNotice !== undefined ? `${body}\n${idleNotice}` : body;
+      const output = resultNotice !== undefined ? `${body}\n${resultNotice}` : body;
       return { output, isError: info.status !== "completed" };
     },
   };

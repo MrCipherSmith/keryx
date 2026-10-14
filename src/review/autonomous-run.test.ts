@@ -492,3 +492,19 @@ describe("progress file", () => {
     expect(JSON.parse(readFileSync(path.join(run.runDir, "progress.json"), "utf8"))).toMatchObject({ state: "complete", exitCode: 0 });
   });
 });
+
+describe("the pull request head reaches the child", () => {
+  test("the prompt carries the resolved head and the --head instruction", async () => {
+    const seen: ChildSpec[] = [];
+    await runAutonomousReview(options(scripted(() => 1, seen)));
+    const prompt = seen[0]!.argv[seen[0]!.argv.length - 1]!;
+    expect(prompt).toContain("The pull request head is abc123");
+    expect(prompt).toContain("--head abc123");
+  });
+
+  test("a head that could not be read leaves --head out of the prompt", async () => {
+    const seen: ChildSpec[] = [];
+    await runAutonomousReview(options(scripted(() => 1, seen), { resolveHead: async () => null }));
+    expect(seen[0]!.argv[seen[0]!.argv.length - 1]!).not.toContain("--head");
+  });
+});

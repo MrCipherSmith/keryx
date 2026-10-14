@@ -49,6 +49,17 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
   and the exit code is 4.
 - **A hang.** The child process is watched through its events file. If nothing new appears for
   `--stall-minutes`, the run is stopped and the exit code is 5.
+- **Silence on the terminal.** While the run goes, stderr gets one line
+  `heartbeat: phase <phase>, <n> round(s), <n> tokens` whenever the phase, the rounds or the
+  tokens change, at most once a minute. It is printed with `--json` too, and stdout stays pure
+  JSON. The line follows the run's progress, so it is not a timer: a stretch with no change in
+  phase, rounds or tokens prints nothing, and a wrapper with a short idle timeout still needs the
+  run started detached.
+- **The commit under review.** The pull request head is resolved once at the start (through
+  `gh`) and given to the child, which passes it as `--head <sha>` to `keryx review start`,
+  `attach` and `ingest`. Without it keryx would record the commit checked out in the directory,
+  and the completion gate would compare the wrong one. When `gh` cannot resolve the head the
+  prompt is unchanged and that risk remains.
 - **A browser.** A check that needs one is skipped and the report says it was skipped.
 - **Rounds.** At most five review rounds, and six reviewers per wave, and no new round when the
   last one found no new blocker or major finding.
