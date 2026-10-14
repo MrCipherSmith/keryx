@@ -73,6 +73,16 @@ describe("foldEvent", () => {
     expect(state.floorRefusals).toEqual([{ phase: "bash", output: "command not approved by the user; not executed" }]);
   });
 
+  test("notes when the latest result is the loop guard refusing a repeated call", () => {
+    const refusal = "same tool call already tried 3× (hash budget); change the arguments or a different tool";
+    let state = foldEvent(emptyProgress(), call("read_file", { path: "a" }));
+    state = foldEvent(state, result("read_file", refusal, true));
+    expect(state.endedOnLoopGuard).toBe(true);
+    state = foldEvent(state, call("read_file", { path: "b" }));
+    state = foldEvent(state, result("read_file", "contents"));
+    expect(state.endedOnLoopGuard).toBe(false);
+  });
+
   test("keeps an error message of the turn", () => {
     const state = foldEvent(emptyProgress(), { type: "turn_end", errorMessage: "boom" });
     expect(state.errorMessage).toBe("boom");

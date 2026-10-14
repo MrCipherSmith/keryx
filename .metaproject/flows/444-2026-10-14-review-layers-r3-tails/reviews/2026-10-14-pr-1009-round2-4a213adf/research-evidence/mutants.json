@@ -1,0 +1,70 @@
+{
+ "mutants": [
+  {
+   "id": "r2-block-force-not-passed",
+   "file": "src/commands/review-layers.ts",
+   "anchor": "{ projectRoot, force: rest.includes(\"--force\") }",
+   "replacement": "{ projectRoot }"
+  },
+  {
+   "id": "r2-ensure-force-dropped",
+   "file": "src/commands/review-layers.ts",
+   "anchor": "...(options.force === true ? { force: true } : {}),",
+   "replacement": ""
+  },
+  {
+   "id": "r2-tui-force-dropped",
+   "file": "src/tui/review-layers-actions.ts",
+   "anchor": "\"--package\", packageDir, \"--force\", \"--json\"]",
+   "replacement": "\"--package\", packageDir, \"--json\"]"
+  },
+  {
+   "id": "r2-maxbuffer-misreported-as-timeout",
+   "file": "src/tui/review-layers-actions.ts",
+   "anchor": "const timedOut = Date.now() - startedAt >= timeoutMs - 100;",
+   "replacement": "const timedOut = true;"
+  },
+  {
+   "id": "r2-signal-bound-removed",
+   "file": "src/review/layers.ts",
+   "anchor": "Promise.race([settled, bound])",
+   "replacement": "settled"
+  },
+  {
+   "id": "r2-unregister-before-cleanup",
+   "file": "src/review/layers.ts",
+   "anchor": "try {\n      await cleanup();\n    } finally {\n      unregister();\n    }",
+   "replacement": "unregister();\n    await cleanup();"
+  },
+  {
+   "id": "r2-layers-write-seam-bypassed",
+   "file": "src/review/layers.ts",
+   "anchor": "await deps.writeLayers(layersFilePath",
+   "replacement": "await writeFileAtomic(layersFilePath"
+  },
+  {
+   "id": "r2-failed-retry-hint-dropped-from-error",
+   "file": "src/review/layers.ts",
+   "anchor": "${layers.graph.error ? `: ${layers.graph.error}` : \"\"}${retry}`",
+   "replacement": "${layers.graph.error ? `: ${layers.graph.error}` : \"\"}`"
+  },
+  {
+   "id": "r2-view-failed-hint-dropped",
+   "file": "src/review/layers-view.ts",
+   "anchor": "${graph.status === \"failed\" ? \" (not retried automatically for a few minutes at the same head; refresh --force retries now)\" : \"\"}",
+   "replacement": ""
+  },
+  {
+   "id": "r2-unavailable-text-format-reverted",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "lines.push(`  ${gap.section}: unavailable (${gap.reason})`)",
+   "replacement": "lines.push(`  unavailable ${gap.section}: ${gap.reason}`)"
+  },
+  {
+   "id": "r2-readpage-seam-ignored",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "content = await readPage(page.absolutePath);",
+   "replacement": "content = await readFile(page.absolutePath, \"utf8\");"
+  }
+ ]
+}

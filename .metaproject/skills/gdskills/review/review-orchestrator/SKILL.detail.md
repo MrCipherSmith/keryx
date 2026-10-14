@@ -697,6 +697,11 @@ each proposed mutant to `<review-dir>/research-evidence/mutants.json`:
 `{ "mutants": [{ "id", "file", "anchor", "replacement" }] }`. `anchor` is exact text that
 occurs once in `file`; `"runnable": false` at the top level says the suite cannot run here.
 
+The testing reviewer's contract is `mutant_candidates` for **every changed branch**, including
+code downstream of the diff that the diff makes reachable differently. The main session writes
+that list to `mutants.json` unchanged. It may not narrow, drop or merge candidates to fit a
+budget: a smaller pass is a cap (below), stated, never a smaller list.
+
 Run `keryx review mutate --test "<the nearest suite command>" --package <review-dir>`. It
 applies each mutant in a scratch copy of the worktree (never in the worktree), refuses to
 start when the baseline is red, and writes the table to `research-evidence/mutation-<n>.md`
@@ -708,6 +713,12 @@ A survivor is evidence for the finding that names it.
 `dispatch.mutationWaiver = { operatorQuote, reason }` carries the operator's own words.
 `keryx review run --autonomous` is unchanged: it records `Not run: mutation pass` as before.
 
+`keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`
+in `mutation-<n>.json`. The table then prints `Not run: N candidates` (and the report must carry
+that line, see `keryx review report-parity`). A candidate the cap left out is still pending, so it
+keeps blocking the coverage gate until a later pass runs it; a cap moves work to the next pass, it
+never closes it.
+
 ### Severity audit — `keryx review severity-audit`
 
 A reviewer that argues a finding from a mutant writes `mutant:<id>` in the finding's `evidence`.
@@ -717,6 +728,34 @@ that survived on a file the review changed raises a minor finding to major and r
 run executed stays minor (a major is capped at minor) and gets the label `unproven`. The audit
 never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
 which can only delete. `--dry-run` prints the changes without writing `findings.json`.
+
+Each mutant in `mutants.json` carries a `kind`: `behavior` (the default, and what a record written
+before the field reads as) or `presentation` (it changes only what a reader sees: a label, a
+column, copy, spacing). A behavior survivor raises as above. When the only survivors a finding
+cites are `presentation`, the severity stays, and the finding gets
+`severity_audit {held: {severity, mutant, kind: "presentation", evidence, reason}}` instead of
+`{from, to}`. A held note is not a raise and not a deletion; it is the record that a survivor was
+seen and did not move the severity, so the report must say so.
+
+`keryx review report-parity <review-dir>` prints what the round left behind as Markdown to paste
+into `report.md`: the `Not run: N candidates` line, each held note, and each follow-up still open
+as `Not verified: <text>`. The same lines show in `keryx review status`, in the shell
+`/review parity` view and in the sidebar. `keryx review complete` warns, and does not refuse, when
+any of them exists and the report names none.
+
+### Layout measurements on a shell host
+
+A shell reviewer cannot start a browser. Before dispatching `review-layout` the main session runs
+the browser measurements itself (Playwright, or Storybook with its test runner) for the changed
+components and passes the output files as `context_files` in the **first** dispatch. A measurement
+counts as evidence for `review-layout` when it names the command and the viewport it ran at; one
+without them is context, not evidence.
+
+`src/review/retry-plan.ts` treats `NEEDS_CONTEXT` as one refill: the first one re-dispatches the
+role with what it asked for. A second `NEEDS_CONTEXT` from the same role that covered no new slice and
+asks nothing new is `notRun`; the reason is `layout: no engine` for `review-layout` and `no engine` for any other
+role when its questions ask for a browser or engine and name no route without one, else `no progress after one
+context refill`, and the round goes on. A second one that covered a new slice or asked a new question still gets its refill.
 
 ### Pull request context — `keryx review context-collect`
 

@@ -1,0 +1,52 @@
+{
+ "mutants": [
+  {
+   "id": "r3-03-args-text",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "layersOfCommand(call, found);\n  return LAYER_NAMES",
+   "replacement": "layersOfCommand(call, found);\n  if (/keryx\\s+wiki/.test(call)) found.add(\"wiki\");\n  return LAYER_NAMES"
+  },
+  {
+   "id": "r3-03-first-segment",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "for (const segment of splitSegments(command)) {",
+   "replacement": "for (const segment of splitSegments(command).slice(0, 1)) {"
+  },
+  {
+   "id": "r3-03-mcp-args",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "for (const key of [\"name\", \"tool\"])",
+   "replacement": "for (const key of [\"name\", \"tool\", \"arguments\"])"
+  },
+  {
+   "id": "r3-05-completeness",
+   "file": "src/flow/review-gate.ts",
+   "anchor": " && (await packageRecordsCoverage(packageDir));",
+   "replacement": ";"
+  },
+  {
+   "id": "r3-ly-fsmonitor",
+   "file": "src/review/layers.ts",
+   "anchor": "\"-c\", \"core.fsmonitor=false\", ",
+   "replacement": ""
+  },
+  {
+   "id": "r3-ly-peel",
+   "file": "src/review/layers.ts",
+   "anchor": "`${rev}^{commit}`",
+   "replacement": "rev"
+  },
+  {
+   "id": "r3-ly-lock-stale-opt-off",
+   "file": "src/review/layers.ts",
+   "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS }",
+   "replacement": "{ timeoutMs: LOCK_WAIT_MS }"
+  },
+  {
+   "id": "r3-rl-maxbytes-floor",
+   "file": "src/commands/review-layers.ts",
+   "anchor": "maxBytes < 256",
+   "replacement": "maxBytes < 255"
+  }
+ ]
+}

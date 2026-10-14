@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
+import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
@@ -8,7 +9,7 @@ import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
-const CLOSED = new Set(["finding", "refuted", "out-of-scope"]);
+const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
 
 export type ParsedResult = {
   reviewer?: string;
@@ -17,6 +18,8 @@ export type ParsedResult = {
   findings?: Array<Record<string, unknown>>;
   needs_context?: unknown;
   slices?: unknown;
+  /** Work the reviewer hands back to the parent. Each entry becomes an obligation that only a disposition closes. */
+  follow_ups?: unknown;
 };
 
 export type RawFile = {
@@ -39,6 +42,8 @@ export type Disposition = {
   finding?: string;
   evidence?: string;
   reason?: string;
+  /** For `narrowed`: what of the finding still stands. Without it the obligation is not closed. */
+  remains?: string;
 };
 
 /** `waves` is how many dispatches of the reviewer's uncovered slices remain, when the gap is about uncovered slices. */
@@ -56,10 +61,17 @@ export type LedgerInputs = {
   /** Reviewer → resolved rule file, only when it exists. */
   ruleFiles: Record<string, string>;
   raws: RawFile[];
+  /** Reviewer → the text of its tool-call log; a reviewer with no entry has `layersUsed` unknown. */
+  toolLogs?: Record<string, string | undefined>;
   retry: RetryState;
   canonical: Array<Record<string, unknown>>;
   dispositions: Disposition[];
   manifestPath?: string;
+  /**
+   * Written to `dispatch.roles`: the roles the code that dispatched this package knew about. Absent for a package nothing
+   * says that of, so a rebuild never turns an in-flight package into one that must have run a role it predates.
+   */
+  dispatchRoles?: readonly string[] | undefined;
 };
 
 export type LedgerResult = {
@@ -198,7 +210,8 @@ export function isReviewerResult(value: unknown): value is ParsedResult {
   return typeof object.reviewer === "string" || Array.isArray(object.findings);
 }
 
-type Decision = { result: ParsedResult | undefined };
+/** `at` is where the label that starts the result begins in the reply. */
+type Decision = { result: ParsedResult | undefined; at: number };
 
 /** A line that only closes a fence. A JSON string cannot hold a raw newline, so such a line is never inside the object. */
 const LINE_CLOSE = /^ {0,3}```[ \t]*\r?$/gm;
@@ -219,7 +232,7 @@ function labelledFence(raw: string): Decision | undefined {
     const close = LINE_CLOSE.exec(raw);
     if (close !== null) parsed = tryParse(raw.slice(bodyStart, close.index));
   }
-  return { result: hasStatus(parsed) ? parsed : undefined };
+  return { result: hasStatus(parsed) ? parsed : undefined, at: last.index! };
 }
 
 function tryParse(source: string): unknown {
@@ -237,7 +250,7 @@ const MARKER = /(?<![^\n])[ \t>*#-]*REVIEW_RESULT(?:[ \t]*[:=])?\s*(?=\{)/g;
  * A marker followed by something that is not a reviewer result (prose such as `REVIEW_RESULT {contract}`, a cut-off
  * object) is passed over for the one before it.
  */
-function afterMarker(raw: string): ParsedResult | undefined {
+function afterMarker(raw: string): { result: ParsedResult; at: number } | undefined {
   const inFence = fenceTester(raw);
   const markers = [...raw.matchAll(MARKER)].filter((marker) => !inFence(marker.index!)).slice(-MAX_MARKERS);
   for (let at = markers.length - 1; at >= 0; at -= 1) {
@@ -246,7 +259,7 @@ function afterMarker(raw: string): ParsedResult | undefined {
     const { end } = objectEnd(raw, start);
     if (end === undefined) continue;
     const parsed = tryParse(raw.slice(start, end + 1));
-    if (isReviewerResult(parsed)) return parsed;
+    if (isReviewerResult(parsed)) return { result: parsed, at: marker.index! };
   }
   return undefined;
 }
@@ -287,7 +300,33 @@ function scannedResult(raw: string): ParsedResult | undefined {
 export function parseReviewResult(raw: string): ParsedResult | undefined {
   const labelled = labelledFence(raw);
   if (labelled !== undefined) return labelled.result;
-  return afterMarker(raw) ?? scannedResult(raw);
+  return afterMarker(raw)?.result ?? scannedResult(raw);
+}
+
+/** A line that starts with `Parent follow-up:` (after at most a quote, list or emphasis prefix); the rest of the line is the follow-up. */
+const PARENT_FOLLOW_UP = /^[ \t>*_-]*Parent follow-up[ \t]*\**:\**[ \t]*(.*\S)[ \t]*$/i;
+
+/**
+ * The `Parent follow-up:` lines a reviewer wrote after its REVIEW_RESULT block. Only lines below the label that starts
+ * the parsed result count (the last ```REVIEW_RESULT fence, else the marker the result was read after), so a line quoted
+ * in the reviewer's own prose before the block is not read as an obligation, and a later mention of the word does not
+ * move the start. A reply with no such label (a bare result object) is read whole.
+ */
+export function parentFollowUps(raw: string): string[] {
+  const label = labelledFence(raw) ?? afterMarker(raw);
+  const lines = (label === undefined ? raw : raw.slice(label.at)).split(/\r?\n/);
+  const found: string[] = [];
+  for (const line of label === undefined ? lines : lines.slice(1)) {
+    const hit = PARENT_FOLLOW_UP.exec(line);
+    if (hit !== null) found.push(hit[1]!);
+  }
+  return found;
+}
+
+/** The follow-ups of a result: its `follow_ups` strings, then the `Parent follow-up:` lines after the block, each distinct text once. */
+export function followUpsOf(result: ParsedResult, raw?: string): string[] {
+  const own = Array.isArray(result.follow_ups) ? result.follow_ups.filter(text).map((s) => s.trim()) : [];
+  return [...new Set([...own, ...(raw === undefined ? [] : parentFollowUps(raw))])];
 }
 
 export function isEmptyOutput(raw: string): boolean {
@@ -359,7 +398,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const status = String(result.status ?? "").toUpperCase();
     const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
     const finished = FINISHED.has(status) && asked.length === 0;
-    const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false };
+    const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
@@ -377,6 +416,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       for (const id of known?.covered ?? []) claimed.add(id);
     }
     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+    if (manifest !== undefined) run.coveredSlices = [...seen].sort();
     const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
     const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
     if (!finished) {
@@ -408,7 +448,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, selected: input.selected, unresolvedRules, runs };
+  const dispatch = { version: 1, mode: input.mode, selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();
@@ -432,8 +472,17 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
         continue;
       }
       obligations.push({ ...base, status: "unresolved" });
-      gaps.push({ detail: `${id}: raw finding is not in the canonical findings and has no closure`, next: `add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope","evidence":…,"reason":…} to --dispositions` });
+      gaps.push({ detail: `${id}: raw finding is not in the canonical findings and has no closure`, next: `add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
     }
+    followUpsOf(raw.result!).forEach((followUp, at) => {
+      const id = `${raw.name.replace(/^raw\//, "").replace(/\.txt$/, "")}:fu${at + 1}`;
+      derived.add(id);
+      const base = { id, source: raw.name, question: `Is the parent follow-up from ${reviewer} done or ruled out, and where is that recorded? ${followUp.slice(0, 200)}` };
+      const closure = closeWith(input.dispositions.find((d) => d.id === id), input.canonical);
+      if (closure !== undefined) { obligations.push({ ...base, ...closure }); return; }
+      obligations.push({ ...base, status: "unresolved" });
+      gaps.push({ detail: `${id}: parent follow-up is open (${followUp.slice(0, 100)})`, next: `do it or rule it out, then add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
+    });
   }
   for (const given of input.dispositions) {
     if (text(given.id) && !derived.has(given.id) && text(given.source) && text(given.question)) {
@@ -459,7 +508,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>): Record<string, unknown> | undefined {
   if (given === undefined || !CLOSED.has(String(given.status)) || !text(given.evidence) || !text(given.reason)) return undefined;
   if (given.status === "finding" && !(text(given.finding) && canonical.filter((f) => f.id === given.finding || f.global_id === given.finding).length === 1)) return undefined;
-  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}) };
+  if (given.status === "narrowed" && !text(given.remains)) return undefined;
+  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
 }
 
 /** The gate's own validators over the built ledger, so "ready" cannot disagree with `keryx review complete`. */

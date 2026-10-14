@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "449",
+  "slug": "review-gate-and-autonomous-floor",
+  "title": "Close the review gate hole for PR URLs under any target; autonomous prompt: skill path and shell guard",
+  "status": "initializing",
+  "createdAt": "2026-10-14T19:32:39.775Z",
+  "updatedAt": "2026-10-14T19:32:51.782Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-14T19:32:39.775Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-14T19:32:51.782Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"Исправляй к 1014 и 1015 сливай и выпускай релиз\"; source: helyx 205583 (The operator asked to fix the defects found in the 7643 clean autonomous run)"
+    }
+  ],
+  "origin": {
+    "kind": "human-request",
+    "quote": "Исправляй к 1014 и 1015 сливай и выпускай релиз",
+    "source": "helyx 205583"
+  }
+}

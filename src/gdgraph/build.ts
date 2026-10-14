@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { gdgraphArtifactsDir, gdgraphStorageDir } from "./data-dir";
 import type { GraphData, GraphEdge, GraphNode, ImportKind, TranspilerImportKind } from "./types";
 import { TYPE_ONLY_IMPORT_KIND, UNKNOWN_IMPORT_KIND } from "./types";
 
@@ -100,7 +101,8 @@ type ResolverSet = {
   python: ImportResolver;
 };
 
-export async function buildGraph(projectRoot: string): Promise<BuildResult> {
+export async function buildGraph(projectRoot: string, options: { dataDir?: string } = {}): Promise<BuildResult> {
+  const { dataDir } = options;
   const collection = await collectSourceFiles(projectRoot);
   const files = collection.files;
   const fileSet = new Set(files);
@@ -157,8 +159,8 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
   }
 
   const graph = { nodes: [...nodes, ...assetNodes.values()].sort((a, b) => a.path.localeCompare(b.path)), edges };
-  await writeGraph(projectRoot, graph);
-  const summaryPath = await writeSummary(projectRoot, graph, collection);
+  await writeGraph(projectRoot, graph, dataDir);
+  const summaryPath = await writeSummary(projectRoot, graph, collection, dataDir);
 
   // B1: after the UNCHANGED file-level build, optionally enrich with the
   // tree-sitter symbol layer behind the Block 0 capability seam. Loaded
@@ -168,7 +170,7 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
   // artifacts stay byte-identical (the golden rule, B-1/C0-7/F-3).
   try {
     const { enrichBuildWithSymbols } = await import("./enrich");
-    await enrichBuildWithSymbols(projectRoot, fileRecords);
+    await enrichBuildWithSymbols(projectRoot, fileRecords, undefined, dataDir);
   } catch {
     // Enrichment module or seam unavailable ⇒ file-level graph only.
   }
@@ -180,7 +182,7 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
   // `edges.jsonl` written above are never revisited (AC13).
   try {
     const { enrichBuildWithWikiLayer } = await import("./wiki-layer");
-    await enrichBuildWithWikiLayer({ projectRoot, graph, fileRecords });
+    await enrichBuildWithWikiLayer({ projectRoot, graph, fileRecords, ...(dataDir === undefined ? {} : { dataDir }) });
   } catch {
     // Wiki absent, unreadable, or the layer module unavailable ⇒ no layer.
   }
@@ -887,9 +889,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function writeGraph(projectRoot: string, graph: GraphData): Promise<void> {
-  const storageDir = path.join(projectRoot, ".metaproject", "data", "gdgraph", "storage");
-  const artifactsDir = path.join(projectRoot, ".metaproject", "data", "gdgraph", "artifacts");
+async function writeGraph(projectRoot: string, graph: GraphData, dataDir?: string): Promise<void> {
+  const storageDir = gdgraphStorageDir(projectRoot, dataDir);
+  const artifactsDir = gdgraphArtifactsDir(projectRoot, dataDir);
   await mkdir(storageDir, { recursive: true });
   await mkdir(artifactsDir, { recursive: true });
 
@@ -914,8 +916,9 @@ async function writeSummary(
   projectRoot: string,
   graph: GraphData,
   collection: SourceCollection,
+  dataDir?: string,
 ): Promise<string> {
-  const artifactsDir = path.join(projectRoot, ".metaproject", "data", "gdgraph", "artifacts");
+  const artifactsDir = gdgraphArtifactsDir(projectRoot, dataDir);
   await mkdir(artifactsDir, { recursive: true });
 
   const unresolved = graph.edges.filter((edge) => edge.kind === "unresolved");

@@ -40,7 +40,7 @@ test("unreadable and escaping artifacts fail closed; legacy is explicit", async 
 test("real new package cannot close until research is resolved", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "keryx-research-managed-"));
   try {
-    const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: "# Review\nNo findings.\n", reviewId: "research-regression", target: { kind: "report", ref: "review.md" } });
+    const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: "# Review\nNo findings.\nEvidence level: static only — did not run: tests\n", reviewId: "research-regression", target: { kind: "report", ref: "review.md" } });
     const pkg = path.resolve(dir, result.path);
     const schema = JSON.parse(await readFile(new URL("../../docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json", import.meta.url), "utf8"));
     const manifest = JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8"));

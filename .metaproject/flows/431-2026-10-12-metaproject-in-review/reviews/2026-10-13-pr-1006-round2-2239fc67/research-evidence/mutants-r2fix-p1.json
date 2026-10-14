@@ -1,0 +1,136 @@
+{
+ "mutants": [
+  {
+   "id": "cr2-parsed-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "  return parsedCoverageWaiver(command);\n}",
+   "replacement": "  return false;\n}"
+  },
+  {
+   "id": "cr5-opaque-dollar-only",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return /[$`]/.test(word);",
+   "replacement": "return /[$]/.test(word);"
+  },
+  {
+   "id": "cr8-ansi-off-parsed",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "for (const seg of splitSegments(expandAnsiCQuotes(command))) {\n    const words = seg.words.map(unescapeWord);",
+   "replacement": "for (const seg of splitSegments(command)) {\n    const words = seg.words.map(unescapeWord);"
+  },
+  {
+   "id": "cr11-confirm-chunk-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": " || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command);",
+   "replacement": " || touchesCoverageWaiver(command);"
+  },
+  {
+   "id": "cr14-answer-eq-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "|| w.startsWith(\"--answer=\"))) return true;",
+   "replacement": "))) return true;"
+  },
+  {
+   "id": "cr17-chunk-ansi-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "for (const seg of splitSegments(expandAnsiCQuotes(text))) {\n      const words = seg.words.map(unescapeWord).map",
+   "replacement": "for (const seg of splitSegments(text)) {\n      const words = seg.words.map(unescapeWord).map"
+  },
+  {
+   "id": "cr20-ansi-quote-escape",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "decodeAnsiC(body).replace(/'/g, \"'\\\\''\")",
+   "replacement": "decodeAnsiC(body)"
+  },
+  {
+   "id": "rv1-terminal-off",
+   "file": "src/commands/review.ts",
+   "anchor": "if (waiver !== undefined && !isTerminal()) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "rs1-completeness-off",
+   "file": "src/review/research.ts",
+   "anchor": "options.completeness === false || ",
+   "replacement": ""
+  },
+  {
+   "id": "un2-answer-off",
+   "file": "src/trigger/unattended.ts",
+   "anchor": "if (touchesCoverageWaiver(text) || touchesChunkEstimateAnswer(text)) {",
+   "replacement": "if (touchesCoverageWaiver(text)) {"
+  },
+  {
+   "id": "tr3-layers",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "    \"layers\",\n",
+   "replacement": ""
+  },
+  {
+   "id": "ar3-quote",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+   "replacement": " && !flags.has(\"--answer\")"
+  },
+  {
+   "id": "ar6-coverage-pkg",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": "case \"coverage\":\n        return inPackage(one(\"--package\"));",
+   "replacement": "case \"coverage\":\n        return true;"
+  },
+  {
+   "id": "ly3-current-intact",
+   "file": "src/review/layers.ts",
+   "anchor": "return existing.graphCommit === existing.prHead && (await graphIntact(packageDir, existing));",
+   "replacement": "return existing.graphCommit === existing.prHead;"
+  },
+  {
+   "id": "ly6-resolve-verify",
+   "file": "src/review/layers.ts",
+   "anchor": "[\"rev-parse\", \"--verify\", \"--quiet\", \"--end-of-options\", `${rev}^{commit}`]",
+   "replacement": "[\"rev-parse\", \"--quiet\", \"--end-of-options\", `${rev}^{commit}`]"
+  },
+  {
+   "id": "ly9-samehead",
+   "file": "src/review/layers.ts",
+   "anchor": "if (input.force !== true && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {",
+   "replacement": "if (input.force !== true && (await layersCurrent(input.packageDir, existing, prHead))) {"
+  },
+  {
+   "id": "ly12-sweep-prefix",
+   "file": "src/review/layers.ts",
+   "anchor": " || !path.basename(worktree).startsWith(WORKTREE_PREFIX)) continue;",
+   "replacement": ") continue;"
+  },
+  {
+   "id": "ly15-builtfrom",
+   "file": "src/review/layers.ts",
+   "anchor": "if (builtFrom !== prHead) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "pl1-pop-files",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "      files.pop();\n      continue;",
+   "replacement": "      throw new Error(\"stuck\");"
+  },
+  {
+   "id": "pl4-empty-throw",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "if (files.length === 0) throw new Error(",
+   "replacement": "if (false) throw new Error("
+  },
+  {
+   "id": "cc1-len",
+   "file": "src/review/coverage-complete.ts",
+   "anchor": "quote.length < MIN_WAIVER_QUOTE_CHARS || ",
+   "replacement": ""
+  },
+  {
+   "id": "ch2-plan-lock",
+   "file": "src/review/chunks.ts",
+   "anchor": "return withChunkStateLock(packageDir, () => cutChunkPlan(packageDir, projectRoot, radius, options));",
+   "replacement": "return cutChunkPlan(packageDir, projectRoot, radius, options);"
+  }
+ ]
+}

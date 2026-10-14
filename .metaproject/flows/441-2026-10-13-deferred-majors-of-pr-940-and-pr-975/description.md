@@ -29,7 +29,7 @@ Each defect is closed by a test that is red before and green after the change, a
 
 - The minor and info findings of the two rounds (F-002 to F-006, F-009 to F-015 of PR 940; the rest of the 975 list). Only the five majors and the three findings that share D-01's function.
 - Redesign of the trust routine table, or of the queue. Each fix is local.
-- Any change to the review depth or metaproject-in-review work (`docs/requirements/keryx-review-depth-parity/`, `docs/requirements/keryx-review-metaproject/`).
+- Any change to the review depth or metaproject-in-review work (`docs/requirements/keryx-review-depth-parity/`, `docs/requirements/keryx-review-context-pack/`).
 
 ## Users
 

@@ -13,8 +13,10 @@ import { findById, loadOpenTui, mountChrome, settle, textOf } from "./ops-sideba
 import {
   formatReviewRowLines,
   formatReviewsHeaderLines,
+  isReviewLayersCommand,
   isReviewsCommand,
   mountReviewsPanel,
+  projectReviewsLayerLines,
   presentReviews,
   projectReviewsRow,
   renderReviewsText,
@@ -252,6 +254,48 @@ describe("sidebar row", () => {
     }
   });
 
+  otuiTest("the mounted section paints the Not run, held and follow-up counts of a review under the layer lines", async () => {
+    const otui = OTUI!;
+    const h = await mountChrome(otui);
+    try {
+      const parent = new otui.core.BoxRenderable(h.renderer, { id: "host-parity", flexDirection: "column" });
+      h.chrome.sidebarTop.add(parent);
+      const row = {
+        reviewId: "r1",
+        pull: "acme/app#7",
+        mode: "all",
+        selected: [],
+        required: [],
+        excluded: [],
+        missing: [],
+        filesKnown: true,
+        mutation: { passes: 1, totals: { killed: 0, survived: 1, invalid: 0, timeout: 0 }, pending: 2 },
+        mutationWaived: false,
+        parity: {
+          notRun: 2,
+          cap: 1,
+          notRunIds: ["m2", "m3"],
+          held: [{ finding: "F-010", severity: "minor", mutant: "m1", reason: "held" }],
+          followUps: [{ id: "review-testing-practices:fu1", text: "not read", state: "open" }],
+        },
+      } as never;
+      const panel = mountReviewsPanel(otui.core, h.renderer, parent, {
+        cwd: "/nonexistent",
+        width: SIDEBAR_TEXT_WIDTH,
+        onOpen: () => {},
+        read: async () => metrics(),
+        readDepth: async () => [row],
+      });
+      await panel.refresh();
+      await settle(h);
+      expect(panel.parityLines()).toEqual(["Not run 2\nheld 1\nfollow-ups 1"]);
+      expect(textOf(findById(parent, "sb-reviews-parity"))).toBe("Not run 2\nheld 1\nfollow-ups 1");
+      panel.dispose();
+    } finally {
+      h.destroy();
+    }
+  });
+
   otuiTest("a read that fails paints an unreadable state rather than a count", async () => {
     const otui = OTUI!;
     const h = await mountChrome(otui);
@@ -273,5 +317,170 @@ describe("sidebar row", () => {
     } finally {
       h.destroy();
     }
+  });
+});
+
+// Flow 431 AC12: the layers line per review in the sidebar, and the menu actions.
+describe("layers in /reviews", () => {
+  const depthRow = (over: object = {}) =>
+    ({
+      reviewId: "r1",
+      pull: "acme/app#7",
+      mode: "all",
+      selected: [],
+      required: [],
+      excluded: [],
+      missing: [],
+      filesKnown: true,
+      mutation: { passes: 0, totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 }, pending: 0 },
+      mutationWaived: false,
+      layersView: {
+        dir: "/p/r1",
+        layers: null,
+        usage: { withLog: 1, usedAny: 1, unknown: 1, total: 2, perLayer: { graph: 1, wiki: 0, memory: 0, ctx: 0 } },
+        chunks: { schemaVersion: 1, reviewer: "review-regression", tier: "middle", totals: { chunks: 4, files: 4, done: 2, failed: 0, pending: 2 }, chunks: [], uncoveredFiles: [], findings: [] },
+        coverageTracked: true,
+        uncovered: 3,
+        coverage: "coverage: in scope 5, covered 2, omitted 0, uncovered 3",
+        waiver: undefined,
+      },
+      ...over,
+    }) as never;
+
+  test("`/review layers` is its own command and the bare /review is not it", () => {
+    expect(isReviewLayersCommand("/review layers")).toBe(true);
+    expect(isReviewLayersCommand("  /review   layers  ")).toBe(true);
+    expect(isReviewLayersCommand("/review")).toBe(false);
+    expect(isReviewLayersCommand("/reviews layers")).toBe(false);
+  });
+
+  test("the sidebar carries one entry per review with the layers used, the unknown count and the chunk pass, within the width", () => {
+    const lines = projectReviewsLayerLines([depthRow(), depthRow({ reviewId: "r2" })], SIDEBAR_TEXT_WIDTH);
+    expect(lines).toHaveLength(2);
+    const joined = lines[0]!.replace(/\n/g, " ");
+    expect(joined).toContain("layers used 1/2");
+    expect(joined).toContain("unknown 1");
+    expect(joined).toContain("chunks 2/4, uncovered 3");
+    for (const line of lines[0]!.split("\n")) expect(line.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+    expect(projectReviewsLayerLines(undefined, SIDEBAR_TEXT_WIDTH)).toEqual([]);
+  });
+
+  test("`l` refreshes the newest review's layers and `c` prepares its missing chunks, through the menu actions", async () => {
+    const called: string[] = [];
+    const actions = {
+      refreshLayers: async (r: { reviewId: string }) => (called.push(`layers:${r.reviewId}`), "refreshed"),
+      runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+    };
+    const view = open(metrics(), { depth: [depthRow(), depthRow({ reviewId: "r2" })], actions });
+    view.press("l");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.press("c");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(called).toEqual(["layers:r1", "chunks:r1"]);
+  });
+
+  test("a key pressed while an action for the same review is still running is ignored, and works again once it ends", async () => {
+    const called: string[] = [];
+    let release: (message: string) => void = () => {};
+    const actions = {
+      refreshLayers: (r: { reviewId: string }) => {
+        called.push(`layers:${r.reviewId}`);
+        return new Promise<string>((resolve) => {
+          release = resolve;
+        });
+      },
+      runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+    };
+    const view = open(metrics(), { depth: [depthRow()], actions });
+    view.press("l");
+    view.press("l");
+    view.press("c");
+    expect(called).toEqual(["layers:r1"]);
+    release("refreshed");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.press("c");
+    expect(called).toEqual(["layers:r1", "chunks:r1"]);
+  });
+
+  describe("the guard is shared by every open view of the same package", () => {
+    const settleLater = () => {
+      const releases: Array<(message: string) => void> = [];
+      const called: string[] = [];
+      const actions = {
+        refreshLayers: (r: { reviewId: string }) => {
+          called.push(`layers:${r.reviewId}`);
+          return new Promise<string>((resolve) => {
+            releases.push(resolve);
+          });
+        },
+        runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+      };
+      return { actions, called, release: () => releases.splice(0).forEach((resolve) => resolve("refreshed")) };
+    };
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    test("a second view over the same package is refused while the first one's action is pending", async () => {
+      const first = settleLater();
+      const second = settleLater();
+      try {
+        const viewOne = open(metrics(), { depth: [depthRow()], actions: first.actions });
+        const viewTwo = open(metrics(), { depth: [depthRow()], actions: second.actions });
+        viewOne.press("l");
+        viewTwo.press("l");
+        viewTwo.press("c");
+        expect(first.called).toEqual(["layers:r1"]);
+        expect(second.called).toEqual([]);
+      } finally {
+        first.release();
+        second.release();
+        await tick();
+      }
+      const again = open(metrics(), { depth: [depthRow()], actions: second.actions });
+      again.press("l");
+      expect(second.called).toEqual(["layers:r1"]);
+      second.release();
+      await tick();
+    });
+
+    test("views over two different packages both start", async () => {
+      const first = settleLater();
+      const second = settleLater();
+      try {
+        const viewOne = open(metrics(), { depth: [depthRow()], actions: first.actions });
+        const viewTwo = open(metrics(), {
+          depth: [depthRow({ reviewId: "r2", layersView: { ...(depthRow() as unknown as { layersView: object }).layersView, dir: "/p/r2" } })],
+          actions: second.actions,
+        });
+        viewOne.press("l");
+        viewTwo.press("l");
+        expect(first.called).toEqual(["layers:r1"]);
+        expect(second.called).toEqual(["layers:r2"]);
+      } finally {
+        first.release();
+        second.release();
+        await tick();
+      }
+    });
+  });
+
+  test("an action that rejects frees the review instead of leaving it pending", async () => {
+    const called: string[] = [];
+    const actions = {
+      refreshLayers: async (r: { reviewId: string }) => {
+        called.push(`layers:${r.reviewId}`);
+        throw new Error("boom");
+      },
+      runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+    };
+    const view = open(metrics(), { depth: [depthRow()], actions });
+    view.press("l");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    view.press("c");
+    expect(called).toEqual(["layers:r1", "chunks:r1"]);
+  });
+
+  test("without actions the keys do nothing", async () => {
+    const view = open(metrics(), { depth: [depthRow()] });
+    expect(() => view.press("l")).not.toThrow();
   });
 });

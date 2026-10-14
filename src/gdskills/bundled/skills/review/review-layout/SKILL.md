@@ -234,5 +234,5 @@ Report done only once all of these hold:
 - No finding invents a severity: each lands under **Severity (canonical)** in
   `review-orchestrator/SKILL.md`.
 - The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, with
-  finding ids prefixed `LY-`, or `NEEDS_CONTEXT` naming the context that was
-  missing — never a guess in its place.
+  finding ids prefixed `LY-`, or `NEEDS_CONTEXT` naming the measurement that was missing.
+  Measurements supplied as `context_files` count as evidence when they name the command and the viewport.

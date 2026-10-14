@@ -271,7 +271,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage }),
+      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head }),
       eventsFile,
       provider: options.provider,
       model: options.model,
@@ -413,7 +413,10 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   } else if (progress.floorRefusals.length > 0) {
     status = "floor";
     const first = progress.floorRefusals[0]!;
-    reason = `a floor refused ${progress.floorRefusals.length} call(s) nobody could approve (first at ${first.phase}) and the package was not closed`;
+    const refused = `a floor refused ${progress.floorRefusals.length} call(s) nobody could approve (first at ${first.phase})`;
+    reason = progress.endedOnLoopGuard
+      ? `the loop guard stopped a repeated call at ${progress.phase} after ${refused} and the package was not closed`
+      : `${refused} and the package was not closed`;
   } else if (found === undefined) {
     status = "incomplete";
     reason = `the shell ended (exit ${exitCode ?? 1}) before a review package was opened`;

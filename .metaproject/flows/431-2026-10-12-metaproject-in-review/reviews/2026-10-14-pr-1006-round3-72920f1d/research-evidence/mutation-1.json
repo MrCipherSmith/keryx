@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 17214
+  },
+  "mutants": [
+    {
+      "id": "r3-ly-fsmonitor",
+      "file": "src/review/layers.ts",
+      "anchor": "\"-c\", \"core.fsmonitor=false\", ",
+      "replacement": "",
+      "line": 369,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 17198
+    },
+    {
+      "id": "r3-ly-prune-always",
+      "file": "src/review/layers.ts",
+      "anchor": "if (added === null) {\n      // Only a failed add prunes",
+      "replacement": "if (true) {\n      // Only a failed add prunes",
+      "line": 371,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20790
+    },
+    {
+      "id": "r3-ly-peel",
+      "file": "src/review/layers.ts",
+      "anchor": "`${rev}^{commit}`",
+      "replacement": "rev",
+      "line": 226,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 17080
+    },
+    {
+      "id": "r3-ly-lock-stale-opt-off",
+      "file": "src/review/layers.ts",
+      "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS }",
+      "replacement": "{ timeoutMs: LOCK_WAIT_MS }",
+      "line": 572,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 17138
+    },
+    {
+      "id": "r3-ly-lock-wait",
+      "file": "src/review/layers.ts",
+      "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS }",
+      "replacement": "{ timeoutMs: 0, staleMs: LOCK_STALE_MS }",
+      "line": 572,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17336
+    },
+    {
+      "id": "r3-ly-publish-no-restore",
+      "file": "src/review/layers.ts",
+      "anchor": "if (hadPrevious) await rename(previous, finalDir).catch(() => {});\n    throw error;",
+      "replacement": "throw error;",
+      "line": 300,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17236
+    },
+    {
+      "id": "r3-ly-signal-lock-keep",
+      "file": "src/review/layers.ts",
+      "anchor": ".then(() => rm(layersLockPath(input.packageDir), { recursive: true, force: true }))",
+      "replacement": ".then(() => {})",
+      "line": 363,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17233
+    },
+    {
+      "id": "r3-ly-wait-deadline",
+      "file": "src/review/layers.ts",
+      "anchor": "if (Date.now() >= deadline) return false;",
+      "replacement": "if (false) return false;",
+      "line": 196,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22062
+    },
+    {
+      "id": "r3-ck-files-cap-off",
+      "file": "src/review/chunks.ts",
+      "anchor": "current.files.length >= maxFiles ||",
+      "replacement": "false ||",
+      "line": 103,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17121
+    },
+    {
+      "id": "r3-ck-bytes-cap-off",
+      "file": "src/review/chunks.ts",
+      "anchor": "(current.files.length > 0 && current.bytes + size > maxBytes)",
+      "replacement": "false",
+      "line": 103,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17202
+    },
+    {
+      "id": "r3-rl-maxbytes-floor",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "maxBytes < 256",
+      "replacement": "maxBytes < 0",
+      "line": 133,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 17222
+    },
+    {
+      "id": "r3-rl-current-head-off",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "if (existing !== null && (await layersCurrent(packageDir, existing, head))) return existing;",
+      "replacement": "if (existing !== null) return existing;",
+      "line": 76,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17041
+    }
+  ],
+  "totals": {
+    "killed": 8,
+    "survived": 4,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

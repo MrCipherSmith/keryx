@@ -1,7 +1,7 @@
 // What the runner learns from the child shell's `--events-file` NDJSON.
 
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
-import { isFloorRefusal } from "./autonomous-profile";
+import { isFloorRefusal, isLoopGuardRefusal } from "./autonomous-profile";
 
 export interface FloorRefusal {
   readonly phase: string;
@@ -18,10 +18,12 @@ export interface Progress {
   readonly turnEnded: boolean;
   readonly errorMessage?: string;
   readonly floorRefusals: readonly FloorRefusal[];
+  /** Whether the latest tool result was the loop guard refusing a repeated call. */
+  readonly endedOnLoopGuard: boolean;
 }
 
 export function emptyProgress(): Progress {
-  return { toolCalls: 0, openCalls: 0, phase: "starting", tokens: 0, usageSum: 0, rounds: 0, turnEnded: false, floorRefusals: [] };
+  return { toolCalls: 0, openCalls: 0, phase: "starting", tokens: 0, usageSum: 0, rounds: 0, turnEnded: false, floorRefusals: [], endedOnLoopGuard: false };
 }
 
 const REVIEW_SUBCOMMAND = /\bkeryx\s+review\s+([a-z][a-z-]*)/;
@@ -66,6 +68,7 @@ export function foldEvent(state: Progress, event: RawEvent): Progress {
       return {
         ...state,
         openCalls: Math.max(0, state.openCalls - 1),
+        endedOnLoopGuard: event.isError === true && isLoopGuardRefusal(output),
         floorRefusals: refused ? [...state.floorRefusals, { phase: state.phase, output }] : state.floorRefusals,
       };
     }

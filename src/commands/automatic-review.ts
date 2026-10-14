@@ -9,6 +9,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ASK_USER_EMERGENCIES } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { AUTOMATIC_REVIEW_DISCLOSURE_FILE } from "../review/chunks-estimate";
 import { describeAutomaticReviewLimit } from "./round-limit";
 
 /** The flag that records the mode on a review package's manifest. */
@@ -20,14 +21,14 @@ export const AUTOMATIC_REVIEW_FLAG = "--automatic";
  * `review complete` itself: nothing here is a way around it.
  *
  * - create: `start`, `attach`, `ingest` (only with `--automatic`, once per run)
- * - positional package ref: `status`, `complete`
+ * - positional package ref: `status`, `report-parity`, `complete`
  * - `--package <dir>`: `ledger build`, `severity-audit`, `mutate`, `compare-reference`, `context-collect`
  * - files inside the package: `retry-plan --manifest`
  * - read-only analysis, output only inside the package: `scope`, `blast-radius`
  * Everything else under `review` (the other subcommands) keeps its normal approval.
  */
 export const AUTOMATIC_REVIEW_CREATE_SUBCOMMANDS = ["start", "attach", "ingest"] as const;
-export const AUTOMATIC_REVIEW_POSITIONAL_SUBCOMMANDS = ["status", "complete"] as const;
+export const AUTOMATIC_REVIEW_POSITIONAL_SUBCOMMANDS = ["status", "report-parity", "complete"] as const;
 export const AUTOMATIC_REVIEW_PACKAGE_FLAG_SUBCOMMANDS = [
   "ledger",
   "severity-audit",
@@ -44,7 +45,7 @@ export const AUTOMATIC_REVIEW_PACKAGE_SUBCOMMANDS = [
 ] as const;
 
 /** Where the run's manual-vs-automatic input counts and defaulted answers are written, inside the package. */
-export const AUTOMATIC_REVIEW_DISCLOSURE_FILE = "automatic-run-inputs.json";
+export { AUTOMATIC_REVIEW_DISCLOSURE_FILE };
 
 const PHRASES: readonly RegExp[] = [
   /\bautomatic(?:ally)?[\s-]+(?:code[\s-]+|pr[\s-]+)?review\b/i,
@@ -381,6 +382,7 @@ export class AutomaticReviewRun {
     const first = args[0];
     switch (sub) {
       case "status":
+      case "report-parity":
       case "complete":
         return first !== undefined && !first.startsWith("-") && this.isBoundRef(first);
       case "ledger":
@@ -401,6 +403,12 @@ export class AutomaticReviewRun {
         const test = one("--test");
         return inPackage(one("--package")) && absentOrUnderCwd("--worktree") && test !== undefined && isBunTest(test);
       }
+      case "layers":
+        return inPackage(one("--package")) && !flags.has("--write-wiki");
+      case "chunks":
+        return inPackage(one("--package")) && !flags.has("--answer") && !flags.has("--quote") && absentOrUnderCwd("--result");
+      case "coverage":
+        return inPackage(one("--package"));
       case "retry-plan":
         return inPackage(one("--manifest")) && absentOrInPackage("--state") && absentOrUnderCwd("--result");
       case "scope":

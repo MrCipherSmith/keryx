@@ -6,6 +6,7 @@ import path from "node:path";
 import { coverageErrors, isAttendedRun, requiredReviewers } from "../review/coverage";
 import type { RawFile } from "../review/ledger";
 import { pendingMutants } from "../review/mutate";
+import { runCoverage } from "./review-chunks";
 import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, readDrivers, runLedger } from "./review-ledger";
 
 describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
@@ -255,6 +256,32 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
     }
   });
 
+  test("a rebuild never invents dispatch.roles: an in-flight package with pr-context.md stays grandfathered, and research.json has no roles key", async () => {
+    const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt" } });
+    try {
+      await writeFile(path.join(pkg, "pr-context.md"), "# pr context\n");
+      const out = await build(pkg);
+      expect("roles" in (out.ledger.dispatch as object)).toBe(false);
+      expect("roles" in JSON.parse(await readFile(path.join(pkg, "research.json"), "utf8")).dispatch).toBe(false);
+      const again = await build(pkg);
+      expect("roles" in (again.ledger.dispatch as object)).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("dispatch.roles is stamped when a driver shows the role was dispatched, and a rebuild keeps an existing stamp", async () => {
+    const { pkg, cleanup } = await fixture({}, { "review-pr-contract.json": { reviewer: "review-pr-contract", slices: ["S1"], result: "raw/review-pr-contract.txt" } });
+    try {
+      await writeFile(path.join(pkg, "pr-context.md"), "# pr context\n");
+      expect((await build(pkg)).ledger.dispatch).toMatchObject({ roles: ["review-pr-contract"] });
+      await rm(path.join(pkg, "drivers"), { recursive: true, force: true });
+      expect((await build(pkg)).ledger.dispatch).toMatchObject({ roles: ["review-pr-contract"] });
+    } finally {
+      await cleanup();
+    }
+  });
+
   test("readDrivers reads an object entry's status as an assignment, not as coverage", async () => {
     const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: [{ id: "S1", status: "NOT_READ" }, "S2"], result: "raw/review-logic.txt" } });
     try {
@@ -263,6 +290,58 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
       expect(drivers.dropped).toEqual([]);
     } finally {
       await cleanup();
+    }
+  });
+});
+
+describe("coverage from the slice manifest of a separate input directory (flow 431 AC9, AC10)", () => {
+  test("ledger build leaves a copy of the manifest in the package, and `review coverage` counts from it", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f431-ledger-"));
+    const original = process.cwd();
+    const pkg = path.join(root, ".metaproject", "reviews", "pkg");
+    const input = path.join(root, ".metaproject", "reviews", "input");
+    try {
+      await mkdir(path.join(input, "raw"), { recursive: true });
+      await mkdir(path.join(input, "slices"), { recursive: true });
+      await mkdir(pkg, { recursive: true });
+      await mkdir(path.join(root, ".git"), { recursive: true });
+      await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts", "src/b.ts", "pnpm-lock.yaml"] }));
+      await writeFile(path.join(input, "slices", "s1.txt"), "src/a.ts\n");
+      await writeFile(
+        path.join(input, "slices", "manifest.json"),
+        JSON.stringify({
+          schemaVersion: 1,
+          maxBytes: 1000,
+          waveBytes: 1000,
+          source: "diff",
+          slices: [{ id: "s1", path: "s1.txt", bytes: 9, files: ["src/a.ts"], domain: "d", split: "file" }],
+          omissions: [{ path: "pnpm-lock.yaml", reason: "lockfile", detail: "generated", bytes: 5 }],
+          totals: { slices: 1, bytes: 9, files: 1, omittedFiles: 1, omittedBytes: 5, droppedBlocks: 0 },
+        }),
+      );
+      const log = console.log;
+      const exitCode = process.exitCode;
+      console.log = () => undefined;
+      try {
+        await runLedger(["build", input, "--package", pkg, "--mode", "all"], { rejectUnknownFlags: () => undefined });
+      } finally {
+        console.log = log;
+        process.exitCode = exitCode;
+      }
+      expect(existsSync(path.join(pkg, "slice-manifest.json"))).toBe(true);
+
+      process.chdir(root);
+      const lines: string[] = [];
+      console.log = (...args: unknown[]) => void lines.push(args.join(" "));
+      try {
+        await runCoverage(["--package", pkg], { rejectUnknownFlags: () => undefined });
+      } finally {
+        console.log = log;
+      }
+      expect(lines.join("\n")).toBe("coverage: in scope 3, covered 0, omitted 1 (lockfile 1), uncovered 2");
+    } finally {
+      process.chdir(original);
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

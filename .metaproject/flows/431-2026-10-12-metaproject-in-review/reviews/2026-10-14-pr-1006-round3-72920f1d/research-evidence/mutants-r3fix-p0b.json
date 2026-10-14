@@ -1,0 +1,10 @@
+{
+ "mutants": [
+  {
+   "id": "r3-01-chunk-answer-opaque",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (lowerArgs.some(isAnswer) && opaqueArgs(args)) return true;\n",
+   "replacement": ""
+  }
+ ]
+}

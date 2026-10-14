@@ -617,7 +617,11 @@ Grouped by what you are trying to do, not by internal module layout.
   taken on the reviewer's word, and a quote that cannot be found is marked
   unlocatable rather than carrying a number nobody checked. Each round also
   states its price — estimated before dispatch, recorded after, and divided by
-  the findings that survived it.
+  the findings that survived it. A round also says what it left undone: mutation
+  candidates that never ran (`review mutate --cap`), severities held because only
+  a presentation mutant survived, and follow-ups handed back to the parent, in
+  `review status` and `review report-parity`. A pull-request round adds
+  `review-pr-contract`, which reads the diff against the PR's own stated contract.
 
 **Operate agents**
 
@@ -1143,6 +1147,14 @@ fails on any detector breaching its committed false-negative threshold — from 
 repository checkout, since the evaluation corpus is not shipped in the npm
 package. See
 [run keryx in CI](docs/docs/guides/run-in-ci.md).
+
+### Layers and coverage in a review
+
+Every managed review start, attach or ingest (and any `dispatch-check` or `blast-radius` given `--package`) refreshes the graph, the wiki and the memory index for the PR head and writes `layers.json`, with **no model call**; `wiki enrich` is the only model step and is never automatic (`keryx review layers refresh --package <dir> [--write-wiki]`). Blast-radius files beyond the 40-file cap are reviewed in chunks (`keryx review chunks estimate|next|record|merge`; the ceiling is 25 passes of 40 files, `reviewChunks.maxPasses` in `routing.config.json`), `keryx review coverage` counts what is covered, omitted by name, and uncovered, and `keryx review complete` refuses while a file is uncovered unless you pass `--waive-coverage "<your words>"`. `/reviews` and `/review layers` in the shell show it.
+
+### Gates that keep a review report honest
+
+`keryx review complete` on a pull-request package (one that targets a PR, or whose `--ref` is a PR URL under any `--target`) refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
 
 ### Review bot on pull requests
 

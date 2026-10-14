@@ -1,0 +1,136 @@
+{
+ "mutants": [
+  {
+   "id": "cr3-words-includes-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (words.some((w) => w.toLowerCase().includes(COVERAGE_WAIVER_FLAG))) return true;",
+   "replacement": "if (false) return true;"
+  },
+  {
+   "id": "cr6-opaque-sub-only",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return /[$`]/.test(word);",
+   "replacement": "return /[`]/.test(word);"
+  },
+  {
+   "id": "cr9-hex-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "const code = x ?? u ?? big;",
+   "replacement": "const code = u ?? big;"
+  },
+  {
+   "id": "cr12-confirm-waiver-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": " || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command);",
+   "replacement": " || touchesChunkEstimateAnswer(command);"
+  },
+  {
+   "id": "cr15-answer-flag-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "after.some((w) => w === \"--answer\" ||",
+   "replacement": "after.some((w) => false ||"
+  },
+  {
+   "id": "cr18-chunk-unescape-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "const words = seg.words.map(unescapeWord).map((w) => w.toLowerCase());",
+   "replacement": "const words = seg.words.map((w) => w.toLowerCase());"
+  },
+  {
+   "id": "cr21-ansi-big",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "|U([0-9a-fA-F]{1,8})",
+   "replacement": ""
+  },
+  {
+   "id": "rv2-terminal-always",
+   "file": "src/commands/review.ts",
+   "anchor": "if (waiver !== undefined && !isTerminal()) {",
+   "replacement": "if (waiver !== undefined) {"
+  },
+  {
+   "id": "rg1-completeness-true",
+   "file": "src/flow/review-gate.ts",
+   "anchor": "{ completeness: readString(manifest?.[\"status\"]) !== \"closed\" }",
+   "replacement": "{ completeness: true }"
+  },
+  {
+   "id": "tr1-chunks",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "    \"chunks\",\n",
+   "replacement": ""
+  },
+  {
+   "id": "ar1-wikiwrite",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": " && !flags.has(\"--write-wiki\");",
+   "replacement": ";"
+  },
+  {
+   "id": "ar4-result",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": "!flags.has(\"--quote\") && absentOrUnderCwd(\"--result\");",
+   "replacement": "!flags.has(\"--quote\");"
+  },
+  {
+   "id": "ly1-current-head",
+   "file": "src/review/layers.ts",
+   "anchor": "if (head !== undefined && existing.prHead !== head) return false;",
+   "replacement": ""
+  },
+  {
+   "id": "ly4-intact-build",
+   "file": "src/review/layers.ts",
+   "anchor": "if (build?.commit !== layers.graphCommit) return false;",
+   "replacement": ""
+  },
+  {
+   "id": "ly7-resolve-hex",
+   "file": "src/review/layers.ts",
+   "anchor": "return full !== null && /^[0-9a-f]{40,64}$/.test(full) ? full : null;",
+   "replacement": "return full;"
+  },
+  {
+   "id": "ly10-keep-failed",
+   "file": "src/review/layers.ts",
+   "anchor": "if (graph.status === \"failed\" && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "ly13-sweep-dir",
+   "file": "src/review/layers.ts",
+   "anchor": "if (path.dirname(worktree) !== temp || ",
+   "replacement": "if ("
+  },
+  {
+   "id": "ly16-recover-call",
+   "file": "src/review/layers.ts",
+   "anchor": "      await recoverGraphDirectory(input.packageDir);\n",
+   "replacement": ""
+  },
+  {
+   "id": "pl2-batch-break",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "if (taken > 0 && removed + entryBytes >= overshoot) break;",
+   "replacement": ""
+  },
+  {
+   "id": "us1-size",
+   "file": "src/review/layers-usage.ts",
+   "anchor": " || info.size > MAX_TOOL_LOG_BYTES",
+   "replacement": ""
+  },
+  {
+   "id": "cc2-alnum",
+   "file": "src/review/coverage-complete.ts",
+   "anchor": " || !/[\\p{L}\\p{N}]/u.test(quote)",
+   "replacement": ""
+  },
+  {
+   "id": "ch3-next-lock",
+   "file": "src/review/chunks.ts",
+   "anchor": "return withChunkStateLock(packageDir, () => nextChunkLocked(packageDir));",
+   "replacement": "return nextChunkLocked(packageDir);"
+  }
+ ]
+}

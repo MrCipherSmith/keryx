@@ -195,6 +195,8 @@ export interface RefreshInput {
   checkStaleness?: StalenessProbe | undefined;
   /** History run page writes are recorded under (flow 367); defaults to `wiki refresh`. */
   history?: WikiWriteContext | undefined;
+  /** Read the code graph from this gdgraph data directory instead of the project's own (a review package's). */
+  dataDir?: string | undefined;
 }
 
 export async function refreshPages(input: RefreshInput): Promise<RefreshResult> {
@@ -202,13 +204,13 @@ export async function refreshPages(input: RefreshInput): Promise<RefreshResult> 
   const generatedAt = (input.now ?? (() => new Date()))().toISOString();
   // AFC-08: ask how old the source is BEFORE generating anything from it.
   const gate = await resolveWikiSourceGate(cwd, input.head, input.checkStaleness);
-  const graph = await loadGraph(cwd);
+  const graph = await loadGraph(cwd, input.dataDir);
   const keyFilesIndex = computeModuleKeyFiles(graph);
   const knownPaths = new Set(
     graph.nodes.filter((node) => node.kind === "file").map((node) => node.path),
   );
 
-  const candidates = await collectGraphWikiCandidates(cwd, generatedAt, DEFAULT_LIMIT, null);
+  const candidates = await collectGraphWikiCandidates(cwd, generatedAt, DEFAULT_LIMIT, null, input.dataDir);
   const referenceBySlug = new Map<string, string>();
   for (const candidate of candidates) {
     const section = referenceSectionOf(candidate.content);

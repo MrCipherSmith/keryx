@@ -118,7 +118,7 @@ export function createMemoryService(): MemoryService {
     async index(input: MemoryIndexInput): Promise<MemoryIndexResult> {
       const entries = await collectEntries(input.cwd);
       const generatedAt = new Date().toISOString();
-      const indexDir = path.join(dataRoot(input.cwd), "index");
+      const indexDir = input.indexDir ?? path.join(dataRoot(input.cwd), "index");
       await mkdir(indexDir, { recursive: true });
       const indexPath = path.join(indexDir, "index.json");
       await writeFile(

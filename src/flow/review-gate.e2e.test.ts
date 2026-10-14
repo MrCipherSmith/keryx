@@ -202,7 +202,7 @@ async function flowDir(root: string): Promise<string> {
 
 async function ingestRound(root: string, reviewId: string, extra: string[] = []): Promise<void> {
   await writeFile(path.join(root, "research.json"), JSON.stringify(readyResearchFixture()), "utf8");
-  await writeFile(path.join(root, "round.md"), "# Round\n\nNothing outstanding.\n", "utf8");
+  await writeFile(path.join(root, "round.md"), "# Round\n\nNothing outstanding.\n\nEvidence level: static only — did not run: tests\n", "utf8");
   await reviewCommand([
     "ingest",
     "--report",

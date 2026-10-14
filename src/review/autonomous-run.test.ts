@@ -152,6 +152,25 @@ describe("exit codes", () => {
     expect(run.summary.reason).toContain("floor");
   });
 
+  test("3b: when the loop guard ended the run after a floor refusal, the reason names the loop guard first", async () => {
+    const run = await runAutonomousReview(
+      options(
+        scripted(async (c) => {
+          writePackage("rv-1", "reviewed");
+          c.emit(call("gh pr merge 7"));
+          c.emit(result("command not approved by the user; not executed", true));
+          c.emit(call("read_file x"));
+          c.emit(result("same tool call already tried 3× (hash budget); change the arguments or a different tool", true));
+          c.emit({ type: "turn_end", text: "stopped", toolCalls: 2 });
+          return 0;
+        }),
+      ),
+    );
+    expect(run.status).toBe("floor");
+    expect(run.summary.reason).toMatch(/^the loop guard stopped a repeated call/);
+    expect(run.summary.reason).toContain("floor refused 1 call");
+  });
+
   test("a refusal that the run routed around does not fail a closed package", async () => {
     const run = await runAutonomousReview(
       options(
@@ -490,5 +509,21 @@ describe("progress file", () => {
     );
     expect(during).toMatchObject({ state: "running", phase: "review start" });
     expect(JSON.parse(readFileSync(path.join(run.runDir, "progress.json"), "utf8"))).toMatchObject({ state: "complete", exitCode: 0 });
+  });
+});
+
+describe("the pull request head reaches the child", () => {
+  test("the prompt carries the resolved head and the --head instruction", async () => {
+    const seen: ChildSpec[] = [];
+    await runAutonomousReview(options(scripted(() => 1, seen)));
+    const prompt = seen[0]!.argv[seen[0]!.argv.length - 1]!;
+    expect(prompt).toContain("The pull request head is abc123");
+    expect(prompt).toContain("--head abc123");
+  });
+
+  test("a head that could not be read leaves --head out of the prompt", async () => {
+    const seen: ChildSpec[] = [];
+    await runAutonomousReview(options(scripted(() => 1, seen), { resolveHead: async () => null }));
+    expect(seen[0]!.argv[seen[0]!.argv.length - 1]!).not.toContain("--head");
   });
 });

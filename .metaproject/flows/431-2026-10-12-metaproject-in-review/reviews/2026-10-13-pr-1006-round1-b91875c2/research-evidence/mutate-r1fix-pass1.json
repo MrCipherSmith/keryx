@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 20878
+  },
+  "mutants": [
+    {
+      "id": "f01",
+      "file": "src/review/layers.ts",
+      "anchor": "prHead = await manifestHead(input.packageDir);",
+      "replacement": "prHead = null;",
+      "line": 408,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 17303
+    },
+    {
+      "id": "f02",
+      "file": "src/review/layers.ts",
+      "anchor": "if (await layersRefreshInFlight(packageDir)) {",
+      "replacement": "if (false as boolean) {",
+      "line": 454,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13031
+    },
+    {
+      "id": "f03",
+      "file": "src/review/layers.ts",
+      "anchor": "if (hadPrevious) await rename(previous, finalDir).catch(() => {});",
+      "replacement": "void 0;",
+      "line": 254,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 18335
+    },
+    {
+      "id": "f04",
+      "file": "src/review/layers.ts",
+      "anchor": "return createMemoryService().index({ cwd, embeddings: false, indexDir });",
+      "replacement": "return createMemoryService().index({ cwd, embeddings: false });",
+      "line": 142,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13190
+    },
+    {
+      "id": "f05",
+      "file": "src/review/layers.ts",
+      "anchor": "\"--end-of-options\", worktree, prHead]);",
+      "replacement": "\"--end-of-options\", worktree, \"HEAD\"]);",
+      "line": 283,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16286
+    },
+    {
+      "id": "f06",
+      "file": "src/review/layers.ts",
+      "anchor": "return typeof head === \"string\" && /^[0-9a-f]{7,64}$/i.test(head) ? head : null;",
+      "replacement": "return typeof head === \"string\" ? head : null;",
+      "line": 199,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13039
+    },
+    {
+      "id": "f07",
+      "file": "src/review/layers.ts",
+      "anchor": "if (input.prHead !== undefined) assertGitRevision(input.prHead);",
+      "replacement": "void 0;",
+      "line": 402,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 14693
+    },
+    {
+      "id": "f08",
+      "file": "src/review/layers.ts",
+      "anchor": "return parsed !== null && parsed.version === LAYERS_VERSION ? parsed : null;",
+      "replacement": "return parsed;",
+      "line": 207,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 18792
+    },
+    {
+      "id": "f09",
+      "file": "src/review/chunks.ts",
+      "anchor": "{ blocker: 0, critical: 0,",
+      "replacement": "{ blocker: 5, critical: 0,",
+      "line": 321,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20138
+    },
+    {
+      "id": "f10",
+      "file": "src/review/chunks.ts",
+      "anchor": "return withFileLock(path.join(packageDir, CHUNK_STATE_LOCK), () => recordChunkLocked(packageDir, chunkId, result), { timeoutMs: 30_000 });",
+      "replacement": "return recordChunkLocked(packageDir, chunkId, result);",
+      "line": 273,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16953
+    },
+    {
+      "id": "f11",
+      "file": "src/review/chunks.ts",
+      "anchor": "const finished = status === \"DONE\" || status === \"DONE_WITH_CONCERNS\";",
+      "replacement": "const finished = status === \"DONE\";",
+      "line": 286,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 20807
+    },
+    {
+      "id": "f12",
+      "file": "src/review/chunks.ts",
+      "anchor": "const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunkId));",
+      "replacement": "const alreadySplit = false;",
+      "line": 310,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 17284
+    },
+    {
+      "id": "f13",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (existing.droppedKey === undefined || existing.droppedKey === droppedKey) return existing;",
+      "replacement": "return existing;",
+      "line": 131,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 15939
+    },
+    {
+      "id": "f14",
+      "file": "src/review/chunks-estimate.ts",
+      "anchor": "const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;",
+      "replacement": "const answered = record?.answer;",
+      "line": 161,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 18034
+    },
+    {
+      "id": "f15",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": "const MIN_WAIVER_QUOTE_LENGTH = 8;",
+      "replacement": "const MIN_WAIVER_QUOTE_LENGTH = 0;",
+      "line": 190,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20340
+    },
+    {
+      "id": "f16",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": ".replace(/-{0,2}waive[- ]?coverage/gi, \"\")",
+      "replacement": ".replace(/zzzz/gi, \"\")",
+      "line": 198,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22526
+    },
+    {
+      "id": "f17",
+      "file": "src/review/managed.ts",
+      "anchor": "if (coverageWaiver !== undefined && researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore);",
+      "replacement": "void 0;",
+      "line": 819,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22327
+    },
+    {
+      "id": "f18",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "|| touchesSchedulerControl(command) || touchesCoverageWaiver(command);",
+      "replacement": "|| touchesSchedulerControl(command);",
+      "line": 626,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20862
+    },
+    {
+      "id": "f19",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "return `'${value.replace(/'/g, `'\\\\''`)}'`;",
+      "replacement": "return `'${value}'`;",
+      "line": 188,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13060
+    },
+    {
+      "id": "f20",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "if (unsafe !== undefined) throw new Error(",
+      "replacement": "if (unsafe === \"never\") throw new Error(",
+      "line": 226,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13090
+    },
+    {
+      "id": "f21",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "const files = allFiles.slice(0, MAX_BLOCK_FILES);",
+      "replacement": "const files = allFiles;",
+      "line": 227,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13070
+    },
+    {
+      "id": "f22",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "return `keryx gdgraph affected ${shellQuote(first)} --depth 2",
+      "replacement": "return `keryx gdgraph affected ${first} --depth 2",
+      "line": 199,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13064
+    },
+    {
+      "id": "f23",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "return log === undefined || log.trim() === \"\" ?",
+      "replacement": "return log === undefined ?",
+      "line": 57,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13027
+    },
+    {
+      "id": "f24",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "if (!(await stat(real)).isFile()) return undefined;",
+      "replacement": "void 0;",
+      "line": 72,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13376
+    },
+    {
+      "id": "f25",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "if (realInside.startsWith(\"..\") || path.isAbsolute(realInside)) return undefined;",
+      "replacement": "void 0;",
+      "line": 71,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13063
+    },
+    {
+      "id": "f26",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "const placed = placeReviewPath(command, \"--package\", raw, { projectRoot: resolveProjectRoot(cwd), cwd });",
+      "replacement": "const placed = { ok: true as const, path: raw };",
+      "line": 50,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16422
+    }
+  ],
+  "totals": {
+    "killed": 18,
+    "survived": 8,
+    "invalid": 0,
+    "timeout": 0
+  },
+  "evidence": {
+    "json": "/home/altsay/keryx-f431i/.metaproject/flows/431-2026-10-12-metaproject-in-review/reviews/2026-10-13-pr-1006-round1-b91875c2/research-evidence/mutation-2.json",
+    "md": "/home/altsay/keryx-f431i/.metaproject/flows/431-2026-10-12-metaproject-in-review/reviews/2026-10-13-pr-1006-round1-b91875c2/research-evidence/mutation-2.md"
+  }
+}

@@ -24,17 +24,21 @@ import {
   createManagedReviewPackage,
   getManagedReviewStatus,
   resolveGitHead,
+  resolveReviewPackagePath,
   upsertPreFilterScopeBlock,
   type FindingDispositionRecord,
   type ManagedReviewIngestInput,
 } from "../review/managed";
+import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
+import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
-import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
+import { packageHasBlastRadius, packageHasPrContext, requiredReviewers } from "../review/coverage";
+import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -47,6 +51,11 @@ import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
+import { resolveProjectRoot } from "../lib/contained-path";
+import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
+import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
+import { PackageGraphError, loadPackageGraph } from "../review/layers";
+import { layersSummaryLine } from "../review/layers-view";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -96,6 +105,7 @@ import {
   type ReviewScope,
   type ScopedRegion,
 } from "../review/scope";
+import { commentRuleScopeConfig } from "../review/comment-rule";
 import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import { loadRoutingConfig } from "../harness/routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../harness/routing/table";
@@ -115,6 +125,7 @@ import {
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
+import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
 import { detectProviders } from "./select";
 import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
@@ -485,6 +496,7 @@ const BLAST_RADIUS_FLAGS = [
   "--json",
   "--brief",
   "--out",
+  "--package",
 ] as const;
 
 const TIER_FLAGS = [
@@ -504,15 +516,15 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -558,7 +570,19 @@ function rejectUnknownFlags(args: readonly string[], allowed: readonly string[],
   }
 }
 
-export async function reviewCommand(args: string[]): Promise<void> {
+/** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
+export interface ReviewCommandSeams {
+  isTerminal?: () => boolean;
+  /** Test seam: reads a PR's state and head for `complete`. Default: the GitHub tracker adapter. */
+  prLookup?: PrLookup;
+}
+
+async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
+  if (!(await githubAdapter.detect())) return null;
+  return githubAdapter.prStatus(ref);
+}
+
+export async function reviewCommand(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   const command = args[0];
   if (!command || command === "--help" || command === "-h") {
     printHelp();
@@ -604,6 +628,18 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "blast-radius") {
       await runBlastRadius(args.slice(1));
+      return;
+    }
+    if (command === "layers") {
+      await runLayers(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "chunks") {
+      await runChunks(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "coverage") {
+      await runCoverage(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "budget") {
@@ -744,8 +780,12 @@ export async function reviewCommand(args: string[]): Promise<void> {
       await runStatus(args.slice(1));
       return;
     }
+    if (command === "report-parity") {
+      await runReportParity(args.slice(1));
+      return;
+    }
     if (command === "complete") {
-      await runComplete(args.slice(1));
+      await runComplete(args.slice(1), seams);
       return;
     }
     if (command === "lightweight") {
@@ -758,6 +798,19 @@ export async function reviewCommand(args: string[]): Promise<void> {
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
+  }
+}
+
+/** A new package starts with fresh layers. A failure is printed and never blocks the package. */
+async function refreshCreatedPackageLayers(packageDir: string, head: string | undefined, cwd: string): Promise<void> {
+  try {
+    const layers = await ensurePackageLayers(packageDir, {
+      projectRoot: resolveProjectRoot(cwd),
+      ...(head === undefined ? {} : { prHead: head }),
+    });
+    console.log(`layers: ${layersSummaryLine(layers)}`);
+  } catch (error) {
+    console.error(`layers: not refreshed — ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -808,6 +861,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd);
   if (result.manifest.automatic === true) {
     console.log("run mode: automatic review");
   }
@@ -2964,8 +3018,10 @@ async function runRequired(args: string[]): Promise<void> {
     throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
   const radiusFile = optionValue(args, "--blast-radius");
+  const prContextFile = optionValue(args, "--pr-context");
   const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
     blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
+    prContext: prContextFile !== undefined && packageHasPrContext(path.dirname(path.resolve(prContextFile)), path.basename(prContextFile)),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(set, null, 2));
@@ -2999,8 +3055,13 @@ async function runMutate(args: string[]): Promise<void> {
   const timeout = optionValue(args, "--timeout-ms");
   const timeoutMs = timeout === undefined ? undefined : Number(timeout);
   if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout-ms must be a positive number");
-  const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
-  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs });
+  const capArg = optionValue(args, "--cap");
+  const cap = capArg === undefined ? undefined : Number(capArg);
+  if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) throw new Error("--cap must be a non-negative integer");
+  const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
+  // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
+  const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
+  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap });
   const written = await writeMutationEvidence(packageDir, record);
   if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
@@ -3052,8 +3113,9 @@ async function runSeverityAudit(args: string[]): Promise<void> {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""} - ${c.reason}`);
-  console.log(`${result.changes.length} of ${result.findings} finding(s) changed${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
+  for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""}${c.held ? " [held]" : ""} - ${c.reason}`);
+  const held = result.changes.filter((c) => c.held).length;
+  console.log(`${result.changes.length - held} of ${result.findings} finding(s) changed${held > 0 ? `, ${held} held (presentation-only survivor)` : ""}${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
 }
 
 async function runStack(args: string[]): Promise<void> {
@@ -3307,7 +3369,7 @@ async function runScope(args: string[]): Promise<void> {
     scope = buildPathScope(paths, { contextLines });
   } else {
     const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
-    scope = buildReviewScope(diff, { contextLines });
+    scope = buildReviewScope(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) });
   }
 
   if (args.includes("--json")) {
@@ -3477,7 +3539,22 @@ async function runBlastRadius(args: string[]): Promise<void> {
     return;
   }
 
-  const graph = await loadGraph(cwd);
+  // With --package the graph is the one built at the package's PR head, never the project's
+  // tracked artifacts; the layers are refreshed first when the package has none.
+  const packageOption = optionValue(args, "--package");
+  let graph: GraphData;
+  if (packageOption === undefined) {
+    graph = await loadGraph(cwd);
+  } else {
+    const packageDir = resolvePackageDir(args, cwd);
+    const layers = await ensurePackageLayers(packageDir);
+    try {
+      graph = (await loadPackageGraph(packageDir, layers.prHead ?? undefined)).graph;
+    } catch (error) {
+      if (!(error instanceof PackageGraphError)) throw error;
+      throw new Error(`${error.message}. The blast radius is not computed from a graph of another commit.`, { cause: error });
+    }
+  }
   if (graph.nodes.length === 0) {
     // An empty graph would produce an empty radius, which reads as "nothing
     // depends on this change". Refuse instead: a scope that shrank to nothing
@@ -3701,6 +3778,15 @@ async function mergeBaseWithHead(ref: string): Promise<string> {
   return base;
 }
 
+/** `keryx review report-parity <review>`: the Markdown to paste into report.md so the leftovers of a round are named. */
+async function runReportParity(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, [], "report-parity <review-id-or-path>");
+  const ref = args[0];
+  if (!ref) throw new Error("Usage: keryx review report-parity <review-id-or-path>");
+  const markdown = renderParityReport(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)));
+  console.log(markdown === "" ? "Nothing to carry into the report: no Not run candidates, held severity notes or open follow-ups." : markdown.trimEnd());
+}
+
 async function runStatus(args: string[]): Promise<void> {
   rejectUnknownFlags(args, [], "status <review-id-or-path>");
   const ref = args[0];
@@ -3716,6 +3802,8 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
   console.log(`coverage: ${manifest.coverage.length}`);
+  // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
+  for (const line of parityLines(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
 
   // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
   // manifest on disk, by a different invocation from the one that wrote it — and
@@ -3810,18 +3898,39 @@ function reportFilterStatsProblems(stats: unknown, where: string): void {
   process.exitCode = 1;
 }
 
-async function runComplete(args: string[]): Promise<void> {
+async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
   const ref = args[0];
   if (!ref) {
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
+  const headFlag = flagTokens(args).find((token) => token.name === "--head");
+  if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
+    throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
+  }
+  const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
+  if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
+    throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
+  }
+  // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
+  // statement, so a person has to be at the terminal that carries it.
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (waiver !== undefined && !isTerminal()) {
+    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+  }
   const {
     manifest,
     reviewNotes,
     dispositions: tally,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions });
+    coverageWaiver,
+    warnings,
+  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  for (const warning of warnings) console.error(`warning: ${warning}`);
+  if (coverageWaiver !== undefined) {
+    const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
+    console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > FIRST_FILES ? ", …" : ""}`);
+  }
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   console.log(`dispositions recorded: ${dispositions.length}`);
@@ -3897,6 +4006,9 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     }
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
+    }
+    if (token.name === "--waive-coverage" || token.name === "--head") {
+      continue;
     }
     if (token.name === "--finding") {
       flush();
@@ -4051,6 +4163,9 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
   ["ledger", printLedgerHelp],
+  ["layers", printLayersHelp],
+  ["chunks", printChunksHelp],
+  ["coverage", printCoverageHelp],
   ["tier", printTierHelp],
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],
@@ -4136,7 +4251,7 @@ Usage:
                         words naming a narrower review in --operator-quote, and
                         the dispatch records them as operatorQuote.
                         \`review complete\` refuses a smaller dispatch.
-  keryx review dispatch-check --payload <file|-> [--manifest <file>]
+  keryx review dispatch-check --payload <file|-> [--manifest <file>] [--package <dir>]
                               [--max-bytes <n>] [--json]
                               Refuses a reviewer payload with no slice, one over the
                               manifest's wave budget, or a shape the schema rejects.
@@ -4166,7 +4281,18 @@ Usage:
                      still scanned, with or without --ref.
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                            [--json | --brief] [--out <file>]
+                            [--package <review-dir>] [--json | --brief] [--out <file>]
+  keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+  keryx review layers status  --package <review-dir> [--json]
+  keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+                      Graph, wiki and memory for one review; no model is called. An intact graph at
+                      the same head is reused (--force rebuilds); a second refresh waits up to 16 min.
+  keryx review chunks plan|estimate|next|record|merge --package <review-dir>
+                      [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]
+                      [--answer yes|no --quote "<words>"] [--json]
+                      The blast-radius files the per-pass cap dropped, one chunk at a time.
+  keryx review coverage --package <review-dir> [--json]
+                      In scope, covered, omitted, uncovered; writes coverage.json.
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
@@ -4265,8 +4391,10 @@ ${COMMENTS_USAGE}
   keryx review reviewers [--json]
   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
+  keryx review report-parity <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
+                        [--waive-coverage "<operator quote>"] [--head <sha>]
   keryx review lightweight
 
 An unrecognised option is REFUSED, not ignored. A flag that is silently dropped
@@ -4283,6 +4411,11 @@ Modes:
   the tree the reviewers actually read, which is deliberately preferred over a
   \`pr\` target's own head so that a round run against something other than what
   will merge FAILS the gate instead of passing it.
+  \`review complete --head <sha>\` names the commit the round actually reviewed
+  when the one recorded at start is wrong or missing; the head gate then checks
+  that commit, and the manifest records it. The gate is not loosened: a head that
+  is not the pull request's head still needs the report's first line to name it
+  and say the PR moved.
 
 scope:
   Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,

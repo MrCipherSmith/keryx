@@ -219,7 +219,10 @@ export async function saveRoutingConfig(layer: RoutingConfigLayer, location: Rou
     return;
   }
   const file = projectRoutingConfigPath(location.cwd);
-  const body = `${JSON.stringify(renderRoutingConfig(table), null, 2)}\n`;
+  // Top-level keys beside `categories` (for example `reviewChunks`) belong to other readers and survive a routing write.
+  const existing = (await pathExists(file)) ? await readJsonObjectFile(file) : undefined;
+  const others = existing?.state === "object" ? (existing.value as Record<string, unknown>) : {};
+  const body = `${JSON.stringify({ ...others, ...renderRoutingConfig(table) }, null, 2)}\n`;
   await writeFileAtomic(file, body);
 }
 

@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f444",
+  "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 24173
+  },
+  "mutants": [
+    {
+      "id": "r2-block-force-not-passed",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "{ projectRoot, force: rest.includes(\"--force\") }",
+      "replacement": "{ projectRoot }",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 137,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 23774
+    },
+    {
+      "id": "r2-ensure-force-dropped",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "...(options.force === true ? { force: true } : {}),",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 83,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19060
+    },
+    {
+      "id": "r2-tui-force-dropped",
+      "file": "src/tui/review-layers-actions.ts",
+      "anchor": "\"--package\", packageDir, \"--force\", \"--json\"]",
+      "replacement": "\"--package\", packageDir, \"--json\"]",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 25,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19829
+    },
+    {
+      "id": "r2-maxbuffer-misreported-as-timeout",
+      "file": "src/tui/review-layers-actions.ts",
+      "anchor": "const timedOut = Date.now() - startedAt >= timeoutMs - 100;",
+      "replacement": "const timedOut = true;",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 55,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 14860
+    },
+    {
+      "id": "r2-signal-bound-removed",
+      "file": "src/review/layers.ts",
+      "anchor": "Promise.race([settled, bound])",
+      "replacement": "settled",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 369,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13157
+    },
+    {
+      "id": "r2-unregister-before-cleanup",
+      "file": "src/review/layers.ts",
+      "anchor": "try {\n      await cleanup();\n    } finally {\n      unregister();\n    }",
+      "replacement": "unregister();\n    await cleanup();",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 416,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13130
+    },
+    {
+      "id": "r2-layers-write-seam-bypassed",
+      "file": "src/review/layers.ts",
+      "anchor": "await deps.writeLayers(layersFilePath",
+      "replacement": "await writeFileAtomic(layersFilePath",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 615,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 75411
+    },
+    {
+      "id": "r2-failed-retry-hint-dropped-from-error",
+      "file": "src/review/layers.ts",
+      "anchor": "${layers.graph.error ? `: ${layers.graph.error}` : \"\"}${retry}`",
+      "replacement": "${layers.graph.error ? `: ${layers.graph.error}` : \"\"}`",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 643,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13560
+    },
+    {
+      "id": "r2-view-failed-hint-dropped",
+      "file": "src/review/layers-view.ts",
+      "anchor": "${graph.status === \"failed\" ? \" (not retried automatically for a few minutes at the same head; refresh --force retries now)\" : \"\"}",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 37,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13162
+    },
+    {
+      "id": "r2-unavailable-text-format-reverted",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "lines.push(`  ${gap.section}: unavailable (${gap.reason})`)",
+      "replacement": "lines.push(`  unavailable ${gap.section}: ${gap.reason}`)",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 360,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13325
+    },
+    {
+      "id": "r2-readpage-seam-ignored",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "content = await readPage(page.absolutePath);",
+      "replacement": "content = await readFile(page.absolutePath, \"utf8\");",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 181,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13353
+    }
+  ],
+  "totals": {
+    "killed": 8,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

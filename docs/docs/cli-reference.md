@@ -3287,7 +3287,7 @@ keryx gdgraph find "<terms>"
 keryx gdgraph symbol "<name>" [--impact] [--depth N]
 keryx gdgraph symbols <enable|disable|status>
 keryx gdgraph path "<A>" "<B>"
-keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
+keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json] [--data-dir <dir>]
 keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
 keryx gdgraph context
 keryx gdgraph assets list | verify [<id>] | pull <id>
@@ -4768,12 +4768,13 @@ keryx review learn --pr <n> [--dry-run] [--json]
 keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
+keryx review report-parity <review-id-or-path>
 keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 keryx review lightweight
 keryx review reviewers [--json]
-keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
-keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--json]
+keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]
+keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--json]
 keryx review severity-audit --package <review-dir> [--dry-run] [--json]
 keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
 keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]
@@ -4782,12 +4783,18 @@ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--json|--brief] [--out <file>]
+                          [--package <review-dir>] [--json|--brief] [--out <file>]
 keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
-keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--json]
+keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
 keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
                         [--state <file>] [--dry-run] [--json]
 keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+keryx review layers status  --package <review-dir> [--json]
+keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+keryx review coverage --package <review-dir> [--json]
+keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -4802,17 +4809,31 @@ will merge *fails* the gate instead of passing it. With no checkout to ask and a
 `pr` target, the pull request's head is used instead; with neither, the head is
 left off and the gate reports it as unobserved.
 
+`review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+head that is not the pull request's head still needs the first line of `report.md` to name it and
+say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+
+A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+
+`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+
 | Subcommand | Description |
 |---|---|
 | `attach` | Create a managed package linked to an existing Task Manager flow. |
 | `start` | Create a standalone managed review package. |
 | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
-| `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. |
+| `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. After those it prints what the round left behind that no count shows, and nothing when there is none: `Not run: <n> candidates (cap <c>): <mutant ids>` for proposed mutants no pass has run, `held: <finding> stays <severity> (mutant <id>): <reason>` for a severity a presentation-only survivor did not raise, and `follow-up open: <id> <text>` (or `follow-up narrowed: … (remains: …)`) for each parent follow-up no disposition closes. |
+| `report-parity` | Print the Markdown to paste into `report.md` so the leftovers of a round are named (`keryx review report-parity <review-id-or-path>`): a `## Review parity` block with one line each for `Not run: <n> candidates`, `Held severity:` and `Not verified:`; with nothing to carry it says so and prints no block. It reads the package and writes nothing. `review complete` adds a warning, never a refusal, for each kind of leftover the report does not name (a line that opens with `Not run`, `Held severity` or `Not verified`, or one that mentions the mutant or obligation id). `/review parity` in the shell, the readline `/reviews` and the sidebar show the same counts from the same projection. In an automatic review, `report-parity <this review>` runs without a prompt. |
 | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
 | `floor` | Report the edits in a diff that lower the bar: a threshold moved the weakening way, a disabled test, a test region that checks fewer things, a new suppression. Exits 1 when it finds any. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
+| `layers` | Refresh the graph, the wiki and the memory index for one review, with no model, and write `layers.json`. See below. |
+| `chunks` | Plan, estimate and run the blast-radius files the per-pass cap dropped, one chunk at a time. See below. |
+| `coverage` | Print how many in-scope files are covered, covered by a named omission, and uncovered. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
@@ -4828,9 +4849,9 @@ left off and the gate reports it as unobserved.
 | `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `flagWarnings`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. `paths` come from `metadata.paths`, else from the globs in the description plus any literal file path named beside them; a description with no glob gives `pathsSource: none` (dispatched on every round) even when it names a file. `flags` come from `metadata.flags` when it has at least one non-empty entry — entries split on commas/whitespace, trimmed, lower-cased and `--`-prefixed; one that is still not `--name` is dropped and reported in `flagWarnings` (a `warning:` line in the text output), and the description's flags are not used even if none survives or the list holds only `--all` (no flags, and no warning for `--all`) — else from the description; an empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. `metadata.flags` and `metadata.paths` accept a comma-separated string, a flow list or a YAML block list; the frontmatter reader accepts a BOM and CRLF, drops trailing `#` comments, counts only keys directly under `metadata:`, and reads any shape outside that subset as not declared. `drift` is `clean`, `changed`, `missing`, or `none` when no origin was recorded (the text row reads `(no recorded origin)`). The top-level `bundledSource` says where the bundled half was read: `project` (this project's installed `.metaproject/skills/gdskills/review`), `package` (that directory is absent, so the keryx package's own review skills are listed — not evidence of what is installed here) or `not-found` (neither; exit `1`). |
-| `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. |
-| `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
-| `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
+| `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-contract, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. `review-pr-contract` joins the set, in both modes, only when `pr-context.md` is in the package (`--pr-context` names it, as `--blast-radius` does for `review-regression`); without it the reviewer prints as excluded with that reason. The rule binds a package whose `research.json` was written by `review ledger build` of this version, which stamps `dispatch.roles` with the roles it knows; a `dispatch` without that stamp predates the role, so a package already in flight is not newly refused: the gate passes and `review complete` warns `review-pr-contract not run (package predates the role)`. |
+| `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
+| `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor of kind `presentation` does not raise it: the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind`, `evidence`, `reason`), and the command prints `[held]` and counts it apart (`<n> held (presentation-only survivor)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
 | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
 | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
 | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
@@ -4876,7 +4897,15 @@ Questions the model asks are answered by the safe default (the recommended optio
 an irreversible one is refused) and each answer is recorded with its basis in `answers.ndjson`. The
 run directory also holds `summary.json`, `report.md`, `events.ndjson`, `progress.json`, `lock.json`,
 `run.json` and `child.log`. A run on the same head resumes an open package; a run on a new head
-starts fresh. In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
+starts fresh. The pull request head resolved at the start is named in the child's prompt, and the
+child passes it as `--head <sha>` to `review start`, `review attach`, `review ingest` and
+`review complete`, so the package records the commit that was reviewed rather than the commit checked out in the directory.
+While the run goes it writes a `heartbeat: phase <phase>, <n> round(s), <n> tokens` line to
+stderr whenever the phase, the rounds or the tokens change (at most one a minute) and, as a
+keep-alive, again whenever a minute passes with no line, so a wrapper with an idle timeout does
+not kill a healthy run. It is printed with or without `--json`; stdout stays the summary alone.
+The keep-alive never counts as child progress: a run that really stalls is still stopped by
+`--stall-minutes` (exit 5). In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
 See [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 ### `review comments`
@@ -5168,6 +5197,24 @@ heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
 
+**A comment-only block is kept when the repository has a rule about comments.**
+The comment-only drop assumes a comment cannot be wrong; a repository that limits
+comments (one line at most, no narration, a comment gate) has said otherwise.
+`review scope` and `review slice` read `CLAUDE.md`, `AGENTS.md` and
+`.metaproject/rules/**` (`.md` and `.mdc`, at most 200 files of 512 KiB each) and
+turn `retainCommentBlocks` on when one line both names comments and carries limiting
+wording (`limit`, `at most`, `no more than`, `one-line`, `gate`, `forbidden` and the
+like); a line that only mentions a comment is not a rule. With it on, a comment-only
+block that adds at least one comment line is retained and recorded under `kept` with
+the reason `kept:comment-rule` (its path, line range and changed-line count), counted
+in `counts.keptByReason` and in `blocksRetained`, not in `blocksDropped` or
+`droppedByReason`; `scope.md` lists it under "Kept past a drop rule". A block that
+only removes comments is still dropped. The setting itself is `false`, `true`, or a
+case-insensitive pattern that the added comment lines must match (a pattern that is
+not a valid expression keeps every such block). With no comment rule, or the setting
+off, the scope is byte-identical to one built before the option existed: no `kept`
+and no `keptByReason`.
+
 ### `review floor`
 
 A review asks whether the change is correct. It does not ask whether the change
@@ -5272,6 +5319,23 @@ vendored or generated path is invisible by construction — and it depends on
 `review scope` never dropping a comment that carries a tool directive, which is
 why that carve-out exists.
 
+### `review layers`, `review chunks` and `review coverage`
+
+A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; a managed review start, attach or ingest does it for you, and so does any `dispatch-check` or `blast-radius` given `--package`. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`. A graph that is intact at the same head is reused and `--force` rebuilds it. A graph that failed at the same head is not rebuilt for 5 minutes (counted from the failure, so polling does not extend it); `--force` or a new head rebuilds it at once. A reader that failed (the wiki, the memory, or the affected-files computation) is reported under `unavailable` in the layers block with its reason, not as an empty result. A `SIGTERM` or `SIGINT` during any phase releases the lock and removes the checkout and the staging directory. One refresh runs per package at a time, and a second one waits for the first for up to 16 minutes.
+
+- The graph is built at the PR head into `<dir>/layers/graph`, in a fresh worktree; the tracked graph artifacts, the working tree and the PR are not touched. `layers.json` records the commit it was built from, and `graph@<sha7> = head` means it equals the PR head.
+- The wiki and the memory are read from the project's working copy. `layers.json` marks how far that copy is from the PR head (`differs`, with the commits and wiki/memory paths between).
+- `layers status` prints the same lines plus the coverage counts. `layers block --files a,b` prints the bounded, deterministic `layers` block a reviewer payload carries for those files: affected files, symbol neighbours, related tests, wiki pages and memory entries, with a command that fetches whatever was cut.
+- Per reviewer run the package records `layersUsed` (`graph`, `wiki`, `memory`, `ctx`), counted from the reviewer's tool-call log, `<input-dir>/tool-calls/<reviewer>.jsonl`, one JSON line per call. A run without a log is `unknown`, never zero, and never blocks `ledger build`, `compare-reference` or `review complete`.
+
+The blast radius keeps at most 40 files per pass; the rest are `dropped`. `review chunks plan` writes `<dir>/chunks.json`, a deterministic split of every dropped file into chunks (at most 40 files and the slice byte cap), each file in exactly one chunk; no dropped files means no plan. Chunks run one at a time through `review-regression` on the middle tier: `chunks next` prints the chunk to dispatch, `chunks record` takes what it returned and applies the retry plan (a failed chunk is retried per the plan, else stays `pending`), and `chunks merge` writes `<dir>/chunk-pass.json` with the state of each chunk and the merged findings (two on the same file and line count once).
+
+`chunks estimate` states the chunk count, the files, the estimated tokens and cost at the middle tier, and the duration before a run. The ceiling is **25 passes of 40 files (1,000 files)**; `reviewChunks.maxPasses` in `routing.config.json` moves it. In automatic mode a run at or under the ceiling goes through without a question and a run over it asks once; in interactive mode a run over it waits for `--answer yes --quote "<words>"`. The estimate and the answer are recorded in `<dir>/chunk-estimate.json`.
+
+`review coverage` writes `<dir>/coverage.json` and prints four counts for the changed files and the blast radius together: in scope, covered, covered by a named omission (with the reasons), and uncovered. Every changed file lands in a slice or under a named omission, and `coverage.json` lists each omitted file with its reason. **`review complete` refuses while any in-scope file is uncovered**: it names the count, the first files and the command that runs the missing chunks. The only way past is `--waive-coverage "<operator quote>"`, which records the quote, the time and the files not reviewed in the dispatch record and shows the waiver in the report and the panel. The waiver needs an interactive terminal (a command run from a script or an agent is refused), its quote must be at least 8 characters with a letter or digit once the flag text is removed, and the command asks for confirmation in every permission mode. There is no "unchecked remainder" outcome.
+
+In the shell, `/reviews` shows one line per review (`graph@<sha7> = head|differs`, wiki and memory divergence, `layers used n/m`, `unknown k`, `chunks d/t, uncovered u`) in the sidebar and the full lines in the Review depth tab, with `l` (refresh layers) and `c` (run missing chunks) in the modal. `/review layers` prints the same lines.
+
 ### `review blast-radius`
 
 `review scope` bounds **the change**, and a review of it answers *is this change
@@ -5287,6 +5351,7 @@ a depth and a file cap, closest first.
 | `--depth <n>` | Edge distance kept. Default **2**. |
 | `--max-files <n>` | File cap, closest first. Default **40**. |
 | `--no-related-tests` | Skip the naming-related tests of the changed files. |
+| `--package <review-dir>` | Read the graph built for that review at its PR head (refreshed first when the package has none), not the working tree's. |
 | `--previous <file>` | The previous round's `--json` record; decides whether this round must recompute. |
 | `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
 | `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |
@@ -5339,7 +5404,11 @@ payload must name its `slices` or carry a `diff` that fits, and what it is
 assigned must total at most the manifest's wave budget (`--max-bytes` overrides it): a role owning more is dispatched in slice waves, and each wave has to fit the reviewer's child deadline. Codes: `REVIEWER_INPUT_INVALID`,
 `REVIEWER_INPUT_NO_SLICE`, `REVIEWER_INPUT_SLICE_UNKNOWN`,
 `REVIEWER_INPUT_TOO_LARGE`. Exit 0 ok, 1 refused, 2 payload or manifest
-unreadable.
+unreadable. The `model` block is closed to unknown keys but declares
+everything `review tier --json` prints, including `routed` (a boolean, true when
+the routing table made the pick), so the block the generator emits for a routed
+pick passes; a `routed` that is not a boolean, or any other unknown `model` key, is
+`REVIEWER_INPUT_INVALID`.
 
 `review retry-plan` decides what follows a reviewer result. `--result` is the
 reviewer's result JSON, or its saved raw reply (the last `REVIEW_RESULT` block is
@@ -5367,6 +5436,12 @@ Only the operator can accept a smaller set than that, with their own quote at
 `NEEDS_CONTEXT` (or any result with an open `needs_context` list) is not a finished
 scope either. It prints decision `context` with the questions: answer them and
 re-dispatch the uncovered slices. Asking again with nothing new covered is `not-run`.
+One refill is the contract: a second `NEEDS_CONTEXT` from the same role is `not-run`
+whatever it covered, with the reason `layout: no engine` for `review-layout` (it needs
+a browser) and `no engine` for any other role, and the report line
+`- **Not run:** <reviewer> — <reason>; it asked for context twice and the host could not supply it, never counted as a clean pass`.
+On a shell host the main session runs the browser measurements before it dispatches
+`review-layout` and passes them as `context_files`, so the first answer already has them.
 
 `review ledger build <input-dir> [--package <review-dir>]` writes the
 `research.json` that `review ingest --research` and `review complete` demand, from
@@ -5381,7 +5456,14 @@ gate requires covered by its dispatched payloads, is a complete source-only run
 word. Each raw finding becomes an obligation that is closed only by a matching
 canonical finding (same reviewer and id) or by a `--dispositions` entry
 `{id, status: finding|refuted|out-of-scope, evidence, reason, finding?}`; otherwise it
-stays `unresolved`. `scopeReviewed` and `rawReconciled` are true only when
+stays `unresolved`. A reviewer's `follow_ups` (strings in its result) and each
+`Parent follow-up: <text>` line after its last `REVIEW_RESULT` block are work handed
+back to the parent: each becomes an obligation `<reviewer>:fu<n>` that stays `unresolved`, and
+is a gap, until a `--dispositions` entry closes it (`narrowed` needs `remains`); a
+quoted line before the block is not read. `status` and `report-parity` list the open
+ones. The ledger's `dispatch` carries `roles`, the roles added after the original
+roster that this version knows (today `review-pr-contract`); `review complete` binds a
+round to them only when the stamp is present. `scopeReviewed` and `rawReconciled` are true only when
 established. The command prints `READY`, or `NOT READY` with every gap and its next
 step (the exact `retry-plan --next-wave` command with the waves left, the uncovered slices, the disposition to add),
 using the gate's own validators; exit 1 when not ready, so

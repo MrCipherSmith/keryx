@@ -1,0 +1,58 @@
+{
+ "mutants": [
+  {
+   "id": "r3-01-opaque-args",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return completeLike && opaqueArgs(rest);",
+   "replacement": "return completeLike && false;"
+  },
+  {
+   "id": "r3-01-opaque-verb",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "includes(\"complete\") || (rest[0] !== undefined && wordIsOpaque(rest[0]));",
+   "replacement": "includes(\"complete\");"
+  },
+  {
+   "id": "r3-01-opaque-head",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (wordIsOpaque(words[0]!)) return words.slice(1);\n",
+   "replacement": ""
+  },
+  {
+   "id": "r3-01-chunk-answer-opaque",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (lowerArgs.some(isAnswer) && opaqueArgs(args)) return true;\n",
+   "replacement": ""
+  },
+  {
+   "id": "r3-01-package-exempt",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "wordIsOpaque(w) && args[i - 1] !== \"--package\"",
+   "replacement": "wordIsOpaque(w)"
+  },
+  {
+   "id": "r3-04-keryx-only",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "? words.slice(at + 1) : undefined;",
+   "replacement": "? words.slice(at + 1) : words.slice(1);"
+  },
+  {
+   "id": "r3-04-terminal",
+   "file": "src/commands/review-chunks.ts",
+   "anchor": "optionValue(rest, \"--answer\") !== undefined && !isTerminal()",
+   "replacement": "false"
+  },
+  {
+   "id": "r3-02-refuse-flags",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (entry.refuseFlags?.some(",
+   "replacement": "if (false && entry.refuseFlags?.some("
+  },
+  {
+   "id": "r3-02-chunks-refuse",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "refuseFlags: [\"--answer\", \"--quote\"]",
+   "replacement": "refuseFlags: []"
+  }
+ ]
+}

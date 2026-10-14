@@ -34,8 +34,10 @@ what a reader must act on; everything else is folded.
 
 ```markdown
 <!-- slot:pre-verdict -->
+<only when the PR merged or its head moved: "Reviewed `<sha>` — the PR has since merged / moved on to `<new sha>`." as the very first line>
 **Changes requested — 1 Blocker, 2 Major, 4 Minor, 1 question.** <what holds, and where the risk is — one sentence.>
 Reviewed `<head>` against `<base>` · round N · <files> files, +<add>/−<del> · CI <green | red: check names>.
+Evidence level: <static only — did not run: tests, build | ran — the commands that ran>
 <!-- slot:after-verdict -->
 
 ### Prior findings            (fix rounds only)
@@ -43,6 +45,7 @@ Reviewed `<head>` against `<base>` · round N · <files> files, +<add>/−<del> 
 ### Major
 ### Minor
 ### Questions
+### Refuted and narrowed      (only when a finding was dismissed or narrowed)
 
 <details><summary><b>Pre-existing (not blocking)</b></summary> … </details>
 <details><summary><b>Scope</b></summary> … </details>          (only when a pr-process note exists)
@@ -67,6 +70,25 @@ author answer, rendered under Questions, not as a finding.
 
 The second line is the context line: head, base, round, size, CI. If head moved
 during the round, add `· unchecked: <commits>`.
+
+The third line is the **evidence level** and is required: `Evidence level: static
+only — did not run: <what>` when nothing was executed, or `Evidence level: ran —
+<what ran>`. `keryx review complete` refuses a report without it.
+
+When the PR was merged or its head moved after the review, the report's first line
+says so and names the reviewed SHA, or `keryx review complete` refuses.
+
+### Refuted and narrowed
+
+One line per finding that did not stand as reported, kept with its evidence so a
+reader sees what was claimed and why it was set aside:
+
+```markdown
+- **F-007. Dismissed** — <the author's rebuttal, quoted>. <citation not found: …> where the cited rule is not in the tree.
+- **F-009. Narrowed** — <what the finding claimed>. **Remains:** <what is still open>. Evidence: <what was run>.
+```
+
+A narrowed finding counts as closed only with its "Remains" text.
 
 ## One finding
 

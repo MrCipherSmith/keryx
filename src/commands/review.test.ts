@@ -99,7 +99,7 @@ const FINDING = {
 
 /** A report carrying the structured block, which is how ingest gets findings. */
 function reportWith(findings: readonly unknown[]): string {
-  return `# Round\n\n\`\`\`json keryx:findings\n${JSON.stringify(findings, null, 2)}\n\`\`\`\n`;
+  return `# Round\n\nEvidence level: static only — did not run: tests\n\n\`\`\`json keryx:findings\n${JSON.stringify(findings, null, 2)}\n\`\`\`\n`;
 }
 
 async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
@@ -247,6 +247,36 @@ test("several findings can be dispositioned in one close", async () => {
   expect(findings.map((f) => f.disposition?.state)).toEqual(["acted-on", "dismissed-incorrect"]);
 });
 
+test("`review complete --head` reaches the gate: it is not read as a disposition flag, and a head that is not the PR's still fails", async () => {
+  const PR_URL = "https://github.com/acme/app/pull/7";
+  const RECORDED = "a".repeat(40);
+  const OTHER = "b".repeat(40);
+  const prLookup = async () => ({ exists: true, state: "OPEN", headSha: RECORDED });
+  const pkg = await ingest("2026-10-14-cli-complete-head", ["--target", "pr", "--ref", PR_URL, "--head", OTHER]);
+  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup });
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).target.head).toBe(RECORDED);
+  expect(errors.join("\n")).toContain("replaces the head recorded");
+
+  const strict = await ingest("2026-10-14-cli-complete-head-strict", ["--target", "pr", "--ref", PR_URL, "--head", RECORDED]);
+  process.exitCode = 0;
+  await reviewCommand(["complete", strict, "--head", OTHER], { prLookup });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("first line");
+});
+
+test("`review complete --head` with no value, or a value that is not a SHA, is refused", async () => {
+  const pkg = await ingest("2026-10-14-cli-complete-head-bad", ["--target", "pr", "--ref", "https://github.com/acme/app/pull/7", "--head", "a".repeat(40)]);
+  await reviewCommand(["complete", pkg, "--head"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--head");
+  process.exitCode = 0;
+  errors = [];
+  await reviewCommand(["complete", pkg, "--head", "zzz"], { prLookup: async () => null });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("not a commit SHA");
+});
+
 test("an unknown disposition state is refused by name", async () => {
   const pkg = await ingest("2026-08-29-cli-bad-state");
   await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "dismissed", "--evidence", "x"]);
@@ -286,6 +316,49 @@ test("closing with no disposition flags still works, and writes nothing", async 
   await reviewCommand(["complete", pkg]);
   expect(process.exitCode).toBe(0);
   expect(await readFile(path.join(pkg, "findings.json"), "utf8")).toBe(before);
+});
+
+// The head and merge gate is switched on only by the command's default lookup, so
+// these two drive the real default against a stand-in `gh` on PATH.
+const GATE_PR = "https://github.com/acme/app/pull/7";
+const GATE_HEAD = "a".repeat(40);
+
+async function prBoundPackage(reviewId: string): Promise<string> {
+  return ingest(reviewId, ["--target", "pr", "--ref", GATE_PR, "--head", GATE_HEAD]);
+}
+
+/** Runs `review complete` in a child whose PATH starts with a stand-in `gh`: Bun resolves `gh` from the PATH it started with. */
+async function completeWithStandInGh(pkg: string, script: string): Promise<{ code: number; stderr: string }> {
+  const bin = path.join(ROOT, "bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(path.join(bin, "gh"), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  const entry = path.join(ROOT, "complete-child.ts");
+  await writeFile(entry, `import { reviewCommand } from ${JSON.stringify(path.resolve(import.meta.dir, "review"))};\nawait reviewCommand(["complete", ${JSON.stringify(pkg)}]);\n`);
+  const child = Bun.spawn([process.execPath, "run", entry], {
+    cwd: ROOT,
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  const [stderr, code] = await Promise.all([new Response(child.stderr).text(), child.exited]);
+  return { code, stderr };
+}
+
+test("`review complete` on a PR-bound package asks the tracker by default and refuses a merged PR", async () => {
+  const pkg = await prBoundPackage("2026-10-14-cli-gate-merged");
+  const merged = `{"isDraft":false,"state":"MERGED","headRefOid":"${"b".repeat(40)}","baseRefName":"main"}`;
+  const { code, stderr } = await completeWithStandInGh(pkg, `case "$1 $2" in "auth status") exit 0;; "pr view") echo '${merged}';; "pr checks") exit 0;; esac`);
+  expect(code).toBe(1);
+  expect(stderr).toMatch(/merged/i);
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+});
+
+test("`review complete` prints a warning, and still closes, when the tracker cannot be reached", async () => {
+  const pkg = await prBoundPackage("2026-10-14-cli-gate-offline");
+  const { code, stderr } = await completeWithStandInGh(pkg, "exit 1");
+  expect(code).toBe(0);
+  expect(stderr).toContain("warning: could not read the PR state");
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).toBe("closed");
 });
 
 // ---------------------------------------------------------------------------

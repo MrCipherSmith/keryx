@@ -2,7 +2,9 @@
 // and the readline text are all built from one `BotMetrics`, so no surface states a number the
 // CLI does not. Read-only: opening it reads the managed review packages and changes nothing.
 
-import { formatReviewDepthLines, loadReviewDepth, renderReviewDepthText, type ReviewDepthRow } from "./review-panel";
+import { paritySummary } from "../review/parity";
+import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, type ReviewDepthRow } from "./review-panel";
+import { createReviewLayersActions, type ReviewLayersActions } from "./review-layers-actions";
 import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
@@ -19,6 +21,46 @@ export const REVIEWS_FOOTER = [
   { key: "↑/↓", label: "scroll" },
   { key: "esc", label: "close" },
 ] as const;
+
+export const REVIEWS_ACTIONS_FOOTER = [
+  { key: "↑/↓", label: "scroll" },
+  { key: "l", label: "refresh layers" },
+  { key: "c", label: "prepare missing chunks" },
+  { key: "esc", label: "close" },
+] as const;
+
+/** `/review layers`: the layers of every managed review, as text. The bare `/review` stays the catch-up inspector. */
+export function isReviewLayersCommand(line: string): boolean {
+  const [token, sub] = line.trim().split(/\s+/);
+  return token === "/review" && sub === "layers";
+}
+
+/** `/review parity`: Not run candidates, held severities and open follow-ups of every managed review, as text. */
+export function isReviewParityCommand(line: string): boolean {
+  const [token, sub] = line.trim().split(/\s+/);
+  return token === "/review" && sub === "parity";
+}
+
+export { renderReviewLayersText, renderReviewParityText };
+
+/** One sidebar line per review that left something behind: `Not run 3, held 1, follow-ups 2`, wrapped to the sidebar width. */
+export function projectReviewsParityLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
+  if (depth === undefined) return [];
+  return depth
+    .map((row) => paritySummary(row.parity))
+    .filter((line) => line !== "")
+    .slice(0, limit)
+    .map((line) => line.split(", ").map((part) => wrapLines(part, width)).join("\n"));
+}
+
+/** One sidebar line per review that has anything to say about its layers, wrapped to the sidebar width. */
+export function projectReviewsLayerLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
+  if (depth === undefined) return [];
+  return depth
+    .filter((row) => row.layersView !== undefined && (row.layersView.layers !== null || row.layersView.usage !== null || row.layersView.chunks !== null))
+    .slice(0, limit)
+    .map((row) => layersLine(row.layersView).split("; ").map((part) => wrapLines(part, width)).join("\n"));
+}
 
 export function isReviewsCommand(line: string): boolean {
   return (line.trim().split(/\s+/)[0] ?? "") === REVIEWS_COMMAND;
@@ -60,6 +102,8 @@ export type PresentReviewsOptions = {
   metrics: BotMetrics;
   /** What each review ran (mode, reviewer set, mutation); adds the "Review depth" tab. */
   depth?: readonly ReviewDepthRow[];
+  /** The menu actions on the newest review: `l` refreshes its layers, `c` prepares its missing chunks. */
+  actions?: ReviewLayersActions;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
@@ -76,6 +120,9 @@ function paint(otui: unknown, renderer: unknown, body: unknown, content: string,
 }
 
 type TabView = { rows: string[]; header: string[]; scroll: number; node: { content: string } | undefined };
+
+// Module level: a modal reopened while its action still runs must not start a second one for the same package.
+const pendingActions = new Set<string>();
 
 export function presentReviews(
   open: OpenModalFn,
@@ -95,6 +142,7 @@ export function presentReviews(
   const tabs = [{ id: "reviews", label: "Managed reviews" }];
   if (options.depth !== undefined) {
     views.depth = { header: [], rows: formatReviewDepthLines(options.depth), scroll: 0, node: undefined };
+    if (options.actions !== undefined) views.depth.header = ["actions: l refresh layers, c prepare missing chunks (newest review)"];
     tabs.push({ id: "depth", label: "Review depth" });
   }
   const windowOf = (view: TabView): number => Math.max(1, bodyRows - view.header.length);
@@ -111,7 +159,7 @@ export function presentReviews(
     title: REVIEWS_COMMAND,
     tabs,
     initialTab: "reviews",
-    footer: REVIEWS_FOOTER,
+    footer: options.actions !== undefined && options.depth !== undefined ? REVIEWS_ACTIONS_FOOTER : REVIEWS_FOOTER,
     renderTab: (tabId, body, ctx) => {
       width = ctx?.width;
       active = tabId;
@@ -129,6 +177,28 @@ export function presentReviews(
       const token = key.name || key.sequence;
       const view = views[handle.activeTab() || active];
       if (view === undefined) return;
+      const newest = options.depth?.[0];
+      if ((token === "l" || token === "c") && options.actions !== undefined && newest !== undefined && views.depth !== undefined) {
+        const depthView = views.depth;
+        const actionKey = newest.layersView?.dir ?? newest.reviewId;
+        if (pendingActions.has(actionKey)) {
+          depthView.header = [`${newest.reviewId}: still working, wait for it to finish…`];
+          if (depthView.node !== undefined) depthView.node.content = content(depthView);
+          return;
+        }
+        pendingActions.add(actionKey);
+        const run = token === "l" ? options.actions.refreshLayers(newest) : options.actions.runMissingChunks(newest);
+        depthView.header = [token === "l" ? "refreshing layers…" : "estimating chunks…"];
+        void run
+          .catch((error: unknown) => `Action failed for ${newest.reviewId}: ${error instanceof Error ? error.message : String(error)}`)
+          .then((message) => {
+            pendingActions.delete(actionKey);
+            depthView.header = message.split("\n");
+            if (depthView.node !== undefined) depthView.node.content = content(depthView);
+          });
+        if (depthView.node !== undefined) depthView.node.content = content(depthView);
+        return;
+      }
       const rowWindow = windowOf(view);
       const step = token === "up" || token === "k" ? -1 : token === "down" || token === "j" ? 1 : token === "pageup" ? -rowWindow : token === "pagedown" ? rowWindow : 0;
       if (step === 0) return;
@@ -158,7 +228,7 @@ export async function openReviews(
     (hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input),
     otui,
     chrome,
-    { ...rest, metrics, ...(depth !== undefined ? { depth } : {}) },
+    { actions: createReviewLayersActions(cwd), ...rest, metrics, ...(depth !== undefined ? { depth } : {}) },
   );
 }
 
@@ -197,12 +267,18 @@ export interface ReviewsPanelOptions {
   onOpen: () => void;
   /** Injectable for tests. Default `computeBotMetrics`. */
   read?: (cwd: string) => Promise<BotMetrics>;
+  /** Injectable for tests. Default `loadReviewDepth`. */
+  readDepth?: (cwd: string) => Promise<ReviewDepthRow[]>;
 }
 
 export interface ReviewsPanelHandle {
   refresh(): Promise<void>;
   row(): ReviewsRow;
   activate(): ReviewsRowAction;
+  /** The per-review layer lines the sidebar paints under the count. */
+  layerLines(): string[];
+  /** The per-review leftovers (Not run, held, follow-ups) the sidebar paints under the layer lines. */
+  parityLines(): string[];
   dispose(): void;
 }
 
@@ -211,6 +287,8 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
   const box = new core.BoxRenderable(renderer as never, { id: "sb-reviews", flexDirection: "column", flexShrink: 0 });
   (parent as PanelParent).add(box);
   const read = options.read ?? computeBotMetrics;
+  const readDepth = options.readDepth ?? loadReviewDepth;
+  let depth: ReviewDepthRow[] | undefined;
   let latest: BotMetrics | undefined;
   let failed = false;
   let generation = 0;
@@ -224,6 +302,10 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
   const value = new core.TextRenderable(renderer as never, { id: "sb-reviews-v", content: "" }) as unknown as TextNode;
   box.add(label);
   box.add(value as never);
+  const layerNode = new core.TextRenderable(renderer as never, { id: "sb-reviews-layers", content: "" }) as unknown as TextNode;
+  box.add(layerNode as never);
+  const parityNode = new core.TextRenderable(renderer as never, { id: "sb-reviews-parity", content: "" }) as unknown as TextNode;
+  box.add(parityNode as never);
 
   const currentRow = (): ReviewsRow => projectReviewsRow(latest, options.width, { failed });
   const draw = (): void => {
@@ -231,6 +313,8 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     const row = currentRow();
     label.content = core.t`${dimChunk(core, "Reviews")}`;
     value.content = core.t`${roleChunk(core, row.role, row.text)}`;
+    layerNode.content = projectReviewsLayerLines(depth, options.width).join("\n");
+    parityNode.content = projectReviewsParityLines(depth, options.width).join("\n");
   };
   const activate = (): ReviewsRowAction => {
     const action = currentRow().action;
@@ -256,6 +340,8 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     if (disposed || mine !== generation) return;
     failed = unreadable;
     if (next !== undefined) latest = next;
+    depth = await readDepth(options.cwd).catch((): ReviewDepthRow[] | undefined => undefined);
+    if (disposed || mine !== generation) return;
     draw();
   };
 
@@ -267,6 +353,8 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     refresh,
     row: currentRow,
     activate,
+    layerLines: () => projectReviewsLayerLines(depth, options.width),
+    parityLines: () => projectReviewsParityLines(depth, options.width),
     dispose() {
       disposed = true;
       generation += 1;

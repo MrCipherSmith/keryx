@@ -1,0 +1,160 @@
+{
+ "mutants": [
+  {
+   "id": "f01",
+   "file": "src/review/layers.ts",
+   "anchor": "prHead = await manifestHead(input.packageDir);",
+   "replacement": "prHead = null;"
+  },
+  {
+   "id": "f02",
+   "file": "src/review/layers.ts",
+   "anchor": "if (await layersRefreshInFlight(packageDir)) {",
+   "replacement": "if (false as boolean) {"
+  },
+  {
+   "id": "f03",
+   "file": "src/review/layers.ts",
+   "anchor": "if (hadPrevious) await rename(previous, finalDir).catch(() => {});",
+   "replacement": "void 0;"
+  },
+  {
+   "id": "f04",
+   "file": "src/review/layers.ts",
+   "anchor": "return createMemoryService().index({ cwd, embeddings: false, indexDir });",
+   "replacement": "return createMemoryService().index({ cwd, embeddings: false });"
+  },
+  {
+   "id": "f05",
+   "file": "src/review/layers.ts",
+   "anchor": "\"--end-of-options\", worktree, prHead]);",
+   "replacement": "\"--end-of-options\", worktree, \"HEAD\"]);"
+  },
+  {
+   "id": "f06",
+   "file": "src/review/layers.ts",
+   "anchor": "return typeof head === \"string\" && /^[0-9a-f]{7,64}$/i.test(head) ? head : null;",
+   "replacement": "return typeof head === \"string\" ? head : null;"
+  },
+  {
+   "id": "f07",
+   "file": "src/review/layers.ts",
+   "anchor": "if (input.prHead !== undefined) assertGitRevision(input.prHead);",
+   "replacement": "void 0;"
+  },
+  {
+   "id": "f08",
+   "file": "src/review/layers.ts",
+   "anchor": "return parsed !== null && parsed.version === LAYERS_VERSION ? parsed : null;",
+   "replacement": "return parsed;"
+  },
+  {
+   "id": "f09",
+   "file": "src/review/chunks.ts",
+   "anchor": "{ blocker: 0, critical: 0,",
+   "replacement": "{ blocker: 5, critical: 0,"
+  },
+  {
+   "id": "f10",
+   "file": "src/review/chunks.ts",
+   "anchor": "return withFileLock(path.join(packageDir, CHUNK_STATE_LOCK), () => recordChunkLocked(packageDir, chunkId, result), { timeoutMs: 30_000 });",
+   "replacement": "return recordChunkLocked(packageDir, chunkId, result);"
+  },
+  {
+   "id": "f11",
+   "file": "src/review/chunks.ts",
+   "anchor": "const finished = status === \"DONE\" || status === \"DONE_WITH_CONCERNS\";",
+   "replacement": "const finished = status === \"DONE\";"
+  },
+  {
+   "id": "f12",
+   "file": "src/review/chunks.ts",
+   "anchor": "const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunkId));",
+   "replacement": "const alreadySplit = false;"
+  },
+  {
+   "id": "f13",
+   "file": "src/review/chunks.ts",
+   "anchor": "if (existing.droppedKey === undefined || existing.droppedKey === droppedKey) return existing;",
+   "replacement": "return existing;"
+  },
+  {
+   "id": "f14",
+   "file": "src/review/chunks-estimate.ts",
+   "anchor": "const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;",
+   "replacement": "const answered = record?.answer;"
+  },
+  {
+   "id": "f15",
+   "file": "src/review/coverage-complete.ts",
+   "anchor": "const MIN_WAIVER_QUOTE_LENGTH = 8;",
+   "replacement": "const MIN_WAIVER_QUOTE_LENGTH = 0;"
+  },
+  {
+   "id": "f16",
+   "file": "src/review/coverage-complete.ts",
+   "anchor": ".replace(/-{0,2}waive[- ]?coverage/gi, \"\")",
+   "replacement": ".replace(/zzzz/gi, \"\")"
+  },
+  {
+   "id": "f17",
+   "file": "src/review/managed.ts",
+   "anchor": "if (coverageWaiver !== undefined && researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore);",
+   "replacement": "void 0;"
+  },
+  {
+   "id": "f18",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "|| touchesSchedulerControl(command) || touchesCoverageWaiver(command);",
+   "replacement": "|| touchesSchedulerControl(command);"
+  },
+  {
+   "id": "f19",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "return `'${value.replace(/'/g, `'\\\\''`)}'`;",
+   "replacement": "return `'${value}'`;"
+  },
+  {
+   "id": "f20",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "if (unsafe !== undefined) throw new Error(",
+   "replacement": "if (unsafe === \"never\") throw new Error("
+  },
+  {
+   "id": "f21",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "const files = allFiles.slice(0, MAX_BLOCK_FILES);",
+   "replacement": "const files = allFiles;"
+  },
+  {
+   "id": "f22",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "return `keryx gdgraph affected ${shellQuote(first)} --depth 2",
+   "replacement": "return `keryx gdgraph affected ${first} --depth 2"
+  },
+  {
+   "id": "f23",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "return log === undefined || log.trim() === \"\" ?",
+   "replacement": "return log === undefined ?"
+  },
+  {
+   "id": "f24",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "if (!(await stat(real)).isFile()) return undefined;",
+   "replacement": "void 0;"
+  },
+  {
+   "id": "f25",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "if (realInside.startsWith(\"..\") || path.isAbsolute(realInside)) return undefined;",
+   "replacement": "void 0;"
+  },
+  {
+   "id": "f26",
+   "file": "src/commands/review-layers.ts",
+   "anchor": "const placed = placeReviewPath(command, \"--package\", raw, { projectRoot: resolveProjectRoot(cwd), cwd });",
+   "replacement": "const placed = { ok: true as const, path: raw };"
+  }
+ ]
+}

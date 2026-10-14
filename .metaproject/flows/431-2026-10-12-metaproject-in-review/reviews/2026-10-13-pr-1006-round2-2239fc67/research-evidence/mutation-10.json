@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk src/lib/trust-routine-command.test.ts src/commands/automatic-review.test.ts src/trigger src/flow src/tui/review-layers",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 56497
+  },
+  "mutants": [
+    {
+      "id": "cr1-collapse-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "  if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;\n",
+      "replacement": "",
+      "line": 703,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 73220
+    },
+    {
+      "id": "cr7-recursion-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (depth < 4 && words.some((w) => /\\s/.test(w) && parsedCoverageWaiver(w, depth + 1))) return true;",
+      "replacement": "",
+      "line": 685,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 67641
+    },
+    {
+      "id": "cr13-estimate-check-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (after.includes(\"estimate\") && after.some(",
+      "replacement": "if (true && after.some(",
+      "line": 718,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56593
+    },
+    {
+      "id": "ar2-answer",
+      "file": "src/commands/automatic-review.ts",
+      "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+      "replacement": " && !flags.has(\"--quote\")",
+      "line": 408,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56697
+    },
+    {
+      "id": "ly2-current-commit",
+      "file": "src/review/layers.ts",
+      "anchor": "return existing.graphCommit === existing.prHead && (await graphIntact(packageDir, existing));",
+      "replacement": "return await graphIntact(packageDir, existing);",
+      "line": 248,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56638
+    },
+    {
+      "id": "ly5-intact-nodes",
+      "file": "src/review/layers.ts",
+      "anchor": "return (await stat(path.join(dataDir, \"storage\", \"nodes.jsonl\"))).size > 0;",
+      "replacement": "return true;",
+      "line": 238,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56456
+    },
+    {
+      "id": "cr5-opaque-dollar-only",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return /[$`]/.test(word);",
+      "replacement": "return /[$]/.test(word);",
+      "line": 669,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 60985
+    },
+    {
+      "id": "ar3-quote",
+      "file": "src/commands/automatic-review.ts",
+      "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+      "replacement": " && !flags.has(\"--answer\")",
+      "line": 408,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56701
+    },
+    {
+      "id": "ly12-sweep-prefix",
+      "file": "src/review/layers.ts",
+      "anchor": " || !path.basename(worktree).startsWith(WORKTREE_PREFIX)) continue;",
+      "replacement": ") continue;",
+      "line": 334,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56704
+    },
+    {
+      "id": "ly13-sweep-dir",
+      "file": "src/review/layers.ts",
+      "anchor": "if (path.dirname(worktree) !== temp || ",
+      "replacement": "if (",
+      "line": 334,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56423
+    },
+    {
+      "id": "ly7-resolve-hex",
+      "file": "src/review/layers.ts",
+      "anchor": "return full !== null && /^[0-9a-f]{40,64}$/.test(full) ? full : null;",
+      "replacement": "return full;",
+      "line": 227,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56738
+    },
+    {
+      "id": "cr21-both-spellings-asis-only",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];",
+      "replacement": "return splitSegments(command);",
+      "line": 664,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 57208
+    },
+    {
+      "id": "cr22-both-spellings-expanded-only",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];",
+      "replacement": "return splitSegments(expanded);",
+      "line": 664,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 93745
+    },
+    {
+      "id": "cr23-continuation-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return command.replace(/\\\\\\r?\\n/g, \"\");",
+      "replacement": "return command;",
+      "line": 644,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 64340
+    },
+    {
+      "id": "cr24-continuation-crlf",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return command.replace(/\\\\\\r?\\n/g, \"\");",
+      "replacement": "return command.replace(/\\\\\\n/g, \"\");",
+      "line": 644,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56743
+    },
+    {
+      "id": "cr25-chunk-collapse-net-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return /chunks\\s+estimate\\b[^;&|]*--answer/i.test(collapseQuoting(joinContinuations(raw)));",
+      "replacement": "return false;",
+      "line": 725,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56429
+    },
+    {
+      "id": "cr26-chunk-scan-depth",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (depth < 4 && plain.some((w) => /\\s/.test(w) && scan(w, depth + 1))) return true;",
+      "replacement": "if (depth < 0 && plain.some((w) => /\\s/.test(w) && scan(w, depth + 1))) return true;",
+      "line": 719,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 57431
+    },
+    {
+      "id": "cr27-chunk-collapse-anywhere",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "[^;&|]*--answer/i",
+      "replacement": "[\\s\\S]*--answer/i",
+      "line": 725,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 56441
+    }
+  ],
+  "totals": {
+    "killed": 18,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

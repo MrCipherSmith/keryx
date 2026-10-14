@@ -87,6 +87,8 @@ A reviewer on this host cannot open a path: its file tool reads inside its worki
 3. **Check before dispatch.** `keryx review dispatch-check --payload <file> --manifest <dir>/manifest.json` for the wave; exit 1 means a payload names no slice, is over the wave ceiling (dispatch fewer slices, then the next wave), or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
 4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time. Give each reviewer `max_rounds` of at least 40 (the default); a reviewer that spends its rounds reading the skill and the schema returns nothing. **Incomplete means the next wave while it makes progress, Not run when it stalls.** Every reviewer result lists the `slices` it covered, in its `REVIEW_RESULT` object, as ids (`"slices": ["slice-01", "slice-02"]`); an object with an `id` and an optional `coverage` note (`{"id": "slice-01", "coverage": "read in full"}`) is read the same way. An object with a `status` counts only when it is DONE, COMPLETE, COVERED or OK (any case); a slice marked NOT_READ, INCOMPLETE, SKIPPED or PARTIAL is not covered, so give a slice you did not read no `status` of that kind and leave it out. An entry with no id counts for nothing. **One driver file per dispatch.** Write `drivers/<reviewer>.json` next to `raw/` with `{"reviewer": "<name>", "slices": [<ids dispatched>], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`: `ledger build` takes the reviewer's rule file from `definition` (a `skill_path` there, or inside a `payload` object, is read too) and the slices it was handed from `slices`. Only reviewer replies belong in `raw/`; a verification payload or a note filed there is reported as set aside and left in place, but it still costs a step. On `INCOMPLETE`, `BLOCKED` or `NEEDS_CONTEXT` (never accepted as a finished scope), and on a `DONE` that left slices open, `keryx review retry-plan --manifest <dir>/manifest.json --result <raw/reviewer.txt>` decides and hands out the next wave of only the slices still uncovered (`--next-wave` plans one without a result). A result that covered a new slice spends no attempt; two results in a row with nothing new, or six failed rounds, print the `- **Not run:** …` line to paste into the report, and a result with nothing new first has its open slices cut in half. Dispatch each wave, save its reply, and run `retry-plan` again until it says `accepted`. Only the operator can accept a smaller set than that, with their own quote. An unfinished reviewer is never counted as a clean pass. **Persist every result.** Pass each reviewer `save_result_to: .metaproject/data/review/raw/<reviewer>.txt`: the host writes its full final text there, so `review complete` has raw evidence even after the transcript is cut. Build `research.json` with `keryx review ledger build <input-dir> --package <review-dir>` — never by hand: it reads the saved results, `scope-files.json` and the retry state, marks a reviewer complete only when its result is finished and its payloads cover the scope, and prints each gap with the exact next command and the waves left (a `retry-plan --next-wave` call, or a `--dispositions` entry for a raw finding). Run `keryx review ingest --research <review-dir>/research.json` once it prints READY (exit 0). A refused `review complete` names what is missing: fix that with a command and run it again; it is never `blocked`. `--head` wants a SHA (`git rev-parse HEAD`), not `HEAD`.
 5. **Never print a scope or a slice.** The tool output of one call is cut at about 20 KB and `keryx review scope` of a large PR prints hundreds of KB. Run it as `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json` and read the counts from the file (`keryx ctx read`, or `jq`); take `<base>` from `git symbolic-ref refs/remotes/origin/HEAD`, not a guessed `origin/main`. Create `.metaproject/data/review/` first (`mkdir -p`) — a missing directory is a command to run, not a blocker. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
+6. **Write mutants whole.** A testing reviewer's `mutant_candidates` cover every changed branch, code downstream of the diff included. Write them to `research-evidence/mutants.json` unchanged; you may not narrow them, and a candidate no pass has run still blocks the coverage gate (`SKILL.detail.md`, mutation pass).
+7. **Measure before `review-layout`.** Run the browser measurements (Playwright/Storybook) yourself and pass them as `context_files` in its first dispatch; they count as evidence when the command and viewport are named. A second `NEEDS_CONTEXT` from one role is Not run (`layout: no engine`), not another refill (`SKILL.detail.md`).
 
 ## Control
 
@@ -207,8 +209,7 @@ keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 ```
 
-**An unrecognised option is refused, not ignored** — a misspelled flag exits
-non-zero rather than printing `status: closed` and writing nothing at all.
+**An unrecognised option is refused, not ignored** — a misspelled flag exits non-zero rather than printing `status: closed` and writing nothing at all.
 
 `--verifications` takes what `review-verifier` returned. `--scope` takes the
 whole `--json` output of `keryx review scope`, so the package records what the
@@ -234,9 +235,7 @@ Two channels, and both work:
   it: it is copied into the package it screened and removed from the slot, so a
   later round cannot be screened against a set nobody recomputed.
 
-Do **not** write the record inside the package directory before the ingest. A
-round that names no `--review-id` has not allocated that directory yet, and
-creating it makes the ingest take the next free name instead.
+Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
 
 `--refuted` takes the findings this round **raised and then dismissed**, in the
 same finding shape, each carrying `disposition: {state, evidence}` with one of
@@ -252,9 +251,12 @@ Everything except `unknown` must cite where the outcome is written down — the
 commit, the test, the decision. A recorded state and its citation cannot be
 overwritten by a later close; record a correction as a new round.
 
-**Closing a fix round without dispositions leaves every finding reading
-`unknown`.** That is not "the reviewers were right"; it is "nobody wrote down
-what happened", and it is the single reason the precision figure cannot be read.
+`review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
+`review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
+`review ingest` refuses an internal finding whose `quote` is not at its `path` at the reviewed SHA, and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
+A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".
+
+**Closing a fix round without dispositions leaves every finding reading `unknown`.** That is not "the reviewers were right"; it is "nobody wrote down what happened", and it is the single reason the precision figure cannot be read.
 
 Managed modes:
 
@@ -792,13 +794,11 @@ and those are different questions — only the first has ever been asked here.
 A deep round dispatches under **both**. Scope B is computed, never browsed:
 
 ```bash
-keryx review blast-radius --ref "${BASE_SHA}" --json > blast-radius.json   # KEEP THIS FILE
-keryx review blast-radius --ref "${BASE_SHA}" --brief                      # what a scope-B reviewer is told
+keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --json > blast-radius.json   # KEEP THIS FILE
+keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --brief                      # what a scope-B reviewer is told
 ```
 
-**KEEP THIS FILE** is not advice. The ingest at Step 12 is **refused** if a
-scope-B finding arrives without it — pass it back as
-`review ingest ... --blast-radius blast-radius.json`.
+**KEEP THIS FILE**: the ingest at Step 12 is **refused** for a scope-B finding without it — pass it as `review ingest ... --blast-radius blast-radius.json`.
 
 Scope B is bounded and computed: distance ≤ 2 from every changed file, at most 40 files, closest
 first. Do not pick the files or widen the set. Record it with `--out "<review-package>/blast-radius.md"`,
@@ -813,9 +813,11 @@ names the caller that breaks.
 Recompute scope B on rounds 2..N only when the changed-file set moved, and always on the final round:
 
 ```bash
-keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --previous blast-radius.json [--final]
 ```
 
+`PKG` is the review package, created by `keryx review start` before dispatch; `--package` makes scope B read the graph built at the PR head. Give each reviewer `keryx review layers block --package "${PKG}" --files <its slice files> --json` as the payload's `layers` field.
+When `dropped` is non-empty, run `keryx review chunks plan|estimate|next|record|merge --package "${PKG}"` until `next` has none left. `review complete` refuses while a file is uncovered; `--waive-coverage "<operator quote>"` takes the operator's own words only, never yours.
 The measurements, the rule table and the recompute table: `SKILL.detail.md` § "Scope B — bounds, rejections and recompute".
 
 ### Path Mode
@@ -871,6 +873,7 @@ If the repository has local convention docs such as `CLAUDE.md`, `AGENTS.md`,
 | `src/core/**`, `core/**`, `shared/**`, `foundation/**` | `review-core-boundaries` |
 | `src/core/flow/**`, `src/graph/**`, `src/shared/flow/**` | `review-flow-graph` |
 | A `.tsx`/`.jsx`/`.css`/`.scss` hunk that adds or changes a sizing or spacing utility on a rendered element — `w-*`, `min-w-*`, `max-w-*`, `flex-*`, `basis-*`, `grid-cols-*`, `truncate`, `line-clamp-*`, `overflow-*`, `p*`/`m*`/`gap-*` and their logical `ps-*`/`pe-*`/`ms-*`/`me-*` forms, or an inline `style` carrying a dimension | `review-layout` |
+| `pr-context.md` is in the package | `review-pr-contract` |
 
 These convention reviewers are additive: keep the generic reviewers selected by normal detection,
 then add the matching convention pass. Deduplicate reviewer names before dispatch.
@@ -1057,6 +1060,7 @@ Skipped reviewers:
 | `--core-boundaries` | `review-core-boundaries` |
 | `--flow-graph` | `review-flow-graph` |
 | `--layout` | `review-layout` |
+| `--pr-contract` | `review-pr-contract` |
 | `--all` | all reviewers above (including `review-clean-code`, `review-highload`, applicable legacy/profile reviewers, and project convention reviewers when local convention docs exist) |
 | `--verify` | `review-verifier`, AFTER all others; checks the consolidated findings by running something. Delete-only. |
 | (auto) | detected from diff file extensions — see Auto-detection table |
@@ -1113,12 +1117,7 @@ Dispatch selected reviewers in parallel when independent — this engine dispatc
 3. Wave C - **verification**: `review-verifier` over the consolidated findings, when blockers/majors
    exist, `--verify` is set, or the PR is high-risk. See below.
 
-**Execution belongs to both B and C, and they execute for opposite reasons.**
-Wave C runs a command to *decide the fate of a finding that exists*; it is
-delete-only and can produce nothing. Wave B runs commands to *make findings* —
-`review-testing-practices` deletes each gate the diff added and records whether
-the suite goes red, and `review-layout` measures rendered geometry in a real
-engine.
+**Execution belongs to both B and C, and they execute for opposite reasons.** Wave C runs a command to *decide the fate of a finding that exists*; it is delete-only and can produce nothing. Wave B runs commands to *make findings* — `review-testing-practices` deletes each gate the diff added and records whether the suite goes red, and `review-layout` measures rendered geometry in a real engine.
 
 The consequence is directional and easy to get wrong: **a surviving mutation is
 not something Wave C can hand you.** If Wave B skips its mutation pass, that

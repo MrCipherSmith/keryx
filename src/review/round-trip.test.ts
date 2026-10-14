@@ -87,6 +87,8 @@ const REVIEWER_RESULTS = [
 const ROUND_1_REPORT = [
   "# Consolidated Review — round 1",
   "",
+  "Evidence level: static only — did not run: tests",
+  "",
   "## Major",
   "",
   "### [F-001] the shared config directory is created group-writable",

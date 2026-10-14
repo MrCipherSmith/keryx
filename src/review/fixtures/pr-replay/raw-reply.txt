@@ -1,0 +1,21 @@
+```REVIEW_RESULT
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE",
+  "summary": "The Last seen row has no test.",
+  "findings": [
+    {
+      "id": "F-010",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "problem": "no test asserts the new Last seen row",
+      "impact": "a wrong value in the row ships unnoticed",
+      "suggested_fix": "assert the rendered cell",
+      "evidence": "mutant:m1 survived",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+Parent follow-up: the sign-in audit log writer was not read, so it is not verified that lastSeen is set for accounts created before the audit log existed.

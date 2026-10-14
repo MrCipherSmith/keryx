@@ -43,12 +43,31 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
 - **A floor.** The calls that always need a human (destructive, credentials, publishing)
   are refused, not granted. A refused call stays refused: the same call in any spelling is
   declined without a new question, and the run is told to choose another path. A run that can
-  only go on through a floor stops with exit code 3.
+  only go on through a floor stops with exit code 3. When the last thing that happened was the
+  loop guard turning away a call the run had already made three times, the reason in the summary
+  says so first and then counts the floor refusals; the status and the exit code stay `floor`.
 - **Time and tokens.** `--budget-minutes` and `--budget-tokens` are checked while the run
   goes. When one is spent, the run is stopped at a safe point, the package is kept as it is,
   and the exit code is 4.
 - **A hang.** The child process is watched through its events file. If nothing new appears for
   `--stall-minutes`, the run is stopped and the exit code is 5.
+- **Silence on the terminal.** While the run goes, stderr gets one line
+  `heartbeat: phase <phase>, <n> round(s), <n> tokens` whenever the phase, the rounds or the
+  tokens change (at most once a minute) and, as a keep-alive, again whenever a minute passes with
+  no line, repeating the latest state. It is printed with `--json` too, and stdout stays pure
+  JSON. A wrapper that kills a command after a stretch of silence therefore sees a live run. The
+  keep-alive only writes: it never counts as progress of the child, so a run that has really
+  stalled is still stopped by `--stall-minutes` (exit code 5) and the lines end with it.
+- **The commit under review.** The pull request head is resolved once at the start (through
+  `gh`) and given to the child, which passes it as `--head <sha>` to `keryx review start`,
+  `attach`, `ingest` and `complete`. Without it keryx would record the commit checked out in the directory,
+  and the completion gate would compare the wrong one. When `gh` cannot resolve the head the
+  prompt is unchanged and that risk remains.
+- **The shell and the skills.** The prompt names the real path of the review skills in the clone
+  (`.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md`) so the run does not search
+  for them, and tells the run how to get past the routing guard that refuses raw `git diff`,
+  `cat`, `sed`, `find` and `tail`: `keryx ctx diff`, `keryx ctx read`, `keryx ctx run --`, or a
+  `# keryx:raw <why>` marker.
 - **A browser.** A check that needs one is skipped and the report says it was skipped.
 - **Rounds.** At most five review rounds, and six reviewers per wave, and no new round when the
   last one found no new blocker or major finding.

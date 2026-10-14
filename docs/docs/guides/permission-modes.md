@@ -111,7 +111,8 @@ While a turn belongs to an automatic review:
   These `keryx review` commands, written as plain words with no pipe, `;`,
   `&&`, redirect or substitution, are approved:
   `start`, `attach` and `ingest` with `--automatic` (once per run);
-  `status <this review>` and `complete <this review>`;
+  `status <this review>`, `report-parity <this review>` and
+  `complete <this review>`;
   `ledger build <dir> --package <this review>`, `severity-audit`,
   `context-collect`, `compare-reference` and `mutate --test "bun test …"`, each
   with `--package <this review>`; `retry-plan --manifest <this review>/…`;

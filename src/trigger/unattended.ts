@@ -32,7 +32,7 @@
 
 import { parsePatchTargets } from "../lib/patch-risk";
 import { commandWord, splitSegments, stripAssignments } from "../lib/shell-syntax";
-import { isPublishCommand } from "../lib/command-risk";
+import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } from "../lib/command-risk";
 
 /**
  * Tools an unattended run is never offered in this version (AC5). The web and
@@ -128,6 +128,11 @@ export function unattendedShellRefusal(command: string): string | undefined {
     if (match !== null) {
       return `\`${match[0]}\` changes flow state, a schedule or a timer — only an operator (or the dispatcher itself) may change those`;
     }
+  }
+
+  // Operator-quote gates of the review (R2-40): derived from the confirmation floor, so the two lists cannot drift.
+  if (touchesCoverageWaiver(text) || touchesChunkEstimateAnswer(text)) {
+    return "a review coverage waiver or an over-ceiling cost answer is the operator's own statement — an unattended run has no operator to make it";
   }
 
   for (const segment of splitSegments(text)) {

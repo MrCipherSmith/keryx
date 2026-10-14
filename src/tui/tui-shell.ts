@@ -73,7 +73,8 @@ import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
-import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
+import { loadReviewDepth } from "./review-panel";
+import { isReviewLayersCommand, isReviewParityCommand, isReviewsCommand, mountReviewsPanel, openReviews, renderReviewLayersText, renderReviewParityText, type ReviewsPanelHandle } from "./reviews-inspector";
 import { permissionsSlashText } from "../commands/permissions-command";
 import {
   loadPosture,
@@ -8948,6 +8949,18 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isWorkspaceCommand(command.name)) {
           showWorkspace();
+          return;
+        }
+        if (isReviewLayersCommand(line)) {
+          void loadReviewDepth(inspectorCwd())
+            .then((rows) => io.onSystem?.(renderReviewLayersText(rows)))
+            .catch(() => io.onSystem?.("The managed reviews could not be read.\n"));
+          return;
+        }
+        if (isReviewParityCommand(line)) {
+          void loadReviewDepth(inspectorCwd())
+            .then((rows) => io.onSystem?.(renderReviewParityText(rows)))
+            .catch(() => io.onSystem?.("The managed reviews could not be read.\n"));
           return;
         }
         if (isReviewCommand(command.name)) {

@@ -84,7 +84,7 @@ async function ingest(reviewId: string, over: Partial<ManagedReviewIngestInput> 
     mode: "ingest",
     reviewId,
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FINDING],
     research: readyResearchFixture([FINDING.reviewer], [FINDING.id]),
     now: new Date("2026-08-30T11:00:00Z"),
@@ -226,7 +226,7 @@ test("AC5: an applied `refuted` verdict writes the note at ingest, attested by t
     mode: "ingest",
     reviewId: "2026-08-30-notes-filtered",
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FINDING],
     verificationMode: "filter",
     verifications: [
@@ -318,7 +318,7 @@ test("AC6: an unattested `dismissed-incorrect` writes NO note, and the refusal i
     mode: "ingest",
     reviewId: "2026-08-30-notes-unattested",
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FINDING],
     refuted: [
       {
@@ -351,7 +351,7 @@ test("AC6: naming the human turns the same dismissal into a note", async () => {
     mode: "ingest",
     reviewId: "2026-08-30-notes-attested",
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FINDING],
     refuted: [
       {

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { formatReviewDepthLines, loadReviewDepth, renderReviewDepthText, REVIEW_DEPTH_EMPTY, type ReviewDepthRow } from "./review-panel";
+import { recordChunk } from "../review/chunks";
+import { formatReviewDepthLines, layersDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, REVIEW_DEPTH_EMPTY, type ReviewDepthRow } from "./review-panel";
 import { presentReviews, renderReviewsText } from "./reviews-inspector";
 
 const roots: string[] = [];
@@ -180,5 +181,98 @@ describe("surfaces share one projection", () => {
     key?.({ name: "down", sequence: "down" });
     expect(nodes.depth?.content).not.toContain("acme/app#7  pr-7");
     expect(painted.reviews).not.toContain("acme/app#7");
+  });
+});
+
+// Flow 431 AC12: one projection of layers.json, the layer usage, the chunk pass and the coverage waiver.
+describe("layers in the review depth", () => {
+  const division = { state: "none", workingCopyCommit: "abcdef0123", prHead: "abcdef0123", commitsBetween: 0, changedPaths: [] };
+  const layers = {
+    version: 1,
+    refreshedAt: "2026-10-13T10:00:00Z",
+    prHead: "abcdef0123",
+    base: "abcdef0122",
+    graphCommit: "abcdef0123",
+    graph: { status: "ok", commit: "abcdef0123", builtAt: "2026-10-13T10:00:00Z", nodes: 10, edges: 20 },
+    wiki: { status: "ok", commit: "abcdef0123", builtAt: null, pagesRefreshed: 0, pagesStaleProse: 0, written: false, divergence: division },
+    memory: { status: "ok", commit: "abcdef0123", builtAt: null, entries: 1, divergence: division },
+  };
+  const plan = {
+    schemaVersion: 1,
+    reviewer: "review-regression",
+    tier: "middle",
+    source: "blast-radius.json",
+    maxFiles: 40,
+    maxBytes: 1000,
+    dropped: 2,
+    chunks: [{ id: "chunk-001", files: ["src/far-1.ts"], bytes: 1 }, { id: "chunk-002", files: ["src/far-2.ts"], bytes: 1 }],
+  };
+  const drop = (file: string) => ({ file, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason: "cap", detail: "over the cap" });
+  const runs = [
+    { reviewer: "review-logic", status: "complete", scopeComplete: true, layersUsed: { graph: 2, wiki: 0, memory: 0, ctx: 1 } },
+    { reviewer: "review-style", status: "complete", scopeComplete: true },
+  ];
+
+  async function tracked(extra: Record<string, unknown> = {}): Promise<ReviewDepthRow> {
+    const root = await project({
+      [`${PKG}/manifest.json`]: manifest,
+      [`${PKG}/research.json`]: { dispatch: { version: 1, mode: "all", selected: ["review-logic", "review-style"], runs, ...extra } },
+      [`${PKG}/layers.json`]: layers,
+      [`${PKG}/scope-files.json`]: { files: ["src/a.ts"] },
+      [`${PKG}/blast-radius.json`]: { schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped: [drop("src/far-1.ts"), drop("src/far-2.ts")] },
+      [`${PKG}/chunks.json`]: plan,
+    });
+    await recordChunk(path.join(root, PKG), "chunk-001", { status: "DONE", findings: [] });
+    const [row] = await loadReviewDepth(root);
+    return row as ReviewDepthRow;
+  }
+
+  test("the one-line form states the graph head, the layers used, the unknown count and the chunk pass", async () => {
+    const row = await tracked();
+    expect(layersLine(row.layersView)).toBe("graph@abcdef0 = head; wiki none; memory none; layers used 1/2; unknown 1; chunks 1/2, uncovered 1");
+  });
+
+  test("a graph built from another commit reads as differs", async () => {
+    const root = await project({
+      [`${PKG}/manifest.json`]: manifest,
+      [`${PKG}/layers.json`]: { ...layers, graphCommit: "1111111222" },
+    });
+    const [row] = await loadReviewDepth(root);
+    expect(layersLine(row?.layersView)).toContain("graph@1111111 = differs");
+  });
+
+  test("the full lines carry layers.json, the usage per layer, every chunk's state and the coverage counts", async () => {
+    const row = await tracked();
+    const text = layersDepthLines(row.layersView).join("\n");
+    expect(text).toContain("graph: ok @abcdef0 = head");
+    expect(text).toContain("layers used: 1 of 2 reviewer(s) (graph 1, wiki 0, memory 0, ctx 1); unknown 1 (no tool-call log)");
+    expect(text).toContain("chunk pass (review-regression, middle tier): 1/2 done, 0 failed, 1 pending, 1 uncovered");
+    expect(text).toContain("chunk-001: done, 1 file(s), 1 attempt(s)");
+    expect(text).toContain("chunk-002: pending, 1 file(s), 0 attempt(s)");
+    expect(text).toContain("coverage: in scope 3, covered 2, omitted 0, uncovered 1");
+  });
+
+  test("the waiver and the operator's quote show", async () => {
+    const row = await tracked({ coverageWaiver: { operatorQuote: "skip chunk two", time: "2026-10-13T11:00:00Z", files: ["src/far-2.ts"] } });
+    expect(layersDepthLines(row.layersView).join("\n")).toContain('coverage waived by the operator (2026-10-13T11:00:00Z): "skip chunk two"; 1 file(s) not reviewed');
+  });
+
+  test("the depth tab, the readline text and `/review layers` print the same lines", async () => {
+    const row = await tracked();
+    const lines = layersDepthLines(row.layersView);
+    for (const line of lines) {
+      expect(formatReviewDepthLines([row])).toContain(`  ${line}`);
+      expect(renderReviewLayersText([row])).toContain(`  ${line}`);
+      expect(renderReviewDepthText([row])).toContain(line);
+    }
+    expect(renderReviewLayersText([row])).toContain(layersLine(row.layersView));
+    expect(renderReviewLayersText([])).toContain(REVIEW_DEPTH_EMPTY);
+  });
+
+  test("a package with no layers.json says how to refresh it", async () => {
+    const root = await project({ [`${PKG}/manifest.json`]: manifest });
+    const [row] = await loadReviewDepth(root);
+    expect(layersLine(row?.layersView)).toBe("layers: not refreshed");
+    expect(layersDepthLines(row?.layersView).join("\n")).toContain("keryx review layers refresh --package");
   });
 });

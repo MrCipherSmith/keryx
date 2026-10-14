@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk src/lib/trust-routine-command.test.ts src/commands/review-chunks.test.ts src/flow/review-gate-coverage.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 28808
+  },
+  "mutants": [
+    {
+      "id": "r3-01-opaque-args",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return completeLike && opaqueArgs(rest);",
+      "replacement": "return completeLike && false;",
+      "line": 726,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 29086
+    },
+    {
+      "id": "r3-01-opaque-verb",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "includes(\"complete\") || (rest[0] !== undefined && wordIsOpaque(rest[0]));",
+      "replacement": "includes(\"complete\");",
+      "line": 725,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 27239
+    },
+    {
+      "id": "r3-01-opaque-head",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (wordIsOpaque(words[0]!)) return words.slice(1);\n",
+      "replacement": "",
+      "line": 681,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 26784
+    },
+    {
+      "id": "r3-01-chunk-answer-opaque",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (lowerArgs.some(isAnswer) && opaqueArgs(args)) return true;\n",
+      "replacement": "",
+      "line": 767,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 25037
+    },
+    {
+      "id": "r3-01-package-exempt",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "wordIsOpaque(w) && args[i - 1] !== \"--package\"",
+      "replacement": "wordIsOpaque(w)",
+      "line": 692,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19983
+    },
+    {
+      "id": "r3-04-keryx-only",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "? words.slice(at + 1) : undefined;",
+      "replacement": "? words.slice(at + 1) : words.slice(1);",
+      "line": 687,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22948
+    },
+    {
+      "id": "r3-04-terminal",
+      "file": "src/commands/review-chunks.ts",
+      "anchor": "optionValue(rest, \"--answer\") !== undefined && !isTerminal()",
+      "replacement": "false",
+      "line": 109,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19682
+    },
+    {
+      "id": "r3-02-refuse-flags",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "if (entry.refuseFlags?.some(",
+      "replacement": "if (false && entry.refuseFlags?.some(",
+      "line": 159,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20145
+    },
+    {
+      "id": "r3-02-chunks-refuse",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "refuseFlags: [\"--answer\", \"--quote\"]",
+      "replacement": "refuseFlags: []",
+      "line": 102,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19586
+    }
+  ],
+  "totals": {
+    "killed": 8,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

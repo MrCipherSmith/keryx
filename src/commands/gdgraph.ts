@@ -734,11 +734,16 @@ async function runFind(rest: string[]): Promise<void> {
 async function runAffected(rest: string[]): Promise<void> {
   let target = positionals(rest)[0];
   if (!target) {
-    console.error("Usage: keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]");
+    console.error("Usage: keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json] [--data-dir <dir>]");
     process.exitCode = 1;
     return;
   }
 
+  const dataDir = optionValue(rest, "--data-dir");
+  const freshnessHere = (): Promise<StalenessCheck> =>
+    dataDir === undefined
+      ? graphFreshness()
+      : Promise.resolve({ status: "unknown", reasons: ["graph read from --data-dir: freshness is recorded in layers.json"] });
   const ranked = rest.includes("--ranked");
   const asJson = rest.includes("--json");
   const depthArg = optionValue(rest, "--depth");
@@ -756,6 +761,7 @@ async function runAffected(rest: string[]): Promise<void> {
       const report = await buildAffectedReport(process.cwd(), target, {
         ...(parsedDepth !== undefined && Number.isFinite(parsedDepth) ? { depth: parsedDepth } : {}),
         ranked: true,
+        ...(dataDir === undefined ? {} : { dataDir }),
       });
       console.log(JSON.stringify(report.json, null, 2));
       process.exitCode = report.exitCode;
@@ -769,7 +775,7 @@ async function runAffected(rest: string[]): Promise<void> {
   const config = await loadGdgraphConfig(process.cwd());
   const depth = parsedDepth !== undefined && Number.isFinite(parsedDepth) ? parsedDepth : config.affected.defaultDepth;
 
-  const graph = await loadGraph(process.cwd());
+  const graph = await loadGraph(process.cwd(), dataDir);
 
   // Symbol-aware: if the target isn't a known file but names a symbol, resolve
   // it to its owning file so `affected "clonePipeline"` just works.
@@ -833,7 +839,7 @@ async function runAffected(rest: string[]): Promise<void> {
     // and not on the success path — despite `affected` being one of the two
     // subcommands the spec explicitly names as presenting graph output as
     // current fact. Added to every exit point below.
-    const freshness = await graphFreshness();
+    const freshness = await freshnessHere();
     if (asJson) {
       console.log(
         JSON.stringify(
@@ -902,7 +908,7 @@ async function runAffected(rest: string[]): Promise<void> {
     // vocabulary. `code` is now that vocabulary's `target-not-indexed`;
     // `error` keeps carrying a value for existing consumers, and carries the
     // same one so the two can never disagree.
-    const freshness = await graphFreshness();
+    const freshness = await freshnessHere();
     if (asJson) {
       console.log(
         JSON.stringify(
@@ -943,7 +949,7 @@ async function runAffected(rest: string[]): Promise<void> {
   }
 
   if (asJson) {
-    console.log(JSON.stringify({ ...affected, freshness: await graphFreshness() }, null, 2));
+    console.log(JSON.stringify({ ...affected, freshness: await freshnessHere() }, null, 2));
     return;
   }
 
@@ -969,7 +975,7 @@ async function runAffected(rest: string[]): Promise<void> {
       }
     }
   }
-  await printStaleNote();
+  await printStaleNote(dataDir === undefined ? undefined : await freshnessHere());
 }
 
 async function runRepomap(rest: string[]): Promise<void> {
@@ -1039,7 +1045,7 @@ function positionals(args: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--depth" || arg === "--budget") {
+    if (arg === "--depth" || arg === "--budget" || arg === "--data-dir") {
       i += 1;
       continue;
     }
@@ -1211,7 +1217,7 @@ Usage:
   keryx gdgraph symbol "<name>" [--json]
   keryx gdgraph symbols <enable|disable|status>
   keryx gdgraph path "<A>" "<B>"
-  keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
+  keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json] [--data-dir <dir>]
   keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
   keryx gdgraph context
   keryx gdgraph assets list | verify [<id>] | pull <id>

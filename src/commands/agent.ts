@@ -744,6 +744,8 @@ export interface AgentDeps {
    * this field existed.
    */
   contextWindow?: number;
+  /** Live window supplied by a background probe; survives host dependency copies. */
+  getContextWindow?: () => number | undefined;
   /**
    * Flow 267: called immediately after the guard above splices a shrunk
    * context into `history` (same array reference — see `runAgentTurn`'s own
@@ -2253,6 +2255,11 @@ function asksForAutomaticReview(deps: AgentDeps, options: RunAgentTurnOptions, u
  * internal `return` statements. A `finally` here is the one place that
  * naturally covers all of them.
  */
+/** A live probe takes precedence, including its still-unknown value. */
+export function agentContextWindow(deps: Pick<AgentDeps, "contextWindow" | "getContextWindow">): number | undefined {
+  return deps.getContextWindow !== undefined ? deps.getContextWindow() : deps.contextWindow;
+}
+
 export async function runAgentTurn(
   io: AgentIO,
   deps: AgentDeps,
@@ -2710,7 +2717,7 @@ async function pruneHistory(
   }
   const lengthBefore = history.length;
   // Flow 393 AC12: the protected window and the batch threshold follow the context window.
-  const thresholds = pruneThresholdsForWindow(deps.contextWindow);
+  const thresholds = pruneThresholdsForWindow(agentContextWindow(deps));
   const result = await pruneToolOutputs(history, {
     sessionDir,
     protectTokens: thresholds.protectTokens,
@@ -2775,7 +2782,7 @@ async function pruneOrRewriteHistory(input: RoundRewriteInput): Promise<PruneRes
   });
   const forced = needsCompaction(
     estimateRequestTokens(history, input.systemInstruction, input.toolDefs),
-    deps.contextWindow,
+    agentContextWindow(deps),
   );
   const logDecision = (d: RewriteDecision): void => {
     const key = `${d.kind}:${d.reason}`;
@@ -2823,7 +2830,7 @@ async function pruneOrRewriteHistory(input: RoundRewriteInput): Promise<PruneRes
     sessionDir: wmDir,
     slate,
     frame: { nonce: input.controlNonce, scrub, ts: input.now() },
-    ...(deps.contextWindow !== undefined ? { contextWindow: deps.contextWindow } : {}),
+    ...(agentContextWindow(deps) !== undefined ? { contextWindow: agentContextWindow(deps)! } : {}),
     providerId: deps.providerId,
     remainingRounds,
     atPlanBoundary: boundary,
@@ -2913,13 +2920,13 @@ async function pruneThenCompact(
     usageAnchors.delete(history);
   }
   const estimate = estimateRequestTokens(history, systemInstruction, toolDefs);
-  if (!needsCompaction(estimate, deps.contextWindow)) {
+  if (!needsCompaction(estimate, agentContextWindow(deps))) {
     return;
   }
   await firePreCompactBestEffort(deps, estimate);
   const compacted = compactWithFallback(history, {
     keepLastUserTurns: 3,
-    fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, systemInstruction, toolDefs), deps.contextWindow),
+    fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, systemInstruction, toolDefs), agentContextWindow(deps)),
   });
   if (!compacted.noop) {
     history.splice(0, history.length, ...compacted.context);
@@ -3538,13 +3545,13 @@ async function runAgentTurnCore(
       pruneResult.pruned + pruneResult.reasoningStripped > 0
         ? estimateRequestTokens(history, roundSystemInstruction, toolDefs)
         : estimateWithUsageAnchor(history, roundSystemInstruction, toolDefs, liveAnchor);
-    if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
+    if (needsCompaction(preRequestEstimate, agentContextWindow(deps))) {
       await firePreCompactBestEffort(deps, preRequestEstimate);
       // Flow 387 T11: fewer operator turns, then a cut inside the current turn,
       // while the result is still over the threshold.
       const compacted = compactWithFallback(history, {
         keepLastUserTurns: 3,
-        fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), deps.contextWindow),
+        fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), agentContextWindow(deps)),
       });
       if (!compacted.noop) {
         // Splice, never reassign — `runAgentTurn`'s own contract (see its doc
@@ -3897,7 +3904,7 @@ async function runAgentTurnCore(
           // never accept a weak cut — `fits` stays false so the strongest one (in-turn tail) wins.
           const overflowTarget = overflowTargetTokens(
             parseOverflowLimits(pendingOverflowError.message),
-            deps.contextWindow,
+            agentContextWindow(deps),
             overflowEstimate,
           );
           const compacted = compactWithFallback(history, {
