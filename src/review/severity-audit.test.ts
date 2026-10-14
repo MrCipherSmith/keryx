@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { type MutantResult, type MutationRecord, parseMutantSpec, renderMutationTable } from "./mutate";
+import { MUTANT_KINDS, type MutantResult, type MutationRecord, parseMutantSpec, renderMutationTable } from "./mutate";
 import { auditPackage, auditSeverity, type NamedMutationRecord } from "./severity-audit";
 
 function mutant(over: Partial<MutantResult> = {}): MutantResult {
@@ -101,5 +101,18 @@ describe("auditSeverity and mutant kind", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the reviewer's documented mutant_candidates shape", () => {
+  const REPO = path.resolve(import.meta.dir, "..", "..");
+  const COPIES = ["src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md", ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"];
+
+  test("names the optional kind with every value the severity hold reads, in both copies", async () => {
+    const texts = await Promise.all(COPIES.map((file) => readFile(path.join(REPO, file), "utf8")));
+    expect(texts[1]).toBe(texts[0]!);
+    const bullet = texts[0]!.slice(texts[0]!.indexOf("`mutant_candidates` in your `REVIEW_RESULT`")).split("\n- ")[0]!;
+    expect(bullet).toContain("optional `kind`");
+    for (const kind of MUTANT_KINDS) expect(bullet).toContain(`\`${kind}\``);
   });
 });

@@ -89,8 +89,8 @@ this pass the class is unreachable for the whole round.
   next. Never leave a mutation in the tree.
 - Run the **nearest** suite, not the full one. This is not a `test:mutation`
   sweep — those are slow, opt-in, and answer a different question.
-- Propose, do not cap: `mutant_candidates` in your `REVIEW_RESULT` names a mutant (`id`, `file`,
-  `anchor`, `replacement`) for **every changed branch**, code downstream of the diff included.
+- Propose, do not cap: `mutant_candidates` in your `REVIEW_RESULT` names a mutant (`id`, `file`, `anchor`, `replacement`,
+  optional `kind`: `behavior` (default) or `presentation`, for copy or styling only) for **every changed branch**, code downstream of the diff included.
   Run what your budget allows, previous-round gates first, and say how many you did not reach:
   the main session writes your list to `mutants.json` unchanged and runs the rest. Silence reads as a clean sweep.
 - If you cannot run the suite at all, say so and skip the pass. Do **not** report
