@@ -2,12 +2,17 @@ diff --git a/src/admin/ExamplePage.tsx b/src/admin/ExamplePage.tsx
 index 1111111..2222222 100644
 --- a/src/admin/ExamplePage.tsx
 +++ b/src/admin/ExamplePage.tsx
-@@ -12,6 +12,10 @@ export function ExamplePage({ account }: Props) {
+@@ -4,4 +4,6 @@ import { useAccount } from "./useAccount";
+ export function ExamplePage({ account }: Props) {
+   const rows = useRows(account);
++  // The last-seen value mirrors the sign-in audit log: it is the most
++  // recent sign-in, not the most recent request of any kind.
+   const total = rows.length;
+   const label = formatTotal(total);
+@@ -12,6 +14,7 @@ export function ExamplePage({ account }: Props) {
    return (
      <table>
        <tbody>
-+        {/* The last-seen value mirrors the sign-in audit log: it is the most
-+            recent sign-in, not the most recent request of any kind. */}
 +        <tr><th>Last seen</th><td>{account.lastSeen}</td></tr>
          <tr><th>Name</th><td>{account.name}</td></tr>
        </tbody>
