@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f444",
+  "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 24632
+  },
+  "mutants": [
+    {
+      "id": "ac1-exit-not-by-signal",
+      "file": "src/review/layers.ts",
+      "anchor": ".finally(() => process.kill(process.pid, signal));",
+      "replacement": ".finally(() => process.exit(0));",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 365,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20317
+    },
+    {
+      "id": "ac1-lock-left",
+      "file": "src/review/layers.ts",
+      "anchor": ".then(() => rm(layersLockPath(packageDir), { recursive: true, force: true }))",
+      "replacement": ".then(() => undefined)",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 363,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20417
+    },
+    {
+      "id": "ac1-cleanups-skipped",
+      "file": "src/review/layers.ts",
+      "anchor": ".map((cleanup) => cleanup().catch(() => {}))",
+      "replacement": ".map(() => Promise.resolve())",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 362,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20820
+    },
+    {
+      "id": "ac1-worktree-not-registered",
+      "file": "src/review/layers.ts",
+      "anchor": "const unregister = register(cleanup);",
+      "replacement": "const unregister = (): void => {};",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 397,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19804
+    },
+    {
+      "id": "ac1-no-handler",
+      "file": "src/review/layers.ts",
+      "anchor": "for (const name of SIGNALS) process.on(name, onSignal);",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 367,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21311
+    },
+    {
+      "id": "ac2-wiki-error-empty",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "return { items: [], unavailable: `the wiki could not be read — ${reasonOf(error)}` };",
+      "replacement": "return { items: [], unavailable: null };",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 164,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21524
+    },
+    {
+      "id": "ac2-memory-error-empty",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "return { items: [], unavailable: `the memory could not be read — ${reasonOf(error)}` };",
+      "replacement": "return { items: [], unavailable: null };",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 204,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20480
+    },
+    {
+      "id": "ac2-affected-failure-dropped",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "failures.push(`${file}: ${reasonOf(error)}`);",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 95,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21455
+    },
+    {
+      "id": "ac2-affected-not-listed",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "if (affected.unavailable !== null) unavailable.push({ section: \"affected\", reason: affected.unavailable });",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 263,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20143
+    },
+    {
+      "id": "ac2-text-line-dropped",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "for (const gap of block.unavailable) lines.push(`  unavailable ${gap.section}: ${gap.reason}`);",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 353,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20171
+    },
+    {
+      "id": "ac2-unreadable-page-dropped",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "unreadable.push(page.relativePath);",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 176,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 21113
+    },
+    {
+      "id": "ac3-window-never",
+      "file": "src/review/layers.ts",
+      "anchor": "return age >= 0 && age < FAILED_RETRY_WINDOW_MS;",
+      "replacement": "return false;",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 194,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20320
+    },
+    {
+      "id": "ac3-window-forever",
+      "file": "src/review/layers.ts",
+      "anchor": "return age >= 0 && age < FAILED_RETRY_WINDOW_MS;",
+      "replacement": "return age >= 0;",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 194,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19701
+    },
+    {
+      "id": "ac3-force-ignored",
+      "file": "src/review/layers.ts",
+      "anchor": "input.force !== true && sameHead && failedRecently(",
+      "replacement": "sameHead && failedRecently(",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 581,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20033
+    },
+    {
+      "id": "ac3-new-head-ignored",
+      "file": "src/review/layers.ts",
+      "anchor": "sameHead && failedRecently(",
+      "replacement": "existing !== null && failedRecently(",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 581,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 15775
+    },
+    {
+      "id": "ac3-window-slides",
+      "file": "src/review/layers.ts",
+      "anchor": "    failedAt: deps.now().toISOString(),\n",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 427,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13072
+    },
+    {
+      "id": "ac4-no-timeout",
+      "file": "src/tui/review-layers-actions.ts",
+      "anchor": "{ cwd: projectRoot, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }",
+      "replacement": "{ cwd: projectRoot, maxBuffer: 16 * 1024 * 1024 }",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 50,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19856
+    },
+    {
+      "id": "ac4-timeout-unreported",
+      "file": "src/tui/review-layers-actions.ts",
+      "anchor": "if (error?.killed === true) {",
+      "replacement": "if (false) {",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 53,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12509
+    },
+    {
+      "id": "ac5-guard-off",
+      "file": "src/tui/reviews-inspector.ts",
+      "anchor": "if (pendingActions.has(actionKey)) {",
+      "replacement": "if (false) {",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 167,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12166
+    },
+    {
+      "id": "ac5-one-key-for-all",
+      "file": "src/tui/reviews-inspector.ts",
+      "anchor": "const actionKey = newest.layersView?.dir ?? newest.reviewId;",
+      "replacement": "const actionKey = \"any\";",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 166,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12804
+    },
+    {
+      "id": "ac5-never-released",
+      "file": "src/tui/reviews-inspector.ts",
+      "anchor": "pendingActions.delete(actionKey);",
+      "replacement": "",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 178,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 22389
+    },
+    {
+      "id": "ac5-guard-per-view",
+      "file": "src/tui/reviews-inspector.ts",
+      "anchor": "if (pendingActions.has(actionKey)) {",
+      "replacement": "if (new Set<string>().has(actionKey)) {",
+      "command": "bun test src/review/layers src/commands/review-layers.test.ts src/tui/reviews-inspector.test.ts src/tui/review-layers-child.test.ts",
+      "line": 167,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 24829
+    }
+  ],
+  "totals": {
+    "killed": 21,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}
