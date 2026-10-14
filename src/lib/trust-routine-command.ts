@@ -46,16 +46,19 @@ export type RoutineKeryxEntry = {
   readonly words: readonly string[];
   readonly suffix?: string;
   readonly requireFlag?: string;
+  /** Flags that take a command out of this row: a command that carries one is not routine (`--flag` or `--flag=value`). */
+  readonly refuseFlags?: readonly string[];
   /** A command that matches this row, shown in tests, docs and the replay. */
   readonly example: string;
 };
 
-function row(words: readonly string[], options: { id?: string; requireFlag?: string } = {}): RoutineKeryxEntry {
+function row(words: readonly string[], options: { id?: string; requireFlag?: string; refuseFlags?: readonly string[] } = {}): RoutineKeryxEntry {
   const flag = options.requireFlag;
   return {
     id: options.id ?? words.join(" "),
     words,
     ...(flag !== undefined ? { requireFlag: flag } : {}),
+    ...(options.refuseFlags !== undefined ? { refuseFlags: options.refuseFlags } : {}),
     example: ["keryx", ...words, ...(flag !== undefined ? [flag] : [])].join(" "),
   };
 }
@@ -91,7 +94,12 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
     "compare-reference",
     "ingest",
     "complete",
+    "coverage",
   ]),
+  // The same refusals `automatic-review` makes: --write-wiki rewrites tracked wiki pages in the working copy, and
+  // --answer/--quote lift the chunk ceiling on the operator's word.
+  row(["review", "layers"], { refuseFlags: ["--write-wiki"] }),
+  row(["review", "chunks"], { refuseFlags: ["--answer", "--quote"] }),
   ...rows("flow", ["status", "list", "check", "next"]),
   ...rows("gdgraph", ["find", "context", "affected", "cycles", "orphans"]),
   ...rows("ctx", ["rg", "read", "diff"]),
@@ -148,6 +156,7 @@ function matchesEntry(entry: RoutineKeryxEntry, args: readonly string[]): boolea
     );
   }
   if (!startsWith(args, entry.words)) return false;
+  if (entry.refuseFlags?.some((flag) => args.some((w) => w === flag || w.startsWith(`${flag}=`)))) return false;
   return entry.requireFlag === undefined || args.includes(entry.requireFlag);
 }
 

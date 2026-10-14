@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 10947
+  },
+  "mutants": [
+    {
+      "id": "m01",
+      "file": "src/review/layers.ts",
+      "anchor": "    if (builtFrom !== prHead) {",
+      "replacement": "    if (builtFrom !== prHead && builtFrom === null) {",
+      "line": 229,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10883
+    },
+    {
+      "id": "m02",
+      "file": "src/review/layers.ts",
+      "anchor": "  if (expected === null || layers.graphCommit !== expected) {",
+      "replacement": "  if (expected === null) {",
+      "line": 386,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11074
+    },
+    {
+      "id": "m03",
+      "file": "src/review/layers.ts",
+      "anchor": "    await writeSelfIgnoringDir(path.dirname(dataDir));",
+      "replacement": "    await mkdir(path.dirname(dataDir), { recursive: true });",
+      "line": 234,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11076
+    },
+    {
+      "id": "m04",
+      "file": "src/review/layers.ts",
+      "anchor": "dryRun: !writeWiki,",
+      "replacement": "dryRun: false,",
+      "line": 283,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10824
+    },
+    {
+      "id": "m05",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "return log === undefined ? { ...UNKNOWN_LAYERS_USED } : countLayerUsage(log);",
+      "replacement": "return countLayerUsage(log ?? \"\");",
+      "line": 58,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12159
+    },
+    {
+      "id": "m06",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "if (sizeOf(deeper) <= maxBytes) block = deeper;",
+      "replacement": "block = deeper;",
+      "line": 234,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 15751
+    },
+    {
+      "id": "m07",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "while (sizeOf(withTruncation()) > maxBytes) {",
+      "replacement": "while (sizeOf(block) > maxBytes) {",
+      "line": 262,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11030
+    },
+    {
+      "id": "m08",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (radius === undefined || radius.dropped.length === 0) return null;",
+      "replacement": "if (radius === undefined) return null;",
+      "line": 127,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11106
+    },
+    {
+      "id": "m09",
+      "file": "src/review/chunks.ts",
+      "anchor": "&& !state.derived.some((d) => d.retryOf?.includes(chunkId))",
+      "replacement": "&& true",
+      "line": 295,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10934
+    },
+    {
+      "id": "m10",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (!known.chunks.includes(outcome.chunk)) known.chunks.push(outcome.chunk);",
+      "replacement": "known.chunks.push(outcome.chunk);",
+      "line": 320,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 11266
+    },
+    {
+      "id": "m11",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (rank(finding) < rank(known))",
+      "replacement": "if (rank(finding) > rank(known))",
+      "line": 322,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10961
+    },
+    {
+      "id": "m12",
+      "file": "src/review/chunks-estimate.ts",
+      "anchor": "remaining.length > effective.maxPasses",
+      "replacement": "remaining.length >= effective.maxPasses",
+      "line": 92,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11024
+    },
+    {
+      "id": "m13",
+      "file": "src/review/chunks-estimate.ts",
+      "anchor": "quote.trim() === \"\"",
+      "replacement": "quote === \"\"",
+      "line": 152,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10972
+    },
+    {
+      "id": "m14",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": "if (!covered.has(slice.id)) continue;",
+      "replacement": "if (covered.size < 0) continue;",
+      "line": 125,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11252
+    },
+    {
+      "id": "m15",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": "uncovered.every((entry) => waiver.files.includes(entry.file))",
+      "replacement": "uncovered.some((entry) => waiver.files.includes(entry.file))",
+      "line": 173,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11012
+    },
+    {
+      "id": "m16",
+      "file": "src/review/managed.ts",
+      "anchor": "await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now)",
+      "replacement": "undefined",
+      "line": 812,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10968
+    },
+    {
+      "id": "m17",
+      "file": "src/review/research.ts",
+      "anchor": "await coverageGateErrors(packageDir, ledger)",
+      "replacement": "([] as string[])",
+      "line": 52,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 11070
+    },
+    {
+      "id": "m18",
+      "file": "src/commands/review.ts",
+      "anchor": "waiver.value === undefined || waiver.value.trim() === \"\"",
+      "replacement": "waiver.value === undefined",
+      "line": 3869,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 11258
+    },
+    {
+      "id": "m19",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "if (!placed.ok) return placed.message;",
+      "replacement": "if (!placed.ok) continue;",
+      "line": 60,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 10961
+    },
+    {
+      "id": "m20",
+      "file": "src/tui/review-panel.ts",
+      "anchor": "if (view.usage.unknown > 0) parts.push(`unknown ${view.usage.unknown}`);",
+      "replacement": "parts.push(`unknown ${view.usage.unknown}`);",
+      "line": 146,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 10884
+    }
+  ],
+  "totals": {
+    "killed": 14,
+    "survived": 6,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

@@ -1,0 +1,76 @@
+{
+ "mutants": [
+  {
+   "id": "r3-ly-fsmonitor",
+   "file": "src/review/layers.ts",
+   "anchor": "\"-c\", \"core.fsmonitor=false\", ",
+   "replacement": ""
+  },
+  {
+   "id": "r3-ly-prune-always",
+   "file": "src/review/layers.ts",
+   "anchor": "if (added === null) {\n      // Only a failed add prunes",
+   "replacement": "if (true) {\n      // Only a failed add prunes"
+  },
+  {
+   "id": "r3-ly-peel",
+   "file": "src/review/layers.ts",
+   "anchor": "`${rev}^{commit}`",
+   "replacement": "rev"
+  },
+  {
+   "id": "r3-ly-lock-stale-opt-off",
+   "file": "src/review/layers.ts",
+   "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS }",
+   "replacement": "{ timeoutMs: LOCK_WAIT_MS }"
+  },
+  {
+   "id": "r3-ly-lock-wait",
+   "file": "src/review/layers.ts",
+   "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS }",
+   "replacement": "{ timeoutMs: 0, staleMs: LOCK_STALE_MS }"
+  },
+  {
+   "id": "r3-ly-publish-no-restore",
+   "file": "src/review/layers.ts",
+   "anchor": "if (hadPrevious) await rename(previous, finalDir).catch(() => {});\n    throw error;",
+   "replacement": "throw error;"
+  },
+  {
+   "id": "r3-ly-signal-lock-keep",
+   "file": "src/review/layers.ts",
+   "anchor": ".then(() => rm(layersLockPath(input.packageDir), { recursive: true, force: true }))",
+   "replacement": ".then(() => {})"
+  },
+  {
+   "id": "r3-ly-wait-deadline",
+   "file": "src/review/layers.ts",
+   "anchor": "if (Date.now() >= deadline) return false;",
+   "replacement": "if (false) return false;"
+  },
+  {
+   "id": "r3-ck-files-cap-off",
+   "file": "src/review/chunks.ts",
+   "anchor": "current.files.length >= maxFiles ||",
+   "replacement": "false ||"
+  },
+  {
+   "id": "r3-ck-bytes-cap-off",
+   "file": "src/review/chunks.ts",
+   "anchor": "(current.files.length > 0 && current.bytes + size > maxBytes)",
+   "replacement": "false"
+  },
+  {
+   "id": "r3-rl-maxbytes-floor",
+   "file": "src/commands/review-layers.ts",
+   "anchor": "maxBytes < 256",
+   "replacement": "maxBytes < 0"
+  },
+  {
+   "id": "r3-rl-current-head-off",
+   "file": "src/commands/review-layers.ts",
+   "anchor": "if (existing !== null && (await layersCurrent(packageDir, existing, head))) return existing;",
+   "replacement": "if (existing !== null) return existing;"
+  }
+ ]
+}

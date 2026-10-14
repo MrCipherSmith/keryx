@@ -1,0 +1,16 @@
+{
+ "mutants": [
+  {
+   "id": "r3-01-chunk-answer-opaque",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (lowerArgs.some(isAnswer) && opaqueArgs(args)) return true;\n",
+   "replacement": ""
+  },
+  {
+   "id": "r3-03-mcp-args",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "for (const key of [\"name\", \"tool\"])",
+   "replacement": "for (const key of [\"name\", \"tool\", \"arguments\"])"
+  }
+ ]
+}

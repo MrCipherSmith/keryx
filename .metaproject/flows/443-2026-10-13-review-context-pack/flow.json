@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "443",
+  "slug": "review-context-pack",
+  "title": "Review context pack: metaproject layers as reviewer context",
+  "status": "initializing",
+  "createdAt": "2026-10-13T09:15:01.514Z",
+  "updatedAt": "2026-10-13T09:15:48.420Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "origin": {
+    "kind": "agent-proposal",
+    "source": "docs/requirements/keryx-review-context-pack/prd.md; ~/notes/review-depth-gap-7659.md; operator audit request helyx message 199859 (2026-10-12); polls 152 and 154 (2026-10-13)"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by tasks T5-T10 (PRD T1-T6)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by tasks T5-T10 (PRD T1-T6)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by tasks T5-T10 (PRD T1-T6)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by tasks T5-T10 (PRD T1-T6)"
+    },
+    {
+      "id": "T5",
+      "title": "T1 Baseline and inventory before code (PRD T1)",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "T2 Pack builder skeleton consumption (PRD T2: R1, R9, R10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "T3 Graph and testing layers (PRD T3: R2, R5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "T4 Wiki, memory and flow layers (PRD T4: R3, R4, R6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "T5 Slicing, context_refs, safety (PRD T5: R7, R8, R11)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "T6 Surfaces and the measurement run (PRD T6: R12, R13)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-13T09:15:01.514Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-13T09:15:42.292Z",
+      "event": "task-added",
+      "detail": "T5: T1 Baseline and inventory before code (PRD T1)"
+    },
+    {
+      "at": "2026-10-13T09:15:42.512Z",
+      "event": "task-added",
+      "detail": "T6: T2 Pack builder skeleton consumption (PRD T2: R1, R9, R10)"
+    },
+    {
+      "at": "2026-10-13T09:15:42.724Z",
+      "event": "task-added",
+      "detail": "T7: T3 Graph and testing layers (PRD T3: R2, R5)"
+    },
+    {
+      "at": "2026-10-13T09:15:42.936Z",
+      "event": "task-added",
+      "detail": "T8: T4 Wiki, memory and flow layers (PRD T4: R3, R4, R6)"
+    },
+    {
+      "at": "2026-10-13T09:15:43.135Z",
+      "event": "task-added",
+      "detail": "T9: T5 Slicing, context_refs, safety (PRD T5: R7, R8, R11)"
+    },
+    {
+      "at": "2026-10-13T09:15:43.340Z",
+      "event": "task-added",
+      "detail": "T10: T6 Surfaces and the measurement run (PRD T6: R12, R13)"
+    },
+    {
+      "at": "2026-10-13T09:15:47.699Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-13T09:15:47.927Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-13T09:15:48.173Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-13T09:15:48.420Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

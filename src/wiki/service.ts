@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { gdgraphStorageDir } from "../gdgraph/data-dir";
 import { pathExists } from "../lib/fs";
 import { revisionOperand } from "../lib/git-revision";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
@@ -463,13 +464,13 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
  * posture. The caller must treat "graph unavailable" as "nothing to flag
  * yet," not as "everything is invalid."
  */
-export async function validModuleNames(cwd: string): Promise<Set<string> | undefined> {
-  const counts = await moduleFileCounts(cwd);
+export async function validModuleNames(cwd: string, dataDir?: string): Promise<Set<string> | undefined> {
+  const counts = await moduleFileCounts(cwd, dataDir);
   return counts === undefined ? undefined : new Set(counts.keys());
 }
 
-async function moduleFileCounts(cwd: string): Promise<Map<string, number> | undefined> {
-  const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
+async function moduleFileCounts(cwd: string, dataDir?: string): Promise<Map<string, number> | undefined> {
+  const nodesPath = path.join(gdgraphStorageDir(cwd, dataDir), "nodes.jsonl");
   if (!(await pathExists(nodesPath))) {
     return undefined;
   }
@@ -726,9 +727,10 @@ export async function collectGraphWikiCandidates(
   generatedAt: string,
   limit: number,
   onlyModules: Set<string> | null,
+  dataDir?: string,
 ): Promise<WikiCollectCandidate[]> {
-  const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
-  const edgesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "edges.jsonl");
+  const nodesPath = path.join(gdgraphStorageDir(cwd, dataDir), "nodes.jsonl");
+  const edgesPath = path.join(gdgraphStorageDir(cwd, dataDir), "edges.jsonl");
   if (!(await pathExists(nodesPath)) || !(await pathExists(edgesPath))) {
     return [];
   }
@@ -866,7 +868,7 @@ export async function collectGraphWikiCandidates(
     const dependents = topCounts(moduleDependents.get(moduleName), 6);
     const readme = await readModuleReadme(cwd, moduleName, pageLink);
     const exportsFrom = entryFiles.length > 0 ? entryFiles : keyFiles.slice(0, 2).map((entry) => entry.file);
-    const exportApi = await extractModuleApi(cwd, exportsFrom);
+    const exportApi = await extractModuleApi(cwd, exportsFrom, dataDir);
 
     const reference: string[] = [];
     const pushRef = (heading: string, lines: string[]): void => {
@@ -1070,9 +1072,9 @@ async function extractModuleExports(cwd: string, files: string[]): Promise<strin
 // each with its real kind (function/class/interface/method) from `symbols.jsonl`,
 // so the scaffold carries `\`build\` (function)` instead of a bare name. Degrades
 // to plain names when the symbol layer is absent (golden-rule floor).
-export async function extractModuleApi(cwd: string, files: string[]): Promise<string[]> {
+export async function extractModuleApi(cwd: string, files: string[], dataDir?: string): Promise<string[]> {
   const names = await extractModuleExports(cwd, files);
-  const symbolsPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "symbols.jsonl");
+  const symbolsPath = path.join(gdgraphStorageDir(cwd, dataDir), "symbols.jsonl");
   if (names.length === 0 || !(await pathExists(symbolsPath))) {
     return names.map((name) => "`" + name + "`");
   }

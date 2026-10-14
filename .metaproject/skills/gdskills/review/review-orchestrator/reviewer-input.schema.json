@@ -223,6 +223,46 @@
         "additionalProperties": true
       }
     },
+    "layers": {
+      "type": "object",
+      "description": "The bounded layers block for this reviewer's files, built from the package's own graph, the working-copy wiki and the memory (`keryx review layers block --package <dir> --files <a,b>`). Optional. `truncated` names what was cut and the command that fetches the rest.",
+      "required": ["version", "files", "affected", "truncated"],
+      "properties": {
+        "version": { "const": 1 },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "prHead": { "type": ["string", "null"] },
+        "graphCommit": { "type": ["string", "null"] },
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "affected": {
+          "type": "object",
+          "required": ["depth", "files"],
+          "properties": {
+            "depth": { "enum": [1, 2] },
+            "files": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "symbols": { "type": "array", "items": { "type": "object" } },
+        "relatedTests": { "type": "array", "items": { "type": "string" } },
+        "wiki": { "type": "array", "items": { "type": "object" } },
+        "memory": { "type": "array", "items": { "type": "object" } },
+        "truncated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["section", "shown", "total", "command"],
+            "properties": {
+              "section": { "enum": ["files", "affected", "symbols", "relatedTests", "wiki", "memory"] },
+              "shown": { "type": "integer", "minimum": 0 },
+              "total": { "type": "integer", "minimum": 0 },
+              "command": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "metaproject": {
       "type": "object",
       "description": "Shared project context, the same context `keryx flow init` already collects for an implementation flow. The review pipeline collected none of it for eleven rounds, which is why a recorded lesson naming the exact recurring failure never reached a reviewer.",

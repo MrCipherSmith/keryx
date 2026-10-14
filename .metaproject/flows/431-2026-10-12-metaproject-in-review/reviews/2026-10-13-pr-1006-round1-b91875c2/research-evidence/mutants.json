@@ -1,0 +1,124 @@
+{
+  "mutants": [
+    {
+      "id": "m01",
+      "file": "src/review/layers.ts",
+      "anchor": "    if (builtFrom !== prHead) {",
+      "replacement": "    if (builtFrom !== prHead && builtFrom === null) {"
+    },
+    {
+      "id": "m02",
+      "file": "src/review/layers.ts",
+      "anchor": "  if (expected === null || layers.graphCommit !== expected) {",
+      "replacement": "  if (expected === null) {"
+    },
+    {
+      "id": "m03",
+      "file": "src/review/layers.ts",
+      "anchor": "    await writeSelfIgnoringDir(path.dirname(dataDir));",
+      "replacement": "    await mkdir(path.dirname(dataDir), { recursive: true });"
+    },
+    {
+      "id": "m04",
+      "file": "src/review/layers.ts",
+      "anchor": "dryRun: !writeWiki,",
+      "replacement": "dryRun: false,"
+    },
+    {
+      "id": "m05",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "return log === undefined ? { ...UNKNOWN_LAYERS_USED } : countLayerUsage(log);",
+      "replacement": "return countLayerUsage(log ?? \"\");"
+    },
+    {
+      "id": "m06",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "if (sizeOf(deeper) <= maxBytes) block = deeper;",
+      "replacement": "block = deeper;"
+    },
+    {
+      "id": "m07",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "while (sizeOf(withTruncation()) > maxBytes) {",
+      "replacement": "while (sizeOf(block) > maxBytes) {"
+    },
+    {
+      "id": "m08",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (radius === undefined || radius.dropped.length === 0) return null;",
+      "replacement": "if (radius === undefined) return null;"
+    },
+    {
+      "id": "m09",
+      "file": "src/review/chunks.ts",
+      "anchor": "&& !state.derived.some((d) => d.retryOf?.includes(chunkId))",
+      "replacement": "&& true"
+    },
+    {
+      "id": "m10",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (!known.chunks.includes(outcome.chunk)) known.chunks.push(outcome.chunk);",
+      "replacement": "known.chunks.push(outcome.chunk);"
+    },
+    {
+      "id": "m11",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (rank(finding) < rank(known))",
+      "replacement": "if (rank(finding) > rank(known))"
+    },
+    {
+      "id": "m12",
+      "file": "src/review/chunks-estimate.ts",
+      "anchor": "remaining.length > effective.maxPasses",
+      "replacement": "remaining.length >= effective.maxPasses"
+    },
+    {
+      "id": "m13",
+      "file": "src/review/chunks-estimate.ts",
+      "anchor": "quote.trim() === \"\"",
+      "replacement": "quote === \"\""
+    },
+    {
+      "id": "m14",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": "if (!covered.has(slice.id)) continue;",
+      "replacement": "if (covered.size < 0) continue;"
+    },
+    {
+      "id": "m15",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": "uncovered.every((entry) => waiver.files.includes(entry.file))",
+      "replacement": "uncovered.some((entry) => waiver.files.includes(entry.file))"
+    },
+    {
+      "id": "m16",
+      "file": "src/review/managed.ts",
+      "anchor": "await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now)",
+      "replacement": "undefined"
+    },
+    {
+      "id": "m17",
+      "file": "src/review/research.ts",
+      "anchor": "await coverageGateErrors(packageDir, ledger)",
+      "replacement": "([] as string[])"
+    },
+    {
+      "id": "m18",
+      "file": "src/commands/review.ts",
+      "anchor": "waiver.value === undefined || waiver.value.trim() === \"\"",
+      "replacement": "waiver.value === undefined"
+    },
+    {
+      "id": "m19",
+      "file": "src/lib/review-path-flags.ts",
+      "anchor": "if (!placed.ok) return placed.message;",
+      "replacement": "if (!placed.ok) continue;"
+    },
+    {
+      "id": "m20",
+      "file": "src/tui/review-panel.ts",
+      "anchor": "if (view.usage.unknown > 0) parts.push(`unknown ${view.usage.unknown}`);",
+      "replacement": "parts.push(`unknown ${view.usage.unknown}`);"
+    }
+  ]
+}

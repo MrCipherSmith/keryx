@@ -3287,7 +3287,7 @@ keryx gdgraph find "<terms>"
 keryx gdgraph symbol "<name>" [--impact] [--depth N]
 keryx gdgraph symbols <enable|disable|status>
 keryx gdgraph path "<A>" "<B>"
-keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
+keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json] [--data-dir <dir>]
 keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
 keryx gdgraph context
 keryx gdgraph assets list | verify [<id>] | pull <id>
@@ -4782,12 +4782,18 @@ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--json|--brief] [--out <file>]
+                          [--package <review-dir>] [--json|--brief] [--out <file>]
 keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
-keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--json]
+keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
 keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
                         [--state <file>] [--dry-run] [--json]
 keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+keryx review layers status  --package <review-dir> [--json]
+keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
+keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+keryx review coverage --package <review-dir> [--json]
+keryx review complete ... [--waive-coverage "<operator quote>"]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -4813,6 +4819,9 @@ left off and the gate reports it as unobserved.
 | `scope` | Build the bounded review scope deterministically. See below. |
 | `floor` | Report the edits in a diff that lower the bar: a threshold moved the weakening way, a disabled test, a test region that checks fewer things, a new suppression. Exits 1 when it finds any. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
+| `layers` | Refresh the graph, the wiki and the memory index for one review, with no model, and write `layers.json`. See below. |
+| `chunks` | Plan, estimate and run the blast-radius files the per-pass cap dropped, one chunk at a time. See below. |
+| `coverage` | Print how many in-scope files are covered, covered by a named omission, and uncovered. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
@@ -5272,6 +5281,23 @@ vendored or generated path is invisible by construction — and it depends on
 `review scope` never dropping a comment that carries a tool directive, which is
 why that carve-out exists.
 
+### `review layers`, `review chunks` and `review coverage`
+
+A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; a managed review start, attach or ingest does it for you, and so does any `dispatch-check` or `blast-radius` given `--package`. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`. A graph that is intact at the same head is reused and `--force` rebuilds it. One refresh runs per package at a time, and a second one waits for the first for up to 16 minutes.
+
+- The graph is built at the PR head into `<dir>/layers/graph`, in a fresh worktree; the tracked graph artifacts, the working tree and the PR are not touched. `layers.json` records the commit it was built from, and `graph@<sha7> = head` means it equals the PR head.
+- The wiki and the memory are read from the project's working copy. `layers.json` marks how far that copy is from the PR head (`differs`, with the commits and wiki/memory paths between).
+- `layers status` prints the same lines plus the coverage counts. `layers block --files a,b` prints the bounded, deterministic `layers` block a reviewer payload carries for those files: affected files, symbol neighbours, related tests, wiki pages and memory entries, with a command that fetches whatever was cut.
+- Per reviewer run the package records `layersUsed` (`graph`, `wiki`, `memory`, `ctx`), counted from the reviewer's tool-call log, `<input-dir>/tool-calls/<reviewer>.jsonl`, one JSON line per call. A run without a log is `unknown`, never zero, and never blocks `ledger build`, `compare-reference` or `review complete`.
+
+The blast radius keeps at most 40 files per pass; the rest are `dropped`. `review chunks plan` writes `<dir>/chunks.json`, a deterministic split of every dropped file into chunks (at most 40 files and the slice byte cap), each file in exactly one chunk; no dropped files means no plan. Chunks run one at a time through `review-regression` on the middle tier: `chunks next` prints the chunk to dispatch, `chunks record` takes what it returned and applies the retry plan (a failed chunk is retried per the plan, else stays `pending`), and `chunks merge` writes `<dir>/chunk-pass.json` with the state of each chunk and the merged findings (two on the same file and line count once).
+
+`chunks estimate` states the chunk count, the files, the estimated tokens and cost at the middle tier, and the duration before a run. The ceiling is **25 passes of 40 files (1,000 files)**; `reviewChunks.maxPasses` in `routing.config.json` moves it. In automatic mode a run at or under the ceiling goes through without a question and a run over it asks once; in interactive mode a run over it waits for `--answer yes --quote "<words>"`. The estimate and the answer are recorded in `<dir>/chunk-estimate.json`.
+
+`review coverage` writes `<dir>/coverage.json` and prints four counts for the changed files and the blast radius together: in scope, covered, covered by a named omission (with the reasons), and uncovered. Every changed file lands in a slice or under a named omission, and `coverage.json` lists each omitted file with its reason. **`review complete` refuses while any in-scope file is uncovered**: it names the count, the first files and the command that runs the missing chunks. The only way past is `--waive-coverage "<operator quote>"`, which records the quote, the time and the files not reviewed in the dispatch record and shows the waiver in the report and the panel. The waiver needs an interactive terminal (a command run from a script or an agent is refused), its quote must be at least 8 characters with a letter or digit once the flag text is removed, and the command asks for confirmation in every permission mode. There is no "unchecked remainder" outcome.
+
+In the shell, `/reviews` shows one line per review (`graph@<sha7> = head|differs`, wiki and memory divergence, `layers used n/m`, `unknown k`, `chunks d/t, uncovered u`) in the sidebar and the full lines in the Review depth tab, with `l` (refresh layers) and `c` (run missing chunks) in the modal. `/review layers` prints the same lines.
+
 ### `review blast-radius`
 
 `review scope` bounds **the change**, and a review of it answers *is this change
@@ -5287,6 +5313,7 @@ a depth and a file cap, closest first.
 | `--depth <n>` | Edge distance kept. Default **2**. |
 | `--max-files <n>` | File cap, closest first. Default **40**. |
 | `--no-related-tests` | Skip the naming-related tests of the changed files. |
+| `--package <review-dir>` | Read the graph built for that review at its PR head (refreshed first when the package has none), not the working tree's. |
 | `--previous <file>` | The previous round's `--json` record; decides whether this round must recompute. |
 | `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
 | `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |

@@ -6,6 +6,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REVIEW_CONFINED_PATH_FLAGS, REVIEW_NON_PATH_FLAGS, confinedPathFlags, reviewPathFlagRefusal } from "../lib/review-path-flags";
+import { CHUNKS_FLAGS, COVERAGE_FLAGS } from "./review-chunks";
+import { LAYERS_BLOCK_FLAGS, LAYERS_REFRESH_FLAGS, LAYERS_STATUS_FLAGS } from "./review-layers";
 import {
   DISPATCH_CHECK_FLAGS,
   RETRY_PLAN_FLAGS,
@@ -253,6 +255,9 @@ test("guard: every flag of a review command is sorted into confined or non-path,
     slice: SLICE_FLAGS,
     "dispatch-check": DISPATCH_CHECK_FLAGS,
     "retry-plan": RETRY_PLAN_FLAGS,
+    layers: [...new Set([...LAYERS_REFRESH_FLAGS, ...LAYERS_STATUS_FLAGS, ...LAYERS_BLOCK_FLAGS])],
+    chunks: CHUNKS_FLAGS,
+    coverage: COVERAGE_FLAGS,
   };
   expect(Object.keys(REVIEW_CONFINED_PATH_FLAGS).sort()).toEqual(Object.keys(commands).sort());
   expect(Object.keys(REVIEW_NON_PATH_FLAGS).sort()).toEqual(Object.keys(commands).sort());

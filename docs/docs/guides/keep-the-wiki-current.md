@@ -251,6 +251,10 @@ and "this page is not about code" are different facts, and one of them is not
 work. Without the declaration such a page sits in `undecidable` forever and
 reads as an oversight, so each new reader tries to fix it again.
 
+## In a review
+
+`keryx review layers refresh --package <dir>` refreshes the graph, the wiki and the memory index for one review, and managed reviews run it on every start, attach and ingest, and on any `dispatch-check` or `blast-radius` given `--package`. It calls **no model**: the wiki step is `wiki refresh`, a dry run unless you pass `--write-wiki`, and `wiki enrich` is the only model step in the wiki and is never run automatically. The graph is built at the PR head in a worktree under the package, so the tracked graph artifacts are left alone; the wiki and the memory are read from your working copy, and `layers.json` marks when that copy differs from the PR head. See [Review with a record](review-with-a-record.md).
+
 ## For agents
 
 `wiki_freshness` is available over MCP, read-only. Its output leads with

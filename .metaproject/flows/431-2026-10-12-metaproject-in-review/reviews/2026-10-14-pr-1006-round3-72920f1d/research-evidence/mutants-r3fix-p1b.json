@@ -1,0 +1,10 @@
+{
+ "mutants": [
+  {
+   "id": "r3-03-mcp-args",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "for (const key of [\"name\", \"tool\"])",
+   "replacement": "for (const key of [\"name\", \"tool\", \"arguments\"])"
+  }
+ ]
+}

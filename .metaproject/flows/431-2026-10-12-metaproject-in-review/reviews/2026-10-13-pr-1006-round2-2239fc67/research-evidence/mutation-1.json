@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 13414
+  },
+  "mutants": [
+    {
+      "id": "m-1",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": "const MIN_WAIVER_QUOTE_LENGTH = 8;",
+      "replacement": "const MIN_WAIVER_QUOTE_LENGTH = 3;",
+      "line": 190,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 12990
+    },
+    {
+      "id": "m-2",
+      "file": "src/tui/review-layers-actions.ts",
+      "anchor": "[...SAFE_BUN_SPAWN_ARGS, process.argv[1] ?? \"\", \"review\", \"layers\", \"refresh\", \"--package\", packageDir, \"--json\"],",
+      "replacement": "[...SAFE_BUN_SPAWN_ARGS, process.argv[1] ?? \"\", \"review\", \"layers\", \"status\", \"--package\", packageDir, \"--json\"],",
+      "line": 27,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13050
+    },
+    {
+      "id": "m-3",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "if (!(await waitForLayersRefresh(packageDir))) {",
+      "replacement": "if (false as boolean) {",
+      "line": 67,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13083
+    },
+    {
+      "id": "m-4",
+      "file": "src/review/layers.ts",
+      "anchor": "await writeFileAtomic(layersFilePath(input.packageDir), `${JSON.stringify(layers, null, 2)}\\n`);",
+      "replacement": "await Bun.write(layersFilePath(input.packageDir), `${JSON.stringify(layers, null, 2)}\\n`);",
+      "line": 436,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13315
+    },
+    {
+      "id": "m-5",
+      "file": "src/review/chunks.ts",
+      "anchor": "const rank = (value: ChunkFinding): number => SEVERITY_RANK[String(value.severity ?? \"\").toLowerCase()] ?? 5;",
+      "replacement": "const rank = (value: ChunkFinding): number => SEVERITY_RANK[String(value.severity ?? \"\").toLowerCase()] ?? -1;",
+      "line": 338,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13068
+    },
+    {
+      "id": "m-6",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (!known.chunks.includes(outcome.chunk)) known.chunks.push(outcome.chunk);",
+      "replacement": "known.chunks.push(outcome.chunk);",
+      "line": 337,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13026
+    },
+    {
+      "id": "m-7",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (existing.droppedKey === undefined || existing.droppedKey === droppedKey) return existing;",
+      "replacement": "if (existing.droppedKey === droppedKey) return existing;",
+      "line": 131,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13032
+    },
+    {
+      "id": "m-8",
+      "file": "src/review/layers.ts",
+      "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS },",
+      "replacement": "{ timeoutMs: LOCK_WAIT_MS, staleMs: 3_600_000_000 },",
+      "line": 439,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13170
+    },
+    {
+      "id": "m-9",
+      "file": "src/review/layers.ts",
+      "anchor": "return isLockHeld(layersLockPath(packageDir), LOCK_STALE_MS);",
+      "replacement": "return isLockHeld(layersLockPath(packageDir), 0);",
+      "line": 181,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13193
+    },
+    {
+      "id": "a01",
+      "file": "src/review/layers.ts",
+      "anchor": "await deps.git(input.projectRoot, [\"worktree\", \"prune\"]);",
+      "replacement": "void 0;",
+      "line": 281,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13014
+    },
+    {
+      "id": "a02",
+      "file": "src/review/layers.ts",
+      "anchor": "headSource = \"manifest\";",
+      "replacement": "headSource = \"input\";",
+      "line": 409,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13130
+    },
+    {
+      "id": "a03",
+      "file": "src/review/layers.ts",
+      "anchor": "headSource = \"checkout\";",
+      "replacement": "headSource = \"manifest\";",
+      "line": 413,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13114
+    },
+    {
+      "id": "a04",
+      "file": "src/review/layers.ts",
+      "anchor": "if ((error as NodeJS.ErrnoException).code !== \"ENOENT\") throw error;",
+      "replacement": "void 0;",
+      "line": 248,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13132
+    },
+    {
+      "id": "a05",
+      "file": "src/review/layers.ts",
+      "anchor": "await rm(staging, { recursive: true, force: true }).catch(() => {});",
+      "replacement": "void 0;",
+      "line": 303,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13227
+    },
+    {
+      "id": "a06",
+      "file": "src/review/layers.ts",
+      "anchor": "await deps.git(input.projectRoot, [\"worktree\", \"remove\", \"--force\", \"--end-of-options\", worktree]);",
+      "replacement": "void 0;",
+      "line": 305,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13079
+    },
+    {
+      "id": "a07",
+      "file": "src/review/layers.ts",
+      "anchor": "if (builtFrom !== prHead) {",
+      "replacement": "if (false as boolean) {",
+      "line": 286,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13147
+    },
+    {
+      "id": "a08",
+      "file": "src/review/layers.ts",
+      "anchor": "if (expected === null || layers.graphCommit !== expected) {",
+      "replacement": "if (expected === null) {",
+      "line": 463,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13252
+    },
+    {
+      "id": "a09",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "const head = options.prHead ?? (await manifestHead(packageDir)) ?? undefined;",
+      "replacement": "const head = options.prHead ?? undefined;",
+      "line": 70,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13288
+    },
+    {
+      "id": "a10",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "if (existing !== null && (head === undefined || existing.prHead === head)) return existing;",
+      "replacement": "if (existing !== null) return existing;",
+      "line": 72,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13152
+    },
+    {
+      "id": "a11",
+      "file": "src/review/chunks.ts",
+      "anchor": "if (Object.keys((await readChunkState(packageDir)).outcomes).length > 0) {",
+      "replacement": "if (false as boolean) {",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13094
+    },
+    {
+      "id": "a12",
+      "file": "src/review/chunks.ts",
+      "anchor": "major: 1, high: 1,",
+      "replacement": "major: 1, high: 3,",
+      "line": 321,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13053
+    },
+    {
+      "id": "a13",
+      "file": "src/tui/review-layers-actions.ts",
+      "anchor": "{ cwd: projectRoot, timeout: REFRESH_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },",
+      "replacement": "{ cwd: projectRoot, maxBuffer: 16 * 1024 * 1024 },",
+      "line": 28,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13074
+    },
+    {
+      "id": "a14",
+      "file": "src/tui/reviews-inspector.ts",
+      "anchor": "if (pendingReviews.has(newest.reviewId)) {",
+      "replacement": "if (false as boolean) {",
+      "line": 164,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13096
+    },
+    {
+      "id": "a15",
+      "file": "src/tui/reviews-inspector.ts",
+      "anchor": "pendingReviews.delete(newest.reviewId);",
+      "replacement": "void 0;",
+      "line": 175,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13065
+    },
+    {
+      "id": "a16",
+      "file": "src/memory/service.ts",
+      "anchor": "const indexDir = input.indexDir ?? path.join(dataRoot(input.cwd), \"index\");",
+      "replacement": "const indexDir = path.join(dataRoot(input.cwd), \"index\");",
+      "line": 121,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13031
+    }
+  ],
+  "totals": {
+    "killed": 13,
+    "survived": 12,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
+import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
@@ -56,6 +57,8 @@ export type LedgerInputs = {
   /** Reviewer → resolved rule file, only when it exists. */
   ruleFiles: Record<string, string>;
   raws: RawFile[];
+  /** Reviewer → the text of its tool-call log; a reviewer with no entry has `layersUsed` unknown. */
+  toolLogs?: Record<string, string | undefined>;
   retry: RetryState;
   canonical: Array<Record<string, unknown>>;
   dispositions: Disposition[];
@@ -359,7 +362,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const status = String(result.status ?? "").toUpperCase();
     const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
     const finished = FINISHED.has(status) && asked.length === 0;
-    const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false };
+    const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
@@ -377,6 +380,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       for (const id of known?.covered ?? []) claimed.add(id);
     }
     const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+    if (manifest !== undefined) run.coveredSlices = [...seen].sort();
     const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
     const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
     if (!finished) {

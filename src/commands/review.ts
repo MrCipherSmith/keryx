@@ -35,6 +35,7 @@ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/co
 import { runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, requiredReviewers } from "../review/coverage";
+import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
@@ -47,6 +48,11 @@ import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
+import { resolveProjectRoot } from "../lib/contained-path";
+import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
+import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
+import { PackageGraphError, loadPackageGraph } from "../review/layers";
+import { layersSummaryLine } from "../review/layers-view";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -115,6 +121,7 @@ import {
   type BlastRadiusScreenInput,
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
+import type { GraphData } from "../gdgraph/types";
 import { withLiveCodexModels } from "./live-codex-models";
 import { detectProviders } from "./select";
 import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
@@ -485,6 +492,7 @@ const BLAST_RADIUS_FLAGS = [
   "--json",
   "--brief",
   "--out",
+  "--package",
 ] as const;
 
 const TIER_FLAGS = [
@@ -504,7 +512,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -558,7 +566,12 @@ function rejectUnknownFlags(args: readonly string[], allowed: readonly string[],
   }
 }
 
-export async function reviewCommand(args: string[]): Promise<void> {
+/** Test seam: whether a person is at a terminal. Default: stdin and stdout are both TTYs. */
+export interface ReviewCommandSeams {
+  isTerminal?: () => boolean;
+}
+
+export async function reviewCommand(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   const command = args[0];
   if (!command || command === "--help" || command === "-h") {
     printHelp();
@@ -604,6 +617,18 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "blast-radius") {
       await runBlastRadius(args.slice(1));
+      return;
+    }
+    if (command === "layers") {
+      await runLayers(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "chunks") {
+      await runChunks(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "coverage") {
+      await runCoverage(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "budget") {
@@ -745,7 +770,7 @@ export async function reviewCommand(args: string[]): Promise<void> {
       return;
     }
     if (command === "complete") {
-      await runComplete(args.slice(1));
+      await runComplete(args.slice(1), seams);
       return;
     }
     if (command === "lightweight") {
@@ -758,6 +783,19 @@ export async function reviewCommand(args: string[]): Promise<void> {
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
+  }
+}
+
+/** A new package starts with fresh layers. A failure is printed and never blocks the package. */
+async function refreshCreatedPackageLayers(packageDir: string, head: string | undefined, cwd: string): Promise<void> {
+  try {
+    const layers = await ensurePackageLayers(packageDir, {
+      projectRoot: resolveProjectRoot(cwd),
+      ...(head === undefined ? {} : { prHead: head }),
+    });
+    console.log(`layers: ${layersSummaryLine(layers)}`);
+  } catch (error) {
+    console.error(`layers: not refreshed — ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -808,6 +846,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd);
   if (result.manifest.automatic === true) {
     console.log("run mode: automatic review");
   }
@@ -3477,7 +3516,22 @@ async function runBlastRadius(args: string[]): Promise<void> {
     return;
   }
 
-  const graph = await loadGraph(cwd);
+  // With --package the graph is the one built at the package's PR head, never the project's
+  // tracked artifacts; the layers are refreshed first when the package has none.
+  const packageOption = optionValue(args, "--package");
+  let graph: GraphData;
+  if (packageOption === undefined) {
+    graph = await loadGraph(cwd);
+  } else {
+    const packageDir = resolvePackageDir(args, cwd);
+    const layers = await ensurePackageLayers(packageDir);
+    try {
+      graph = (await loadPackageGraph(packageDir, layers.prHead ?? undefined)).graph;
+    } catch (error) {
+      if (!(error instanceof PackageGraphError)) throw error;
+      throw new Error(`${error.message}. The blast radius is not computed from a graph of another commit.`, { cause: error });
+    }
+  }
   if (graph.nodes.length === 0) {
     // An empty graph would produce an empty radius, which reads as "nothing
     // depends on this change". Refuse instead: a scope that shrank to nothing
@@ -3810,18 +3864,33 @@ function reportFilterStatsProblems(stats: unknown, where: string): void {
   process.exitCode = 1;
 }
 
-async function runComplete(args: string[]): Promise<void> {
+async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
   const ref = args[0];
   if (!ref) {
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
+  const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
+  if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
+    throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
+  }
+  // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
+  // statement, so a person has to be at the terminal that carries it.
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (waiver !== undefined && !isTerminal()) {
+    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+  }
   const {
     manifest,
     reviewNotes,
     dispositions: tally,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions });
+    coverageWaiver,
+  } = await completeManagedReview(process.cwd(), ref, { dispositions, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }) });
+  if (coverageWaiver !== undefined) {
+    const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
+    console.log(`coverage waived by the operator (${coverageWaiver.time}): "${coverageWaiver.operatorQuote}"; ${coverageWaiver.files.length} file(s) not reviewed: ${shown}${coverageWaiver.files.length > FIRST_FILES ? ", …" : ""}`);
+  }
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   console.log(`dispositions recorded: ${dispositions.length}`);
@@ -3897,6 +3966,9 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     }
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
+    }
+    if (token.name === "--waive-coverage") {
+      continue;
     }
     if (token.name === "--finding") {
       flush();
@@ -4051,6 +4123,9 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
   ["ledger", printLedgerHelp],
+  ["layers", printLayersHelp],
+  ["chunks", printChunksHelp],
+  ["coverage", printCoverageHelp],
   ["tier", printTierHelp],
   ["comments", printCommentsHelp],
   ["learn", printLearnHelp],
@@ -4136,7 +4211,7 @@ Usage:
                         words naming a narrower review in --operator-quote, and
                         the dispatch records them as operatorQuote.
                         \`review complete\` refuses a smaller dispatch.
-  keryx review dispatch-check --payload <file|-> [--manifest <file>]
+  keryx review dispatch-check --payload <file|-> [--manifest <file>] [--package <dir>]
                               [--max-bytes <n>] [--json]
                               Refuses a reviewer payload with no slice, one over the
                               manifest's wave budget, or a shape the schema rejects.
@@ -4166,7 +4241,18 @@ Usage:
                      still scanned, with or without --ref.
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                            [--json | --brief] [--out <file>]
+                            [--package <review-dir>] [--json | --brief] [--out <file>]
+  keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+  keryx review layers status  --package <review-dir> [--json]
+  keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--json]
+                      Graph, wiki and memory for one review; no model is called. An intact graph at
+                      the same head is reused (--force rebuilds); a second refresh waits up to 16 min.
+  keryx review chunks plan|estimate|next|record|merge --package <review-dir>
+                      [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]
+                      [--answer yes|no --quote "<words>"] [--json]
+                      The blast-radius files the per-pass cap dropped, one chunk at a time.
+  keryx review coverage --package <review-dir> [--json]
+                      In scope, covered, omitted, uncovered; writes coverage.json.
   keryx review budget [--spent <usd>] [--ceiling <usd>]
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
@@ -4267,6 +4353,7 @@ ${COMMENTS_USAGE}
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
+                        [--waive-coverage "<operator quote>"]
   keryx review lightweight
 
 An unrecognised option is REFUSED, not ignored. A flag that is silently dropped

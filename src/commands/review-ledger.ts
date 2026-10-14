@@ -5,6 +5,8 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
+import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, emptyRetryState, readSliceIds, scopeFingerprint } from "../review/retry-plan";
@@ -60,7 +62,7 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   }
 }
 
-type DriverFile = { reviewer?: unknown; slices?: unknown; definition?: unknown; skill_path?: unknown; payload?: unknown; result?: unknown };
+type DriverFile = { reviewer?: unknown; slices?: unknown; definition?: unknown; skill_path?: unknown; payload?: unknown; result?: unknown; toolLog?: unknown };
 
 /** Where a driver file names the reviewer's rule file: a top-level `definition` or `skill_path`, or the same keys inside the dispatch `payload`. */
 export function definitionCandidates(driver: DriverFile): string[] {
@@ -125,6 +127,8 @@ export type DriverRecords = {
   payloadSlices: Record<string, string[]>;
   payloadDispatchCounts: Record<string, number>;
   ruleFiles: Record<string, string>;
+  /** Reviewer → the tool-call log path its driver names. */
+  toolLogs: Record<string, string>;
   assignments: Map<string, string[][]>;
   replies: ReplyNames;
   /** Drivers whose `slices` held an entry with no usable id: that dispatch's slices are not counted as handed out. */
@@ -136,6 +140,7 @@ export async function readDrivers(inputDir: string, root: string): Promise<Drive
   const payloadSlices: Record<string, string[]> = {};
   const payloadDispatchCounts: Record<string, number> = {};
   const ruleFiles: Record<string, string> = {};
+  const toolLogs: Record<string, string> = {};
   const assignments = new Map<string, string[][]>();
   const replyFiles = new Set<string>();
   const replyReviewers = new Set<string>();
@@ -158,12 +163,13 @@ export async function readDrivers(inputDir: string, root: string): Promise<Drive
         assignments.set(key, matches);
       }
     }
+    if (typeof driver.toolLog === "string" && driver.toolLog.trim() !== "") toolLogs[driver.reviewer] = driver.toolLog;
     for (const candidate of definitionCandidates(driver)) {
       const definition = path.resolve(root, candidate);
       if (existsSync(definition)) { ruleFiles[driver.reviewer] = path.relative(root, definition); break; }
     }
   }
-  return { payloadSlices, payloadDispatchCounts, ruleFiles, assignments, replies: { files: replyFiles, reviewers: [...replyReviewers] }, dropped };
+  return { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs, assignments, replies: { files: replyFiles, reviewers: [...replyReviewers] }, dropped };
 }
 
 export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false): string {
@@ -219,10 +225,12 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
 
   const blastRadius = await packageHasBlastRadius(packageDir);
   const required = await requiredReviewers(root, mode, files, { blastRadius });
-  const { payloadSlices, payloadDispatchCounts, ruleFiles, assignments, replies, dropped } = await readDrivers(inputDir, root);
+  const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, assignments, replies, dropped } = await readDrivers(inputDir, root);
   const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...required.required])] });
 
   assignRawDispatch(raws, assignments);
+  const toolLogs: Record<string, string | undefined> = {};
+  for (const reviewer of required.required) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
   const { ledger, gaps } = buildLedger({
     mode,
     selected: required.required,
@@ -231,6 +239,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     payloadDispatchCounts,
     ruleFiles,
     raws,
+    toolLogs,
     retry: await loadRetry(manifest === undefined ? undefined : scopeFingerprint(manifest), path.join(inputDir, "slices", "retry-state.json"), path.join(packageDir, "retry-state.json")),
     canonical,
     dispositions,
@@ -242,7 +251,10 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (setAside.length > 0) ledger.setAside = setAside;
   const blockers = await ledgerBlockers(ledger, canonical, { root, files, blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
   const ready = blockers.length === 0;
-  if (!rest.includes("--dry-run")) await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
+  if (!rest.includes("--dry-run")) {
+    await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
+    if (manifest !== undefined && path.resolve(packageDir) !== inputDir) await writeFileAtomic(path.join(packageDir, SLICE_MANIFEST_COPY), `${JSON.stringify(manifest, null, 2)}\n`);
+  }
   console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run")));
   if (!ready) process.exitCode = 1;
 }

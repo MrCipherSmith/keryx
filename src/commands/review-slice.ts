@@ -6,6 +6,8 @@ import { resolveProjectRoot } from "../lib/contained-path";
 import { writeFileAtomic } from "../lib/fs";
 import { placeReviewPath, reviewPathFlagRefusal } from "../lib/review-path-flags";
 import { hasStatus, parseReviewResult } from "../review/ledger";
+import { layersSummaryLine } from "../review/layers-view";
+import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
@@ -19,7 +21,7 @@ export type SliceDeps = {
 };
 
 export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--out", "--json", "--help", "-h"] as const;
-export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--pr-context", "--json", "--help", "-h"] as const;
+export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--pr-context", "--package", "--json", "--help", "-h"] as const;
 export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--covered", "--next-wave", "--state", "--dry-run", "--json", "--help", "-h"] as const;
 
 const DEFAULT_SLICE_DIR = ".metaproject/data/review/slices";
@@ -78,7 +80,10 @@ export function printDispatchCheckHelp(): void {
   console.log(`keryx review dispatch-check — usage:
 
   keryx review dispatch-check --payload <file|-> [--manifest <manifest.json>]
-                              [--max-bytes <n>] [--pr-context] [--json]
+                              [--max-bytes <n>] [--pr-context] [--package <dir>] [--json]
+
+--package <dir> refreshes the review's layers (graph, wiki, memory; no model) first when the
+package has none for its head, so a dispatch never starts from stale layers.
 
 --pr-context is for a pull-request review: every payload must carry \`pr_context\`,
 the path of the pr-context.md that \`keryx review context-collect\` wrote.
@@ -240,6 +245,12 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
   }
   const manifestSource = placed("--manifest");
   const rawMax = optionValue(args, "--max-bytes");
+
+  if (optionValue(args, "--package") !== undefined) {
+    // A dispatch starts from fresh layers: refresh them when the package has none for this head.
+    const layers = await ensurePackageLayers(resolvePackageDir(args));
+    console.error(`layers: ${layersSummaryLine(layers)}`);
+  }
 
   try {
     const payloads = asPayloads(await readJsonSource<unknown>(payloadSource, "payload"));

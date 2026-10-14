@@ -107,13 +107,15 @@ export interface BuildReportInput {
    * rather than paying for a second `rev-parse` spawn.
    */
   gitAvailable?: boolean;
+  /** A gdgraph data directory other than the project's own (a review package's graph). */
+  dataDir?: string | undefined;
 }
 
 export async function buildFreshnessReport(input: BuildReportInput): Promise<FreshnessReport> {
   const now = (input.now ?? (() => new Date()))().toISOString();
   const limitations: Limitation[] = [];
 
-  const modules = await validModuleNames(input.cwd);
+  const modules = await validModuleNames(input.cwd, input.dataDir);
   const filesChanged = input.changes.length;
   const filesCosmetic = input.changes.filter((c) => c.changeClass === "cosmetic").length;
 

@@ -232,7 +232,12 @@ export type MemoryCreateResult = {
   securitySkipped?: string | undefined;
 };
 
-export type MemoryIndexInput = { cwd: string; embeddings?: boolean | undefined };
+export type MemoryIndexInput = {
+  cwd: string;
+  embeddings?: boolean | undefined;
+  /** Write `index.json` here instead of the project's tracked `.metaproject/data/memory/index`. */
+  indexDir?: string | undefined;
+};
 export type MemoryIndexResult = {
   path: string;
   entryCount: number;

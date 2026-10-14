@@ -9,6 +9,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ASK_USER_EMERGENCIES } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { AUTOMATIC_REVIEW_DISCLOSURE_FILE } from "../review/chunks-estimate";
 import { describeAutomaticReviewLimit } from "./round-limit";
 
 /** The flag that records the mode on a review package's manifest. */
@@ -44,7 +45,7 @@ export const AUTOMATIC_REVIEW_PACKAGE_SUBCOMMANDS = [
 ] as const;
 
 /** Where the run's manual-vs-automatic input counts and defaulted answers are written, inside the package. */
-export const AUTOMATIC_REVIEW_DISCLOSURE_FILE = "automatic-run-inputs.json";
+export { AUTOMATIC_REVIEW_DISCLOSURE_FILE };
 
 const PHRASES: readonly RegExp[] = [
   /\bautomatic(?:ally)?[\s-]+(?:code[\s-]+|pr[\s-]+)?review\b/i,
@@ -401,6 +402,12 @@ export class AutomaticReviewRun {
         const test = one("--test");
         return inPackage(one("--package")) && absentOrUnderCwd("--worktree") && test !== undefined && isBunTest(test);
       }
+      case "layers":
+        return inPackage(one("--package")) && !flags.has("--write-wiki");
+      case "chunks":
+        return inPackage(one("--package")) && !flags.has("--answer") && !flags.has("--quote") && absentOrUnderCwd("--result");
+      case "coverage":
+        return inPackage(one("--package"));
       case "retry-plan":
         return inPackage(one("--manifest")) && absentOrInPackage("--state") && absentOrUnderCwd("--result");
       case "scope":

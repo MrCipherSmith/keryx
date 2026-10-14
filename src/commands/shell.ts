@@ -122,7 +122,7 @@ import { computeBotMetrics } from "../review/bot/metrics";
 import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
-import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
+import { isReviewLayersCommand, isReviewsCommand, renderReviewLayersText, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
@@ -2843,6 +2843,12 @@ export async function runAgentRepl(
         agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
       } else if (command === "/setup") {
         agentIo.onSystem?.(renderSetupSlash(rest));
+      } else if (isReviewLayersCommand(line)) {
+        try {
+          agentIo.onSystem?.(renderReviewLayersText(await loadReviewDepth(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
       } else if (isReviewsCommand(command)) {
         // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
         try {

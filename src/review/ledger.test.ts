@@ -880,3 +880,25 @@ describe("severity audit (flow 428 AC6)", () => {
     expect(JSON.parse(await Bun.file(path.join(pkg, "findings.json")).text())[0].severity).toBe("major");
   });
 });
+
+describe("layersUsed on a reviewer run (AC7)", () => {
+  test("counts the layers from the reviewer's tool-call log and records them on its run", async () => {
+    const input = await inputs();
+    const [first] = input.selected;
+    const log = `${JSON.stringify({ name: "Bash", command: "keryx gdgraph affected src/a.ts" })}\nkeryx ctx rg x\nkeryx ctx rg y\n`;
+    const result = buildLedger({ ...input, toolLogs: { [first!]: log } });
+    const runs = result.ledger.dispatch.runs as Array<Record<string, unknown>>;
+    expect(runs.find((run) => run.reviewer === first)?.layersUsed).toEqual({ graph: 1, wiki: 0, memory: 0, ctx: 2 });
+  });
+
+  test("a reviewer with no log is unknown, never zero, and it blocks nothing", async () => {
+    const input = await inputs();
+    const withoutLogs = buildLedger(input);
+    const runs = withoutLogs.ledger.dispatch.runs as Array<Record<string, unknown>>;
+    expect(runs.length).toBeGreaterThan(0);
+    for (const run of runs) expect(run.layersUsed).toEqual({ graph: "unknown", wiki: "unknown", memory: "unknown", ctx: "unknown" });
+    const withLogs = buildLedger({ ...input, toolLogs: Object.fromEntries(input.selected.map((reviewer) => [reviewer, "keryx ctx rg x\n"])) });
+    expect(withoutLogs.gaps).toEqual(withLogs.gaps);
+    expect(await blockersOf(withoutLogs)).toEqual(await blockersOf(withLogs));
+  });
+});

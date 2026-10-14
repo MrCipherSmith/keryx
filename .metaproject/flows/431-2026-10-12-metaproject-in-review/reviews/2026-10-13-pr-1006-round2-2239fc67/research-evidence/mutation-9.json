@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk src/lib/trust-routine-command.test.ts src/commands/automatic-review.test.ts src/trigger src/flow src/tui/review-layers",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 115841
+  },
+  "mutants": [
+    {
+      "id": "cr1-collapse-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "  if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;\n",
+      "replacement": "",
+      "line": 687,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 163203
+    },
+    {
+      "id": "cr4-opaque-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (words.slice(review + 1).some(wordIsOpaque)) return true;",
+      "replacement": "if (false) return true;",
+      "line": 668,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 177651
+    },
+    {
+      "id": "cr7-recursion-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (depth < 4 && words.some((w) => /\\s/.test(w) && parsedCoverageWaiver(w, depth + 1))) return true;",
+      "replacement": "",
+      "line": 670,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 152209
+    },
+    {
+      "id": "cr10-oct-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (oct !== undefined) return String.fromCharCode(Number.parseInt(oct, 8) & 0xff);",
+      "replacement": "",
+      "line": 637,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 167735
+    },
+    {
+      "id": "cr13-estimate-check-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (after.includes(\"estimate\") && after.some(",
+      "replacement": "if (true && after.some(",
+      "line": 701,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 142285
+    },
+    {
+      "id": "cr16-chunk-recursion-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (depth < 4 && seg.words.some((w) => /\\s/.test(w) && scan(w, depth + 1))) return true;",
+      "replacement": "",
+      "line": 702,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 131573
+    },
+    {
+      "id": "cr19-ansi-newline",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "n: \"\\n\", ",
+      "replacement": "",
+      "line": 630,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 125142
+    },
+    {
+      "id": "cr22-review-complete-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (review >= 0 && words.slice(review + 1).some((w) => w.toLowerCase() === \"complete\")) {",
+      "replacement": "if (false) {",
+      "line": 667,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 125315
+    },
+    {
+      "id": "mg1-restore-off",
+      "file": "src/review/managed.ts",
+      "anchor": "if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);",
+      "replacement": "",
+      "line": 840,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 148724
+    },
+    {
+      "id": "un1-waiver-off",
+      "file": "src/trigger/unattended.ts",
+      "anchor": "if (touchesCoverageWaiver(text) || touchesChunkEstimateAnswer(text)) {",
+      "replacement": "if (touchesChunkEstimateAnswer(text)) {",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 129037
+    },
+    {
+      "id": "tr2-coverage",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "    \"coverage\",\n",
+      "replacement": "",
+      "line": 96,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 107730
+    },
+    {
+      "id": "ar2-answer",
+      "file": "src/commands/automatic-review.ts",
+      "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+      "replacement": " && !flags.has(\"--quote\")",
+      "line": 408,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 71954
+    },
+    {
+      "id": "ar5-chunks-pkg",
+      "file": "src/commands/automatic-review.ts",
+      "anchor": "case \"chunks\":\n        return inPackage(one(\"--package\")) &&",
+      "replacement": "case \"chunks\":\n        return",
+      "line": 407,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 71632
+    },
+    {
+      "id": "ly2-current-commit",
+      "file": "src/review/layers.ts",
+      "anchor": "return existing.graphCommit === existing.prHead && (await graphIntact(packageDir, existing));",
+      "replacement": "return await graphIntact(packageDir, existing);",
+      "line": 248,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 73008
+    },
+    {
+      "id": "ly5-intact-nodes",
+      "file": "src/review/layers.ts",
+      "anchor": "return (await stat(path.join(dataDir, \"storage\", \"nodes.jsonl\"))).size > 0;",
+      "replacement": "return true;",
+      "line": 238,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 73649
+    },
+    {
+      "id": "ly8-force",
+      "file": "src/review/layers.ts",
+      "anchor": "if (input.force !== true && sameHead &&",
+      "replacement": "if (sameHead &&",
+      "line": 546,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 65029
+    },
+    {
+      "id": "ly11-sweep-age",
+      "file": "src/review/layers.ts",
+      "anchor": "if (age < WORKTREE_SWEEP_AGE_MS) continue;",
+      "replacement": "",
+      "line": 336,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 61362
+    },
+    {
+      "id": "ly14-recover-old",
+      "file": "src/review/layers.ts",
+      "anchor": "if (missing && entry.startsWith(`${name}.old.`)) {",
+      "replacement": "if (false) {",
+      "line": 315,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 62718
+    },
+    {
+      "id": "ly17-sweep-call",
+      "file": "src/review/layers.ts",
+      "anchor": "      await sweepStaleWorktrees(deps, input.projectRoot);\n",
+      "replacement": "",
+      "line": 541,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 61984
+    },
+    {
+      "id": "pl3-batch-bound",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "taken < Math.max(1, list.length - runnerUp) &&",
+      "replacement": "taken < 1 &&",
+      "line": 295,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 58481
+    },
+    {
+      "id": "us2-isfile",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "if (!info.isFile() || info.size",
+      "replacement": "if (info.size",
+      "line": 80,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 58558
+    },
+    {
+      "id": "ch1-lock-wait",
+      "file": "src/review/chunks.ts",
+      "anchor": "{ timeoutMs: CHUNK_LOCK_WAIT_MS }",
+      "replacement": "{ timeoutMs: 1 }",
+      "line": 24,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 57392
+    },
+    {
+      "id": "ch4-record-lock",
+      "file": "src/review/chunks.ts",
+      "anchor": "return withChunkStateLock(packageDir, () => recordChunkLocked(packageDir, chunkId, result));",
+      "replacement": "return recordChunkLocked(packageDir, chunkId, result);",
+      "line": 289,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 59411
+    }
+  ],
+  "totals": {
+    "killed": 15,
+    "survived": 8,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

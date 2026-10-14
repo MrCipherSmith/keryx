@@ -6,8 +6,14 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { shellWord } from "../lib/shell-quote";
 import { listReviewPackages, type ListedReview } from "../review/bot/packages";
 import { packageHasBlastRadius, packageScopeFiles, requiredReviewers, type RequiredSet, type ReviewMode } from "../review/coverage";
+import { computeChunkPass, hasChunkPlan, type ChunkPass } from "../review/chunks";
+import { computeCoverage, coverageLine, readCoverageWaiver, type CoverageWaiver } from "../review/coverage-complete";
+import { readLayers, type LayersFile } from "../review/layers";
+import { layersDetailLines, layersSummaryLine } from "../review/layers-view";
+import { LAYER_NAMES, summarizeLayersUsage, type LayersUsageSummary } from "../review/layers-usage";
 import { EVIDENCE_DIR, pendingMutants, type MutantStatus, type MutationRecord } from "../review/mutate";
 
 export const REVIEW_DEPTH_EMPTY = "No managed review has recorded a dispatch yet.";
@@ -18,6 +24,22 @@ export type ReviewDepthMutation = {
   totals: Record<MutantStatus, number>;
   /** Proposed mutants no recorded pass has run. */
   pending: number;
+};
+
+/** What a review knows about its layers, its chunk pass and its coverage (flow 431, AC12). One projection for every surface. */
+export type ReviewLayersView = {
+  /** The package directory, for the command a missing piece points at. */
+  dir: string;
+  layers: LayersFile | null;
+  /** Null when the package records no reviewer runs. */
+  usage: LayersUsageSummary | null;
+  /** Null when the package has no chunk plan. */
+  chunks: ChunkPass | null;
+  /** False when the package holds nothing to account coverage against. */
+  coverageTracked: boolean;
+  uncovered: number;
+  coverage: string;
+  waiver: CoverageWaiver | undefined;
 };
 
 export type ReviewDepthRow = {
@@ -36,6 +58,7 @@ export type ReviewDepthRow = {
   mutation: ReviewDepthMutation;
   /** The operator's recorded waiver of the mutation pass, when there is one. */
   mutationWaived: boolean;
+  layersView?: ReviewLayersView;
 };
 
 const ZERO: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
@@ -63,6 +86,21 @@ async function mutationOf(packageDir: string): Promise<ReviewDepthMutation> {
   return { passes, totals, pending: (await pendingMutants(packageDir)).length };
 }
 
+async function layersViewOf(dir: string, dispatch: Record<string, unknown> | undefined): Promise<ReviewLayersView> {
+  const runs = Array.isArray(dispatch?.runs) ? dispatch.runs.filter((run): run is Record<string, unknown> => run !== null && typeof run === "object") : [];
+  const coverage = await computeCoverage(dir).catch(() => undefined);
+  return {
+    dir,
+    layers: await readLayers(dir).catch(() => null),
+    usage: runs.length === 0 ? null : summarizeLayersUsage(runs),
+    chunks: hasChunkPlan(dir) ? await computeChunkPass(dir).catch(() => null) : null,
+    coverageTracked: coverage?.tracked ?? false,
+    uncovered: coverage?.counts.uncovered ?? 0,
+    coverage: coverage === undefined ? "coverage: unreadable" : coverageLine(coverage),
+    waiver: readCoverageWaiver(dispatch),
+  };
+}
+
 function pullLabel(review: ListedReview): string {
   if (review.repo !== null && review.number !== null) return `${review.repo}#${review.number}`;
   return review.manifest.target?.ref ?? review.reviewId;
@@ -78,7 +116,7 @@ export async function loadReviewDepth(cwd: string, listed?: readonly ListedRevie
     const selected = Array.isArray(dispatch?.selected) ? dispatch.selected.filter((s): s is string => typeof s === "string") : [];
     const waiver = dispatch?.mutationWaiver;
     const mutationWaived = waiver !== null && typeof waiver === "object" && typeof (waiver as { operatorQuote?: unknown }).operatorQuote === "string";
-    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived };
+    const base = { reviewId: review.reviewId, pull: pullLabel(review), selected, mutation: await mutationOf(review.dir), mutationWaived, layersView: await layersViewOf(review.dir, dispatch) };
     if (mode === undefined) {
       rows.push({ ...base, mode: "unrecorded", required: [], excluded: [], missing: [], filesKnown: false });
       continue;
@@ -100,19 +138,59 @@ function mutationLine(m: ReviewDepthMutation, waived: boolean): string {
   return `mutation: ${killed} killed, ${survived} survived, ${invalid} invalid, ${timeout} timed out${pending}`;
 }
 
+/** The one-line form: `graph@<sha7> = head|differs; wiki …; memory …; layers used n/m; unknown k; chunks d/t, uncovered u`. */
+export function layersLine(view: ReviewLayersView | undefined): string {
+  if (view === undefined) return "layers: not read";
+  const parts = [view.layers === null ? "layers: not refreshed" : layersSummaryLine(view.layers)];
+  if (view.usage !== null) {
+    parts.push(`layers used ${view.usage.usedAny}/${view.usage.total}`);
+    if (view.usage.unknown > 0) parts.push(`unknown ${view.usage.unknown}`);
+  }
+  if (view.chunks !== null) parts.push(`chunks ${view.chunks.totals.done}/${view.chunks.totals.chunks}, uncovered ${view.uncovered}`);
+  else if (view.coverageTracked) parts.push(`chunks 0/0, uncovered ${view.uncovered}`);
+  return parts.join("; ");
+}
+
+/** The full lines: `layers.json`, who used which layer, the chunk pass, the coverage counts and the waiver. */
+export function layersDepthLines(view: ReviewLayersView | undefined): string[] {
+  if (view === undefined) return [];
+  const lines = view.layers === null ? [`layers: not refreshed; run \`keryx review layers refresh --package ${shellWord(view.dir)}\``] : layersDetailLines(view.layers);
+  if (view.usage !== null) {
+    const used = view.usage;
+    const per = LAYER_NAMES.map((name) => `${name} ${used.perLayer[name]}`).join(", ");
+    lines.push(`layers used: ${used.usedAny} of ${used.total} reviewer(s) (${per}); unknown ${used.unknown}${used.unknown > 0 ? " (no tool-call log)" : ""}`);
+  }
+  if (view.chunks !== null) {
+    const { totals } = view.chunks;
+    lines.push(`chunk pass (${view.chunks.reviewer}, ${view.chunks.tier} tier): ${totals.done}/${totals.chunks} done, ${totals.failed} failed, ${totals.pending} pending, ${view.uncovered} uncovered`);
+    for (const chunk of view.chunks.chunks) lines.push(`  ${chunk.id}: ${chunk.state}, ${chunk.files.length} file(s), ${chunk.attempts} attempt(s)`);
+  } else lines.push("chunk pass: no plan (no dropped files)");
+  lines.push(view.coverage);
+  if (view.waiver !== undefined) lines.push(`coverage waived by the operator (${view.waiver.time}): "${view.waiver.operatorQuote}"; ${view.waiver.files.length} file(s) not reviewed`);
+  return lines;
+}
+
 export function formatReviewDepthRowLines(row: ReviewDepthRow): string[] {
   const head = `${row.pull}  ${row.reviewId}  mode ${row.mode}`;
   const lines = [head];
+  const layers = layersDepthLines(row.layersView).map((line) => `  ${line}`);
   if (row.mode === "unrecorded") {
-    lines.push("  no dispatch record: the reviewer set is not known", `  ${mutationLine(row.mutation, row.mutationWaived)}`);
+    lines.push("  no dispatch record: the reviewer set is not known", `  ${mutationLine(row.mutation, row.mutationWaived)}`, ...layers);
     return lines;
   }
   const covered = row.required.length - row.missing.length;
   lines.push(`  reviewers: ${covered} of ${row.required.length} required were dispatched${row.filesKnown ? "" : " (no scope file list, path gates not applied)"}`);
   if (row.missing.length > 0) lines.push(`  missing: ${row.missing.join(", ")}`);
   for (const e of row.excluded) lines.push(`  excluded ${e.reviewer}: ${e.reason}`);
-  lines.push(`  ${mutationLine(row.mutation, row.mutationWaived)}`);
+  lines.push(`  ${mutationLine(row.mutation, row.mutationWaived)}`, ...layers);
   return lines;
+}
+
+/** `/review layers` and the readline text: the one-line form and the full lines of every review. */
+export function renderReviewLayersText(rows: readonly ReviewDepthRow[]): string {
+  if (rows.length === 0) return `${REVIEW_DEPTH_EMPTY}\n`;
+  const blocks = rows.map((row) => [`${row.pull}  ${row.reviewId}`, `  ${layersLine(row.layersView)}`, ...layersDepthLines(row.layersView).map((line) => `  ${line}`)].join("\n"));
+  return `Review layers\n${blocks.join("\n\n")}\n`;
 }
 
 /** One block per review, a blank line between blocks. */
