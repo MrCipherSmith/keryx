@@ -50,6 +50,10 @@ export function makeLayersRefreshRunner(entry: string | undefined, timeoutMs = R
         { cwd: projectRoot, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
         (error, stdout, stderr) => {
           liveChildren.delete(child);
+          if (error?.killed === true) {
+            reject(new Error(`the layers refresh did not finish within ${Math.round(timeoutMs / 1000)}s and was stopped`));
+            return;
+          }
           try {
             resolve(JSON.parse(stdout) as LayersFile);
           } catch {

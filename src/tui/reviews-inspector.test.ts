@@ -360,6 +360,67 @@ describe("layers in /reviews", () => {
     expect(called).toEqual(["layers:r1", "chunks:r1"]);
   });
 
+  describe("the guard is shared by every open view of the same package", () => {
+    const settleLater = () => {
+      const releases: Array<(message: string) => void> = [];
+      const called: string[] = [];
+      const actions = {
+        refreshLayers: (r: { reviewId: string }) => {
+          called.push(`layers:${r.reviewId}`);
+          return new Promise<string>((resolve) => {
+            releases.push(resolve);
+          });
+        },
+        runMissingChunks: async (r: { reviewId: string }) => (called.push(`chunks:${r.reviewId}`), "estimated"),
+      };
+      return { actions, called, release: () => releases.splice(0).forEach((resolve) => resolve("refreshed")) };
+    };
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    test("a second view over the same package is refused while the first one's action is pending", async () => {
+      const first = settleLater();
+      const second = settleLater();
+      try {
+        const viewOne = open(metrics(), { depth: [depthRow()], actions: first.actions });
+        const viewTwo = open(metrics(), { depth: [depthRow()], actions: second.actions });
+        viewOne.press("l");
+        viewTwo.press("l");
+        viewTwo.press("c");
+        expect(first.called).toEqual(["layers:r1"]);
+        expect(second.called).toEqual([]);
+      } finally {
+        first.release();
+        second.release();
+        await tick();
+      }
+      const again = open(metrics(), { depth: [depthRow()], actions: second.actions });
+      again.press("l");
+      expect(second.called).toEqual(["layers:r1"]);
+      second.release();
+      await tick();
+    });
+
+    test("views over two different packages both start", async () => {
+      const first = settleLater();
+      const second = settleLater();
+      try {
+        const viewOne = open(metrics(), { depth: [depthRow()], actions: first.actions });
+        const viewTwo = open(metrics(), {
+          depth: [depthRow({ reviewId: "r2", layersView: { ...(depthRow() as unknown as { layersView: object }).layersView, dir: "/p/r2" } })],
+          actions: second.actions,
+        });
+        viewOne.press("l");
+        viewTwo.press("l");
+        expect(first.called).toEqual(["layers:r1"]);
+        expect(second.called).toEqual(["layers:r2"]);
+      } finally {
+        first.release();
+        second.release();
+        await tick();
+      }
+    });
+  });
+
   test("an action that rejects frees the review instead of leaving it pending", async () => {
     const called: string[] = [];
     const actions = {
