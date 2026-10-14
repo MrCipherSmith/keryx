@@ -49,6 +49,8 @@ afterEach(async () => {
 const REPORT = [
   "# Round",
   "",
+  "Evidence level: static only — did not run: tests",
+  "",
   "```json keryx:findings",
   JSON.stringify([
     {
