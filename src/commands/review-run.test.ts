@@ -8,7 +8,7 @@ import { endLine, createTelegramNotifier, startLine, type RunNotifier } from "./
 import { parseAutonomousTarget } from "../review/autonomous-profile";
 import { AutonomousRunLockedError, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 import type { AutonomousSummary } from "../review/autonomous-summary";
-import { parseRunArgs, runReviewRunCommand } from "./review-run";
+import { createHeartbeat, parseRunArgs, runReviewRunCommand } from "./review-run";
 
 const REF = "https://github.com/o/r/pull/7";
 const BASE = ["--autonomous", "--target", "pr", "--ref", REF];
@@ -227,5 +227,41 @@ describe("notes to Telegram", () => {
     await notifier.finished("two");
     await notifier.close();
     expect(sent).toEqual(["one", "two"]);
+  });
+});
+
+describe("heartbeat on stderr", () => {
+  const running = (phase: string, rounds: number, tokens: number) => ({ state: "running", phase, rounds, tokens });
+
+  test("one line per change, rate limited, and nothing for an unchanged or a finished state", () => {
+    const lines: string[] = [];
+    let clock = 0;
+    const beat = createHeartbeat((l) => lines.push(l), () => clock, 60_000);
+    beat(running("review start", 0, 10));
+    clock = 5_000;
+    beat(running("review start", 0, 20));
+    expect(lines).toHaveLength(1);
+    clock = 61_000;
+    beat(running("review start", 0, 20));
+    expect(lines).toHaveLength(2);
+    beat(running("review start", 0, 20));
+    clock = 130_000;
+    beat(running("review start", 0, 20));
+    expect(lines).toHaveLength(2);
+    beat(running("review dispatch", 1, 900));
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe("heartbeat: phase review dispatch, 1 round(s), 900 tokens");
+    clock = 200_000;
+    beat({ state: "complete", phase: "review complete", rounds: 2, tokens: 5000 });
+    expect(lines).toHaveLength(3);
+  });
+
+  test("progress from the runner reaches stderr and leaves --json stdout as the verdict alone", async () => {
+    const driven = await drive([...BASE, "--json"], async (o) => {
+      o.onProgress?.({ state: "running", ref: REF, phase: "review dispatch", rounds: 1, tokens: 42, startedAt: "x", pid: 1 });
+      return result("complete", 0);
+    });
+    expect(driven.err).toEqual(["heartbeat: phase review dispatch, 1 round(s), 42 tokens"]);
+    expect(JSON.parse(driven.out.join("\n"))).toMatchObject({ status: "complete" });
   });
 });

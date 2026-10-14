@@ -4889,7 +4889,12 @@ Questions the model asks are answered by the safe default (the recommended optio
 an irreversible one is refused) and each answer is recorded with its basis in `answers.ndjson`. The
 run directory also holds `summary.json`, `report.md`, `events.ndjson`, `progress.json`, `lock.json`,
 `run.json` and `child.log`. A run on the same head resumes an open package; a run on a new head
-starts fresh. In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
+starts fresh. The pull request head resolved at the start is named in the child's prompt, and the
+child passes it as `--head <sha>` to `review start`, `review attach` and `review ingest`, so the
+package records the commit that was reviewed rather than the commit checked out in the directory.
+While the run goes it writes one `heartbeat: phase <phase>, <n> round(s), <n> tokens` line to
+stderr whenever the phase, the rounds or the tokens change (at most one a minute), with or without
+`--json`; stdout stays the summary alone. In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
 See [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 ### `review comments`

@@ -271,7 +271,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage }),
+      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head }),
       eventsFile,
       provider: options.provider,
       model: options.model,

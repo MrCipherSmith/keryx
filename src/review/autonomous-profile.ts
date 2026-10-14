@@ -78,7 +78,12 @@ export function buildAutonomousShellArgv(input: AutonomousArgvInput): string[] {
   return argv;
 }
 
-export function buildAutonomousPrompt(input: { readonly ref: string; readonly resumePackage?: string | undefined }): string {
+export function buildAutonomousPrompt(input: {
+  readonly ref: string;
+  readonly resumePackage?: string | undefined;
+  /** The pull request's head commit as the host reports it; null when it could not be read. */
+  readonly head?: string | null | undefined;
+}): string {
   const lines = [
     `Run a full managed code review of ${input.ref} and finish it yourself: keryx review start, the reviewer waves, keryx review ingest, then keryx review complete.`,
     `Nobody is at the keyboard and nobody is answering questions. Do not wait for anyone: take the recommended option of any menu, and when an action is refused choose another path instead of repeating it.`,
@@ -88,6 +93,11 @@ export function buildAutonomousPrompt(input: { readonly ref: string; readonly re
     `Run the whole orchestration yourself in this session. A subagent has no shell and cannot dispatch reviewers (it answers BLOCKED nested_dispatch_unavailable), so hand a subagent only the review of one slice, never the orchestration, the ledger, the ingest or the complete.`,
     `The run is finished only when keryx review complete has closed the package.`,
   ];
+  if (input.head !== undefined && input.head !== null) {
+    lines.push(
+      `The pull request head is ${input.head}. Review exactly that commit, in a detached worktree at it, and pass \`--head ${input.head}\` to \`keryx review start\` (or attach) and to \`keryx review ingest\`: without it keryx records the commit checked out in this directory, which is not the commit you reviewed.`,
+    );
+  }
   if (input.resumePackage !== undefined) {
     lines.push(`A package for this pull request request already exists: ${input.resumePackage}. Resume it and continue from where it stopped instead of starting a new one.`);
   }

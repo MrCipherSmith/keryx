@@ -33,7 +33,9 @@ export const RUN_HELP = `${RUN_USAGE}
 
 Runs one review of a pull request with nobody at the keyboard, in the review-autonomous profile.
 Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused
-(bad arguments, or another run of the same pull request holds the lock).`;
+(bad arguments, or another run of the same pull request holds the lock).
+While it runs it writes one "heartbeat:" line to stderr when the phase, round count or token count
+changes (at most one a minute), also with --json, whose verdict is the only thing on stdout.`;
 
 export interface ParsedRun {
   readonly ref: string;
@@ -92,12 +94,40 @@ export function parseRunArgs(args: string[]): ParsedRun {
   };
 }
 
+/** Minimum gap between two heartbeat lines; the token count moves on nearly every poll. */
+export const HEARTBEAT_MIN_GAP_MS = 60_000;
+
+/**
+ * One stderr line per change of phase, round count or token count, at most once per gap.
+ *
+ * `--json` keeps stdout for the verdict, so a caller that wraps this command in a shell task sees
+ * nothing for the whole run and an idle rail kills it; stderr is what keeps that task alive.
+ */
+export function createHeartbeat(
+  write: (line: string) => void,
+  now: () => number = Date.now,
+  minGapMs: number = HEARTBEAT_MIN_GAP_MS,
+): (progress: { state: string; phase: string; rounds: number; tokens: number }) => void {
+  let lastKey = "";
+  let lastAt = Number.NEGATIVE_INFINITY;
+  return (progress) => {
+    if (progress.state !== "running") return;
+    const key = `${progress.phase}|${progress.rounds}|${progress.tokens}`;
+    const at = now();
+    if (key === lastKey || at - lastAt < minGapMs) return;
+    lastKey = key;
+    lastAt = at;
+    write(`heartbeat: phase ${progress.phase}, ${progress.rounds} round(s), ${progress.tokens} tokens`);
+  };
+}
+
 export interface RunCommandDeps {
   readonly cwd?: string;
   readonly run?: (options: AutonomousRunOptions) => Promise<AutonomousRunResult>;
   readonly notifier?: RunNotifier;
   readonly log?: (line: string) => void;
   readonly error?: (line: string) => void;
+  readonly now?: () => number;
 }
 
 /** Returns the process exit code instead of setting it, so a test can read it. */
@@ -119,6 +149,7 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
   const target = parseAutonomousTarget(parsed.ref);
   const notifier = deps.notifier ?? (parsed.notify ? createTelegramNotifier({ project: path.basename(cwd), target }) : NO_NOTIFIER);
   const run = deps.run ?? runAutonomousReview;
+  const heartbeat = createHeartbeat(error, deps.now);
   const stop = new AbortController();
   const onSignal = (): void => stop.abort();
   process.on("SIGTERM", onSignal);
@@ -129,6 +160,7 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
       cwd,
       ref: parsed.ref,
       signal: stop.signal,
+      onProgress: heartbeat,
       stallMs: parsed.stallMinutes * 60_000,
       ...(parsed.budgetMinutes === undefined ? {} : { budgetMinutes: parsed.budgetMinutes }),
       ...(parsed.budgetTokens === undefined ? {} : { budgetTokens: parsed.budgetTokens }),

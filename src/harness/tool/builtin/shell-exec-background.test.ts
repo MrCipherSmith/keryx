@@ -323,6 +323,63 @@ describe("flow 263 AC1: the release-watch incident — a long foreground command
     await registry.sweepAll();
   });
 
+  test("a clamped idle_timeout_ms says so in the result; an in-range one stays silent about it", async () => {
+    const { spawn } = scriptedSpawner(() => ({ kind: "hang" }));
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 200 });
+    const tool = shellExecTool("/proj", unusedRun, registry, { yieldMs: 30 });
+
+    const high = JSON.parse((await tool.invoke({ command: "sleep 60", idle_timeout_ms: 3_600_000 })).output) as {
+      notice: string;
+    };
+    expect(high.notice).toContain(`idle_timeout_ms 3600000 was clamped to ${MAX_TASK_IDLE_TIMEOUT_MS}`);
+    expect(high.notice).toContain("detached");
+
+    const ok = JSON.parse((await tool.invoke({ command: "sleep 61", idle_timeout_ms: 60_000 })).output) as {
+      notice: string;
+    };
+    expect(ok.notice).not.toContain("clamped");
+
+    for (const [i, edge] of [1000, MAX_TASK_IDLE_TIMEOUT_MS, 1500.5].entries()) {
+      const edgeHandle = JSON.parse(
+        (await tool.invoke({ command: `sleep 7${i}`, idle_timeout_ms: edge })).output,
+      ) as { notice: string };
+      expect(edgeHandle.notice).not.toContain("clamped");
+    }
+
+    const low = JSON.parse((await tool.invoke({ command: "sleep 62", idle_timeout_ms: 5 })).output) as {
+      notice: string;
+    };
+    expect(low.notice).toContain(`idle_timeout_ms 5 was clamped to ${MIN_TASK_IDLE_TIMEOUT_MS}`);
+    expect(low.notice).not.toContain("detached");
+
+    const description = tool.definition.description;
+    expect(description).toContain("1800000");
+    expect(description).toContain("detached");
+    await registry.sweepAll();
+  });
+
+  test("a clamped idle_timeout_ms on a background:true call says so in the handle", async () => {
+    const { spawn } = scriptedSpawner(() => ({ kind: "hang" }));
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 200 });
+    const tool = shellExecTool("/proj", unusedRun, registry, { yieldMs: 5_000 });
+
+    const handle = JSON.parse(
+      (await tool.invoke({ command: "sleep 63", background: true, idle_timeout_ms: 3_600_000 })).output,
+    ) as { notice: string };
+    expect(handle.notice).toContain("was clamped");
+    await registry.sweepAll();
+  });
+
+  test("a foreground command that exits within the yield still reports a clamped idle_timeout_ms", async () => {
+    const { spawn } = scriptedSpawner(() => ({ kind: "exit", stdout: "done\n", exitCode: 0 }));
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const tool = shellExecTool("/proj", unusedRun, registry, { yieldMs: 5_000 });
+
+    const result = await tool.invoke({ command: "true", idle_timeout_ms: 99_999_999 });
+    expect(result.output).toContain("done");
+    expect(result.output).toContain(`clamped to ${MAX_TASK_IDLE_TIMEOUT_MS}`);
+  });
+
   test("background:true starts a background-phase task and returns the same handle keys", async () => {
     const { spawn } = scriptedSpawner(() => ({ kind: "hang" }));
     const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 200 });
