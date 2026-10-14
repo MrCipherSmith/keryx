@@ -697,6 +697,11 @@ each proposed mutant to `<review-dir>/research-evidence/mutants.json`:
 `{ "mutants": [{ "id", "file", "anchor", "replacement" }] }`. `anchor` is exact text that
 occurs once in `file`; `"runnable": false` at the top level says the suite cannot run here.
 
+The testing reviewer's contract is `mutant_candidates` for **every changed branch**, including
+code downstream of the diff that the diff makes reachable differently. The main session writes
+that list to `mutants.json` unchanged. It may not narrow, drop or merge candidates to fit a
+budget: a smaller pass is a cap (below), stated, never a smaller list.
+
 Run `keryx review mutate --test "<the nearest suite command>" --package <review-dir>`. It
 applies each mutant in a scratch copy of the worktree (never in the worktree), refuses to
 start when the baseline is red, and writes the table to `research-evidence/mutation-<n>.md`
@@ -707,6 +712,12 @@ A survivor is evidence for the finding that names it.
 `keryx review complete` refuses while proposed mutants are unrun, unless
 `dispatch.mutationWaiver = { operatorQuote, reason }` carries the operator's own words.
 `keryx review run --autonomous` is unchanged: it records `Not run: mutation pass` as before.
+
+`keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`
+in `mutation-<n>.json`. The table then prints `Not run: N candidates` (and the report must carry
+that line, see `keryx review report-parity`). A candidate the cap left out is still pending, so it
+keeps blocking the coverage gate until a later pass runs it; a cap moves work to the next pass, it
+never closes it.
 
 ### Severity audit — `keryx review severity-audit`
 

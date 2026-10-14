@@ -171,7 +171,7 @@ const CEILINGS_BY_KEY = {
   "review/review-jev-scenarios": 187,
   "review/review-layout": 238,
   "review/review-logic": 370,
-  "review/review-orchestrator": 1616,
+  "review/review-orchestrator": 1612,
   "review/review-performance": 359,
   "review/review-pr-feedback": 895,
   "review/review-regression": 214,

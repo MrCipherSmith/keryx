@@ -519,7 +519,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-cov
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--json"] as const;
@@ -3047,8 +3047,11 @@ async function runMutate(args: string[]): Promise<void> {
   const timeout = optionValue(args, "--timeout-ms");
   const timeoutMs = timeout === undefined ? undefined : Number(timeout);
   if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) throw new Error("--timeout-ms must be a positive number");
+  const capArg = optionValue(args, "--cap");
+  const cap = capArg === undefined ? undefined : Number(capArg);
+  if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) throw new Error("--cap must be a non-negative integer");
   const mutants = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
-  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs });
+  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap });
   const written = await writeMutationEvidence(packageDir, record);
   if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);

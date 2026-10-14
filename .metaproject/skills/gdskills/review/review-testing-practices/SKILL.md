@@ -85,14 +85,14 @@ this pass the class is unreachable for the whole round.
 
 ### Bounds
 
-- Mutate only gates inside **scope A**, one at a time, reverting each before the
+- Run mutants one at a time on gates inside **scope A**, reverting each before the
   next. Never leave a mutation in the tree.
 - Run the **nearest** suite, not the full one. This is not a `test:mutation`
   sweep — those are slow, opt-in, and answer a different question.
-- Cap it: the gates the diff added, plus any gate a previous round asked for. If
-  that set is larger than your budget, take the previous-round gates first and say
-  in your summary how many you did not reach. A stated cap is a result; silence
-  reads as a clean sweep.
+- Propose, do not cap: `mutant_candidates` in your `REVIEW_RESULT` names a mutant (`id`, `file`,
+  `anchor`, `replacement`) for **every changed branch**, code downstream of the diff included.
+  Run what your budget allows, previous-round gates first, and say how many you did not reach:
+  the main session writes your list to `mutants.json` unchanged and runs the rest. Silence reads as a clean sweep.
 - If you cannot run the suite at all, say so and skip the pass. Do **not** report
   a mutation you did not run — a predicted result is `info` at best, and this
   reviewer has no use for one.

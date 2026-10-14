@@ -49,6 +49,10 @@ export type MutationRecord = {
   baseline: { exitCode: number; ms: number };
   mutants: MutantResult[];
   totals: Record<MutantStatus, number>;
+  /** The most candidates this pass was allowed to run; absent when the pass ran with no cap. */
+  cap?: number | undefined;
+  /** Candidates the pass was given but did not run (they stay pending). Present only when a cap was set. */
+  not_reached?: number | undefined;
 };
 
 export const MUTANTS_SPEC = "mutants.json";
@@ -134,6 +138,8 @@ export async function runMutation(options: {
   mutants: readonly MutantSpec[];
   timeoutMs?: number | undefined;
   scratchRoot?: string | undefined;
+  /** Run at most this many candidates; the rest are counted in `not_reached` and stay pending. */
+  cap?: number | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
   const timeoutMs = options.timeoutMs ?? 300_000;
@@ -146,7 +152,9 @@ export async function runMutation(options: {
       throw new Error(`the baseline run of \`${options.command}\` ${baseline.timedOut ? "timed out" : `exited ${baseline.exitCode}`} on an unmodified copy; mutants would all read as killed, so none were run`);
 
     const results: MutantResult[] = [];
-    for (const mutant of options.mutants) {
+    const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
+    const candidates = cap === undefined ? options.mutants : options.mutants.slice(0, cap);
+    for (const mutant of candidates) {
       const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command, ...(mutant.kind === undefined ? {} : { kind: mutant.kind }) };
       const target = insideRoot(copy, mutant.file);
       if (target === undefined || !existsSync(target)) {
@@ -173,7 +181,7 @@ export async function runMutation(options: {
     }
     const totals: Record<MutantStatus, number> = { killed: 0, survived: 0, invalid: 0, timeout: 0 };
     for (const r of results) totals[r.status] += 1;
-    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals };
+    return { schemaVersion: 1, worktree, command: options.command, baseline: { exitCode: baseline.exitCode, ms: baseline.ms }, mutants: results, totals, ...(cap === undefined ? {} : { cap, not_reached: options.mutants.length - candidates.length }) };
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
@@ -205,6 +213,7 @@ export function renderMutationTable(record: MutationRecord): string {
     `|${columns.map(() => "---|").join("")}`,
     ...rows,
     "",
+    ...(record.not_reached !== undefined && record.not_reached > 0 ? [`Not run: ${record.not_reached} candidates${record.cap === undefined ? "" : ` (cap ${record.cap})`}. They stay pending and block the coverage gate until a pass runs them.`, ""] : []),
     t.survived > 0 ? "A survivor means no assertion pins that behaviour: the severity audit reads it as evidence." : "No survivor.",
     "",
   ].join("\n");
