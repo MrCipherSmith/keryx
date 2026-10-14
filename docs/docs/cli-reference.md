@@ -4815,6 +4815,8 @@ records it (with a warning when it replaces a different recorded head). The gate
 head that is not the pull request's head still needs the first line of `report.md` to name it and
 say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
 
+A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+
 `review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
 
 | Subcommand | Description |

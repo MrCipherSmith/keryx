@@ -91,6 +91,8 @@ export function buildAutonomousPrompt(input: {
     `Open at most ${AUTONOMOUS_PROFILE.roundLimit} review rounds and dispatch at most ${AUTONOMOUS_PROFILE.waveSize} reviewers per wave. Stop opening rounds when a round finds no new blocker or major.`,
     `Dispatch the full reviewer set: run \`keryx review required --mode all\` and dispatch every reviewer it prints, with dispatch mode "all". Nobody can name a narrower review in a run like this, so do not use mode "diff".`,
     `Run the whole orchestration yourself in this session. A subagent has no shell and cannot dispatch reviewers (it answers BLOCKED nested_dispatch_unavailable), so hand a subagent only the review of one slice, never the orchestration, the ledger, the ingest or the complete.`,
+    `The review skills live in this clone under \`.metaproject/skills/gdskills/review/\` (the orchestration is \`review-orchestrator/SKILL.md\` there): read them from that path and do not search the filesystem or \`$HOME/.keryx\` for them.`,
+    `A guard refuses raw \`git diff\`, \`cat\`, \`sed\`, \`find\` and \`tail\` in the shell. Use \`keryx ctx diff\`, \`keryx ctx read <file>\` and \`keryx ctx run -- <command>\` instead, or end a command that must stay raw with \`# keryx:raw <why>\`.`,
     `The run is finished only when keryx review complete has closed the package.`,
   ];
   if (input.head !== undefined && input.head !== null) {
@@ -112,4 +114,11 @@ const FLOOR_REFUSAL_PATTERNS: readonly RegExp[] = [
 /** Whether a tool result is the refusal an unattended floor ask produces (nobody could approve it). */
 export function isFloorRefusal(output: string): boolean {
   return FLOOR_REFUSAL_PATTERNS.some((pattern) => pattern.test(output));
+}
+
+const LOOP_GUARD_REFUSAL = /same tool call already tried \d+× \(hash budget\)/;
+
+/** Whether a tool result is the loop guard turning away a call the agent already made too many times. */
+export function isLoopGuardRefusal(output: string): boolean {
+  return LOOP_GUARD_REFUSAL.test(output);
 }

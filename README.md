@@ -1154,7 +1154,7 @@ Every managed review start, attach or ingest (and any `dispatch-check` or `blast
 
 ### Gates that keep a review report honest
 
-`keryx review complete` on a pull-request package refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
+`keryx review complete` on a pull-request package (one that targets a PR, or whose `--ref` is a PR URL under any `--target`) refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
 
 ### Review bot on pull requests
 
