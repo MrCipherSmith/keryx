@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, utimes, writeFile } fro
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLayersFixture, git, type LayersFixture } from "../review/layers.test-helpers";
-import { defaultLayerDeps, layersLockPath, layersRefreshInFlight, readLayers, refreshLayers } from "../review/layers";
+import { defaultLayerDeps, layersLockPath, layersRefreshInFlight, loadPackageGraph, readLayers, refreshLayers } from "../review/layers";
 import { ensurePackageLayers } from "./review-layers";
 import { reviewCommand } from "./review";
 
@@ -235,6 +235,27 @@ describe("a graph that keeps failing is not rebuilt on every call", () => {
     await reviewCommand(["layers", "refresh", "--package", fixture.packageDir, "--force"]);
     expect(builds).toHaveBeenCalledTimes(2);
     expect(worktreeAdds()).toBe(2);
+  });
+
+  test("the refusal that serves the cached failure names the window and the command that retries now", async () => {
+    await ensure();
+    const error = await loadPackageGraph(fixture.packageDir).then(
+      () => null,
+      (reason: unknown) => reason as Error,
+    );
+    expect(error?.message).toContain("the package graph is failed: disk full");
+    expect(error?.message).toContain("5 minutes");
+    expect(error?.message).toContain("layers refresh --package");
+    expect(error?.message).toContain("--force");
+  });
+
+  test("ensurePackageLayers with force rebuilds inside the window, and layers block takes the flag", async () => {
+    await ensure();
+    await ensurePackageLayers(fixture.packageDir, { projectRoot: fixture.root, force: true });
+    expect(builds).toHaveBeenCalledTimes(2);
+
+    await reviewCommand(["layers", "block", "--package", fixture.packageDir, "--files", "src/a.ts", "--force"]).catch(() => {});
+    expect(builds).toHaveBeenCalledTimes(3);
   });
 
   test("a new head rebuilds inside the window", async () => {

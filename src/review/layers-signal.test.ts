@@ -22,6 +22,8 @@ const PHASES: Record<string, string> = {
   "the graph build": `buildGraph: async () => { writeFileSync(READY, "1"); ${HANG} },`,
   "the wiki refresh": `refreshWiki: async () => { writeFileSync(READY, "1"); ${HANG} },`,
   "the memory index": `indexMemory: async () => { writeFileSync(READY, "1"); ${HANG} },`,
+  "the checkout's removal after the build": `git: async (cwd, args) => { if (args.includes("remove") && !globalThis.HELD) { globalThis.HELD = true; writeFileSync(READY, "1"); await new Promise((resolve) => setTimeout(resolve, 20000)); } return defaultLayerDeps.git(cwd, args); },`,
+  "the layers.json write":`writeLayers: async () => { writeFileSync(READY, "1"); ${HANG} },`,
 };
 
 const registered = (): string[] =>

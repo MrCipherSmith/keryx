@@ -24,13 +24,13 @@ describe("the production runner behind the /reviews layers refresh", () => {
       `console.log(JSON.stringify({ version: 1, argv: process.argv.slice(2), cwd: process.cwd(), graph: { status: "ok" } }));`,
     );
     const got = (await makeLayersRefreshRunner(entry)(dir, "/pkg dir")) as unknown as { argv: string[]; cwd: string };
-    expect(got.argv).toEqual(["review", "layers", "refresh", "--package", "/pkg dir", "--json"]);
+    expect(got.argv).toEqual(["review", "layers", "refresh", "--package", "/pkg dir", "--force", "--json"]);
     expect(got.cwd.endsWith(path.basename(dir))).toBe(true);
   });
 
   test("the argument vector names the entry right before the subcommand words", () => {
     const argv = layersRefreshArgv("e.js", "/p");
-    expect(argv.slice(-7)).toEqual(["e.js", "review", "layers", "refresh", "--package", "/p", "--json"]);
+    expect(argv.slice(-8)).toEqual(["e.js", "review", "layers", "refresh", "--package", "/p", "--force", "--json"]);
   });
 
   test("a child that fails reports the first line of its stderr", async () => {

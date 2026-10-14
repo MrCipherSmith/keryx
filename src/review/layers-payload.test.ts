@@ -239,7 +239,7 @@ describe("a reader that failed is reported as unavailable, not as empty", () => 
     expect(block.unavailable[0]?.reason).toContain("1 of 2 file(s)");
     expect(block.unavailable[0]?.reason).toContain("util.ts: Graph target");
     expect(block.affected.files).toContain("src/b.ts");
-    expect(layersBlockLines(block).join("\n")).toContain("unavailable affected:");
+    expect(layersBlockLines(block).join("\n")).toContain("affected: unavailable (not computed for 1 of 2 file(s)");
     expect((JSON.parse(JSON.stringify(block)) as { unavailable: unknown[] }).unavailable).toHaveLength(1);
   });
 
@@ -251,7 +251,21 @@ describe("a reader that failed is reported as unavailable, not as empty", () => 
     expect(gap).toBeDefined();
     expect(gap?.reason.length).toBeGreaterThan(0);
     expect(block.wiki).toEqual([]);
-    expect(layersBlockLines(block).join("\n")).toContain("unavailable wiki:");
+    expect(layersBlockLines(block).join("\n")).toContain("wiki: unavailable (");
+  });
+
+  test("a wiki page that cannot be read after the collection step is named, not dropped from the list", async () => {
+    await refresh();
+    const block = await buildLayersBlock({
+      ...input(),
+      readPage: async (absolutePath) => {
+        if (absolutePath.endsWith("alpha.md")) throw new Error("EACCES: permission denied");
+        return "";
+      },
+    });
+    const gap = block.unavailable.find((entry) => entry.section === "wiki");
+    expect(gap?.reason).toMatch(/^1 of \d+ wiki page\(s\) could not be read — .*alpha\.md/);
+    expect(layersBlockLines(block).join("\n")).toContain("wiki: unavailable (1 of");
   });
 
   test.skipIf(!canLock)("a single wiki page file that cannot be read makes the wiki unavailable, naming the file", async () => {

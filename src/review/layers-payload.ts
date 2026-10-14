@@ -40,7 +40,7 @@ export interface LayersBlockTruncation {
 
 /** A section that could not be read: empty because the reader failed, which is not the same as nothing found. */
 export interface LayersBlockUnavailable {
-  section: LayersBlockSection;
+  section: "affected" | "wiki" | "memory";
   reason: string;
 }
 
@@ -66,6 +66,8 @@ export interface BuildLayersBlockInput {
   /** The reviewer's files, repository-relative. */
   files: readonly string[];
   maxBytes?: number;
+  /** Reads one wiki page's text; a test replaces it to fail one page after the collection step has read it. */
+  readPage?: (absolutePath: string) => Promise<string>;
 }
 
 function sizeOf(block: LayersBlock): number {
@@ -156,7 +158,12 @@ interface Read<T> {
   unavailable: string | null;
 }
 
-async function wikiFor(projectRoot: string, graph: GraphData, files: readonly string[]): Promise<Read<{ page: string; title: string }>> {
+async function wikiFor(
+  projectRoot: string,
+  graph: GraphData,
+  files: readonly string[],
+  readPage: (absolutePath: string) => Promise<string> = (absolutePath) => readFile(absolutePath, "utf8"),
+): Promise<Read<{ page: string; title: string }>> {
   let pages;
   try {
     pages = await collectPages(projectRoot);
@@ -171,7 +178,7 @@ async function wikiFor(projectRoot: string, graph: GraphData, files: readonly st
   for (const page of pages) {
     let content: string;
     try {
-      content = await readFile(page.absolutePath, "utf8");
+      content = await readPage(page.absolutePath);
     } catch {
       unreadable.push(page.relativePath);
       continue;
@@ -257,7 +264,7 @@ export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<La
 
   const base = async (depth: 1 | 2): Promise<LayersBlock> => {
     const affected = affectedFor(graph, files, depth);
-    const wiki = await wikiFor(input.projectRoot, graph, files);
+    const wiki = await wikiFor(input.projectRoot, graph, files, input.readPage);
     const memory = await memoryFor(input.projectRoot, files);
     const unavailable: LayersBlockUnavailable[] = [];
     if (affected.unavailable !== null) unavailable.push({ section: "affected", reason: affected.unavailable });
@@ -350,7 +357,7 @@ export function layersBlockLines(block: LayersBlock): string[] {
     `  wiki pages: ${block.wiki.length}`,
     `  memory entries: ${block.memory.length}`,
   ];
-  for (const gap of block.unavailable) lines.push(`  unavailable ${gap.section}: ${gap.reason}`);
+  for (const gap of block.unavailable) lines.push(`  ${gap.section}: unavailable (${gap.reason})`);
   for (const cut of block.truncated) lines.push(`  truncated ${cut.section}: ${cut.shown}/${cut.total} — ${cut.command}`);
   return lines;
 }

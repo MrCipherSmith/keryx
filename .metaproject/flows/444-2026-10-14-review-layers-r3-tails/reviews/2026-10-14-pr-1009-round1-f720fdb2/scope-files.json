@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/acceptance-criteria.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/context.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/description.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/flow.json",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/journal.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/mutants.json",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/research-evidence/mutation-1.json",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/research-evidence/mutation-1.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/survivors.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/plan.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/tasks.md",
+    "CHANGELOG.md",
+    "docs/docs/cli-reference.md",
+    "src/commands/review-layers.test.ts",
+    "src/commands/review-layers.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+    "src/review/layers-payload.test.ts",
+    "src/review/layers-payload.ts",
+    "src/review/layers-refresh-lifecycle.test.ts",
+    "src/review/layers-signal.test.ts",
+    "src/review/layers-usage.test.ts",
+    "src/review/layers.ts",
+    "src/tui/review-layers-actions.ts",
+    "src/tui/review-layers-child.test.ts",
+    "src/tui/reviews-inspector.test.ts"
+  ]
+}

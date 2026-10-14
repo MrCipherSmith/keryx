@@ -60,6 +60,8 @@ const WORKTREE_SWEEP_AGE_MS = 30 * 60_000;
 /** A graph build that failed at a head is not retried at that head inside this window unless the refresh is forced. */
 const FAILED_RETRY_WINDOW_MS = 5 * 60_000;
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
+/** The most a signal waits for registered cleanups before it removes the lock and re-raises. */
+const SIGNAL_CLEANUP_MAX_MS = 5_000;
 const WIKI_PATH_PREFIX = ".metaproject/wiki";
 const MEMORY_PATH_PREFIX = ".metaproject/memory";
 
@@ -130,6 +132,8 @@ export interface LayerDeps {
   refreshWiki(input: RefreshInput): Promise<RefreshResult>;
   previewFreshness(input: PreviewFreshnessInput): Promise<FreshnessReport>;
   indexMemory(cwd: string, indexDir: string): Promise<{ entryCount: number }>;
+  /** Writes `layers.json`; a test replaces it to stop the refresh in its last phase. */
+  writeLayers(file: string, text: string): Promise<void>;
   now(): Date;
 }
 
@@ -151,6 +155,7 @@ export const defaultLayerDeps: LayerDeps = {
   async indexMemory(cwd, indexDir) {
     return createMemoryService().index({ cwd, embeddings: false, indexDir });
   },
+  writeLayers: writeFileAtomic,
   now: () => new Date(),
 };
 
@@ -359,7 +364,9 @@ async function withSignalCleanup<T>(packageDir: string, body: (register: (cleanu
   const cleanups = new Set<Cleanup>();
   const onSignal = (signal: NodeJS.Signals): void => {
     for (const name of SIGNALS) process.off(name, onSignal);
-    void Promise.all([...cleanups].map((cleanup) => cleanup().catch(() => {})))
+    const settled = Promise.all([...cleanups].map((cleanup) => cleanup().catch(() => {})));
+    const bound = new Promise<void>((resolve) => setTimeout(resolve, SIGNAL_CLEANUP_MAX_MS).unref());
+    void Promise.race([settled, bound])
       .then(() => rm(layersLockPath(packageDir), { recursive: true, force: true }))
       .catch(() => {})
       .finally(() => process.kill(process.pid, signal));
@@ -406,8 +413,11 @@ async function withDetachedWorktree<T>(
     if (added === null) throw new Error(`could not check out ${rev} to build its graph`);
     return await use(worktree, await deps.git(worktree, ["rev-parse", "HEAD"]));
   } finally {
-    unregister();
-    await cleanup();
+    try {
+      await cleanup();
+    } finally {
+      unregister();
+    }
   }
 }
 
@@ -602,7 +612,7 @@ export async function refreshLayers(input: RefreshLayersInput): Promise<LayersFi
           wiki,
           memory,
         };
-        await writeFileAtomic(layersFilePath(input.packageDir), `${JSON.stringify(layers, null, 2)}\n`);
+        await deps.writeLayers(layersFilePath(input.packageDir), `${JSON.stringify(layers, null, 2)}\n`);
         return layers;
       }),
     { timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS },
@@ -626,7 +636,11 @@ export async function loadPackageGraph(
   const layers = await readLayers(packageDir);
   if (layers === null) throw new PackageGraphError(`no ${LAYERS_FILE} in ${packageDir}; run \`keryx review layers refresh --package ${shellWord(packageDir)}\``);
   if (layers.graph.status !== "ok") {
-    throw new PackageGraphError(`the package graph is ${layers.graph.status}${layers.graph.error ? `: ${layers.graph.error}` : ""}`);
+    const retry =
+      layers.graph.status === "failed"
+        ? `; a failed build is not retried for ${FAILED_RETRY_WINDOW_MS / 60_000} minutes at the same head, run \`keryx review layers refresh --package ${shellWord(packageDir)} --force\` to retry now`
+        : "";
+    throw new PackageGraphError(`the package graph is ${layers.graph.status}${layers.graph.error ? `: ${layers.graph.error}` : ""}${retry}`);
   }
   if (!(await graphIntact(packageDir, layers))) {
     throw new PackageGraphError(`the package graph directory is missing or does not match ${LAYERS_FILE}; run \`keryx review layers refresh --package ${shellWord(packageDir)}\``);
