@@ -80,3 +80,28 @@ After the sync change of this branch, `keryx research sync` writes this file its
 - Исторические снимки и файлы flow совпадают с main и не изменены выгрузкой.
 - Flow вне main: отсутствуют; номера 415 и 416 присутствуют в main. Слияние в main в этой задаче не выполнялось.
 - Источники объединения: `142cd74e` — 26 строк, `1932608c` — 134 строк, `fa7c0ca1` — 98 строк. Итоговый PR не открыт.
+
+## Финальная выгрузка 2026-10-14 20:05 UTC
+
+- Машина 1; роль копии: основная; источник: `1932608c`.
+- Строк: 135; предыдущая выгрузка: 134; добавлено: 1.
+- Первая `openedAt`: `2026-08-07T09:56:21.008Z`; последняя: `2026-10-14T19:54:37.774Z`.
+- Живых решений после 2026-10-04 15:26 UTC: 15; eligible: 12; forced: 3; плечи eligible: A: 8, B: 3, C: 1, D: 0.
+- Keryx: `0.3.116`; HEAD копии исследования: `ee443509a6c6f4cc4f7303cca4cae0a7fb73ae95`; ветка: `research/part2-data`.
+- Ветка источника: `main`; HEAD источника: `47be31215799bc37034c1fc1e94a3b7758dbf58e`.
+- Проверки шага 4: 41 тест пройден; объединение 294 строк равно всем raw, без дублей `(host, seq)` и повторных решений `(ref, openedAt)`; запрещённые поля и локальные идентификаторы не обнаружены. Исторические снимки и flow сбором не изменены.
+
+### Flow вне main
+
+- Flow 261: `in-progress`; в origin/main: `done`. `backup/flow261-real-rounds-8437ecd5`: запушена, не слита; `chore/flow-261-complete`: запушена, слита.
+- Flow 376: `in-progress`; в origin/main: `done`. `chore/flow-376-complete`: запушена, слита; `chore/flow-376-followups`: запушена, слита.
+- Flow 388: `ready`; в origin/main: `done`. `chore/flow-388-complete`: запушена, слита.
+- Flow 389: `ready`; в origin/main: `implemented`. `chore/flow-389-close`: запушена, слита; `fix/review-findings-389`: запушена, слита.
+- Flow 415: `initializing`; в origin/main: `отсутствует`. Ветка не найдена; по решению оператора ничего не создавать и оставить flow без изменений.
+- Flow 416: `implemented`; в origin/main: `отсутствует`. `chore/flow-416-complete`: запушена, не слита; `feat/flow-416-import-templates`: запушена, слита; `fix/flow-416-import-templates-hardening`: запушена, слита.
+- Flow 417: `implemented`; в origin/main: `done`. `chore/flows-417-418-complete`: запушена, слита; `chore/flows-complete-417-418-419-427`: запушена, слита; `feat/flow-417-review-orchestrator-inline`: запушена, слита.
+- Flow 418: `implemented`; в origin/main: `done`. `chore/flows-417-418-complete`: запушена, слита; `chore/flows-complete-417-418-419-427`: запушена, слита; `feat/flow-418-shell-review`: запушена, слита.
+- Flow 419: `in-progress`; в origin/main: `implemented`. `chore/flows-complete-417-418-419-427`: запушена, слита.
+- Flow 446: `implemented`; в origin/main: `in-progress`. `feat/review-parity`: запушена, слита.
+
+Публикация веток подтверждена совпадением local HEAD с remote-tracking ref. Свежая сетевая сверка всех refs прервана по тайм-ауту; резервная ветка flow 261 опубликована отдельным push в этом запуске. Рабочие копии источников не изменены.
