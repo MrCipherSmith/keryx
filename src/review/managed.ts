@@ -770,6 +770,13 @@ export type CompleteManagedReviewOptions = {
   waiveCoverage?: string | undefined;
   /** Reads a PR's state and head. Absent means the head and merge check is not made (a library caller with no tracker). */
   prLookup?: PrLookup | undefined;
+  /**
+   * The commit this round reviewed (`--head`), a 7-40 hex SHA. When given it is what the head gate
+   * checks and what the closed manifest records as `target.head`, in place of the head recorded at
+   * start. The gate itself is unchanged: a head that is not the PR's head still needs the report
+   * to name it and say the PR moved.
+   */
+  head?: string | undefined;
 };
 
 export type CompleteManagedReviewResult = {
@@ -817,12 +824,27 @@ export async function completeManagedReview(
 ): Promise<CompleteManagedReviewResult> {
   const packageDir = await resolveReviewPackagePath(cwd, ref);
   const manifestPath = path.join(packageDir, "manifest.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
+  const stored = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const missing = await missingArtifacts(packageDir);
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
   const warnings: string[] = [];
+  let manifest = stored;
+  if (options.head !== undefined) {
+    if (stored.target.kind !== "pr") {
+      throw new Error(`--head applies to a pull request package; ${stored.reviewId} targets a ${stored.target.kind}.`);
+    }
+    const head = options.head.trim().toLowerCase();
+    if (!/^[0-9a-f]{7,40}$/.test(head)) {
+      throw new Error(`--head "${options.head}" is not a commit SHA. Give the commit this round ran against, 7-40 hex characters.`);
+    }
+    const recordedHead = stored.target.head;
+    if (typeof recordedHead === "string" && recordedHead !== "" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {
+      warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}); the manifest now records ${head.slice(0, 7)}`);
+    }
+    manifest = { ...stored, target: { ...stored.target, head } };
+  }
   const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
   if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: reportText, lookup: options.prLookup })).warnings);
   const evidence = parseEvidenceLevel(reportText);

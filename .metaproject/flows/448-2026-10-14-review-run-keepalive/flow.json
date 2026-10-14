@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "448",
+  "slug": "review-run-keepalive",
+  "title": "Review run keep-alive heartbeat and --head on review complete",
+  "status": "in-progress",
+  "createdAt": "2026-10-14T18:22:11.476Z",
+  "updatedAt": "2026-10-14T18:29:08.457Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-14T18:29:05.711Z"
+    },
+    "AC2": {
+      "at": "2026-10-14T18:29:06.141Z"
+    },
+    "AC3": {
+      "at": "2026-10-14T18:29:06.521Z"
+    },
+    "AC4": {
+      "at": "2026-10-14T18:29:07.014Z"
+    },
+    "AC5": {
+      "at": "2026-10-14T18:29:07.477Z"
+    },
+    "AC6": {
+      "at": "2026-10-14T18:29:07.967Z"
+    },
+    "AC7": {
+      "at": "2026-10-14T18:29:08.457Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "agent-finding",
+    "source": "operator request relayed by the coordinator on 2026-10-14, following the limits reported on PR 1014"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-14T18:22:11.476Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-14T18:27:42.300Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-14T18:27:42.814Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-14T18:29:00.470Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-14T18:29:00.920Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-14T18:29:01.388Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-14T18:29:01.858Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-14T18:29:05.711Z",
+      "event": "ac-confirmed",
+      "detail": "AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-14T18:29:06.141Z",
+      "event": "ac-confirmed",
+      "detail": "AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-14T18:29:06.521Z",
+      "event": "ac-confirmed",
+      "detail": "AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-14T18:29:07.014Z",
+      "event": "ac-confirmed",
+      "detail": "AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-14T18:29:07.477Z",
+      "event": "ac-confirmed",
+      "detail": "AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-14T18:29:07.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-14T18:29:08.457Z",
+      "event": "ac-confirmed",
+      "detail": "AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-run.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-run.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/review.test.ts src/review/complete-head-gate.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-head-gate.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-head-gate.test.ts src/commands/review.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/autonomous-profile.test.ts"
+    },
+    "AC7": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-14T18:29:05.711Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    },
+    {
+      "at": "2026-10-14T18:29:06.141Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    },
+    {
+      "at": "2026-10-14T18:29:06.521Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    },
+    {
+      "at": "2026-10-14T18:29:07.014Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    },
+    {
+      "at": "2026-10-14T18:29:07.477Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    },
+    {
+      "at": "2026-10-14T18:29:07.967Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    },
+    {
+      "at": "2026-10-14T18:29:08.457Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:e1954a791544a6e96daa56d45523d25b7be3b4c5811657aa7ab2780e4e3022f8"
+    }
+  ]
+}

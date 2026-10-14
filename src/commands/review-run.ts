@@ -34,8 +34,10 @@ export const RUN_HELP = `${RUN_USAGE}
 Runs one review of a pull request with nobody at the keyboard, in the review-autonomous profile.
 Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused
 (bad arguments, or another run of the same pull request holds the lock).
-While it runs it writes one "heartbeat:" line to stderr when the phase, round count or token count
-changes (at most one a minute), also with --json, whose verdict is the only thing on stdout.`;
+While it runs it writes a "heartbeat:" line to stderr when the phase, round count or token count
+changes (at most one a minute), and again whenever a minute passes with no line, so a wrapper with an
+idle timeout sees the run is alive. Also with --json, whose verdict is the only thing on stdout.
+A run that really stalls is still stopped by --stall-minutes (exit 5), and the lines end with it.`;
 
 export interface ParsedRun {
   readonly ref: string;
@@ -94,31 +96,65 @@ export function parseRunArgs(args: string[]): ParsedRun {
   };
 }
 
-/** Minimum gap between two heartbeat lines; the token count moves on nearly every poll. */
+/** Minimum gap between two change-driven heartbeat lines; the token count moves on nearly every poll. */
 export const HEARTBEAT_MIN_GAP_MS = 60_000;
 
+/** A line is written at least this often while the run is alive, change or no change. */
+export const HEARTBEAT_KEEPALIVE_MS = 60_000;
+
+type HeartbeatProgress = { state: string; phase: string; rounds: number; tokens: number };
+export type Heartbeat = ((progress: HeartbeatProgress) => void) & { stop: () => void };
+
 /**
- * One stderr line per change of phase, round count or token count, at most once per gap.
+ * stderr lines that show a review run is alive: one per change of phase, round count or token count
+ * (at most one per gap), and, when `keepAliveMs` is given, one more whenever that long passes with
+ * no line, repeating the latest known state.
  *
  * `--json` keeps stdout for the verdict, so a caller that wraps this command in a shell task sees
- * nothing for the whole run and an idle rail kills it; stderr is what keeps that task alive.
+ * nothing for the whole run and its idle rail kills it; stderr is what keeps that task alive. The
+ * timer only writes. Stall detection stays with the runner, which watches the child's events file,
+ * so a line from here never counts as progress of the child. `stop()` ends the timer; it never
+ * keeps the process alive.
  */
 export function createHeartbeat(
   write: (line: string) => void,
   now: () => number = Date.now,
   minGapMs: number = HEARTBEAT_MIN_GAP_MS,
-): (progress: { state: string; phase: string; rounds: number; tokens: number }) => void {
+  keepAliveMs?: number,
+): Heartbeat {
   let lastKey = "";
   let lastAt = Number.NEGATIVE_INFINITY;
-  return (progress) => {
-    if (progress.state !== "running") return;
-    const key = `${progress.phase}|${progress.rounds}|${progress.tokens}`;
-    const at = now();
-    if (key === lastKey || at - lastAt < minGapMs) return;
-    lastKey = key;
-    lastAt = at;
+  let latest: HeartbeatProgress = { state: "running", phase: "starting", rounds: 0, tokens: 0 };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+
+  const emit = (progress: HeartbeatProgress): void => {
+    lastKey = `${progress.phase}|${progress.rounds}|${progress.tokens}`;
+    lastAt = now();
     write(`heartbeat: phase ${progress.phase}, ${progress.rounds} round(s), ${progress.tokens} tokens`);
+    arm();
   };
+  const arm = (): void => {
+    if (keepAliveMs === undefined || stopped) return;
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => emit(latest), keepAliveMs);
+    timer.unref?.();
+  };
+
+  const beat = ((progress: HeartbeatProgress): void => {
+    if (stopped || progress.state !== "running") return;
+    latest = progress;
+    const key = `${progress.phase}|${progress.rounds}|${progress.tokens}`;
+    if (key === lastKey || now() - lastAt < minGapMs) return;
+    emit(progress);
+  }) as Heartbeat;
+  beat.stop = () => {
+    stopped = true;
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
+  arm();
+  return beat;
 }
 
 export interface RunCommandDeps {
@@ -128,6 +164,8 @@ export interface RunCommandDeps {
   readonly log?: (line: string) => void;
   readonly error?: (line: string) => void;
   readonly now?: () => number;
+  /** Keep-alive period for the stderr heartbeat; a test shortens it. */
+  readonly keepAliveMs?: number;
 }
 
 /** Returns the process exit code instead of setting it, so a test can read it. */
@@ -149,7 +187,7 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
   const target = parseAutonomousTarget(parsed.ref);
   const notifier = deps.notifier ?? (parsed.notify ? createTelegramNotifier({ project: path.basename(cwd), target }) : NO_NOTIFIER);
   const run = deps.run ?? runAutonomousReview;
-  const heartbeat = createHeartbeat(error, deps.now);
+  const heartbeat = createHeartbeat(error, deps.now, undefined, deps.keepAliveMs ?? HEARTBEAT_KEEPALIVE_MS);
   const stop = new AbortController();
   const onSignal = (): void => stop.abort();
   process.on("SIGTERM", onSignal);
@@ -185,6 +223,7 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
     error(problem instanceof Error ? problem.message : String(problem));
     return 1;
   } finally {
+    heartbeat.stop();
     process.off("SIGTERM", onSignal);
     process.off("SIGINT", onSignal);
     await notifier.close();

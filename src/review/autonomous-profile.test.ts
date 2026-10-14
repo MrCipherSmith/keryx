@@ -77,12 +77,13 @@ describe("prompt", () => {
     expect(text).toContain("nested_dispatch_unavailable");
   });
 
-  test("a known pull request head is named and --head is required on start and ingest", () => {
+  test("a known pull request head is named and --head is required on start, ingest and complete", () => {
     const head = "0123456789abcdef0123456789abcdef01234567";
     const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7", head });
     expect(text).toContain(`The pull request head is ${head}`);
     expect(text).toContain(`--head ${head}`);
     expect(text).toContain("keryx review ingest");
+    expect(text).toContain("`keryx review complete`");
   });
 
   test("an unknown head leaves the prompt unchanged", () => {

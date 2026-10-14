@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { READY_DISPATCH } from "./dispatch.test-helpers";
@@ -104,4 +104,53 @@ test("a recorded head that is not a usable SHA is a warning, and an empty one ne
 test("completeHeadGate compares by prefix, so a short recorded SHA matches the full PR head", async () => {
   const manifest = { target: { kind: "pr", ref: PR, head: HEAD.slice(0, 7) } } as never;
   expect((await completeHeadGate({ manifest, report: "# R", lookup: lookup({ headSha: HEAD }) })).warnings).toEqual([]);
+});
+
+test("--head names the reviewed commit: it replaces a wrong recorded head, passes the gate and is what the manifest keeps", async () => {
+  const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: MOVED });
+  const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD.toUpperCase() });
+  expect(done.manifest.status).toBe("closed");
+  expect(done.manifest.target.head).toBe(HEAD);
+  expect(done.warnings.join(" ")).toContain(`replaces the head recorded when the round started (${MOVED.slice(0, 7)})`);
+  const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
+  expect(onDisk.target.head).toBe(HEAD);
+});
+
+test("--head fills a head the round never recorded, without a warning about replacing one", async () => {
+  const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR });
+  const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: HEAD.slice(0, 7) });
+  expect(done.manifest.target.head).toBe(HEAD.slice(0, 7));
+  expect(done.warnings.join(" ")).not.toContain("replaces");
+});
+
+test("--head does not loosen the gate: a head that is not the PR's head still fails, and the manifest stays as it was", async () => {
+  const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+  const error = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED }).catch((e: Error) => e);
+  expect(error).toBeInstanceOf(Error);
+  expect((error as Error).message).toContain(MOVED.slice(0, 7));
+  expect((error as Error).message).toContain(HEAD.slice(0, 7));
+  expect((error as Error).message).toContain("first line");
+  const onDisk = JSON.parse(await readFile(path.join(path.resolve(dir, ref), "manifest.json"), "utf8"));
+  expect(onDisk.status).not.toBe("closed");
+  expect(onDisk.target.head).toBe(HEAD);
+});
+
+test("a head that is not the PR's head completes when the report names it and says the PR moved", async () => {
+  const ref = await ingest(`Reviewed ${MOVED.slice(0, 7)} — the PR has since moved on.\nNo findings.`, { kind: "pr", ref: PR, head: HEAD });
+  const done = await completeManagedReview(dir, ref, { prLookup: lookup({ headSha: HEAD }), head: MOVED });
+  expect(done.manifest.target.head).toBe(MOVED);
+});
+
+test("--head must be a commit SHA and needs a pull request package", async () => {
+  const pr = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+  await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "not-a-sha" })).rejects.toThrow(/not a commit SHA/);
+  await expect(completeManagedReview(dir, pr, { prLookup: lookup({}), head: "abc" })).rejects.toThrow(/not a commit SHA/);
+  const report = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: `# R\nNo findings.\n${EVIDENCE}\n`, reviewId: "head-report", target: { kind: "report", ref: "review.md" } });
+  await writeFile(path.join(path.resolve(dir, report.path), "research.json"), JSON.stringify(ready));
+  await expect(completeManagedReview(dir, report.path, { head: HEAD })).rejects.toThrow(/pull request package/);
+});
+
+test("without --head the recorded head is what the gate checks, as before", async () => {
+  const ref = await ingest("# Review\nNo findings.", { kind: "pr", ref: PR, head: HEAD });
+  await expect(completeManagedReview(dir, ref, { prLookup: lookup({ headSha: MOVED }) })).rejects.toThrow(/moved/);
 });
