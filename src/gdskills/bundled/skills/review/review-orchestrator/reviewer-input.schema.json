@@ -259,6 +259,19 @@
             },
             "additionalProperties": false
           }
+        },
+        "unavailable": {
+          "type": "array",
+          "description": "Sections that could not be read, with the reason. An empty section that is not listed here was read and held nothing.",
+          "items": {
+            "type": "object",
+            "required": ["section", "reason"],
+            "properties": {
+              "section": { "enum": ["affected", "symbols", "relatedTests", "wiki", "memory"] },
+              "reason": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
