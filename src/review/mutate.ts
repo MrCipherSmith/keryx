@@ -4,6 +4,14 @@ import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+/**
+ * What a mutant changes. `behavior` alters what the code does; `presentation` alters only how it
+ * looks or reads (copy, class names, ordering of display rows). A survivor of the second kind is not
+ * evidence that behaviour is unpinned, so the severity audit does not raise a finding on it.
+ */
+export type MutantKind = "behavior" | "presentation";
+export const MUTANT_KINDS: readonly MutantKind[] = ["behavior", "presentation"];
+
 export type MutantSpec = {
   id: string;
   file: string;
@@ -11,6 +19,8 @@ export type MutantSpec = {
   anchor: string;
   replacement: string;
   note?: string | undefined;
+  /** Absent means `behavior`. */
+  kind?: MutantKind | undefined;
 };
 
 export type MutantStatus = "killed" | "survived" | "invalid" | "timeout";
@@ -28,6 +38,8 @@ export type MutantResult = {
   ms: number;
   reason?: string | undefined;
   note?: string | undefined;
+  /** Absent in records written before the field existed, and means `behavior`. */
+  kind?: MutantKind | undefined;
 };
 
 export type MutationRecord = {
@@ -56,7 +68,15 @@ export function parseMutantSpec(raw: unknown): MutantSpec[] {
     if (ids.has(id)) throw new Error(`mutant id "${id}" appears twice`);
     ids.add(id);
     if (m.anchor === m.replacement) throw new Error(`mutant ${id}: replacement equals the anchor, so nothing changes`);
-    return { id, file: m.file as string, anchor: m.anchor as string, replacement: m.replacement as string, note: typeof m.note === "string" ? m.note : undefined };
+    if (m.kind !== undefined && !MUTANT_KINDS.includes(m.kind as MutantKind)) throw new Error(`mutant ${id}: "kind" must be one of ${MUTANT_KINDS.join(", ")}`);
+    return {
+      id,
+      file: m.file as string,
+      anchor: m.anchor as string,
+      replacement: m.replacement as string,
+      note: typeof m.note === "string" ? m.note : undefined,
+      ...(m.kind === undefined ? {} : { kind: m.kind as MutantKind }),
+    };
   });
 }
 
@@ -127,7 +147,7 @@ export async function runMutation(options: {
 
     const results: MutantResult[] = [];
     for (const mutant of options.mutants) {
-      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command };
+      const base = { id: mutant.id, file: mutant.file, anchor: mutant.anchor, replacement: mutant.replacement, note: mutant.note, command: options.command, ...(mutant.kind === undefined ? {} : { kind: mutant.kind }) };
       const target = insideRoot(copy, mutant.file);
       if (target === undefined || !existsSync(target)) {
         results.push({ ...base, status: "invalid", ms: 0, reason: target === undefined ? "file is outside the worktree" : "file does not exist in the worktree" });
@@ -167,7 +187,7 @@ export function renderMutationTable(record: MutationRecord): string {
     { header: "Mutant", render: (m) => cell(m.id) },
     { header: "Where", render: (m) => `${cell(m.file)}${m.line === undefined ? "" : `:${m.line}`}` },
     { header: "Change", render: (m) => `${code(m.anchor)} → ${code(m.replacement)}` },
-    { header: "Result", render: (m) => `${m.status}${m.reason ? ` (${cell(m.reason)})` : ""}` },
+    { header: "Result", render: (m) => `${m.status}${m.reason ? ` (${cell(m.reason)})` : ""}${m.kind === "presentation" ? " [presentation]" : ""}` },
     { header: "Test command", render: (m) => code(m.command ?? record.command) },
     { header: "Exit", render: (m) => String(m.exitCode ?? "-") },
   ];
