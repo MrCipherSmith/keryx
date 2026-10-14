@@ -221,8 +221,8 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 332;
-export const RANK1_TOTAL = 334;
+export const RANK1_FIRST = 334;
+export const RANK1_TOTAL = 337;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
