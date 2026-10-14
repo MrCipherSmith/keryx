@@ -4,10 +4,11 @@
 
 ### Changed
 - **`shell_exec` says when it clamps `idle_timeout_ms`.** A value outside 1000-1800000 was clamped silently, so a command meant to wait an hour was killed after 30 minutes with no hint why. The result now states the requested and the effective value, and the tool description gives the range and the way out: print progress, or start the command detached (`setsid nohup <command> > <log> 2>&1 &`) and read its log.
-- **`keryx review run --autonomous` names the pull request head.** The resolved head goes into the child's prompt with the instruction to review exactly that commit and pass `--head <sha>` to `review start`, `attach` and `ingest`; with no resolvable head the prompt is unchanged.
+- **`keryx review run --autonomous` names the pull request head.** The resolved head goes into the child's prompt with the instruction to review exactly that commit and pass `--head <sha>` to `review start`, `attach`, `ingest` and `complete`; with no resolvable head the prompt is unchanged.
 
 ### Added
-- **Heartbeat on stderr for an autonomous review.** `keryx review run --autonomous` writes `heartbeat: phase <phase>, <n> round(s), <n> tokens` when the phase, the rounds or the tokens change (at most once a minute), also with `--json`, whose stdout stays the summary alone.
+- **Heartbeat on stderr for an autonomous review.** `keryx review run --autonomous` writes `heartbeat: phase <phase>, <n> round(s), <n> tokens` when the phase, the rounds or the tokens change (at most once a minute), also with `--json`, whose stdout stays the summary alone. The line is a keep-alive: it is repeated every minute with the latest state when nothing changes, so a wrapper with an idle timeout does not kill a healthy run. It never counts as progress of the child, so a run that really stalls is still stopped by `--stall-minutes` (exit 5).
+- **`keryx review complete --head <sha>`.** Names the commit the round actually reviewed, like `start`, `attach` and `ingest`. The completion gate checks it and the closed manifest records it, with a warning when it replaces a different recorded head. The gate is unchanged: a head that is not the pull request's head still needs the report's first line to name it and say the PR moved.
 
 ## [0.3.116] - 2026-10-14
 

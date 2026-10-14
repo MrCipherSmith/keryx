@@ -247,6 +247,36 @@ test("several findings can be dispositioned in one close", async () => {
   expect(findings.map((f) => f.disposition?.state)).toEqual(["acted-on", "dismissed-incorrect"]);
 });
 
+test("`review complete --head` reaches the gate: it is not read as a disposition flag, and a head that is not the PR's still fails", async () => {
+  const PR_URL = "https://github.com/acme/app/pull/7";
+  const RECORDED = "a".repeat(40);
+  const OTHER = "b".repeat(40);
+  const prLookup = async () => ({ exists: true, state: "OPEN", headSha: RECORDED });
+  const pkg = await ingest("2026-10-14-cli-complete-head", ["--target", "pr", "--ref", PR_URL, "--head", OTHER]);
+  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup });
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).target.head).toBe(RECORDED);
+  expect(errors.join("\n")).toContain("replaces the head recorded");
+
+  const strict = await ingest("2026-10-14-cli-complete-head-strict", ["--target", "pr", "--ref", PR_URL, "--head", RECORDED]);
+  process.exitCode = 0;
+  await reviewCommand(["complete", strict, "--head", OTHER], { prLookup });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("first line");
+});
+
+test("`review complete --head` with no value, or a value that is not a SHA, is refused", async () => {
+  const pkg = await ingest("2026-10-14-cli-complete-head-bad", ["--target", "pr", "--ref", "https://github.com/acme/app/pull/7", "--head", "a".repeat(40)]);
+  await reviewCommand(["complete", pkg, "--head"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--head");
+  process.exitCode = 0;
+  errors = [];
+  await reviewCommand(["complete", pkg, "--head", "zzz"], { prLookup: async () => null });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("not a commit SHA");
+});
+
 test("an unknown disposition state is refused by name", async () => {
   const pkg = await ingest("2026-08-29-cli-bad-state");
   await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "dismissed", "--evidence", "x"]);

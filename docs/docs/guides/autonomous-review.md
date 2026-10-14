@@ -51,13 +51,14 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
   `--stall-minutes`, the run is stopped and the exit code is 5.
 - **Silence on the terminal.** While the run goes, stderr gets one line
   `heartbeat: phase <phase>, <n> round(s), <n> tokens` whenever the phase, the rounds or the
-  tokens change, at most once a minute. It is printed with `--json` too, and stdout stays pure
-  JSON. The line follows the run's progress, so it is not a timer: a stretch with no change in
-  phase, rounds or tokens prints nothing, and a wrapper with a short idle timeout still needs the
-  run started detached.
+  tokens change (at most once a minute) and, as a keep-alive, again whenever a minute passes with
+  no line, repeating the latest state. It is printed with `--json` too, and stdout stays pure
+  JSON. A wrapper that kills a command after a stretch of silence therefore sees a live run. The
+  keep-alive only writes: it never counts as progress of the child, so a run that has really
+  stalled is still stopped by `--stall-minutes` (exit code 5) and the lines end with it.
 - **The commit under review.** The pull request head is resolved once at the start (through
   `gh`) and given to the child, which passes it as `--head <sha>` to `keryx review start`,
-  `attach` and `ingest`. Without it keryx would record the commit checked out in the directory,
+  `attach`, `ingest` and `complete`. Without it keryx would record the commit checked out in the directory,
   and the completion gate would compare the wrong one. When `gh` cannot resolve the head the
   prompt is unchanged and that risk remains.
 - **A browser.** A check that needs one is skipped and the report says it was skipped.

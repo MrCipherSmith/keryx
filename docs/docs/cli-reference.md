@@ -4794,7 +4794,7 @@ keryx review layers status  --package <review-dir> [--json]
 keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
 keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
 keryx review coverage --package <review-dir> [--json]
-keryx review complete ... [--waive-coverage "<operator quote>"]
+keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -4808,6 +4808,12 @@ is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
 will merge *fails* the gate instead of passing it. With no checkout to ask and a
 `pr` target, the pull request's head is used instead; with neither, the head is
 left off and the gate reports it as unobserved.
+
+`review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+head that is not the pull request's head still needs the first line of `report.md` to name it and
+say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
 
 `review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
 
@@ -4890,11 +4896,14 @@ an irreversible one is refused) and each answer is recorded with its basis in `a
 run directory also holds `summary.json`, `report.md`, `events.ndjson`, `progress.json`, `lock.json`,
 `run.json` and `child.log`. A run on the same head resumes an open package; a run on a new head
 starts fresh. The pull request head resolved at the start is named in the child's prompt, and the
-child passes it as `--head <sha>` to `review start`, `review attach` and `review ingest`, so the
-package records the commit that was reviewed rather than the commit checked out in the directory.
-While the run goes it writes one `heartbeat: phase <phase>, <n> round(s), <n> tokens` line to
-stderr whenever the phase, the rounds or the tokens change (at most one a minute), with or without
-`--json`; stdout stays the summary alone. In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
+child passes it as `--head <sha>` to `review start`, `review attach`, `review ingest` and
+`review complete`, so the package records the commit that was reviewed rather than the commit checked out in the directory.
+While the run goes it writes a `heartbeat: phase <phase>, <n> round(s), <n> tokens` line to
+stderr whenever the phase, the rounds or the tokens change (at most one a minute) and, as a
+keep-alive, again whenever a minute passes with no line, so a wrapper with an idle timeout does
+not kill a healthy run. It is printed with or without `--json`; stdout stays the summary alone.
+The keep-alive never counts as child progress: a run that really stalls is still stopped by
+`--stall-minutes` (exit 5). In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
 See [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 ### `review comments`

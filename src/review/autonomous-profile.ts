@@ -95,7 +95,7 @@ export function buildAutonomousPrompt(input: {
   ];
   if (input.head !== undefined && input.head !== null) {
     lines.push(
-      `The pull request head is ${input.head}. Review exactly that commit, in a detached worktree at it, and pass \`--head ${input.head}\` to \`keryx review start\` (or attach) and to \`keryx review ingest\`: without it keryx records the commit checked out in this directory, which is not the commit you reviewed.`,
+      `The pull request head is ${input.head}. Review exactly that commit, in a detached worktree at it, and pass \`--head ${input.head}\` to \`keryx review start\` (or attach) to \`keryx review ingest\` and to \`keryx review complete\`: without it keryx records the commit checked out in this directory, which is not the commit you reviewed, and the close is checked against that commit.`,
     );
   }
   if (input.resumePackage !== undefined) {

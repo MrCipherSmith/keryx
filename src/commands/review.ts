@@ -516,7 +516,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -3905,6 +3905,10 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
+  const headFlag = flagTokens(args).find((token) => token.name === "--head");
+  if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
+    throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
+  }
   const waiver = flagTokens(args).find((token) => token.name === "--waive-coverage");
   if (waiver !== undefined && (waiver.value === undefined || waiver.value.trim() === "")) {
     throw new Error("--waive-coverage needs the operator's own words: --waive-coverage \"<operator quote>\".");
@@ -3921,7 +3925,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     dispositions: tally,
     coverageWaiver,
     warnings,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }) });
+  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
@@ -4003,7 +4007,7 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
     }
-    if (token.name === "--waive-coverage") {
+    if (token.name === "--waive-coverage" || token.name === "--head") {
       continue;
     }
     if (token.name === "--finding") {
@@ -4390,7 +4394,7 @@ ${COMMENTS_USAGE}
   keryx review report-parity <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
-                        [--waive-coverage "<operator quote>"]
+                        [--waive-coverage "<operator quote>"] [--head <sha>]
   keryx review lightweight
 
 An unrecognised option is REFUSED, not ignored. A flag that is silently dropped
@@ -4407,6 +4411,11 @@ Modes:
   the tree the reviewers actually read, which is deliberately preferred over a
   \`pr\` target's own head so that a round run against something other than what
   will merge FAILS the gate instead of passing it.
+  \`review complete --head <sha>\` names the commit the round actually reviewed
+  when the one recorded at start is wrong or missing; the head gate then checks
+  that commit, and the manifest records it. The gate is not loosened: a head that
+  is not the pull request's head still needs the report's first line to name it
+  and say the PR moved.
 
 scope:
   Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,
