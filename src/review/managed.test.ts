@@ -1,6 +1,6 @@
 import { READY_DISPATCH } from "./dispatch.test-helpers";
 import { afterEach, describe, test, expect } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -574,6 +574,7 @@ test("complete requires every managed review artifact", async () => {
     target: { kind: "path", ref: "src/review" },
     now: new Date("2026-07-09T11:00:00Z"),
   });
+  await appendFile(path.join(ROOT, result.path, "report.md"), "\nEvidence level: static only — did not run: tests\n", "utf8");
 
   const completed = await completeManagedReview(ROOT, result.path);
   expect(completed.manifest.status).toBe("closed");
@@ -642,7 +643,7 @@ async function ingestFindings(
     mode: "ingest",
     reviewId,
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FULL_FINDING],
     now: new Date("2026-08-29T11:00:00Z"),
     ...over,
@@ -1537,7 +1538,7 @@ async function ingestUnnamed(
     cwd: ROOT,
     mode: "ingest",
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FULL_FINDING],
     now: new Date("2026-08-29T11:00:00Z"),
     ...over,

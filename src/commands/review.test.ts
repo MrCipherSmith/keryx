@@ -99,7 +99,7 @@ const FINDING = {
 
 /** A report carrying the structured block, which is how ingest gets findings. */
 function reportWith(findings: readonly unknown[]): string {
-  return `# Round\n\n\`\`\`json keryx:findings\n${JSON.stringify(findings, null, 2)}\n\`\`\`\n`;
+  return `# Round\n\nEvidence level: static only — did not run: tests\n\n\`\`\`json keryx:findings\n${JSON.stringify(findings, null, 2)}\n\`\`\`\n`;
 }
 
 async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
