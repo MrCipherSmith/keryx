@@ -1,0 +1,112 @@
+{
+ "mutants": [
+  {
+   "id": "cr1-collapse-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "  if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;\n",
+   "replacement": ""
+  },
+  {
+   "id": "cr7-recursion-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (depth < 4 && words.some((w) => /\\s/.test(w) && parsedCoverageWaiver(w, depth + 1))) return true;",
+   "replacement": ""
+  },
+  {
+   "id": "cr13-estimate-check-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (after.includes(\"estimate\") && after.some(",
+   "replacement": "if (true && after.some("
+  },
+  {
+   "id": "ar2-answer",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+   "replacement": " && !flags.has(\"--quote\")"
+  },
+  {
+   "id": "ly2-current-commit",
+   "file": "src/review/layers.ts",
+   "anchor": "return existing.graphCommit === existing.prHead && (await graphIntact(packageDir, existing));",
+   "replacement": "return await graphIntact(packageDir, existing);"
+  },
+  {
+   "id": "ly5-intact-nodes",
+   "file": "src/review/layers.ts",
+   "anchor": "return (await stat(path.join(dataDir, \"storage\", \"nodes.jsonl\"))).size > 0;",
+   "replacement": "return true;"
+  },
+  {
+   "id": "cr5-opaque-dollar-only",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return /[$`]/.test(word);",
+   "replacement": "return /[$]/.test(word);"
+  },
+  {
+   "id": "ar3-quote",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+   "replacement": " && !flags.has(\"--answer\")"
+  },
+  {
+   "id": "ly12-sweep-prefix",
+   "file": "src/review/layers.ts",
+   "anchor": " || !path.basename(worktree).startsWith(WORKTREE_PREFIX)) continue;",
+   "replacement": ") continue;"
+  },
+  {
+   "id": "ly13-sweep-dir",
+   "file": "src/review/layers.ts",
+   "anchor": "if (path.dirname(worktree) !== temp || ",
+   "replacement": "if ("
+  },
+  {
+   "id": "ly7-resolve-hex",
+   "file": "src/review/layers.ts",
+   "anchor": "return full !== null && /^[0-9a-f]{40,64}$/.test(full) ? full : null;",
+   "replacement": "return full;"
+  },
+  {
+   "id": "cr21-both-spellings-asis-only",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];",
+   "replacement": "return splitSegments(command);"
+  },
+  {
+   "id": "cr22-both-spellings-expanded-only",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];",
+   "replacement": "return splitSegments(expanded);"
+  },
+  {
+   "id": "cr23-continuation-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return command.replace(/\\\\\\r?\\n/g, \"\");",
+   "replacement": "return command;"
+  },
+  {
+   "id": "cr24-continuation-crlf",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return command.replace(/\\\\\\r?\\n/g, \"\");",
+   "replacement": "return command.replace(/\\\\\\n/g, \"\");"
+  },
+  {
+   "id": "cr25-chunk-collapse-net-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "return /chunks\\s+estimate\\b[^;&|]*--answer/i.test(collapseQuoting(joinContinuations(raw)));",
+   "replacement": "return false;"
+  },
+  {
+   "id": "cr26-chunk-scan-depth",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (depth < 4 && plain.some((w) => /\\s/.test(w) && scan(w, depth + 1))) return true;",
+   "replacement": "if (depth < 0 && plain.some((w) => /\\s/.test(w) && scan(w, depth + 1))) return true;"
+  },
+  {
+   "id": "cr27-chunk-collapse-anywhere",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "[^;&|]*--answer/i",
+   "replacement": "[\\s\\S]*--answer/i"
+  }
+ ]
+}
