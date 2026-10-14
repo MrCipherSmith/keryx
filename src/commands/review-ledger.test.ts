@@ -256,6 +256,32 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
     }
   });
 
+  test("a rebuild never invents dispatch.roles: an in-flight package with pr-context.md stays grandfathered, and research.json has no roles key", async () => {
+    const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt" } });
+    try {
+      await writeFile(path.join(pkg, "pr-context.md"), "# pr context\n");
+      const out = await build(pkg);
+      expect("roles" in (out.ledger.dispatch as object)).toBe(false);
+      expect("roles" in JSON.parse(await readFile(path.join(pkg, "research.json"), "utf8")).dispatch).toBe(false);
+      const again = await build(pkg);
+      expect("roles" in (again.ledger.dispatch as object)).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("dispatch.roles is stamped when a driver shows the role was dispatched, and a rebuild keeps an existing stamp", async () => {
+    const { pkg, cleanup } = await fixture({}, { "review-pr-contract.json": { reviewer: "review-pr-contract", slices: ["S1"], result: "raw/review-pr-contract.txt" } });
+    try {
+      await writeFile(path.join(pkg, "pr-context.md"), "# pr context\n");
+      expect((await build(pkg)).ledger.dispatch).toMatchObject({ roles: ["review-pr-contract"] });
+      await rm(path.join(pkg, "drivers"), { recursive: true, force: true });
+      expect((await build(pkg)).ledger.dispatch).toMatchObject({ roles: ["review-pr-contract"] });
+    } finally {
+      await cleanup();
+    }
+  });
+
   test("readDrivers reads an object entry's status as an assignment, not as coverage", async () => {
     const { pkg, cleanup } = await fixture({}, { "review-logic.json": { reviewer: "review-logic", slices: [{ id: "S1", status: "NOT_READ" }, "S2"], result: "raw/review-logic.txt" } });
     try {

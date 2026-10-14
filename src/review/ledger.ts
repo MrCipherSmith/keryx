@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { DISPATCH_KNOWN_ROLES, coverageErrors, type ReviewMode } from "./coverage";
+import { coverageErrors, type ReviewMode } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
@@ -67,6 +67,11 @@ export type LedgerInputs = {
   canonical: Array<Record<string, unknown>>;
   dispositions: Disposition[];
   manifestPath?: string;
+  /**
+   * Written to `dispatch.roles`: the roles the code that dispatched this package knew about. Absent for a package nothing
+   * says that of, so a rebuild never turns an in-flight package into one that must have run a role it predates.
+   */
+  dispatchRoles?: readonly string[] | undefined;
 };
 
 export type LedgerResult = {
@@ -443,7 +448,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, selected: input.selected, roles: [...DISPATCH_KNOWN_ROLES], unresolvedRules, runs };
+  const dispatch = { version: 1, mode: input.mode, selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();

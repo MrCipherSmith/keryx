@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
@@ -175,6 +175,19 @@ export async function readDrivers(inputDir: string, root: string): Promise<Drive
   return { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs, assignments, replies: { files: replyFiles, reviewers: [...replyReviewers] }, dropped };
 }
 
+/**
+ * The `dispatch.roles` stamp for a rebuild. A rebuild does not know what dispatched the package, so it never invents the
+ * stamp: it keeps one the ledger on disk already has, and adds a known role only when a driver shows that role was dispatched.
+ * A package in flight from before a role existed is therefore still grandfathered after a rebuild.
+ */
+async function knownDispatchRoles(ledgerFile: string, driverReviewers: readonly string[]): Promise<string[] | undefined> {
+  const prior = (await readJson<{ dispatch?: { roles?: unknown } }>(ledgerFile))?.dispatch?.roles;
+  const kept = Array.isArray(prior) ? prior.filter((role): role is string => typeof role === "string") : [];
+  const dispatched = DISPATCH_KNOWN_ROLES.filter((role) => driverReviewers.includes(role));
+  const roles = [...new Set([...kept, ...dispatched])];
+  return roles.length === 0 ? undefined : roles;
+}
+
 export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false): string {
   const verb = dryRun ? "would be written" : "written";
   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
@@ -235,6 +248,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const toolLogs: Record<string, string | undefined> = {};
   for (const reviewer of required.required) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
   const { ledger, gaps } = buildLedger({
+    dispatchRoles: await knownDispatchRoles(out, replies.reviewers),
     mode,
     selected: required.required,
     manifest,

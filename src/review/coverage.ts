@@ -86,9 +86,10 @@ const REGRESSION = "review-regression";
 const PR_CONTRACT = "review-pr-contract";
 
 /**
- * Written to `dispatch.roles` by the ledger builder: the roles added after the original roster that the writer knew
- * about. A dispatch without the mark was recorded before the role existed, so a package already in flight is not newly
- * refused for a reviewer nobody could have dispatched.
+ * Written to `dispatch.roles` by `ledger build` only when the package shows the role was dispatched (a driver for it) or
+ * already carries the stamp: the roles added after the original roster that the dispatch knew about. A dispatch without
+ * the mark was recorded before the role existed, so a package already in flight, rebuilt or not, is not newly refused for
+ * a reviewer nobody could have dispatched.
  */
 export const DISPATCH_KNOWN_ROLES: readonly string[] = [PR_CONTRACT];
 
