@@ -8,7 +8,7 @@ import { packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, require
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
-import { type Disposition, type LedgerGap, type RawFile, buildLedger, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
+import { type Disposition, type LedgerGap, type RawFile, buildLedger, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, emptyRetryState, readSliceIds, scopeFingerprint } from "../review/retry-plan";
 import type { SliceManifest } from "../review/slice";
 
@@ -102,7 +102,10 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
       ignored.push(`raw/${name}`);
       continue;
     }
-    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(result === undefined ? {} : { result }) });
+    // `Parent follow-up:` lines below the block join the result's own `follow_ups`; a result with neither is left as parsed.
+    const followUps = result === undefined ? [] : followUpsOf(result, body);
+    const merged = result === undefined || followUps.length === 0 ? result : { ...result, follow_ups: followUps };
+    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? {} : { result: merged }) });
   }
   return { raws, ignored, setAside };
 }

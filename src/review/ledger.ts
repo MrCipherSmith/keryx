@@ -18,6 +18,8 @@ export type ParsedResult = {
   findings?: Array<Record<string, unknown>>;
   needs_context?: unknown;
   slices?: unknown;
+  /** Work the reviewer hands back to the parent. Each entry becomes an obligation that only a disposition closes. */
+  follow_ups?: unknown;
 };
 
 export type RawFile = {
@@ -295,6 +297,32 @@ export function parseReviewResult(raw: string): ParsedResult | undefined {
   return afterMarker(raw) ?? scannedResult(raw);
 }
 
+/** A line that starts with `Parent follow-up:` (after at most a quote, list or emphasis prefix); the rest of the line is the follow-up. */
+const PARENT_FOLLOW_UP = /^[ \t>*_-]*Parent follow-up[ \t]*\**:\**[ \t]*(.*\S)[ \t]*$/i;
+
+/**
+ * The `Parent follow-up:` lines a reviewer wrote after its REVIEW_RESULT block. Only lines below the last result label
+ * count, so a line quoted in the reviewer's own prose before the block is not read as an obligation. A reply with no
+ * label (a bare result object) is read whole.
+ */
+export function parentFollowUps(raw: string): string[] {
+  const labels = [...raw.matchAll(/REVIEW_RESULT/gi)];
+  const from = labels.length === 0 ? 0 : labels[labels.length - 1]!.index!;
+  const lines = raw.slice(from).split(/\r?\n/);
+  const found: string[] = [];
+  for (const line of labels.length === 0 ? lines : lines.slice(1)) {
+    const hit = PARENT_FOLLOW_UP.exec(line);
+    if (hit !== null) found.push(hit[1]!);
+  }
+  return found;
+}
+
+/** The follow-ups of a result: its `follow_ups` strings, then the `Parent follow-up:` lines after the block, each distinct text once. */
+export function followUpsOf(result: ParsedResult, raw?: string): string[] {
+  const own = Array.isArray(result.follow_ups) ? result.follow_ups.filter(text).map((s) => s.trim()) : [];
+  return [...new Set([...own, ...(raw === undefined ? [] : parentFollowUps(raw))])];
+}
+
 export function isEmptyOutput(raw: string): boolean {
   return raw.trim() === "" || /^\(subagent produced no text\)$/.test(raw.trim());
 }
@@ -440,6 +468,15 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       obligations.push({ ...base, status: "unresolved" });
       gaps.push({ detail: `${id}: raw finding is not in the canonical findings and has no closure`, next: `add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
     }
+    followUpsOf(raw.result!).forEach((followUp, at) => {
+      const id = `${raw.name.replace(/^raw\//, "").replace(/\.txt$/, "")}:fu${at + 1}`;
+      derived.add(id);
+      const base = { id, source: raw.name, question: `Is the parent follow-up from ${reviewer} done or ruled out, and where is that recorded? ${followUp.slice(0, 200)}` };
+      const closure = closeWith(input.dispositions.find((d) => d.id === id), input.canonical);
+      if (closure !== undefined) { obligations.push({ ...base, ...closure }); return; }
+      obligations.push({ ...base, status: "unresolved" });
+      gaps.push({ detail: `${id}: parent follow-up is open (${followUp.slice(0, 100)})`, next: `do it or rule it out, then add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
+    });
   }
   for (const given of input.dispositions) {
     if (text(given.id) && !derived.has(given.id) && text(given.source) && text(given.question)) {
