@@ -57,6 +57,8 @@ const LOCK_STALE_MS = 60_000;
 const LOCK_WAIT_MS = 16 * 60_000;
 const WORKTREE_PREFIX = "keryx-layers-";
 const WORKTREE_SWEEP_AGE_MS = 30 * 60_000;
+/** A graph build that failed at a head is not retried at that head inside this window unless the refresh is forced. */
+const FAILED_RETRY_WINDOW_MS = 5 * 60_000;
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 const WIKI_PATH_PREFIX = ".metaproject/wiki";
 const MEMORY_PATH_PREFIX = ".metaproject/memory";
@@ -79,6 +81,8 @@ export interface GraphLayerRecord {
   nodes: number;
   edges: number;
   error?: string;
+  /** When a failed build ended; the retry window runs from here, so a refresh that keeps this record does not extend it. */
+  failedAt?: string;
 }
 
 export interface WikiLayerRecord {
@@ -182,6 +186,12 @@ export function layersLockPath(packageDir: string): string {
 
 function packageMemoryDir(packageDir: string): string {
   return path.join(packageDir, LAYERS_DIR, MEMORY_DIR);
+}
+
+function failedRecently(existing: LayersFile, now: Date): boolean {
+  if (existing.graph.status !== "failed") return false;
+  const age = now.getTime() - Date.parse(existing.graph.failedAt ?? existing.refreshedAt);
+  return age >= 0 && age < FAILED_RETRY_WINDOW_MS;
 }
 
 /** True while a refresh of this package holds its lock. */
@@ -339,16 +349,43 @@ async function sweepStaleWorktrees(deps: LayerDeps, projectRoot: string): Promis
   }
 }
 
+type Cleanup = () => Promise<void>;
+
+/**
+ * Runs `body` with a SIGINT/SIGTERM handler for the whole time the refresh lock is held: on a signal it runs
+ * every registered cleanup, removes the lock, and re-raises the signal so the process still dies by it.
+ */
+async function withSignalCleanup<T>(packageDir: string, body: (register: (cleanup: Cleanup) => () => void) => Promise<T>): Promise<T> {
+  const cleanups = new Set<Cleanup>();
+  const onSignal = (signal: NodeJS.Signals): void => {
+    for (const name of SIGNALS) process.off(name, onSignal);
+    void Promise.all([...cleanups].map((cleanup) => cleanup().catch(() => {})))
+      .then(() => rm(layersLockPath(packageDir), { recursive: true, force: true }))
+      .catch(() => {})
+      .finally(() => process.kill(process.pid, signal));
+  };
+  for (const name of SIGNALS) process.on(name, onSignal);
+  try {
+    return await body((cleanup) => {
+      cleanups.add(cleanup);
+      return () => void cleanups.delete(cleanup);
+    });
+  } finally {
+    for (const name of SIGNALS) process.off(name, onSignal);
+  }
+}
+
 /**
  * A clean detached checkout of `rev` for the duration of `use`. The checkout never runs the operator's
- * post-checkout hook; a SIGINT or SIGTERM removes the checkout, its registration, the extra cleanup and
- * the lock before the signal is re-raised.
+ * post-checkout hook; its removal, with its registration and the extra cleanup, is registered with the
+ * lock-scope signal handler.
  */
 async function withDetachedWorktree<T>(
   deps: LayerDeps,
   input: { projectRoot: string; packageDir: string },
   rev: string,
   cleanupExtra: () => Promise<void>,
+  register: (cleanup: Cleanup) => () => void,
   use: (worktree: string, checkedOutAt: string | null) => Promise<T>,
 ): Promise<T> {
   const worktree = await mkdtemp(path.join(tmpdir(), WORKTREE_PREFIX));
@@ -357,14 +394,7 @@ async function withDetachedWorktree<T>(
     await deps.git(input.projectRoot, ["worktree", "remove", "--force", "--end-of-options", worktree]);
     await rm(worktree, { recursive: true, force: true }).catch(() => {});
   };
-  const onSignal = (signal: NodeJS.Signals): void => {
-    for (const name of SIGNALS) process.off(name, onSignal);
-    void cleanup()
-      .then(() => rm(layersLockPath(input.packageDir), { recursive: true, force: true }))
-      .catch(() => {})
-      .finally(() => process.kill(process.pid, signal));
-  };
-  for (const name of SIGNALS) process.on(name, onSignal);
+  const unregister = register(cleanup);
   try {
     const add = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "worktree", "add", "--detach", "--force", "--end-of-options", worktree, rev];
     let added = await deps.git(input.projectRoot, add);
@@ -376,7 +406,7 @@ async function withDetachedWorktree<T>(
     if (added === null) throw new Error(`could not check out ${rev} to build its graph`);
     return await use(worktree, await deps.git(worktree, ["rev-parse", "HEAD"]));
   } finally {
-    for (const name of SIGNALS) process.off(name, onSignal);
+    unregister();
     await cleanup();
   }
 }
@@ -385,6 +415,7 @@ async function buildPackageGraph(
   deps: LayerDeps,
   input: RefreshLayersInput,
   prHead: string | null,
+  register: (cleanup: Cleanup) => () => void,
 ): Promise<GraphLayerRecord> {
   const failed = (error: string): GraphLayerRecord => ({
     status: "failed",
@@ -393,6 +424,7 @@ async function buildPackageGraph(
     nodes: 0,
     edges: 0,
     error,
+    failedAt: deps.now().toISOString(),
   });
   if (prHead === null) return failed("no commit to build the graph at");
 
@@ -400,7 +432,7 @@ async function buildPackageGraph(
   const staging = `${dataDir}.${randomUUID()}`;
   const dropStaging = (): Promise<void> => rm(staging, { recursive: true, force: true }).catch(() => {});
   try {
-    return await withDetachedWorktree(deps, input, prHead, dropStaging, async (worktree, builtFrom) => {
+    return await withDetachedWorktree(deps, input, prHead, dropStaging, register, async (worktree, builtFrom) => {
       if (builtFrom !== prHead) {
         return failed(`graph would be built at ${builtFrom ?? "an unknown commit"}, not the PR head ${prHead}`);
       }
@@ -536,39 +568,43 @@ export async function refreshLayers(input: RefreshLayersInput): Promise<LayersFi
   await writeSelfIgnoringDir(path.join(input.packageDir, LAYERS_DIR));
   return withFileLock(
     layersLockPath(input.packageDir),
-    async () => {
-      await recoverGraphDirectory(input.packageDir);
-      await sweepStaleWorktrees(deps, input.projectRoot);
-      // Another refresh may have finished while this one waited for the lock: the same head needs no second build.
-      const existing = await readLayers(input.packageDir);
-      const sameHead = prHead !== null && existing?.prHead === prHead;
-      let graph: GraphLayerRecord;
-      if (input.force !== true && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {
-        graph = (existing as LayersFile).graph;
-      } else {
-        graph = await buildPackageGraph(deps, input, prHead);
-        // A failed rebuild leaves the previous graph in place (publish puts it back): keep its record while it is still the right one.
-        if (graph.status === "failed" && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {
+    () =>
+      withSignalCleanup(input.packageDir, async (register) => {
+        await recoverGraphDirectory(input.packageDir);
+        await sweepStaleWorktrees(deps, input.projectRoot);
+        // Another refresh may have finished while this one waited for the lock: the same head needs no second build.
+        const existing = await readLayers(input.packageDir);
+        const sameHead = prHead !== null && existing?.prHead === prHead;
+        let graph: GraphLayerRecord;
+        if (input.force !== true && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {
           graph = (existing as LayersFile).graph;
+        } else if (input.force !== true && sameHead && failedRecently(existing as LayersFile, deps.now())) {
+          // A build that failed at this head a moment ago fails again for the same reason: do not pay a worktree and a build per call.
+          graph = (existing as LayersFile).graph;
+        } else {
+          graph = await buildPackageGraph(deps, input, prHead, register);
+          // A failed rebuild leaves the previous graph in place (publish puts it back): keep its record while it is still the right one.
+          if (graph.status === "failed" && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {
+            graph = (existing as LayersFile).graph;
+          }
         }
-      }
-      const wiki = await refreshWikiLayer(deps, input, graph, prHead, base);
-      const memory = await indexMemoryLayer(deps, input, prHead);
+        const wiki = await refreshWikiLayer(deps, input, graph, prHead, base);
+        const memory = await indexMemoryLayer(deps, input, prHead);
 
-      const layers: LayersFile = {
-        version: LAYERS_VERSION,
-        refreshedAt: deps.now().toISOString(),
-        prHead,
-        headSource,
-        base,
-        graphCommit: graph.commit,
-        graph,
-        wiki,
-        memory,
-      };
-      await writeFileAtomic(layersFilePath(input.packageDir), `${JSON.stringify(layers, null, 2)}\n`);
-      return layers;
-    },
+        const layers: LayersFile = {
+          version: LAYERS_VERSION,
+          refreshedAt: deps.now().toISOString(),
+          prHead,
+          headSource,
+          base,
+          graphCommit: graph.commit,
+          graph,
+          wiki,
+          memory,
+        };
+        await writeFileAtomic(layersFilePath(input.packageDir), `${JSON.stringify(layers, null, 2)}\n`);
+        return layers;
+      }),
     { timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS },
   );
 }

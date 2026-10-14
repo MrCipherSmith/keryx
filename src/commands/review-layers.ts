@@ -38,7 +38,8 @@ The graph is built at the PR head into <dir>/layers/graph; the tracked graph art
 the working tree are not touched. The wiki and the memory are read from the project's
 working copy, and layers.json marks how far that is from the PR head. The wiki refresh is a
 dry run unless --write-wiki is given. A graph that is already built at this head and intact is
-kept (the wiki and the memory are still refreshed); --force rebuilds it.`);
+kept (the wiki and the memory are still refreshed); --force rebuilds it. A graph that failed at
+this head is not rebuilt for 5 minutes after the failure; --force or a new head rebuilds it.`);
 }
 
 export function wantsHelp(args: readonly string[]): boolean {
