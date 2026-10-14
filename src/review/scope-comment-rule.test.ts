@@ -68,8 +68,8 @@ describe("retainCommentBlocks", () => {
 
   test("a block that only removes comments is still dropped", () => {
     const removal = COMMENT_DIFF.replace("@@ -10,4 +10,6 @@", "@@ -10,6 +10,4 @@")
-      .replace(/^\+  \/\/ The table.*$/m, "-  // The table is virtualised, so the row count is only an estimate here.")
-      .replace(/^\+  \/\/ Keep it.*$/m, "-  // Keep it in step with the page size used by the loader.");
+      .replace(/^\+ {2}\/\/ The table.*$/m, "-  // The table is virtualised, so the row count is only an estimate here.")
+      .replace(/^\+ {2}\/\/ Keep it.*$/m, "-  // Keep it in step with the page size used by the loader.");
     const scope = buildReviewScope(removal, { retainCommentBlocks: true });
     expect(scope.drops.map((drop) => drop.reason)).toEqual(["comment-only"]);
     expect("kept" in scope).toBe(false);
