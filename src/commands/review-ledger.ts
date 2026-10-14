@@ -32,8 +32,8 @@ needs_context and every slice its path gate requires covered by its dispatched p
 complete run (source-only, executionRequired false); anything else — NEEDS_CONTEXT, BLOCKED,
 INCOMPLETE, missing slices, no result — stays incomplete or not-run, never declared complete.
 Each raw finding becomes an obligation, closed only by a matching canonical finding or a
-valid --dispositions entry ({id, status finding|refuted|out-of-scope, evidence, reason,
-finding?}; default: the obligations already in research.json). scopeReviewed and rawReconciled
+valid --dispositions entry ({id, status finding|refuted|out-of-scope|narrowed, evidence, reason,
+finding?, remains? — required for narrowed: what of the finding still stands}; default: the obligations already in research.json). scopeReviewed and rawReconciled
 are true only when established.
 
 Slices are dispatched in waves bounded by the manifest's wave budget; a reviewer that covered

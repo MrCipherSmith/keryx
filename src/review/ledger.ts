@@ -9,7 +9,7 @@ import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
-const CLOSED = new Set(["finding", "refuted", "out-of-scope"]);
+const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
 
 export type ParsedResult = {
   reviewer?: string;
@@ -40,6 +40,8 @@ export type Disposition = {
   finding?: string;
   evidence?: string;
   reason?: string;
+  /** For `narrowed`: what of the finding still stands. Without it the obligation is not closed. */
+  remains?: string;
 };
 
 /** `waves` is how many dispatches of the reviewer's uncovered slices remain, when the gap is about uncovered slices. */
@@ -436,7 +438,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
         continue;
       }
       obligations.push({ ...base, status: "unresolved" });
-      gaps.push({ detail: `${id}: raw finding is not in the canonical findings and has no closure`, next: `add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope","evidence":…,"reason":…} to --dispositions` });
+      gaps.push({ detail: `${id}: raw finding is not in the canonical findings and has no closure`, next: `add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
     }
   }
   for (const given of input.dispositions) {
@@ -463,7 +465,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>): Record<string, unknown> | undefined {
   if (given === undefined || !CLOSED.has(String(given.status)) || !text(given.evidence) || !text(given.reason)) return undefined;
   if (given.status === "finding" && !(text(given.finding) && canonical.filter((f) => f.id === given.finding || f.global_id === given.finding).length === 1)) return undefined;
-  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}) };
+  if (given.status === "narrowed" && !text(given.remains)) return undefined;
+  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
 }
 
 /** The gate's own validators over the built ledger, so "ready" cannot disagree with `keryx review complete`. */
