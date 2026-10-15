@@ -279,6 +279,12 @@ Before a round dispatches, the review refreshes the graph, the wiki and the memo
 
 The blast radius is capped at 40 files a pass. The files beyond the cap are not skipped silently: `keryx review chunks plan` splits them into chunks, `chunks estimate` states the cost before you spend it (the ceiling is 25 passes of 40 files, set by `reviewChunks.maxPasses` in `routing.config.json`), and the chunks run one at a time through `review-regression` on the middle tier. `keryx review coverage` counts what is covered, covered by a named omission, and uncovered. `keryx review complete` refuses while a file is uncovered and names the command that runs the missing chunks; the only way past is `--waive-coverage "<operator quote>"`, recorded with the time and the files not reviewed. See [`review layers`, `review chunks` and `review coverage`](../cli-reference.md#review-layers-review-chunks-and-review-coverage).
 
+#### Child agents are counted per wave
+
+One orchestrator turn may start at most 32 child agents, which a deep run with many waves used to hit: the 33rd reviewer was refused and the package stayed incomplete. The dispatcher now names the wave on `spawn_subagent` with `review_wave: { "package": "<package dir>", "pass": "<chunk id>" }` (`"pass": "round"` for the round's own reviewers), and each wave counts its own 32 children. One turn opens at most 25 waves, the same ceiling as the chunk plan, so the total stays bounded; the pool of 16 concurrent children is shared and unchanged.
+
+The count is fail-closed. A wave is accepted only when the package is inside the project, has a `manifest.json`, and the pass is `round` or a chunk the package records (`chunks.json`, or a retry chunk in `chunk-state.json`). A wave that does not check out is ignored, not refused: the child counts against the turn's 32 exactly as a call without `review_wave` does, so inventing wave names buys nothing. A refusal says which cap was hit. For a full wave, finish it with `review chunks record` and dispatch the next one; for the turn, continue in a new turn.
+
 ## Answer the humans — once, at the end
 
 ```bash
