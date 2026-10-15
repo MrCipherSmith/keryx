@@ -9,9 +9,9 @@
   "id": "452",
   "slug": "review-clean-context",
   "title": "Review clean context: no memory outside the orchestrator's stages, blocking check",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T07:39:35.258Z",
-  "updatedAt": "2026-10-15T07:40:08.634Z",
+  "updatedAt": "2026-10-15T08:11:00.567Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1023"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -107,6 +107,11 @@
     {
       "at": "2026-10-15T07:40:08.634Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-15T08:11:00.567Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1023 (warning: PR is not a draft) (base: main)"
     }
   ],
   "origin": {
@@ -150,5 +155,6 @@
       "kind": "exec",
       "check": "bun test src/review/chunks.test.ts"
     }
-  }
+  },
+  "baseBranch": "main"
 }
