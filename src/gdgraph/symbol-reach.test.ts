@@ -162,14 +162,51 @@ describe("symbol reach (AC1)", () => {
     expect(result.omitted.filter((entry) => entry.reason === "hub-damped")).toHaveLength(150);
   });
 
+  describe("hop 2 goes only through exports that depend on the changed names", () => {
+    const changeAlpha = (): Map<string, FileDiff> => edit("src/core.ts", lineOf(CORE, "return helper() + 1"));
+    const withImporter = (file: string, source: string): Fixture => ({
+      "src/core.ts": CORE,
+      [file]: source,
+      "src/downstream.ts": `import { exposed } from "./${file.slice(4, -3)}";\nexport const d = exposed;\n`,
+    });
+
+    test("an importer that uses the changed symbol only internally is a leaf: reached, not expanded", () => {
+      const fixture = withImporter(
+        "src/leaf.ts",
+        'import { alpha } from "./core";\n\nfunction inner(): number {\n  return alpha();\n}\nconsole.log(inner());\n\nexport const exposed = 1;\n',
+      );
+      const result = reach(fixture, changeAlpha());
+      expect(result.reached.find((entry) => entry.file === "src/leaf.ts")).toMatchObject({ hop: 1, names: [] });
+      expect(files(result)).not.toContain("src/downstream.ts");
+    });
+
+    test("a wrapper export (body or signature) is expanded to its importers", () => {
+      const wrapper = withImporter("src/wrapper.ts", 'import { alpha } from "./core";\n\nexport function exposed(): number {\n  return alpha() * 2;\n}\n');
+      expect(files(reach(wrapper, changeAlpha()))).toEqual(["src/wrapper.ts", "src/downstream.ts"]);
+      const typed = withImporter("src/typed.ts", 'import type { alpha } from "./core";\n\nexport type exposed = ReturnType<typeof alpha>;\n');
+      expect(files(reach(typed, changeAlpha()))).toEqual(["src/typed.ts", "src/downstream.ts"]);
+    });
+
+    test("an importer that re-exports the changed symbol is expanded under the re-exported name", () => {
+      const listed = withImporter("src/relay.ts", 'import { alpha } from "./core";\n\nconsole.log(alpha());\nexport { alpha as exposed };\n');
+      expect(files(reach(listed, changeAlpha()))).toEqual(["src/relay.ts", "src/downstream.ts"]);
+      const from = withImporter("src/relay.ts", 'import { alpha } from "./core";\nexport { alpha as exposed } from "./core";\nconsole.log(alpha());\n');
+      const result = reach(from, changeAlpha());
+      expect(files(result)).toEqual(["src/relay.ts", "src/downstream.ts"]);
+    });
+  });
+
   describe("fallback to the file edge", () => {
     test("module-level code (a side effect) reaches every importer", () => {
       const source = `${CORE}console.log("loaded");\n`;
       const head = { ...BASE_FILES, "src/core.ts": source };
       const result = reach(head, edit("src/core.ts", lineOf(source, "console.log")));
       expect(result.seeds[0]).toMatchObject({ mode: "file-edge", names: "*" });
-      expect(files(result)).toEqual(expect.arrayContaining(["src/uses-alpha.ts", "src/uses-beta.ts", "src/via-barrel-beta.ts", "src/ns.ts", "src/index.ts"]));
-      expect(result.omitted).toEqual([]);
+      // Every importer consumes the module; the barrel passes everything through; hop 2 still goes only through
+      // exports that depend on the module (useAlpha does, `other` does not).
+      expect(files(result)).toEqual(["src/ns.ts", "src/uses-alpha.ts", "src/uses-beta.ts", "src/via-barrel-beta.ts", "src/via-barrel.ts", "src/second-hop.ts"]);
+      expect(result.barrels).toEqual(["src/index.ts"]);
+      expect(result.omitted.map((entry) => [entry.file, entry.reason])).toEqual([["src/other-hop.ts", "unrelated-symbol"]]);
     });
 
     test("a source that does not parse reaches every importer", () => {
@@ -192,15 +229,15 @@ describe("symbol reach (AC1)", () => {
       expect(files(result)).toContain("src/uses-beta.ts");
     });
 
-    test("an importer that does not parse, or loads the module dynamically, is reached by its file edge", () => {
+    test("an importer that does not parse is reached by its file edge; a dynamic importer walks on through the export holding the call", () => {
       const head = {
         ...BASE_FILES,
         "src/uses-beta.ts": 'import { beta } from "./core";\nexport const b = beta( {;\n',
-        "src/dynamic.ts": 'export async function load() {\n  const m = await import("./core");\n  return m;\n}\n',
+        "src/dynamic.ts": 'export async function load() {\n  const m = await import("./core");\n  return m;\n}\n\nexport const unrelated = 1;\n',
       };
       const result = reach(head, edit("src/core.ts", lineOf(CORE, "return helper() + 1")), { depth: 1 });
       expect(result.reached.find((entry) => entry.file === "src/uses-beta.ts")?.mode).toBe("file-edge");
-      expect(result.reached.find((entry) => entry.file === "src/dynamic.ts")?.mode).toBe("file-edge");
+      expect(result.reached.find((entry) => entry.file === "src/dynamic.ts")).toMatchObject({ mode: "symbol", names: ["load"] });
     });
   });
 });
