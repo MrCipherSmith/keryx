@@ -4188,7 +4188,7 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
     shown = true;
     if (yes) return true;
     if (!isTerminal()) {
-      console.log("Not posted: the operator has not read the body. Re-run with --yes once they have, or run the command in a terminal.");
+      console.log("Not posted: the operator has not read the body. Inside keryx shell, call the review_publish tool: the operator reads the body and answers it as a card. Outside keryx shell, run this command in a terminal.");
       return false;
     }
     return promptYes(`Post this ${kind} review to ${target}? [y/N] `);
@@ -4229,11 +4229,11 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   // statement, so a person has to be at the terminal that carries it.
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (waiver !== undefined && !isTerminal()) {
-    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+    throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then run `keryx review complete`. Outside keryx shell, run this command in a terminal.");
   }
   const readinessWaivers = parseReadinessWaivers(args);
   if (readinessWaivers.length > 0 && !isTerminal()) {
-    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then run `keryx review complete`. Outside keryx shell, run this command in a terminal.");
   }
   const {
     manifest,

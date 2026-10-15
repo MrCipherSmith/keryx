@@ -7,7 +7,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isPrBound } from "./complete-head-gate";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
-import type { ManagedReviewManifest } from "./types";
+import type { ConfirmedVia, ManagedReviewManifest } from "./types";
 
 export const REVIEW_EVENTS = ["COMMENT", "REQUEST_CHANGES", "APPROVE"] as const;
 export type ReviewEvent = (typeof REVIEW_EVENTS)[number];
@@ -23,6 +23,8 @@ export type PublishOptions = {
   /** Shows the body to the operator and answers whether to post it. */
   confirm: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   now?: (() => Date) | undefined;
+  /** Set when the operator's yes came from a card instead of the terminal prompt; recorded in published.json. */
+  confirmedVia?: ConfirmedVia | undefined;
 };
 
 export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean };
@@ -66,7 +68,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);
   await writeFileAtomic(
     path.join(packageDir, "published.json"),
-    `${JSON.stringify({ pr: manifest.target.ref, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString() }, null, 2)}\n`,
+    `${JSON.stringify({ pr: manifest.target.ref, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }, null, 2)}\n`,
   );
   return { readiness, body, event, partial, posted: true };
 }

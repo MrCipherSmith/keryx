@@ -311,7 +311,7 @@ export function flowStateSchema(): Record<string, unknown> {
             additionalProperties: true,
             required: ["mechanism", "tokenRef", "mintedAt", "consumedAt", "boundTo"],
             properties: {
-              mechanism: { type: "string", enum: ["terminal-token"] },
+              mechanism: { type: "string", enum: ["terminal-token", "tui-card-token", "remote-card-token"] },
               tokenRef: { type: "string", description: "A prefix of the stored token hash. Never the token." },
               mintedAt: { type: "string" },
               consumedAt: { type: "string" },

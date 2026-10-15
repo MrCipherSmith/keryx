@@ -19,8 +19,9 @@ tracker reporting.
   --text "<criterion>"` to rewrite/append one line)
 - `keryx flow implemented <id> --pr <url>`
 - `keryx flow complete <id> [--comment] [--signed-by "<name>"] [--confirm-token <token>]`
-- `keryx flow confirm <id> [--merged]` (mints a short-lived, single-use
-  terminal confirmation token; only for a flow created with
+- `keryx flow confirm <id> [--merged]` (in keryx shell the `flow_confirm` tool
+  does this as an operator card; mints a short-lived, single-use
+  confirmation token; only for a flow created with
   `flow init --require-confirmation` or `completion.require_confirmation:
   true`)
 - `keryx flow recover <id> --reason "<why>"` (moves a flow stuck in

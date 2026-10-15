@@ -661,7 +661,7 @@ entries.
 | `keryx flow ac kinds <id> [--json]` | Read-only: each criterion's verification kind (`exec`, `invariant`, `judged`, `none`, `unclassified`) from its trailing `[verify: ...]` marker, with the distribution and runnable coverage. Information only, never a gate. |
 | `keryx flow implemented <id> --pr <url>` | Record implementation and PR. |
 | `keryx flow complete <id> [--comment] [--signed-by "<name>"] [--confirm-token <token>]` | Run completion gates and finish; appends a completion signature. |
-| `keryx flow confirm <id>` | In a terminal: mint the confirmation token a flow created with `--require-confirmation` needs to complete. |
+| `keryx flow confirm <id>` | In a terminal: mint the confirmation token a flow created with `--require-confirmation` needs to complete. In `keryx shell` the agent calls the `flow_confirm` tool and the operator answers it as a card. |
 | `keryx flow recover <id> --reason "<reason>"` | Return a flow left in `completing` by an interrupted run to `in-progress`. |
 | `keryx flow block <id> --reason "<reason>"` | Block a flow. |
 | `keryx flow unblock <id>` | Restore the previous status. |

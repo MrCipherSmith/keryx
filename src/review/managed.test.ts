@@ -1784,6 +1784,7 @@ test("R2-05: without a terminal the waiver is refused and nothing is written", a
     await reviewCommand(["complete", pkg, "--waive-coverage", "skip the far files, generated"], { isTerminal: () => false });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("needs a terminal");
+    expect(errors.join("\n")).toContain("review_waive_coverage");
   } finally {
     console.error = logError;
     process.exitCode = 0;

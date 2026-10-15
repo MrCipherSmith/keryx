@@ -23,10 +23,12 @@ whose status is `implemented`.
    git commit` has run; the gate checks only that `flow.json` is in `HEAD`). The
    flow folder is committed in the same PR as the code; the commit at closing
    is a rule to follow, not one the gate checks. A
-   flow created with `--require-confirmation` needs one more gate: run
-   `keryx flow confirm <id>` in your own terminal first (a typed challenge
-   mints a short-lived, single-use token - it proves an interactive step ran
-   outside the agent's tool roster, not that a human did), then pass it as
+   flow created with `--require-confirmation` needs one more gate: get
+   a token first: in keryx shell call the `flow_confirm` tool (the operator
+   answers it as a card; never send the operator to a terminal), outside it run
+   `keryx flow confirm <id>` in a terminal (a typed challenge). The token is
+   short-lived and single-use; it proves an interactive step ran, not that a
+   human did. Then pass it as
    `--confirm-token <token>`. On pass this also appends a completion
    signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:

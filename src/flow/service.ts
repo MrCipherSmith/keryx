@@ -56,7 +56,9 @@ import {
 } from "./confirm-token";
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
-export { CONFIRMATION_CAVEAT } from "./confirm-token";
+export { CONFIRMATION_CAVEAT, completionTarget } from "./confirm-token";
+// Flow 456: the shell's operator card tools reach the GitHub adapter through this facade, not the zone's internals.
+export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github";
 // Flow 328: re-exported so `keryx flow check-ac`'s adapter
 // (`src/commands/flow-check-ac.ts`), the AC5/AC6 callers
 // (`src/commands/flow.ts`/`src/commands/review.ts`) and the AC7 TUI reader
@@ -1634,7 +1636,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async confirmMint({ cwd, id, merged }): Promise<FlowConfirmMintResult> {
+    async confirmMint({ cwd, id, merged, confirmation, expect }): Promise<FlowConfirmMintResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
         let flow = await readFlow(cwd, dir);
@@ -1643,6 +1645,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           throw new Error(refusal ?? `flow confirm: flow ${flow.id}'s acceptance criteria are not frozen.`);
         }
         await assertAcIntact(cwd, dir, flow);
+        if (expect !== undefined) {
+          const nowTarget = completionTarget({ merged: merged === true, prUrl: flow.pr.url });
+          if (flow.acChecksum !== expect.acChecksum || nowTarget !== expect.target) {
+            throw new Error(
+              `flow confirm: flow ${flow.id}'s ${flow.acChecksum !== expect.acChecksum ? "acceptance criteria" : "completion target"} ` +
+                "changed after the confirmation card was shown; no token was minted. Ask for a new card.",
+            );
+          }
+        }
         const criteria = await readAcCriteria(cwd, dir);
         const { token, stored } = await mintConfirmationToken(
           cwd,
@@ -1653,6 +1664,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             // The target the CLI just showed the operator (security review of
             // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
             target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+            ...(confirmation !== undefined
+              ? { confirmedVia: confirmation.confirmedVia, confirmationQuote: confirmation.quote }
+              : {}),
           },
           { now: deps.now },
         );

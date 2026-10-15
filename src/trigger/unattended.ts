@@ -38,7 +38,8 @@ import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } f
  * Tools an unattended run is never offered in this version (AC5). The web and
  * MCP tools bring third-party content that cannot authorize anything; a
  * subagent would be a second agent outside this run's floor and spend cap;
- * `ask_user` has nobody to ask.
+ * `ask_user` has nobody to ask. The operator-confirmed gates are excluded too,
+ * through {@link isUnattendedExcludedTool}: check membership with that, not this list.
  */
 export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   "web_fetch",
@@ -50,6 +51,32 @@ export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   // Flow 295 (AC7): creating a schedule needs an operator's confirmation, and an unattended run has none.
   "schedule_create",
 ];
+
+/**
+ * Flow 456 (AC1): the operator-confirmed gates (`../commands/operator-confirm-tools.ts`). Listed here, not
+ * imported, because a core owner must not import a command module; `operator-confirm-rosters.test.ts` fails
+ * when this list and the registry differ, so a new gate is excluded the moment it is registered.
+ */
+export const OPERATOR_CONFIRM_TOOL_NAMES: readonly string[] = [
+  "review_chunks_answer",
+  "review_publish",
+  "review_waive_coverage",
+  "review_waive_readiness",
+  "flow_confirm",
+  "external_apply",
+  "learn_accept",
+  "learn_promote",
+  "learn_graduate",
+  "schedule_resume",
+  "schedule_run",
+  "schedule_pause",
+  "schedule_remove",
+];
+
+/** Whether an unattended run may never be offered `toolName`: the fixed list above plus every operator-confirmed gate. */
+export function isUnattendedExcludedTool(toolName: string): boolean {
+  return UNATTENDED_EXCLUDED_TOOLS.includes(toolName) || OPERATOR_CONFIRM_TOOL_NAMES.includes(toolName);
+}
 
 /** `keryx flow` verbs only an operator (or the dispatcher itself) may run. */
 const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
@@ -202,7 +229,7 @@ export function unattendedPatchRefusal(patch: string): string | undefined {
  * has no objection here (the permission mode still governs it).
  */
 export function unattendedRefusal(toolName: string, input: Record<string, unknown>): string | undefined {
-  if (UNATTENDED_EXCLUDED_TOOLS.includes(toolName)) {
+  if (isUnattendedExcludedTool(toolName)) {
     return `\`${toolName}\` is not offered to an unattended run`;
   }
   if (toolName === "shell_exec") {
