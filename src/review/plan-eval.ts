@@ -67,6 +67,8 @@ export type PlanEvalInput = {
   newChunks?: number | undefined;
   reach?: RoutingOptions["reach"];
   jevScores?: RoutingOptions["jevScores"];
+  /** Share of light slices sampled deep; 0 measures the routing alone, without the audit sample. */
+  auditRate?: number | undefined;
 };
 
 const SERIOUS = new Set(["blocker", "critical", "major"]);
@@ -110,7 +112,7 @@ function slicesHolding(slices: readonly BuiltSlice[], finding: GroundTruthFindin
 export function evaluatePlans(input: PlanEvalInput): PlanEval {
   const built = buildSlices(sliceSourceFromDiff(input.diff), { ...(input.maxBytes === undefined ? {} : { maxBytes: input.maxBytes }), ...(input.waveBytes === undefined ? {} : { waveBytes: input.waveBytes }) });
   const oldManifest = manifestOf(built.manifest, built.slices);
-  const routed = routeSlices(built.slices, { head: input.head ?? "plan-eval", reach: input.reach, jevScores: input.jevScores });
+  const routed = routeSlices(built.slices, { head: input.head ?? "plan-eval", reach: input.reach, jevScores: input.jevScores, auditRate: input.auditRate });
   const newManifest = manifestOf(built.manifest, routed);
   const unlimited = { maxDispatches: Number.MAX_SAFE_INTEGER, maxMinutes: Number.MAX_SAFE_INTEGER };
   const oldSide = side(estimateRound(input.roles, oldManifest, "full", unlimited), oldManifest, input.oldChunks ?? 0);

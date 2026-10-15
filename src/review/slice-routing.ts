@@ -52,7 +52,26 @@ const FRONTEND_FILE = /(\.(tsx|jsx|vue|svelte|html|css|scss|sass|less)$|\.store\
 const CONFIG_FILE = /((^|\/)(package\.json|tsconfig[^/]*\.json|bunfig\.toml|[^/]+\.config\.[cm]?[jt]s|\.[^/]+rc(\.[a-z]+)?)$|\.(ya?ml|toml)$)/i;
 const BACKEND_DIR = /(^|\/)src\/(api|services|controllers|modules|server|routes)\//;
 const DATA_FILE = /(\.sql$|(^|\/)prisma\/schema\.prisma$|(^|\/)migrations?\/)/;
-const ENTRY_FILE = /(^|\/)(index|mod|main)\.[cm]?[jt]sx?$/;
+/** Files an agent reads as instructions: skills, rules, AGENTS/CLAUDE/GEMINI files, prompt templates. */
+const AGENT_INSTRUCTION_FILE = /((^|\/)SKILL(\.detail)?\.md$|(^|\/)rules\/.+\.mdc?$|(^|\/)(AGENTS|CLAUDE|GEMINI)(\.[^/]+)?\.md$|(^|\/)prompts?\/|[-_.]prompt[-_.][^/]*$|\.prompt\.(md|txt)$)/i;
+/** Contracts and schemas: what other code or agents rely on the shape of. */
+const CONTRACT_FILE = /(\.schema\.json$|(^|\/)(contracts?|schemas?)\/|(^|\/)[\w-]*contract[\w-]*\.[cm]?[jt]s$|\.d\.ts$|(^|\/)types\.[cm]?ts$|\.proto$|(^|\/)openapi[^/]*\.(ya?ml|json)$)/i;
+/**
+ * Changed lines that spawn a process or build its argv or shell string, invoke git, derive a filesystem path from
+ * input, read the environment, or talk to the network.
+ */
+const SECURITY_PRINCIPLE = new RegExp([
+  String.raw`\b(git|gh|sh|bash|run|exec)\w*\s*\(\s*\w*\s*,?\s*\[`, // runner(cwd, ["diff", ...]) shaped argv calls
+  String.raw`\bgit\w*\(`,
+  String.raw`["'\x60](git|gh|sh|bash|zsh|npm|npx|bun|node|curl|wget|ssh|docker|rg|grep)["'\x60]\s*,`,
+  String.raw`\bargv\b|process\.argv|--end-of-options|\b(shell|command)(Line|String|Args?)\b|\bsh\s+-c\b|\bquote\w*\(|\bshellEscape|\brevision\w*\(`,
+  String.raw`\bpath\.(resolve|join|normalize|relative)\([^)\n]*\b(args?|input|options?|opts|flags?|value|user\w*|params?|query|ref|name|target|from|to|dir|file\w*|request)\b`,
+  String.raw`\b(readFile|readdir|stat|lstat|open|createReadStream|createWriteStream|mkdir|copyFile|rename)\w*\(`,
+  String.raw`process\.env|\bBun\.env\b|\benv\[`,
+  String.raw`\bfetch\(|\bhttps?\.(get|request)|\bnet\.|\bWebSocket\b|\bsocket\b|new URL\(`,
+].join("|"));
+
+const ENTRY_FILE =/(^|\/)(index|mod|main)\.[cm]?[jt]sx?$/;
 
 /**
  * Role rules. Every role here is a bundled reviewer id (`src/gdskills/bundled/skills/review/`); `review-logic` is not
@@ -70,6 +89,12 @@ const ROLE_RULES: readonly RoleRule[] = [
   { role: "review-clean-code", why: "new functions or classes", content: /^\+\s*(export\s+)?(default\s+)?(async\s+)?(function\s+\w|class\s+\w|(const|let)\s+\w+\s*=\s*(async\s*)?\([^)]*\)\s*(:\s*[^=]+)?=>)/m, codeOnly: true },
   { role: "review-architecture", why: "imports or exports changed", content: /^[+-]\s*(import\b.*\bfrom\b|export\s+(\*|\{)|export\s+(default\s+)?(async\s+)?(function|class|interface|type|const|enum)\b)/m, codeOnly: true },
   { role: "review-architecture", why: "entry point or project config", path: (f) => ENTRY_FILE.test(f) || CONFIG_FILE.test(f) },
+  // Agent instructions are the program an agent runs: a changed skill, rule, AGENTS/CLAUDE file or prompt changes behaviour.
+  { role: "review-architecture", why: "agent instructions (skill, rule, AGENTS/CLAUDE file, prompt)", path: (f) => AGENT_INSTRUCTION_FILE.test(f) },
+  { role: "review-architecture", why: "contract or schema", path: (f) => CONTRACT_FILE.test(f) },
+  { role: "review-architecture", why: "exported signature or contract type changed", content: /^[+-]\s*export\s+(declare\s+)?(type|interface|abstract\s+class|enum)\b|^[+-]\s*export\s+(async\s+)?function\s+\w+\s*[<(]/m },
+  // Process and argv construction, git invocations, input-derived paths, env, network: where injection and traversal live.
+  { role: "review-security-code", why: "process, argv, git, input-derived path, env or network", content: SECURITY_PRINCIPLE, codeOnly: true },
   { role: "review-security-code", why: "process, filesystem write or trust-sensitive code", content: /\b(exec|execSync|execFile|spawn|spawnSync|Bun\.spawn|child_process|eval|new Function|innerHTML|dangerouslySetInnerHTML|password|passwd|secret|token|credential|api[_-]?key|sanitiz\w*|escape\w*|redact\w*|untrusted|trust\w*|permission\w*|allow-?list|deny-?list|sandbox\w*|cookie|cors|csrf|jwt|writeFile\w*|rm|unlink|rmdir|chmod|symlink\w*|realpath)\b/i, codeOnly: true },
   { role: "review-security-code", why: "auth, crypto or secret path", path: (f) => /\b(auth|login|session|permission|acl|rbac|credential|crypto|cipher|secret|security|trust|sandbox)\w*/i.test(f) && !isTestFilePath(f) && !DOC_FILE.test(f) },
   { role: "review-performance", why: "synchronous IO, timers, caching or hot loops", content: /\b(readFileSync|writeFileSync|statSync|existsSync|execSync|spawnSync|setInterval|setTimeout|requestAnimationFrame|useEffect|useMemo|cache\w*|memo\w*|debounce|throttle|for await|while\s*\(|\.sort\(|new RegExp)/, codeOnly: true },
