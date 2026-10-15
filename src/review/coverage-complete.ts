@@ -9,6 +9,7 @@ import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
 import { BLAST_RADIUS_SCOPE_REVIEWER } from "./blast-radius";
 import { packageScopeFiles } from "./coverage";
 import type { SliceManifest } from "./slice";
+import type { ConfirmedVia } from "./types";
 import { readJsonFileOr } from "../lib/json";
 
 export const COVERAGE_FILE = "coverage.json";
@@ -27,7 +28,7 @@ export type CoverageFile = {
   reason?: string;
 };
 
-export type CoverageWaiver = { operatorQuote: string; time: string; files: string[] };
+export type CoverageWaiver = { operatorQuote: string; time: string; files: string[]; confirmedVia?: ConfirmedVia | undefined };
 
 export type CoverageReport = {
   schemaVersion: 1;
@@ -98,7 +99,8 @@ export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefine
   const waiver = record(record(dispatch)?.coverageWaiver);
   if (waiver === undefined || !text(waiver.operatorQuote) || !text(waiver.time)) return undefined;
   const files = Array.isArray(waiver.files) ? waiver.files.filter(text) : [];
-  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files };
+  const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" ? waiver.confirmedVia : undefined;
+  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }) };
 }
 
 export type ComputeCoverageOptions = {
@@ -208,7 +210,7 @@ const MIN_WAIVER_QUOTE_CHARS = 8;
  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape
  * of the mutation waiver: their quote, the time, and the waived file list). Nothing uncovered means nothing to waive.
  */
-export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date()): Promise<CoverageWaiver | undefined> {
+export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia): Promise<CoverageWaiver | undefined> {
   // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
   const quote = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
@@ -221,7 +223,7 @@ export async function recordCoverageWaiver(packageDir: string, operatorQuote: st
   const report = await computeCoverage(packageDir, { research });
   const uncovered = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
   if (!report.tracked || uncovered.length === 0) return undefined;
-  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered };
+  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }) };
   await writeFileAtomic(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
   return waiver;
 }

@@ -16,7 +16,7 @@ import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED } from "./orchestrator-log";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
-import type { ManagedReviewManifest, ReadinessWaiver } from "./types";
+import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
@@ -391,7 +391,7 @@ async function writePartialHeader(packageDir: string, waivers: readonly Readines
  * Waives the named failing items in the operator's own words: written into the manifest and into the first lines of
  * report.md. A quote that is a flag name, a one-word "ok" or too short is refused, as the coverage waiver does.
  */
-export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date } = {}): Promise<ReadinessWaiver[]> {
+export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } = {}): Promise<ReadinessWaiver[]> {
   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
     throw new Error(`--waive needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
@@ -408,7 +408,7 @@ export async function waiveReadiness(packageDir: string, selectors: readonly str
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const time = (options.now ?? new Date()).toISOString();
   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
-  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time }));
+  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }));
   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
   await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
   await writePartialHeader(packageDir, all);

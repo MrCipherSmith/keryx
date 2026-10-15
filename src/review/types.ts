@@ -76,7 +76,10 @@ export type ReviewCoverageEntry = {
 };
 
 /** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
-export type ReadinessWaiver = { item: string; operator_quote: string; time: string };
+/** How an operator decision was taken: the shell's yes/no card, or the remote topic's mirror of it. Absent on a terminal answer and on older records. */
+export type ConfirmedVia = "tui-card" | "remote-card";
+
+export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined };
 
 export type ManagedReviewManifest = {
   schemaVersion: 1;
