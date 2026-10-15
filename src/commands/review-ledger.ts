@@ -18,13 +18,14 @@ const VALUE_FLAGS = new Set(["--package", "--mode", "--findings", "--disposition
 export function printLedgerHelp(): void {
   console.log(`keryx review ledger build — usage:
 
-  keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
+  keryx review ledger build [<input-dir>] [--package <review-dir>] [--mode all|diff]
                             [--findings <findings.json>] [--dispositions <file>]
                             [--out <research.json>] [--dry-run] [--json]
 
 Builds the research ledger \`keryx review ingest --research\` and \`complete\` demand, from
 files only. <input-dir> holds raw/*.txt (reviewer replies), drivers/*.json and
-slices/manifest.json; --package (default: <input-dir> when it holds scope-files.json) holds
+slices/manifest.json, and defaults to --package (each review keeps its own raw/ and drivers/; the
+shared .metaproject/data/review is read only when named); --package (default: <input-dir> when it holds scope-files.json) holds
 scope-files.json, findings.json and retry-state.json. Writes research.json there (--out).
 
 Per required reviewer: the latest raw result decides. DONE / DONE_WITH_CONCERNS with no open
@@ -213,8 +214,10 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (args[0] !== "build") throw new Error(`Unknown ledger subcommand "${args[0]}". See \`keryx review ledger --help\`.`);
   const rest = args.slice(1);
   deps.rejectUnknownFlags(rest, LEDGER_FLAGS, "ledger build");
-  const target = positional(rest);
-  if (target === undefined) throw new Error("Missing <input-dir>. See `keryx review ledger --help`.");
+  // Flow 457 (T7, audit row 11): the input directory defaults to the package itself (<package>/raw, drivers, slices),
+  // so one review never reads another's replies; the shared .metaproject/data/review is used only when named.
+  const target = positional(rest) ?? optionValue(rest, "--package");
+  if (target === undefined) throw new Error("Missing <input-dir> (or --package <review-dir>, whose raw/ is then the input). See `keryx review ledger --help`.");
   const inputDir = path.resolve(target);
   if (!existsSync(path.join(inputDir, "raw"))) throw new Error(`${inputDir} has no raw/ directory; pass the review input directory.`);
   const packageArg = optionValue(rest, "--package");
