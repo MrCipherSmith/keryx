@@ -694,13 +694,25 @@ export class OpenAiProvider implements ProviderPort {
     // Provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
       let bodyRecord: Record<string, unknown> = {};
+      let bodyText = "";
       try {
-        bodyRecord = asRecord(JSON.parse(await response.text()));
+        bodyText = await response.text();
+        bodyRecord = asRecord(JSON.parse(bodyText));
       } catch {
         // Non-JSON error body: keep the generic status message below.
       }
       const fields = extractErrorFields(bodyRecord);
       const error = withRetryAfter(classifyHttpError(response.status, response.headers, fields.code), response.headers, this.deps.clock);
+      // Only this exact gateway response is a transient Forbidden error.
+      const overloadMessage = "Our servers are currently overloaded. Please try again later.";
+      const candidate = fields.message ?? asString(bodyRecord.detail) ?? bodyText.trim();
+      if (response.status === 403 && candidate === overloadMessage) {
+        error.kind = "overloaded";
+        error.retryable = true;
+        error.detail = { transientOverload403: true };
+        fields.message = overloadMessage;
+      }
+
       let providerMessage = `OpenAI API returned HTTP ${response.status}`;
       if (fields.message !== undefined && fields.message.length > 0) {
         providerMessage = fields.message;

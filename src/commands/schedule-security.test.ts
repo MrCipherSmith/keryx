@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -487,6 +487,7 @@ describe("F8: schedule_create is bound to a one-time confirmation token", () => 
       projectRoot: root,
       defaults: () => ({ provider: "scripted", model: "m" }),
       host: { backend: "cron", run: async () => ({ code: 0, stdout: "", stderr: "" }) },
+      env: {}, // Fake interactive caller, independent of the test runner's origin.
       providerReportsUsage: () => true,
       checkCredential: async () => ({ ok: true }),
     });
@@ -747,7 +748,7 @@ describe("pinned #! wrappers at run time", () => {
    * under test did not execute the wrapper.
    */
   function expectWrapperRuns(wrapper: string, binDir: string, marker: string): void {
-    execFileSync(wrapper, [], { env: envFor(binDir) as NodeJS.ProcessEnv, stdio: "ignore" });
+    execFileSync(wrapper, [], { env: envFor(binDir) as NodeJS.ProcessEnv, stdio: "ignore", timeout: 10_000 });
     expect(existsSync(marker)).toBe(true);
     rmSync(marker);
   }
@@ -771,8 +772,8 @@ describe("pinned #! wrappers at run time", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  test("a changed interpreter is refused, and so is one resolved elsewhere on the runtime PATH", async () => {
-    const { wrapper, interp, binDir, marker } = envWrapper();
+  test("an interpreter resolved elsewhere on the runtime PATH is refused", async () => {
+    const { wrapper, binDir, marker } = envWrapper();
     expectWrapperRuns(wrapper, binDir, marker);
     await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
 
@@ -784,15 +785,24 @@ describe("pinned #! wrappers at run time", () => {
     await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: { PATH: `${other}:${binDir}:/usr/bin:/bin` } } });
     expect((await lastRecord()).detail).toContain("the interpreter");
     expect(existsSync(marker)).toBe(false);
+    // Copies and hashes real executables, just like the adjacent mutation case.
+  }, 30_000);
+
+  test("a changed pinned interpreter is refused", async () => {
+    const { wrapper, interp, binDir, marker } = envWrapper();
+    expectWrapperRuns(wrapper, binDir, marker);
+    await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
 
     // The pinned interpreter itself changed.
-    writeFileSync(interp, Buffer.concat([readFileSync(interp), Buffer.from("\n")]), { mode: 0o755 });
+    // Avoid copying the entire executable through JS memory just to append a byte.
+    appendFileSync(interp, "\n");
     await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: envFor(binDir) } });
     const record = await lastRecord();
     expect(record.agentTask?.refusal).toBe("grants-changed");
     expect(record.detail).toContain("the interpreter");
     expect(existsSync(marker)).toBe(false);
-  });
+    // Real interpreter copy, execution and hashing need an integration-test budget.
+  }, 30_000);
 });
 
 describe("N3: the scratch parent must be ours", () => {

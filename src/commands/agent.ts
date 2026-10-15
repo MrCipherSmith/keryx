@@ -3638,6 +3638,8 @@ async function runAgentTurnCore(
     let pendingOverflowError: NormalizedError | undefined;
 
     let recoveryAttempt = 0;
+    // Separate from generic recovery; reset only after a completed round.
+    let overload403Retries = 0;
     for (;;) {
       if (isAborted()) {
         io.onAttemptInterrupted?.();
@@ -3803,6 +3805,13 @@ async function runAgentTurnCore(
           }
           if (!attemptUsageKnown) system("\n[recovery usage] Failed-attempt usage unknown; provider may have billed it.\n");
           if (retryable) {
+            if (attemptError?.detail?.transientOverload403 === true) {
+              if (overload403Retries >= 3) {
+                system("\n[error] OpenAI overload retry limit reached (3 retries); try again later.\n");
+                return { finishReason: "interrupted" };
+              }
+              overload403Retries += 1;
+            }
             if (recovery.canRequest?.() === false) {
               system("\n[budget] Recovery stopped: request budget exhausted.\n");
               return { finishReason: "budget" };

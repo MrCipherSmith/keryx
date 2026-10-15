@@ -1,10 +1,9 @@
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { pathExists } from "../lib/fs";
 import { offersIndexTools } from "../lib/metaproject-state";
 import { readFile } from "node:fs/promises";
 import { omissionNote } from "./lines";
-import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
+import { checkGraphStaleness, gitStatusPorcelain, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
 
 // Orientation context for the Metaproject bootstrap + graph/wiki enforcement
 // layer. Where the gdctx
@@ -140,42 +139,16 @@ export type WorkingTreeCodeChanges =
   | { status: "counted"; count: number }
   | { status: "unknown"; reason: string };
 
-type GitOutput = { ok: true; stdout: string } | { ok: false; reason: string };
-
-function gitOutput(cwd: string, args: string[]): Promise<GitOutput> {
-  return new Promise<GitOutput>((resolve) => {
-    try {
-      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
-      let out = "";
-      child.stdout?.on("data", (chunk) => {
-        out += String(chunk);
-      });
-      child.on("error", (error) => resolve({ ok: false, reason: `git could not be run (${error.message})` }));
-      child.on("close", (code) =>
-        resolve(
-          code === 0
-            ? { ok: true, stdout: out }
-            : { ok: false, reason: `\`git ${args.join(" ")}\` exited ${code ?? "with a signal"} (not a git repository, or git is unavailable)` },
-        ),
-      );
-    } catch (error) {
-      resolve({ ok: false, reason: `git could not be run (${error instanceof Error ? error.message : String(error)})` });
-    }
-  });
-}
-
-// `git status --porcelain=v1` lines are "XY path", with renames printed as
-// "old -> new". Both sides of a rename are code-relevant, so either matching
-// `CODE_EXT` counts the entry once.
+// NUL porcelain preserves Unicode, newlines and literal " -> " in paths.
+// Renames/copies have an original-path field; count the whole entry once.
 function countCodePaths(porcelain: string): number {
   let count = 0;
-  for (const line of porcelain.split("\n")) {
-    if (line.length < 4) continue;
-    const paths = line
-      .slice(3)
-      .split(" -> ")
-      .map((candidate) => candidate.replace(/^"|"$/g, "").trim())
-      .filter(Boolean);
+  const entries = porcelain.split("\0");
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i] ?? "";
+    if (entry.length < 4) continue;
+    const paths = [entry.slice(3)];
+    if (/[RC]/.test(entry.slice(0, 2))) paths.push(entries[++i] ?? "");
     if (paths.some((candidate) => CODE_EXT.test(candidate))) count += 1;
   }
   return count;
@@ -184,11 +157,13 @@ function countCodePaths(porcelain: string): number {
 // Count uncommitted code-file changes — a deterministic freshness signal that
 // needs no stored build ref. Local git only; never throws, never networks.
 export async function uncommittedCodeCount(cwd: string): Promise<WorkingTreeCodeChanges> {
-  const status = await gitOutput(cwd, ["status", "--porcelain=v1"]);
-  if (!status.ok) {
-    return { status: "unknown", reason: status.reason };
-  }
-  return { status: "counted", count: countCodePaths(status.stdout) };
+  return codeChanges(await gitStatusPorcelain(cwd));
+}
+
+function codeChanges(porcelain: string | null): WorkingTreeCodeChanges {
+  return porcelain === null
+    ? { status: "unknown", reason: "git status failed (not a git repository, or git is unavailable)" }
+    : { status: "counted", count: countCodePaths(porcelain) };
 }
 
 function freshnessNote(changes: WorkingTreeCodeChanges): string {
@@ -250,7 +225,13 @@ export async function graphContext(cwd: string): Promise<string> {
   const table = section.slice(0, MAX_MODULE_ROWS + 2); // header + separator + rows
   const tableNote = omissionNote(table.length, section.length, "module rows");
 
-  const [changes, staleness] = await Promise.all([uncommittedCodeCount(cwd), checkGraphStaleness(cwd)]);
+  // Invocation-local sharing, never a cross-call freshness cache.
+  const statusObservation = gitStatusPorcelain(cwd);
+  const [porcelain, staleness] = await Promise.all([
+    statusObservation,
+    checkGraphStaleness(cwd, statusObservation),
+  ]);
+  const changes = codeChanges(porcelain);
   const stale = stalenessNote(staleness);
   return [
     "## Code graph (map)",
