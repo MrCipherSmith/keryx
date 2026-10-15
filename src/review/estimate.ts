@@ -33,6 +33,8 @@ export type RoundEstimate = {
   minutes: { min: number; max: number };
   perRole: RoleEstimate[];
   assumptions: string;
+  /** The slice manifest the estimate read, relative to the project root; undefined when the package is not sliced. */
+  manifest?: string | undefined;
 };
 
 export function estimateRound(roles: readonly string[], manifest: SliceManifest | undefined, depth: RoundEstimate["depth"] = "unrecorded"): RoundEstimate {
@@ -61,15 +63,24 @@ export function estimateRound(roles: readonly string[], manifest: SliceManifest 
   };
 }
 
-async function readManifest(packageDir: string): Promise<SliceManifest | undefined> {
-  for (const candidate of [path.join(packageDir, "slices", "manifest.json"), path.join(packageDir, "slice-manifest.json")]) {
+/** Where a round's slice manifest lives when `--manifest` is not given: the package's own, then the shell host's shared one. */
+export function manifestCandidates(packageDir: string, root: string): string[] {
+  return [
+    path.join(packageDir, "slices", "manifest.json"),
+    path.join(packageDir, "slice-manifest.json"),
+    path.join(root, ".metaproject", "data", "review", "slices", "manifest.json"),
+  ];
+}
+
+async function readManifest(candidates: readonly string[]): Promise<{ manifest: SliceManifest; file: string } | undefined> {
+  for (const candidate of candidates) {
     const found = await readJsonFileOr<SliceManifest | undefined>(candidate, undefined);
-    if (found !== undefined && Array.isArray(found.slices)) return found;
+    if (found !== undefined && Array.isArray(found.slices)) return { manifest: found, file: candidate };
   }
   return undefined;
 }
 
-export async function estimatePackage(packageDir: string): Promise<RoundEstimate> {
+export async function estimatePackage(packageDir: string, options: { manifest?: string | undefined } = {}): Promise<RoundEstimate> {
   if (!existsSync(packageDir)) throw new Error(`${packageDir} does not exist; pass --package <review-dir>`);
   const root = projectRootOfPackage(packageDir);
   const recorded = await packageRoundDepth(packageDir);
@@ -79,12 +90,15 @@ export async function estimatePackage(packageDir: string): Promise<RoundEstimate
     prContext: packageHasPrContext(packageDir),
     depth: recorded?.depth,
   });
-  return estimateRound(set.required, await readManifest(packageDir), recorded?.depth ?? "unrecorded");
+  const found = await readManifest(options.manifest === undefined ? manifestCandidates(packageDir, root) : [options.manifest]);
+  if (options.manifest !== undefined && found === undefined) throw new Error(`${options.manifest} is not a slice manifest (no readable JSON with a slices array); run \`keryx review slice\` first`);
+  return { ...estimateRound(set.required, found?.manifest, recorded?.depth ?? "unrecorded"), manifest: found === undefined ? undefined : path.relative(root, found.file) };
 }
 
 export function renderEstimate(estimate: RoundEstimate): string {
   const lines = [
     `depth: ${estimate.depth}`,
+    `manifest: ${estimate.manifest ?? "none (the package is not sliced; pass --manifest <slices/manifest.json>)"}`,
     estimate.sliced
       ? `assignments: ${estimate.roles} roles x ${estimate.slices} slices = ${estimate.assignments} (a path-gated role owns only the slices its gate matches)`
       : `assignments: ${estimate.assignments} (${estimate.roles} roles; the package is not sliced, so each role reviews the whole diff once)`,

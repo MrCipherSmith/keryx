@@ -64,7 +64,13 @@ export const RISK_PATH_GATES: Record<string, (file: string) => boolean> = Object
   Object.entries(BUNDLED_PATH_GATES).filter(([name]) => name !== "review-testing-practices" && name !== "review-frontend-conventions"),
 );
 
-export type DepthDecision = { requested: DepthRequest; depth: RoundDepth; reason: string };
+export type DepthDecision = {
+  requested: DepthRequest;
+  depth: RoundDepth;
+  reason: string;
+  /** Set by {@link packageRoundDepth} when the recorded decision no longer matches the package and was dropped. */
+  stale?: string | undefined;
+};
 
 export type DepthInput = {
   files?: readonly string[] | undefined;
@@ -73,14 +79,25 @@ export type DepthInput = {
   forceFull?: string | undefined;
 };
 
+/**
+ * Light is never taken on the operator's word: `--depth light` runs the same checks as `auto` and resolves to full,
+ * with the reason, when any of them fails. `--depth full`, `--all` and `--gating` are always full.
+ */
 export async function decideRoundDepth(root: string, request: DepthRequest, input: DepthInput): Promise<DepthDecision> {
   if (request === "full") return { requested: request, depth: "full", reason: "--depth full" };
-  if (request === "light") return { requested: request, depth: "light", reason: "--depth light" };
-  const full = (reason: string): DepthDecision => ({ requested: request, depth: "full", reason });
-  if (input.forceFull !== undefined) return full(`${input.forceFull} forces the full set`);
+  const checked = await autoDepth(root, input);
+  if (request === "auto") return { requested: request, ...checked };
+  return checked.depth === "light"
+    ? { requested: request, depth: "light", reason: `--depth light: ${checked.reason}` }
+    : { requested: request, depth: "full", reason: `--depth light not honoured: ${checked.reason.replace(/^auto: /, "")}` };
+}
+
+async function autoDepth(root: string, input: DepthInput): Promise<{ depth: RoundDepth; reason: string }> {
+  const full = (reason: string): { depth: RoundDepth; reason: string } => ({ depth: "full", reason });
+  if (input.forceFull !== undefined) return full(`auto: ${input.forceFull} forces the full set`);
   const files = input.files;
   if (files === undefined) return full("auto: no scope file list, so the diff size and risk class are unknown");
-  if (input.changedLines === undefined) return full("auto: changed-line count unknown (pass --scope <scope.json> or --diff-lines <n>)");
+  if (input.changedLines === undefined) return full("auto: no line count (changed-line count unknown; pass --scope <scope.json> or --diff-lines <n>)");
   if (files.length > LIGHT_MAX_FILES) return full(`auto: ${files.length} files exceeds ${LIGHT_MAX_FILES}`);
   if (input.changedLines > LIGHT_MAX_CHANGED_LINES) return full(`auto: ${input.changedLines} changed lines exceeds ${LIGHT_MAX_CHANGED_LINES}`);
   const hit = Object.entries(RISK_PATH_GATES).find(([, gate]) => files.some(gate));
@@ -92,19 +109,53 @@ export async function decideRoundDepth(root: string, request: DepthRequest, inpu
     const patterns = reviewer.paths.map(globToRegExp);
     if (files.some((f) => patterns.some((p) => p.test(f)))) return full(`auto: a file hits the project reviewer ${reviewer.name} path gate (risk class)`);
   }
-  return { requested: request, depth: "light", reason: `auto: ${files.length} file(s), ${input.changedLines} changed line(s), no risk-class path gate` };
+  return { depth: "light", reason: `auto: ${files.length} file(s), ${input.changedLines} changed line(s), no risk-class path gate` };
 }
 
 /** `round-depth.json` in the package: what `required --package` decided, read back by `ledger build`. */
 export const ROUND_DEPTH_FILE = "round-depth.json";
 
-export async function packageRoundDepth(packageDir: string): Promise<DepthDecision | undefined> {
+/** The package's scope facts a recorded depth is tied to: head, the sorted scope-A file list and the changed-line count. */
+export type DepthBasis = { head?: string | undefined; files?: string[] | undefined; changedLines?: number | undefined };
+
+export async function packageDepthBasis(packageDir: string): Promise<DepthBasis> {
+  const manifest = await readFile(path.join(packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
+  const head = manifest?.target?.head;
+  const files = await packageScopeFiles(packageDir);
+  return { head: typeof head === "string" ? head : undefined, files: files === undefined ? undefined : [...files].sort(), changedLines: await packageChangedLines(packageDir) };
+}
+
+/** The changed-line count `keryx review start|ingest --scope` stored next to the file list, when it did. */
+export async function packageChangedLines(packageDir: string): Promise<number | undefined> {
   try {
-    const parsed = JSON.parse(await readFile(path.join(packageDir, ROUND_DEPTH_FILE), "utf8"));
-    return (parsed?.depth === "light" || parsed?.depth === "full") && typeof parsed.reason === "string" ? { requested: parsed.requested ?? "auto", depth: parsed.depth, reason: parsed.reason } : undefined;
+    const parsed = JSON.parse(await readFile(path.join(packageDir, "scope-files.json"), "utf8"));
+    return typeof parsed?.changedLines === "number" && Number.isFinite(parsed.changedLines) && parsed.changedLines >= 0 ? parsed.changedLines : undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * What `required --package` decided for this package, or a full decision marked `stale` when the recorded one was made
+ * for another head, file list or line count. Undefined when nothing was recorded.
+ */
+export async function packageRoundDepth(packageDir: string): Promise<DepthDecision | undefined> {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(await readFile(path.join(packageDir, ROUND_DEPTH_FILE), "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (!((parsed?.depth === "light" || parsed?.depth === "full") && typeof parsed.reason === "string")) return undefined;
+  const decision: DepthDecision = { requested: (parsed.requested as DepthRequest | undefined) ?? "auto", depth: parsed.depth, reason: parsed.reason };
+  if (decision.depth === "full") return decision;
+  const now = await packageDepthBasis(packageDir);
+  const recorded = Array.isArray(parsed.files) && parsed.files.every((f) => typeof f === "string") ? [...(parsed.files as string[])].sort() : undefined;
+  const stale = (why: string): DepthDecision => ({ requested: decision.requested, depth: "full", reason: `${ROUND_DEPTH_FILE} ignored: ${why}`, stale: why });
+  if (recorded === undefined || now.files === undefined || recorded.join("\n") !== now.files.join("\n")) return stale("it was decided for a different scope file list");
+  if (typeof parsed.changedLines !== "number" || parsed.changedLines !== now.changedLines) return stale("it was decided for a different changed-line count");
+  if (parsed.head !== undefined && now.head !== undefined && parsed.head !== now.head) return stale("it was decided for a different head");
+  return decision;
 }
 
 export function globToRegExp(glob: string): RegExp {
@@ -249,6 +300,8 @@ export type CoverageOptions = {
   blastRadius?: boolean | undefined;
   /** Whether the package holds `pr-context.md`. */
   prContext?: boolean | undefined;
+  /** Changed lines of the scope, from `scope-files.json`; unknown keeps a light dispatch from being accepted. */
+  changedLines?: number | undefined;
   /** Proposed mutants no recorded mutation pass has run (`pendingMutants`). */
   pendingMutants?: number | undefined;
   /** False for `keryx review run --autonomous`; defaults to the environment the process runs in. */
@@ -260,9 +313,19 @@ export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[ENV_AUTONOMOUS_ANSWERS_FILE] === undefined;
 }
 
-function mutationErrors(record: Record<string, unknown>, options: CoverageOptions): string[] {
+/**
+ * The depth the gate holds a dispatch to. A dispatch that says `light` is trusted only while the current scope still
+ * qualifies for a light round (small, outside the risk class); otherwise the full-round rules apply.
+ */
+async function effectiveDepth(record: Record<string, unknown>, options: CoverageOptions): Promise<{ depth: RoundDepth; refused?: string }> {
+  if (record.depth !== "light") return { depth: "full" };
+  const decision = await decideRoundDepth(options.root, "auto", { files: options.files, changedLines: options.changedLines });
+  return decision.depth === "light" ? { depth: "light" } : { depth: "full", refused: decision.reason.replace(/^auto: /, "") };
+}
+
+function mutationErrors(record: Record<string, unknown>, options: CoverageOptions, depth: RoundDepth): string[] {
   const pending = options.pendingMutants ?? 0;
-  if (record.depth === "light") return [];
+  if (depth === "light") return [];
   if (pending === 0 || (options.attended ?? isAttendedRun()) === false) return [];
   const w = record.mutationWaiver;
   const waiver = w && typeof w === "object" && !Array.isArray(w) ? (w as Record<string, unknown>) : {};
@@ -291,10 +354,11 @@ export function packageHasPrContext(packageDir: string, name = "pr-context.md"):
 
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
-  return [...(await reviewerSetErrors(dispatch, options)), ...(record === undefined ? [] : mutationErrors(record, options))];
+  const effective = record === undefined ? undefined : await effectiveDepth(record, options);
+  return [...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : mutationErrors(record, options, effective.depth))];
 }
 
-async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
+async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, effective: { depth: RoundDepth; refused?: string } | undefined): Promise<string[]> {
   if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
   const record = dispatch as Record<string, unknown>;
   const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
@@ -314,14 +378,15 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): P
   const need = await requiredReviewers(options.root, record.mode, options.files, {
     blastRadius: options.blastRadius,
     prContext: options.prContext === true && dispatchKnowsRole(record, PR_CONTRACT),
-    depth: record.depth === "light" ? "light" : "full",
+    depth: effective?.depth ?? "full",
   });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];
   return [
     `dispatch covers ${need.required.length - missing.length} of ${need.required.length} reviewers that mode ${record.mode} requires; missing: ${missing.join(", ")}. ` +
-      "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set",
+      "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set" +
+      (effective?.refused === undefined ? "" : `. The dispatch says depth light, but the full set applies: ${effective.refused}`),
   ];
 }
 

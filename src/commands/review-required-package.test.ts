@@ -68,5 +68,40 @@ test("an explicit --scope wins over the package's scope-files.json", async () =>
   await writeFile(scopeFile, JSON.stringify({ files: ["src/b.ts", "src/c.ts"], counts: { changedLinesRetained: 10 }, drops: [] }));
   await reviewCommand(["required", "--package", fixture.packageDir, "--scope", scopeFile]);
   const depth = JSON.parse(await Bun.file(path.join(fixture.packageDir, "round-depth.json")).text());
-  expect(depth.files).toBe(2);
+  expect(depth.files).toEqual(["src/b.ts", "src/c.ts"]);
+  expect(depth.changedLines).toBe(10);
+});
+
+test("a package that stored a line count gives a light round without --scope", async () => {
+  await writeFile(path.join(fixture.packageDir, "scope-files.json"), JSON.stringify({ version: 1, files: ["src/a.ts"], changedLines: 12 }));
+  logs.length = 0;
+  await reviewCommand(["required", "--package", fixture.packageDir]);
+  expect(logs.join("\n")).toContain("depth: light");
+  const depth = JSON.parse(await Bun.file(path.join(fixture.packageDir, "round-depth.json")).text());
+  expect(depth).toMatchObject({ depth: "light", changedLines: 12, files: ["src/a.ts"] });
+});
+
+test("a package with a file list but no line count stays full and says so", async () => {
+  await writeFile(path.join(fixture.packageDir, "scope-files.json"), JSON.stringify({ version: 1, files: ["src/a.ts"] }));
+  logs.length = 0;
+  await reviewCommand(["required", "--package", fixture.packageDir]);
+  const output = logs.join("\n");
+  expect(output).toContain("depth: full");
+  expect(output).toContain("no line count (");
+  expect(output).toContain("--scope");
+  expect(output).toContain("--diff-lines");
+});
+
+test("--depth light on a big package is not honoured", async () => {
+  const files = Array.from({ length: 60 }, (_, i) => `src/f${i}.ts`);
+  await writeFile(path.join(fixture.packageDir, "scope-files.json"), JSON.stringify({ version: 1, files, changedLines: 10 }));
+  logs.length = 0;
+  await reviewCommand(["required", "--depth", "light", "--package", fixture.packageDir]);
+  expect(logs.join("\n")).toContain("depth: full (--depth light not honoured: 60 files exceeds 5)");
+});
+
+test("--package outside the project root is refused", async () => {
+  await reviewCommand(["required", "--package", "/tmp/not-in-the-project"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("keryx review required --package");
 });

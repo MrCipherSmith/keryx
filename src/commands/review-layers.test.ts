@@ -323,6 +323,21 @@ describe("review start --graph-timeout", () => {
     expect(errors.join("\n")).toContain("layers: not refreshed");
   });
 
+  test("a child that fails but left layers.json prints the layers summary, not only 'not refreshed'", async () => {
+    await reviewCommand(["layers", "refresh", "--package", fixture.packageDir]);
+    errors.length = 0;
+    const fake = fakeSpawner(10, 1);
+    await refreshCreatedPackageLayers(fixture.packageDir, fixture.second, fixture.root, { timeoutSeconds: 5, spawner: fake.spawner });
+    expect(errors.join("\n")).toContain("layers: graph@");
+    expect(errors.join("\n")).toContain("refresh exited 1");
+  });
+
+  test("--graph-timeout above 3600 seconds is refused with a clear error", async () => {
+    await reviewCommand(["start", "--target", "branch", "--ref", "main", "--graph-timeout", "3601"]);
+    expect(errors.join("\n")).toContain("above the 3600 s");
+    expect(process.exitCode).toBe(1);
+  });
+
   test("0 means no bound: the refresh is awaited in process", async () => {
     const fake = fakeSpawner();
     await refreshCreatedPackageLayers(fixture.packageDir, fixture.second, fixture.root, { timeoutSeconds: 0, spawner: fake.spawner });

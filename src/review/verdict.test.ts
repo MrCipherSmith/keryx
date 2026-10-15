@@ -105,3 +105,56 @@ describe("empty and partial packages", () => {
     expect(markdown).toContain("F-1 [major]");
   });
 });
+
+describe("raw directory, verifier results and dispositions", () => {
+  test("--raw reads reviewer results from another directory", async () => {
+    const dir = await pkg();
+    const shellRaw = path.join(dir, "elsewhere");
+    await mkdir(shellRaw, { recursive: true });
+    await writeFile(path.join(shellRaw, "review-logic.txt"), reply("review-logic", [finding("F-1", "blocker", "bad")]));
+    expect((await computeVerdict(dir)).source).toBe("none");
+    const verdict = await computeVerdict(dir, { rawDir: shellRaw });
+    expect(verdict.source).toBe("raw reviewer results");
+    expect(verdict.counts.blocker).toBe(1);
+    const { markdown } = await writeVerdict(dir, "r1", { rawDir: shellRaw });
+    expect(markdown).toContain(`raw results read from: ${shellRaw}`);
+  });
+
+  test("verifier results in research-evidence/verifications.json exclude refuted findings", async () => {
+    const dir = await pkg();
+    await mkdir(path.join(dir, "research-evidence"), { recursive: true });
+    await writeFile(path.join(dir, "raw", "review-logic.txt"), reply("review-logic", [finding("F-1", "blocker", "noise"), finding("F-2", "major", "real")]));
+    await writeFile(
+      path.join(dir, "research-evidence", "verifications.json"),
+      JSON.stringify({
+        verifier: "review-verifier",
+        verifications: [
+          { finding: "F-1", verdict: "refuted", method: "execution", evidence: "ran the test; it passes" },
+          { finding: "F-2", verdict: "confirmed", method: "execution", evidence: "ran the test; it fails" },
+        ],
+      }),
+    );
+    const verdict = await computeVerdict(dir);
+    expect(verdict.refuted).toBe(1);
+    expect(verdict.verifierClaims).toBe(2);
+    expect(verdict.counts).toEqual({ blocker: 0, major: 1, minor: 0, info: 0 });
+    expect(verdict.verified).toBe(1);
+    expect(verdict.open.map((f) => f.id)).toEqual(["F-2"]);
+  });
+
+  test("a finding whose disposition is acted-on is not an open blocker or major", async () => {
+    const dir = await pkg();
+    await writeFile(
+      path.join(dir, "findings.json"),
+      JSON.stringify([
+        finding("F-1", "blocker", "fixed already", { reviewer: "review-logic", disposition: { state: "acted-on", evidence: "commit abc" } }),
+        finding("F-2", "major", "still open", { reviewer: "review-logic" }),
+      ]),
+    );
+    const verdict = await computeVerdict(dir);
+    expect(verdict.resolved).toBe(1);
+    expect(verdict.counts).toEqual({ blocker: 0, major: 1, minor: 0, info: 0 });
+    expect(verdict.open.map((f) => f.id)).toEqual(["F-2"]);
+    expect(verdict.headline).toContain("major");
+  });
+});

@@ -96,8 +96,11 @@ test("required and estimate list every flag their parsers accept, in both helps"
   }
   const own = helpFor(["estimate"]);
   expect(own).toContain("--package");
+  expect(own).toContain("--manifest");
   expect(own).toContain("--json");
   expect(GROUP()).toContain("keryx review estimate --package");
+  expect(GROUP()).toContain("--manifest <slices/manifest.json>");
+  for (const help of [GROUP(), helpFor(["verdict"])]) expect(help).toContain("--raw <dir>");
 });
 
 const SUBCOMMAND_FLAGS: Record<string, readonly string[]> = {
