@@ -247,6 +247,22 @@ describe("AC1 — tool-call round-trip SYNTHETIC fixture normalizes correctly, k
   });
 });
 
+describe("temporary OpenAI overload 403", () => {
+  const message = "Our servers are currently overloaded. Please try again later.";
+  for (const body of [JSON.stringify({ error: { message } }), JSON.stringify({ message }), JSON.stringify({ detail: message }), message, "Forbidden", JSON.stringify({ message: `Access denied: ${message}` })]) {
+    test(`classifies 403 body: ${body}`, async () => {
+      const { fetch: fetchMock } = makeFetchMock(() => new Response(body, { status: 403 }));
+      const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+      const events = await collectEvents(provider.stream(buildRequest("overload"), { attemptId: "overload" }));
+      const temporary = body === message || [JSON.stringify({ error: { message } }), JSON.stringify({ message }), JSON.stringify({ detail: message })].includes(body);
+      expect(events).toHaveLength(1);
+      expect(events[0]?.error).toMatchObject({ kind: temporary ? "overloaded" : "invalid_request", retryable: temporary });
+      if (temporary) expect(events[0]?.error).toMatchObject({ message, detail: { transientOverload403: true } });
+      else expect(events[0]?.error?.detail).toBeUndefined();
+    });
+  }
+});
+
 describe("AC1 — the documented empty-message context-overflow bug never surfaces an empty string", () => {
   test("terminal error event with empty message + context_length_exceeded code -> classified, non-empty message", async () => {
     const { fetch: fetchMock } = makeFixtureFetchMock(ERROR_FIXTURE_PATH);

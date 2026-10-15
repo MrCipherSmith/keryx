@@ -262,6 +262,62 @@ test("failed and successful attempt usage both reach host accounting", async () 
 });
 
 
+const overload403: Script = [{ kind: "provider_error", error: { kind: "overloaded", retryable: true, message: "Our servers are currently overloaded. Please try again later.", detail: { transientOverload403: true } } }];
+for (const failures of [1, 3, 4]) {
+  test(`overload 403 allows only three retries: ${failures} failures`, async () => {
+    const f = fixture([...Array.from({ length: failures }, () => overload403), ok]);
+    const result = await f.run();
+    expect(f.requests).toHaveLength(Math.min(failures + 1, 4));
+    expect(f.delays).toEqual([750, 1500, 3000].slice(0, Math.min(failures, 3)));
+    if (failures === 4) {
+      expect(result.finishReason).toBe("interrupted");
+      expect(f.system.join("")).toContain("retry limit");
+      expect(f.history).toHaveLength(1);
+    } else expect(f.history.at(-1)?.content).toBe("Recovered answer.");
+  });
+}
+test("overload 403 limit survives intervening generic outages", async () => {
+  const f = fixture([temporary(), overload403, temporary(), overload403, overload403, overload403, ok]);
+  expect((await f.run()).finishReason).toBe("interrupted");
+  expect(f.requests).toHaveLength(6);
+});
+test("overload 403 does not enable noninteractive recovery", async () => {
+  const f = fixture([overload403, ok]); await f.run({ recovery: undefined }); expect(f.requests).toHaveLength(1);
+});
+
+for (const failures of [1, 4]) {
+  test(`real OpenAI adapter: overload 403 is bounded with ${failures} failures`, async () => {
+    const { OpenAiProvider } = await import("../harness/provider/openai/openai-provider");
+    const f = fixture([]);
+    let fetches = 0;
+    f.deps.providerId = "openai";
+    f.deps.provider = new OpenAiProvider({
+      grant: { network: true, apiKey: "fixture-key" },
+      fetch: Object.assign(async () => {
+        fetches += 1;
+        if (fetches <= failures) return new Response(JSON.stringify({ error: {
+          message: "Our servers are currently overloaded. Please try again later.",
+        } }), { status: 403 });
+        return new Response([
+          'data: {"type":"response.created","response":{"id":"r1"}}\n\n',
+          'data: {"type":"response.output_text.delta","delta":"Recovered native."}\n\n',
+          'data: {"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":2}}}\n\n',
+        ].join(""), { headers: { "content-type": "text/event-stream" } });
+      }, { preconnect: () => {} }),
+    });
+    const result = await f.run();
+    expect(fetches).toBe(Math.min(failures + 1, 4));
+    expect(f.delays).toEqual([750, 1500, 3000].slice(0, Math.min(failures, 3)));
+    if (failures === 4) {
+      expect(result.finishReason).toBe("interrupted");
+      expect(f.system.join("")).toContain("retry limit");
+      expect(f.history).toHaveLength(1);
+    } else {
+      expect(f.history.at(-1)?.content).toBe("Recovered native.");
+    }
+  });
+}
+
 test("real OpenAI adapter: HTTP 503 Retry-After date, truncated SSE, then success in one turn", async () => {
   const { OpenAiProvider } = await import("../harness/provider/openai/openai-provider");
   let fetches = 0;
