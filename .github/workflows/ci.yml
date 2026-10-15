@@ -108,7 +108,24 @@ jobs:
       # it ran. `bun run check` (everything, one command) is unchanged and is
       # still what `release.yml` runs before publishing.
       - name: Typecheck and core gate (offline, model-free)
-        run: bun run check:core
+        run: |
+          # Preserve the gate status; expose bounded diagnostics via checks API.
+          set +e
+          bun run check:core > "$RUNNER_TEMP/core-gate.log" 2>&1
+          code=$?
+          set -e
+          python3 - "$RUNNER_TEMP/core-gate.log" "$code" <<'PYCODE'
+          import pathlib, re, sys
+          text = pathlib.Path(sys.argv[1]).read_text(errors="replace")
+          print(text)
+          if sys.argv[2] != "0":
+              text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)[-12000:]
+              for offset in range(0, len(text), 3000):
+                  message = text[offset:offset + 3000]
+                  message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                  print(f"::error title=Core gate diagnostic::{message}")
+          PYCODE
+          exit "$code"
 
       # `wiki check-links` covers the wiki; nothing covered `docs/` or the root
       # Markdown until now — which is how a documentation pass could green-light
