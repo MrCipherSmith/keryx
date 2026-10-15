@@ -18,11 +18,8 @@ metadata:
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
-
 # Flow Orchestrator
-
 ## Preflight
-
 Run in the main session: this skill dispatches workers. Without a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent), or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose

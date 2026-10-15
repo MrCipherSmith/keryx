@@ -379,6 +379,7 @@ test("review round 1, REG-1: core.security and core.impactEvidence member names 
     "applyAuditProposal",
     "applyRedaction",
     "auditGate",
+    "buildHarnessScanner",
     "createSecurityService",
     "defaultBaselinePath",
     "detectEntropy",

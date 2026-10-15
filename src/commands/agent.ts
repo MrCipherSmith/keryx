@@ -45,7 +45,7 @@ export {
   MAX_AGENT_MAX_ROUNDS,
   resolveAgentMaxRounds,
 } from "./round-limit";
-import { redactSensitiveText } from "../security/redact";
+import { redactSensitiveText } from "../security/service";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
 import { runWithCallWatchdog, type CallStage } from "./call-watchdog";
