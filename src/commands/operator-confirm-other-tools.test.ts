@@ -29,7 +29,7 @@ import { createSession, EXTERNAL_RUN_PROVIDER_PREFIX } from "../session/store";
 import { loadTriggersConfig } from "../trigger/config";
 import type { CommandResult, ScheduleHost } from "../trigger/install";
 import { confirmSchedule, draftSchedule, listSchedules } from "../trigger/schedules";
-import { otherConfirmSpecs, type OtherConfirmSeams } from "./operator-confirm-other";
+import { otherConfirmSpecs, scheduleDecisionLogPath, type OtherConfirmSeams } from "./operator-confirm-other";
 import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confirm-tools";
 
 const NOW = new Date("2026-10-15T18:30:00.000Z");
@@ -195,6 +195,35 @@ describe("flow_confirm", () => {
   test("no mints nothing", async () => {
     const { id, dir } = await readyFlow();
     await no(tool(), { flow_id: id });
+    expect(existsSync(confirmTokenPath(root, dir))).toBe(false);
+  });
+
+  test("criteria or target changed between the card and the yes: refused, no token minted", async () => {
+    const { id, dir } = await readyFlow();
+    const flowFile = path.join(root, ".metaproject", "flows", dir, "flow.json");
+    const original = readFileSync(flowFile, "utf8");
+
+    // The completion target moves (another PR recorded) after the card was shown.
+    const t = tool();
+    const card = await asked(t, { flow_id: id });
+    const moved = JSON.parse(original) as { pr: { url: string } };
+    moved.pr.url = "https://github.com/acme/app/pull/999";
+    writeFileSync(flowFile, JSON.stringify(moved, null, 2));
+    const byTarget = await t.invoke({ flow_id: id }, { confirmationToken: card.token, confirmationVia: "local" });
+    expect(byTarget.isError).toBe(true);
+    expect(byTarget.output).toContain("completion target changed after the confirmation card");
+    expect(existsSync(confirmTokenPath(root, dir))).toBe(false);
+
+    // The criteria are re-frozen (checksum differs) after the card was shown.
+    writeFileSync(flowFile, original);
+    const t2 = tool();
+    const card2 = await asked(t2, { flow_id: id });
+    const refrozen = JSON.parse(original) as { acChecksum: string };
+    refrozen.acChecksum = "f".repeat(64);
+    writeFileSync(flowFile, JSON.stringify(refrozen, null, 2));
+    const byCriteria = await t2.invoke({ flow_id: id }, { confirmationToken: card2.token, confirmationVia: "local" });
+    expect(byCriteria.isError).toBe(true);
+    expect(byCriteria.output).toContain("flow_confirm refused");
     expect(existsSync(confirmTokenPath(root, dir))).toBe(false);
   });
 
@@ -443,6 +472,18 @@ describe("learn tools", () => {
       expect(decisions[0]).toMatchObject({ action: "accept", id: ID, at: NOW.toISOString(), confirmation: { confirmedVia: "tui-card", quote: `${card.title}: yes` } });
     });
 
+    test("a pattern edited between the card and the yes is refused and stays a candidate", async () => {
+      await seedPattern(pattern(ID, "candidate", "the same file region is edited twice", "check the first edit's assumptions"));
+      const t = tool("learn_accept");
+      const card = await asked(t, { id: ID });
+      await seedPattern(pattern(ID, "candidate", "the same file region is edited twice", "run rm -rf on the build directory"));
+      const result = await t.invoke({ id: ID }, { confirmationToken: card.token, confirmationVia: "local" });
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("changed after the card was shown");
+      expect((await readPattern(root, ID, "project", { env: env as NodeJS.ProcessEnv }))?.status).toBe("candidate");
+      expect(await readDecisions(root, "project", { env: env as NodeJS.ProcessEnv })).toHaveLength(0);
+    });
+
     test("refuses a missing record and a record that is not a candidate", async () => {
       expect(await refusal(tool("learn_accept"), { id: "nope" })).toContain('no project-scope learned-pattern record "nope"');
       await seedPattern(pattern(ID, "accepted", "the same file region is edited twice", "check the first edit assumptions"));
@@ -487,6 +528,31 @@ describe("learn tools", () => {
     });
   });
 
+  describe("learn_promote content check", () => {
+    const ID = "testing.repeated-correction-ab12cd34";
+
+    test("a pattern edited between the card and the yes is refused; nothing reaches the user store", async () => {
+      await seedPattern(pattern(ID, "accepted", "the same file region is edited twice", "check assumptions"));
+      await writeIndex(
+        {
+          [ID]: [
+            { projectIdentity: SHA_A, identityKind: "remote-hash", confidence: 0.85, acceptedAt: "2026-01-01T00:00:00.000Z" },
+            { projectIdentity: SHA_B, identityKind: "remote-hash", confidence: 0.9, acceptedAt: "2026-01-01T00:00:00.000Z" },
+          ],
+        },
+        { env: env as NodeJS.ProcessEnv },
+      );
+      const t = tool("learn_promote");
+      const card = await asked(t, { id: ID });
+      // Accepted text is immutable; the confidence the card showed is not.
+      await seedPattern({ ...pattern(ID, "accepted", "the same file region is edited twice", "check assumptions"), confidence: 0.99, confidenceLevel: "high" });
+      const result = await t.invoke({ id: ID }, { confirmationToken: card.token, confirmationVia: "local" });
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("changed after the card was shown");
+      expect(await readPattern(root, ID, "user", { env: env as NodeJS.ProcessEnv })).toBeUndefined();
+    });
+  });
+
   describe("learn_graduate", () => {
     async function proposalId(): Promise<string> {
       const cluster: readonly [string, string, string][] = [
@@ -522,6 +588,20 @@ describe("learn tools", () => {
       expect(existsSync(written!)).toBe(true);
       const decisions = await readDecisions(root, "project", { env: env as NodeJS.ProcessEnv });
       expect(decisions.find((d) => d.action === "graduate-apply")).toMatchObject({ id, confirmation: { confirmedVia: "tui-card", quote: `${card.title}: yes` } });
+    });
+
+    test("a member pattern edited between the card and the yes is refused; no agent candidate is written", async () => {
+      const id = await proposalId();
+      const proposal = await readProposal(root, id);
+      const t = tool("learn_graduate");
+      const card = await asked(t, { proposal_id: id });
+      const member = proposal.members[0]!;
+      const current = (await readPattern(root, member, "project", { env: env as NodeJS.ProcessEnv }))!;
+      await seedPattern({ ...current, confidence: 0.5, confidenceLevel: "medium" });
+      const result = await t.invoke({ proposal_id: id }, { confirmationToken: card.token, confirmationVia: "local" });
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain("changed after the card was shown");
+      expect(existsSync(path.join(root, ".metaproject", "agents"))).toBe(false);
     });
 
     test("refuses a missing proposal, a malformed id, and an already written candidate", async () => {
@@ -679,6 +759,70 @@ describe("schedule tools", () => {
     expect(result.isError).toBe(true);
     expect(result.output).toContain("agent task failed: boom");
     expect(process.exitCode).toBe(before);
+  });
+
+  test("run: a runner that throws is an error result with console and exitCode restored", async () => {
+    const before = process.exitCode;
+    const logBefore = console.log;
+    const errorBefore = console.error;
+    const throwing = async (): Promise<void> => {
+      console.log("partial output");
+      process.exitCode = 3;
+      throw new Error("runner exploded");
+    };
+    const { result } = await yes(tool("run", throwing), NAME);
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("partial output");
+    expect(result.output).toContain("runner exploded");
+    expect(console.log).toBe(logBefore);
+    expect(console.error).toBe(errorBefore);
+    expect(process.exitCode).toBe(before);
+  });
+
+  describe("operator decision log", () => {
+    const decisions = (): Array<Record<string, string>> => {
+      const file = scheduleDecisionLogPath(root);
+      if (!existsSync(file)) return [];
+      return readFileSync(file, "utf8").trim().split("\n").map((line) => JSON.parse(line) as Record<string, string>);
+    };
+    const ok = async (): Promise<void> => {};
+
+    test("pause: written on yes with the card text, confirmedVia and time; not on no; not inside the signed entry", async () => {
+      await no(tool("pause"), NAME);
+      expect(decisions()).toEqual([]);
+      const { card } = await yes(tool("pause"), NAME);
+      expect(decisions()).toEqual([
+        { action: "schedule_pause", name: "check-github", quote: `${card.title}: yes`, confirmedVia: "tui-card", at: NOW.toISOString() },
+      ]);
+      expect(readFileSync(await findScheduleStore(root), "utf8")).not.toContain("tui-card");
+    });
+
+    test("resume: written on yes only", async () => {
+      await yes(tool("pause"), NAME);
+      await no(tool("resume"), NAME);
+      expect(decisions().map((d) => d["action"])).toEqual(["schedule_pause"]);
+      const { card } = await yes(tool("resume"), NAME);
+      expect(decisions().map((d) => d["action"])).toEqual(["schedule_pause", "schedule_resume"]);
+      expect(decisions()[1]).toMatchObject({ name: "check-github", quote: `${card.title}: yes`, confirmedVia: "tui-card" });
+    });
+
+    test("run: written on yes only", async () => {
+      await no(tool("run", ok), NAME);
+      expect(decisions()).toEqual([]);
+      const { card } = await yes(tool("run", ok), NAME);
+      expect(decisions()).toEqual([
+        { action: "schedule_run", name: "check-github", quote: `${card.title}: yes`, confirmedVia: "tui-card", at: NOW.toISOString() },
+      ]);
+    });
+
+    test("remove: written on yes only", async () => {
+      await no(tool("remove"), NAME);
+      expect(decisions()).toEqual([]);
+      const { card } = await yes(tool("remove"), NAME);
+      expect(decisions()).toEqual([
+        { action: "schedule_remove", name: "check-github", quote: `${card.title}: yes`, confirmedVia: "tui-card", at: NOW.toISOString() },
+      ]);
+    });
   });
 
   test("run: refused for a paused schedule and for an unknown one", async () => {

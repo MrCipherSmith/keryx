@@ -1634,7 +1634,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async confirmMint({ cwd, id, merged, confirmation }): Promise<FlowConfirmMintResult> {
+    async confirmMint({ cwd, id, merged, confirmation, expect }): Promise<FlowConfirmMintResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
         let flow = await readFlow(cwd, dir);
@@ -1643,6 +1643,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           throw new Error(refusal ?? `flow confirm: flow ${flow.id}'s acceptance criteria are not frozen.`);
         }
         await assertAcIntact(cwd, dir, flow);
+        if (expect !== undefined) {
+          const nowTarget = completionTarget({ merged: merged === true, prUrl: flow.pr.url });
+          if (flow.acChecksum !== expect.acChecksum || nowTarget !== expect.target) {
+            throw new Error(
+              `flow confirm: flow ${flow.id}'s ${flow.acChecksum !== expect.acChecksum ? "acceptance criteria" : "completion target"} ` +
+                "changed after the confirmation card was shown; no token was minted. Ask for a new card.",
+            );
+          }
+        }
         const criteria = await readAcCriteria(cwd, dir);
         const { token, stored } = await mintConfirmationToken(
           cwd,

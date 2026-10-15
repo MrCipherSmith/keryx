@@ -21,6 +21,11 @@
 // stored entry inside `resumeStoredSchedule`, exactly as the CLI does, and creation stays in
 // ./schedule-tools.ts.
 
+import { createHash } from "node:crypto";
+import { appendFile, mkdir } from "node:fs/promises";
+import path from "node:path";
+import { completionTarget } from "../flow/confirm-token";
+import { triggerDataDir } from "../trigger/record";
 import { listPendingWriteRuns, landWriteRun, viewWriteRun, writeRunLandBlock, type WriteLandDeps } from "../harness/external/write-land";
 import type { FlowService } from "../flow/types";
 import { confirmPreconditionError } from "../flow/service";
@@ -87,6 +92,15 @@ function learnErrorText(error: unknown): string {
   return `${errorText(error)}${reason}`;
 }
 
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+/** Stable digest of a value as it was SHOWN on a card, so `apply` can refuse content that changed after the yes was asked for. */
+function contentDigest(value: unknown): string {
+  return sha256(JSON.stringify(value ?? null));
+}
+
 function limited(lines: readonly string[]): string[] {
   if (lines.length <= MAX_LISTED) return [...lines];
   return [...lines.slice(0, MAX_LISTED), `  ... and ${lines.length - MAX_LISTED} more`];
@@ -112,18 +126,20 @@ async function captureConsole(fn: () => Promise<void>): Promise<{ output: string
   console.info = grab();
   process.exitCode = 0;
   let thrown: unknown;
+  let exitCode: typeof process.exitCode;
   try {
     await fn();
   } catch (error) {
     thrown = error;
   } finally {
+    exitCode = process.exitCode;
     console.log = saved.log;
     console.error = saved.error;
     console.warn = saved.warn;
     console.info = saved.info;
+    process.exitCode = before;
   }
-  const failed = (process.exitCode ?? 0) !== 0 || thrown !== undefined;
-  process.exitCode = before;
+  const failed = (exitCode ?? 0) !== 0 || thrown !== undefined;
   return { output: lines.join("\n"), failed, ...(thrown !== undefined ? { error: thrown } : {}) };
 }
 
@@ -134,6 +150,9 @@ async function captureConsole(fn: () => Promise<void>): Promise<{ output: string
 interface FlowConfirmPrepared {
   readonly flowId: string;
   readonly merged: boolean;
+  /** The criteria checksum and completion target printed on the card; `confirmMint` refuses if either moved. */
+  readonly acChecksum: string;
+  readonly target: string;
 }
 
 async function defaultFlowService(): Promise<FlowService> {
@@ -184,17 +203,29 @@ function flowConfirmSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<FlowConf
           "it proves a yes was pressed in this shell, not who pressed it",
         ],
         subject: `flow ${flow.id} @ criteria ${flow.acChecksum ?? "none"}`,
-        prepared: { flowId: flow.id, merged },
+        prepared: {
+          flowId: flow.id,
+          merged,
+          acChecksum: flow.acChecksum as string,
+          target: completionTarget({ merged, prUrl: flow.pr.url }),
+        },
       };
     },
     apply: async (_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> => {
       if (prepared === undefined) return { output: "flow_confirm: nothing prepared - no token was minted", isError: true };
-      const result = await (await service()).confirmMint({
-        cwd: ctx.projectRoot,
-        id: prepared.flowId,
-        merged: prepared.merged,
-        confirmation: record(confirmation),
-      });
+      let result;
+      try {
+        result = await (await service()).confirmMint({
+          cwd: ctx.projectRoot,
+          id: prepared.flowId,
+          merged: prepared.merged,
+          confirmation: record(confirmation),
+          // Checked inside confirmMint's flow lock: a yes to one card never mints for changed criteria or target.
+          expect: { acChecksum: prepared.acChecksum, target: prepared.target },
+        });
+      } catch (error) {
+        return { output: `flow_confirm refused: ${errorText(error)}`, isError: true };
+      }
       return {
         output: [
           `token: ${result.token}`,
@@ -332,6 +363,8 @@ interface AcceptPrepared {
   readonly id: string;
   readonly scope: LearningScope;
   readonly refresh: boolean;
+  /** Digest of the record as the card showed it. */
+  readonly digest: string;
 }
 
 function learnAcceptSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<AcceptPrepared> {
@@ -367,7 +400,7 @@ function learnAcceptSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<AcceptPr
           title: `Refresh the cross-project index entry for learned pattern ${cardSafe(id)}?`,
           lines: [...patternLines(pattern), "effect: overwrites this project's entry in ~/.keryx/learning/index.json with the live confidence; status unchanged"],
           subject: `learned pattern ${id} (project, refresh)`,
-          prepared: { id, scope: "project", refresh: true },
+          prepared: { id, scope: "project", refresh: true, digest: contentDigest(pattern) },
         };
       }
       if (pattern.status !== "candidate") {
@@ -381,11 +414,15 @@ function learnAcceptSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<AcceptPr
           "the text is security-scanned again before anything is written",
         ],
         subject: `learned pattern ${id} (${scope})`,
-        prepared: { id, scope, refresh: false },
+        prepared: { id, scope, refresh: false, digest: contentDigest(pattern) },
       };
     },
     apply: async (_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> => {
       if (prepared === undefined) return { output: "learn_accept: nothing prepared - nothing was accepted", isError: true };
+      const now = await readPattern(ctx.projectRoot, prepared.id, prepared.scope, storeOptions(ctx, seams));
+      if (now === undefined || contentDigest(now) !== prepared.digest) {
+        return { output: "learn_accept refused: the pattern changed after the card was shown; nothing was accepted. Ask for a new card.", isError: true };
+      }
       try {
         const result = await acceptPattern(ctx.projectRoot, prepared.id, {
           scope: prepared.scope,
@@ -408,6 +445,7 @@ function learnAcceptSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<AcceptPr
 
 interface PromotePrepared {
   readonly id: string;
+  readonly digest: string;
 }
 
 function learnPromoteSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<PromotePrepared> {
@@ -445,11 +483,15 @@ function learnPromoteSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<Promote
           "effect: copies it to ~/.keryx/learning as a user-scope candidate (30-day TTL); other projects can then see it",
         ],
         subject: `learned pattern ${id} (project -> user)`,
-        prepared: { id },
+        prepared: { id, digest: contentDigest(pattern) },
       };
     },
     apply: async (_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> => {
       if (prepared === undefined) return { output: "learn_promote: nothing prepared - nothing was promoted", isError: true };
+      const now = await readPattern(ctx.projectRoot, prepared.id, "project", storeOptions(ctx, seams));
+      if (now === undefined || contentDigest(now) !== prepared.digest) {
+        return { output: "learn_promote refused: the pattern changed after the card was shown; nothing was promoted. Ask for a new card.", isError: true };
+      }
       try {
         const result = await promotePattern(ctx.projectRoot, prepared.id, {
           isTerminal: true,
@@ -468,6 +510,14 @@ function learnPromoteSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<Promote
 
 interface GraduatePrepared {
   readonly proposalId: string;
+  /** Digest of the proposal file and its member patterns as the card showed them. */
+  readonly digest: string;
+}
+
+/** The proposal as shown plus the member patterns it would be built from (the written agent is recomputed from them). */
+async function graduationDigest(ctx: OperatorConfirmContext, seams: OtherConfirmSeams, proposal: GraduationProposalFile): Promise<string> {
+  const members = await Promise.all(proposal.members.map((id) => readPattern(ctx.projectRoot, id, "project", storeOptions(ctx, seams))));
+  return contentDigest({ proposal, members });
 }
 
 function learnGraduateSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<GraduatePrepared> {
@@ -512,11 +562,19 @@ function learnGraduateSpec(seams: OtherConfirmSeams): OperatorConfirmSpec<Gradua
             "the name is recomputed from the member patterns now); read-only tools only",
         ],
         subject: `graduation proposal ${proposalId}`,
-        prepared: { proposalId },
+        prepared: { proposalId, digest: await graduationDigest(ctx, seams, proposal) },
       };
     },
     apply: async (_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> => {
       if (prepared === undefined) return { output: "learn_graduate: nothing prepared - nothing was written", isError: true };
+      try {
+        const proposal = await readProposal(ctx.projectRoot, prepared.proposalId);
+        if ((await graduationDigest(ctx, seams, proposal)) !== prepared.digest) {
+          return { output: "learn_graduate refused: the proposal or its member patterns changed after the card was shown; nothing was written. Ask for a new card.", isError: true };
+        }
+      } catch (error) {
+        return { output: `learn_graduate refused: ${learnErrorText(error)}`, isError: true };
+      }
       try {
         const result = await applyGraduation(ctx.projectRoot, prepared.proposalId, {
           isTerminal: true,
@@ -551,6 +609,20 @@ const SCHEDULE_DESCRIPTIONS: Readonly<Record<ScheduleVerb, string>> = {
   pause: "Pause a schedule: disable its timer and mark it disabled (`keryx schedule pause <name>`). ",
   remove: "Remove a schedule: uninstall its timer (only keryx-written files) and delete its entry (`keryx schedule remove <name>`). ",
 };
+
+/** Per-machine operator decisions on schedules. Under the trigger data dir the unattended floor protects; never inside the signed entry. */
+export function scheduleDecisionLogPath(projectRoot: string): string {
+  return path.join(triggerDataDir(projectRoot), "operator-decisions.jsonl");
+}
+
+async function recordScheduleDecision(
+  projectRoot: string,
+  line: { action: string; name: string; quote: string; confirmedVia: string; at: string },
+): Promise<void> {
+  const file = scheduleDecisionLogPath(projectRoot);
+  await mkdir(path.dirname(file), { recursive: true });
+  await appendFile(file, `${JSON.stringify(line)}\n`, "utf8");
+}
 
 function scheduleLines(row: ScheduleSummary): string[] {
   const a = row.entry.action;
@@ -612,9 +684,11 @@ function scheduleSpec(verb: ScheduleVerb, seams: OtherConfirmSeams): OperatorCon
         prepared: { name },
       };
     },
-    apply: async (_input, ctx, _confirmation, prepared): Promise<OperatorApplyResult> => {
+    apply: async (_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> => {
       if (prepared === undefined) return { output: `schedule_${verb}: nothing prepared - nothing was changed`, isError: true };
       const { name } = prepared;
+      // The decision is recorded before the effect, so a verb that fails half way still leaves the yes on file.
+      await recordScheduleDecision(ctx.projectRoot, { action: `schedule_${verb}`, name, ...record(confirmation), at: ctx.now().toISOString() });
       switch (verb) {
         case "pause":
           await pauseStoredSchedule(ctx.projectRoot, name, host);

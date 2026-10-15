@@ -218,8 +218,11 @@ export async function consumeConfirmationToken(
     confirmTokenPath(cwd, dir),
     `${JSON.stringify({ ...stored, usedAt: consumedAt }, null, 2)}\n`,
   );
+  // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token".
+  const mechanism: SignatureConfirmation["mechanism"] =
+    stored.confirmedVia === "tui-card" ? "tui-card-token" : stored.confirmedVia === "remote-card" ? "remote-card-token" : "terminal-token";
   return {
-    mechanism: "terminal-token",
+    mechanism,
     tokenRef: stored.tokenRef,
     mintedAt: stored.mintedAt,
     consumedAt,
@@ -229,7 +232,9 @@ export async function consumeConfirmationToken(
 
 /** One operator-facing sentence per refusal. Never echoes the token. */
 export function describeConfirmationFailure(reason: ConfirmationTokenFailure, flowId: string): string {
-  const mint = `mint one from a terminal: \`keryx flow confirm ${flowId}\``;
+  const mint =
+    "mint one with the `flow_confirm` tool inside keryx shell (the operator presses yes on a card), " +
+    `or from a terminal outside it: \`keryx flow confirm ${flowId}\``;
   switch (reason) {
     case "token_required":
       return `this flow requires a confirmation token, passed as --confirm-token; ${mint}`;

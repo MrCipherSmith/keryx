@@ -173,7 +173,7 @@ export type FlowGates = {
  * this AC checksum. It does not say who ran that step (see TM-03).
  */
 export type SignatureConfirmation = {
-  mechanism: "terminal-token";
+  mechanism: "terminal-token" | "tui-card-token" | "remote-card-token";
   /** A prefix of the stored hash, for correlation. Never the token. */
   tokenRef: string;
   mintedAt: string;
@@ -778,6 +778,11 @@ export interface FlowService {
     merged?: boolean | undefined;
     /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
     confirmation?: { confirmedVia: string; quote: string } | undefined;
+    /**
+     * Flow 456: the criteria checksum and completion target the operator was SHOWN on the card. Checked
+     * under the flow lock; if either changed since, nothing is minted.
+     */
+    expect?: { acChecksum: string; target: string } | undefined;
   }): Promise<FlowConfirmMintResult>;
   /**
    * Move a flow stuck in `completing` back to `in-progress` (flow 299, AC6),
