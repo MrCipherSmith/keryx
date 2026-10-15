@@ -87,7 +87,7 @@ export async function runEvidenceEvaluation(raw: string, adapters: Partial<Recor
           const labels: EvaluationSpan[] = query.relevant.map(label => ({ ...label, version: Number(label.version) }));
           row.score = scoreEvidenceRanking(labels, result.ranking);
           row.status = "ok"; row.elapsedMs = elapsed;
-        } catch { row.status = "invalid-observation" | "timed-out" | "cancelled"; }
+        } catch { row.status = "invalid-observation"; }
       }
     }
   }

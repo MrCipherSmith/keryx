@@ -50,6 +50,9 @@ test("exceptions and ineligible ranking do not leak text or become zero", async 
   });
   expect(report.observations.some(row => row.status === "failed")).toBe(true);
   expect(report.observations.some(row => row.status === "invalid-observation")).toBe(true);
+  const rejected = report.observations.filter(row => row.arm === "C" && row.status !== "unsupported");
+  expect(rejected.length).toBeGreaterThan(0);
+  expect(rejected.every(row => row.status === "invalid-observation" && row.score.recallAt10 === null)).toBe(true);
   expect(JSON.stringify(report)).not.toContain("PRIVATE_SECRET");
   expect(report.observations.filter(row => row.status !== "ok").every(row => row.elapsedMs === null)).toBe(true);
 });
