@@ -84,6 +84,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx ctx` | Run compact context commands and save raw output. |
 | `keryx wiki` | Manage the local project knowledge base. |
 | `keryx memory` | Store and search long-term project memory. |
+| `keryx evidence` | Search untrusted source evidence and manage its derived index. |
 | `keryx orient` | Emit a bounded graph + wiki startup block, or install it as a turn-start hook. |
 | `keryx skills` | Manage bundled Metaproject working skills. |
 | `keryx stack` | Deterministic, offline stack detection — keryx stack detect. |
