@@ -82,7 +82,8 @@ test("overflow: compacts once, retries the same round, and the retry succeeds", 
   const compactions: number[] = [];
   const history = longHistory();
 
-  await runAgentTurn(io, deps(provider, { onContextCompaction: (r) => compactions.push(r.removed) }), history, "next");
+  const result = await runAgentTurn(io, deps(provider, { onContextCompaction: (r) => compactions.push(r.removed) }), history, "next");
+  expect(result.error).toBeUndefined();
 
   expect(requests).toHaveLength(2);
   expect(compactions).toHaveLength(1);
@@ -109,7 +110,9 @@ test("overflow: a second overflow on the retry ends the turn with a visible erro
   const { io, system } = collectingIo();
   const compactions: number[] = [];
 
-  await runAgentTurn(io, deps(provider, { onContextCompaction: (r) => compactions.push(r.removed) }), longHistory(), "next");
+  const result = await runAgentTurn(io, deps(provider, { onContextCompaction: (r) => compactions.push(r.removed) }), longHistory(), "next");
+  expect(result.error?.kind).toBe("provider_error");
+  expect(result.error?.message).toContain("still too long");
 
   expect(requests).toHaveLength(2); // original + exactly one retry
   expect(compactions).toHaveLength(1);

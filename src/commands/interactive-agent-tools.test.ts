@@ -156,6 +156,7 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
   expect(names).toEqual([
     "apply_patch",
     "ask_user",
+    "evidence_search",
     "flow_status",
     "get_cwd",
     "graph_affected",
@@ -547,4 +548,19 @@ describe("denyInteractiveTools", () => {
     expect(() => assertDeniableTools([tool("a")], ["a"])).not.toThrow();
     expect(() => assertDeniableTools([tool("a")], ["z"])).toThrow(/z/);
   });
+});
+
+
+test("ERL tool is shell-scoped, read-only, disabled by default and deniable", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-evidence-roster-"));
+  const tools = buildInteractiveAgentTools({ cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: createDefaultSearchProviderController(), spawnTool: stubSpawn });
+  const tool = tools.find(tool => tool.definition.name === "evidence_search");
+  expect(tool).toBeDefined();
+  expect(tool?.definition.risk).toBe("read");
+  const result = await tool?.invoke({ query: "evidence" });
+  expect(result?.untrusted).toBe(true);
+  expect(JSON.parse(result?.output ?? "{}").code).toBe("disabled");
+  expect(await rosterIn(cwd, ["evidence_search"])).not.toContain("evidence_search");
 });

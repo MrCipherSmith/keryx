@@ -100,3 +100,32 @@ test("AC4: the /compact suggestion is NOT appended for a different error kind", 
   expect(errorLine).toBeDefined();
   expect(errorLine?.toLowerCase()).not.toContain("/compact");
 });
+
+
+test("terminal provider failure is returned, not only emitted to onSystem", async () => {
+  const { provider } = scriptedProvider([[{ kind: "provider_error", error: {
+    kind: "rate_limit", retryable: true, message: "slow down",
+  } }]]);
+  const result = await runAgentTurn(collectingIo().io, baseDeps(provider), [], "hi");
+  expect(result.error?.kind).toBe("provider_error");
+  expect(result.error?.message).toContain("slow down");
+});
+
+test("a throwing provider stream returns a redacted, bounded diagnostic", async () => {
+  const { provider } = scriptedProvider([]);
+  const secret = ["synthetic", "regression", "password"].join("-");
+  provider.stream = () => {
+    throw new Error("transport failed " + "PASSWORD=" + secret + " " + "x".repeat(5000));
+  };
+  const result = await runAgentTurn(collectingIo().io, baseDeps(provider), [], "hi");
+  expect(result.error?.kind).toBe("stream_error");
+  expect(result.error?.message).toContain("transport failed");
+  expect(result.error?.message).not.toContain(secret);
+  expect(result.error?.message.length).toBeLessThanOrEqual(4000);
+});
+
+test("a clean model finish has no terminal error", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
+  const result = await runAgentTurn(collectingIo().io, baseDeps(provider), [], "hi");
+  expect(result.error).toBeUndefined();
+});

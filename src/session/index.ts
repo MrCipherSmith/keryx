@@ -1,6 +1,13 @@
 // Public surface for per-project interactive sessions.
 
 export {
+  createSessionEvidenceOwner,
+  type SessionEvidenceScope,
+  type SessionEvidenceOwnerOptions,
+  type SessionEvidenceRevocationResult,
+} from "./evidence-revocation";
+
+export {
   keryxDataDir,
   projectKeyFromPath,
   projectSessionsDir,

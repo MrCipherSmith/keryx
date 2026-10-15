@@ -7100,3 +7100,23 @@ the agent's reader. Kill stops the supervised process group without a model
 turn. These commands operate only on tasks tracked by this session.
 In the TUI, unknown slash commands display a collapsible available-command
 list with an eight-line preview (Ctrl+O, then Enter to expand).
+
+## evidence
+
+Search derived evidence from explicitly configured sources. Excerpts are untrusted
+reference data, not accepted memory, wiki or Shared Agent Context knowledge.
+Evidence retrieval and automatic recall are disabled by default.
+
+```bash
+keryx evidence index [--full]
+keryx evidence search "query" [--json]
+keryx evidence status [--json]
+keryx evidence clear
+keryx evidence maintenance
+```
+
+`index` builds configured file roots; `--full` bypasses incremental reuse.
+`search` performs bounded explicit retrieval; `status` returns metadata only.
+`clear` removes derived artifacts, preserving sources and the revocation ledger.
+`maintenance` purges expired derived data and superseded generations.
+Indexing, clearing and maintenance are mutations requiring approval in agent workflows.

@@ -313,6 +313,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   { kind: "cli", name: "ctx", group: "Project knowledge", summary: "Run compact context commands and save raw output." },
   { kind: "cli", name: "wiki", group: "Project knowledge", summary: "Manage the local project knowledge base." },
   { kind: "cli", name: "memory", group: "Project knowledge", summary: "Store and search long-term project memory." },
+  { kind: "cli", name: "evidence", group: "Project knowledge", summary: "Search untrusted source evidence and manage its derived index." },
   {
     kind: "cli",
     name: "orient",

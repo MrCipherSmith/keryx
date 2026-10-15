@@ -182,3 +182,25 @@ test("untrusted-origin shell approval cannot be answered by a saved grant", () =
   expect(ev.untrustedOrigin).toBe(true);
   expect(formatShellApprovalHints(ev).join(" ")).toContain("untrusted external content");
 });
+
+test("ERL mutations cannot inherit remembered grants", async () => {
+  const { suggestShellPatterns, validateShellPattern } = await import("../lib/shell-permissions");
+  for (const command of ["keryx evidence index", "keryx evidence index --full", "keryx evidence clear", "keryx evidence maintenance"]) {
+    const ev = evaluateShellApproval({ inputJson: JSON.stringify({ command }),
+      sessionAllow: new Set(["keryx evidence *"]), fingerprintAtStart: "start",
+      io: { loadAudit: () => ({ permissions: { allow: [command] }, rejected: [] as const }), fingerprint: () => "start" } });
+    expect(ev.autoApprove).toBe(false);
+    expect(ev.sacReviewConfirmation).toBe(true);
+    expect(suggestShellPatterns(command).offerExact).toBe(false);
+    expect(suggestShellPatterns(command).offerPrefix).toBe(false);
+    expect(validateShellPattern(command).ok).toBe(false);
+    expect(rememberExactShellGrant(command, new Set())).toBe("");
+  }
+  for (const command of ["keryx evidence search query", "keryx evidence status"]) {
+    const ev = evaluateShellApproval({ inputJson: JSON.stringify({ command }),
+      sessionAllow: new Set(["keryx evidence *"]), fingerprintAtStart: "start",
+      io: { loadAudit: () => ({ permissions: { allow: [] }, rejected: [] as const }), fingerprint: () => "start" } });
+    expect(ev.autoApprove).toBe(true);
+    expect(ev.sacReviewConfirmation).toBe(false);
+  }
+});

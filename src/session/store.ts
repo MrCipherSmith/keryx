@@ -127,6 +127,17 @@ interface TranscriptLine {
  * entry is dropped rather than handed to an adapter that would serialize it into
  * a provider request.
  */
+/** Closed textual archive projection; reasoning/replay/spill references are never traversed. */
+export function decodeSessionTextRecord(value: unknown): { role: string; text: string; timestamp: string | null } | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>;
+  if ((row.kind !== undefined && row.kind !== "message") || !["user", "assistant", "tool"].includes(row.role as string) || row.injected === true || row.provenance === "harness") return undefined;
+  const texts = typeof row.content === "string" && row.content ? [row.content] : [];
+  if (row.role === "assistant") for (const call of readToolCalls(row.toolCalls) ?? []) if (call.arguments) texts.push(call.arguments);
+  if (!texts.length) return undefined;
+  return { role: row.role as string, text: texts.join("\n"), timestamp: typeof row.ts === "string" ? row.ts : null };
+}
+
 function readToolCalls(value: unknown): NormalizedToolCall[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;

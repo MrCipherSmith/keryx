@@ -2,8 +2,11 @@
 Version: 0.1.1
 
 ## Status and execution contract
-All phases planned, none implemented in this doc change. Use fresh implementation
-branch, recheck actual HEAD seams and accepted constraints; preserve unrelated edits.
+P0 and explicit lexical P1 have runtime implementations and focused verification;
+P2–P5 remain pending. P1 session lifecycle uses the operator-approved owner API
+scope: durable revocation and reader drain, without adding archive deletion or
+ACP session/delete. Hybrid and automatic recall are explicitly unavailable until
+their phases pass. Recheck actual HEAD seams and accepted constraints; preserve unrelated edits.
 Each phase produces executable tests/review/status evidence. Commands below are
 PLANNED and become executable only after named suites exist, not checks already run.
 

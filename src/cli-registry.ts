@@ -74,6 +74,7 @@ import { routingCommand } from "./commands/routing";
 import { externalCommand } from "./commands/external";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
+import { evidenceCommand } from "./commands/evidence";
 import { remoteCommand } from "./commands/remote";
 import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
@@ -177,6 +178,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   version: versionCommand,
   workspace: workspaceCommand,
   retention: retentionCommand,
+  evidence: evidenceCommand,
   remote: remoteCommand,
   forgetting: forgettingCommand,
   trigger: triggerCommand,
@@ -251,6 +253,7 @@ export function groupsWithKnownSubcommands(): readonly string[] {
  * actually read.
  */
 export const USAGE_BODY = `Usage:
+  keryx evidence index [--full] | search <query> [--json] | status [--json] | clear
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness

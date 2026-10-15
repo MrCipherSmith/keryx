@@ -1,3 +1,4 @@
+import { createEvidenceSearchTool } from "../evidence/tool";
 // Single factory for the interactive agent tool set (TUI + readline).
 // Adding a tool here is the only way either surface gets it.
 
@@ -214,6 +215,8 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd, { getSessionDir }),
     ...metaprojectTools,
+    // ERL results are untrusted; do not widen the independently pinned ACP roster.
+    createEvidenceSearchTool(input.cwd),
     webFetchTool({ cwd: input.cwd }),
     webSearchTool(input.searchController, { cwd: input.cwd }),
     shellExecTool(input.cwd, undefined, jobRegistry),

@@ -408,6 +408,9 @@ export interface AgentIO {
 
 /** Injected dependencies keeping `runAgentTurn` deterministic + offline. */
 export interface AgentDeps {
+  /** Host-owned optional recall factory. Absent means no evidence I/O. */
+  automaticEvidence?: (query: string, reserveBytes: number, signal?: AbortSignal) =>
+    Promise<import("../harness/provider/types").StreamOptions["prepareSerializedRequest"]>;
   provider: ProviderPort;
   providerId: string;
   modelId: string;
@@ -860,6 +863,8 @@ export interface RunAgentTurnResult {
    * a child turn.
    */
   finishReason?: AgentFinishReason;
+  /** Terminal provider/stream failure, redacted and bounded; absent after successful recovery. */
+  error?: { kind: "provider_error" | "stream_error"; message: string };
   /**
    * Flow 347 T7 (AC5): which limit stopped a `subagentBudget` turn, with the
    * usage at the stop. Set only together with `finishReason` "budget"
@@ -3172,6 +3177,8 @@ async function runAgentTurnCore(
   // round completes without an error, so a later round can recover again but a
   // retry that overflows a second time ends the turn instead of looping.
   let overflowRetried = false;
+  let automaticRecallInitialized = false;
+  let automaticRecall: import("../harness/provider/types").StreamOptions["prepareSerializedRequest"];
   for (;;) {
     if (roundState.round >= roundState.maxRounds) {
       if (subagentBudget !== undefined) {
@@ -3294,6 +3301,18 @@ async function runAgentTurnCore(
     };
     const request: NormalizedRequest =
       signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
+    if (!automaticRecallInitialized) {
+      automaticRecallInitialized = true;
+      // Recall may consume only spare capacity; never evict required context.
+      const reserve = deps.contextWindow === undefined ? 0 : Math.max(0, Math.min(2000,
+        Math.floor(deps.contextWindow * 0.85 -
+          estimateRequestTokens(history, roundSystemInstruction, toolDefs) - maxOutputTokens)));
+      if (reserve > 0 && options.origin !== "task-notification" && options.origin !== "bus-message" &&
+          deps.subagentBudget === undefined && deps.automaticEvidence !== undefined) {
+        try { automaticRecall = await deps.automaticEvidence(userLine, reserve, signal); }
+        catch { /* Optional recall failure preserves the ordinary turn. */ }
+      }
+    }
 
     let assistantText = "";
     let assistantMessage: NormalizedMessage | undefined;
@@ -3340,6 +3359,7 @@ async function runAgentTurnCore(
     const nameById = new Map<string, string>();
     const calls: PendingCall[] = [];
     let errored = false;
+    let turnError: RunAgentTurnResult["error"];
     // Flow 387 T6: the round's normalized provider error, held back (not yet
     // printed) when it is a context overflow that may still be recovered.
     let pendingOverflowError: NormalizedError | undefined;
@@ -3347,6 +3367,7 @@ async function runAgentTurnCore(
     try {
       const streamOptions = {
         attemptId: deps.idSeq(),
+        ...(automaticRecall === undefined ? {} : { prepareSerializedRequest: automaticRecall }),
         ...(signal === undefined ? {} : { signal }),
         ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
       };
@@ -3414,6 +3435,10 @@ async function runAgentTurnCore(
             }
           }
         } else if (event.kind === "provider_error") {
+          turnError = {
+            kind: "provider_error",
+            message: scrub(redactSensitiveText(formatProviderErrorMessage(event.error))).slice(0, 4000).trim(),
+          };
           if (!overflowRetried && isContextOverflowError(event.error)) {
             pendingOverflowError = event.error;
           } else {
@@ -3434,7 +3459,11 @@ async function runAgentTurnCore(
         system("\n[stopped] Model turn interrupted by user.\n");
         return {};
       }
-      system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
+      turnError = {
+        kind: "stream_error",
+        message: scrub(redactSensitiveText(cause instanceof Error ? cause.message : String(cause))).slice(0, 4000),
+      };
+      system(`\n[error] ${turnError.message}\n`);
       errored = true;
     }
 
@@ -3533,7 +3562,7 @@ async function runAgentTurnCore(
         }
         system(formatProviderErrorMessage(pendingOverflowError));
       }
-      return {};
+      return turnError === undefined ? {} : { error: turnError };
     }
     overflowRetried = false;
     if (calls.length === 0) {

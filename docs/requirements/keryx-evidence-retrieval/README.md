@@ -4,8 +4,14 @@ Version: 0.1.0
 ## Purpose and status
 Implementation package for a separate **Evidence Retrieval Layer (ERL)**:
 semantic discovery over raw evidence, exact visible-context exclusion, incremental
-indexing. **Spec ready; runtime not implemented.** New paths, commands and defaults
-are planned, not existing behavior. Benefits have not yet been benchmarked.
+indexing. **P0 and explicit lexical P1 are implemented; P2–P5 remain pending.**
+CLI supports `evidence index/search/status/clear/maintenance`; the interactive
+shell exposes read-only `evidence_search`. Enabled hybrid mode and automatic
+recall currently fail explicitly before source access, rather than silently using
+lexical retrieval. They are reserved for P2 and P4 respectively.
+Session revocation is a trusted owner API backed by the durable ledger and reader
+drain; no archive-deletion command or ACP `session/delete` workflow was added.
+Benefits have not yet been benchmarked; whole-flow acceptance remains pending.
 
 ## Document index
 - [PRD](prd.md)

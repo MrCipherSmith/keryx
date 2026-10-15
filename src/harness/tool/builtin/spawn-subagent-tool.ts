@@ -20,6 +20,7 @@ import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { spawnSubagent, foldChildSummary, DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
+import { redactSensitiveText } from "../../../security/redact";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
@@ -269,9 +270,10 @@ function boundSummary(text: string): string {
  * `status: NoProgress (…)` — so the parent reads the outcome before anything else.
  */
 function formatStoppedStatusLine(
-  status: "BudgetExhausted" | "NoProgress" | "Interrupted",
+  status: "BudgetExhausted" | "NoProgress" | "Interrupted" | "Error",
   turnResult: RunAgentTurnResult | undefined,
 ): string {
+  if (status === "Error") return "status: Error";
   if (status === "Interrupted") {
     return "status: Interrupted (stopped during the final submit_result round)";
   }
@@ -306,8 +308,10 @@ export function subagentStatusForFinishReason(
 }
 
 /** The fleet `detail` for a settled child's status (its fleet `status` is `done` only when `Completed`). */
-export function subagentFleetDetail(status: ReturnType<typeof subagentStatusForFinishReason>): string {
+export function subagentFleetDetail(status: ReturnType<typeof subagentStatusForFinishReason> | "Error"): string {
   switch (status) {
+    case "Error":
+      return "error";
     case "Completed":
       return "done";
     case "NoProgress":
@@ -1875,7 +1879,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // check whether `runAgentTurnCore` itself cut the turn short for one
         // of D2a's two internal reasons FIRST. No new detection here; this
         // only labels what `finishReason` (D2a) already computed.
-        const status = subagentStatusForFinishReason(turnResult?.finishReason);
+        const status = turnResult?.error !== undefined
+          ? "Error"
+          : subagentStatusForFinishReason(turnResult?.finishReason);
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
@@ -1922,10 +1928,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
                   `--- last output ---\n${raw}`,
               ).text;
         const boundedResult = boundSummary(resultBlock);
+        const diagnostic = turnResult?.error === undefined
+          ? ""
+          : foldChildSummary(redactSensitiveText(
+              `--- ${turnResult.error.kind} ---\n${turnResult.error.message}`,
+            )).text + "\n";
         return {
           status,
           isError,
-          output: `${statusLine}\n${header}${boundedResult}`,
+          output: `${statusLine}\n${header}${diagnostic}${boundedResult}`,
           partial: boundedResult,
         };
       } catch (cause) {
@@ -1933,7 +1944,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         internalAbort.abort();
         composed.dispose();
         releaseBudget(); // a failed child must not hold the parent's budget either
-        const msg = cause instanceof Error ? cause.message : String(cause);
+        const msg = boundSummary(foldChildSummary(redactSensitiveText(cause instanceof Error ? cause.message : String(cause))).text);
         emitFleetEvent({
           kind: "upsert",
           id: workerId,

@@ -74,6 +74,46 @@ export interface CommandDescriptor {
  * `(module, command)` so output is deterministic regardless of insertion order.
  */
 export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
+  // ---- evidence ---------------------------------------------------------
+  {
+    module: "evidence", command: "evidence index",
+    summary: "Build the derived evidence index from configured roots.",
+    intent: ["index evidence", "индексируй исходные свидетельства"],
+    args: [{ name: "full", type: "bool", desc: "force a full rebuild" }],
+    read: false,
+    sideEffects: ["reads configured sources through security scanning", "writes derived evidence generations and caches"],
+  },
+  {
+    module: "evidence", command: "evidence search",
+    summary: "Retrieve bounded untrusted excerpts from eligible indexed sources.",
+    intent: ["search evidence", "найди исходные свидетельства"],
+    args: [
+      { name: "<query>", type: "string", required: true, desc: "nonempty query, at most 8192 UTF-8 bytes" },
+      { name: "json", type: "bool", desc: "structured JSON result" },
+    ],
+    json: true, read: true,
+  },
+  {
+    module: "evidence", command: "evidence status",
+    summary: "Show evidence index metadata without excerpts or scanning.",
+    intent: ["evidence status", "статус индекса свидетельств"],
+    args: [{ name: "json", type: "bool", desc: "structured JSON result" }],
+    json: true, read: true,
+  },
+  {
+    module: "evidence", command: "evidence clear",
+    summary: "Delete derived evidence artifacts while preserving sources and the revocation ledger.",
+    intent: ["clear evidence index", "очисти индекс свидетельств"],
+    args: [], read: false,
+    sideEffects: ["deletes derived evidence artifacts; preserves sources and revocation ledger"],
+  },
+  {
+    module: "evidence", command: "evidence maintenance",
+    summary: "Purge expired derived evidence data and superseded generations.",
+    intent: ["evidence maintenance", "обслужи индекс свидетельств"],
+    args: [], read: false,
+    sideEffects: ["deletes expired derived evidence data and superseded index generations"],
+  },
   // ---- gdgraph ----------------------------------------------------------
   {
     module: "gdgraph",

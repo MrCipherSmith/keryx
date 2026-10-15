@@ -411,6 +411,14 @@ export interface ProviderDescription {
 
 /** Options passed to a single attempt-scoped `stream()` invocation. */
 export interface StreamOptions {
+  /** Opt-in ephemeral final-body visibility; unsupported adapters do not call it. */
+  onSerializedRequest?: (projection: import("./visible-context").VisibleProjection) => void;
+  /** Trusted host hook. send starts transport synchronously under the source lease. */
+  prepareSerializedRequest?: (
+    base: import("./visible-context").VisibleProjection,
+    assemble: (extra: readonly NormalizedMessage[]) => import("./visible-context").VisibleProjection,
+    send: (projection: import("./visible-context").VisibleProjection) => void,
+  ) => Promise<void>;
   /** Stable identity for this attempt; stamped on every yielded event. */
   attemptId: string;
   /** Cancellation signal for the attempt. */
