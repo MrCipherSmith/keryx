@@ -1,17 +1,17 @@
 # Текущее состояние / Live status
 
-Запуск (run, UTC): 2026-10-14 19:56 UTC
+Запуск (run, UTC): 2026-10-15 06:03 UTC
 
 Состояние (status): ok
-HEAD: ee443509a6c6f4cc4f7303cca4cae0a7fb73ae95
+HEAD: c578a312096860a420f9eda2fafb2acde2809d8f
 Строк в contribution-log.md (rows): 48
 
 ## Счётчики: снимок 04809f4f / сейчас (counts: snapshot / now)
 
 | Ключ (key) | снимок 04809f4f | сейчас |
 | --- | --- | --- |
-| commit | 04809f4f | ee443509 |
-| generated_at | 2026-10-04T13:17Z | 2026-10-14T19:56Z |
+| commit | 04809f4f | c578a3120 |
+| generated_at | 2026-10-04T13:17Z | 2026-10-14T21:57Z |
 | flows | 383 | 421 |
 | flows_by_status | done: 339, blocked: 2, in-progress: 25, ready: 3, initializing: 3, implemented: 11 | done: 347, blocked: 3, in-progress: 40, ready: 5, initializing: 7, implemented: 19 |
 | acceptance_criteria | 3175 | 3570 |
@@ -23,23 +23,23 @@ HEAD: ee443509a6c6f4cc4f7303cca4cae0a7fb73ae95
 | reviewed_flows | 159 | 176 |
 | review_rounds | 368 | 420 |
 | findings | 2544 | 2980 |
-| findings_by_severity | major: 831, minor: 1204, info: 334, blocker: 175 | major: 923, minor: 1466, info: 414, blocker: 177 |
+| findings_by_severity | major: 831, minor: 1204, info: 334, blocker: 175 | major: 923, minor: 1466, blocker: 177, info: 414 |
 | findings_blocking | 175 | 177 |
-| verdicts | refuted: 1623, confirmed: 329, no-verdict: 577, unverifiable: 15 | refuted: 1668, confirmed: 459, no-verdict: 834, unverifiable: 19 |
+| verdicts | refuted: 1623, confirmed: 329, no-verdict: 577, unverifiable: 15 | refuted: 1668, no-verdict: 834, confirmed: 459, unverifiable: 19 |
 | refuted_by_disposition | acted-on: 1546, dismissed-incorrect: 49, no-disposition: 28 | acted-on: 1591, dismissed-incorrect: 49, no-disposition: 28 |
 
 ## Журнал решений (decisions journal)
 
-- Решений (decisions): 62; с рекомендацией (with a recommendation): 42
-- Совпадения, обычный режим (matches, normal): 18 из 25 (matched of answered)
-- Совпадения, частично слепой режим (matches, partial): 3 из 4 (matched of answered)
-- Совпадения, слепой режим (matches, blind): 6 из 11 (matched of answered)
-- Отклонения (deviations): 13; с причиной (with a reason): 3; без причины (without a reason): 10
-- Исключено как необратимые (excluded-irreversible): 3
-- Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 1/150, B 3/150, C 1/150, D 0/150; порог достигнут (met): нет (no)
-- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 60/20, слепых 11/5; числа достигнуты (numeric targets met)
-- Машин в журнале (machines in the journal): 5; записей по машинам (records per machine): 142cd74e 26, 1932608c 135, a90ce006 1, f2ede59b 34, fa7c0ca1 98
-- Решений во всех машинах (decisions, all machines): 294; с рекомендацией (with a recommendation): 243; живых, не backfilled (live, not backfilled): 221
+- Решений (decisions): 116; с рекомендацией (with a recommendation): 104
+- Совпадения, обычный режим (matches, normal): 75 из 78 (matched of answered)
+- Совпадения, частично слепой режим (matches, partial): 15 из 15 (matched of answered)
+- Совпадения, слепой режим (matches, blind): 8 из 10 (matched of answered)
+- Отклонения (deviations): 5; с причиной (with a reason): 3; без причины (without a reason): 2
+- Исключено как необратимые (excluded-irreversible): 72
+- Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 16/150, B 9/150, C 6/150, D 10/150; порог достигнут (met): нет (no)
+- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 115/20, слепых 10/5; числа достигнуты (numeric targets met)
+- Машин в журнале (machines in the journal): 5; записей по машинам (records per machine): 142cd74e 44, 1932608c 135, a90ce006 1, f2ede59b 34, fa7c0ca1 116
+- Решений во всех машинах (decisions, all machines): 330; с рекомендацией (with a recommendation): 274; живых, не backfilled (live, not backfilled): 257
 
 ## Виды проверки (verification kinds)
 

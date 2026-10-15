@@ -1,6 +1,6 @@
 {
-  "commit": "ee443509",
-  "generated_at": "2026-10-14T19:56Z",
+  "commit": "c578a3120",
+  "generated_at": "2026-10-14T21:57Z",
   "flows": 421,
   "flows_by_status": {
     "done": 347,
@@ -37,14 +37,14 @@
   "findings_by_severity": {
     "major": 923,
     "minor": 1466,
-    "info": 414,
-    "blocker": 177
+    "blocker": 177,
+    "info": 414
   },
   "findings_blocking": 177,
   "verdicts": {
     "refuted": 1668,
-    "confirmed": 459,
     "no-verdict": 834,
+    "confirmed": 459,
     "unverifiable": 19
   },
   "refuted_by_disposition": {
