@@ -6,9 +6,22 @@ import { collectReviewers } from "./reviewers";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "./autonomous-answers";
 
 export type ReviewMode = "all" | "diff";
+export type RoundDepth = "light" | "full";
+export type DepthRequest = "auto" | "light" | "full";
+export const DEPTH_REQUESTS: readonly DepthRequest[] = ["auto", "light", "full"];
+
+/** A diff at or under both limits, outside the risk class, gets a light round under `--depth auto`. */
+export const LIGHT_MAX_FILES = 5;
+export const LIGHT_MAX_CHANGED_LINES = 300;
+/** The light round's logic and testing reviewers; the conventions reviewer is picked from {@link LIGHT_CONVENTIONS_PREFERENCE}. */
+export const LIGHT_FIXED_REVIEWERS: readonly string[] = ["review-logic", "review-testing-practices"];
+/** Stack-aware choice, first one the stack filter kept wins: React/MobX stacks keep frontend-conventions, a backend stack keeps review-backend, anything else falls to clean-code. */
+export const LIGHT_CONVENTIONS_PREFERENCE: readonly string[] = ["review-frontend-conventions", "review-backend", "review-clean-code"];
 
 export type RequiredSet = {
   mode: ReviewMode;
+  /** The depth the set was computed for; `full` unless a light round was asked for. */
+  depth: RoundDepth;
   required: string[];
   excluded: { reviewer: string; reason: string }[];
   /** False when no scope-A file list was recorded, so path-gated reviewers could not be ruled out. */
@@ -40,6 +53,59 @@ export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
   "review-frontend-conventions": (f) => FRONTEND_EXT.test(f) || /\.stories\.tsx$/.test(f) || CODE_FILE.test(f),
   "review-layout": (f) => /\.(tsx|jsx|css|scss)$/.test(f),
 };
+
+/**
+ * The path gates that mark the risk class. `review-testing-practices` (any test file) and `review-frontend-conventions`
+ * (any .ts/.js/.tsx file) are in BUNDLED_PATH_GATES but fire on almost every diff, so counting them would make a light
+ * round unreachable; they are left out here. A data/migration file, a project-declared reviewer path gate, and the
+ * remaining bundled gates (core/shared, flow graph, layout) do count.
+ */
+export const RISK_PATH_GATES: Record<string, (file: string) => boolean> = Object.fromEntries(
+  Object.entries(BUNDLED_PATH_GATES).filter(([name]) => name !== "review-testing-practices" && name !== "review-frontend-conventions"),
+);
+
+export type DepthDecision = { requested: DepthRequest; depth: RoundDepth; reason: string };
+
+export type DepthInput = {
+  files?: readonly string[] | undefined;
+  changedLines?: number | undefined;
+  /** `--all` / `--gating`: a forced round is always full. */
+  forceFull?: string | undefined;
+};
+
+export async function decideRoundDepth(root: string, request: DepthRequest, input: DepthInput): Promise<DepthDecision> {
+  if (request === "full") return { requested: request, depth: "full", reason: "--depth full" };
+  if (request === "light") return { requested: request, depth: "light", reason: "--depth light" };
+  const full = (reason: string): DepthDecision => ({ requested: request, depth: "full", reason });
+  if (input.forceFull !== undefined) return full(`${input.forceFull} forces the full set`);
+  const files = input.files;
+  if (files === undefined) return full("auto: no scope file list, so the diff size and risk class are unknown");
+  if (input.changedLines === undefined) return full("auto: changed-line count unknown (pass --scope <scope.json> or --diff-lines <n>)");
+  if (files.length > LIGHT_MAX_FILES) return full(`auto: ${files.length} files exceeds ${LIGHT_MAX_FILES}`);
+  if (input.changedLines > LIGHT_MAX_CHANGED_LINES) return full(`auto: ${input.changedLines} changed lines exceeds ${LIGHT_MAX_CHANGED_LINES}`);
+  const hit = Object.entries(RISK_PATH_GATES).find(([, gate]) => files.some(gate));
+  if (hit) return full(`auto: a file hits the ${hit[0]} path gate (risk class)`);
+  if (files.some((f) => DATA_FILE.test(f))) return full("auto: a data/migration file is in the diff (risk class)");
+  const inventory = await collectReviewers(root);
+  for (const reviewer of inventory.project) {
+    if (reviewer.pathsSource === "none" || !reviewer.paths.length) continue;
+    const patterns = reviewer.paths.map(globToRegExp);
+    if (files.some((f) => patterns.some((p) => p.test(f)))) return full(`auto: a file hits the project reviewer ${reviewer.name} path gate (risk class)`);
+  }
+  return { requested: request, depth: "light", reason: `auto: ${files.length} file(s), ${input.changedLines} changed line(s), no risk-class path gate` };
+}
+
+/** `round-depth.json` in the package: what `required --package` decided, read back by `ledger build`. */
+export const ROUND_DEPTH_FILE = "round-depth.json";
+
+export async function packageRoundDepth(packageDir: string): Promise<DepthDecision | undefined> {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(packageDir, ROUND_DEPTH_FILE), "utf8"));
+    return (parsed?.depth === "light" || parsed?.depth === "full") && typeof parsed.reason === "string" ? { requested: parsed.requested ?? "auto", depth: parsed.depth, reason: parsed.reason } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function globToRegExp(glob: string): RegExp {
   const body = glob
@@ -80,6 +146,8 @@ export type RequiredOptions = {
   blastRadius?: boolean | undefined;
   /** Whether the package holds `pr-context.md`: there is a PR body checklist for `review-pr-contract` to compare with the diff. */
   prContext?: boolean | undefined;
+  /** `light` narrows the set to logic, testing and one conventions reviewer; default `full`. */
+  depth?: RoundDepth | undefined;
 };
 
 const REGRESSION = "review-regression";
@@ -134,6 +202,14 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (reviewer.pathsSource !== "none" && reviewer.paths.length) projectGates.set(reviewer.name, reviewer.paths.map(globToRegExp));
   }
   const filesKnown = files !== undefined;
+  if (options.depth === "light") {
+    const conventions = LIGHT_CONVENTIONS_PREFERENCE.find((name) => roster.includes(name));
+    const keep = new Set([...LIGHT_FIXED_REVIEWERS, ...(conventions === undefined ? [] : [conventions])]);
+    const light = roster.filter((name) => keep.has(name));
+    for (const name of roster) if (!keep.has(name)) excluded.push({ reviewer: name, reason: "light round: only logic, testing and the stack's conventions reviewer run" });
+    for (const name of [REGRESSION, PR_CONTRACT]) if (inventory.bundled.some((r) => r.name === name)) excluded.push({ reviewer: name, reason: "light round: not part of the light set" });
+    return { mode, depth: "light", required: light.sort(), excluded, filesKnown };
+  }
   const gated = (name: string): boolean | undefined => {
     if (!filesKnown) return undefined;
     const bundled = BUNDLED_PATH_GATES[name];
@@ -162,7 +238,7 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (options.prContext === true) required.push(PR_CONTRACT);
     else excluded.push({ reviewer: PR_CONTRACT, reason: "no pr-context.md in the package: there is no PR body checklist to compare with the diff" });
   }
-  return { mode, required: required.sort(), excluded, filesKnown };
+  return { mode, depth: "full", required: required.sort(), excluded, filesKnown };
 }
 
 export type CoverageOptions = {
@@ -186,6 +262,7 @@ export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
 
 function mutationErrors(record: Record<string, unknown>, options: CoverageOptions): string[] {
   const pending = options.pendingMutants ?? 0;
+  if (record.depth === "light") return [];
   if (pending === 0 || (options.attended ?? isAttendedRun()) === false) return [];
   const w = record.mutationWaiver;
   const waiver = w && typeof w === "object" && !Array.isArray(w) ? (w as Record<string, unknown>) : {};
@@ -237,6 +314,7 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): P
   const need = await requiredReviewers(options.root, record.mode, options.files, {
     blastRadius: options.blastRadius,
     prContext: options.prContext === true && dispatchKnowsRole(record, PR_CONTRACT),
+    depth: record.depth === "light" ? "light" : "full",
   });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   const missing = need.required.filter((name) => !selected.has(name));

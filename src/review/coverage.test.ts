@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, coverageWarnings, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 
 let root: string;
 
@@ -256,5 +256,76 @@ describe("review-pr-contract on packages already in flight", () => {
     const selected = await withoutIt();
     expect(coverageWarnings({ mode: "all", selected }, { prContext: false })).toEqual([]);
     expect(coverageWarnings({ mode: "all", selected: [...selected, "review-pr-contract"] }, { prContext: true })).toEqual([]);
+  });
+});
+
+describe("round depth (light vs full)", () => {
+  const small = ["src/a.ts", "src/b.ts"];
+  const files = (n: number): string[] => Array.from({ length: n }, (_, i) => `src/f${i}.ts`);
+
+  test("5 files and 300 lines is a light round, outside the risk class", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: files(5), changedLines: 300 });
+    expect(d.depth).toBe("light");
+    expect(d.reason).toContain("5 file(s), 300 changed line(s)");
+  });
+
+  test("6 files is full, and the reason names the limit", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: files(6), changedLines: 10 });
+    expect(d.depth).toBe("full");
+    expect(d.reason).toContain("6 files exceeds 5");
+  });
+
+  test("301 changed lines is full", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: small, changedLines: 301 });
+    expect(d.depth).toBe("full");
+    expect(d.reason).toContain("301 changed lines exceeds 300");
+  });
+
+  test("a risk-class path gate hit on a small diff is full", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: ["src/core/store.ts"], changedLines: 5 });
+    expect(d.depth).toBe("full");
+    expect(d.reason).toContain("review-core-boundaries");
+  });
+
+  test("a test file or a plain .ts file alone does not count as the risk class", async () => {
+    expect((await decideRoundDepth(root, "auto", { files: ["src/a.test.ts", "src/a.ts"], changedLines: 40 })).depth).toBe("light");
+  });
+
+  test("--depth full overrides a small diff; --all and --gating force full; unknown size is full", async () => {
+    expect((await decideRoundDepth(root, "full", { files: small, changedLines: 1 })).depth).toBe("full");
+    expect((await decideRoundDepth(root, "auto", { files: small, changedLines: 1, forceFull: "--all" })).depth).toBe("full");
+    expect((await decideRoundDepth(root, "auto", { files: small })).reason).toContain("changed-line count unknown");
+  });
+
+  test("the light set is logic, testing and one conventions reviewer; full is unchanged", async () => {
+    const light = await requiredReviewers(root, "all", small, { depth: "light" });
+    expect(light.depth).toBe("light");
+    expect(light.required).toEqual(["review-clean-code", "review-logic", "review-testing-practices"]);
+    expect(light.excluded.find((e) => e.reviewer === "review-style")?.reason).toContain("light round");
+    const full = await requiredReviewers(root, "all", undefined);
+    expect(full.depth).toBe("full");
+    expect(full.required).toContain("review-style");
+  });
+});
+
+describe("mutation gate by round depth", () => {
+  const attended = { attended: true, pendingMutants: 3 } as const;
+
+  test("a full attended round with pending mutants is still refused", async () => {
+    const full = await requiredReviewers(root, "all", undefined);
+    const errors = await coverageErrors({ mode: "all", depth: "full", selected: full.required }, { root, ...attended });
+    expect(errors.join("\n")).toContain("never run");
+    const legacy = await coverageErrors({ mode: "all", selected: full.required }, { root, ...attended });
+    expect(legacy.join("\n")).toContain("never run");
+  });
+
+  test("a light round is not refused for pending mutants", async () => {
+    const light = await requiredReviewers(root, "all", undefined, { depth: "light" });
+    expect(await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended })).toEqual([]);
+  });
+
+  test("a light dispatch still must cover the light set", async () => {
+    const errors = await coverageErrors({ mode: "all", depth: "light", selected: ["review-logic"] }, { root, ...attended });
+    expect(errors.join("\n")).toContain("missing");
   });
 });

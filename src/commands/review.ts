@@ -37,7 +37,8 @@ import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers } from "../review/coverage";
+import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
+import { estimatePackage, renderEstimate } from "../review/estimate";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -532,7 +533,8 @@ const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"
 const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--json"] as const;
+const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
+const ESTIMATE_FLAGS = ["--package", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -775,6 +777,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "required") {
       await runRequired(args.slice(1));
+      return;
+    }
+    if (command === "estimate") {
+      await runEstimate(args.slice(1));
       return;
     }
     if (command === "mutate") {
@@ -3051,17 +3057,42 @@ async function runRequired(args: string[]): Promise<void> {
   if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
   const radiusFile = optionValue(args, "--blast-radius");
   const prContextFile = optionValue(args, "--pr-context");
-  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
+  const depthArg = (optionValue(args, "--depth") ?? "auto") as DepthRequest;
+  if (!DEPTH_REQUESTS.includes(depthArg)) throw new Error(`--depth must be one of ${DEPTH_REQUESTS.join(", ")}`);
+  // Changed lines: --diff-lines wins, else the scope record's retained changed lines (what reviewers actually see).
+  const diffLinesArg = optionValue(args, "--diff-lines");
+  if (diffLinesArg !== undefined && !/^\d+$/.test(diffLinesArg)) throw new Error("--diff-lines must be a non-negative integer");
+  const retained = (scope?.counts as { changedLinesRetained?: unknown } | undefined)?.changedLinesRetained;
+  const changedLines = diffLinesArg !== undefined ? Number(diffLinesArg) : typeof retained === "number" ? retained : undefined;
+  const files = scope?.files === undefined ? undefined : [...scope.files];
+  const forceFull = args.includes("--all") ? "--all" : args.includes("--gating") ? "--gating" : undefined;
+  const decision = await decideRoundDepth(process.cwd(), depthArg, { files, changedLines, forceFull });
+  const set = await requiredReviewers(process.cwd(), mode, files, {
     blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
     prContext: prContextFile !== undefined && packageHasPrContext(path.dirname(path.resolve(prContextFile)), path.basename(prContextFile)),
+    depth: decision.depth,
   });
+  const packageArg = optionValue(args, "--package");
+  if (packageArg !== undefined) {
+    // The one write: `ledger build` reads the round's depth back from the package.
+    await writeFileAtomic(path.join(path.resolve(packageArg), ROUND_DEPTH_FILE), `${JSON.stringify({ ...decision, files: files?.length, changedLines }, null, 2)}\n`);
+  }
   if (args.includes("--json")) {
-    console.log(JSON.stringify(set, null, 2));
+    console.log(JSON.stringify({ ...set, depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
     return;
   }
+  console.log(`depth: ${set.depth} (${decision.reason})`);
   console.log(`mode: ${set.mode}${set.filesKnown ? "" : " (no scope file list: path-gated reviewers stay required)"}`);
   console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+}
+
+async function runEstimate(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, ESTIMATE_FLAGS, "estimate");
+  const packageArg = optionValue(args, "--package");
+  if (packageArg === undefined) throw new Error("estimate needs --package <review-dir>");
+  const estimate = await estimatePackage(path.resolve(packageArg));
+  console.log(args.includes("--json") ? JSON.stringify(estimate, null, 2) : renderEstimate(estimate));
 }
 
 async function runCompareReference(args: string[]): Promise<void> {
@@ -4345,6 +4376,8 @@ ${reviewHelpSection("learn")}
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["estimate", printEstimateHelp],
+  ["required", printRequiredHelp],
   ["scope", printScopeHelp],
   ["slice", printSliceHelp],
   ["dispatch-check", printDispatchCheckHelp],
@@ -4366,6 +4399,20 @@ export function printReviewHelpFor(rest: readonly string[] = []): void {
   const subcommand = rest[0];
   const own = subcommand === undefined ? undefined : REVIEW_SUBCOMMAND_HELP.get(subcommand);
   (own ?? printHelp)();
+}
+
+function printEstimateHelp(): void {
+  console.log("keryx review estimate --package <review-dir> [--json]\n\nRoles x slices = assignments, dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.");
+}
+
+function printRequiredHelp(): void {
+  console.log(`keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"]
+                      [--blast-radius <file>] [--pr-context <file>] [--depth auto|light|full] [--diff-lines <n>]
+                      [--all] [--gating] [--package <review-dir>] [--json]
+
+The reviewer set a round must dispatch. --depth auto (default) picks a light round (logic, testing, the stack's conventions
+reviewer) for at most 5 files and 300 changed lines outside the risk class; --all, --gating and --depth full keep the full set.
+Changed lines: --diff-lines, else --scope's changedLinesRetained. --package writes round-depth.json for ledger build.`);
 }
 
 function printHelp(): void {
@@ -4435,7 +4482,22 @@ Usage:
                         reference ran a mutant and this package has no mutation
                         pass. --input adds the raw reviewer replies for class C.
   keryx review required [--mode all|diff] [--scope <scope.json>]
-                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
+                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>]
+                        [--depth auto|light|full] [--diff-lines <n>] [--all] [--gating]
+                        [--package <review-dir>] [--json]
+                        --depth auto (default) runs a light round (logic, testing and
+                        the stack's conventions reviewer; no mandatory mutation pass)
+                        for a diff of at most 5 files and 300 changed lines outside
+                        the risk class (core/flow-graph/layout path gates, data files,
+                        project reviewer path gates); --all, --gating or --depth full
+                        keep the full set. Changed lines come from --diff-lines, else
+                        --scope's changedLinesRetained; unknown means full. The text
+                        and --json output state the depth and why. --package records
+                        the depth in <review-dir>/round-depth.json for ledger build.
+  keryx review estimate --package <review-dir> [--json]
+                        Roles x slices = assignments, waves at the manifest's wave
+                        budget, and an expected duration range (2-5 min per dispatch,
+                        4 in parallel); not sliced: assignments = roles.
                         --blast-radius adds review-regression to the set; without a
                         computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available

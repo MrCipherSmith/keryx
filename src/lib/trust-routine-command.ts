@@ -94,6 +94,7 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
     "readiness",
     "reviewers",
     "required",
+    "estimate",
     "compare-reference",
     "ingest",
     "complete",

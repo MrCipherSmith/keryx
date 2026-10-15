@@ -90,3 +90,12 @@ test("--outcomes is shown as required for reply, as the parser requires it", () 
     expect(entry).not.toContain("[--outcomes");
   }
 });
+test("required and estimate list every flag their parsers accept, in both helps", () => {
+  for (const help of [GROUP(), helpFor(["required"])]) {
+    for (const flag of ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"]) expect(help).toContain(flag);
+  }
+  const own = helpFor(["estimate"]);
+  expect(own).toContain("--package");
+  expect(own).toContain("--json");
+  expect(GROUP()).toContain("keryx review estimate --package");
+});

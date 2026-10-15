@@ -51,6 +51,8 @@ export type LedgerGap = { reviewer?: string; detail: string; next: string; waves
 
 export type LedgerInputs = {
   mode: ReviewMode;
+  /** The round depth `required --package` recorded; absent means a full round. */
+  depth?: "light" | "full" | undefined;
   selected: string[];
   /** Absent for a run that was never sliced. */
   manifest?: SliceManifest | undefined;
@@ -448,7 +450,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
+  const dispatch = { version: 1, mode: input.mode, ...(input.depth === "light" ? { depth: "light", notRun: ["Not run: mutation (light round)"] } : input.depth === "full" ? { depth: "full" } : {}), selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();
