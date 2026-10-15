@@ -4,6 +4,7 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
 import { mergeVerifications, verificationClaims } from "./verification";
+import { promoteParentExecutions } from "./verify-run";
 import type { StructuredReviewFinding, VerificationSource } from "./types";
 
 /**
@@ -147,7 +148,8 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
   if (source === undefined) return undefined;
   let claims;
   try {
-    claims = verificationClaims(source as VerificationSource);
+    // A claim citing a `keryx review verify-run` record of its finding ran in the parent (flow 457): execution.
+    claims = promoteParentExecutions(verificationClaims(source as VerificationSource), path.resolve(packageDir, "..", "..", ".."));
   } catch {
     return undefined;
   }

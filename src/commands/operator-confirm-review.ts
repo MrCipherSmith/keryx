@@ -8,6 +8,13 @@
 //   review_waive_coverage   keryx review complete --waive-coverage "<quote>"       -> recordCoverageWaiver
 //   review_waive_readiness  keryx review complete --waive <item> "<quote>"         -> waiveReadiness
 //
+// Flow 457 (T7) adds four more, each with a terminal counterpart that refuses without a TTY:
+//
+//   review_waive_mutation      keryx review waive-mutation --package --reason          -> recordOperatorDecision
+//   review_override_reviewers  keryx review override-reviewers --package --reason      -> recordOperatorDecision
+//   review_comments_reply      keryx review comments reply --final                     -> commentsReplyPass
+//   review_confirm_plan        keryx review confirm-plan --package                     -> recordPlanConfirmation
+//
 // The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
 // the package and passes the gate; the CLI flags record the waiver and close in one run.
 //
@@ -28,6 +35,10 @@ import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from ".
 import { computeReadiness, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
+import { pendingMutants } from "../review/mutate";
+import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "../review/coverage";
+import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
+import { estimatePlan, planKeyOf, planOverThreshold, DEFAULT_PLAN_THRESHOLD, recordPlanConfirmation } from "../review/plan-confirmation";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
 export interface ReviewConfirmSeams {
@@ -335,9 +346,215 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
   };
 }
 
-/** The four specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
+// ---------------------------------------------------------------------------------------------------------------------
+// 5-6. review_waive_mutation, review_override_reviewers (flow 457)
+
+type DecisionPrepared = { dir: string; reason: string; detail: string };
+
+const reasonOf = (input: Record<string, unknown>): string | undefined => {
+  const value = input["reason"];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+};
+
+function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionPrepared> {
+  const mutation = kind === "mutation-waiver";
+  return {
+    name: mutation ? "review_waive_mutation" : "review_override_reviewers",
+    description: mutation
+      ? "Record the operator's waiver of the mutation pass: the proposed mutants stay unrun and the review records `Not run: mutation pass`. Pass the review package and the reason. " +
+        "Same effect as `keryx review waive-mutation` at a terminal. A mutationWaiver quote you write into the dispatch is not accepted on its own."
+      : "Record the operator's decision to run a smaller reviewer set than `keryx review required` names (an override, or mode diff). Pass the review package, the reason and, optionally, the reviewers that will run. " +
+        "Same effect as `keryx review override-reviewers` at a terminal. An override quote you write into the dispatch is not accepted on its own.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        package: packageSchema,
+        reason: { type: "string", description: "Why, in a sentence the operator will read." },
+        ...(mutation ? {} : { selected: { type: "array", items: { type: "string" }, description: "The reviewers that will run." } }),
+      },
+      required: ["package", "reason"],
+      additionalProperties: false,
+    },
+    async buildCard(input, ctx): Promise<OperatorCardResult<DecisionPrepared>> {
+      const ref = packageRef(input);
+      const reason = reasonOf(input);
+      if (ref === undefined) return { refusal: "package is required" };
+      if (reason === undefined) return { refusal: "reason is required" };
+      try {
+        const dir = await resolvePackage(ref, ctx.projectRoot);
+        const name = label(dir, ctx.projectRoot);
+        if (mutation) {
+          const pending = (await pendingMutants(dir)).length;
+          if (pending === 0) return { refusal: "No proposed mutant is unrun: there is no mutation pass to waive." };
+          return {
+            title: `Waive the mutation pass for ${name}: ${pending} proposed mutant(s) stay unrun?`,
+            lines: [`unrun mutants: ${pending} (research-evidence/mutants.json)`, `reason: ${cardSafe(reason)}`, "yes: the review records `Not run: mutation pass` with your words, and the gate accepts it"],
+            subject: `package ${name}`,
+            prepared: { dir, reason, detail: `${pending} mutant(s)` },
+          };
+        }
+        const files = await packageScopeFiles(dir);
+        const need = await requiredReviewers(projectRootOfPackage(dir), "all", files, { blastRadius: await packageHasBlastRadius(dir), prContext: packageHasPrContext(dir) });
+        const selected = Array.isArray(input["selected"]) ? (input["selected"] as unknown[]).filter((v): v is string => typeof v === "string") : undefined;
+        const missing = selected === undefined ? need.required : need.required.filter((role) => !selected.includes(role));
+        return {
+          title: `Run a smaller reviewer set than required for ${name}?`,
+          lines: [
+            `required (mode all): ${need.required.length} reviewer(s)`,
+            selected === undefined ? "selected: not named" : `selected: ${cardSafe(selected.join(", "))}`,
+            `not run: ${cardSafe(missing.slice(0, LISTED_FILES).join(", ") || "none")}${missing.length > LISTED_FILES ? ` … and ${missing.length - LISTED_FILES} more` : ""}`,
+            `reason: ${cardSafe(reason)}`,
+            "yes: the gate accepts the narrower set for this package",
+          ],
+          subject: `package ${name}`,
+          prepared: { dir, reason, detail: missing.join(",") },
+        };
+      } catch (error) {
+        return failed(error);
+      }
+    },
+    async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+      if (prepared === undefined) return { output: `${mutation ? "review_waive_mutation" : "review_override_reviewers"}: nothing prepared for this card`, isError: true };
+      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
+      return { output: `${mutation ? "mutation pass waived" : "reviewer-set override recorded"} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 7. review_comments_reply (flow 457)
+
+type ReplyPrepared = { argv: string[]; requests: string };
+
+const REPLY_PREVIEW = 6;
+
+function replyArgv(input: Record<string, unknown>): string[] | { refusal: string } {
+  const repo = input["repo"];
+  const pr = input["pr"];
+  const sha = input["sha"];
+  if (typeof repo !== "string" || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return { refusal: "repo must be <owner>/<repo>" };
+  if (typeof pr !== "number" || !Number.isInteger(pr) || pr <= 0) return { refusal: "pr must be the pull request number" };
+  if (typeof sha !== "string" || !/^[0-9a-f]{7,40}$/i.test(sha)) return { refusal: "sha must be the pull request head commit" };
+  const argv = ["--repo", repo, "--pr", String(pr), "--sha", sha, "--final"];
+  for (const [key, flag] of [["outcomes", "--outcomes"], ["review", "--review"], ["result", "--result"], ["flow_link", "--flow-link"]] as const) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim() !== "") argv.push(flag, value.trim());
+  }
+  if (typeof input["round"] === "number") argv.push("--round", String(input["round"]));
+  return argv;
+}
+
+function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
+  return {
+    name: "review_comments_reply",
+    description:
+      "Post the final review-comment replies on a pull request (`keryx review comments reply --final`). Pass the repo, the PR number, its head sha, the outcomes file and the review package or result. " +
+      "The operator sees every reply before anything is posted.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo: { type: "string", description: "owner/repo" },
+        pr: { type: "integer", description: "The pull request number." },
+        sha: { type: "string", description: "The pull request head commit." },
+        outcomes: { type: "string", description: "The outcomes file (--outcomes)." },
+        review: { type: "string", description: "The managed review package (--review)." },
+        result: { type: "string", description: "The review result file (--result)." },
+        round: { type: "integer", description: "The review round (--round)." },
+        flow_link: { type: "string", description: "A flow link to add to replies (--flow-link)." },
+      },
+      required: ["repo", "pr", "sha"],
+      additionalProperties: false,
+    },
+    async buildCard(input): Promise<OperatorCardResult<ReplyPrepared>> {
+      const argv = replyArgv(input);
+      if (!Array.isArray(argv)) return argv;
+      try {
+        const { commentsReplyPass } = await import("./review");
+        const dry = await commentsReplyPass([...argv], true);
+        const requests = dry.result.requests;
+        if (requests.length === 0) return { refusal: "The reply pass has nothing to post." };
+        const bodies = requests.slice(0, REPLY_PREVIEW).map((request) => `  ${cardSafe(((request.body as { body?: string }).body ?? "").slice(0, BODY_PREVIEW_CHARS))}`);
+        return {
+          title: `Post ${requests.length} reply(ies) on ${cardSafe(dry.repo)}#${dry.number}?`,
+          lines: [`replies: ${requests.length}; the first ${Math.min(REPLY_PREVIEW, requests.length)}:`, ...bodies, "yes: the replies are posted on the pull request and cannot be taken back from here"],
+          subject: `${cardSafe(dry.repo)}#${dry.number}`,
+          prepared: { argv, requests: JSON.stringify(requests) },
+        };
+      } catch (error) {
+        return failed(error);
+      }
+    },
+    async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+      if (prepared === undefined) return { output: "review_comments_reply: nothing prepared for this card", isError: true };
+      const { commentsReplyPass } = await import("./review");
+      const again = await commentsReplyPass([...prepared.argv], true);
+      if (JSON.stringify(again.result.requests) !== prepared.requests) return { output: "The replies changed after the card was shown; nothing was posted. Ask again.", isError: true };
+      const posted = await commentsReplyPass([...prepared.argv], false);
+      return { output: `posted ${posted.result.posted.length} reply(ies) (${confirmation.confirmedVia}, ${confirmation.at}); skipped ${posted.result.skipped.length}` };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 8. review_confirm_plan (flow 457, AC6)
+
+type PlanPrepared = { dir: string; planKey: string };
+
+function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
+  return {
+    name: "review_confirm_plan",
+    description:
+      "Confirm a review plan over the threshold: the operator sees the dispatches and minutes `keryx review estimate` computes and says yes before any wave runs. Pass the review package. " +
+      "Same effect as `keryx review confirm-plan` at a terminal; records plan-confirmation.json for exactly this plan.",
+    inputSchema: { type: "object", properties: { package: packageSchema }, required: ["package"], additionalProperties: false },
+    async buildCard(input, ctx): Promise<OperatorCardResult<PlanPrepared>> {
+      const ref = packageRef(input);
+      if (ref === undefined) return { refusal: "package is required" };
+      try {
+        const dir = await resolvePackage(ref, ctx.projectRoot);
+        const estimate = await estimatePlan(dir);
+        if (!planOverThreshold(estimate)) {
+          return { refusal: `The plan needs ${estimate.dispatches} dispatch(es), ${estimate.minutes.min}-${estimate.minutes.max} min: within the threshold (${DEFAULT_PLAN_THRESHOLD.dispatches} dispatches, ${DEFAULT_PLAN_THRESHOLD.minutes} min), so it runs without a confirmation.` };
+        }
+        const name = label(dir, ctx.projectRoot);
+        return {
+          title: `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for ${name}?`,
+          lines: [
+            `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
+            `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
+            `threshold: ${DEFAULT_PLAN_THRESHOLD.dispatches} dispatches or ${DEFAULT_PLAN_THRESHOLD.minutes} min`,
+            ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
+            "yes: this plan may run; a re-cut plan asks again",
+          ],
+          subject: `package ${name}`,
+          prepared: { dir, planKey: planKeyOf(estimate) },
+        };
+      } catch (error) {
+        return failed(error);
+      }
+    },
+    async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+      if (prepared === undefined) return { output: "review_confirm_plan: nothing prepared for this card", isError: true };
+      const estimate = await estimatePlan(prepared.dir);
+      if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
+      return { output: `plan confirmed by the operator (${record.confirmedVia}, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min` };
+    },
+  };
+}
+
+/** The specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
 export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonly OperatorConfirmSpec[] {
-  return [chunksAnswerSpec(), publishSpec(seams), waiveCoverageSpec(), waiveReadinessSpec(seams)] as readonly OperatorConfirmSpec[];
+  return [
+    chunksAnswerSpec(),
+    publishSpec(seams),
+    waiveCoverageSpec(),
+    waiveReadinessSpec(seams),
+    decisionSpec("mutation-waiver"),
+    decisionSpec("reviewer-override"),
+    replySpec(),
+    confirmPlanSpec(),
+  ] as readonly OperatorConfirmSpec[];
 }
 
 export function reviewConfirmSpecs(): readonly OperatorConfirmSpec[] {

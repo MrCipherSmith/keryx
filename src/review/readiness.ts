@@ -13,7 +13,8 @@ import { packageScopeFiles } from "./coverage";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
-import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED } from "./orchestrator-log";
+import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+import { readRunProfile } from "./run-profile";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
 import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
@@ -242,7 +243,16 @@ const sameQuery = (a: string, b: string): boolean => a.trim().replace(/\s+/g, " 
  */
 async function memoryStageCheck(ctx: Context): Promise<Verdict> {
   const log = await readToolLog(ctx.dir, ORCHESTRATOR_LOG);
-  if (log === undefined) return ok(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl): this check could not see the orchestrator's own memory reads`);
+  // Flow 457: outside keryx shell no layer can tell the orchestrator's calls from a reviewer's unless the host passes
+  // the caller token; the item then says so instead of passing on a log it could not read.
+  const host = readRunProfile(ctx.dir)?.host;
+  const blind = host !== undefined && host !== "keryx-shell";
+  const notObservable = (why: string): Verdict => ok(`not observable on this host (${host}): ${why}`);
+  if (log === undefined) {
+    return blind
+      ? notObservable(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl) to read`)
+      : ok(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl): this check could not see the orchestrator's own memory reads`);
+  }
   const clean = ctx.manifest.cleanContext;
   const started = clean === undefined ? Number.NaN : Date.parse(clean.startedAt);
   let stage = clean?.memoryQuery;
@@ -263,6 +273,11 @@ async function memoryStageCheck(ctx: Context): Promise<Verdict> {
     }
   }
   const warning = unattributed.length === 0 ? "" : `; warning: ${unattributed.length} unattributed memory call(s) (CLI or MCP from a host that names no caller, not counted against the orchestrator): ${some(unattributed)}`;
+  if (outside.length === 0 && inStage === 0 && blind) {
+    return notObservable(
+      `no memory call in the log is attributable to the orchestrator; export ${ENV_REVIEW_CALLER_TOKEN} from the token \`keryx review start\` printed so the host's own keryx calls are attributed${warning}`,
+    );
+  }
   if (outside.length === 0) {
     const recorded = log.split("\n").some((line) => line.includes('"log-start"') || line.includes('"source"'));
     const none = recorded ? "no memory call recorded by the orchestrator (log written by keryx)" : "the orchestrator made no memory call";
@@ -270,7 +285,7 @@ async function memoryStageCheck(ctx: Context): Promise<Verdict> {
   }
   return bad(
     `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}${warning}`,
-    `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
+    `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: in keryx shell call the review_waive_readiness tool with item memory-outside-stage (the operator answers a card); in a terminal run keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
   );
 }
 

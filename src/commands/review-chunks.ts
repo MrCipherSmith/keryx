@@ -15,6 +15,7 @@ import {
   renderChunkEstimate,
 } from "../review/chunks-estimate";
 import { coverageLine, writeCoverage } from "../review/coverage-complete";
+import { isAutonomousEnv } from "../review/run-profile";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { resolvePackageDir, wantsHelp } from "./review-layers";
 
@@ -95,7 +96,7 @@ async function ensureEstimateRecorded(packageDir: string, estimate: ChunkEstimat
   await recordChunkEstimate(packageDir, estimate, chunkModeOf(packageDir));
 }
 
-export type ChunksSeams = { isTerminal?: () => boolean };
+export type ChunksSeams = { isTerminal?: () => boolean; env?: Readonly<Record<string, string | undefined>> };
 
 export async function runChunks(args: string[], deps: ChunksDeps, seams?: ChunksSeams): Promise<void> {
   const [sub, ...rest] = args;
@@ -108,6 +109,11 @@ export async function runChunks(args: string[], deps: ChunksDeps, seams?: Chunks
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (sub === "estimate" && optionValue(rest, "--answer") !== undefined && !isTerminal()) {
     throw new Error("--answer needs a terminal: the answer is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_chunks_answer tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.");
+  }
+  // Flow 457 (T7, audit row 7): automatic mode is the autonomous runner's (or a person's at a terminal) to choose; an
+  // agent's shell that names it would turn "wait for the operator's yes" into "ask once" on its own say.
+  if (sub === "estimate" && optionValue(rest, "--mode") === "automatic" && !isTerminal() && !isAutonomousEnv(seams?.env ?? process.env)) {
+    throw new Error("--mode automatic needs a terminal or the autonomous runner (`keryx review run --autonomous`): it changes how an over-ceiling chunk run is decided, and is refused when stdin or stdout is not a TTY. Inside keryx shell, run `keryx review chunks estimate` without --mode and call the review_chunks_answer tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.");
   }
   const packageDir = resolvePackageDir(rest, process.cwd(), "chunks");
   const projectRoot = resolveProjectRoot(process.cwd());

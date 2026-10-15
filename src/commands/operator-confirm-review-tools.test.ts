@@ -70,9 +70,18 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("the four review gates are registered and listed for the unattended refusal", () => {
+test("the review gates are registered and listed for the unattended refusal", () => {
   const names = reviewConfirmSpecs().map((spec) => spec.name);
-  expect(names).toEqual(["review_chunks_answer", "review_publish", "review_waive_coverage", "review_waive_readiness"]);
+  expect(names).toEqual([
+    "review_chunks_answer",
+    "review_publish",
+    "review_waive_coverage",
+    "review_waive_readiness",
+    "review_waive_mutation",
+    "review_override_reviewers",
+    "review_comments_reply",
+    "review_confirm_plan",
+  ]);
   for (const name of names) expect(operatorConfirmToolNames()).toContain(name);
 });
 

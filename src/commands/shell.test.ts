@@ -876,8 +876,12 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "recall_step",
     "repomap",
     "review_chunks_answer",
+    "review_comments_reply",
+    "review_confirm_plan",
+    "review_override_reviewers",
     "review_publish",
     "review_waive_coverage",
+    "review_waive_mutation",
     "review_waive_readiness",
     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
     // the card; schedule_list is read-only. TUI roster only.
