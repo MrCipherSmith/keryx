@@ -75,6 +75,9 @@ export type ReviewCoverageEntry = {
   reason: string;
 };
 
+/** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
+export type ReadinessWaiver = { item: string; operator_quote: string; time: string };
+
 export type ManagedReviewManifest = {
   schemaVersion: 1;
   reviewId: string;
@@ -111,6 +114,8 @@ export type ManagedReviewManifest = {
    * back and says `not recorded` rather than letting the silence pass.
    */
   filter_stats?: ReviewFilterStats | undefined;
+  /** Readiness items waived by the operator; each also heads report.md as a "Partial review" line. */
+  readiness_waivers?: ReadinessWaiver[] | undefined;
   /**
    * Fields the ingest supplied rather than the reviewer authoring them.
    * Written only when something was repaired — see

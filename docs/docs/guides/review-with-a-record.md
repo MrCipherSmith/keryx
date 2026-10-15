@@ -662,6 +662,51 @@ keryx review ingest --report round7.md --ref round7 --refuted refuted.json
 Closing with no dispositions is allowed. It leaves every finding reading
 `unknown`, which means "nobody wrote down what happened".
 
+### Completed means ready — the checklist
+
+A package cannot be marked `completed` while a file nobody read, a reviewer
+that never reported, or a verifier that skipped findings is still in it. Nine
+items are checked, offline except the last, and `keryx review complete` refuses
+while any of them fails:
+
+```bash
+keryx review readiness <review-id-or-path>   # NOT READY lists each failing item and its repair
+```
+
+| # | Item | Repair |
+|---|------|--------|
+| 1 | every changed file is covered by a wave or a recorded waiver | run the missing wave |
+| 2 | no file the blast radius cut is left unreviewed | `keryx review chunks plan`, `estimate`, `next`/`record`, `merge` |
+| 3 | every planned reviewer was dispatched and ingested | dispatch it, save the reply, `ledger build` |
+| 4 | the verifier checked every finding it should | run the verifier, or let the report state the count it did not |
+| 5 | the ledger is READY | close each obligation with a disposition |
+| 6 | coverage.md does not list a reviewer as `run` that did not finish | re-run `keryx review ingest` |
+| 7 | the report's head is the PR head | `--head <sha>` |
+| 8 | pending mutation candidates and parity warnings are named | add them to the report |
+| 9 | the changed-file count equals the PR's own file list | recount from the PR's files |
+
+When the blast radius is cut, `keryx review blast-radius --package <ref>` writes
+the chunk plan next to it, so the waves are one command away. An unattended run
+(`keryx review run --autonomous`) runs every wave without asking, up to the
+25-pass ceiling; an interactive run asks you once before the waves start.
+
+Only you can waive an item, in a terminal, with your own words recorded beside
+the time:
+
+```bash
+keryx review complete <ref> --waive blast-radius "the cut files are generated code"
+```
+
+Publishing is held by the same checklist. `keryx review publish` refuses a
+package that is not READY; `keryx review publish --partial` posts it with a
+"Partial review" header and never approves. The same verdict shows in
+`keryx review status`, in the TUI Review depth tab and sidebar, and as
+`/review readiness`.
+
+**Named limit.** The refusal lives in keryx and in the keryx shell guard. A
+publisher outside them (CI, another agent, a script file calling `gh`
+directly) is not stopped by it.
+
 ### Five gates that keep a report honest
 
 - **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, completion is refused until the first line of `report.md` names the reviewed SHA and says so ("Reviewed `1a2b3c4` — the PR has since merged."). A package is PR-bound when it targets a pull request or when its `--ref` is a pull request URL, even if it was ingested with `--target report`; a package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.

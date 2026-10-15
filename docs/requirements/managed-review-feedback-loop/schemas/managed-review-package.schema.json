@@ -167,6 +167,20 @@
         "spent_usd": { "type": "number", "minimum": 0 }
       }
     },
+    "readiness_waivers": {
+      "type": "array",
+      "description": "Readiness checklist items the operator waived in their own words.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "operator_quote", "time"],
+        "properties": {
+          "item": { "type": "string" },
+          "operator_quote": { "type": "string", "minLength": 1 },
+          "time": { "type": "string" }
+        }
+      }
+    },
     "filter_stats": {
       "description": "What the round filtered (roadmap §5.1). Written by the code that does the filtering, never assembled from scope.md. Every count is an integer or null, and null ALWAYS means the stage did not run — it never means zero. A null count must have a matching row in `not_measured` giving the reason; `keryx review status` refuses a record where the two disagree. `dropped_prefilter` counts diff material (whole files and change blocks) and is deliberately not summed with the finding counts.",
       "type": "object",

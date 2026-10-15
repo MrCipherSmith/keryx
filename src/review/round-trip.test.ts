@@ -281,6 +281,8 @@ describe("a disposition and a finding key survive the round trip", () => {
   test("round 2's dispatch carries what round 1 decided, and validates", async () => {
     await withTempRoot(async (root) => {
       const findings = await round1Findings(root);
+      const reportFile = path.join(root, ".metaproject/reviews/2026-08-29-round-1/report.md");
+      await writeFile(reportFile, `${await readFile(reportFile, "utf8")}\nNot verified: ${findings.length}\n`);
       await completeManagedReview(root, ".metaproject/reviews/2026-08-29-round-1", {
         dispositions: [
           {

@@ -25,6 +25,7 @@ import type { ApprovalCause } from "./approval-cause";
 
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { tracePhase } from "../lib/phase-trace";
+import { reviewPublishRefusal } from "../review/publish-guard";
 import { isDestructiveCommand, isPublishCommand, touchesAgentCredentials, touchesHumanConfirmation } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
 import { isTrustRoutineCommand, isTrustRoutineTool, recordBunfigBaseline } from "../lib/trust-routine-command";
@@ -5736,6 +5737,12 @@ async function executeCallUnbounded(
     // missing dimension. Escalation only — it never denies on its own (ADR-0009),
     // because a "safe" verdict from an incomplete list must never read as a grant.
     const command = typeof input.command === "string" ? input.command : "";
+    // Flow 451: a direct GitHub review while a bound review package is not READY is refused, not escalated: the
+    // readiness checklist is only a gate if the other road to GitHub is shut.
+    if (command.length > 0) {
+      const publishRefusal = await reviewPublishRefusal(command, tool.workingDirectory ?? process.cwd());
+      if (publishRefusal !== undefined) return { output: publishRefusal, isError: true };
+    }
     const routineContext = {
       untrustedContent: untrustedOrigin,
       ...(tool.workingDirectory === undefined ? {} : { cwd: tool.workingDirectory }),

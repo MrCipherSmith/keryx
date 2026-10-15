@@ -5,6 +5,7 @@ import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-leve
 import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
+import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -777,6 +778,10 @@ export type CompleteManagedReviewOptions = {
    * to name it and say the PR moved.
    */
   head?: string | undefined;
+  /** Readiness items the operator waives in their own words (`--waive <item> "<quote>"`), one entry per flag. */
+  waiveReadiness?: ReadonlyArray<{ items: readonly string[]; quote: string }> | undefined;
+  /** Reads the PR's own file list for readiness item 9; absent means that comparison is not made. */
+  prFiles?: ((ref: string) => Promise<string[] | null>) | undefined;
 };
 
 export type CompleteManagedReviewResult = {
@@ -797,6 +802,8 @@ export type CompleteManagedReviewResult = {
   dispositions: FindingDispositionTally;
   /** The waiver this close recorded for files no reviewer covered; absent when none was passed or nothing was uncovered. */
   coverageWaiver?: CoverageWaiver;
+  /** The readiness checklist this close passed, with any items the operator waived. */
+  readiness?: ReadinessReport;
   /** Things the close let through that a current package would have been refused for. */
   warnings: string[];
 };
@@ -846,7 +853,7 @@ export async function completeManagedReview(
     manifest = { ...stored, target: { ...stored.target, head } };
   }
   const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
-  if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: reportText, lookup: options.prLookup })).warnings);
+  if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: withoutPartialHeader(reportText), lookup: options.prLookup })).warnings);
   const evidence = parseEvidenceLevel(reportText);
   if (!evidence.ok) {
     const problem = `the report's evidence level is missing or invalid: ${evidence.reason}`;
@@ -864,13 +871,23 @@ export async function completeManagedReview(
   const researchPath = path.join(packageDir, "research.json");
   const researchBefore = options.waiveCoverage === undefined ? undefined : await readFile(researchPath, "utf8").catch(() => undefined);
   let coverageWaiver: CoverageWaiver | undefined;
+  let readiness: ReadinessReport | undefined;
   let updated: ManagedReviewManifest;
+  const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
   try {
     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
-    const researchProblems = await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
+    for (const waiver of options.waiveReadiness ?? []) {
+      await waiveReadiness(packageDir, waiver.items, waiver.quote, { prFiles: options.prFiles, headChecked: options.prLookup !== undefined, ...(options.now === undefined ? {} : { now: options.now }) });
+    }
+    if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target }) };
+    const waivedRadius = (manifest.readiness_waivers ?? []).some((waiver) => ["files-covered", "blast-radius", "reviewers", "ledger"].includes(waiver.item));
+    // The operator's quoted waiver of one of these items replaces the research gate's refusal for it; the checklist below still names it.
+    const researchProblems = waivedRadius ? [] : await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
     if (researchProblems.length) {
       throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
     }
+    readiness = await computeReadiness(packageDir, { prLookup: options.prLookup, prFiles: options.prFiles, headChecked: options.prLookup !== undefined });
+    if (readiness.verdict !== "READY") throw new Error(readinessRefusal(readiness, "complete the review"));
     const dispositions = options.dispositions ?? [];
     if (dispositions.length > 0) {
       await recordDispositions(packageDir, dispositions);
@@ -888,6 +905,10 @@ export async function completeManagedReview(
   } catch (error) {
     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
     if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
+    if (waiverBackup !== undefined) {
+      await writeFileAtomic(manifestPath, waiverBackup.manifest).catch(() => undefined);
+      await writeFileAtomic(path.join(packageDir, "report.md"), waiverBackup.report).catch(() => undefined);
+    }
     throw error;
   }
 
@@ -910,7 +931,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(coverageWaiver === undefined ? {} : { coverageWaiver }) };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(coverageWaiver === undefined ? {} : { coverageWaiver }), ...(readiness === undefined ? {} : { readiness }) };
 }
 
 export async function validateManagedReviewManifest(
