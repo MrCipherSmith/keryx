@@ -113,7 +113,7 @@ describe("keryx review report-parity", () => {
 });
 
 describe("keryx review complete", () => {
-  test("warns, and still closes, when the report names none of the leftovers", async () => {
+  test("refuses at the readiness checklist while the report names none of the leftovers, and closes only when the operator waives that item in their words", async () => {
     const pkg = await ingest("parity-warn");
     await leaveThingsBehind(pkg);
     // The unrun candidates would refuse the close; the operator's waiver is the existing way past that gate.
@@ -122,12 +122,15 @@ describe("keryx review complete", () => {
     await writeFile(path.join(pkg, "research.json"), JSON.stringify(research), "utf8");
     errors = [];
     await reviewCommand(["complete", pkg]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("report-names");
+    expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+    process.exitCode = 0;
+    errors = [];
+    await reviewCommand(["complete", pkg, "--waive", "report-names", "the leftovers are known and carried by hand"], { isTerminal: () => true });
     expect(process.exitCode).toBe(0);
     expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).toBe("closed");
-    const warnings = errors.filter((line) => line.startsWith("warning:")).join("\n");
-    expect(warnings).toContain("2 mutation candidate(s) were Not run");
-    expect(warnings).toContain("1 severity note(s) were held");
-    expect(warnings).toContain("1 follow-up(s) are not verified");
+    expect(await readFile(path.join(pkg, "report.md"), "utf8")).toContain("Partial review: report-names waived by the operator: the leftovers are known and carried by hand");
   });
 
   test("is quiet when the report carries the pasted block", async () => {

@@ -411,6 +411,22 @@ export async function mergeChunkPass(packageDir: string): Promise<ChunkPass | nu
   });
 }
 
+/**
+ * Records the blast radius in the package and, when the cap dropped files, cuts the chunk plan, so the waves are one
+ * command away. Returns the line to print. A plan that cannot be cut (passes already recorded against another dropped
+ * set) is reported, not thrown: the radius is still written.
+ */
+export async function recordRadiusAndPlan(packageDir: string, projectRoot: string, radius: BlastRadius, packageArg: string): Promise<string> {
+  await writeFileAtomic(path.join(packageDir, "blast-radius.json"), `${JSON.stringify(radius, null, 2)}\n`);
+  try {
+    const plan = await ensureChunkPlan(packageDir, projectRoot);
+    if (plan === null) return "chunk plan: nothing dropped, no waves needed";
+    return `chunk plan: ${plan.chunks.length} chunk(s) for ${plan.dropped} dropped file(s) written to chunks.json; next: keryx review chunks estimate --package ${packageArg}`;
+  } catch (error) {
+    return `chunk plan NOT written: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 export function hasChunkPlan(packageDir: string): boolean {
   return existsSync(path.join(packageDir, CHUNKS_FILE));
 }

@@ -90,6 +90,7 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
     "tier",
     "status",
     "report-parity",
+    "readiness",
     "reviewers",
     "required",
     "compare-reference",

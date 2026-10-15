@@ -87,6 +87,7 @@ export function buildAutonomousPrompt(input: {
   const lines = [
     `Run a full managed code review of ${input.ref} and finish it yourself: keryx review start, the reviewer waves, keryx review ingest, then keryx review complete.`,
     `Nobody is at the keyboard and nobody is answering questions. Do not wait for anyone: take the recommended option of any menu, and when an action is refused choose another path instead of repeating it.`,
+    `When \`keryx review blast-radius\` says "Cut blast radius", run every wave without asking: \`keryx review chunks plan\`, \`keryx review chunks estimate --mode automatic\`, then \`chunks next\` and \`chunks record\` until none is left, then \`chunks merge\`. A review with files nobody read does not close: \`keryx review readiness\` lists what is missing.`,
     `Review the source only (source-only): skip any check that needs a browser or a running app and say that it was skipped.`,
     `Open at most ${AUTONOMOUS_PROFILE.roundLimit} review rounds and dispatch at most ${AUTONOMOUS_PROFILE.waveSize} reviewers per wave. Stop opening rounds when a round finds no new blocker or major.`,
     `Dispatch the full reviewer set: run \`keryx review required --mode all\` and dispatch every reviewer it prints, with dispatch mode "all". Nobody can name a narrower review in a run like this, so do not use mode "diff".`,

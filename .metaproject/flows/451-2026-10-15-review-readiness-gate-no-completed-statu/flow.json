@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "451",
+  "slug": "review-readiness-gate-no-completed-statu",
+  "title": "Review readiness gate: no completed status and no GitHub publish until a checklist passes",
+  "status": "in-progress",
+  "createdAt": "2026-10-15T05:37:42.143Z",
+  "updatedAt": "2026-10-15T05:39:57.939Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6a8356b4703c977f69f7241a2c7f5565073262311049e2e0fc357d1d712ee22d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "также разработай гейт и чек-лист, который необходимо выполнить перед публикацией на GitHub или перед тем, как мы можем сказать, что ревью вообще завершено",
+    "source": "helyx 206417, 2026-10-15T05:33Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-15T05:37:42.143Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-15T05:39:57.438Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-15T05:39:57.939Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/readiness.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/readiness.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/readiness.test.ts src/review/completion-gate.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/publish.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/hooks/review-publish-guard.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/blast-radius.test.ts src/review/chunks.test.ts src/gdskills/review-orchestrator-skill-parity.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/blast-radius.test.ts src/review/readiness.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/review/parity.test.ts src/tui/review-readiness.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/review-orchestrator-skill-parity.test.ts src/gdskills/review-skills-iron-laws.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun run check"
+    }
+  }
+}

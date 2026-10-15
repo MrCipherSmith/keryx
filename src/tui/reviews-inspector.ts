@@ -3,7 +3,7 @@
 // CLI does not. Read-only: opening it reads the managed review packages and changes nothing.
 
 import { paritySummary } from "../review/parity";
-import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, type ReviewDepthRow } from "./review-panel";
+import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewDepthRow } from "./review-panel";
 import { createReviewLayersActions, type ReviewLayersActions } from "./review-layers-actions";
 import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
@@ -41,7 +41,26 @@ export function isReviewParityCommand(line: string): boolean {
   return token === "/review" && sub === "parity";
 }
 
-export { renderReviewLayersText, renderReviewParityText };
+/** `/review readiness`: the readiness checklist of every managed review, as text. */
+export function isReviewReadinessCommand(line: string): boolean {
+  const [token, sub] = line.trim().split(/\s+/);
+  return token === "/review" && sub === "readiness";
+}
+
+export { renderReviewLayersText, renderReviewParityText, renderReviewReadinessText };
+
+/** The sidebar's Readiness block: per review, the verdict and the failing item ids, wrapped to the sidebar width. */
+export function projectReviewsReadinessLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
+  if (depth === undefined) return [];
+  return depth
+    .filter((row) => row.readiness !== undefined)
+    .slice(0, limit)
+    .map((row) => {
+      const report = row.readiness!;
+      const failing = report.items.filter((item) => item.status === "fail").map((item) => item.id);
+      return wrapLines(failing.length === 0 ? `${row.reviewId}: ${report.verdict}` : `${row.reviewId}: ${report.verdict}, ${failing.join(", ")}`, width);
+    });
+}
 
 /** One sidebar line per review that left something behind: `Not run 3, held 1, follow-ups 2`, wrapped to the sidebar width. */
 export function projectReviewsParityLines(depth: readonly ReviewDepthRow[] | undefined, width: number, limit = 3): string[] {
@@ -279,6 +298,8 @@ export interface ReviewsPanelHandle {
   layerLines(): string[];
   /** The per-review leftovers (Not run, held, follow-ups) the sidebar paints under the layer lines. */
   parityLines(): string[];
+  /** The Readiness block: verdict and failing items per review. */
+  readinessLines(): string[];
   dispose(): void;
 }
 
@@ -306,6 +327,8 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
   box.add(layerNode as never);
   const parityNode = new core.TextRenderable(renderer as never, { id: "sb-reviews-parity", content: "" }) as unknown as TextNode;
   box.add(parityNode as never);
+  const readinessNode = new core.TextRenderable(renderer as never, { id: "sb-reviews-readiness", content: "" }) as unknown as TextNode;
+  box.add(readinessNode as never);
 
   const currentRow = (): ReviewsRow => projectReviewsRow(latest, options.width, { failed });
   const draw = (): void => {
@@ -315,6 +338,7 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     value.content = core.t`${roleChunk(core, row.role, row.text)}`;
     layerNode.content = projectReviewsLayerLines(depth, options.width).join("\n");
     parityNode.content = projectReviewsParityLines(depth, options.width).join("\n");
+    readinessNode.content = projectReviewsReadinessLines(depth, options.width).join("\n");
   };
   const activate = (): ReviewsRowAction => {
     const action = currentRow().action;
@@ -355,6 +379,7 @@ export function mountReviewsPanel(otui: unknown, renderer: unknown, parent: unkn
     activate,
     layerLines: () => projectReviewsLayerLines(depth, options.width),
     parityLines: () => projectReviewsParityLines(depth, options.width),
+    readinessLines: () => projectReviewsReadinessLines(depth, options.width),
     dispose() {
       disposed = true;
       generation += 1;
