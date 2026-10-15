@@ -143,3 +143,38 @@ test("scopeFingerprint changes when a slice file changes without changing its si
   await writeFile(slicePath, edited, "utf8");
   expect(await fingerprint()).not.toBe(before);
 });
+
+async function plantLate(ids: string[], raw: string): Promise<void> {
+  await mkdir(path.join(root, "pkg", "raw"), { recursive: true });
+  await mkdir(path.join(root, "pkg", "drivers"), { recursive: true });
+  await writeFile(path.join(root, "pkg", "raw", "review-logic.txt"), raw, "utf8");
+  await writeFile(path.join(root, "pkg", "drivers", "review-logic-1.json"), JSON.stringify({ reviewer: "review-logic", slices: ids, result: "raw/review-logic.txt" }), "utf8");
+}
+
+async function nextWave(extra: string[] = ["--json"]): Promise<string> {
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--reviewer", "review-logic", "--next-wave", "--package", "pkg", "--dry-run", ...extra]);
+  expect(process.exitCode).toBe(0);
+  return logs.join("\n");
+}
+
+test("retry-plan --package: a finished result written after the deadline covers its slices and is reported as collected late", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `Done.\n\nREVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE_WITH_CONCERNS", slices: ids })}\n`);
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch).toEqual([]);
+  expect(plan.collectedLate).toBe(1);
+  expect(await nextWave([])).toContain("collected late: 1");
+});
+
+test("retry-plan --package: a malformed or INCOMPLETE result covers nothing, the slice is handed out again", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, "REVIEW_RESULT: {\"reviewer\": \"review-logic\", \"status\": \"DO");
+  let plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE", slices: ids })}\n`);
+  plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+});

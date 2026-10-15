@@ -11,7 +11,7 @@ import { type PlacedPathResult, placePathWithinSync } from "./contained-path";
 
 export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
   slice: ["--diff", "--out"],
-  "retry-plan": ["--manifest", "--result", "--state"],
+  "retry-plan": ["--manifest", "--result", "--state", "--package"],
   "dispatch-check": ["--manifest", "--payload", "--package"],
   layers: ["--package"],
   chunks: ["--package", "--result"],
