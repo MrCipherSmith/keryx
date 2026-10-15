@@ -660,8 +660,10 @@ export type SymbolReachEntry = {
   via: string;
   /** `[file, …, via]`, barrels included. */
   path: string[];
-  /** The names this file was reached by (`*` for a file-edge reach). */
+  /** Its own exports that depend on the change, walked next (`*` for a file-edge reach; empty for a leaf). */
   names: string[] | "*";
+  /** The changed names of the module it imports that it uses (`*` = all of them: namespace, dynamic or file edge). */
+  uses: string[] | "*";
   mode: "symbol" | "file-edge";
 };
 
@@ -742,7 +744,7 @@ function seedNames(file: string, diff: FileDiff | undefined, read: SourceReader)
 
 type ImporterVerdict =
   | { kind: "fallback"; detail: string }
-  | { kind: "analysed"; consumer: boolean; imported: string[]; passThrough: ChangedNames | undefined; next: ChangedNames };
+  | { kind: "analysed"; consumer: boolean; imported: string[]; uses: ChangedNames; passThrough: ChangedNames | undefined; next: ChangedNames };
 
 function unionNames(a: ChangedNames | undefined, b: ChangedNames | undefined): ChangedNames {
   if (a === "*" || b === "*") return "*";
@@ -775,13 +777,17 @@ function judgeImporter(importer: string, specifiers: readonly string[], names: C
   const imported = new Set<string>();
   let sideEffect = false;
   let passThrough: ChangedNames | undefined;
+  let uses: ChangedNames = new Set<string>();
   for (const statement of matching) {
     if (statement.kind === "import") {
       const bindings = statement.bindings ?? [];
       if (bindings.length === 0 && names === "*") sideEffect = true;
       for (const binding of bindings) {
         imported.add(binding.imported);
-        if (binding.imported === "*" || has(binding.imported)) locals.add(binding.local);
+        if (binding.imported === "*" || has(binding.imported)) {
+          locals.add(binding.local);
+          uses = binding.imported === "*" ? unionNames(uses, names) : unionNames(uses, new Set([binding.imported]));
+        }
       }
     } else if (statement.kind === "export-from") {
       for (const item of statement.reexports ?? []) {
@@ -805,7 +811,8 @@ function judgeImporter(importer: string, specifiers: readonly string[], names: C
       ? ({ names: "*" } as const)
       : affectedExports(outline, { changedLocals: locals, touchedLines: dynamicLines, leafCode: true })
     : { names: new Set<string>() as ChangedNames };
-  return { kind: "analysed", consumer, imported: [...imported].sort(), passThrough, next: unionNames(own.names, passThrough) };
+  if (sideEffect || dynamicLines.size > 0) uses = unionNames(uses, names);
+  return { kind: "analysed", consumer, imported: [...imported].sort(), uses, passThrough, next: unionNames(own.names, passThrough) };
 }
 
 /**
@@ -886,7 +893,7 @@ export function computeSymbolReach(input: SymbolReachInput): SymbolReachResult {
       // it consumes whatever it imports, and walks on only through its exports that depend on those bindings.
       const verdict = judgeImporter(importer, specifiers, item.names, input.read);
       if (verdict.kind === "fallback") {
-        record({ file: importer, hop, weight, via: item.via, path, names: "*", mode: "file-edge" }, importerFanIn);
+        record({ file: importer, hop, weight, via: item.via, path, names: "*", uses: "*", mode: "file-edge" }, importerFanIn);
         queue.push({ file: importer, hop, weight, names: "*", via: item.via, path, mode: "file-edge" });
         continue;
       }
@@ -911,7 +918,7 @@ export function computeSymbolReach(input: SymbolReachInput): SymbolReachResult {
         queue.push({ file: importer, hop: item.hop, weight, names: verdict.passThrough as ChangedNames, via: item.via, path, mode: "symbol" });
         continue;
       }
-      record({ file: importer, hop, weight, via: item.via, path, names: namesOut(verdict.next), mode: "symbol" }, importerFanIn);
+      record({ file: importer, hop, weight, via: item.via, path, names: namesOut(verdict.next), uses: namesOut(verdict.uses), mode: "symbol" }, importerFanIn);
       queue.push({ file: importer, hop, weight, names: verdict.next, via: item.via, path, mode: "symbol" });
     }
   }

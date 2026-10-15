@@ -414,7 +414,12 @@ describe("item 2 counts only cap drops (flow 457 AC2)", () => {
       maxFiles: 40,
       changedFiles: CHANGED,
       files: [],
-      dropped: [reasoned(CUT[0] as string, "unrelated-symbol"), reasoned(CUT[1] as string, "hub-damped"), reasoned(CUT[2] as string, "text-hub")],
+      dropped: [
+        reasoned(CUT[0] as string, "unrelated-symbol"),
+        reasoned(CUT[1] as string, "hub-damped"),
+        reasoned(CUT[2] as string, "text-hub"),
+        reasoned("src/cut.test.ts", "test-consumer"),
+      ],
       unresolved: [],
       counts: {},
       graph: { nodes: 1, edges: 0 },
@@ -424,7 +429,7 @@ describe("item 2 counts only cap drops (flow 457 AC2)", () => {
     writeJson("slice-manifest.json", { schemaVersion: 1, maxBytes: 1000, waveBytes: 1000, source: "diff", slices: [{ id: "s1", path: "slices/s1", bytes: 10, contentHash: "s1", files: CHANGED, domain: "d", split: "file" }], omissions: [], totals: { slices: 1, bytes: 10, files: CHANGED.length, omittedFiles: 0, omittedBytes: 0, droppedBlocks: 0 } });
     const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "blast-radius");
     expect(item?.status).toBe("pass");
-    expect(item?.evidence).toContain("3 graph-related file(s) omitted with a reason");
+    expect(item?.evidence).toContain("4 graph-related file(s) omitted with a reason");
   });
 
   test("a cap drop beside reasoned omissions still fails item 2 until its chunk is read", async () => {
