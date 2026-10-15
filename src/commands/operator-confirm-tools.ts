@@ -29,6 +29,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { otherConfirmSpecs } from "./operator-confirm-other";
+import { reviewConfirmSpecs } from "./operator-confirm-review";
 
 /** How the operator's yes reached the tool: this shell's card, or the remote topic's mirror of it. */
 export type ConfirmedVia = "tui-card" | "remote-card";
@@ -189,7 +191,7 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
  * constant, so a spec module that imports this file is never read half-built through a cycle.
  */
 export function operatorConfirmSpecs(): readonly OperatorConfirmSpec[] {
-  return [];
+  return [...reviewConfirmSpecs(), ...otherConfirmSpecs()];
 }
 
 /** The names in the registry — what `../trigger/unattended.ts` refuses to an unattended run. */
