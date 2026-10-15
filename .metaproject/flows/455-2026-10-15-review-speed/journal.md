@@ -42,3 +42,7 @@ Fix lanes dispatched: lane 1 (depth gate, required, verdict, estimate, graph-tim
 - 2026-10-15T12:00:08.158Z - task-attempt: T11: started (attempt 1) — review round 1: 1 blocker, 3 major; fix lanes 1+2
 - 2026-10-15T12:22:33.077Z - task-done: T11: Verify + review round + PR
 - 2026-10-15: PR https://github.com/MrCipherSmith/keryx/pull/1029 opened (T11). Merge is the owner's; then T12 patch release.
+- 2026-10-15T13:50:40.017Z - task-done: T12: Patch release after merge; record version
+- 2026-10-15T13:50:43.116Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1029 (warning: PR is not a draft)
+- 2026-10-15T13:50:43.283Z - ac-confirmed: AC12: npm latest = 0.3.118 (release run 38743164813, tag v0.3.118 on 1675e4336) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-15: released @mrciphersmith/keryx 0.3.118 (PR #1030, tag v0.3.118, run 38743164813). T13 (owner live check, AC13) open: answer expected in 2-3 days.

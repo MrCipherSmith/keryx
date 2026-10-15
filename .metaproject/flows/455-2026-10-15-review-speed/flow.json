@@ -9,17 +9,22 @@
   "id": "455",
   "slug": "review-speed",
   "title": "Reviews finish faster, complete, with an early verdict",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T11:21:50.411Z",
-  "updatedAt": "2026-10-15T12:22:33.077Z",
+  "updatedAt": "2026-10-15T13:50:43.283Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:75b568f039c8f7d5caef4649499bb62515a140ead5c6b76d78fc3aded0b04e03",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC12": {
+      "at": "2026-10-15T13:50:43.283Z",
+      "note": "npm latest = 0.3.118 (release run 38743164813, tag v0.3.118 on 1675e4336)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1029"
   },
   "baseBranch": "main",
   "owner": {
@@ -235,7 +240,7 @@
       "id": "T12",
       "title": "Patch release after merge; record version",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -245,7 +250,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -412,6 +418,21 @@
       "at": "2026-10-15T12:22:33.077Z",
       "event": "task-done",
       "detail": "T11: Verify + review round + PR"
+    },
+    {
+      "at": "2026-10-15T13:50:40.017Z",
+      "event": "task-done",
+      "detail": "T12: Patch release after merge; record version"
+    },
+    {
+      "at": "2026-10-15T13:50:43.116Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1029 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-15T13:50:43.283Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: npm latest = 0.3.118 (release run 38743164813, tag v0.3.118 on 1675e4336) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -466,5 +487,18 @@
     "AC13": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-15T13:50:43.283Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:75b568f039c8f7d5caef4649499bb62515a140ead5c6b76d78fc3aded0b04e03"
+    }
+  ]
 }
