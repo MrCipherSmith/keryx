@@ -1,6 +1,6 @@
 # PRD: the orchestrator's call log is written by keryx, not by the agent
 
-Status: DRAFT 1 for the operator (source: poll 180, answer 1, 2026-10-15; follow-up of flow 452). Not frozen.
+Status: APPROVED by the operator (poll 182, 2026-10-15), frozen as flow 454. Source: poll 180, answer 1; follow-up of flow 452. Decision D1: unattributed calls only warn, never block.
 
 ## Problem
 
