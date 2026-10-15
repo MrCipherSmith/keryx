@@ -208,3 +208,27 @@ test("retry-plan --package: two drivers naming the same raw file are collected o
   expect(plan.dispatch).toEqual([]);
   expect(plan.collectedLate).toBe(1);
 });
+
+test("slice writes the routing into the manifest: roles from content, review-logic on every slice, a depth", async () => {
+  await sliceOnce();
+  const manifest = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ roles?: string[]; depth?: string; risk?: { score: number } }> };
+  for (const slice of manifest.slices) {
+    expect(slice.roles).toContain("review-logic");
+    expect(slice.roles).toContain("review-architecture");
+    expect(["deep", "light"].includes(slice.depth ?? "")).toBe(true);
+    expect(typeof slice.risk?.score).toBe("number");
+  }
+});
+
+test("retry-plan re-opens a light slice deep when a result reports a major finding on it", async () => {
+  const { ids } = await sliceOnce();
+  await writeFile(path.join(root, "major.json"), JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids, findings: [{ id: "F-1", severity: "major", file: "src/m/a.ts" }] }), "utf8");
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "major.json", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(logs.join("\n")).escalations).toEqual([{ slice: ids[0]!, finding: "F-1", severity: "major", by: "review-logic" }]);
+  const manifest = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string; depth?: string; roles?: string[]; escalated?: unknown }> };
+  const slice = manifest.slices.find((entry) => entry.id === ids[0]!)!;
+  expect(slice.depth).toBe("deep");
+  expect(slice.roles).toContain("review-security-code");
+  expect(slice.escalated).toEqual({ by: "review-logic", finding: "F-1" });
+});

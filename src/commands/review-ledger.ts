@@ -10,7 +10,8 @@ import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, emptyRetryState, readSliceIds, scopeFingerprint } from "../review/retry-plan";
-import type { SliceManifest } from "../review/slice";
+import { type SliceManifest, manifestSizeProblem } from "../review/slice";
+import { packagePlanGate } from "../review/estimate";
 
 export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--dry-run", "--json", "--help", "-h"] as const;
 const VALUE_FLAGS = new Set(["--package", "--mode", "--findings", "--dispositions", "--out"]);
@@ -227,6 +228,13 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const files = await packageScopeFiles(packageDir);
   const manifestPath = path.join(inputDir, "slices", "manifest.json");
   const manifest = await readJson<SliceManifest>(manifestPath);
+  if (manifest !== undefined) {
+    // The plan the round ran: over the operator threshold it needs a recorded confirmation before it can be closed.
+    const unsized = manifestSizeProblem(manifest);
+    if (unsized !== undefined) throw new Error(`${path.relative(process.cwd(), manifestPath) || manifestPath}: ${unsized}`);
+    const plan = await packagePlanGate(packageDir, { manifest: manifestPath });
+    if (plan.refusal !== undefined) throw new Error(`ledger build refused: ${plan.refusal}`);
+  }
   if (manifest !== undefined) for (const entry of manifest.slices) {
     const hash = await readFile(path.resolve(path.dirname(manifestPath), entry.path))
       .then((body) => createHash("sha256").update(body).digest("hex")).catch(() => undefined);
