@@ -1,34 +1,34 @@
 {
-  "commit": "c578a3120",
-  "generated_at": "2026-10-14T21:57Z",
-  "flows": 421,
+  "commit": "2423af16",
+  "generated_at": "2026-10-15T06:33Z",
+  "flows": 422,
   "flows_by_status": {
     "done": 347,
     "blocked": 3,
-    "in-progress": 40,
+    "in-progress": 41,
     "ready": 5,
     "initializing": 7,
     "implemented": 19
   },
-  "acceptance_criteria": 3570,
+  "acceptance_criteria": 3576,
   "acceptance_criteria_confirmed": 3210,
   "verify_tags": {
     "untagged": 3090,
-    "exec": 351,
+    "exec": 356,
     "none": 17,
     "judged": 83,
-    "invariant": 29
+    "invariant": 30
   },
-  "flows_since_baseline": 82,
+  "flows_since_baseline": 83,
   "outcome_author": {
-    "None": 371,
+    "None": 372,
     "agent": 32,
     "human": 18
   },
   "origin": {
     "None": 379,
     "agent-finding": 6,
-    "human-request": 33,
+    "human-request": 34,
     "agent-proposal": 3
   },
   "reviewed_flows": 176,

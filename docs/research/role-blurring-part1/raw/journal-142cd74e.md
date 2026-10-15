@@ -4,7 +4,7 @@
 - Source identifier: 142cd74e (first 8 hex characters of seed-file SHA-256; no hostname).
 - Decisions: 26; previous export: 0; added: 26.
 - First openedAt: 2026-10-07T19:35:29.206Z; last openedAt: 2026-10-13T12:42:23.760Z.
-- Exporter version: 0.3.112; exporter HEAD: f0ad228a6e8eb93f62167a97152958f34e9805fd.
+- Exporter version: 0.3.112. Historical source HEAD omitted under the final-collection privacy rules.
 - Writer versions are not recorded; exporter version is not writer attribution.
 - Collection: current research-branch machineExport(sourceRoot), renderMachineRows, parseMachineRows; entire source journal, no date filter.
 - Privacy: seed and question/option/reason text fields excluded; raw validation and path/email checks passed. No source journal or source code written.
@@ -27,3 +27,14 @@
 - Проверки шага 4: 41 тест пройден, 0 ошибок (таймаут 30000 мс); объединение 330 строк равно всем raw; дубли `(host, seq)` и `(ref, openedAt)` отсутствуют; запрещённые текстовые поля, seed, пути, email и локальное имя пользователя отсутствуют. Исторические снимки и flow этим сбором не изменены.
 - Flow 352: локально implemented, в main in-progress; отдельная ветка по номеру не найдена. По решению оператора расхождение только зафиксировано, ветка не создаётся.
 - Это не последний запуск: PR не открывается. Семь источников других репозиториев исключены по решению оператора.
+
+## Финальная выгрузка 2026-10-15 06:35 UTC
+
+- Машина 2; роль копии: параллельная. Весь журнал, без фильтра по дате.
+- Строк: 50; предыдущая опубликованная выгрузка: 44; добавлено: 6. С исходного сбора 2026-10-13 (26 строк) добавлено 24 строки.
+- Первая `openedAt`: `2026-10-07T19:35:29.206Z`; последняя: `2026-10-15T06:21:23.949Z`.
+- Живых решений после 2026-10-04 15:26 UTC: 50; eligible: 18; forced: 32; плечи A–D у eligible: A=9, B=3, C=2, D=4.
+- Версия keryx: `0.3.117`; HEAD исследовательской копии: `2423af168016e585a9f4af34dfebb8685bb2fa15`.
+- Проверки: 41 тест пройден, 0 ошибок; latest точно равен объединению raw (339 строк); дубли `(host, seq)` и межисточниковые дубли `(ref, openedAt)` отсутствуют; запрещённые текстовые поля, seed, пути, email и локальное имя пользователя отсутствуют в JSONL. `git diff --check` пройден; исторические снимки и файлы flow не изменены.
+- Flow 352: локально implemented, в main in-progress; отдельной ветки нет. По ранее принятому решению оператора новая ветка не создаётся. Других расхождений статусов flow по номеру нет.
+- Последний запуск; подготовка одного PR без слияния. Исходная рабочая копия не переключалась и не изменялась; семь источников других репозиториев остаются исключены по решению оператора.

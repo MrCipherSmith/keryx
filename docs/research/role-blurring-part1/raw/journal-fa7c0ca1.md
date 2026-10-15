@@ -5,7 +5,7 @@
 - Exported decisions: 28; raw journal records: 56.
 - First openedAt: 2026-10-05T05:59:32.787Z; last openedAt: 2026-10-05T22:19:01.824Z.
 - Backfilled decisions: 0 (retained, outside confirmatory sample).
-- Exporter version: 0.3.77; HEAD: 51ea30a1790299077181490842a4387b4a0fcaf1.
+- Exporter version: 0.3.77. Historical source HEAD omitted under the final-collection privacy rules.
 - Writer versions recorded in journal: not recorded; cannot reliably attribute git history to this machine.
 - Export summary: 28 rows, 0 skipped, 0 invalid fields blanked.
 - Entire local journal exported without a since filter; original open seq and arm retained. Numeric seed field removed to satisfy AC2; seed file only hashed, never exported.
@@ -55,7 +55,7 @@ Writer-version attribution remains unknown: journal records do not contain it, a
 - Машина: `fa7c0ca1`.
 - Строк: 98; предыдущая выгрузка: 28; добавлено: 70.
 - Первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-13T11:44:17.266Z`.
-- Версия экспортера keryx: `0.3.112`; HEAD: `9449cd8cc9ffaad887b2844220b98a1b11ea5e95`. Версия записи отдельных решений неизвестна.
+- Версия экспортера keryx: `0.3.112`. Исторический HEAD источника исключён по правилам финального сбора. Версия записи отдельных решений неизвестна.
 - Команда: `bun run keryx research sync`; весь локальный журнал, без фильтра по дате.
 - Приватность: запрещённые текстовые поля и seed отсутствуют; проверка локальных идентификаторов, путей и email пройдена. Экспорт другой машины не изменён.
 - Независимая проверка: latest равен объединению raw, 232 строки; дубли `(host, seq)` отсутствуют.
@@ -75,3 +75,15 @@ Writer-version attribution remains unknown: journal records do not contain it, a
 - Flow 352: локально implemented, в main in-progress; отдельная ветка по номеру не найдена. По решению оператора расхождение только зафиксировано, ветка не создаётся.
 - Flow 387: локально in-progress, в main ready; ветки `chore/flow-387-complete`, `fix/387-review-r1`, `fix/387-review-r3` входят в main. Первая опубликована, две remote-ветки удалены после слияния; по решению оператора не восстанавливаются.
 - Это не последний запуск: PR не открывается. Семь источников других репозиториев исключены по решению оператора.
+
+## Финальная выгрузка 2026-10-15 06:35 UTC
+
+- Машина 2; роль копии: основная. Весь журнал, без фильтра по дате.
+- Строк: 119; предыдущая опубликованная выгрузка: 116; добавлено: 3. С исходного сбора 2026-10-13 (98 строк) добавлена 21 строка.
+- Первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-15T06:16:23.857Z`.
+- Живых решений после 2026-10-04 15:26 UTC: 119; eligible: 45; forced: 74; плечи A–D у eligible: A=19, B=10, C=6, D=10.
+- Версия keryx: `0.3.117`; HEAD исследовательской копии: `2423af168016e585a9f4af34dfebb8685bb2fa15`.
+- Проверки: 41 тест пройден, 0 ошибок; latest точно равен объединению raw (339 строк); дубли `(host, seq)` и межисточниковые дубли `(ref, openedAt)` отсутствуют; запрещённые текстовые поля, seed, пути, email и локальное имя пользователя отсутствуют в JSONL. `git diff --check` пройден; исторические снимки и файлы flow не изменены.
+- Flow 352: локально implemented, в main in-progress; отдельной ветки нет. По ранее принятому решению оператора новая ветка не создаётся.
+- Flow 387: локально in-progress, в main ready. Ветки `chore/flow-387-complete`, `fix/387-review-r1`, `fix/387-review-r3` уже входят в main; первая существует на remote, две другие удалены после слияния и по ранее принятому решению оператора не восстанавливаются.
+- Последний запуск; подготовка одного PR без слияния. Чужие источники не перезаписывались; семь источников других репозиториев остаются исключены по решению оператора.

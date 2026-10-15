@@ -1,25 +1,25 @@
 # Текущее состояние / Live status
 
-Запуск (run, UTC): 2026-10-15 06:03 UTC
+Запуск (run, UTC): 2026-10-15 06:39 UTC
 
 Состояние (status): ok
-HEAD: c578a312096860a420f9eda2fafb2acde2809d8f
+HEAD: 2423af168016e585a9f4af34dfebb8685bb2fa15
 Строк в contribution-log.md (rows): 48
 
 ## Счётчики: снимок 04809f4f / сейчас (counts: snapshot / now)
 
 | Ключ (key) | снимок 04809f4f | сейчас |
 | --- | --- | --- |
-| commit | 04809f4f | c578a3120 |
-| generated_at | 2026-10-04T13:17Z | 2026-10-14T21:57Z |
-| flows | 383 | 421 |
-| flows_by_status | done: 339, blocked: 2, in-progress: 25, ready: 3, initializing: 3, implemented: 11 | done: 347, blocked: 3, in-progress: 40, ready: 5, initializing: 7, implemented: 19 |
-| acceptance_criteria | 3175 | 3570 |
+| commit | 04809f4f | 2423af16 |
+| generated_at | 2026-10-04T13:17Z | 2026-10-15T06:33Z |
+| flows | 383 | 422 |
+| flows_by_status | done: 339, blocked: 2, in-progress: 25, ready: 3, initializing: 3, implemented: 11 | done: 347, blocked: 3, in-progress: 41, ready: 5, initializing: 7, implemented: 19 |
+| acceptance_criteria | 3175 | 3576 |
 | acceptance_criteria_confirmed | 3062 | 3210 |
-| verify_tags | untagged: 2906, exec: 201, none: 16, judged: 31, invariant: 21 | untagged: 3090, exec: 351, none: 17, judged: 83, invariant: 29 |
-| flows_since_baseline | 44 | 82 |
-| outcome_author | None: 354, agent: 18, human: 11 | None: 371, agent: 32, human: 18 |
-| origin | None: 373, human-request: 9, agent-finding: 1 | None: 379, agent-finding: 6, human-request: 33, agent-proposal: 3 |
+| verify_tags | untagged: 2906, exec: 201, none: 16, judged: 31, invariant: 21 | untagged: 3090, exec: 356, none: 17, judged: 83, invariant: 30 |
+| flows_since_baseline | 44 | 83 |
+| outcome_author | None: 354, agent: 18, human: 11 | None: 372, agent: 32, human: 18 |
+| origin | None: 373, human-request: 9, agent-finding: 1 | None: 379, agent-finding: 6, human-request: 34, agent-proposal: 3 |
 | reviewed_flows | 159 | 176 |
 | review_rounds | 368 | 420 |
 | findings | 2544 | 2980 |
@@ -30,20 +30,20 @@ HEAD: c578a312096860a420f9eda2fafb2acde2809d8f
 
 ## Журнал решений (decisions journal)
 
-- Решений (decisions): 116; с рекомендацией (with a recommendation): 104
-- Совпадения, обычный режим (matches, normal): 75 из 78 (matched of answered)
-- Совпадения, частично слепой режим (matches, partial): 15 из 15 (matched of answered)
-- Совпадения, слепой режим (matches, blind): 8 из 10 (matched of answered)
-- Отклонения (deviations): 5; с причиной (with a reason): 3; без причины (without a reason): 2
-- Исключено как необратимые (excluded-irreversible): 72
-- Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 16/150, B 9/150, C 6/150, D 10/150; порог достигнут (met): нет (no)
-- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 115/20, слепых 10/5; числа достигнуты (numeric targets met)
-- Машин в журнале (machines in the journal): 5; записей по машинам (records per machine): 142cd74e 44, 1932608c 135, a90ce006 1, f2ede59b 34, fa7c0ca1 116
-- Решений во всех машинах (decisions, all machines): 330; с рекомендацией (with a recommendation): 274; живых, не backfilled (live, not backfilled): 257
+- Решений (decisions): 50; с рекомендацией (with a recommendation): 44
+- Совпадения, обычный режим (matches, normal): 34 из 35 (matched of answered)
+- Совпадения, частично слепой режим (matches, partial): 5 из 5 (matched of answered)
+- Совпадения, слепой режим (matches, blind): 3 из 4 (matched of answered)
+- Отклонения (deviations): 2; с причиной (with a reason): 2; без причины (without a reason): 0
+- Исключено как необратимые (excluded-irreversible): 32
+- Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 5/150, B 3/150, C 2/150, D 4/150; порог достигнут (met): нет (no)
+- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 50/20, слепых 4/5; числа не достигнуты (numeric targets not met)
+- Машин в журнале (machines in the journal): 5; записей по машинам (records per machine): 142cd74e 50, 1932608c 135, a90ce006 1, f2ede59b 34, fa7c0ca1 119
+- Решений во всех машинах (decisions, all machines): 339; с рекомендацией (with a recommendation): 283; живых, не backfilled (live, not backfilled): 266
 
 ## Виды проверки (verification kinds)
 
-- verification kinds, flows frozen in the last 7 days: 21 flows, 221 criteria, unclassified 86 (39%)
-- WARNING: unclassified share 39% is above 20%: criteria are being frozen without a verification kind.
-- sensitivity, flows frozen in the last 7 days: 0 of 102 exec/invariant criteria carry a sensitivity note (0%)
+- verification kinds, flows frozen in the last 7 days: 22 flows, 227 criteria, unclassified 86 (38%)
+- WARNING: unclassified share 38% is above 20%: criteria are being frozen without a verification kind.
+- sensitivity, flows frozen in the last 7 days: 0 of 108 exec/invariant criteria carry a sensitivity note (0%)
 - Определение (definition): flows whose last `frozen` history entry is within 7 days before the run time above (UTC clock of this run); criteria are the `- ACn:` lines of each flow's acceptance-criteria.md; unclassified means no `[verify: ...]` marker or a malformed one.
