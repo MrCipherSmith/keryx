@@ -38,8 +38,11 @@ for (const mutation of ["delete", "replace", "symlink", "root-replace"] as const
         await mkdir(path.join(f.root, "docs"), { recursive: true });
         await writeFile(f.target, "alpha evidence");
       } else {
-        await rm(f.target);
-        if (mutation === "replace") await writeFile(f.target, "alpha evidence");
+        if (mutation === "replace") {
+          // Preserve the old inode so Linux cannot reuse it for the replacement.
+          await rename(f.target, path.join(f.parent, "original.txt"));
+          await writeFile(f.target, "alpha evidence");
+        } else await rm(f.target);
         if (mutation === "symlink") {
           const outside = path.join(f.parent, "outside.txt");
           await writeFile(outside, "alpha evidence");
