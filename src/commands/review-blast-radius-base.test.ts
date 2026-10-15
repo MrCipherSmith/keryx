@@ -3,7 +3,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { defaultLayerDeps, resolveLayersBase } from "../review/layers";
@@ -36,6 +36,8 @@ beforeAll(() => {
   write("src/core.ts", "export function alpha(): number {\n  return 1;\n}\n\nexport function beta(): number {\n  return 2;\n}\n");
   write("src/uses-alpha.ts", 'import { alpha } from "./core";\nexport const a = alpha();\n');
   write("src/uses-beta.ts", 'import { beta } from "./core";\nexport const b = beta();\n');
+  write("src/uses-alpha.test.ts", 'import { a } from "./uses-alpha";\ntest("a", () => a);\n');
+  write("package.json", JSON.stringify({ scripts: { test: "bun test" } }));
   git("add", ".");
   git("commit", "-qm", "base");
   baseSha = git("rev-parse", "HEAD");
@@ -146,7 +148,13 @@ describe("keryx review blast-radius --package (AC7, end to end)", () => {
     const radius = JSON.parse(child.stdout.toString()) as { changedFiles: string[]; files: Array<{ file: string }>; dropped: Array<{ file: string; reason: string }> };
     expect(radius.changedFiles).toEqual(["src/core.ts", "src/extra.ts"]);
     expect(radius.files.map((entry) => entry.file)).toEqual(["src/uses-alpha.ts"]);
-    expect(radius.dropped).toEqual([expect.objectContaining({ file: "src/uses-beta.ts", reason: "unrelated-symbol" })]);
+    expect(radius.dropped).toEqual([
+      expect.objectContaining({ file: "src/uses-alpha.test.ts", hop: 2, reason: "test-consumer" }),
+      expect.objectContaining({ file: "src/uses-beta.ts", reason: "unrelated-symbol" }),
+    ]);
     expect(stderr).toContain("base from manifest");
+    // The reached test is on the package's run list, with the project's runner.
+    expect(JSON.parse(readFileSync(path.join(pkg, "tests-to-run.json"), "utf8"))).toEqual([{ file: "src/uses-alpha.test.ts", reason: "graph-consumer", symbols: ["a"] }]);
+    expect(stderr).toContain("1 tests exercise the changed code — run them: `bun test src/uses-alpha.test.ts`");
   }, 120_000);
 });

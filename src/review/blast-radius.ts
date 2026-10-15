@@ -174,7 +174,7 @@ export type BlastRadiusEntry = {
   isTest: boolean;
 };
 
-export const BLAST_RADIUS_DROP_REASONS = ["cap", "pre-filter", "unrelated-symbol", "hub-damped", "text-hub"] as const;
+export const BLAST_RADIUS_DROP_REASONS = ["cap", "pre-filter", "unrelated-symbol", "hub-damped", "text-hub", "test-consumer"] as const;
 export type BlastRadiusDropReason = (typeof BLAST_RADIUS_DROP_REASONS)[number];
 
 /**
@@ -190,7 +190,21 @@ export type BlastRadiusDropReason = (typeof BLAST_RADIUS_DROP_REASONS)[number];
  * Coverage counts them as `omitted` under their reason; chunks are planned only
  * for cap drops; readiness item 2 does not fail on them.
  */
-export const REASONED_DROP_REASONS = ["unrelated-symbol", "hub-damped", "text-hub"] as const;
+export const REASONED_DROP_REASONS = ["unrelated-symbol", "hub-damped", "text-hub", "test-consumer"] as const;
+
+/**
+ * A test the radius reached (any hop) or added by name. Under the symbol radius it is not owed a chunk reading
+ * (`test-consumer` drop): it is a check to RUN, listed in `tests-to-run.json` and the brief.
+ */
+export type TestToRun = {
+  file: string;
+  /** How it was found: it imports the change (graph), mentions a changed key (text-link), or is named after a changed file. */
+  reason: "graph-consumer" | "text-link" | "related-test";
+  /** The changed names it exercises (`*` = every export of the changed file), empty when found by name only. */
+  symbols: string[];
+  /** The changed file it exercises. */
+  via: string;
+};
 
 /**
  * True for a drop that is owed a review pass: the cap. A record written before
@@ -253,6 +267,7 @@ export type BlastRadiusCounts = {
   droppedUnrelatedSymbol?: number;
   droppedHubDamped?: number;
   droppedTextHub?: number;
+  droppedTestConsumer?: number;
   textLinksAdded?: number;
   relatedTestsAdded: number;
   /** Retained entries that are test files. */
@@ -286,6 +301,10 @@ export type BlastRadius = {
     textHubs: Array<{ key: string; kind: string; via: string; hits: number }>;
     textSkipped: number;
   };
+  /** Tests that exercise the change: run, not read (flow 457). Present under the symbol radius. */
+  testsToRun?: TestToRun[];
+  /** The command the brief prints for {@link testsToRun}, when the project's runner is known. */
+  testCommand?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -347,6 +366,8 @@ type Candidate = {
   via: string;
   path: string[];
   source: BlastRadiusSource;
+  /** The changed names that reached it, from the symbol walk (`*` = every export). */
+  names?: string[] | "*";
 };
 
 /** hop asc -> fanIn desc -> path asc. The order `computeAffected` already uses. */
@@ -380,6 +401,8 @@ export function computeBlastRadius(input: {
   symbols?: { read: SourceReader; diff?: ReadonlyMap<string, FileDiff> | undefined } | undefined;
   /** Implicit consumers found by text search over the diff's string keys (flow 457, AC3). */
   textLinks?: TextLinksResult | undefined;
+  /** The project's test command for the run-list line (`bun test`), when the caller detected one. */
+  testCommand?: string | undefined;
 }): BlastRadius {
   const config = resolveConfig(input.config);
   const graph = input.graph;
@@ -428,7 +451,7 @@ export function computeBlastRadius(input: {
       depth: config.depth,
     });
     for (const entry of result.reached) {
-      best.set(entry.file, { file: entry.file, hop: entry.hop, fanIn: entry.fanIn, via: entry.via, path: entry.path, source: "graph" });
+      best.set(entry.file, { file: entry.file, hop: entry.hop, fanIn: entry.fanIn, via: entry.via, path: entry.path, source: "graph", names: entry.uses });
     }
     for (const omission of result.omitted) {
       reasoned.set(omission.file, {
@@ -539,10 +562,32 @@ export function computeBlastRadius(input: {
     }
   }
 
+  // Under the symbol radius a test the walk reached, or one added by name, is a check to RUN, not a file to read: it is
+  // a `test-consumer` omission and goes on the run list. The plain file walk keeps tests in the reviewed set.
+  const testsAsRunList = input.symbols !== undefined;
+  const testsToRun: TestToRun[] = [];
   const dropped: BlastRadiusDrop[] = [];
   const ranked: Candidate[] = [];
   for (const candidate of [...best.values()].sort(rankOrder)) {
     const excluded = classifyPath(candidate.file, config.scope);
+    if (excluded === null && testsAsRunList && TEST_FILE_RE.test(candidate.file)) {
+      const test = testToRun(candidate);
+      testsToRun.push(test);
+      const exercised = test.symbols.length === 0 ? "" : `{${test.symbols.join(", ")}} of `;
+      dropped.push({
+        file: candidate.file,
+        hop: candidate.hop,
+        fanIn: candidate.fanIn,
+        via: candidate.via,
+        source: candidate.source,
+        reason: "test-consumer",
+        detail:
+          test.reason === "related-test"
+            ? `a test named after the changed ${candidate.via}: run it, it is not read`
+            : `exercises ${exercised}${candidate.path[1] ?? candidate.via} (hop ${candidate.hop}, from ${candidate.via}): run it, it is not read`,
+      });
+      continue;
+    }
     if (excluded === null) {
       ranked.push(candidate);
       continue;
@@ -613,6 +658,7 @@ export function computeBlastRadius(input: {
       droppedUnrelatedSymbol: dropped.filter((drop) => drop.reason === "unrelated-symbol").length,
       droppedHubDamped: dropped.filter((drop) => drop.reason === "hub-damped").length,
       droppedTextHub: dropped.filter((drop) => drop.reason === "text-hub").length,
+      droppedTestConsumer: dropped.filter((drop) => drop.reason === "test-consumer").length,
       textLinksAdded,
       relatedTestsAdded,
       testsRetained: files.filter((entry) => entry.isTest).length,
@@ -620,7 +666,25 @@ export function computeBlastRadius(input: {
     },
     graph: { nodes: graph.nodes.length, edges: graph.edges.length },
     ...(reach === undefined ? {} : { reach }),
+    ...(testsAsRunList ? { testsToRun: testsToRun.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0)) } : {}),
+    ...(testsAsRunList && input.testCommand !== undefined ? { testCommand: input.testCommand } : {}),
   };
+}
+
+function testToRun(candidate: Candidate): TestToRun {
+  const reason = candidate.source === "related-test" ? "related-test" : candidate.source === "text-link" ? "text-link" : "graph-consumer";
+  const symbols = candidate.names === undefined ? [] : candidate.names === "*" ? ["*"] : [...candidate.names];
+  return { file: candidate.file, reason, symbols, via: candidate.via };
+}
+
+/** `bun test a b` style line for the run list, or the bare list when the runner is unknown. */
+export function testsToRunLine(radius: Pick<BlastRadius, "testsToRun" | "testCommand">): string | undefined {
+  const tests = radius.testsToRun ?? [];
+  if (tests.length === 0) return undefined;
+  const files = tests.map((test) => test.file).join(" ");
+  return radius.testCommand === undefined
+    ? `${tests.length} tests exercise the changed code — run them: ${files}`
+    : `${tests.length} tests exercise the changed code — run them: \`${radius.testCommand} ${files}\``;
 }
 
 /** How many files of one text-hub key are recorded as omissions; the hub's full hit count is in the detail. */
@@ -1155,6 +1219,7 @@ export function renderBlastRadiusMarkdown(radius: BlastRadius): string {
     lines.push(`omitted_unrelated_symbol: ${radius.counts.droppedUnrelatedSymbol ?? 0}`);
     lines.push(`omitted_hub_damped: ${radius.counts.droppedHubDamped ?? 0}`);
     lines.push(`omitted_text_hub: ${radius.counts.droppedTextHub ?? 0}`);
+    lines.push(`omitted_test_consumer: ${radius.counts.droppedTestConsumer ?? 0}`);
     lines.push(`text_links_added: ${radius.counts.textLinksAdded ?? 0}`);
   }
   lines.push(`related_tests_added: ${radius.counts.relatedTestsAdded}`);
@@ -1204,6 +1269,14 @@ export function renderBlastRadiusMarkdown(radius: BlastRadius): string {
     }
   }
   lines.push("");
+
+  const runLine = testsToRunLine(radius);
+  if (runLine !== undefined) {
+    lines.push("### Tests to run");
+    lines.push("");
+    lines.push(runLine);
+    lines.push("");
+  }
 
   lines.push("### Changed files the graph could not answer for");
   lines.push("");
@@ -1355,8 +1428,13 @@ export function renderBlastRadiusDispatchBrief(radius: BlastRadius): string {
   if (excused > 0) {
     lines.push("");
     lines.push(
-      `OMITTED WITH A REASON (${excused}: they import none of the changed names, sit behind a damped hub, or mention a hub string key). Context, not under regression check.`,
+      `OMITTED WITH A REASON (${excused}: they import none of the changed names, sit behind a damped hub, mention a hub string key, or are tests to run). Context, not under regression check.`,
     );
+  }
+  const runLine = testsToRunLine(radius);
+  if (runLine !== undefined) {
+    lines.push("");
+    lines.push(`TESTS TO RUN: ${runLine}`);
   }
   if (radius.unresolved.length > 0) {
     lines.push("");

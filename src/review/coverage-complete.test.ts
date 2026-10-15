@@ -30,7 +30,7 @@ const manifest = (slices: ReturnType<typeof slice>[], omissions: Array<{ path: s
 });
 const dispatch = (runs: object[]) => ({ dispatch: { version: 1, mode: "all", selected: ["review-logic"], runs } });
 const run = (reviewer: string, extra: object = {}) => ({ reviewer, status: "complete", scopeComplete: true, ...extra });
-const drop = (file: string, reason: "cap" | "pre-filter" | "unrelated-symbol" | "hub-damped" | "text-hub" = "cap", detail = "over the cap") => ({ file, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason, detail });
+const drop = (file: string, reason: "cap" | "pre-filter" | "unrelated-symbol" | "hub-damped" | "text-hub" | "test-consumer" = "cap", detail = "over the cap") => ({ file, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason, detail });
 const radius = (files: string[], dropped: ReturnType<typeof drop>[]) => ({ schemaVersion: 1, scope: "blast-radius", changedFiles: ["src/a.ts"], files: files.map((file) => ({ file })), dropped });
 
 beforeEach(() => {
@@ -140,6 +140,7 @@ test("flow 457 AC2: reasoned omissions are omitted under their reason and owe no
       drop("src/uses-beta.ts", "unrelated-symbol", "imports {beta} from src/a.ts; changed: {alpha}"),
       drop("src/behind-hub.ts", "hub-damped", "weight 0.39 < 0.5"),
       drop("src/locale.json", "text-hub", "i18n-key x is mentioned by 300 files"),
+      drop("src/a.test.ts", "test-consumer", "exercises {alpha} of src/a.ts (hop 1, from src/a.ts): run it, it is not read"),
     ]),
   );
   put("research.json", dispatch([run("review-logic", { coveredSlices: ["s1"] })]));
@@ -150,8 +151,9 @@ test("flow 457 AC2: reasoned omissions are omitted under their reason and owe no
     "src/uses-beta.ts": "omitted",
     "src/behind-hub.ts": "omitted",
     "src/locale.json": "omitted",
+    "src/a.test.ts": "omitted",
   });
   expect(report.files.find((entry) => entry.file === "src/uses-beta.ts")?.reason).toBe("unrelated-symbol: imports {beta} from src/a.ts; changed: {alpha}");
-  expect(report.counts).toEqual({ inScope: 5, covered: 1, omitted: 3, uncovered: 1 });
-  expect(Object.keys(report.omissionReasons).map((reason) => reason.split(":")[0]).sort()).toEqual(["hub-damped", "text-hub", "unrelated-symbol"]);
+  expect(report.counts).toEqual({ inScope: 6, covered: 1, omitted: 4, uncovered: 1 });
+  expect(Object.keys(report.omissionReasons).map((reason) => reason.split(":")[0]).sort()).toEqual(["hub-damped", "test-consumer", "text-hub", "unrelated-symbol"]);
 });

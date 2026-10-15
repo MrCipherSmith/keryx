@@ -68,6 +68,7 @@ import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } fr
 import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
 import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
 import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
+import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
 import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/symbol-reach";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
@@ -135,6 +136,7 @@ import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from ".
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
+  testsToRunLine,
   DEFAULT_BLAST_RADIUS_DEPTH,
   DEFAULT_BLAST_RADIUS_MAX_FILES,
   renderBlastRadiusDispatchBrief,
@@ -3866,14 +3868,21 @@ async function runBlastRadius(args: string[]): Promise<void> {
     config: { depth, maxFiles, includeRelatedTests },
     symbols,
     textLinks,
+    testCommand: detectTestCommand(projectRoot),
   });
   await emitBlastRadius(radius, args);
-  const reasoned = (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0);
+  const reasoned =
+    (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0) + (radius.counts.droppedTestConsumer ?? 0);
   if (reasoned > 0) {
     console.error(
-      `omitted with a reason: ${radius.counts.droppedUnrelatedSymbol ?? 0} unrelated-symbol, ${radius.counts.droppedHubDamped ?? 0} hub-damped, ${radius.counts.droppedTextHub ?? 0} text-hub. ` +
+      `omitted with a reason: ${radius.counts.droppedUnrelatedSymbol ?? 0} unrelated-symbol, ${radius.counts.droppedHubDamped ?? 0} hub-damped, ${radius.counts.droppedTextHub ?? 0} text-hub, ${radius.counts.droppedTestConsumer ?? 0} test-consumer. ` +
         "They are context, not owed a chunk pass.",
     );
+  }
+  if (radius.testsToRun !== undefined) {
+    const runLine = testsToRunLine(radius);
+    if (runLine !== undefined) console.error(runLine);
+    if (packageOption !== undefined) console.error(`tests to run: ${await writeTestsToRun(resolvePackageDir(args, cwd), radius)}`);
   }
   if (radius.counts.droppedByCap > 0) {
     console.error(

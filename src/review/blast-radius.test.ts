@@ -4,6 +4,7 @@ import {
   BLAST_RADIUS_SCOPE_REVIEWER,
   isCapDrop,
   REASONED_DROP_REASONS,
+  testsToRunLine,
   blastRadiusRecomputeDecision,
   computeBlastRadius,
   isBlastRadiusScopedFinding,
@@ -758,9 +759,9 @@ describe("the symbol radius records non-consumers as reasoned omissions (flow 45
     const radius = computeBlastRadius({ graph, changedFiles: ["src/core.ts"], config: { includeRelatedTests: false } });
     expect(radius.files.map((entry) => entry.file).sort()).toEqual(["src/after-alpha.ts", "src/uses-alpha.ts", "src/uses-beta.ts"]);
     expect(radius.reach).toBeUndefined();
-    expect(BLAST_RADIUS_DROP_REASONS).toEqual(["cap", "pre-filter", "unrelated-symbol", "hub-damped", "text-hub"]);
+    expect(BLAST_RADIUS_DROP_REASONS).toEqual(["cap", "pre-filter", "unrelated-symbol", "hub-damped", "text-hub", "test-consumer"]);
     expect(["cap", "legacy-unknown"].map(isCapDrop)).toEqual([true, true]);
-    expect(["pre-filter", ...REASONED_DROP_REASONS].map(isCapDrop)).toEqual([false, false, false, false]);
+    expect(["pre-filter", ...REASONED_DROP_REASONS].map(isCapDrop)).toEqual([false, false, false, false, false]);
   });
 
   test("the cap cuts only consumers; reasoned omissions never count against it", () => {
@@ -795,5 +796,66 @@ describe("the symbol radius records non-consumers as reasoned omissions (flow 45
     expect(brief).toContain("OMITTED WITH A REASON (2");
     expect(brief).not.toContain("NOT CHECKED");
     expect(renderBlastRadiusMarkdown(radius)).toContain("omitted_unrelated_symbol: 1");
+  });
+
+  describe("tests are run, not read (test-consumer)", () => {
+    const withTests: Record<string, string> = {
+      ...SOURCES,
+      "src/core.test.ts": 'import { alpha, beta } from "./core";\ntest("x", () => alpha() + beta());\n',
+      "src/uses-alpha.test.ts": 'import { a } from "./uses-alpha";\ntest("y", () => a);\n',
+    };
+    const testGraph: GraphData = {
+      nodes: Object.keys(withTests).map((path) => ({ id: path, kind: "file" as const, path, language: "typescript" as const })),
+      edges: [
+        ...graph.edges,
+        { id: "4", from: "src/core.test.ts", to: "src/core.ts", kind: "imports", specifier: "./core" },
+        { id: "5", from: "src/uses-alpha.test.ts", to: "src/uses-alpha.ts", kind: "imports", specifier: "./uses-alpha" },
+      ],
+    };
+    const run = (testFiles: string[] = []) =>
+      computeBlastRadius({
+        graph: testGraph,
+        changedFiles: ["src/core.ts"],
+        testFiles,
+        symbols: { ...symbols, read: { head: (file: string) => withTests[file] } },
+        testCommand: "bun test",
+        config: { maxFiles: 1 },
+      });
+
+    test("reached tests (any hop) and related tests are test-consumer omissions on the run list, never cap drops", () => {
+      const radius = run(["src/core.test.ts", "src/other/core.test.ts"]);
+      expect(radius.files.map((entry) => entry.file)).toEqual(["src/uses-alpha.ts"]);
+      const tests = radius.dropped.filter((drop) => drop.reason === "test-consumer");
+      expect(tests.map((drop) => [drop.file, drop.hop])).toEqual([
+        ["src/core.test.ts", 1],
+        ["src/uses-alpha.test.ts", 2],
+        ["src/other/core.test.ts", 3],
+      ]);
+      expect(tests[0]?.detail).toBe("exercises {alpha} of src/core.ts (hop 1, from src/core.ts): run it, it is not read");
+      expect(tests[1]?.detail).toContain("exercises {a} of src/uses-alpha.ts (hop 2");
+      expect(tests[2]?.detail).toContain("a test named after the changed src/core.ts");
+      expect(radius.dropped.filter((drop) => drop.reason === "cap").map((drop) => drop.file)).toEqual(["src/after-alpha.ts"]);
+      expect(radius.counts.droppedTestConsumer).toBe(3);
+      expect(radius.testsToRun).toEqual([
+        { file: "src/core.test.ts", reason: "graph-consumer", symbols: ["alpha"], via: "src/core.ts" },
+        { file: "src/other/core.test.ts", reason: "related-test", symbols: [], via: "src/core.ts" },
+        { file: "src/uses-alpha.test.ts", reason: "graph-consumer", symbols: ["a"], via: "src/core.ts" },
+      ]);
+    });
+
+    test("the brief and the markdown carry the run command", () => {
+      const radius = run();
+      const line = "2 tests exercise the changed code — run them: `bun test src/core.test.ts src/uses-alpha.test.ts`";
+      expect(testsToRunLine(radius)).toBe(line);
+      expect(renderBlastRadiusDispatchBrief(radius)).toContain(`TESTS TO RUN: ${line}`);
+      expect(renderBlastRadiusMarkdown(radius)).toContain(`### Tests to run\n\n${line}`);
+      expect(testsToRunLine({ testsToRun: radius.testsToRun ?? [] })).toBe("2 tests exercise the changed code — run them: src/core.test.ts src/uses-alpha.test.ts");
+    });
+
+    test("the plain file walk keeps tests in the reviewed set and has no run list", () => {
+      const radius = computeBlastRadius({ graph: testGraph, changedFiles: ["src/core.ts"], config: { includeRelatedTests: false } });
+      expect(radius.files.some((entry) => entry.file === "src/core.test.ts")).toBe(true);
+      expect(radius.testsToRun).toBeUndefined();
+    });
   });
 });
