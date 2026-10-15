@@ -54,7 +54,18 @@ test("exceptions and ineligible ranking do not leak text or become zero", async 
   expect(rejected.length).toBeGreaterThan(0);
   expect(rejected.every(row => row.status === "invalid-observation" && row.score.recallAt10 === null)).toBe(true);
   expect(JSON.stringify(report)).not.toContain("PRIVATE_SECRET");
-  expect(report.observations.filter(row => row.status !== "ok").every(row => row.elapsedMs === null)).toBe(true);
+  const attempted = report.observations.filter(row => ["failed", "invalid-observation"].includes(row.status));
+  expect(attempted.length).toBeGreaterThan(0);
+  expect(attempted.every(row => row.elapsedMs !== null && Number.isFinite(row.elapsedMs) && row.elapsedMs >= 0)).toBe(true);
+  expect(report.observations.filter(row => ["missing-adapter", "unsupported"].includes(row.status))
+    .every(row => row.elapsedMs === null)).toBe(true);
+  for (const arm of report.arms) {
+    expect(arm.attempted).toBe(attempted.filter(row => row.arm === arm.arm).length);
+    expect(arm.latencyPopulation).toBe("successful-observations-only");
+    expect(arm.latency.samples).toBe(0);
+    expect(arm.latency.p50Ms).toBeNull();
+    expect(arm.latency.p95Ms).toBeNull();
+  }
 });
 test("invalid dataset refuses before invoking adapters", async () => {
   let calls = 0;
