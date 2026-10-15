@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, openSync } from "node:fs";
+import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
@@ -3221,7 +3221,7 @@ async function runMutate(args: string[]): Promise<void> {
     // A red baseline still leaves evidence: the command, its cwd and the output tail say why no mutant ran.
     if (error instanceof BaselineError) {
       const written = await writeMutationEvidence(packageDir, error.record);
-      throw new Error(`${error.message}\nevidence: ${written.md}`);
+      throw new Error(`${error.message}\nevidence: ${written.md}`, { cause: error });
     }
     throw error;
   }
