@@ -835,7 +835,8 @@ describe("severity audit (flow 428 AC6)", () => {
     schemaVersion: 1, worktree: "/w", command: "t", baseline: { exitCode: 0, ms: 1 }, totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
     mutants: Object.entries(statuses).map(([id, status]) => ({ id, file, anchor: "a", replacement: "b", status, command: "t", ms: 1 })),
   });
-  const run = { name: "mutation-1.json", record: record({ M1: "survived", M2: "killed", M3: "invalid" }) };
+  const base = record({ M1: "survived", M2: "killed", M3: "invalid" });
+  const run = { name: "mutation-1.json", record: { ...base, mutants: base.mutants.map((m) => (m.id === "M2" ? { ...m, file: "src/other.ts" } : m)) } };
   const finding = (extra: Record<string, unknown>) => ({ id: "F1", severity: "minor", evidence: "mutant:M1 survives", ...extra });
 
   test("a surviving mutant the finding cites raises it to major and records the evidence id", () => {

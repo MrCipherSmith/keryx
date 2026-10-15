@@ -5,6 +5,11 @@
 ## [0.3.117] - 2026-10-14
 
 ### Changed
+- **`keryx review severity-audit` no longer raises a test gap in covered code to major.** A surviving mutant shows that no assertion pins one behaviour, not that the behaviour is wrong. The audit now raises a finding only when no mutant in the same file was `killed` or `timeout` in any recorded pass, that is, when nothing in the suite exercises the changed code. When another mutant in that file was killed, the severity is held and the finding gets `severity_audit.held` with `kind: "covered"` and a reason that names the kill count; `keryx review status`, `report-parity` and the severity-audit output show the held line. On vantage-frontend PR 7643 the old rule raised three test-quality findings to major with 15 of 24 mutants killed; they now stay minor, as the canonical rubric and the project's own ladder say. Presentation holds, the `unproven` cap and the blocker rule are unchanged.
+
+## [0.3.117] - 2026-10-14
+
+### Changed
 - **`shell_exec` says when it clamps `idle_timeout_ms`.** A value outside 1000-1800000 was clamped silently, so a command meant to wait an hour was killed after 30 minutes with no hint why. The result now states the requested and the effective value, and the tool description gives the range and the way out: print progress, or start the command detached (`setsid nohup <command> > <log> 2>&1 &`) and read its log.
 - **`keryx review run --autonomous` names the pull request head.** The resolved head goes into the child's prompt with the instruction to review exactly that commit and pass `--head <sha>` to `review start`, `attach`, `ingest` and `complete`; with no resolvable head the prompt is unchanged.
 

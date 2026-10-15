@@ -40,7 +40,7 @@ describe("readReviewParity", () => {
 
   test("reads held notes off findings.json", async () => {
     const view = await readReviewParity(await pkg({ held: true }));
-    expect(view.held).toEqual([{ finding: "F-010", severity: "minor", mutant: "m1", reason: "mutant m1 survived but only changes presentation: severity held" }]);
+    expect(view.held).toEqual([{ finding: "F-010", severity: "minor", mutant: "m1", kind: "presentation", reason: "mutant m1 survived but only changes presentation: severity held" }]);
     expect(parityLines(view)).toEqual(["held: F-010 stays minor (mutant m1): mutant m1 survived but only changes presentation: severity held"]);
   });
 

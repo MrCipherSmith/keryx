@@ -9,10 +9,12 @@ export const UNPROVEN = "unproven";
 export type SeverityAuditNote = { from: string; to: string; evidence: string };
 
 /**
- * Written instead of a raise when the only survivors are presentation mutants: the severity stays, and the
- * note names the mutant so a reader of the report sees why a survivor did not move it.
+ * Written instead of a raise when a survivor does not show wrong behaviour: either the only survivors are
+ * presentation mutants, or the suite already exercises the mutated file (another mutant there was killed), so the
+ * survivor is a gap in covered code. The severity stays, and the note names the mutant so a reader of the report
+ * sees why a survivor did not move it.
  */
-export type SeverityAuditHeld = { severity: string; mutant: string; kind: "presentation"; evidence: string; reason: string };
+export type SeverityAuditHeld = { severity: string; mutant: string; kind: "presentation" | "covered"; evidence: string; reason: string };
 
 export type AuditChange = {
   id: string;
@@ -44,6 +46,19 @@ function executed(id: string, records: readonly NamedMutationRecord[]): { result
     if (result) return { result, name };
   }
   return undefined;
+}
+
+/** The latest non-invalid result of every mutant id across the recorded passes. */
+function latestResults(records: readonly NamedMutationRecord[]): MutantResult[] {
+  const byId = new Map<string, MutantResult>();
+  for (const { record } of records) for (const result of record.mutants) if (result.status !== "invalid") byId.set(result.id, result);
+  return [...byId.values()];
+}
+
+/** How many mutants in `file` the suite caught (`killed` or `timeout`) out of those that ran. */
+function killsIn(file: string, results: readonly MutantResult[]): { killed: number; ran: number } {
+  const inFile = results.filter((r) => r.file === file);
+  return { killed: inFile.filter((r) => r.status === "killed" || r.status === "timeout").length, ran: inFile.length };
 }
 
 function withLabel(finding: Finding, label: string): string[] {
@@ -83,9 +98,20 @@ export function auditSeverity(
         const held = { severity, mutant: first.id, kind: "presentation", evidence, reason } satisfies SeverityAuditHeld;
         return { ...finding, severity_audit: { held } };
       }
-      const first = behavioral[0]!;
+      const results = latestResults(records);
+      const unpinned = behavioral.filter((r) => killsIn(r.run!.result.file, results).killed === 0);
+      if (unpinned.length === 0) {
+        const first = behavioral[0]!;
+        const { killed, ran } = killsIn(first.run!.result.file, results);
+        const evidence = `${first.run!.name}#${first.id}`;
+        const reason = `mutant ${first.id} survived but ${killed} of ${ran} mutants in ${first.run!.result.file} were killed: the suite covers this code, so it is a gap in covered code, severity held`;
+        changes.push({ id: label, from: severity, to: severity, evidence, held: true, reason });
+        const held = { severity, mutant: first.id, kind: "covered", evidence, reason } satisfies SeverityAuditHeld;
+        return { ...finding, severity_audit: { held } };
+      }
+      const first = unpinned[0]!;
       const evidence = `${first.run!.name}#${first.id}`;
-      changes.push({ id: label, from: severity, to: "major", evidence, reason: `mutant ${first.id} survived: no assertion pins the changed behaviour` });
+      changes.push({ id: label, from: severity, to: "major", evidence, reason: `mutant ${first.id} survived and no mutant in ${first.run!.result.file} was killed: no test exercises the changed behaviour` });
       return { ...finding, severity: "major", severity_audit: { from: severity, to: "major", evidence } satisfies SeverityAuditNote };
     }
     if (runs.every((r) => r.run === undefined)) {
