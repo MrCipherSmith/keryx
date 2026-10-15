@@ -6,7 +6,7 @@ import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
-import { BLAST_RADIUS_SCOPE_REVIEWER } from "./blast-radius";
+import { BLAST_RADIUS_SCOPE_REVIEWER, isCapDrop, isReasonedDrop } from "./blast-radius";
 import { packageScopeFiles } from "./coverage";
 import type { SliceManifest } from "./slice";
 import type { ConfirmedVia } from "./types";
@@ -120,8 +120,12 @@ export async function computeCoverage(packageDir: string, options: ComputeCovera
 
   const radiusFiles = (radius?.files ?? []).map((entry) => entry.file).filter(text);
   const dropped = (radius?.dropped ?? []).filter((entry) => text(entry.file));
-  const capDropped = dropped.filter((entry) => entry.reason !== "pre-filter").map((entry) => entry.file as string);
+  const capDropped = dropped.filter((entry) => isCapDrop(entry.reason)).map((entry) => entry.file as string);
   const preFiltered = new Map(dropped.filter((entry) => entry.reason === "pre-filter").map((entry) => [entry.file as string, text(entry.detail) ? `pre-filter: ${entry.detail}` : "pre-filter"]));
+  // Reasoned omissions (flow 457): not consumers of the changed contract, so omitted under their reason, never owed a pass.
+  const reasonedDrops = new Map(
+    dropped.filter((entry) => isReasonedDrop(entry.reason)).map((entry) => [entry.file as string, text(entry.detail) ? `${String(entry.reason)}: ${entry.detail}` : String(entry.reason)]),
+  );
 
   const tracked = manifest !== undefined || capDropped.length > 0 || chunkPass !== null;
   const files: CoverageFile[] = [];
@@ -174,6 +178,7 @@ export async function computeCoverage(packageDir: string, options: ComputeCovera
     place(file, "B", doneChunks.get(file) ?? sliceCover.get(file), omitted.get(file), whyNot);
   }
   for (const [file, reason] of [...preFiltered].sort(([a], [b]) => a.localeCompare(b))) add({ file, scope: "B", status: "omitted", reason });
+  for (const [file, reason] of [...reasonedDrops].sort(([a], [b]) => a.localeCompare(b))) add({ file, scope: "B", status: "omitted", reason });
 
   const omissions = files.filter((entry) => entry.status === "omitted").map((entry) => ({ file: entry.file, reason: entry.reason ?? "omitted" }));
   const omissionReasons: Record<string, number> = {};

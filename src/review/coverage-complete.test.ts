@@ -30,7 +30,7 @@ const manifest = (slices: ReturnType<typeof slice>[], omissions: Array<{ path: s
 });
 const dispatch = (runs: object[]) => ({ dispatch: { version: 1, mode: "all", selected: ["review-logic"], runs } });
 const run = (reviewer: string, extra: object = {}) => ({ reviewer, status: "complete", scopeComplete: true, ...extra });
-const drop = (file: string, reason: "cap" | "pre-filter" = "cap", detail = "over the cap") => ({ file, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason, detail });
+const drop = (file: string, reason: "cap" | "pre-filter" | "unrelated-symbol" | "hub-damped" | "text-hub" = "cap", detail = "over the cap") => ({ file, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason, detail });
 const radius = (files: string[], dropped: ReturnType<typeof drop>[]) => ({ schemaVersion: 1, scope: "blast-radius", changedFiles: ["src/a.ts"], files: files.map((file) => ({ file })), dropped });
 
 beforeEach(() => {
@@ -128,4 +128,30 @@ test("`keryx review coverage` prints the four counts for A and B together and wr
   }
   expect(lines.join("\n")).toBe("coverage: in scope 2, covered 1, omitted 0, uncovered 1");
   expect((await readCoverage(pkg))?.counts.uncovered).toBe(1);
+});
+
+test("flow 457 AC2: reasoned omissions are omitted under their reason and owe no chunk; only cap drops stay uncovered", async () => {
+  put("scope-files.json", { files: ["src/a.ts"] });
+  put("slice-manifest.json", manifest([slice("s1", ["src/a.ts"])]));
+  put(
+    "blast-radius.json",
+    radius([], [
+      drop("src/far.ts"),
+      drop("src/uses-beta.ts", "unrelated-symbol", "imports {beta} from src/a.ts; changed: {alpha}"),
+      drop("src/behind-hub.ts", "hub-damped", "weight 0.39 < 0.5"),
+      drop("src/locale.json", "text-hub", "i18n-key x is mentioned by 300 files"),
+    ]),
+  );
+  put("research.json", dispatch([run("review-logic", { coveredSlices: ["s1"] })]));
+  const report = await computeCoverage(pkg);
+  expect(Object.fromEntries(report.files.map((entry) => [entry.file, entry.status]))).toEqual({
+    "src/a.ts": "covered",
+    "src/far.ts": "uncovered",
+    "src/uses-beta.ts": "omitted",
+    "src/behind-hub.ts": "omitted",
+    "src/locale.json": "omitted",
+  });
+  expect(report.files.find((entry) => entry.file === "src/uses-beta.ts")?.reason).toBe("unrelated-symbol: imports {beta} from src/a.ts; changed: {alpha}");
+  expect(report.counts).toEqual({ inScope: 5, covered: 1, omitted: 3, uncovered: 1 });
+  expect(Object.keys(report.omissionReasons).map((reason) => reason.split(":")[0]).sort()).toEqual(["hub-damped", "text-hub", "unrelated-symbol"]);
 });

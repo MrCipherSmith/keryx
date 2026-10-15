@@ -7,6 +7,7 @@ import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { isCapDrop, isReasonedDrop } from "./blast-radius";
 import { computeCoverage } from "./coverage-complete";
 import { hasChunkPlan } from "./chunks";
 import { packageScopeFiles } from "./coverage";
@@ -113,7 +114,7 @@ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verd
     return { files: note, radius: note };
   }
   const blast = await readJson<{ dropped?: Array<{ file?: unknown; reason?: unknown }> }>(path.join(ctx.dir, "blast-radius.json"));
-  const cut = new Set((blast?.dropped ?? []).filter((entry) => text(entry.file) && entry.reason !== "pre-filter").map((entry) => entry.file as string));
+  const cut = new Set((blast?.dropped ?? []).filter((entry) => text(entry.file) && isCapDrop(entry.reason)).map((entry) => entry.file as string));
   const uncovered = coverage.files.filter((entry) => entry.status === "uncovered");
   const uncoveredCut = uncovered.filter((entry) => cut.has(entry.file)).map((entry) => entry.file);
   const uncoveredRest = uncovered.filter((entry) => !cut.has(entry.file)).map((entry) => entry.file);
@@ -124,8 +125,10 @@ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verd
     ? ok(`${counts}${waived}`)
     : bad(`${uncoveredRest.length} file(s) uncovered: ${some(uncoveredRest)}; ${counts}`, sliceRepair);
   const waveRepair = hasChunkPlan(ctx.dir) ? `keryx review chunks next --package ${ctx.arg}` : `keryx review chunks plan --package ${ctx.arg}`;
+  const reasoned = (blast?.dropped ?? []).filter((entry) => text(entry.file) && isReasonedDrop(entry.reason)).length;
+  const omittedNote = reasoned === 0 ? "" : `; ${reasoned} graph-related file(s) omitted with a reason (not consumers of the changed contract)`;
   const radius: Verdict = uncoveredCut.length === 0 || coverage.waived
-    ? ok(cut.size === 0 ? "the blast radius cut nothing" : `${cut.size} file(s) cut by the cap, all covered by a chunk pass${waived}`)
+    ? ok(`${cut.size === 0 ? "the blast radius cut nothing" : `${cut.size} file(s) cut by the cap, all covered by a chunk pass${waived}`}${omittedNote}`)
     : bad(`${uncoveredCut.length} of ${cut.size} file(s) cut by the cap were never reviewed: ${some(uncoveredCut)}`, waveRepair);
   return { files, radius };
 }

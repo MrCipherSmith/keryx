@@ -94,7 +94,9 @@
  */
 
 import { computeAffected } from "../gdgraph/affected";
+import { computeSymbolReach, type FileDiff, type SourceReader, type SymbolReachSeed } from "../gdgraph/symbol-reach";
 import type { GraphData } from "../gdgraph/types";
+import type { TextLinksResult } from "./text-links";
 import { relatedByNamingAndDirectory, TEST_FILE_RE } from "../testing/selection";
 import { classifyPath, DEFAULT_REVIEW_SCOPE_CONFIG, type ReviewScopeConfig } from "./scope";
 import { REVIEW_FINDING_SEVERITIES, type ReviewFindingSeverity, type StructuredReviewFinding } from "./types";
@@ -143,8 +145,11 @@ export const DEFAULT_BLAST_RADIUS_CONFIG: BlastRadiusConfig = {
 // The record
 // ---------------------------------------------------------------------------
 
-/** Where an entry came from. `graph` is derived; `related-test` is a name match. */
-export const BLAST_RADIUS_SOURCES = ["graph", "related-test"] as const;
+/**
+ * Where an entry came from. `graph` is derived; `related-test` is a name match;
+ * `text-link` is a file that mentions a string key the diff changed.
+ */
+export const BLAST_RADIUS_SOURCES = ["graph", "related-test", "text-link"] as const;
 export type BlastRadiusSource = (typeof BLAST_RADIUS_SOURCES)[number];
 
 /**
@@ -169,8 +174,36 @@ export type BlastRadiusEntry = {
   isTest: boolean;
 };
 
-export const BLAST_RADIUS_DROP_REASONS = ["cap", "pre-filter"] as const;
+export const BLAST_RADIUS_DROP_REASONS = ["cap", "pre-filter", "unrelated-symbol", "hub-damped", "text-hub"] as const;
 export type BlastRadiusDropReason = (typeof BLAST_RADIUS_DROP_REASONS)[number];
+
+/**
+ * Drops that are a reasoned omission, not unfinished work (flow 457, AC2):
+ *
+ * - `unrelated-symbol` — imports the changed module, but none of the names the
+ *   change touched;
+ * - `hub-damped` — reached only through a high fan-in hub, below the reach
+ *   weight cutoff (see src/gdgraph/symbol-reach.ts);
+ * - `text-hub` — mentions a changed string key that too many files mention to
+ *   follow one by one.
+ *
+ * Coverage counts them as `omitted` under their reason; chunks are planned only
+ * for cap drops; readiness item 2 does not fail on them.
+ */
+export const REASONED_DROP_REASONS = ["unrelated-symbol", "hub-damped", "text-hub"] as const;
+
+/**
+ * True for a drop that is owed a review pass: the cap. A record written before
+ * the reasoned omissions existed carries only `cap` and `pre-filter`, and any
+ * reason this build does not know is treated as owed rather than as excused.
+ */
+export function isCapDrop(reason: unknown): boolean {
+  return reason !== "pre-filter" && !(REASONED_DROP_REASONS as readonly unknown[]).includes(reason);
+}
+
+export function isReasonedDrop(reason: unknown): boolean {
+  return (REASONED_DROP_REASONS as readonly unknown[]).includes(reason);
+}
 
 /**
  * One file that was in the candidate set and is not in the reviewed set.
@@ -216,6 +249,11 @@ export type BlastRadiusCounts = {
   retained: number;
   droppedByCap: number;
   droppedByPreFilter: number;
+  /** Reasoned omissions (flow 457); absent on a record written before them. */
+  droppedUnrelatedSymbol?: number;
+  droppedHubDamped?: number;
+  droppedTextHub?: number;
+  textLinksAdded?: number;
   relatedTestsAdded: number;
   /** Retained entries that are test files. */
   testsRetained: number;
@@ -236,6 +274,18 @@ export type BlastRadius = {
   counts: BlastRadiusCounts;
   /** What the set was computed against, so a stale answer is recognisable. */
   graph: { nodes: number; edges: number };
+  /**
+   * How the graph part was walked: `symbol` (changed exported names, flow 457)
+   * or `file` (every reverse import edge). Absent on an older record (`file`).
+   */
+  reach?: {
+    mode: "symbol" | "file";
+    seeds: SymbolReachSeed[];
+    barrels: string[];
+    textKeys: number;
+    textHubs: Array<{ key: string; kind: string; via: string; hits: number }>;
+    textSkipped: number;
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -300,7 +350,7 @@ type Candidate = {
 };
 
 /** hop asc -> fanIn desc -> path asc. The order `computeAffected` already uses. */
-function rankOrder(a: Candidate, b: Candidate): number {
+function rankOrder(a: Pick<Candidate, "hop" | "fanIn" | "file">, b: Pick<Candidate, "hop" | "fanIn" | "file">): number {
   if (a.hop !== b.hop) {
     return a.hop - b.hop;
   }
@@ -323,6 +373,13 @@ export function computeBlastRadius(input: {
   changedFiles: readonly string[];
   testFiles?: readonly string[] | undefined;
   config?: BlastRadiusConfigOverrides | undefined;
+  /**
+   * Walk changed exported symbols instead of every reverse edge (flow 457).
+   * Without it the radius is the plain file-level `computeAffected` walk.
+   */
+  symbols?: { read: SourceReader; diff?: ReadonlyMap<string, FileDiff> | undefined } | undefined;
+  /** Implicit consumers found by text search over the diff's string keys (flow 457, AC3). */
+  textLinks?: TextLinksResult | undefined;
 }): BlastRadius {
   const config = resolveConfig(input.config);
   const graph = input.graph;
@@ -357,9 +414,37 @@ export function computeBlastRadius(input: {
 
   const closer = closerNeighbours(graph);
   const best = new Map<string, Candidate>();
+  const reasoned = new Map<string, BlastRadiusDrop>();
   let ambiguousSeeds = 0;
+  let reach: BlastRadius["reach"];
 
-  for (const seed of seeds) {
+  if (input.symbols !== undefined) {
+    const result = computeSymbolReach({
+      graph,
+      seeds,
+      changedFiles,
+      diff: input.symbols.diff,
+      read: input.symbols.read,
+      depth: config.depth,
+    });
+    for (const entry of result.reached) {
+      best.set(entry.file, { file: entry.file, hop: entry.hop, fanIn: entry.fanIn, via: entry.via, path: entry.path, source: "graph" });
+    }
+    for (const omission of result.omitted) {
+      reasoned.set(omission.file, {
+        file: omission.file,
+        hop: omission.hop,
+        fanIn: omission.fanIn,
+        via: omission.via,
+        source: "graph",
+        reason: omission.reason,
+        detail: omission.detail,
+      });
+    }
+    reach = { mode: "symbol", seeds: result.seeds, barrels: result.barrels, textKeys: 0, textHubs: [], textSkipped: 0 };
+  }
+
+  for (const seed of input.symbols === undefined ? seeds : []) {
     let result;
     try {
       result = computeAffected(graph, seed, { depth: config.depth, ranked: true });
@@ -399,6 +484,36 @@ export function computeBlastRadius(input: {
     }
   }
 
+  // Text links: a file that mentions a string key the diff changed is a consumer
+  // the import graph cannot see. Ranked at hop 1 — it reads the changed value
+  // directly. A hub key's files are reasoned omissions (at most
+  // TEXT_HUB_FILES_RECORDED per key; the hub's hit count is in the detail).
+  let textLinksAdded = 0;
+  const fanInOf = new Map<string, number>();
+  for (const edge of graph.edges) if (edge.kind !== "unresolved") fanInOf.set(edge.to, (fanInOf.get(edge.to) ?? 0) + 1);
+  if (input.textLinks !== undefined) {
+    for (const link of input.textLinks.links) {
+      const file = normalizeFile(link.file);
+      if (changedSet.has(file) || best.has(file)) continue;
+      reasoned.delete(file);
+      best.set(file, { file, hop: 1, fanIn: fanInOf.get(file) ?? 0, via: link.via, path: [file, link.via], source: "text-link" });
+      textLinksAdded += 1;
+    }
+    for (const hub of input.textLinks.hubs) {
+      for (const raw of hub.files.slice(0, TEXT_HUB_FILES_RECORDED)) {
+        const file = normalizeFile(raw);
+        if (changedSet.has(file) || best.has(file) || reasoned.has(file)) continue;
+        reasoned.set(file, { file, hop: 1, fanIn: fanInOf.get(file) ?? 0, via: hub.via, source: "text-link", reason: "text-hub", detail: hub.detail });
+      }
+    }
+    reach = {
+      ...(reach ?? { mode: "file" as const, seeds: [], barrels: [] }),
+      textKeys: input.textLinks.keys.length,
+      textHubs: input.textLinks.hubs.map((hub) => ({ key: hub.key, kind: hub.kind, via: hub.via, hits: hub.hits })),
+      textSkipped: input.textLinks.skipped.length,
+    };
+  }
+
   // Related tests, of the CHANGED FILES only. Ranked one hop beyond the bound so
   // the cap reaches them before it reaches anything the graph derived.
   let relatedTestsAdded = 0;
@@ -410,6 +525,7 @@ export function computeBlastRadius(input: {
         if (changedSet.has(test) || best.has(test) || classifyPath(test, config.scope) !== null) {
           continue;
         }
+        reasoned.delete(test);
         best.set(test, {
           file: test,
           hop: config.depth + 1,
@@ -456,6 +572,10 @@ export function computeBlastRadius(input: {
         `hop ${cut.hop}, fan-in ${cut.fanIn}, reached via ${cut.via}. It was NOT reviewed.`,
     });
   }
+  for (const drop of [...reasoned.values()].sort(rankOrder)) {
+    if (classifyPath(drop.file, config.scope) !== null) continue;
+    dropped.push(drop);
+  }
 
   const files: BlastRadiusEntry[] = retained.map((candidate) => ({
     file: candidate.file,
@@ -490,13 +610,21 @@ export function computeBlastRadius(input: {
       retained: files.length,
       droppedByCap: dropped.filter((drop) => drop.reason === "cap").length,
       droppedByPreFilter: dropped.filter((drop) => drop.reason === "pre-filter").length,
+      droppedUnrelatedSymbol: dropped.filter((drop) => drop.reason === "unrelated-symbol").length,
+      droppedHubDamped: dropped.filter((drop) => drop.reason === "hub-damped").length,
+      droppedTextHub: dropped.filter((drop) => drop.reason === "text-hub").length,
+      textLinksAdded,
       relatedTestsAdded,
       testsRetained: files.filter((entry) => entry.isTest).length,
       hopHistogram,
     },
     graph: { nodes: graph.nodes.length, edges: graph.edges.length },
+    ...(reach === undefined ? {} : { reach }),
   };
 }
+
+/** How many files of one text-hub key are recorded as omissions; the hub's full hit count is in the detail. */
+export const TEXT_HUB_FILES_RECORDED = 50;
 
 /**
  * `[entry, …, target]` walking INWARD, one hop closer at each step.
@@ -1022,6 +1150,13 @@ export function renderBlastRadiusMarkdown(radius: BlastRadius): string {
   lines.push(`retained: ${radius.counts.retained}`);
   lines.push(`dropped_by_cap: ${radius.counts.droppedByCap}`);
   lines.push(`dropped_by_pre_filter: ${radius.counts.droppedByPreFilter}`);
+  if (radius.reach !== undefined) {
+    lines.push(`reach: ${radius.reach.mode}${radius.reach.barrels.length > 0 ? ` (${radius.reach.barrels.length} barrel(s) passed through)` : ""}`);
+    lines.push(`omitted_unrelated_symbol: ${radius.counts.droppedUnrelatedSymbol ?? 0}`);
+    lines.push(`omitted_hub_damped: ${radius.counts.droppedHubDamped ?? 0}`);
+    lines.push(`omitted_text_hub: ${radius.counts.droppedTextHub ?? 0}`);
+    lines.push(`text_links_added: ${radius.counts.textLinksAdded ?? 0}`);
+  }
   lines.push(`related_tests_added: ${radius.counts.relatedTestsAdded}`);
   lines.push(`tests_retained: ${radius.counts.testsRetained}`);
   lines.push(
@@ -1211,10 +1346,16 @@ export function renderBlastRadiusDispatchBrief(radius: BlastRadius): string {
   for (const entry of radius.files) {
     lines.push(`  - ${entry.file}  [hop ${entry.hop}]  ${entry.path.join(" -> ")}`);
   }
-  if (radius.dropped.length > 0) {
+  const owed = radius.dropped.filter((drop) => !isReasonedDrop(drop.reason)).length;
+  const excused = radius.dropped.length - owed;
+  if (owed > 0) {
+    lines.push("");
+    lines.push(`NOT CHECKED (${owed} dropped by the cap or the pre-filter). This round does not cover them.`);
+  }
+  if (excused > 0) {
     lines.push("");
     lines.push(
-      `NOT CHECKED (${radius.dropped.length} dropped by the cap or the pre-filter). This round does not cover them.`,
+      `OMITTED WITH A REASON (${excused}: they import none of the changed names, sit behind a damped hub, or mention a hub string key). Context, not under regression check.`,
     );
   }
   if (radius.unresolved.length > 0) {
