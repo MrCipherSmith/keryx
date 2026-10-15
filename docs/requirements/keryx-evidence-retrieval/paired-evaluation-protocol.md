@@ -84,3 +84,29 @@ in the first ten results. Unanswerable recall/MRR and missing observations are n
 Paired bootstrap resamples complete query pairs (fixed seed, percentile 95% CI),
 reports missing pairs, and withholds CI for fewer than two pairs. Latency uses
 nearest-rank p50/p95. These helpers alone are not a report or a rollout gate.
+
+
+## Offline orchestration runner
+
+`run-evidence-evaluation.ts` exports an adapter-driven runner for A–E, three
+repetitions, split-separated paired scoring and content-free named failures.
+Repetitions are averaged per query before bootstrap; incomplete triples stay
+missing. Missing adapters never become zero. Source/version/hash/project/split,
+active state and span bounds are checked before scoring. Adapter exceptions are
+not serialized. Adapters are trusted caller-supplied code; the harness neither
+certifies their execution provenance nor grants network/model authorization.
+
+The CLI accepts the same dataset path as the preparer and intentionally loads no
+adapters. Its output contains missing observations, not retrieval measurements.
+Tests inject fixture adapters only. No production A–E adapters are wired yet.
+Lifecycle and visibility classes remain explicitly unsupported until a driver
+can produce actual mutation/final-request proofs; they are not static queries.
+Grounded-answer judgments, embedding accounting, duplicate-token, recovery and
+full ranking artifacts remain future work. This runner is partial infrastructure,
+not the full protocol implementation, a quality report or a completed T12.
+
+Per-observation deadlines default to 30 seconds (configurable 1–300000 ms).
+Expiry requests cooperative cancellation and prevents further adapter calls;
+subsequent observations stay cancelled/missing. It cannot terminate arbitrary
+in-process code or CPU loops; untrusted adapters need process isolation.
+Query splits are restricted to dev/held-out; distractor is source-only.

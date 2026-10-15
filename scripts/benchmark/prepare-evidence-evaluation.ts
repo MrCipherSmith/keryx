@@ -52,6 +52,7 @@ export function prepareEvidenceEvaluation(raw: string) {
   const seen = new Set<string>();
   const compiled = queries.map(query => {
     const id = text(query.id), kind = text(query.class); scope(query); text(query.text);
+    if (query.split === "distractor") throw Error("invalid query split");
     if (seen.has(id)) throw Error("duplicate query"); seen.add(id);
     if (!["answerable", "unanswerable", "conflicting", "paraphrased", "current-visible", "compacted-out",
       "rewritten-cross-project", "revoked", "instruction-shaped"].includes(kind)) throw Error("unknown scenario");
