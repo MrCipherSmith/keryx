@@ -127,7 +127,7 @@
     },
     "AC5": {
       "kind": "exec",
-      "check": "bun test src/hooks/review-publish-guard.test.ts"
+      "check": "bun test src/review/publish-guard.test.ts"
     },
     "AC6": {
       "kind": "exec",
