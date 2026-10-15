@@ -11,12 +11,12 @@
   "title": "Reviews finish faster, complete, with an early verdict",
   "status": "in-progress",
   "createdAt": "2026-10-15T11:21:50.411Z",
-  "updatedAt": "2026-10-15T11:25:27.577Z",
+  "updatedAt": "2026-10-15T11:25:35.997Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:193d8ba5194bd139c12105bf59201d7605345f0caf482bd024d85243a42dbd6d",
+  "acChecksum": "sha256:75b568f039c8f7d5caef4649499bb62515a140ead5c6b76d78fc3aded0b04e03",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -317,6 +317,26 @@
     {
       "at": "2026-10-15T11:25:27.577Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-15T11:25:35.566Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"When the mutate baseline exits non-zero or times out, the command fails with exit code ≠ 0 AND prints the baseline command, its cwd and the last lines of its stdout/stderr; the same tail is written to the mutation evidence file. A test with a deliberately failing baseline asserts the printed tail. [verify: exec `bun test src/review/mutate.test.ts`] · sensitive: failure-scenario\" -> \"When the mutate baseline exits non-zero or times out, the command fails with exit code ≠ 0 AND prints the baseline command, its cwd and the last lines of its stdout/stderr; the same tail is written to the mutation evidence file. A test with a deliberately failing baseline asserts the printed tail. · sensitive: failure-scenario [verify: exec `bun test src/review/mutate.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:25:35.706Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`keryx review retry-plan --package <dir> --next-wave` reads the package's raw results and does not hand out a slice whose result for that reviewer already exists and parses as DONE or DONE_WITH_CONCERNS; it reports how many late results it collected. A test plants a finished result file and asserts the slice is absent from the next wave, and that a malformed file does not count as covered. [verify: exec `bun test src/review/retry-plan.test.ts src/commands/review-slice.test.ts`] · sensitive: failure-scenario\" -> \"keryx review retry-plan --package <dir> --next-wave reads the package raw results and does not hand out a slice whose result for that reviewer already exists and parses as DONE or DONE_WITH_CONCERNS; it reports how many late results it collected. A test plants a finished result file and asserts the slice is absent from the next wave, and that a malformed file does not count as covered. · sensitive: failure-scenario [verify: exec `bun test src/review/retry-plan.test.ts src/commands/review-slice.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:25:35.849Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"On a light round, `review complete` does not refuse for pending mutants and records \"Not run: mutation (light round)\"; on a full attended round the existing mutation refusal is unchanged. [verify: exec `bun test src/review/coverage.test.ts src/review/coverage-complete.test.ts`] · sensitive: revert\" -> \"On a light round, review complete does not refuse for pending mutants and records \"Not run: mutation (light round)\"; on a full attended round the existing mutation refusal is unchanged. · sensitive: revert [verify: exec `bun test src/review/coverage.test.ts src/review/coverage-complete.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:25:35.997Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"`review dispatch-check` fails with `REVIEWER_INPUT_PATH_MISSING`, naming the field, when `skill_path`, `context_doc` or another file path in the payload does not exist, and passes when they exist. [verify: exec `bun test src/review/dispatch-check.test.ts`] · sensitive: failure-scenario\" -> \"review dispatch-check fails with REVIEWER_INPUT_PATH_MISSING, naming the field, when skill_path, context_doc or another file path in the payload does not exist, and passes when they exist. · sensitive: failure-scenario [verify: exec `bun test src/review/dispatch-check.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
     }
   ],
   "acKinds": {
@@ -325,10 +345,12 @@
       "check": "bun test src/review/mutate.test.ts"
     },
     "AC2": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts"
     },
     "AC3": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/review/retry-plan.test.ts src/commands/review-slice.test.ts"
     },
     "AC4": {
       "kind": "exec",
@@ -339,14 +361,16 @@
       "check": "bun test src/review/coverage.test.ts"
     },
     "AC6": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/review/coverage.test.ts src/review/coverage-complete.test.ts"
     },
     "AC7": {
       "kind": "exec",
       "check": "bun test src/review/estimate.test.ts"
     },
     "AC8": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/review/dispatch-check.test.ts"
     },
     "AC9": {
       "kind": "exec",
