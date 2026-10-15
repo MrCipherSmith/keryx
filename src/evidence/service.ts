@@ -1,4 +1,5 @@
 import { lstat, realpath } from "node:fs/promises";
+import { keryxDataDir } from "../session/paths";
 import path from "node:path";
 import type { ArchiveCursorAccess } from "./archive-cursor";
 import { readDescriptorChainAsync, type DescriptorIdentity } from "../lib/descriptor-read";
@@ -14,7 +15,7 @@ export interface EvidenceServiceOptions {
 export async function createEvidenceService(options: EvidenceServiceOptions) {
   const parsed = parseEvidenceConfig(options.config);
   if (!parsed.ok) return parsed;
-  const config = parsed.config, projectRoot = options.projectRoot, dataDir = options.dataDir;
+  const config = parsed.config, projectRoot = options.projectRoot, dataDir = path.resolve(keryxDataDir(options.dataDir));
   const factory = options.scannerFactory ?? createEvidenceScanner;
   const disabled = () => ({ code: "disabled" as const, diagnostics: ["disabled"] });
   const unavailable = () => ({ code: "source-unavailable" as const, diagnostics: ["source-unreadable"] });
@@ -46,7 +47,7 @@ export async function createEvidenceService(options: EvidenceServiceOptions) {
         const scan = await factory(scope, controller.signal);
         if (controller.signal.aborted || performance.now() >= deadline) return timeout();
         if (!scan) return unavailable();
-        const common = { projectRoot: scope, expectedRootIdentity: identity, maxSourceBytes: config.maxSourceBytes,
+        const common = { dataDir, projectRoot: scope, expectedRootIdentity: identity, maxSourceBytes: config.maxSourceBytes,
           timeoutMs: Math.max(1, Math.floor(deadline - performance.now())), maxRecords: config.maxChunks,
           scanner: scan, signal: controller.signal };
         return kind === "file" ? await readEvidenceFile({ ...common, path: locator, roots: config.roots }) :

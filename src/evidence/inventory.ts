@@ -5,6 +5,7 @@ import { lstat, realpath } from "node:fs/promises";
 import { DescriptorReadError, listDescriptorDirectory } from "../lib/descriptor-read";
 import { parseEvidenceConfig, safeRelativePath } from "./config";
 import { evidenceFilePathDenied } from "./sources";
+import { evidenceFileOutsideSessionStore } from "./file-policy";
 import type { EvidenceSourceScope } from "./lifecycle";
 
 type InventoryResult = { code: "ok"; scopes: EvidenceSourceScope[] } |
@@ -13,7 +14,7 @@ type InventoryResult = { code: "ok"; scopes: EvidenceSourceScope[] } |
 export async function collectEvidenceFiles(options: {
   projectRoot: string; config?: unknown; signal?: AbortSignal; dataDir?: string;
 }): Promise<InventoryResult> {
-  const dataDir = options.dataDir;
+  const dataDir = path.resolve(keryxDataDir(options.dataDir));
   const parsed = parseEvidenceConfig(options.config);
   if (!parsed.ok) return { code: "source-unavailable", scopes: [] };
   const config = parsed.config;
@@ -35,6 +36,7 @@ export async function collectEvidenceFiles(options: {
     while (directories.length) {
       checkpoint();
       const relative = directories.pop()!;
+      if (!evidenceFileOutsideSessionStore(root, relative, dataDir)) continue;
       if (seen.has(relative)) continue;
       seen.add(relative);
       const entries = listDescriptorDirectory(root, relative, {
@@ -43,7 +45,8 @@ export async function collectEvidenceFiles(options: {
       visited += entries.length;
       for (const entry of entries) {
         const candidate = relative ? `${relative}/${entry.name}` : entry.name;
-        if (!safeRelativePath(candidate) || evidenceFilePathDenied(candidate)) continue;
+        if (!safeRelativePath(candidate) || evidenceFilePathDenied(candidate) ||
+            !evidenceFileOutsideSessionStore(root, candidate, dataDir)) continue;
         if (entry.kind === "directory") directories.push(candidate);
         if (entry.kind === "file") files.add(candidate);
         if (files.size > config.maxChunks) return { code: "budget-exceeded", scopes: [] };

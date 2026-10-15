@@ -158,3 +158,18 @@ test("inventory shares candidate budget between configured files and archives", 
     } })).toEqual({ code: "budget-exceeded", scopes: [] });
   } finally { await rm(base, { recursive: true, force: true }); }
 });
+
+test("file inventory excludes in-checkout session stores without archive opt-in", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "erl-store-exclusion-"));
+  const dataDir = path.join(root, "docs/store");
+  try {
+    await mkdir(path.join(dataDir, "sessions/foreign/session"), { recursive: true });
+    await writeFile(path.join(dataDir, "sessions/foreign/session/archive.jsonl"), "opaque replay");
+    await writeFile(path.join(root, "docs/note.txt"), "ordinary evidence");
+    const { collectEvidenceFiles } = await import(moduleName);
+    expect(await collectEvidenceFiles({ projectRoot: root, dataDir,
+      config: { schemaVersion: 1, enabled: true, roots: ["docs"], sessionArchives: false } })).toEqual({
+      code: "ok", scopes: [{ kind: "file", id: "docs/note.txt" }],
+    });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

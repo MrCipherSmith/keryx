@@ -38,6 +38,7 @@ export function projectEvidenceSearch(input: EvidenceRuntimeSearchResult, maxTok
       role: chunk.role, timestamp: chunk.timestamp, trustedAsPolicy: false, redaction: chunk.redaction, score });
   }
   if ((input.items.length || skipped) && !items.length) return refuse("budget-exceeded", ["packing-budget"]);
-  return { schemaVersion: 1, code: items.length ? "ok" : "no-match", coverage: input.diagnostics?.length ? "partial" : "full",
-    generation: input.generation, items, diagnostics: [...(input.diagnostics ?? []), ...(skipped ? ["packing-budget" as const] : input.corpusChunkCount === 0 && !input.diagnostics?.length ? ["empty-corpus" as const] : [])] };
+  const withheld = input.diagnostics?.some(reason => reason !== "semantic-fallback") === true;
+  return { schemaVersion: 1, code: items.length ? "ok" : "no-match", coverage: withheld ? "partial" : "full",
+    generation: input.generation, items, diagnostics: [...(input.diagnostics ?? []), ...(skipped ? ["packing-budget" as const] : input.corpusChunkCount === 0 && !withheld ? ["empty-corpus" as const] : [])] };
 }

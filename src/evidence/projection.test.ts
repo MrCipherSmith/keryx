@@ -51,3 +51,14 @@ test("query refusal reports query-budget before generation load", () => {
   expect(result.generation).toBeNull(); expect(result.diagnostics).toEqual(["query-budget"]);
   expect(validate(result)).toBe(true);
 });
+
+test("semantic fallback is informational, not withheld source coverage", () => {
+  const result = projectEvidenceSearch({ code: "ok", generation: "g", items: [ranked], diagnostics: ["semantic-fallback"] });
+  expect(result.coverage).toBe("full"); expect(result.diagnostics).toEqual(["semantic-fallback"]);
+  expect(validate(result)).toBe(true);
+  const empty = projectEvidenceSearch({ code: "ok", generation: "g", items: [], corpusChunkCount: 0, diagnostics: ["semantic-fallback"] });
+  expect(empty.coverage).toBe("full"); expect(empty.code).toBe("no-match");
+  expect(empty.diagnostics).toEqual(["semantic-fallback", "empty-corpus"]); expect(validate(empty)).toBe(true);
+  const withheld = projectEvidenceSearch({ code: "ok", generation: "g", items: [ranked], diagnostics: ["semantic-fallback", "source-denied"] });
+  expect(withheld.coverage).toBe("partial"); expect(validate(withheld)).toBe(true);
+});

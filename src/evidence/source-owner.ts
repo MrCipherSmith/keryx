@@ -92,7 +92,7 @@ export async function createEvidenceSourceOwner(options: {
           if (!active() || (sources.length && !scanner)) return false;
           for (const ref of sources) {
             if (!active()) return false;
-            const common = { projectRoot: root, expectedRootIdentity: rootIdentity, maxSourceBytes: config.maxSourceBytes,
+            const common = { ...(dataDir !== undefined ? { dataDir } : {}), projectRoot: root, expectedRootIdentity: rootIdentity, maxSourceBytes: config.maxSourceBytes,
               maxRecords: config.maxChunks, timeoutMs: Math.max(1, Math.floor(deadline - performance.now())), signal,
               ...(scanner ? { scanner } : {}) };
             const result = ref.scope.kind === "file" ?

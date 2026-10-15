@@ -56,25 +56,12 @@ test("runtime hybrid discovers semantic-only evidence without query cache writes
   } finally { if (created.ok) created.runtime.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-test("runtime hybrid without an embedding adapter falls back without query writes", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "erl-hybrid-fallback-"));
-  await mkdir(path.join(root, "docs"));
-  await writeFile(path.join(root, "docs/a.txt"), "orchard apple");
-  const created = await createEvidenceRuntime({ projectRoot: root,
-    config: { schemaVersion: 1, enabled: true, mode: "hybrid", roots: ["docs"] }, scannerFactory: async () => scanner });
-  try {
-    expect(created.ok).toBe(true);
-    if (!created.ok) throw Error(created.diagnostics.join(","));
-    expect((await created.runtime.buildConfiguredFiles()).code).toBe("ok");
-    const directory = path.join(root, ".metaproject/evidence");
-    const before = (await readdir(directory)).sort();
-    const result = await created.runtime.searchPublic("apple", value => value);
-    expect(result.code).toBe("ok");
-    expect(result.items[0]?.text).toBe("orchard apple");
-    expect(result.diagnostics).toEqual(["semantic-fallback"]);
-    const miss = await created.runtime.searchPublic("fruit garden", value => value);
-    expect(miss.code).toBe("no-match");
-    expect(miss.diagnostics).toEqual(["semantic-fallback"]);
-    expect((await readdir(directory)).sort()).toEqual(before);
-  } finally { if (created.ok) created.runtime.close(); await rm(root, { recursive: true, force: true }); }
+test("enabled hybrid without an embedding owner is explicitly gated", async () => {
+  const created = await createEvidenceRuntime({ projectRoot: "/nonexistent-hybrid-owner",
+    config: { schemaVersion: 1, enabled: true, mode: "hybrid", roots: ["docs"] } });
+  expect(created).toEqual({ ok: false, diagnostics: ["hybrid-owner-unavailable"] });
+  const disabled = await createEvidenceRuntime({ projectRoot: "/nonexistent-hybrid-owner",
+    config: { schemaVersion: 1, enabled: false, mode: "hybrid" } });
+  expect(disabled.ok).toBe(true);
+  if (disabled.ok) { expect(disabled.runtime.status().code).toBe("disabled"); disabled.runtime.close(); }
 });

@@ -137,3 +137,24 @@ describe("ERL scanner and archive fail-closed contracts", () => {
     } finally { cursor.clear(); }
   });
 });
+
+test("session store cannot bypass archive ownership through generic file roots", async () => {
+  const dataDir = path.join(projectRoot, "docs/store");
+  await mkdir(path.join(dataDir, "sessions/foreign/session"), { recursive: true });
+  const relative = "docs/store/sessions/foreign/session/archive.jsonl";
+  await writeFile(path.join(projectRoot, relative), "opaque replay");
+  const result = await read(relative, { dataDir });
+  expect(result.code).toBe("source-unavailable");
+  expect(result.diagnostics).toContain("source-denied"); expect(result.text).toBeUndefined();
+  const alias = path.join(base, "store-alias"); await symlink(dataDir, alias);
+  expect((await read(relative, { dataDir: alias })).code).toBe("source-unavailable");
+  const { readVerifiedEvidenceFile } = await import(sourceModule);
+  const futureStore = path.join(base, "future-store");
+  const candidate = await readVerifiedEvidenceFile({ projectRoot, path: relative, dataDir: futureStore,
+    roots: ["docs"], maxSourceBytes: 1024,
+    scanner: async text => ({ code: "ok", text, redaction: "not-needed" }) });
+  expect(candidate.code).toBe("ok");
+  await symlink(dataDir, futureStore);
+  if (candidate.code !== "ok") throw Error("candidate unavailable");
+  expect(candidate.confirm()).toBe(false);
+});

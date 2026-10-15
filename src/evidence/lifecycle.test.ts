@@ -155,3 +155,23 @@ test("dotted session ID revocation persists across lifecycle reopen", async () =
   try { expect(() => next.beginReader(scope)).toThrow(); }
   finally { next.close(); reopened.close(); }
 });
+
+test("writer contention does not poison retained lifecycle or active readers", async () => {
+  const root = await fixture(), store = openEvidenceStorage(root), foreign = openEvidenceStorage(root);
+  const lifecycle = createEvidenceLifecycle(store), reader = lifecycle.beginReader(source);
+  try {
+    for (const action of [() => lifecycle.revokeAndDrain(source), () => lifecycle.clearDerived()]) {
+      const before = store.read("ledger.json", 300000);
+      let pending: Promise<unknown> | undefined;
+      foreign.withWriter(() => { pending = action(); });
+      await expect(pending!).rejects.toThrow("evidence writer busy");
+      expect(store.read("ledger.json", 300000)).toEqual(before);
+      expect(reader.signal.aborted).toBe(false);
+      expect(reader.deliver(() => "still eligible")).toBe("still eligible");
+      const next = lifecycle.beginReader(source); next.close();
+    }
+    reader.close();
+    await lifecycle.revokeAndDrain(source);
+    expect(() => lifecycle.beginReader(source)).toThrow();
+  } finally { reader.close(); lifecycle.close(); store.close(); foreign.close(); }
+});

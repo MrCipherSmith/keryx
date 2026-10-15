@@ -2,6 +2,7 @@ import { canAppendArchive, createArchiveCheckpoint } from "./archive-checkpoint"
 import { isSessionEvidenceId } from "../session/evidence-revocation";
 import { lstat, realpath } from "node:fs/promises";
 import { createFileConfirmation } from "./file-verifier";
+import { evidenceFileOutsideSessionStore } from "./file-policy";
 import { readDescriptorChainAsync, type DescriptorIdentity } from "../lib/descriptor-read";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -86,15 +87,16 @@ export async function createEvidenceScanner(projectRoot: string): Promise<Eviden
   };
 }
 type EvidenceFileOptions = {
-  projectRoot: string; path: string; roots: string[]; maxSourceBytes: number; scanner?: EvidenceScanner; timeoutMs?: number; maxRecords?: number; signal?: AbortSignal; expectedRootIdentity?: DescriptorIdentity;
+  dataDir?: string; projectRoot: string; path: string; roots: string[]; maxSourceBytes: number; scanner?: EvidenceScanner; timeoutMs?: number; maxRecords?: number; signal?: AbortSignal; expectedRootIdentity?: DescriptorIdentity;
 };
 async function readEvidenceFileInternal(opts: EvidenceFileOptions, verified: boolean) {
-  opts = { ...opts, roots: Array.isArray(opts.roots) ? [...opts.roots] : opts.roots };
+  opts = { ...opts, dataDir: path.resolve(keryxDataDir(opts.dataDir)), roots: Array.isArray(opts.roots) ? [...opts.roots] : opts.roots };
   if (!opts.scanner || !safeRelativePath(opts.path) || denied(opts.path) || !Array.isArray(opts.roots) ||
       !opts.roots.some(root => safeRelativePath(root) && !denied(root) && inside(path.resolve(root), path.resolve(opts.path)))) return refused("source-denied");
   try {
     const budget = sourceBudget(opts); checkBudget(budget);
     const root = await realpath(opts.projectRoot), rootIdentity = opts.expectedRootIdentity ?? await lstat(root);
+    if (!evidenceFileOutsideSessionStore(root, opts.path, opts.dataDir)) return refused("source-denied");
     const targetIdentity = await lstat(path.join(root, opts.path));
     const bytes = await boundedBytes(root, opts.path, opts.maxSourceBytes, rootIdentity, targetIdentity);
     const original = decode(bytes);
@@ -104,9 +106,12 @@ async function readEvidenceFileInternal(opts: EvidenceFileOptions, verified: boo
     const versionHash = evidenceHash(bytes);
     const result = { ...clean, versionHash, trustedAsPolicy: false as const,
       fileProjection: { redaction: clean.redaction, originalByteLength: bytes.length, originalLineCount: original.split("\n").length } };
+    if (!evidenceFileOutsideSessionStore(root, opts.path, opts.dataDir)) return refused("source-denied");
     if (!verified) return result;
-    const confirm = createFileConfirmation({ root, relativePath: opts.path, maxBytes: opts.maxSourceBytes,
+    const confirmBytes = createFileConfirmation({ root, relativePath: opts.path, maxBytes: opts.maxSourceBytes,
       rootIdentity, targetIdentity, versionHash, ...(opts.signal ? { signal: opts.signal } : {}) });
+    const confirm = () => evidenceFileOutsideSessionStore(root, opts.path, opts.dataDir) && confirmBytes() &&
+      evidenceFileOutsideSessionStore(root, opts.path, opts.dataDir);
     return { ...result, confirm };
   } catch (error) { return sourceFailure(error); }
 }

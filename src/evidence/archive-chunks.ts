@@ -102,8 +102,11 @@ export function isArchiveChunk(chunk: LexicalChunk): chunk is ArchiveChunk {
  * Raw record identity alone is insufficient: redaction policy can change text. */
 function reusableRecord(chunks: readonly ArchiveChunk[], record: ArchiveRecord): boolean {
   const bytes = Buffer.from(record.text);
-  let end = 0;
+  let end = 0, lineCursor = 0, startLine = 1;
   for (const chunk of chunks) {
+    while (lineCursor < chunk.startByte && lineCursor < bytes.length) {
+      if (bytes[lineCursor++] === 10) startLine++;
+    }
     if (chunk.role !== record.role || chunk.timestamp !== record.timestamp || chunk.redaction !== record.redaction ||
         chunk.trustedAsPolicy !== false || chunk.versionHash !== chunks[0]!.versionHash ||
         chunk.locator.endByte !== record.endByte - record.startByte - 1 ||
@@ -113,7 +116,7 @@ function reusableRecord(chunks: readonly ArchiveChunk[], record: ArchiveRecord):
         !chunk.text || Buffer.byteLength(chunk.text) > 400 ||
         chunk.contentHash !== createHash("sha256").update(chunk.text).digest("hex") ||
         !bytes.subarray(chunk.startByte, chunk.endByte).equals(Buffer.from(chunk.text)) ||
-        chunk.startLine !== bytes.subarray(0, chunk.startByte).toString().split("\n").length ||
+        chunk.startLine !== startLine ||
         chunk.endLine !== chunk.startLine + chunk.text.split("\n").length - 1) return false;
     end = chunk.endByte;
   }

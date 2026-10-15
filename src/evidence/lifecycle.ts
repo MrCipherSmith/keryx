@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { EvidenceStorage } from "./storage";
+import { EvidenceWriterBusyError, type EvidenceStorage } from "./storage";
 import { createSessionEvidenceOwner, isSessionEvidenceId } from "../session/evidence-revocation";
 export interface EvidenceSourceScope { kind: "file" | "session-archive"; id: string }
 interface Ledger { version: 1; revision: number; revoked: string[]; epoch: number; clearing: boolean }
@@ -35,7 +35,7 @@ export function createEvidenceLifecycle(store: EvidenceStorage, options: { creat
       if ([...observed].some(item => !ledger.revoked.includes(item))) throw new Error("evidence tombstone rollback");
       for (const item of ledger.revoked) observed.add(item);
       revision = ledger.revision; epoch = ledger.epoch; return ledger;
-    } catch (error) { poison(); throw error; }
+    } catch (error) { if (!(error instanceof EvidenceWriterBusyError)) poison(); throw error; }
   }
   store.withWriter(() => {
     let ledger = store.read("ledger.json", cap);
@@ -100,7 +100,7 @@ export function createEvidenceLifecycle(store: EvidenceStorage, options: { creat
             store.writeAtomic("ledger.json", bytes); revision = next.revision; observed.add(sourceKey);
           }
         });
-      } catch (error) { poison(); throw error; }
+      } catch (error) { if (!(error instanceof EvidenceWriterBusyError)) poison(); throw error; }
       // P1 conservatively drops the whole derived namespace; P2 may collect selectively.
       await lifecycle.clearDerived(timeoutMs);
     },
@@ -146,7 +146,7 @@ export function createEvidenceLifecycle(store: EvidenceStorage, options: { creat
           return true;
         });
         if (!selected) return false;
-      } catch (error) { poison(); throw error; }
+      } catch (error) { if (!(error instanceof EvidenceWriterBusyError)) poison(); throw error; }
       for (const reader of readers) reader.controller.abort();
       while (true) {
         const ledger = read();

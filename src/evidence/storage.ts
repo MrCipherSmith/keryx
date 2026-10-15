@@ -7,6 +7,8 @@ let storageLibrary: ReturnType<typeof dlopen> | undefined;
 
 /** Private flat namespace. No source reads, async callbacks, or tool paths. */
 export class EvidenceStorageAbsentError extends Error {}
+/** Nonblocking contention before the writer callback or any mutation. */
+export class EvidenceWriterBusyError extends Error {}
 export function openEvidenceStorage(projectRoot: string, create = true) {
   if (process.platform !== "darwin" && process.platform !== "linux") throw new Error("evidence storage unavailable");
   const darwin = process.platform === "darwin";
@@ -159,7 +161,11 @@ export function openEvidenceStorage(projectRoot: string, create = true) {
       if (current < 0) throw new Error("writer lease unavailable");
       try { if (!same(regular(current), fstatSync(leaseFd))) throw new Error("writer lease changed"); }
       finally { closeSync(current); }
-      if (leased || c.flock!(leaseFd, 2 | 4) !== 0) throw new Error("evidence writer busy");
+      if (leased) throw new EvidenceWriterBusyError("evidence writer busy");
+      if (c.flock!(leaseFd, 2 | 4) !== 0) {
+        if (errno() === (darwin ? 35 : 11)) throw new EvidenceWriterBusyError("evidence writer busy");
+        throw new Error("evidence writer lease failed");
+      }
       leased = true;
       try {
         validate();

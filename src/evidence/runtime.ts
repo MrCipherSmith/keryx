@@ -35,6 +35,8 @@ export async function createEvidenceRuntime(options: EvidenceServiceOptions & { 
   const parsed = parseEvidenceConfig(options.config);
   if (!parsed.ok) return parsed;
   const config = parsed.config;
+  if (config.enabled && config.mode === "hybrid" && !options.embedding)
+    return { ok: false as const, diagnostics: ["hybrid-owner-unavailable"] };
   // Capture options before the first await; callers cannot redirect a pending operation.
   const embedding = options.embedding ? Object.freeze({ ...options.embedding,
     identity: Object.freeze({ ...options.embedding.identity }), spec: Object.freeze({ ...options.embedding.spec }) }) : undefined;
