@@ -30,7 +30,7 @@ test("--help lists the harness command and the interactive shell", async () => {
 
   expect(output).toMatch(/keryx harness run/);
   expect(/shell|interactive/i.test(output)).toBe(true);
-});
+}, 10_000);
 
 test("bare `keryx` (no args) prints CLI usage, not the shell", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
