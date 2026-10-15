@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { renderScopedDiff, buildReviewScope } from "./scope";
 import {
   DEFAULT_SLICE_MAX_BYTES,
+  DEFAULT_WAVE_BYTES,
   buildSlices,
+  manifestSizeProblem,
+  waveBytesOf,
   byteLength,
   classifyLedger,
   looksLikeScopedDiff,
@@ -167,5 +170,21 @@ describe("buildSlices", () => {
     expect(smaller.length).toBeGreaterThan(1);
     expect(smaller[0]?.id).toBe("r1-x-01");
     expect(new Set(smaller.flatMap((slice) => slice.files)).size).toBe(4);
+  });
+});
+
+describe("waveBytesOf never returns NaN", () => {
+  test("the manifest's own waveBytes, else maxBytes raised to the default wave", () => {
+    expect(waveBytesOf({ maxBytes: 1000, waveBytes: 5000 })).toBe(5000);
+    expect(waveBytesOf({ maxBytes: 1000 })).toBe(DEFAULT_WAVE_BYTES);
+    expect(waveBytesOf({ maxBytes: DEFAULT_WAVE_BYTES * 2 })).toBe(DEFAULT_WAVE_BYTES * 2);
+  });
+
+  test("a manifest with neither size is refused with a message, not turned into NaN", () => {
+    const unsized: { maxBytes?: number; waveBytes?: number } = {};
+    expect(manifestSizeProblem(unsized)).toContain("neither waveBytes nor maxBytes");
+    expect(() => waveBytesOf(unsized)).toThrow("neither waveBytes nor maxBytes");
+    expect(() => waveBytesOf({ maxBytes: Number.NaN, waveBytes: Number.NaN })).toThrow("re-run `keryx review slice`");
+    expect(manifestSizeProblem({ maxBytes: 1000 })).toBeUndefined();
   });
 });
