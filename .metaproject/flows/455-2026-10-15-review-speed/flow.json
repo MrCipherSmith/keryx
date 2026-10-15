@@ -11,7 +11,7 @@
   "title": "Reviews finish faster, complete, with an early verdict",
   "status": "in-progress",
   "createdAt": "2026-10-15T11:21:50.411Z",
-  "updatedAt": "2026-10-15T12:00:08.158Z",
+  "updatedAt": "2026-10-15T12:22:33.077Z",
   "source": {
     "type": "description",
     "ref": null
@@ -211,7 +211,7 @@
       "id": "T11",
       "title": "Verify + review round + PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T10"
@@ -228,7 +228,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -406,6 +407,11 @@
       "at": "2026-10-15T12:00:08.158Z",
       "event": "task-attempt",
       "detail": "T11: started (attempt 1) — review round 1: 1 blocker, 3 major; fix lanes 1+2"
+    },
+    {
+      "at": "2026-10-15T12:22:33.077Z",
+      "event": "task-done",
+      "detail": "T11: Verify + review round + PR"
     }
   ],
   "acKinds": {

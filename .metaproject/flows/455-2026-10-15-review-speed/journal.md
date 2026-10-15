@@ -40,3 +40,5 @@ Two opus reviewers on origin/main...HEAD.
 - Skill: depth auto needs file list + line count; preflight 4 placed before a package exists; verdict misses shell-host raw dir and verifier refutations; --depth light honoured with --all; early verifier contradicts wave order/9b/consolidated findings; shell-host rule wrong (children can read project files); checklist wording; attended-only tail wording; recovery order.
 Fix lanes dispatched: lane 1 (depth gate, required, verdict, estimate, graph-timeout), lane 2 (late results, mutate, gitignore, evidence naming, dispatch-check help). Skill text after both.
 - 2026-10-15T12:00:08.158Z - task-attempt: T11: started (attempt 1) — review round 1: 1 blocker, 3 major; fix lanes 1+2
+- 2026-10-15T12:22:33.077Z - task-done: T11: Verify + review round + PR
+- 2026-10-15: PR https://github.com/MrCipherSmith/keryx/pull/1029 opened (T11). Merge is the owner's; then T12 patch release.
