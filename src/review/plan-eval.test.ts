@@ -82,6 +82,27 @@ describe("a large diff", () => {
   });
 });
 
+describe("eval regressions: findings the old plan routed must land by routing alone", () => {
+  // Minimal hunks of PR #424 round 1 and PR #1005 with their ground-truth majors. The audit sample is off, so a finding
+  // lands only because routing gave its slice the finding's reviewer (or a risk class made it deep), never by luck.
+  const FIXTURES = path.join(import.meta.dir, "fixtures", "plan-eval");
+  const truth = parseGroundTruth(readFileSync(path.join(FIXTURES, "truth.json"), "utf8"));
+
+  for (const [name, file] of [["agent instructions change routes review-architecture (PR #424)", "pr424-flow-orchestrator-skill.diff"], ["a git argv built from a provenance value routes review-security-code (PR #1005)", "pr1005-staleness.diff"]] as const) {
+    test(name, () => {
+      const diff = readFileSync(path.join(FIXTURES, file), "utf8");
+      for (const head of ["a", "b", "c"]) {
+        const result = evaluatePlans({ diff, roles: ROLES_418, findings: truth, maxBytes: 18_000, waveBytes: 54_000, head, auditRate: 0 });
+        const inDiff = result.findings.filter((f) => f.how !== "not-in-diff");
+        expect(inDiff.length).toBeGreaterThan(0);
+        for (const finding of inDiff) {
+          expect({ id: finding.id, landed: finding.landed, how: finding.how.startsWith("owner") }).toEqual({ id: finding.id, landed: true, how: true });
+        }
+      }
+    });
+  }
+});
+
 describe("ground truth input", () => {
   test("a canonical array, a findings.json object and a report's keryx:findings block all parse; entries without a file are left out", () => {
     const list = [{ id: "A", severity: "major", file: "src/a.ts", line: 3, reviewer: "review-logic" }, { id: "B", severity: "minor" }];
