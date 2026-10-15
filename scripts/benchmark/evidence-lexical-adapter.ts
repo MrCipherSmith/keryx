@@ -80,7 +80,8 @@ export async function createLexicalEvaluationAdapter(raw: string) {
           for (const item of result.items) {
             const source = context.files.get(item.sourcePath);
             const meta = source && metadata.get(source.id);
-            if (!source || !meta || item.versionHash !== meta.sourceHash || !item.locator ||
+            if (!source || !meta || item.versionHash !== meta.sourceHash ||
+                !("locator" in item) || !("redaction" in item) || !item.locator ||
                 item.locator.kind !== "file" || item.redaction !== "not-needed") {
               // A redacted envelope does not prove retrieval of every original byte.
               return { status: "failed" as const };
