@@ -369,6 +369,26 @@ itself draws between a reviewer's claim (`severity`, `problem`, …) and what
 became of it (`disposition`), which a reviewer never states and this pass
 does not either.
 
+## Clean context — why, the log, the three accepted paths
+
+A review must be reproducible from its package: the same inputs give the same context, whoever runs it and whatever that agent remembers from earlier work. So the round starts empty and every input has a named source.
+
+**Inputs.** Only the orchestrator's context stages (scope, Review Context Pack, the memory stage, layers) and, for a reviewer, its payload. The agent's session memory, the auto-memory index (`MEMORY.md`), remembered feedback and the earlier conversation are not inputs, and neither is a second memory search made "to double-check".
+
+**The three accepted paths** are known and kept on the operator's decision (poll 179), not leaks:
+
+1. `prior_findings` — findings of an earlier round of the same package enter by design from round 2 on.
+2. Review-notes and skill learning — auto-accepted output of earlier reviews reaches a later one only through the memory stage, as accepted memory.
+3. A reviewer's `memory_search` — the reviewer agents keep it as a lookup in the project's recorded lessons.
+
+**One memory read, and the log.** The stage query is `keryx memory search "<changed modules and the concepts they touch>" --status accepted`, once. Pass the same text to `keryx review start … --memory-query "<query>"` so the manifest's `cleanContext` block holds it next to the start time. keryx writes the orchestrator log, `<package>/tool-calls/orchestrator.jsonl`, on its own: `keryx review start` and `keryx review attach` mark the package active, and every `keryx memory` command and every MCP memory tool (`memory_search`, `memory_handoff`, `memory_propose`) appends one line naming its caller. You do not write that file and must not edit it; a hand-written line is a forgery the readiness item cannot tell apart from a record. A call by a `spawn_subagent` child is recorded under the child's reviewer id and is not judged by item 10. A call from a host that names no caller is recorded as `unattributed`: it warns in the item's detail line and never blocks. Reviewer logs stay in their own files.
+
+Item 10, `memory-outside-stage`, reads that log. Outside the stage is: a memory search with a different query, a search without `--status accepted`, any other memory command or MCP memory tool, and a stage call stamped before the round started. The same query repeated is the stage. Repair is to rerun from a session whose only memory read is the stage; only `keryx review complete <package> --waive memory-outside-stage "<operator quote>"` from a terminal lifts it. With no orchestrator log the item passes and its evidence says it could not see your reads; with a log that holds no memory call it passes and says so. Only calls that go through keryx are visible: a read through a tool keryx does not wrap is not in the log.
+
+**Open questions.** One general rule, replacing per-fork wording: the answer is in this skill or `SKILL.detail.md`, or it is the user's. Interactive: one `AskUserQuestion`. Unattended: the whole output is one line, `STATUS: BLOCKED question — <the question>`, and you stop. A guess and a recollection are both wrong answers.
+
+**Named limit.** An agent runtime that loads its memory before this skill starts cannot be prevented by keryx. The guarantee is instruction plus detection, not isolation, and reads of the agent's personal memory outside `keryx memory` are not visible to the log.
+
 ## Start questions (Step 5) — once per round, after the context pack
 
 The round asks its operator three questions, once, in one interaction, after

@@ -35,7 +35,12 @@ async function tsFiles(dir: string): Promise<string[]> {
 // are pure — the port is a types-only interface, the operations file is pure
 // descriptors + projections, and the reference adapter composes ONLY the service
 // facades already allow-listed above. No module internals cross the boundary.
+//
+// `../review/orchestrator-log` is permitted (flow 454): the MCP memory tools append one line to the active review
+// package's call log. It is a single append-only recorder; it imports a type from the harness, `lib/*` and two pure
+// review modules (the active-review pointer and the log-line reader), and no module internals cross the boundary.
 const ALLOWED_EXTERNAL = new Set([
+  "../review/orchestrator-log",
   "../gdgraph/query",
   "../gdgraph/types",
   "../security/service",

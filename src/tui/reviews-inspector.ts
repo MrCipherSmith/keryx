@@ -3,6 +3,7 @@
 // CLI does not. Read-only: opening it reads the managed review packages and changes nothing.
 
 import { paritySummary } from "../review/parity";
+import { memoryLogNote } from "../review/readiness";
 import { formatReviewDepthLines, layersLine, loadReviewDepth, renderReviewDepthText, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewDepthRow } from "./review-panel";
 import { createReviewLayersActions, type ReviewLayersActions } from "./review-layers-actions";
 import { computeBotMetrics, formatRatio, renderBotMetrics, type BotMetrics, type ReviewRow } from "../review/bot/metrics";
@@ -58,7 +59,9 @@ export function projectReviewsReadinessLines(depth: readonly ReviewDepthRow[] | 
     .map((row) => {
       const report = row.readiness!;
       const failing = report.items.filter((item) => item.status === "fail").map((item) => item.id);
-      return wrapLines(failing.length === 0 ? `${row.reviewId}: ${report.verdict}` : `${row.reviewId}: ${report.verdict}, ${failing.join(", ")}`, width);
+      const verdict = failing.length === 0 ? `${row.reviewId}: ${report.verdict}` : `${row.reviewId}: ${report.verdict}, ${failing.join(", ")}`;
+      const note = memoryLogNote(report);
+      return wrapLines(note === "" ? verdict : `${verdict} (${note})`, width);
     });
 }
 

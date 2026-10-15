@@ -64,6 +64,8 @@ export interface SubagentContext {
   detected: readonly DetectedProviderLike[];
   config?: SubagentConfig;
   parentLeafEntryId?: string;
+  /** Count this child against the named scope (a review wave) instead of the ledger's own child count. */
+  childScope?: string;
 }
 
 /** One subagent dispatch request (the per-child variable inputs). */
@@ -125,7 +127,7 @@ export function spawnSubagent(
     caps: {
       maxTreeDepth: config.maxTreeDepth ?? DEFAULT_MAX_TREE_DEPTH,
       maxChildren: config.maxChildren ?? DEFAULT_MAX_CHILDREN,
-      currentChildCount: ctx.ledger.childCount,
+      currentChildCount: ctx.childScope === undefined ? ctx.ledger.childCount : ctx.ledger.scopeChildCount(ctx.childScope),
     },
     childRequest: {
       attempt: request.attempt,
@@ -149,7 +151,7 @@ export function spawnSubagent(
   // spawn. Uses the same fail-closed subset check; a mismatch (should not happen
   // since spawnChild already granted against `ledger.remaining`) is surfaced, not
   // silently ignored.
-  const admitted = ctx.ledger.admit(request.budgetRequest);
+  const admitted = ctx.ledger.admit(request.budgetRequest, ctx.childScope);
   if (!admitted.ok) {
     return { ok: false, reason: `ledger admission denied: ${admitted.reason}` };
   }

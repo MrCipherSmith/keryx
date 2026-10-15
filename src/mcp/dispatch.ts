@@ -16,6 +16,7 @@ import {
   type ResourceListing,
 } from "./resources";
 import { validateToolOutput, validateTextOutput, type OutputRedaction } from "./redact-seam";
+import { recordProcessCall } from "../review/orchestrator-log";
 
 export interface McpContext {
   cwd: string;
@@ -110,6 +111,9 @@ export function dispatchListTools(ctx: McpContext): ToolListing[] {
   }));
 }
 
+// Flow 454: the memory tools an orchestrator call log records, under either spelling a client sees.
+const MEMORY_MCP_TOOL = /^memory[._](?:search|handoff|propose)$/;
+
 export interface ToolCallResult {
   text: string;
   isError: boolean;
@@ -127,6 +131,9 @@ export async function dispatchCallTool(
   const tool = visibleTools(ctx).find((entry) => entry.name === name);
   if (!tool) {
     return { text: "Unknown or unavailable tool.", isError: true, redaction: { state: "none", reasons: [] } };
+  }
+  if (MEMORY_MCP_TOOL.test(name)) {
+    await recordProcessCall(ctx.cwd, { source: "mcp", tool: name.replace(".", "_"), input: args ?? {} });
   }
   try {
     const result = await tool.invoke(ctx.cwd, args ?? {}, {

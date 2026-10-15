@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { recordLogStart, recordOrchestratorCall } from "../review/orchestrator-log";
 import { computeReadiness, renderReadiness } from "../review/readiness";
 import { formatReviewDepthLines, loadReviewDepth, renderReviewReadinessText } from "./review-panel";
 import { isReviewReadinessCommand, projectReviewsReadinessLines } from "./reviews-inspector";
@@ -99,5 +100,86 @@ describe("keryx review status", () => {
     const output = lines.join("\n");
     expect(output).toContain("readiness: NOT READY");
     expect(output).toContain("verifier");
+  });
+});
+
+// Flow 452 AC6: the tenth item reaches every surface the other nine reach.
+describe("the memory-outside-stage item on every surface", () => {
+  const stray = `${JSON.stringify({ command: 'keryx memory search "pr 7 earlier review" --status accepted' })}\n${JSON.stringify({ command: 'keryx memory search "what did we decide last week"' })}\n`;
+
+  async function withStrayRead(): Promise<string> {
+    const { root, dir } = await project();
+    await mkdir(path.join(dir, "tool-calls"), { recursive: true });
+    await writeFile(path.join(dir, "tool-calls", "orchestrator.jsonl"), stray, "utf8");
+    return root;
+  }
+
+  test("the checklist has ten items and the depth block, /review readiness and the sidebar name the failing one", async () => {
+    const root = await withStrayRead();
+    const rows = await loadReviewDepth(root);
+    expect(rows[0]?.readiness?.items).toHaveLength(10);
+    expect(rows[0]?.readiness?.items.find((item) => item.id === "memory-outside-stage")?.status).toBe("fail");
+    expect(formatReviewDepthLines(rows).join("\n")).toContain("memory-outside-stage:");
+    expect(renderReviewReadinessText(rows)).toContain("10. [FAIL  ] memory-outside-stage");
+    expect(projectReviewsReadinessLines(rows, 120)[0]).toContain("memory-outside-stage");
+  });
+
+  test("keryx review status and keryx review readiness print it", async () => {
+    const root = await withStrayRead();
+    process.chdir(root);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
+    try {
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
+      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false });
+    } finally {
+      console.log = original;
+    }
+    const output = lines.join("\n");
+    expect(output).toContain("memory-outside-stage");
+    expect(output).toContain("10. [FAIL  ] memory-outside-stage");
+    expect(output).toContain('--waive memory-outside-stage "<operator quote>"');
+  });
+});
+
+// Flow 454 AC7: recorded versus no log, and the unattributed count, in the same words on every surface.
+describe("the orchestrator log note on every surface", () => {
+  async function surfaces(root: string): Promise<{ depth: string; readinessText: string; sidebar: string; status: string; readiness: string }> {
+    const rows = await loadReviewDepth(root);
+    process.chdir(root);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
+    let status: string;
+    let readiness: string;
+    try {
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
+      status = lines.splice(0).join("\n");
+      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false });
+      readiness = lines.splice(0).join("\n");
+    } finally {
+      console.log = original;
+    }
+    return { depth: formatReviewDepthLines(rows).join("\n"), readinessText: renderReviewReadinessText(rows), sidebar: projectReviewsReadinessLines(rows, 200).join("\n"), status, readiness };
+  }
+
+  test("no log file: none, on the checklist, the status, the depth tab, the TUI text and the sidebar", async () => {
+    const { root } = await project();
+    const all = await surfaces(root);
+    for (const text of Object.values(all)) expect(text).toContain("orchestrator log: none");
+    for (const text of Object.values(all)) expect(text).not.toContain("orchestrator log: recorded");
+  });
+
+  test("a log keryx wrote: recorded, with the unattributed count when there is one", async () => {
+    const { root, dir } = await project();
+    await recordLogStart(dir);
+    const quiet = await surfaces(root);
+    for (const text of Object.values(quiet)) expect(text).toContain("orchestrator log: recorded");
+    for (const text of Object.values(quiet)) expect(text).not.toContain("unattributed memory");
+
+    await recordOrchestratorCall(dir, { source: "cli", caller: "unattributed", command: "keryx memory search \"who\"" });
+    const noisy = await surfaces(root);
+    for (const text of Object.values(noisy)) expect(text).toContain("orchestrator log: recorded, 1 unattributed");
   });
 });

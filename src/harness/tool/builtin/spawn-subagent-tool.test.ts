@@ -13,6 +13,8 @@ import {
   SUBAGENT_CHILD_RESERVATION_MS,
   DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
   SUBAGENT_TURN_MAX_CHILDREN,
+  SUBAGENT_TURN_MAX_WAVES,
+  SUBAGENT_WAVE_MAX_CHILDREN,
   type SpawnSubagentFleetEvent,
 } from "./spawn-subagent-tool";
 import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
@@ -1362,3 +1364,144 @@ test("flow 420: save_result_to writes the child's full text inside the project a
     await rm(outside, { recursive: true, force: true });
   }
 });
+
+// Flow 453: the child count is kept per review wave.
+
+async function reviewProject(chunkIds: readonly string[]): Promise<{ root: string; pkg: string }> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-wave-"));
+  const pkg = ".metaproject/reviews/pkg";
+  await mkdir(path.join(root, pkg), { recursive: true });
+  await writeFile(path.join(root, pkg, "manifest.json"), "{}");
+  await writeFile(
+    path.join(root, pkg, "chunks.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      reviewer: "review-logic",
+      tier: "middle",
+      source: "blast-radius.json",
+      maxFiles: 40,
+      maxBytes: 1,
+      dropped: 0,
+      chunks: chunkIds.map((id) => ({ id, files: [], bytes: 0 })),
+    }),
+  );
+  return { root, pkg };
+}
+
+function waveTool(root: string) {
+  return createSpawnSubagentTool({
+    cwd: root,
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => textProvider("done"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+  });
+}
+
+test("AC1: each review wave counts its own children; the 33rd in a wave is refused", async () => {
+  const { root, pkg } = await reviewProject(["chunk-a", "chunk-b"]);
+  try {
+    const tool = waveTool(root);
+    for (const pass of ["chunk-a", "chunk-b"]) {
+      for (let i = 0; i < SUBAGENT_WAVE_MAX_CHILDREN; i += 1) {
+        const r = await tool.invoke({ task: `${pass} ${i}`, review_wave: { package: pkg, pass } });
+        expect(r.status).toBe("Completed");
+      }
+    }
+    const over = await tool.invoke({ task: "one too many", review_wave: { package: pkg, pass: "chunk-a" } });
+    expect(over.status).toBe("Denied");
+    // Waves did not touch the turn's own count: a call outside any wave still has all of it.
+    const plain = await tool.invoke({ task: "outside any wave" });
+    expect(plain.status).toBe("Completed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 180_000);
+
+test("AC2: a wave the package does not record, or a package outside the project, counts against the turn", async () => {
+  const { root, pkg } = await reviewProject(["chunk-a"]);
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-wave-out-"));
+  try {
+    await writeFile(path.join(outside, "manifest.json"), "{}");
+    await writeFile(
+      path.join(outside, "chunks.json"),
+      JSON.stringify({ schemaVersion: 1, chunks: [{ id: "chunk-a", files: [], bytes: 0 }] }),
+    );
+    const tool = waveTool(root);
+    const invented = { package: pkg, pass: "invented" };
+    const elsewhere = { package: outside, pass: "chunk-a" };
+    const missing = { package: ".metaproject/reviews/none", pass: "chunk-a" };
+    const waves = [invented, elsewhere, missing, undefined];
+    for (let i = 0; i < SUBAGENT_TURN_MAX_CHILDREN; i += 1) {
+      const wave = waves[i % waves.length];
+      const r = await tool.invoke({ task: `turn ${i}`, ...(wave !== undefined ? { review_wave: wave } : {}) });
+      expect(r.status).toBe("Completed");
+    }
+    const over = await tool.invoke({ task: "past the turn", review_wave: invented });
+    expect(over.status).toBe("Denied");
+    expect(over.output).toMatch(/turn cap is 32/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("AC2: a malformed review_wave is ignored, not refused for that reason", async () => {
+  const { root } = await reviewProject(["chunk-a"]);
+  try {
+    const tool = waveTool(root);
+    for (const bad of ["chunk-a", 3, null, {}, { package: 1, pass: "x" }, { package: "", pass: "" }]) {
+      const r = await tool.invoke({ task: "malformed wave", review_wave: bad as never });
+      expect(r.status).toBe("Completed");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC4: the refusal names the cap, wave or turn, and the next step", async () => {
+  const { root, pkg } = await reviewProject(["chunk-a"]);
+  try {
+    const waveRun = waveTool(root);
+    for (let i = 0; i < SUBAGENT_WAVE_MAX_CHILDREN; i += 1) {
+      await waveRun.invoke({ task: `w ${i}`, review_wave: { package: pkg, pass: "chunk-a" } });
+    }
+    const wave = await waveRun.invoke({ task: "w over", review_wave: { package: pkg, pass: "chunk-a" } });
+    expect(wave.status).toBe("Denied");
+    expect(wave.output).toContain("denied by MAE");
+    expect(wave.output).toContain("wave pkg/chunk-a is full");
+    expect(wave.output).toContain(`wave cap is ${SUBAGENT_WAVE_MAX_CHILDREN} children`);
+    expect(wave.output).toContain("review chunks record");
+
+    const turnRun = waveTool(root);
+    for (let i = 0; i < SUBAGENT_TURN_MAX_CHILDREN; i += 1) await turnRun.invoke({ task: `t ${i}` });
+    const turn = await turnRun.invoke({ task: "t over" });
+    expect(turn.status).toBe("Denied");
+    expect(turn.output).toContain(`turn cap is ${SUBAGENT_TURN_MAX_CHILDREN} children`);
+    expect(turn.output).toContain("new turn");
+    expect(turn.output).not.toContain("review chunks record");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("AC6: one turn opens at most 25 waves; the 26th is refused", async () => {
+  expect(SUBAGENT_TURN_MAX_WAVES).toBe(25);
+  const ids = Array.from({ length: SUBAGENT_TURN_MAX_WAVES + 1 }, (_, i) => `chunk-${i}`);
+  const { root, pkg } = await reviewProject(ids);
+  try {
+    const tool = waveTool(root);
+    for (const pass of ids.slice(0, SUBAGENT_TURN_MAX_WAVES)) {
+      const r = await tool.invoke({ task: pass, review_wave: { package: pkg, pass } });
+      expect(r.status).toBe("Completed");
+    }
+    const extra = await tool.invoke({ task: "wave 26", review_wave: { package: pkg, pass: ids[SUBAGENT_TURN_MAX_WAVES] } });
+    expect(extra.status).toBe("Denied");
+    expect(extra.output).toContain(`${SUBAGENT_TURN_MAX_WAVES} review waves`);
+    expect(extra.output).toContain("new turn");
+    // A wave already open keeps its own room.
+    const again = await tool.invoke({ task: "back in wave 1", review_wave: { package: pkg, pass: ids[0] } });
+    expect(again.status).toBe("Completed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);

@@ -27,7 +27,7 @@ license: "MIT"
 
 # Review — PR Contract
 
-Reviewer for what the pull request says about itself.
+Reviewer for what the pull request says about itself. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 This lane exists because nobody else reads the PR body. `review-logic` reads the code,
 `review-testing-practices` reads the tests, and a retrospective review of a merged

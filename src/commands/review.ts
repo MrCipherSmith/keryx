@@ -52,6 +52,7 @@ import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
+import { startOrchestratorLog } from "../review/orchestrator-log";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
 import { PackageGraphError, loadPackageGraph } from "../review/layers";
@@ -318,6 +319,7 @@ export const CREATE_FLAGS = [
   "--tokens-out",
   "--parallel",
   "--outstanding",
+  "--memory-query",
   AUTOMATIC_REVIEW_FLAG,
 ] as const;
 
@@ -848,6 +850,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
+    memoryQuery: optionValue(args, "--memory-query")?.trim() || undefined,
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
@@ -878,6 +881,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  if (mode !== "ingest") await startOrchestratorLog(cwd, result.reviewId, result.path);
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd);
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
   if (mode === "review-flow" && Array.isArray(startRadius?.dropped) && startRadius.dropped.length > 0) {
@@ -4326,7 +4330,7 @@ Usage:
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
                       [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-                     [--research <ledger.json>] [--review-id <id>] [--automatic]
+                     [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
@@ -4528,7 +4532,7 @@ ${COMMENTS_USAGE}
   keryx review status <review-id-or-path>
   keryx review report-parity <review-id-or-path>
   keryx review readiness <review-id-or-path> [--json]
-                        One checklist (9 items) that a review passes before it is
+                        One checklist (10 items) that a review passes before it is
                         completed or published; each failing item names its repair.
   keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE]
                        [--partial] [--yes]

@@ -26,6 +26,7 @@ Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                     [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
                       [--scope <scope.json>] [--refuted <file|->]
@@ -277,6 +278,12 @@ keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 Before a round dispatches, the review refreshes the graph, the wiki and the memory for the PR head and writes `layers.json` into the package. **No model is called**, and `wiki enrich` — the only model step in the wiki — is never run automatically. The graph is built at the PR head in a fresh worktree, so its recorded commit equals the head; the wiki and the memory come from your working copy, and `layers.json` says how far that copy is from the head. Each reviewer payload carries a bounded `layers` block, and the package records per reviewer how many graph, wiki, memory and ctx calls it made (`unknown`, never zero, when it left no tool-call log).
 
 The blast radius is capped at 40 files a pass. The files beyond the cap are not skipped silently: `keryx review chunks plan` splits them into chunks, `chunks estimate` states the cost before you spend it (the ceiling is 25 passes of 40 files, set by `reviewChunks.maxPasses` in `routing.config.json`), and the chunks run one at a time through `review-regression` on the middle tier. `keryx review coverage` counts what is covered, covered by a named omission, and uncovered. `keryx review complete` refuses while a file is uncovered and names the command that runs the missing chunks; the only way past is `--waive-coverage "<operator quote>"`, recorded with the time and the files not reviewed. See [`review layers`, `review chunks` and `review coverage`](../cli-reference.md#review-layers-review-chunks-and-review-coverage).
+
+#### Child agents are counted per wave
+
+One orchestrator turn may start at most 32 child agents, which a deep run with many waves used to hit: the 33rd reviewer was refused and the package stayed incomplete. The dispatcher now names the wave on `spawn_subagent` with `review_wave: { "package": "<package dir>", "pass": "<chunk id>" }` (`"pass": "round"` for the round's own reviewers), and each wave counts its own 32 children. One turn opens at most 25 waves, the same ceiling as the chunk plan, so the total stays bounded; the pool of 16 concurrent children is shared and unchanged.
+
+The count is fail-closed. A wave is accepted only when the package is inside the project, has a `manifest.json`, and the pass is `round` or a chunk the package records (`chunks.json`, or a retry chunk in `chunk-state.json`). A wave that does not check out is ignored, not refused: the child counts against the turn's 32 exactly as a call without `review_wave` does, so inventing wave names buys nothing. A refusal says which cap was hit. For a full wave, finish it with `review chunks record` and dispatch the next one; for the turn, continue in a new turn.
 
 ## Answer the humans — once, at the end
 
@@ -665,8 +672,8 @@ Closing with no dispositions is allowed. It leaves every finding reading
 ### Completed means ready — the checklist
 
 A package cannot be marked `completed` while a file nobody read, a reviewer
-that never reported, or a verifier that skipped findings is still in it. Nine
-items are checked, offline except the last, and `keryx review complete` refuses
+that never reported, or a verifier that skipped findings is still in it. Ten
+items are checked, offline except the ninth, and `keryx review complete` refuses
 while any of them fails:
 
 ```bash
@@ -706,6 +713,74 @@ package that is not READY; `keryx review publish --partial` posts it with a
 **Named limit.** The refusal lives in keryx and in the keryx shell guard. A
 publisher outside them (CI, another agent, a script file calling `gh`
 directly) is not stopped by it.
+
+### A review starts with clean context
+
+A review has to be reproducible from its package: the same inputs give the same
+context, whoever runs it and whatever that agent remembers from earlier work. So
+the orchestrator takes context only from its own stages (scope, the context pack,
+one memory search, the layers), and a reviewer takes the reviewer payload only.
+The agent's session memory, its auto-memory index (`MEMORY.md`), remembered
+feedback and the earlier conversation are not inputs. When the orchestrator has
+a question, it looks in its own instructions; if the answer is not there it asks
+you (once, interactively), or ends an unattended run with
+`STATUS: BLOCKED question — <the question>`. It never answers from memory or a
+guess.
+
+`keryx review start --memory-query "<query>"` writes a `cleanContext` block into
+the manifest: the start time and the query of the memory stage. keryx writes the
+orchestrator log, `<package>/tool-calls/orchestrator.jsonl`, itself: the agent
+does not append to it and must not edit it. `keryx review start` and
+`keryx review attach` mark the package as the active one (a small pointer in the
+project's data directory, `.metaproject/data/review-active/`, which is not
+committed), and from then on every `keryx memory` command, every MCP memory tool
+(`memory_search`, `memory_handoff`, `memory_propose`) and every memory call the
+keryx agent makes adds one line: the tool, its query, the time, the source (`cli`,
+`mcp` or `shell`) and who called. closing the package (`keryx review complete`) removes the pointer, and a
+pointer to a package that is missing or closed is ignored, so a finished review is
+never written to. The tenth readiness item, `memory-outside-stage`, reads that log. A memory call
+with another query, without `--status accepted`, any other memory command, or a
+stage call stamped before the round started, fails the item; the same query
+repeated does not. It blocks `review complete` and `review publish` like the
+other nine, and only you lift it, in a terminal:
+
+```bash
+keryx review complete <ref> --waive memory-outside-stage "<your own words>"
+```
+
+Three paths bring earlier work into a review on purpose, and they are kept:
+
+1. `prior_findings` from an earlier round of the same package.
+2. Review-notes and skill learning that earlier reviews wrote, which reach the
+   next review only through the memory stage as accepted memory.
+3. A reviewer's own `memory_search`, a lookup in the project's recorded lessons.
+   The item never judges a reviewer's log.
+
+Who called is one of three things. In a `keryx shell` session the parent's own
+calls are `orchestrator`, and a call by a `spawn_subagent` child is recorded under
+the child's reviewer id (keryx puts `KERYX_REVIEW_CALLER` into the child's command
+environment only), so a reviewer's own lookup is never counted against the
+orchestrator. A call that reaches keryx from a host that names no caller, such as
+`keryx memory search` typed in another terminal or an MCP memory tool called by
+Claude Code or Codex directly, is `unattributed`. It does not block: it adds
+`warning: N unattributed memory call(s)` to the item's detail, and `review
+readiness`, `review status`, the Review depth tab and the sidebar show
+`orchestrator log: recorded, N unattributed`. A log that holds only its first line
+passes with "no memory call recorded"; no file at all passes with "no orchestrator
+tool log", as before, and those surfaces say `orchestrator log: none`.
+
+**Named limits.** keryx cannot prevent an agent runtime that loads its memory
+before the skill starts. The guarantee is instruction plus detection, not
+isolation, and reads of the agent's personal memory outside `keryx memory` are not
+visible to the log. Four things the automatic log does not do:
+
+- Only calls through keryx are visible. A memory read through a tool keryx does not
+  wrap is not in the log.
+- Unmarked calls outside the keryx shell are `unattributed`: keryx records them but
+  cannot say whether the orchestrator or a reviewer made them.
+- The log is not a sandbox. It records the calls; it does not stop them.
+- The log is a plain editable file. Anyone with write access to the package can
+  change it, so it is evidence of what keryx saw, not proof against tampering.
 
 ### Five gates that keep a report honest
 

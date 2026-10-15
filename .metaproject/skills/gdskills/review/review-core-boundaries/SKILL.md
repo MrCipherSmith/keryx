@@ -24,7 +24,7 @@ license: "MIT"
 # Review — Core Boundaries
 
 Reviewer for shared infrastructure modules. A core module should provide stable foundations
-used by feature modules; it should not accumulate feature-specific behaviour.
+used by feature modules; it should not accumulate feature-specific behaviour. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ---
 

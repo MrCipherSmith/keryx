@@ -30,6 +30,13 @@ export interface LedgerLimits {
    * is not tracked at all (byte-for-byte the pre-hook behavior).
    */
   maxCostUnits?: number;
+  /**
+   * Children one named scope (a review wave) may start. A child admitted under a scope counts against that scope
+   * only, never against `maxChildren`; the runtime budget stays shared by every scope. Needs `maxScopes`.
+   */
+  maxScopeChildren?: number;
+  /** Most distinct scopes the ledger will open; a child for one more is denied. */
+  maxScopes?: number;
 }
 
 /** Result of {@link RemainingBudgetLedger.admit}: a granted reservation or a denial. */
@@ -62,6 +69,9 @@ export class RemainingBudgetLedger {
   private remainingBudget: ParentRemainingBudget;
   private admittedChildren = 0;
   private readonly maxChildren: number | undefined;
+  private readonly maxScopeChildren: number | undefined;
+  private readonly maxScopes: number | undefined;
+  private readonly scopeCounts = new Map<string, number>();
   /** Remaining cost budget; `undefined` when cost is not tracked (no ceiling). */
   private costUnitsRemaining: number | undefined;
   /** Live grants, keyed by reservation id, so a release can be bounded by them. */
@@ -73,6 +83,8 @@ export class RemainingBudgetLedger {
         ? { maxRuntimeMs: initial.maxRuntimeMs, maxToolCalls: initial.maxToolCalls }
         : { maxRuntimeMs: initial.maxRuntimeMs };
     this.maxChildren = limits.maxChildren;
+    this.maxScopeChildren = limits.maxScopeChildren;
+    this.maxScopes = limits.maxScopes;
     this.costUnitsRemaining = limits.maxCostUnits;
   }
 
@@ -88,9 +100,19 @@ export class RemainingBudgetLedger {
       : { maxRuntimeMs: this.remainingBudget.maxRuntimeMs };
   }
 
-  /** How many children have been admitted so far. */
+  /** How many children have been admitted so far, outside any scope. */
   get childCount(): number {
     return this.admittedChildren;
+  }
+
+  /** How many children have been admitted under `scope`. */
+  scopeChildCount(scope: string): number {
+    return this.scopeCounts.get(scope) ?? 0;
+  }
+
+  /** How many distinct scopes have admitted a child. */
+  get scopeCount(): number {
+    return this.scopeCounts.size;
   }
 
   /**
@@ -101,9 +123,19 @@ export class RemainingBudgetLedger {
    * counter are decremented together.
    */
   /** Non-mutating budget/count/cost check; not a grant or policy approval. */
-  check(request: BudgetReservation): LedgerAdmitResult {
-    if (this.maxChildren !== undefined && this.admittedChildren >= this.maxChildren) {
-      return { ok: false, reason: `child count cap ${this.maxChildren} reached` };
+  check(request: BudgetReservation, scope?: string): LedgerAdmitResult {
+    if (scope === undefined) {
+      if (this.maxChildren !== undefined && this.admittedChildren >= this.maxChildren) {
+        return { ok: false, reason: `child count cap ${this.maxChildren} reached` };
+      }
+    } else {
+      const opened = this.scopeCounts.has(scope);
+      if (!opened && this.maxScopes !== undefined && this.scopeCounts.size >= this.maxScopes) {
+        return { ok: false, reason: `scope count cap ${this.maxScopes} reached` };
+      }
+      if (this.maxScopeChildren !== undefined && this.scopeChildCount(scope) >= this.maxScopeChildren) {
+        return { ok: false, reason: `scope child count cap ${this.maxScopeChildren} reached` };
+      }
     }
     const granted = inheritBudget(this.remainingBudget, request);
     if (!granted.ok) {
@@ -123,13 +155,14 @@ export class RemainingBudgetLedger {
       ? { ...granted.reservation, costUnits: request.costUnits } : granted.reservation };
   }
 
-  admit(request: BudgetReservation): LedgerAdmitResult {
-    const granted = this.check(request);
+  admit(request: BudgetReservation, scope?: string): LedgerAdmitResult {
+    const granted = this.check(request, scope);
     if (!granted.ok) return granted;
     const cost = request.costUnits ?? 0;
 
     this.remainingBudget = decrement(this.remainingBudget, granted.reservation);
-    this.admittedChildren += 1;
+    if (scope === undefined) this.admittedChildren += 1;
+    else this.scopeCounts.set(scope, this.scopeChildCount(scope) + 1);
     this.outstanding.set(granted.reservation.reservationId, granted.reservation);
     if (this.costUnitsRemaining !== undefined) {
       this.costUnitsRemaining -= cost;

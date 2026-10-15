@@ -110,6 +110,77 @@ export function layersUsedFrom(log: string | undefined): LayersUsed {
 
 export const TOOL_LOG_DIR = "tool-calls";
 
+/**
+ * The orchestrator's own log, `<package>/tool-calls/orchestrator.jsonl`, beside the per-reviewer logs. A reviewer's
+ * calls are in its own file, so the orchestrator's reads are told from the reviewers' by the file they are in.
+ */
+export const ORCHESTRATOR_LOG = "orchestrator";
+
+/** One call into the memory layer: what it asked, and whether it asked for accepted entries only. */
+export type MemoryCall = { search: boolean; accepted: boolean; query?: string; time?: string; caller?: string; summary: string };
+
+const SEARCH_VALUE_FLAGS: ReadonlySet<string> = new Set(["--module", "--entity", "--status", "--limit", "--scope", "--kind"]);
+
+/** `keryx memory search "<query>" --status accepted` inside one shell command, or undefined when it holds none. */
+function memorySearchOfCommand(command: string): Pick<MemoryCall, "accepted" | "query"> | undefined {
+  for (const segment of splitSegments(command)) {
+    const words = stripAssignments(segment.words);
+    const at = words.findIndex((word, i) => i >= 2 && word === "search" && words[i - 1] === "memory" && ["keryx", "cli.ts", "cli.js"].includes(path.basename(words[i - 2] ?? "")));
+    if (at < 0) continue;
+    let query: string | undefined;
+    let accepted = false;
+    for (let i = at + 1; i < words.length; i++) {
+      const word = words[i]!;
+      if (word === "--status" && words[i + 1] === "accepted") accepted = true;
+      if (word === "--status=accepted") accepted = true;
+      if (SEARCH_VALUE_FLAGS.has(word)) i++;
+      else if (!word.startsWith("-") && query === undefined) query = word;
+    }
+    return { accepted, ...(query === undefined ? {} : { query }) };
+  }
+  return undefined;
+}
+
+function entryTime(entry: Record<string, unknown>): string | undefined {
+  for (const key of ["time", "timestamp", "ts", "at"]) if (typeof entry[key] === "string") return entry[key] as string;
+  return undefined;
+}
+
+/** Every call a log makes into the memory layer, in order: the shell command or the MCP tool, with its query when it is a search. */
+export function memoryCalls(log: string): MemoryCall[] {
+  const calls: MemoryCall[] = [];
+  for (const line of log.split("\n")) {
+    if (line.trim() === "" || !callLayers(line).includes("memory")) continue;
+    let entry: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(line) as unknown;
+      if (parsed !== null && typeof parsed === "object") entry = parsed as Record<string, unknown>;
+    } catch {
+      // a plain command line
+    }
+    const time = entryTime(entry);
+    const mcpName = [entry.name, entry.tool].find((value): value is string => typeof value === "string");
+    const args = (value: unknown): Record<string, unknown> => {
+      if (typeof value === "string") {
+        try { return args(JSON.parse(value)); } catch { return {}; }
+      }
+      return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    };
+    const input = { ...args(entry.input), ...args(entry.arguments) };
+    const caller = typeof entry.caller === "string" && entry.caller.trim() !== "" ? entry.caller.trim() : undefined;
+    const base = { ...(time === undefined ? {} : { time }), ...(caller === undefined ? {} : { caller }) };
+    if (mcpName !== undefined && /memory_search$/.test(mcpName)) {
+      const query = typeof input.query === "string" && input.query.trim() !== "" ? input.query : undefined;
+      calls.push({ search: true, accepted: input.status === "accepted", ...(query === undefined ? {} : { query }), ...base, summary: `${mcpName}${query === undefined ? "" : ` "${query}"`}` });
+      continue;
+    }
+    const command = commandOf(entry) ?? commandOf(entry.input) ?? commandOf(entry.arguments) ?? (mcpName === undefined && Object.keys(entry).length === 0 ? line : undefined);
+    const search = command === undefined ? undefined : memorySearchOfCommand(command);
+    calls.push(search === undefined ? { search: false, accepted: false, ...base, summary: (command ?? mcpName ?? line).trim().slice(0, 120) } : { search: true, ...search, ...base, summary: (command ?? "").trim().slice(0, 120) });
+  }
+  return calls;
+}
+
 /** A log above this is not read: the layers-used figure is then unknown, not wrong. */
 export const MAX_TOOL_LOG_BYTES = 8 * 1024 * 1024;
 

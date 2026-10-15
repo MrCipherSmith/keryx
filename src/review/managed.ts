@@ -11,6 +11,8 @@ import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { pathExists, writeFileAtomic } from "../lib/fs";
+import { resolveProjectRoot } from "../lib/contained-path";
+import { clearActiveReview } from "./active-review";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
@@ -911,6 +913,7 @@ export async function completeManagedReview(
     }
     throw error;
   }
+  await clearActiveReview(resolveProjectRoot(cwd), updated.reviewId);
 
   // Flow 207 AC5, the second of the two places a `dismissed-incorrect` becomes
   // durable. This one is the attended path by construction: somebody ran
@@ -1069,6 +1072,9 @@ function buildManifest(args: {
     ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
     ...(args.input.automatic === true ? { automatic: true as const } : {}),
+    ...(args.input.mode === "review-flow"
+      ? { cleanContext: { startedAt: args.at, ...(args.input.memoryQuery === undefined ? {} : { memoryQuery: args.input.memoryQuery }) } }
+      : {}),
     createdAt: args.at,
     updatedAt: args.at,
   };
