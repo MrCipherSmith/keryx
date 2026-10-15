@@ -93,7 +93,7 @@ describe("keryx review status", () => {
     const original = console.log;
     console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
     try {
-      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false, prLookup: async () => null, prFiles: async () => null });
     } finally {
       console.log = original;
     }
@@ -131,8 +131,8 @@ describe("the memory-outside-stage item on every surface", () => {
     const original = console.log;
     console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
     try {
-      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
-      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false });
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false, prLookup: async () => null, prFiles: async () => null });
+      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false, prLookup: async () => null, prFiles: async () => null });
     } finally {
       console.log = original;
     }
@@ -154,9 +154,9 @@ describe("the orchestrator log note on every surface", () => {
     let status: string;
     let readiness: string;
     try {
-      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false, prLookup: async () => null, prFiles: async () => null });
       status = lines.splice(0).join("\n");
-      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false });
+      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false, prLookup: async () => null, prFiles: async () => null });
       readiness = lines.splice(0).join("\n");
     } finally {
       console.log = original;
