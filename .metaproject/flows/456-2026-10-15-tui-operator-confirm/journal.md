@@ -27,3 +27,4 @@ Minor: chunks card writes chunks.json; terminal-pointing refusals in chunks-esti
 Fix lanes A (review), B (other), C (framework/TUI/remote/docs) dispatched.
 - 2026-10-15T19:00:19.298Z - task-attempt: T9: started (attempt 1) — review round 1: 0 blocker, 2 major; fix lanes A/B/C
 - 2026-10-15T19:08:25.752Z - task-done: T9: Verify + review round + PR
+- 2026-10-15T21:37:03.108Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1034 (warning: PR is not a draft)

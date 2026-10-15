@@ -9,9 +9,9 @@
   "id": "456",
   "slug": "tui-operator-confirm",
   "title": "Operator confirmations answered in the TUI instead of a separate terminal",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T18:08:38.862Z",
-  "updatedAt": "2026-10-15T19:08:25.752Z",
+  "updatedAt": "2026-10-15T21:37:03.108Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:5ca600c227905bf738921615e5d7867ac0d02cf76b4fa5ac2779d629ea7a5185",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1034"
   },
   "baseBranch": "main",
   "owner": {
@@ -326,6 +326,11 @@
       "at": "2026-10-15T19:08:25.752Z",
       "event": "task-done",
       "detail": "T9: Verify + review round + PR"
+    },
+    {
+      "at": "2026-10-15T21:37:03.108Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1034 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
