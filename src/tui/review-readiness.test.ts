@@ -101,3 +101,43 @@ describe("keryx review status", () => {
     expect(output).toContain("verifier");
   });
 });
+
+// Flow 452 AC6: the tenth item reaches every surface the other nine reach.
+describe("the memory-outside-stage item on every surface", () => {
+  const stray = `${JSON.stringify({ command: 'keryx memory search "pr 7 earlier review" --status accepted' })}\n${JSON.stringify({ command: 'keryx memory search "what did we decide last week"' })}\n`;
+
+  async function withStrayRead(): Promise<string> {
+    const { root, dir } = await project();
+    await mkdir(path.join(dir, "tool-calls"), { recursive: true });
+    await writeFile(path.join(dir, "tool-calls", "orchestrator.jsonl"), stray, "utf8");
+    return root;
+  }
+
+  test("the checklist has ten items and the depth block, /review readiness and the sidebar name the failing one", async () => {
+    const root = await withStrayRead();
+    const rows = await loadReviewDepth(root);
+    expect(rows[0]?.readiness?.items).toHaveLength(10);
+    expect(rows[0]?.readiness?.items.find((item) => item.id === "memory-outside-stage")?.status).toBe("fail");
+    expect(formatReviewDepthLines(rows).join("\n")).toContain("memory-outside-stage:");
+    expect(renderReviewReadinessText(rows)).toContain("10. [FAIL  ] memory-outside-stage");
+    expect(projectReviewsReadinessLines(rows, 120)[0]).toContain("memory-outside-stage");
+  });
+
+  test("keryx review status and keryx review readiness print it", async () => {
+    const root = await withStrayRead();
+    process.chdir(root);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
+    try {
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
+      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false });
+    } finally {
+      console.log = original;
+    }
+    const output = lines.join("\n");
+    expect(output).toContain("memory-outside-stage");
+    expect(output).toContain("10. [FAIL  ] memory-outside-stage");
+    expect(output).toContain('--waive memory-outside-stage "<operator quote>"');
+  });
+});

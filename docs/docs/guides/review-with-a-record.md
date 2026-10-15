@@ -26,6 +26,7 @@ Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                     [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
                       [--scope <scope.json>] [--refuted <file|->]
@@ -665,8 +666,8 @@ Closing with no dispositions is allowed. It leaves every finding reading
 ### Completed means ready — the checklist
 
 A package cannot be marked `completed` while a file nobody read, a reviewer
-that never reported, or a verifier that skipped findings is still in it. Nine
-items are checked, offline except the last, and `keryx review complete` refuses
+that never reported, or a verifier that skipped findings is still in it. Ten
+items are checked, offline except the ninth, and `keryx review complete` refuses
 while any of them fails:
 
 ```bash
@@ -706,6 +707,45 @@ package that is not READY; `keryx review publish --partial` posts it with a
 **Named limit.** The refusal lives in keryx and in the keryx shell guard. A
 publisher outside them (CI, another agent, a script file calling `gh`
 directly) is not stopped by it.
+
+### A review starts with clean context
+
+A review has to be reproducible from its package: the same inputs give the same
+context, whoever runs it and whatever that agent remembers from earlier work. So
+the orchestrator takes context only from its own stages (scope, the context pack,
+one memory search, the layers), and a reviewer takes the reviewer payload only.
+The agent's session memory, its auto-memory index (`MEMORY.md`), remembered
+feedback and the earlier conversation are not inputs. When the orchestrator has
+a question, it looks in its own instructions; if the answer is not there it asks
+you (once, interactively), or ends an unattended run with
+`STATUS: BLOCKED question — <the question>`. It never answers from memory or a
+guess.
+
+`keryx review start --memory-query "<query>"` writes a `cleanContext` block into
+the manifest: the start time and the query of the memory stage. The orchestrator
+appends each of its tool calls to `<package>/tool-calls/orchestrator.jsonl`, and
+the tenth readiness item, `memory-outside-stage`, reads that log. A memory call
+with another query, without `--status accepted`, any other memory command, or a
+stage call stamped before the round started, fails the item; the same query
+repeated does not. It blocks `review complete` and `review publish` like the
+other nine, and only you lift it, in a terminal:
+
+```bash
+keryx review complete <ref> --waive memory-outside-stage "<your own words>"
+```
+
+Three paths bring earlier work into a review on purpose, and they are kept:
+
+1. `prior_findings` from an earlier round of the same package.
+2. Review-notes and skill learning that earlier reviews wrote, which reach the
+   next review only through the memory stage as accepted memory.
+3. A reviewer's own `memory_search`, a lookup in the project's recorded lessons.
+   The item never judges a reviewer's log.
+
+**Named limit.** keryx cannot prevent an agent runtime that loads its memory
+before the skill starts. The guarantee is instruction plus detection, not
+isolation, and reads of the agent's personal memory outside `keryx memory` are not
+visible to the log. With no orchestrator log the item passes and says so.
 
 ### Five gates that keep a report honest
 

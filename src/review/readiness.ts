@@ -12,6 +12,7 @@ import { hasChunkPlan } from "./chunks";
 import { packageScopeFiles } from "./coverage";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { dispatchErrors } from "./dispatch";
+import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
 import type { ManagedReviewManifest, ReadinessWaiver } from "./types";
@@ -26,6 +27,7 @@ export const READINESS_ITEMS = [
   { number: 7, id: "head", title: "the report's head matches the PR head" },
   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
+  { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
 ] as const;
 
 export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
@@ -230,6 +232,38 @@ async function prFilesCheck(ctx: Context, options: ReadinessOptions): Promise<Ve
   return bad(`the package scope holds ${scope.length} file(s), the PR lists ${list.length}${missing.length > 0 ? `; not in scope: ${some(missing)}` : ""}${extra.length > 0 ? `; not in the PR: ${some(extra)}` : ""}`, `re-cut the scope from the PR's file list: keryx review start --pr ${ctx.manifest.target.ref}`);
 }
 
+const sameQuery = (a: string, b: string): boolean => a.trim().replace(/\s+/g, " ") === b.trim().replace(/\s+/g, " ");
+
+/**
+ * Flow 452. The orchestrator may read project memory once, in its memory stage (`keryx memory search "<query>" --status accepted`);
+ * any other memory call in its own tool log is a read from outside that stage. The stage query is the one the manifest records,
+ * else the first accepted search in the log. A reviewer's lookups are in the reviewers' own logs and are not read here.
+ */
+async function memoryStageCheck(ctx: Context): Promise<Verdict> {
+  const log = await readToolLog(ctx.dir, ORCHESTRATOR_LOG);
+  if (log === undefined) return ok(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl): this check could not see the orchestrator's own memory reads`);
+  const clean = ctx.manifest.cleanContext;
+  const started = clean === undefined ? Number.NaN : Date.parse(clean.startedAt);
+  let stage = clean?.memoryQuery;
+  const outside: string[] = [];
+  let inStage = 0;
+  for (const call of memoryCalls(log)) {
+    const time = call.time === undefined ? Number.NaN : Date.parse(call.time);
+    const stageCall = call.search && call.accepted && call.query !== undefined && (stage === undefined || sameQuery(call.query, stage));
+    if (!stageCall) outside.push(call.summary);
+    else if (time < started) outside.push(`${call.summary} (before the round started)`);
+    else {
+      stage ??= call.query;
+      inStage += 1;
+    }
+  }
+  if (outside.length === 0) return ok(inStage === 0 ? "the orchestrator made no memory call" : `${inStage} memory call(s) by the orchestrator, all the stage query${stage === undefined ? "" : ` "${stage}"`}`);
+  return bad(
+    `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}`,
+    `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
+  );
+}
+
 /** The checklist, computed from what the package holds. Writes nothing. */
 export async function computeReadiness(packageDir: string, options: ReadinessOptions = {}): Promise<ReadinessReport> {
   const manifest = await readJson<ManagedReviewManifest>(path.join(packageDir, "manifest.json"));
@@ -256,6 +290,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     head: await headCheck(ctx, options),
     "report-names": await reportNamesCheck(ctx),
     "pr-files": await prFilesCheck(ctx, options),
+    "memory-outside-stage": await memoryStageCheck(ctx),
   };
   const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {

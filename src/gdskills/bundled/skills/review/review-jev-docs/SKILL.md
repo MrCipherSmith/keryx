@@ -35,7 +35,7 @@ LLM sub-agent: `review-orchestrator` never dispatches a platform-native agent
 for it, it runs `keryx review jev-docs` and reads the `--json` output. Every
 finding is composed by keryx; Jev ("System One" on OpenRouter) supplies only a
 `noul` staleness probability per doc section — it never writes prose, and
-nothing it returns is quoted verbatim into a finding.
+nothing it returns is quoted verbatim into a finding. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ---
 

@@ -156,8 +156,19 @@ export type ManagedReviewManifest = {
    * It changes how the shell prompts, never what the completion gate requires.
    */
   automatic?: true | undefined;
+  /**
+   * Written by `keryx review start` (flow 452): when the round began and, when the caller named it, the query of the
+   * orchestrator's memory stage. The readiness item `memory-outside-stage` compares the orchestrator's tool log with it.
+   * Absent on a package cut before the field, and on an ingest of a review made elsewhere.
+   */
+  cleanContext?: ReviewCleanContext | undefined;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
+};
+
+export type ReviewCleanContext = {
+  startedAt: string;
+  memoryQuery?: string | undefined;
 };
 
 export const REVIEW_FINDING_SEVERITIES = ["blocker", "major", "minor", "info"] as const;
@@ -517,6 +528,8 @@ export type ManagedReviewInput = {
   reviewId?: string | undefined;
   /** Mark the package as an automatic review. See {@link ManagedReviewManifest.automatic}. */
   automatic?: boolean | undefined;
+  /** The query of the orchestrator's memory stage, recorded in the manifest's `cleanContext` block by `review start`. */
+  memoryQuery?: string | undefined;
   reviewers?: string[] | undefined;
   coverage?: ReviewCoverageEntry[] | undefined;
   reportPath?: string | undefined;

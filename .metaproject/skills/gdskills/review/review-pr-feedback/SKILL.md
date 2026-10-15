@@ -31,7 +31,7 @@ license: "MIT"
 Analyzes GitHub PR review comments from human reviewers or bots, checks each one
 against the code as it stands, and turns the surviving ones into an ordered fix
 plan. This skill does **not** review code itself — it interprets what others said,
-and it verifies whether what they said is still true.
+and it verifies whether what they said is still true. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 With `--fix` it also **executes** that plan: the work runs as a managed flow, on a
 branch cut from the reviewed PR's own branch, behind its own draft PR, through a

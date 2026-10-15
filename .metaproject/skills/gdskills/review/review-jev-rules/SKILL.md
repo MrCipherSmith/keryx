@@ -37,7 +37,7 @@ for it, it runs `keryx review jev-rules` and reads the `--json` output. Every
 finding is composed by keryx; Jev ("System One" on OpenRouter) supplies only a
 `noul` probability per `(hunk, rule clause)` pair — it never writes prose, and
 nothing it returns is quoted verbatim into a finding except the clause text
-keryx already had.
+keryx already had. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ---
 

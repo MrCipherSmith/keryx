@@ -101,7 +101,7 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
   test("is NOT READY with exactly the failing items, each naming the command that repairs it", async () => {
     const report = await computeReadiness(pkg);
     expect(report.verdict).toBe("NOT READY");
-    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(ids(failingItems(report))).toEqual(["blast-radius", "reviewers", "verifier", "ledger", "coverage-md"]);
     for (const item of failingItems(report)) {
       expect(item.repair).toBeTruthy();

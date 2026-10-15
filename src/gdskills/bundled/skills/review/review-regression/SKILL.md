@@ -22,7 +22,7 @@ license: "MIT"
 # Review: Regression
 
 You are reviewing **scope B** of a deep round. The files you are given are not
-under review. They are under **regression check**.
+under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ## The one question
 

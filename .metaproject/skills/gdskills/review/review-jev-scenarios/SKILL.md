@@ -34,7 +34,7 @@ An ADDITIONAL orchestrator reviewer, flow 332. It is a **keryx program**, not
 an LLM sub-agent: `review-orchestrator` never dispatches a platform-native
 agent for it, it runs `keryx review jev-scenarios` and reads the `--json`
 output. Every finding is composed by keryx; Jev ("System One" on OpenRouter)
-supplies only one `noul` probability per scenario — never prose.
+supplies only one `noul` probability per scenario — never prose. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ---
 
