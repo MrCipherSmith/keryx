@@ -11,13 +11,50 @@
   "title": "Review clean context: no memory outside the orchestrator's stages, blocking check",
   "status": "implemented",
   "createdAt": "2026-10-15T07:39:35.258Z",
-  "updatedAt": "2026-10-15T08:11:00.567Z",
+  "updatedAt": "2026-10-15T15:42:16.041Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-15T15:41:05.845Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC2": {
+      "at": "2026-10-15T15:41:06.056Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC3": {
+      "at": "2026-10-15T15:41:06.265Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC4": {
+      "at": "2026-10-15T15:41:06.473Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC5": {
+      "at": "2026-10-15T15:41:06.682Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC6": {
+      "at": "2026-10-15T15:41:06.904Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC7": {
+      "at": "2026-10-15T15:41:07.122Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC8": {
+      "at": "2026-10-15T15:41:07.328Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    },
+    "AC9": {
+      "at": "2026-10-15T15:41:07.538Z",
+      "note": "confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/1023"
   },
@@ -112,6 +149,70 @@
       "at": "2026-10-15T08:11:00.567Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1023 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-15T15:41:05.845Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:06.056Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:06.265Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:06.474Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:06.682Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:06.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:07.122Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:07.328Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:07.538Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: confirmed by the operator in Telegram, poll 193 (2026-10-15): confirm all AC and complete; verify command passed in CI of merged PR #1023 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-15T15:41:22.312Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-15T15:41:28.741Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-10-15T15:41:28.742Z",
+      "event": "completion-failed",
+      "detail": "tasks: not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 452 T1 --disposition skipped --reason \"<why this flow did not need it>\") | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/452-2026-10-15-review-clean-context/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1023 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1023.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1023 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-10-15T15:42:16.041Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1023 (warning: PR is not a draft)"
     }
   ],
   "origin": {
@@ -156,5 +257,165 @@
       "check": "bun test src/review/chunks.test.ts"
     }
   },
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-15T15:41:05.845Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:06.056Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:06.265Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:06.473Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:06.682Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:06.904Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:07.122Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:07.328Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    },
+    {
+      "at": "2026-10-15T15:41:07.538Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-15T15:41:28.741Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "fail",
+          "detail": "not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 452 T1 --disposition skipped --reason \"<why this flow did not need it>\")"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "452-2026-10-15-review-clean-context is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/452-2026-10-15-review-clean-context/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1023 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1023.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1023 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1f042cd488dd1fcc819a89ad4cafd80949ab2c4157575077ea5d195b6a249730"
+    }
+  ]
 }
