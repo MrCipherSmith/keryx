@@ -164,7 +164,7 @@ test("real archive owner revocation survives runtime restart and derived clear",
       automaticEvidence: async (query, reserveBytes, signal) => createAutomaticEvidenceRecall({
         projectRoot: root, config: { ...config, automatic: true }, query, reserveBytes,
         ...(signal === undefined ? {} : { signal }),
-        search: async (q, handoff, abort) => { await loaded.runtime.searchPublic(q, handoff, abort); },
+        search: async (q, handoff, abort) => { await runtime.searchPublic(q, handoff, abort); },
       }),
     });
     await runAgentTurn(collectingIo().io, deps, [], "quartz");
