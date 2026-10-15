@@ -26,6 +26,7 @@ Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                     [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
                       [--scope <scope.json>] [--refuted <file|->]

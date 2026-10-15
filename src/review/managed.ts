@@ -1069,6 +1069,9 @@ function buildManifest(args: {
     ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
     ...(args.input.automatic === true ? { automatic: true as const } : {}),
+    ...(args.input.mode === "review-flow"
+      ? { cleanContext: { startedAt: args.at, ...(args.input.memoryQuery === undefined ? {} : { memoryQuery: args.input.memoryQuery }) } }
+      : {}),
     createdAt: args.at,
     updatedAt: args.at,
   };

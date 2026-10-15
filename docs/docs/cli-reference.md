@@ -4724,7 +4724,8 @@ review's own commands without a prompt — see
 ```text
 keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                     [--reviewers a,b] [--report <path>] [--automatic]
-keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--automatic]
+keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                   [--memory-query "<query>"] [--automatic]
 keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
