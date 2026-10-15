@@ -40,7 +40,8 @@ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/co
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
-import { estimatePackage, renderEstimate } from "../review/estimate";
+import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
+import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -540,7 +541,7 @@ const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
-export const ESTIMATE_FLAGS = ["--package", "--manifest", "--json"] as const;
+export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -786,7 +787,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "estimate") {
-      await runEstimate(args.slice(1));
+      await runEstimate(args.slice(1), seams);
+      return;
+    }
+    if (command === "plan-eval") {
+      await runPlanEval(args.slice(1), { rejectUnknownFlags });
       return;
     }
     if (command === "mutate") {
@@ -3183,13 +3188,27 @@ async function runRequired(args: string[]): Promise<void> {
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
 }
 
-async function runEstimate(args: string[]): Promise<void> {
+async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, ESTIMATE_FLAGS, "estimate");
   const placed = guardReviewPaths("estimate", args);
   const packageDir = placed("--package");
   if (packageDir === undefined) throw new Error("estimate needs --package <review-dir>");
+  const confirm = args.includes("--confirm");
+  const quote = optionValue(args, "--quote");
+  if (quote !== undefined && !confirm) throw new Error("--quote is the operator's answer to --confirm; pass both.");
+  // A plan confirmation is the operator's own statement, so a person has to be at the terminal that records it.
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (confirm && !isTerminal()) {
+    throw new Error(`--confirm needs a terminal: a plan confirmation is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the ${CONFIRM_PLAN_TOOL} tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.`);
+  }
+  if (confirm && (quote === undefined || quote.trim() === "")) throw new Error("--confirm needs the operator's own words: --quote \"<words>\".");
   const estimate = await estimatePackage(packageDir, { manifest: placed("--manifest") });
-  console.log(args.includes("--json") ? JSON.stringify(estimate, null, 2) : renderEstimate(estimate));
+  if (confirm) {
+    const file = await writePlanConfirmation(packageDir, planConfirmationFor(estimate, quote!, "terminal"));
+    console.log(args.includes("--json") ? JSON.stringify({ ...estimate, confirmation: file }, null, 2) : `${renderEstimate(estimate)}\nconfirmed: plan ${estimate.planKey} recorded in ${file}`);
+    return;
+  }
+  console.log(args.includes("--json") ? JSON.stringify({ ...estimate, confirmed: planConfirmed(packageDir, estimate) }, null, 2) : renderEstimate(estimate));
 }
 
 async function runCompareReference(args: string[]): Promise<void> {
@@ -4483,6 +4502,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["complete", printCompleteHelp],
   ["status", printStatusHelp],
   ["estimate", printEstimateHelp],
+  ["plan-eval", printPlanEvalHelp],
   ["required", printRequiredHelp],
   ["scope", printScopeHelp],
   ["slice", printSliceHelp],
@@ -4508,7 +4528,7 @@ export function printReviewHelpFor(rest: readonly string[] = []): void {
 }
 
 function printEstimateHelp(): void {
-  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments, dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.");
+  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote \"<words>\"] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments (a routed slice is owned by its roles), dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.\nA plan over routing.config.json reviewPlan.maxDispatches (default 40) or reviewPlan.maxMinutes (default 90) is flagged `over threshold`;\ndispatch-check and ledger build refuse it until the operator confirms it: the review_confirm_plan card inside keryx shell, or\n--confirm --quote \"<the operator's words>\" at a terminal (refused without a TTY), which writes <review-dir>/plan-confirmation.json.");
 }
 
 const GRAPH_TIMEOUT_HELP = `--graph-timeout <seconds> bounds the wait for the graph, wiki and memory refresh of the new package
@@ -4666,7 +4686,12 @@ Usage:
   keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]
                         Roles x slices = assignments, waves at the manifest's wave
                         budget, and an expected duration range (2-5 min per dispatch,
-                        4 in parallel); not sliced: assignments = roles.
+                        4 in parallel); not sliced: assignments = roles. Over the
+                        plan threshold it says so; --confirm --quote at a terminal
+                        records the operator's confirmation.
+  keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+                        Old plan vs new (routed, depth by risk) plan for the same
+                        diff, and where each ground-truth finding lands. Offline.
                         --blast-radius adds review-regression to the set; without a
                         computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available
