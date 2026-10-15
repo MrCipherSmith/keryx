@@ -785,7 +785,8 @@ describe("pinned #! wrappers at run time", () => {
     await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: { PATH: `${other}:${binDir}:/usr/bin:/bin` } } });
     expect((await lastRecord()).detail).toContain("the interpreter");
     expect(existsSync(marker)).toBe(false);
-  });
+    // Copies and hashes real executables, just like the adjacent mutation case.
+  }, 30_000);
 
   test("a changed pinned interpreter is refused", async () => {
     const { wrapper, interp, binDir, marker } = envWrapper();
