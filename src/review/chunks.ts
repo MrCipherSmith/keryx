@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
-import { type BlastRadius, BLAST_RADIUS_SCOPE_REVIEWER, DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
+import { type BlastRadius, BLAST_RADIUS_SCOPE_REVIEWER, DEFAULT_BLAST_RADIUS_MAX_FILES, isCapDrop } from "./blast-radius";
 import { type RetryDecision, type RetryState, emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest } from "./slice";
 import { sliceGraph } from "./waves";
@@ -45,6 +45,8 @@ export type ChunkPlan = {
   dropped: number;
   /** Hash of the dropped file set the plan was cut from; a plan written before this field existed has none. */
   droppedKey?: string;
+  /** Each planned file's size on disk when the plan was cut, so a retry's halves carry real sizes. Absent on older plans. */
+  fileBytes?: Record<string, number>;
   chunks: ChunkEntry[];
 };
 
@@ -125,19 +127,25 @@ export async function readChunkPlan(packageDir: string): Promise<ChunkPlan | und
   return plan !== undefined && Array.isArray(plan.chunks) ? plan : undefined;
 }
 
+/** The dropped files a chunk pass owes a review: the cap's cuts. Reasoned omissions and pre-filter drops are not owed one. */
+export function capDropped(radius: Pick<BlastRadius, "dropped">): BlastRadius["dropped"] {
+  return radius.dropped.filter((entry) => isCapDrop(entry.reason));
+}
+
 /**
- * Writes `chunks.json` from the dropped files of `blast-radius.json`. No dropped file means no plan (null).
+ * Writes `chunks.json` from the cap-dropped files of `blast-radius.json`. No such file means no plan (null).
  * A plan whose dropped set still matches is kept (so is one written before `droppedKey` existed). A plan cut from a
  * different dropped set is replaced while no pass is recorded and refused once one is: the plan may not move under a pass.
  */
 export async function ensureChunkPlan(packageDir: string, projectRoot: string, options: { maxBytes?: number; maxFiles?: number } = {}): Promise<ChunkPlan | null> {
   const radius = await readBlastRadius(packageDir);
-  if (radius === undefined || radius.dropped.length === 0) return null;
+  if (radius === undefined || capDropped(radius).length === 0) return null;
   return withChunkStateLock(packageDir, () => cutChunkPlan(packageDir, projectRoot, radius, options));
 }
 
 async function cutChunkPlan(packageDir: string, projectRoot: string, radius: BlastRadius, options: { maxBytes?: number; maxFiles?: number }): Promise<ChunkPlan> {
-  const droppedKey = droppedKeyOf(radius.dropped.map((entry) => entry.file));
+  const dropped = capDropped(radius);
+  const droppedKey = droppedKeyOf(dropped.map((entry) => entry.file));
   const existing = await readChunkPlan(packageDir);
   if (existing !== undefined) {
     if (existing.droppedKey === undefined || existing.droppedKey === droppedKey) return existing;
@@ -150,14 +158,13 @@ async function cutChunkPlan(packageDir: string, projectRoot: string, radius: Bla
   }
   const sizes = new Map<string, number>();
   await Promise.all(
-    radius.dropped.map(async (entry) => {
-      const info = await stat(path.join(projectRoot, entry.file)).catch(() => undefined);
-      sizes.set(entry.file, info?.isFile() === true ? info.size : 0);
+    dropped.map(async (entry) => {
+      sizes.set(entry.file, await sizeOnDisk(projectRoot, entry.file));
     }),
   );
   const maxFiles = options.maxFiles ?? DEFAULT_BLAST_RADIUS_MAX_FILES;
   const maxBytes = options.maxBytes ?? DEFAULT_SLICE_MAX_BYTES;
-  const chunks = planChunks({ dropped: radius.dropped, maxFiles, maxBytes, sizeOf: (file) => sizes.get(file) ?? 0 });
+  const chunks = planChunks({ dropped, maxFiles, maxBytes, sizeOf: (file) => sizes.get(file) ?? 0 });
   const plan: ChunkPlan = {
     schemaVersion: 1,
     reviewer: CHUNK_REVIEWER,
@@ -165,8 +172,9 @@ async function cutChunkPlan(packageDir: string, projectRoot: string, radius: Bla
     source: "blast-radius.json",
     maxFiles,
     maxBytes,
-    dropped: new Set(radius.dropped.map((entry) => entry.file)).size,
+    dropped: new Set(dropped.map((entry) => entry.file)).size,
     droppedKey,
+    fileBytes: Object.fromEntries([...sizes].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
     chunks,
   };
   await mkdir(packageDir, { recursive: true });
@@ -267,14 +275,20 @@ function findingsOf(value: unknown): ChunkFinding[] {
   return Array.isArray(value) ? value.filter((item): item is ChunkFinding => item !== null && typeof item === "object" && !Array.isArray(item)) : [];
 }
 
-function halves(chunk: ChunkEntry, attempt: number): ChunkEntry[] {
+async function sizeOnDisk(projectRoot: string, file: string): Promise<number> {
+  const info = await stat(path.join(projectRoot, file)).catch(() => undefined);
+  return info?.isFile() === true ? info.size : 0;
+}
+
+/** The two halves a failed chunk is cut into, each carrying the real size of its own files (never a share of the parent's). */
+function halves(chunk: ChunkEntry, attempt: number, sizeOf: (file: string) => number): ChunkEntry[] {
   const middle = Math.ceil(chunk.files.length / 2);
   return [chunk.files.slice(0, middle), chunk.files.slice(middle)]
     .filter((files) => files.length > 0)
     .map((files, index) => ({
       id: `${chunk.id}.r${attempt}-${index + 1}`,
       files,
-      bytes: Math.max(1, Math.round((chunk.bytes * files.length) / chunk.files.length)),
+      bytes: Math.max(1, files.reduce((sum, file) => sum + sizeOf(file), 0)),
       retryOf: [chunk.id],
       attempt,
     }));
@@ -284,21 +298,25 @@ function halves(chunk: ChunkEntry, attempt: number): ChunkEntry[] {
  * Records what one chunk pass returned. A DONE pass covers its chunk. A failed pass goes through the retry plan: it is
  * handed back smaller (the chunk is cut in half) while the plan still allows a retry, and otherwise stays pending.
  */
-export function recordChunk(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<ChunkRecordResult> {
+export function recordChunk(packageDir: string, chunkId: string, result: ChunkResultInput, options: { projectRoot?: string } = {}): Promise<ChunkRecordResult> {
   // Two overlapping records would each start from the same snapshot, and the later write would erase the earlier outcome.
-  return withChunkStateLock(packageDir, () => recordChunkLocked(packageDir, chunkId, result));
+  return withChunkStateLock(packageDir, () => recordChunkLocked(packageDir, chunkId, result, options.projectRoot));
 }
 
 type ChunkRecordResult = { decision: RetryDecision; reason: string; state: ChunkRunState };
 
-async function recordChunkLocked(packageDir: string, chunkId: string, result: ChunkResultInput): Promise<ChunkRecordResult> {
+async function recordChunkLocked(packageDir: string, chunkId: string, result: ChunkResultInput, projectRoot: string | undefined): Promise<ChunkRecordResult> {
   const plan = await readChunkPlan(packageDir);
   if (plan === undefined) throw new Error(`No ${CHUNKS_FILE} in ${packageDir}.`);
   const state = await readChunkState(packageDir);
   const all = [...plan.chunks, ...state.derived];
   const chunk = all.find((entry) => entry.id === chunkId);
   if (chunk === undefined) throw new Error(`Unknown chunk ${chunkId}; the plan has ${all.map((entry) => entry.id).join(", ")}.`);
-  const { next, decision } = applyChunkResult(plan, state, chunk, result);
+  // Real sizes for a retry's halves: the plan's own record, and for a plan cut before it kept one, the files on disk.
+  const sizes = new Map<string, number>(Object.entries(plan.fileBytes ?? {}));
+  const root = projectRoot ?? projectRootOf(packageDir);
+  await Promise.all(chunk.files.filter((file) => !sizes.has(file)).map(async (file) => sizes.set(file, await sizeOnDisk(root, file))));
+  const { next, decision } = applyChunkResult(plan, state, chunk, result, (file) => sizes.get(file) ?? 0);
   await writeChunkState(packageDir, next);
   const states = runStates(plan, next);
   const mine = states.find((entry) => entry.chunk.id === chunkId || next.derived.some((d) => d.id === chunkId && d.retryOf?.includes(entry.chunk.id)));
@@ -306,7 +324,13 @@ async function recordChunkLocked(packageDir: string, chunkId: string, result: Ch
 }
 
 /** The state after one chunk's result, and the retry decision that led to it. Reads and writes nothing. */
-function applyChunkResult(plan: ChunkPlan, state: ChunkState, chunk: ChunkEntry, result: ChunkResultInput): { next: ChunkState; decision: ReturnType<typeof planRetry> } {
+function applyChunkResult(
+  plan: ChunkPlan,
+  state: ChunkState,
+  chunk: ChunkEntry,
+  result: ChunkResultInput,
+  sizeOf: (file: string) => number,
+): { next: ChunkState; decision: ReturnType<typeof planRetry> } {
   const manifest = chunkManifest(plan, state.derived);
   const read = readText(manifest);
   const status = result.status.toUpperCase();
@@ -336,7 +360,7 @@ function applyChunkResult(plan: ChunkPlan, state: ChunkState, chunk: ChunkEntry,
   };
   const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunk.id));
   if (!finished && decision.decision === "retry" && !decision.progress && chunk.files.length > 1 && !alreadySplit) {
-    next.derived.push(...halves(chunk, decision.priorAttempts + 1));
+    next.derived.push(...halves(chunk, decision.priorAttempts + 1, sizeOf));
   }
   return { next, decision };
 }
@@ -425,6 +449,13 @@ export async function recordRadiusAndPlan(packageDir: string, projectRoot: strin
   } catch (error) {
     return `chunk plan NOT written: ${error instanceof Error ? error.message : String(error)}`;
   }
+}
+
+/** `<root>/.metaproject/reviews/<id>` → `<root>`; any other layout falls back to the working directory. */
+function projectRootOf(packageDir: string): string {
+  const parts = path.resolve(packageDir).split(path.sep);
+  const at = parts.lastIndexOf(".metaproject");
+  return at > 0 ? parts.slice(0, at).join(path.sep) || path.sep : process.cwd();
 }
 
 export function hasChunkPlan(packageDir: string): boolean {

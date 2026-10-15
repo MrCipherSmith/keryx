@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BLAST_RADIUS_DROP_REASONS,
   BLAST_RADIUS_SCOPE_REVIEWER,
+  isCapDrop,
+  REASONED_DROP_REASONS,
   blastRadiusRecomputeDecision,
   computeBlastRadius,
   isBlastRadiusScopedFinding,
@@ -710,4 +713,87 @@ test("an exempted finding and a rejected one each sit under their own heading", 
   expect(exemptRow).toBeGreaterThan(admitted);
   expect(exemptRow).toBeLessThan(rejectedHeading);
   expect(rejectRow).toBeGreaterThan(rejectedHeading);
+});
+
+// ---------------------------------------------------------------------------
+// Flow 457 AC2/AC3 — symbol reach, text links and reasoned omissions
+// ---------------------------------------------------------------------------
+
+describe("the symbol radius records non-consumers as reasoned omissions (flow 457 AC2)", () => {
+  const SOURCES: Record<string, string> = {
+    "src/core.ts": "export function alpha(): number {\n  return 1;\n}\n\nexport function beta(): number {\n  return 2;\n}\n",
+    "src/uses-alpha.ts": 'import { alpha } from "./core";\nexport const a = alpha();\n',
+    "src/uses-beta.ts": 'import { beta } from "./core";\nexport const b = beta();\n',
+    "src/after-alpha.ts": 'import { a } from "./uses-alpha";\nexport const c = a;\n',
+  };
+  const graph: GraphData = {
+    nodes: Object.keys(SOURCES).map((path) => ({ id: path, kind: "file" as const, path, language: "typescript" as const })),
+    edges: [
+      { id: "1", from: "src/uses-alpha.ts", to: "src/core.ts", kind: "imports", specifier: "./core" },
+      { id: "2", from: "src/uses-beta.ts", to: "src/core.ts", kind: "imports", specifier: "./core" },
+      { id: "3", from: "src/after-alpha.ts", to: "src/uses-alpha.ts", kind: "imports", specifier: "./uses-alpha" },
+    ],
+  };
+  const symbols = {
+    read: { head: (file: string) => SOURCES[file] },
+    diff: new Map([["src/core.ts", { path: "src/core.ts", oldPath: "src/core.ts", hunks: [{ oldStart: 2, oldLines: 1, newStart: 2, newLines: 1 }] }]]),
+  };
+
+  test("a body edit to alpha keeps alpha's consumers and omits beta's importer with the reason and a detail", () => {
+    const radius = computeBlastRadius({ graph, changedFiles: ["src/core.ts"], symbols, config: { includeRelatedTests: false } });
+    expect(radius.files.map((entry) => [entry.file, entry.hop])).toEqual([
+      ["src/uses-alpha.ts", 1],
+      ["src/after-alpha.ts", 2],
+    ]);
+    expect(radius.dropped).toEqual([
+      expect.objectContaining({ file: "src/uses-beta.ts", reason: "unrelated-symbol", detail: expect.stringContaining("imports {beta}") }),
+    ]);
+    expect(radius.counts.droppedByCap).toBe(0);
+    expect(radius.counts.droppedUnrelatedSymbol).toBe(1);
+    expect(radius.reach?.mode).toBe("symbol");
+    expect(radius.reach?.seeds[0]?.names).toEqual(["alpha"]);
+  });
+
+  test("the plain file walk is unchanged without symbol input, and every reason is a known drop reason", () => {
+    const radius = computeBlastRadius({ graph, changedFiles: ["src/core.ts"], config: { includeRelatedTests: false } });
+    expect(radius.files.map((entry) => entry.file).sort()).toEqual(["src/after-alpha.ts", "src/uses-alpha.ts", "src/uses-beta.ts"]);
+    expect(radius.reach).toBeUndefined();
+    expect(BLAST_RADIUS_DROP_REASONS).toEqual(["cap", "pre-filter", "unrelated-symbol", "hub-damped", "text-hub"]);
+    expect(["cap", "legacy-unknown"].map(isCapDrop)).toEqual([true, true]);
+    expect(["pre-filter", ...REASONED_DROP_REASONS].map(isCapDrop)).toEqual([false, false, false, false]);
+  });
+
+  test("the cap cuts only consumers; reasoned omissions never count against it", () => {
+    const radius = computeBlastRadius({ graph, changedFiles: ["src/core.ts"], symbols, config: { includeRelatedTests: false, maxFiles: 1 } });
+    expect(radius.files.map((entry) => entry.file)).toEqual(["src/uses-alpha.ts"]);
+    expect(radius.dropped.map((drop) => [drop.file, drop.reason])).toEqual([
+      ["src/after-alpha.ts", "cap"],
+      ["src/uses-beta.ts", "unrelated-symbol"],
+    ]);
+  });
+
+  test("text links add implicit consumers at hop 1; a hub key's files are text-hub omissions", () => {
+    const radius = computeBlastRadius({
+      graph,
+      changedFiles: ["src/core.ts"],
+      symbols,
+      config: { includeRelatedTests: false },
+      textLinks: {
+        keys: [],
+        links: [{ file: "src/locales/en.json", key: "core.title", kind: "i18n-key", via: "src/core.ts" }],
+        hubs: [{ key: "btn", kind: "css-class", via: "src/core.ts", hits: 2, files: ["src/x.tsx", "src/uses-alpha.ts"], detail: "css-class btn is a hub" }],
+        skipped: [],
+      },
+    });
+    expect(radius.files.find((entry) => entry.file === "src/locales/en.json")).toMatchObject({ hop: 1, source: "text-link", path: ["src/locales/en.json", "src/core.ts"] });
+    expect(radius.dropped.filter((drop) => drop.reason === "text-hub")).toEqual([
+      expect.objectContaining({ file: "src/x.tsx", detail: "css-class btn is a hub" }),
+    ]);
+    expect(radius.counts.textLinksAdded).toBe(1);
+    expect(radius.counts.droppedTextHub).toBe(1);
+    const brief = renderBlastRadiusDispatchBrief(radius);
+    expect(brief).toContain("OMITTED WITH A REASON (2");
+    expect(brief).not.toContain("NOT CHECKED");
+    expect(renderBlastRadiusMarkdown(radius)).toContain("omitted_unrelated_symbol: 1");
+  });
 });
