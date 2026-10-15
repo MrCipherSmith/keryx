@@ -218,7 +218,7 @@ export function renderMutationTable(record: MutationRecord): string {
     ...rows,
     "",
     ...(record.not_reached !== undefined && record.not_reached > 0 ? [`Not run: ${record.not_reached} candidates${record.cap === undefined ? "" : ` (cap ${record.cap})`}. They stay pending and block the coverage gate until a pass runs them.`, ""] : []),
-    t.survived > 0 ? "A survivor means no assertion pins that behaviour: the severity audit reads it as evidence." : "No survivor.",
+    t.survived > 0 ? "A survivor means no assertion pins that behaviour: the severity audit raises a finding to major only when no mutant in the same file was killed." : "No survivor.",
     "",
   ].join("\n");
 }

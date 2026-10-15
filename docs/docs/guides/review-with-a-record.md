@@ -170,11 +170,14 @@ is: `behavior` (the default) or `presentation` (copy, class names, display order
 worktree is never written) and records whether the tests failed. The table in
 `research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
 test command it was judged by and that command's exit code. A mutant that
-**survived** means no test pins that behaviour. `severity-audit` raises a finding
-that cites a surviving mutant (`mutant:<id>` in its `evidence`) from minor to major
-and records why; it never deletes a finding. A survivor of kind `presentation`
-does not raise anything: the severity is held and the finding records
-`severity_audit.held`, because a test that does not pin copy is not a missing test.
+**survived** means no test pins that behaviour. A survivor shows a
+missing assertion, not wrong behaviour, so `severity-audit` raises a finding that
+cites a surviving mutant (`mutant:<id>` in its `evidence`) from minor to major only
+when no mutant in the same file was killed: nothing in the suite exercises that code.
+When the file has a killed mutant, the suite covers it, the survivor is a gap in covered
+code, and the severity is held with `severity_audit.held` (`kind: "covered"`, and the
+kill count in `reason`). A survivor of kind `presentation` is held the same way,
+because a test that does not pin copy is not a missing test. The audit never deletes a finding.
 For an attended run `review complete`
 refuses a package with proposed mutants nobody ran, unless the dispatch carries a
 `mutationWaiver` with the operator's own words.

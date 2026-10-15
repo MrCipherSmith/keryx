@@ -3115,7 +3115,7 @@ async function runSeverityAudit(args: string[]): Promise<void> {
   }
   for (const c of result.changes) console.log(`${c.id}: ${c.from} -> ${c.to}${c.evidence ? ` (${c.evidence})` : ""}${c.label ? ` [${c.label}]` : ""}${c.held ? " [held]" : ""} - ${c.reason}`);
   const held = result.changes.filter((c) => c.held).length;
-  console.log(`${result.changes.length - held} of ${result.findings} finding(s) changed${held > 0 ? `, ${held} held (presentation-only survivor)` : ""}${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
+  console.log(`${result.changes.length - held} of ${result.findings} finding(s) changed${held > 0 ? `, ${held} held (survivor does not show wrong behaviour)` : ""}${result.written ? "; findings.json rewritten" : result.changes.length ? " (not written: --dry-run)" : ""}.`);
 }
 
 async function runStack(args: string[]): Promise<void> {
@@ -4218,7 +4218,8 @@ Usage:
                         <review-dir>/research-evidence/mutants.json) in a scratch
                         copy of the worktree; the worktree is never written. The
                         baseline must pass first. A survivor means no assertion
-                        pins that behaviour. Writes mutation-<n>.json and .md to
+                        pins that behaviour; it raises a finding only where no
+                        mutant in the same file was killed. Writes mutation-<n>.json and .md to
                         research-evidence/.
   keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>
                         [--self <login>] [--checks <gh-checks.json>] [--json]

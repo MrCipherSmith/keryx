@@ -5,11 +5,11 @@ import { EVIDENCE_DIR, pendingMutants, type MutationRecord } from "./mutate";
 
 /**
  * What a review round leaves behind that no severity or finding count shows: mutation candidates that never ran,
- * severities a presentation-only survivor held in place, and follow-ups the parent still owes. One projection read by
+ * severities a survivor held in place (presentation-only, or in code the suite covers), and follow-ups the parent still owes. One projection read by
  * `keryx review status`, the `/review parity` shell view, the sidebar, and `keryx review report-parity`, so no surface
  * states a number another does not. Read-only.
  */
-export type ParityHeld = { finding: string; severity: string; mutant: string; reason: string };
+export type ParityHeld = { finding: string; severity: string; mutant: string; kind?: string | undefined; reason: string };
 
 export type ParityFollowUp = {
   /** The ledger obligation id, e.g. `review-testing-practices:fu1`. */
@@ -66,6 +66,7 @@ function heldOf(findings: unknown): ParityHeld[] {
       finding: String(finding.id ?? finding.global_id ?? "?"),
       severity: String(note.severity ?? finding.severity ?? ""),
       mutant: String(note.mutant ?? ""),
+      ...(typeof note.kind === "string" ? { kind: note.kind } : {}),
       reason: String(note.reason ?? ""),
     });
   }
@@ -131,7 +132,7 @@ export function renderParityReport(view: ReviewParityView): string {
   if (parityIsEmpty(view)) return "";
   const lines = ["## Review parity", ""];
   if (view.notRun > 0) lines.push(`- **${notRunText(view)}.** They stay pending; a pass that runs them can still change a severity.`);
-  for (const held of view.held) lines.push(`- **Held severity:** ${held.finding} stays ${held.severity}. Mutant ${held.mutant} survived but only changes presentation.`);
+  for (const held of view.held) lines.push(`- **Held severity:** ${held.finding} stays ${held.severity}. ${held.kind === "covered" ? `${held.reason.charAt(0).toUpperCase()}${held.reason.slice(1)}.` : `Mutant ${held.mutant} survived but only changes presentation.`}`);
   for (const up of view.followUps) lines.push(`- **Not verified:** ${up.text} (${up.id}, ${up.state === "open" ? "open" : `narrowed, remains: ${up.remains ?? "not stated"}`})`);
   return `${lines.join("\n")}\n`;
 }
@@ -153,7 +154,7 @@ export function parityWarnings(view: ReviewParityView, report: string): string[]
     warnings.push(`${view.notRun} mutation candidate(s) were Not run and the report does not say so; paste \`keryx review report-parity <review>\` into report.md`);
   }
   if (view.held.length > 0 && !view.held.some((h) => mentions(h.mutant)) && !startsLine("Held severity").test(report)) {
-    warnings.push(`${view.held.length} severity note(s) were held by a presentation-only mutant and the report names none; paste \`keryx review report-parity <review>\` into report.md`);
+    warnings.push(`${view.held.length} severity note(s) were held by a surviving mutant and the report names none; paste \`keryx review report-parity <review>\` into report.md`);
   }
   if (view.followUps.length > 0 && !view.followUps.some((f) => mentions(f.id)) && !startsLine("Not verified").test(report)) {
     warnings.push(`${view.followUps.length} follow-up(s) are not verified and the report names none; paste \`keryx review report-parity <review>\` into report.md`);

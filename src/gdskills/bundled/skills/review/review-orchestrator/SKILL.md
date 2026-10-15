@@ -1328,6 +1328,9 @@ someone who did not write it — and has not read the code — reaches the same
 answer: look for the trigger and the outcome. Present → `major`. Absent, but a
 concrete maintenance cost is named → `minor`. Neither → `info`.
 
+A surviving mutant shows a missing assertion, not wrong behaviour: a test gap in code the
+suite exercises is `minor`; `severity-audit` raises it only when no mutant in that file was killed.
+
 Two consequences, both previously decided differently in different files:
 
 - A finding that **claims** runtime harm and cannot name the trigger is `info`,
@@ -1339,11 +1342,8 @@ Two consequences, both previously decided differently in different files:
   that puts a style reviewer's unproven concern there.
 - **And never of how crisply the finding is worded.** An outcome that costs a
   user, a caller or persisted state nothing is `minor` however precisely its
-  trigger is named. Without this clause the test above rates prose quality: a
-  cosmetic wording nit stated as "trigger X produces output Y" reads as `major`,
-  while a real defect stated tersely reads as `info`. That is not academic — the
-  findings cap truncates by severity, so the well-written typo would survive and
-  the terse real defect would be cut.
+  trigger is named; otherwise a cosmetic nit stated as "trigger X produces output Y"
+  reads as `major` and survives the findings cap while a terse real defect is cut.
 
 The boundary this rubric does **not** draw is `major` against `major`. Two
 findings that both name a trigger and an outcome are the same severity even when
