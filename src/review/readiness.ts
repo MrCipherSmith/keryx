@@ -13,6 +13,7 @@ import { packageScopeFiles } from "./coverage";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
+import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED } from "./orchestrator-log";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
 import type { ManagedReviewManifest, ReadinessWaiver } from "./types";
@@ -246,8 +247,12 @@ async function memoryStageCheck(ctx: Context): Promise<Verdict> {
   const started = clean === undefined ? Number.NaN : Date.parse(clean.startedAt);
   let stage = clean?.memoryQuery;
   const outside: string[] = [];
+  const unattributed: string[] = [];
   let inStage = 0;
   for (const call of memoryCalls(log)) {
+    // A reviewer's lookups are its own; a call keryx could not attribute only warns (flow 454, D1).
+    if (call.caller === CALLER_UNATTRIBUTED) { unattributed.push(call.summary); continue; }
+    if (call.caller !== undefined && call.caller !== CALLER_ORCHESTRATOR) continue;
     const time = call.time === undefined ? Number.NaN : Date.parse(call.time);
     const stageCall = call.search && call.accepted && call.query !== undefined && (stage === undefined || sameQuery(call.query, stage));
     if (!stageCall) outside.push(call.summary);
@@ -257,9 +262,14 @@ async function memoryStageCheck(ctx: Context): Promise<Verdict> {
       inStage += 1;
     }
   }
-  if (outside.length === 0) return ok(inStage === 0 ? "the orchestrator made no memory call" : `${inStage} memory call(s) by the orchestrator, all the stage query${stage === undefined ? "" : ` "${stage}"`}`);
+  const warning = unattributed.length === 0 ? "" : `; warning: ${unattributed.length} unattributed memory call(s) (CLI or MCP from a host that names no caller, not counted against the orchestrator): ${some(unattributed)}`;
+  if (outside.length === 0) {
+    const recorded = log.split("\n").some((line) => line.includes('"log-start"') || line.includes('"source"'));
+    const none = recorded ? "no memory call recorded by the orchestrator (log written by keryx)" : "the orchestrator made no memory call";
+    return ok(`${inStage === 0 ? none : `${inStage} memory call(s) by the orchestrator, all the stage query${stage === undefined ? "" : ` "${stage}"`}`}${warning}`);
+  }
   return bad(
-    `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}`,
+    `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}${warning}`,
     `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
   );
 }
@@ -312,6 +322,7 @@ export function renderReadiness(report: ReadinessReport): string[] {
     const mark = item.status === "pass" ? "pass  " : item.status === "waived" ? "waived" : "FAIL  ";
     lines.push(`  ${item.number}. [${mark}] ${item.id}: ${item.title}`);
     lines.push(`       ${item.evidence}`);
+    if (item.id === "memory-outside-stage") lines.push(`       ${memoryLogNote(report)}`);
     if (item.status === "waived" && item.waiver !== undefined) lines.push(`       waived by the operator: ${item.waiver.operatorQuote}`);
     if (item.status === "fail" && item.repair !== undefined) lines.push(`       repair: ${item.repair}`);
   }
@@ -327,7 +338,23 @@ export function readinessLine(report: ReadinessReport): string {
 /** The verdict and each failing item with what is missing; one projection for the depth tab, the readline text and `review status`. */
 export function readinessDepthLines(report: ReadinessReport | undefined): string[] {
   if (report === undefined) return ["readiness: not read"];
-  return [readinessLine(report), ...failingItems(report).map((item) => `  ${item.id}: ${item.evidence}`)];
+  const memory = report.items.find((item) => item.id === "memory-outside-stage");
+  const note = memoryLogNote(report);
+  // A passing item is not listed above, yet whether its log was recorded or absent is what tells a pass from a blind pass (flow 454).
+  const logLine = memory === undefined || memory.status === "fail" || note === "" ? [] : [`  memory-outside-stage: ${note}`];
+  return [readinessLine(report), ...failingItems(report).map((item) => `  ${item.id}: ${item.evidence}`), ...logLine];
+}
+
+/**
+ * The orchestrator log as the compact surfaces say it: `orchestrator log: recorded` or `orchestrator log: none`, and the count of
+ * calls keryx could not attribute (flow 454). The same words the item's own detail line uses, taken from it so they cannot drift.
+ */
+export function memoryLogNote(report: ReadinessReport): string {
+  const item = report.items.find((entry) => entry.id === "memory-outside-stage");
+  if (item === undefined) return "";
+  const state = item.evidence.startsWith("no orchestrator tool log") ? "none" : "recorded";
+  const unattributed = /(\d+) unattributed memory call/.exec(item.evidence)?.[1];
+  return `orchestrator log: ${state}${unattributed === undefined ? "" : `, ${unattributed} unattributed`}`;
 }
 
 /** What `complete` and `publish` refuse with. */

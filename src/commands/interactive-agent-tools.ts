@@ -31,6 +31,7 @@ import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { journaledAskUser } from "../tui/ask-user-bridge";
+import { CALLER_ORCHESTRATOR, withOrchestratorLog } from "../review/orchestrator-log";
 import { buildProjectTools } from "./project-tools";
 
 export type InteractiveAgentToolsInput = {
@@ -216,7 +217,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     ...metaprojectTools,
     webFetchTool({ cwd: input.cwd }),
     webSearchTool(input.searchController, { cwd: input.cwd }),
-    shellExecTool(input.cwd, undefined, jobRegistry),
+    withOrchestratorLog(shellExecTool(input.cwd, undefined, jobRegistry), { cwd: input.cwd, caller: CALLER_ORCHESTRATOR }),
     // Flow 266: the task tools proper, plus the two old names kept as
     // deprecated aliases for one release. `observer` is what decides whether a
     // read counts as delivery — this roster is the MAIN session's, so its copy

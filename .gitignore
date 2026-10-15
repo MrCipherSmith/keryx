@@ -92,6 +92,10 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # chose and why they deviated — personal runtime state, not something to commit.
 # Written 0o600. Same placement and reasoning as the entries above.
 .metaproject/data/decisions/
+# `keryx review start|attach` (flow 454): the pointer to the review package whose
+# orchestrator call log is being written. Per-machine runtime state, removed by
+# `review complete`; same placement and reasoning as the entries above.
+.metaproject/data/review-active/
 # Flow 331's review-conform adapter runs `keryx review conform` with its cwd
 # set to bench/jev-review/fixtures/conform-project/ (its own scratch
 # .metaproject/tasks.config.json), so that command writes the same

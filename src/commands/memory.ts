@@ -9,6 +9,8 @@ import { loadEmbeddingIndex } from "../memory/service";
 import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
 import { optionValue } from "../lib/args";
+import { shellQuote } from "../lib/shell-quote";
+import { memoryCliCommand, recordProcessCall } from "../review/orchestrator-log";
 import {
   describeRemovalLookup,
   loadDeletionTrail,
@@ -35,6 +37,18 @@ const INGEST_FLAGS: Record<string, string> = {
   "--from-job": "job",
   "--from-skill-verifier": "skill-verifier",
 };
+
+/**
+ * The `keryx memory` entry the CLI registry points at (flow 454): with a review package active, the call is
+ * appended to its orchestrator log first, then runs exactly as before. `memoryCommand` stays unrecorded because
+ * `keryx sync` calls it in-process for housekeeping that is not an agent's memory read.
+ */
+export async function memoryCliEntry(args: string[]): Promise<void> {
+  if (args.length > 0 && args[0] !== "--help" && args[0] !== "-h") {
+    await recordProcessCall(process.cwd(), { source: "cli", command: memoryCliCommand(args, shellQuote) });
+  }
+  await memoryCommand(args);
+}
 
 export async function memoryCommand(args: string[]): Promise<void> {
   const command = args[0];

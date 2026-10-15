@@ -17,6 +17,7 @@ import { promisify } from "node:util";
 import type { InteractiveTool, InteractiveToolContext } from "./interactive-tools";
 import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
+import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
@@ -1656,16 +1657,23 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // location above, this ledger, the OS-temp ephemeral slate directory)
       // deliberately keep reading `deps.cwd`.
       const cwd = childCwd;
+      // Flow 454: a child's memory calls are recorded under its own id, and its keryx subprocesses carry
+      // `KERYX_REVIEW_CALLER` — the child has no shell, so that runner is its whole "command environment".
+      const reviewCaller = reviewerCallerId(labelRaw, workerId);
       const tools =
         mode === "read_only"
           ? [
               ...builtinReadOnlyTools(cwd),
-              ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), createMetaprojectAdapter(cwd)),
+              ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd, undefined, reviewCaller), createMetaprojectAdapter(cwd)).map((tool) =>
+                withOrchestratorLog(tool, { cwd, caller: reviewCaller }),
+              ),
             ]
           : [
               // v1 general: still no shell_exec (parent owns mutations)
               ...builtinReadOnlyTools(cwd),
-              ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), createMetaprojectAdapter(cwd)),
+              ...builtinMetaprojectTools(cwd, makeKeryxRunner(cwd, undefined, reviewCaller), createMetaprojectAdapter(cwd)).map((tool) =>
+                withOrchestratorLog(tool, { cwd, caller: reviewCaller }),
+              ),
             ];
 
       // SLATE-6 (flow 163 Track A): give the child a real, throwaway slate to
