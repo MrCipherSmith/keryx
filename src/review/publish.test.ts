@@ -150,11 +150,29 @@ describe("keryx review publish", () => {
 
   test("prints the body before it posts, and posts it once the operator's --yes is on the command", async () => {
     makePackage({ ready: true });
-    const { io, output } = await publish(["--yes", "--event", "COMMENT"]);
+    const { io, output } = await publish(["--yes", "--event", "COMMENT"], { isTerminal: () => true });
     expect(output.indexOf("--- review body")).toBeGreaterThanOrEqual(0);
     expect(output.indexOf("Request changes.")).toBeLessThan(output.indexOf("published: COMMENT"));
     expect(io.posts).toHaveLength(1);
     expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  test("flow 457: --yes without a terminal (and outside the autonomous runner) is refused, naming the card", async () => {
+    makePackage({ ready: true });
+    process.chdir(root);
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+    try {
+      const io = seams();
+      await reviewCommand(["publish", "pr7932-r1", "--yes"], { isTerminal: () => false, postReview: io.post, prLookup: async () => null, prFiles: async () => null });
+      expect(io.posts).toEqual([]);
+    } finally {
+      console.error = original;
+    }
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("review_publish");
+    process.exitCode = 0;
   });
 
   test("without a terminal and without --yes it shows the body and does not post", async () => {
@@ -175,7 +193,7 @@ describe("keryx review publish", () => {
     console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
     try {
       const io = seams();
-      await reviewCommand(["publish", "pr7932-r1", "--yes"], { isTerminal: () => false, postReview: io.post, prLookup: async () => null, prFiles: async () => null });
+      await reviewCommand(["publish", "pr7932-r1", "--yes"], { isTerminal: () => true, postReview: io.post, prLookup: async () => null, prFiles: async () => null });
       expect(io.posts).toEqual([]);
     } finally {
       console.error = original;
@@ -183,7 +201,7 @@ describe("keryx review publish", () => {
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("verifier");
     process.exitCode = 0;
-    const { io } = await publish(["--partial", "--yes"]);
+    const { io } = await publish(["--partial", "--yes"], { isTerminal: () => true });
     expect(io.posts).toHaveLength(1);
     expect(io.posts[0]!.body.startsWith("**Partial review.**")).toBe(true);
   });

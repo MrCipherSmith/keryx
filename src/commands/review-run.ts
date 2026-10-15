@@ -6,7 +6,7 @@
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { createTelegramNotifier, arbiterEscalateLine, endLine, NO_NOTIFIER, startLine, type RunNotifier } from "./review-notify";
-import { AUTONOMOUS_PROFILE, parseAutonomousTarget } from "../review/autonomous-profile";
+import { AUTONOMOUS_PROFILE, parseAutonomousRangeTarget, parseAutonomousTarget, type AutonomousTarget } from "../review/autonomous-profile";
 import { ARBITER_LOG_NAME, readArbiterLog } from "../review/arbiter-log";
 import { AutonomousRunLockedError, runAutonomousReview, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 
@@ -14,6 +14,7 @@ export const RUN_FLAGS = [
   "--autonomous",
   "--target",
   "--ref",
+  "--head",
   "--budget-minutes",
   "--budget-tokens",
   "--stall-minutes",
@@ -27,11 +28,13 @@ export const RUN_FLAGS = [
 ] as const;
 
 export const RUN_USAGE =
-  "keryx review run --autonomous --target pr --ref <pull request URL> [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]";
+  "keryx review run --autonomous (--target pr --ref <pull request URL> | --target branch --ref <base> [--head <commit>]) [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]";
 
 export const RUN_HELP = `${RUN_USAGE}
 
 Runs one review of a pull request with nobody at the keyboard, in the review-autonomous profile.
+--target branch reviews a local range base...head instead (head defaults to the commit checked out): the
+path for a host that cannot spawn reviewers itself and has no pull request to name.
 Exit codes: 0 complete, 2 incomplete, 3 stopped at a floor, 4 budget spent, 5 stalled, 1 refused
 (bad arguments, or another run of the same pull request holds the lock).
 While it runs it writes a "heartbeat:" line to stderr when the phase, round count or token count
@@ -41,6 +44,7 @@ A run that really stalls is still stopped by --stall-minutes (exit 5), and the l
 
 export interface ParsedRun {
   readonly ref: string;
+  readonly target: AutonomousTarget;
   readonly budgetMinutes?: number;
   readonly budgetTokens?: number;
   readonly stallMinutes: number;
@@ -72,11 +76,13 @@ export function parseRunArgs(args: string[]): ParsedRun {
   if (!args.includes("--autonomous")) {
     throw new Error(`\`keryx review run\` needs --autonomous: it is the only mode. Usage: ${RUN_USAGE}`);
   }
-  const target = optionValue(args, "--target");
-  if (target !== "pr") throw new Error(`--target must be "pr" (the only target an autonomous review takes), got ${target === undefined ? "nothing" : `"${target}"`}`);
+  const kind = optionValue(args, "--target");
+  if (kind !== "pr" && kind !== "branch") throw new Error(`--target must be "pr" or "branch" (a local base...head range), got ${kind === undefined ? "nothing" : `"${kind}"`}`);
   const ref = optionValue(args, "--ref");
-  if (ref === undefined || ref.length === 0) throw new Error(`--ref <pull request URL> is required. Usage: ${RUN_USAGE}`);
-  parseAutonomousTarget(ref);
+  if (ref === undefined || ref.length === 0) throw new Error(`--ref <${kind === "pr" ? "pull request URL" : "base"}> is required. Usage: ${RUN_USAGE}`);
+  const head = optionValue(args, "--head");
+  if (kind === "pr" && head !== undefined) throw new Error("--head is for --target branch; a pull request's head is read from the pull request");
+  const target: AutonomousTarget = kind === "pr" ? parseAutonomousTarget(ref) : parseAutonomousRangeTarget(ref, head);
   const budgetMinutes = positive(args, "--budget-minutes", false);
   const budgetTokens = positive(args, "--budget-tokens", true);
   const stallMinutes = positive(args, "--stall-minutes", false) ?? AUTONOMOUS_PROFILE.stallMinutes;
@@ -85,6 +91,7 @@ export function parseRunArgs(args: string[]): ParsedRun {
   const model = optionValue(args, "--model");
   return {
     ref,
+    target,
     ...(budgetMinutes === undefined ? {} : { budgetMinutes }),
     ...(budgetTokens === undefined ? {} : { budgetTokens }),
     stallMinutes,
@@ -184,7 +191,7 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
     return 1;
   }
   const cwd = deps.cwd ?? process.cwd();
-  const target = parseAutonomousTarget(parsed.ref);
+  const target = parsed.target;
   const notifier = deps.notifier ?? (parsed.notify ? createTelegramNotifier({ project: path.basename(cwd), target }) : NO_NOTIFIER);
   const run = deps.run ?? runAutonomousReview;
   const heartbeat = createHeartbeat(error, deps.now, undefined, deps.keepAliveMs ?? HEARTBEAT_KEEPALIVE_MS);
@@ -197,6 +204,7 @@ export async function runReviewRunCommand(args: string[], deps: RunCommandDeps =
     const result = await run({
       cwd,
       ref: parsed.ref,
+      target,
       signal: stop.signal,
       onProgress: heartbeat,
       stallMs: parsed.stallMinutes * 60_000,

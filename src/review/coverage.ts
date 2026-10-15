@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers } from "./reviewers";
-import { ENV_AUTONOMOUS_ANSWERS_FILE } from "./autonomous-answers";
+import { isAttendedRun, operatorGateApplies } from "./run-profile";
+import { confirmedDecision, decisionWriters, type OperatorDecisionKind } from "./operator-decisions";
 import { buildReviewScope } from "./scope";
 import { assertGitRevision } from "../lib/git-revision";
 
@@ -340,10 +341,11 @@ async function packageDiffStats(options: CoverageOptions): Promise<{ files: stri
   return typeof ref === "string" && typeof head === "string" ? gitDiffStats(options.root, { ref, head }) : undefined;
 }
 
-/** An attended run is every run except the autonomous runner's child shell. */
-export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[ENV_AUTONOMOUS_ANSWERS_FILE] === undefined;
-}
+/**
+ * An attended run is every run except the autonomous runner's child shell and a round whose package records an
+ * unattended start (`review start --unattended`, ./run-profile.ts). Re-exported for the callers that read it here.
+ */
+export { isAttendedRun };
 
 /**
  * The depth the gate holds a dispatch to. A dispatch that says `light` is trusted only while the current scope still
@@ -365,10 +367,30 @@ async function effectiveDepth(record: Record<string, unknown>, options: Coverage
   return decision.depth === "light" ? { depth: "light" } : { depth: "full", refused: decision.reason.replace(/^auto: /, "") };
 }
 
-function mutationErrors(record: Record<string, unknown>, options: CoverageOptions, depth: RoundDepth): string[] {
+/**
+ * On a package stamped with the operator gate (./run-profile.ts), a quote in the dispatch is not the operator's word
+ * unless a card or a terminal recorded the decision (./operator-decisions.ts). Undefined: nothing is missing.
+ */
+async function unconfirmedDecision(options: CoverageOptions, kind: OperatorDecisionKind): Promise<string | undefined> {
+  const dir = options.packageDir;
+  if (dir === undefined || !operatorGateApplies(dir)) return undefined;
+  if ((await confirmedDecision(dir, kind)) !== undefined) return undefined;
+  return decisionWriters(kind, path.relative(process.cwd(), dir) || ".");
+}
+
+async function mutationErrors(record: Record<string, unknown>, options: CoverageOptions, depth: RoundDepth): Promise<string[]> {
   const pending = options.pendingMutants ?? 0;
   if (depth === "light") return [];
-  if (pending === 0 || (options.attended ?? isAttendedRun()) === false) return [];
+  if (pending === 0 || (options.attended ?? isAttendedRun(process.env, options.packageDir)) === false) return [];
+  const missing = await unconfirmedDecision(options, "mutation-waiver");
+  if (operatorGateApplies(options.packageDir)) {
+    if (missing === undefined) return [];
+    return [
+      `${pending} proposed mutant(s) in research-evidence/mutants.json were never run, so \`Not run: mutation pass\` is not allowed on an attended review. ` +
+        `Run \`keryx review mutate --test "<command>" --package <review-dir>\`, or have the operator waive it: ${missing}. ` +
+        "A mutationWaiver quote written into the dispatch is not the operator's word. A run with nobody present declares it at the start: `keryx review start --unattended`",
+    ];
+  }
   const w = record.mutationWaiver;
   const waiver = w && typeof w === "object" && !Array.isArray(w) ? (w as Record<string, unknown>) : {};
   const text = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
@@ -397,7 +419,7 @@ export function packageHasPrContext(packageDir: string, name = "pr-context.md"):
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
   const effective = record === undefined ? undefined : await effectiveDepth(record, options);
-  return [...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : mutationErrors(record, options, effective.depth))];
+  return [...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : await mutationErrors(record, options, effective.depth))];
 }
 
 async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, effective: { depth: RoundDepth; refused?: string } | undefined): Promise<string[]> {
@@ -409,6 +431,11 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
   if (record.mode === "diff" && !text(record.operatorQuote))
     return ['dispatch mode "diff" narrows the reviewer set and needs operatorQuote (the operator\'s own words naming a narrower review); a pull request defaults to mode "all"'];
   const override = record.override;
+  // A narrowed set (mode diff, or an override) is the operator's decision; on a gated package only a card or a terminal records it.
+  const unconfirmed = record.mode === "diff" || override !== undefined ? await unconfirmedDecision(options, "reviewer-override") : undefined;
+  if (unconfirmed !== undefined) {
+    return [`dispatch ${override !== undefined ? "override" : 'mode "diff"'} narrows the reviewer set, and an operatorQuote written into the dispatch is not the operator's word on this package: ${unconfirmed}`];
+  }
   if (override !== undefined) {
     const o = override && typeof override === "object" && !Array.isArray(override) ? (override as Record<string, unknown>) : {};
     return text(o.operatorQuote) && text(o.reason)

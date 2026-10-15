@@ -14,6 +14,7 @@ import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type Slic
 import { packagePlanGate } from "../review/estimate";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
+import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
 export type SliceDeps = {
@@ -23,7 +24,7 @@ export type SliceDeps = {
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
 };
 
-export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--out", "--head", "--reach", "--jev-scores", "--json", "--help", "-h"] as const;
+export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--host", "--package", "--out", "--head", "--reach", "--jev-scores", "--json", "--help", "-h"] as const;
 export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--pr-context", "--package", "--json", "--help", "-h"] as const;
 export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--covered", "--next-wave", "--package", "--state", "--dry-run", "--json", "--help", "-h"] as const;
 
@@ -62,14 +63,18 @@ export function printSliceHelp(): void {
   console.log(`keryx review slice — usage:
 
   keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
-                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>]
+                     [--max-bytes <n>] [--wave-bytes <n>] [--host ${REVIEW_HOSTS.join("|")}]
+                     [--package <review-dir> | --out <dir>]
                      [--head <sha>] [--reach <file.json>] [--jev-scores <file.json>] [--json]
 
 Cuts the scoped diff into reviewer-sized slices, no model call. Each slice is a
 file of at most --max-bytes (default ${DEFAULT_SLICE_MAX_BYTES}) holding whole domains where they fit; a domain over the
-limit is cut by file, a file over it by hunk. --wave-bytes (default ${DEFAULT_WAVE_BYTES}, at least
---max-bytes) is what one reviewer dispatch may carry in total: a role owning more
-is dispatched in waves, so each dispatch fits the reviewer's child deadline. Data ledgers (csv, tsv, jsonl,
+limit is cut by file, a file over it by hunk. --wave-bytes (at least --max-bytes) is what one reviewer
+dispatch may carry in total: a role owning more is dispatched in waves, so each dispatch fits the
+reviewer's child deadline. Its default depends on --host (default: detected from the environment):
+keryx-shell ${HOST_WAVE_BYTES["keryx-shell"]} (a child is killed after 5 minutes), claude-code, codex and other
+${HOST_WAVE_BYTES["claude-code"]} (no child deadline; ${DEFAULT_WAVE_BYTES} was the old default for every host). The
+manifest records host and waveBytes. Data ledgers (csv, tsv, jsonl,
 parquet), lockfiles, snapshots, generated and oversize json are never sliced:
 they are listed under omissions with their reason and size.
 
@@ -81,7 +86,9 @@ light. A deterministic ~12% of light slices (hash of --head, default HEAD, and t
 slice id) run deep as an audit sample (\`audit: true\`).
 
 Accepts a git diff or the output of \`keryx review scope --scoped-diff\`.
-Writes slice-NN.diff and ${MANIFEST_NAME} into --out (default ${DEFAULT_SLICE_DIR}).
+Writes slice-NN.diff and ${MANIFEST_NAME} into --out, else <review-dir>/slices with --package (where
+retry-plan and the ledger look for them), else ${DEFAULT_SLICE_DIR} (shared by every review: pass
+--package so one review's slices never mix with another's).
 Manifest paths are relative to the manifest. Put each slice's TEXT in the
 reviewer prompt; then \`keryx review dispatch-check\` the payload.
 `);
@@ -180,9 +187,12 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
 
   const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
+  const hostArg = optionValue(args, "--host");
+  const host = hostArg === undefined ? detectReviewHost() : parseReviewHost(hostArg);
+  if (host === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
   const rawWave = optionValue(args, "--wave-bytes");
-  const waveBytes = rawWave === undefined ? undefined : validateWaveBytes(Number(rawWave), maxBytes);
-  const built = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
+  const waveBytes = validateWaveBytes(rawWave === undefined ? defaultWaveBytes(host, maxBytes) : Number(rawWave), maxBytes);
+  const built = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, waveBytes });
   // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
   const head = optionValue(args, "--head") ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
@@ -192,10 +202,12 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     ...(reachFile === undefined ? {} : { reach: await readNumberMap(reachFile, "--reach") }),
     ...(jevFile === undefined ? {} : { jevScores: await readNumberMap(jevFile, "--jev-scores") }),
   });
-  const manifest = { ...built.manifest, slices: slices.map(({ text: _text, ...entry }) => entry) };
+  const manifest = { ...built.manifest, host, waveBytes, slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
-  const outDir = placed("--out", DEFAULT_SLICE_DIR) as string;
+  const packageOut = optionValue(args, "--out") === undefined ? placed("--package") : undefined;
+  if (packageOut !== undefined && (!existsSync(packageOut) || !statSync(packageOut).isDirectory())) throw new Error(`--package ${packageOut} is not a directory.`);
+  const outDir = packageOut !== undefined ? path.join(packageOut, "slices") : (placed("--out", DEFAULT_SLICE_DIR) as string);
   await mkdir(outDir, { recursive: true });
   for (const entry of await readdir(outDir)) {
     if (/^slice-\d+\.diff$/.test(entry)) {
@@ -323,6 +335,17 @@ async function collectLateResults(packageDir: string, reviewer: string, known: R
   return { covered: [...covered], collected };
 }
 
+/**
+ * Flow 457 (T7, audit row 11): the review package a slice manifest belongs to — `<package>/slices/manifest.json` —
+ * so retry-plan reads that package's raw/ and drivers/ without `--package`. Undefined for the shared slice directory.
+ */
+export function packageOfManifest(manifestDir: string): string | undefined {
+  const candidate = path.dirname(manifestDir);
+  return path.basename(manifestDir) === "slices" && existsSync(path.join(candidate, "manifest.json")) && existsSync(path.join(candidate, "raw"))
+    ? candidate
+    : undefined;
+}
+
 function failUnreadable(error: unknown): void {
   if (error instanceof UnreadableInput) {
     console.error(error.message);
@@ -415,7 +438,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     }
     const sliceList = optionValue(args, "--slices");
     const coveredList = optionValue(args, "--covered");
-    const packageSource = placed("--package");
+    const packageSource = placed("--package") ?? packageOfManifest(manifestDir);
     if (packageSource !== undefined && (!existsSync(packageSource) || !statSync(packageSource).isDirectory())) {
       throw new Error(`--package ${packageSource} is not a directory.`);
     }

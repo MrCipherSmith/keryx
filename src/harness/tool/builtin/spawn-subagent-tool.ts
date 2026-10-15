@@ -2202,12 +2202,19 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             // pass those paths already use, not a raw pass-through.
             const partial = assistant.trim();
             const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
+            // Flow 457 (T7, audit row 14): the parent parses the saved file, never the bounded tool output, so a
+            // child that ran out of time still leaves everything it wrote in `save_result_to`.
+            const partialSaveNote =
+              saveTarget.abs === undefined || partial.length === 0
+                ? ""
+                : `\n[partial result ${(await saveChildResult(saveTarget.abs, partial)) === undefined ? "saved to" : "could NOT be saved to"} ${String(input.save_result_to)}]`;
             return {
               status: "Timeout",
               output:
                 `subagent ${label} (${workerId}) timed out after ${deadlineMs}ms and was abandoned ` +
                 `(tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS})` +
-                (foldedPartial.length > 0 ? `\n--- partial output ---\n${boundSummary(foldedPartial)}` : ""),
+                (foldedPartial.length > 0 ? `\n--- partial output ---\n${boundSummary(foldedPartial)}` : "") +
+                partialSaveNote,
               isError: true,
               ...(foldedPartial.length > 0 ? { partial: boundSummary(foldedPartial) } : {}),
             };

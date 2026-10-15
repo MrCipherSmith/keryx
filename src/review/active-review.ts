@@ -14,6 +14,8 @@ export interface ActiveReview {
   /** Absolute path of the package directory. */
   dir: string;
   startedAt: string;
+  /** Flow 457: the token `review start` recorded; a CLI call carrying it in KERYX_REVIEW_CALLER_TOKEN is the orchestrator's. */
+  callerToken?: string;
 }
 
 function pointerPath(projectRoot: string): string {
@@ -28,13 +30,18 @@ function inside(root: string, candidate: string): boolean {
 /** Points the project at `packageDir`. Never throws: a review that cannot write its pointer is simply not recorded. */
 export async function writeActiveReview(
   projectRoot: string,
-  review: { id: string; dir: string },
+  review: { id: string; dir: string; callerToken?: string | undefined },
   now: Date = new Date(),
 ): Promise<boolean> {
   try {
     const file = pointerPath(projectRoot);
     await mkdir(path.dirname(file), { recursive: true });
-    const body: ActiveReview = { id: review.id, dir: path.resolve(projectRoot, review.dir), startedAt: now.toISOString() };
+    const body: ActiveReview = {
+      id: review.id,
+      dir: path.resolve(projectRoot, review.dir),
+      startedAt: now.toISOString(),
+      ...(review.callerToken === undefined ? {} : { callerToken: review.callerToken }),
+    };
     await writeFile(file, `${JSON.stringify(body)}\n`, { mode: 0o600 });
     return true;
   } catch {
@@ -59,7 +66,7 @@ async function readPointer(projectRoot: string): Promise<ActiveReview | undefine
   try {
     const parsed = JSON.parse(await readFile(pointerPath(projectRoot), "utf8")) as Partial<ActiveReview>;
     if (typeof parsed.id !== "string" || typeof parsed.dir !== "string" || typeof parsed.startedAt !== "string") return undefined;
-    return { id: parsed.id, dir: parsed.dir, startedAt: parsed.startedAt };
+    return { id: parsed.id, dir: parsed.dir, startedAt: parsed.startedAt, ...(typeof parsed.callerToken === "string" && parsed.callerToken !== "" ? { callerToken: parsed.callerToken } : {}) };
   } catch {
     return undefined;
   }

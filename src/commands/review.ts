@@ -57,7 +57,12 @@ import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { guardReviewPaths } from "../lib/review-path-flags";
-import { startOrchestratorLog } from "../review/orchestrator-log";
+import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
+import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
+import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
+import { buildRunProfile, isAutonomousEnv, writeRunProfile } from "../review/run-profile";
+import { promoteParentExecutions } from "../review/verify-run";
+import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
 import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
@@ -333,6 +338,11 @@ export const CREATE_FLAGS = [
   "--memory-query",
   "--graph-timeout",
   AUTOMATIC_REVIEW_FLAG,
+  // Flow 457 (T7): `start|attach` record how the round runs in <package>/run-profile.json. --unattended: nobody is at
+  // the keyboard, so an unrun mutation pass is recorded as not run instead of refused. --host: the agent host
+  // (keryx-shell, claude-code, codex, other); default detected from the environment.
+  "--unattended",
+  "--host",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -687,7 +697,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "comments") {
-      await runComments(args.slice(1));
+      await runComments(args.slice(1), seams);
       return;
     }
     if (command === "ci-triage") {
@@ -836,6 +846,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       await runComplete(args.slice(1), seams);
       return;
     }
+    if ((OPERATOR_COMMANDS as readonly string[]).includes(command)) {
+      const code = await runOperatorCommand(command as OperatorCommand, args.slice(1), seams?.isTerminal === undefined ? {} : { isTerminal: seams.isTerminal });
+      if (code !== 0) process.exitCode = code;
+      return;
+    }
     if (command === "lightweight") {
       console.log("lightweight review mode: report-only; no managed review artifacts created");
       return;
@@ -948,6 +963,8 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
   const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
+  const hostArg = optionValue(args, "--host");
+  if (hostArg !== undefined && parseReviewHost(hostArg) === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   const input: ManagedReviewIngestInput = {
@@ -988,7 +1005,14 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
-  if (mode !== "ingest") await startOrchestratorLog(cwd, result.reviewId, result.path);
+  if (mode !== "ingest") {
+    const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
+    await writeRunProfile(result.path, profile);
+    await startOrchestratorLog(cwd, result.reviewId, result.path, profile.callerToken);
+    console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
+    console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
+    for (const line of renderSkillDrift(reviewSkillDrift({ projectRoot: resolveProjectRoot(cwd), bundledRoot: defaultBundledReviewRoot() }))) console.error(line);
+  }
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
   if (mode === "review-flow" && Array.isArray(startRadius?.dropped) && startRadius.dropped.length > 0) {
@@ -1674,7 +1698,7 @@ export function dispatchModelBlock(decision: DispatchModelDecision): Record<stri
  * network and no pull request. It is not a test-only affordance — it is the
  * supported way to see what a reply pass would say before it says it.
  */
-async function runComments(args: string[]): Promise<void> {
+async function runComments(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   // Before the dispatch: `reply` posts, and must never be reached by a question.
   if (asksForHelp(args)) {
     printCommentsHelp();
@@ -1686,7 +1710,7 @@ async function runComments(args: string[]): Promise<void> {
     return;
   }
   if (sub === "reply") {
-    await runCommentsReply(args.slice(1));
+    await runCommentsReply(args.slice(1), seams);
     return;
   }
   throw new Error("Usage: keryx review comments <collect|reply> --repo <owner/repo> --pr <n> ...");
@@ -1750,13 +1774,34 @@ async function runCommentsCollect(args: string[]): Promise<void> {
   );
 }
 
-async function runCommentsReply(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+/**
+ * Flow 457 (T7, audit row 9): a final reply pass posts the operator's answers on the pull request, so outside a
+ * dry run and an offline `--fixtures` rehearsal it needs a person at a terminal, or the `review_comments_reply`
+ * card in keryx shell (which runs {@link commentsReplyPass} itself after the operator's yes).
+ */
+export function commentsReplyGate(args: readonly string[], isTerminal: () => boolean): string | undefined {
+  if (!args.includes("--final") || args.includes("--dry-run") || optionValue([...args], "--fixtures") !== undefined) return undefined;
+  if (isTerminal()) return undefined;
+  return "comments reply --final posts on the pull request and needs a terminal: refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_comments_reply tool: the operator reads the replies and answers a card. Outside keryx shell, run this command in a terminal; `--dry-run` shows the replies without posting.";
+}
+
+/** What one reply pass did (or, dry, would do): the result and where it ran. */
+export type CommentsReplyRun = {
+  result: Awaited<ReturnType<typeof postReplyPass>>;
+  cwd: string;
+  repo: string;
+  number: number;
+  state: Awaited<ReturnType<typeof readPrCommentState>>;
+  dryRun: boolean;
+};
+
+/** One reply pass from `comments reply` arguments; `dryRun` overrides `--dry-run`. Prints nothing. */
+export async function commentsReplyPass(args: string[], dryRunOverride?: boolean): Promise<CommentsReplyRun> {
   const repo = requiredOption(args, "--repo", "comments reply");
   const number = requiredInteger(args, "--pr");
   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
   const isFinal = args.includes("--final");
-  const dryRun = args.includes("--dry-run");
+  const dryRun = dryRunOverride ?? args.includes("--dry-run");
 
   // Before any network call, not merely before the post. A self-contradictory
   // result is refusable from the file alone, and making the caller wait on a
@@ -1806,6 +1851,14 @@ async function runCommentsReply(args: string[]): Promise<void> {
     state,
     dryRun,
   });
+  return { result, cwd, repo, number, state, dryRun };
+}
+
+async function runCommentsReply(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+  const refused = commentsReplyGate(args, seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true));
+  if (refused !== undefined) throw new Error(refused);
+  const { result, cwd, repo, number, state, dryRun } = await commentsReplyPass(args);
 
   console.log(`# review comments reply (${dryRun ? "dry run" : "posted"})`);
   console.log("");
@@ -3447,7 +3500,8 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
   }
-  return verificationClaims(parsed as VerificationSource);
+  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding ran in the parent: execution.
+  return promoteParentExecutions(verificationClaims(parsed as VerificationSource), process.cwd());
 }
 
 /**
@@ -4066,8 +4120,8 @@ Usage:
 The verdict of a review round as it stands: finding counts by severity, verified vs
 unverified (refuted excluded), open blockers and majors, and the reviewers that have
 not reported. Reads the ingested round (findings.json) when there is one, else the raw
-reviewer results in --raw <dir> (default <package>/raw; a shell host keeps them in
-.metaproject/data/review/raw). Verifier results in research-evidence/verifications.json are applied
+reviewer results in --raw <dir> (default <package>/raw, where every host keeps them; the shared
+.metaproject/data/review/raw is read only when passed explicitly, since it holds other rounds' replies). Verifier results in research-evidence/verifications.json are applied
 first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
 verdict-interim.md into the package. A package with no findings says so and exits 0.
 `);
@@ -4244,6 +4298,11 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
   const yes = tokens.some((token) => token.name === "--yes");
   const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  // Flow 457 (T7, audit row 7): `--yes` skips the operator's reading of the body, so only a person at a terminal or
+  // the autonomous runner (whose run was started by the operator to publish unattended) may pass it.
+  if (yes && !isTerminal() && !isAutonomousEnv()) {
+    throw new Error("publish --yes needs a terminal or the autonomous runner: it posts without the operator reading the body, and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_publish tool: the operator reads the body and answers a card. Outside keryx shell, run this command in a terminal.");
+  }
   let shown = false;
   const confirm = seams?.confirmPublish ?? (async (body: string, target: string, kind: ReviewEvent): Promise<boolean> => {
     console.log(`--- review body (${kind}) for ${target} ---`);
@@ -4563,6 +4622,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["learn", printLearnHelp],
   ["import", printImportHelp],
   ["run", () => console.log(RUN_HELP)],
+  ...OPERATOR_COMMANDS.map((name): [string, () => void] => [name, () => printOperatorCommandHelp(name)]),
 ]);
 
 /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
@@ -4584,7 +4644,11 @@ process; past the bound the package is still created, the command returns, and t
 function printStartHelp(): void {
   console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
-                   [--graph-timeout <seconds>]
+                   [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+
+--unattended: nobody is at the keyboard, so an unrun mutation pass is recorded as \`Not run\` instead of refused
+(default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
+caller token \`start\` prints; a package created before run-profile.json keeps the earlier operator-quote rules.
 
 Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
 ${GRAPH_TIMEOUT_HELP}`);
@@ -4665,7 +4729,11 @@ Usage:
                       [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
-                     [--graph-timeout <seconds>]
+                     [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+  keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
+  keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
+  keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
+  keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
