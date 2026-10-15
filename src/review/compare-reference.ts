@@ -174,7 +174,7 @@ export async function loadPackageEvidence(packageDir: string, inputDir?: string)
   if (inputDir !== undefined) lost.push(...(await rawReplies(inputDir)));
 
   const evidenceDir = path.join(packageDir, "research-evidence");
-  const mutationPass = existsSync(evidenceDir) && (await readdir(evidenceDir)).some((n) => /^mutation/i.test(n));
+  const mutationPass = existsSync(evidenceDir) && (await readdir(evidenceDir)).some((n) => /^mutation-\d+\.(json|md)$/i.test(n));
   return { ran: [...ran].sort(), findings, lost, mutationPass };
 }
 

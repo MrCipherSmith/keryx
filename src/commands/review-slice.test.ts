@@ -178,3 +178,33 @@ test("retry-plan --package: a malformed or INCOMPLETE result covers nothing, the
   expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
   expect(plan.collectedLate).toBe(0);
 });
+
+test("retry-plan --package: a late result counts the slices it reported, not the whole assignment (same rule as the ledger)", async () => {
+  await writeFile(path.join(root, "change.diff"), ["a", "b", "c"].map((n) => gitFile(`src/m/${n}.ts`, 40)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "1500", "--out", "out"]);
+  expect(process.exitCode).toBe(0);
+  const ids = (JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string }> }).slices.map((slice) => slice.id);
+  logs = [];
+  expect(ids.length).toBeGreaterThanOrEqual(3);
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: [ids[0]] })}\n`);
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids.slice(1));
+  expect(plan.collectedLate).toBe(1);
+});
+
+test("retry-plan --package: a late result for a different scope fingerprint covers nothing", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", scopeFingerprint: "stale", slices: ids })}\n`);
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+});
+
+test("retry-plan --package: two drivers naming the same raw file are collected once", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids })}\n`);
+  await writeFile(path.join(root, "pkg", "drivers", "review-logic-2.json"), JSON.stringify({ reviewer: "review-logic", slices: ids, result: "raw/review-logic.txt" }), "utf8");
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch).toEqual([]);
+  expect(plan.collectedLate).toBe(1);
+});

@@ -9,8 +9,8 @@ import { hasStatus, parseReviewResult } from "../review/ledger";
 import { layersSummaryLine } from "../review/layers-view";
 import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
-import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry, readSliceIds } from "../review/retry-plan";
-import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "../review/retry-plan";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -97,7 +97,8 @@ must total at most --max-bytes (default: the manifest's wave budget, else
 ${DEFAULT_SLICE_MAX_BYTES}); more than that is dispatched in waves (\`retry-plan --next-wave\`).
 
 Codes: REVIEWER_INPUT_INVALID, REVIEWER_INPUT_NO_SLICE,
-REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE, REVIEWER_INPUT_NO_PR_CONTEXT.
+REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE, REVIEWER_INPUT_NO_PR_CONTEXT,
+REVIEWER_INPUT_PATH_MISSING.
 Exit 0 ok, 1 payload refused, 2 payload or manifest unreadable.
 `);
 }
@@ -226,8 +227,9 @@ function wholeFileResult(raw: string): ReviewerResult | undefined {
  * the driver handed out. `collected` counts those files that add a slice not yet in `known`. Anything unreadable, malformed
  * or unfinished covers nothing.
  */
-async function collectLateResults(packageDir: string, reviewer: string, known: ReadonlySet<string>): Promise<{ covered: string[]; collected: number }> {
+async function collectLateResults(packageDir: string, reviewer: string, known: ReadonlySet<string>, fingerprint?: string): Promise<{ covered: string[]; collected: number }> {
   const covered = new Set<string>();
+  const countedFiles = new Set<string>();
   let collected = 0;
   const driversDir = path.join(packageDir, "drivers");
   if (!existsSync(driversDir)) return { covered: [], collected: 0 };
@@ -247,10 +249,18 @@ async function collectLateResults(packageDir: string, reviewer: string, known: R
     const open = (Array.isArray(result.needs_context) ? result.needs_context : []).some((item) => String(item).trim() !== "");
     if (open || (status !== "DONE" && status !== "DONE_WITH_CONCERNS")) continue;
     if (result.reviewer !== undefined && result.reviewer !== reviewer) continue;
-    const ids = readSliceIds(driver.slices, "assigned");
-    if (ids.unusable > 0) continue;
-    if (ids.ids.some((id) => !known.has(id) && !covered.has(id))) collected += 1;
-    for (const id of ids.ids) covered.add(id);
+    const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
+    if (typeof stamped === "string" && stamped !== fingerprint) continue;
+    const assigned = readSliceIds(driver.slices, "assigned");
+    if (assigned.unusable > 0) continue;
+    // Same rule as the ledger: the reply's own slice list bounded by what was assigned; no list means the whole assignment.
+    const allowed = new Set(assigned.ids);
+    const claimed = result.slices === undefined ? assigned.ids : readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
+    if (!countedFiles.has(file) && claimed.some((id) => !known.has(id) && !covered.has(id))) {
+      collected += 1;
+      countedFiles.add(file);
+    }
+    for (const id of claimed) covered.add(id);
   }
   return { covered: [...covered], collected };
 }
@@ -347,7 +357,14 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       throw new Error(`--package ${packageSource} is not a directory.`);
     }
     const knownCovered = state.scopeFingerprint === undefined ? [] : state.reviewers[reviewer]?.covered ?? [];
-    const late = packageSource === undefined ? { covered: [], collected: 0 } : await collectLateResults(packageSource, reviewer, new Set(knownCovered));
+    const readSliceText = (entry: SliceEntry): string => {
+      const file = path.resolve(manifestDir, entry.path);
+      if (!existsSync(file)) {
+        throw new UnreadableInput(`slice file is missing: ${file}`);
+      }
+      return readFileSync(file, "utf8");
+    };
+    const late = packageSource === undefined ? { covered: [], collected: 0 } : await collectLateResults(packageSource, reviewer, new Set(knownCovered), scopeFingerprint(manifest, readSliceText));
     const coveredIds = [...(coveredList === undefined ? [] : coveredList.split(",").map((item) => item.trim()).filter(Boolean)), ...late.covered];
     const plan = planRetry({
       manifest,
@@ -357,13 +374,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
       ...(coveredIds.length === 0 ? {} : { covered: coveredIds }),
       ...(nextWave ? { nextWave } : {}),
       state,
-      readSliceText: (entry) => {
-        const file = path.resolve(manifestDir, entry.path);
-        if (!existsSync(file)) {
-          throw new UnreadableInput(`slice file is missing: ${file}`);
-        }
-        return readFileSync(file, "utf8");
-      },
+      readSliceText,
     });
 
     if (!args.includes("--dry-run")) {
