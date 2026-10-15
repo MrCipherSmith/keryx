@@ -240,7 +240,7 @@ const CONNECT_GUIDANCE = [
   "To use Anthropic (claude-*) models, set the ANTHROPIC_API_KEY environment",
   "variable before launching keryx, e.g.:",
   "",
-  "  export ANTHROPIC_API_KEY=your-anthropic-key",
+  "  export ANTHROPIC_API_KEY=<key>",
   "",
   "keryx reads ANTHROPIC_API_KEY from the environment only — it never stores,",
   "logs, or echoes the key. Then run /provider to pick the anthropic provider.",
@@ -1381,7 +1381,7 @@ function oauthCredentialsFor(name: string): { credentials?: Record<string, strin
   return { credentials: { ...process.env, [envKey]: grant.access } };
 }
 
-/** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
+/** Build the bundled detect+pick selector using the real HTTP client and environment. */
 function realSelectProviderModel(
   baseUrl: string | undefined,
   cacheDir: string | undefined,

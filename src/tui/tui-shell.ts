@@ -912,8 +912,8 @@ async function promptCustomProviderWizard(otui: OpenTui, target: StepTarget): Pr
     while (true) {
       const urlStep = await promptCustomFieldStep(otui, target, {
         title: "Base URL",
-        note: "before the chat path — /v1/chat/completions is appended, e.g. http://10.110.43.19:8080",
-        value: "http://localhost:8000",
+        note: "before the chat path — /v1/chat/completions is appended; enter your provider endpoint",
+        value: "",
       });
       if (urlStep.kind === "back") {
         break; // → back to the name step
