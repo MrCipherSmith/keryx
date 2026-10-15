@@ -568,7 +568,16 @@ function mentions(masked: string, names: ReadonlySet<string>): boolean {
  */
 export function affectedExports(
   outline: ModuleOutline,
-  input: { touchedLines?: ReadonlySet<number>; changedLocals?: Iterable<string> },
+  input: {
+    touchedLines?: ReadonlySet<number>;
+    changedLocals?: Iterable<string>;
+    /**
+     * Module-level code that uses a changed name makes the module a leaf instead
+     * of changing every export: it is how an importer is judged, where such code
+     * runs the changed symbol but exports nothing that depends on it.
+     */
+    leafCode?: boolean;
+  },
 ): { names: ChangedNames; moduleLevel: boolean } {
   const locals = new Set<string>(input.changedLocals ?? []);
   const exported = new Set<string>();
@@ -603,7 +612,7 @@ export function affectedExports(
         for (const name of s.exports) exported.add(name);
         break;
       case "code":
-        star = true;
+        if (input.leafCode !== true) star = true;
         break;
     }
   };
@@ -746,9 +755,21 @@ function judgeImporter(importer: string, specifiers: readonly string[], names: C
   if (source === undefined) return { kind: "fallback", detail: "importer source could not be read" };
   const outline = outlineModule(importer, source);
   if (outline === undefined) return { kind: "fallback", detail: "importer did not parse" };
-  if (specifiers.some((spec) => outline.dynamicSpecifiers.has(spec))) return { kind: "fallback", detail: "importer loads the module dynamically" };
+  // A dynamic `import()`/`require()` names no binding: the importer is a consumer, and the exports whose statements
+  // hold the call are the ones that depend on the module. A call the line scan cannot place falls back to the file edge.
+  const dynamicLines = new Set<number>();
+  if (specifiers.some((spec) => outline.dynamicSpecifiers.has(spec))) {
+    const lines = source.split("\n");
+    for (const spec of specifiers) {
+      const call = new RegExp(`(?:\\bimport|\\brequire)\\s*\\(\\s*["']${spec.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`);
+      lines.forEach((line, index) => {
+        if (call.test(line)) dynamicLines.add(index + 1);
+      });
+    }
+    if (dynamicLines.size === 0) return { kind: "fallback", detail: "importer loads the module dynamically at a call the scan cannot place" };
+  }
   const matching = outline.statements.filter((s) => s.specifier !== undefined && specifiers.includes(s.specifier));
-  if (matching.length === 0) return { kind: "fallback", detail: "the import clause naming the module was not found" };
+  if (matching.length === 0 && dynamicLines.size === 0) return { kind: "fallback", detail: "the import clause naming the module was not found" };
   const has = (name: string): boolean => names === "*" || names.has(name);
   const locals = new Set<string>();
   const imported = new Set<string>();
@@ -775,8 +796,15 @@ function judgeImporter(importer: string, specifiers: readonly string[], names: C
       }
     }
   }
-  const consumer = sideEffect || locals.size > 0;
-  const own = consumer ? (sideEffect ? ({ names: "*" } as const) : affectedExports(outline, { changedLocals: locals })) : { names: new Set<string>() as ChangedNames };
+  const consumer = sideEffect || locals.size > 0 || dynamicLines.size > 0;
+  // An importer walks on only through its own exports that depend on the changed names: an export that re-exports
+  // them, or whose body or signature mentions them (directly or through a local helper). One that only uses them
+  // internally or in module-level code is a leaf: reached, not expanded.
+  const own = consumer
+    ? sideEffect
+      ? ({ names: "*" } as const)
+      : affectedExports(outline, { changedLocals: locals, touchedLines: dynamicLines, leafCode: true })
+    : { names: new Set<string>() as ChangedNames };
   return { kind: "analysed", consumer, imported: [...imported].sort(), passThrough, next: unionNames(own.names, passThrough) };
 }
 
@@ -854,9 +882,9 @@ export function computeSymbolReach(input: SymbolReachInput): SymbolReachResult {
         }
         continue;
       }
-      const verdict: ImporterVerdict = item.names === "*" && item.mode === "file-edge"
-        ? { kind: "fallback", detail: "file edge" }
-        : judgeImporter(importer, specifiers, item.names, input.read);
+      // Even behind a file edge (`*`: every name of the module counts as changed) a parseable importer is judged:
+      // it consumes whatever it imports, and walks on only through its exports that depend on those bindings.
+      const verdict = judgeImporter(importer, specifiers, item.names, input.read);
       if (verdict.kind === "fallback") {
         record({ file: importer, hop, weight, via: item.via, path, names: "*", mode: "file-edge" }, importerFanIn);
         queue.push({ file: importer, hop, weight, names: "*", via: item.via, path, mode: "file-edge" });
