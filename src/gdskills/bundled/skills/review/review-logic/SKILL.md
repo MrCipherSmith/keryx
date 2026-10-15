@@ -27,7 +27,7 @@ license: "MIT"
 
 Specialized reviewer for **logic correctness and algorithmic soundness**.
 Inherits from the original `code-ai-review` + `code-learned-review` correctness phases
-and unifies them into a single focused pass.
+and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 This reviewer does not care about formatting, naming, or architecture opinions.
 Every finding must describe an observable, reproducible defect or a spec gap.

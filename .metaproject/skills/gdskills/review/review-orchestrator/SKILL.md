@@ -29,6 +29,14 @@ license: "MIT"
 2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
 3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same `merge-base..HEAD`. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
 
+## Clean context — the round starts empty
+
+Context comes only from your own context stages: scope, the Review Context Pack, the memory stage and the layers. Your session memory, the auto-memory index (`MEMORY.md`), remembered feedback and the earlier conversation are not inputs: do not read, quote or apply them.
+- **Accepted exceptions, the only three:** `prior_findings` of an earlier round of the same package; review-notes and learning that reach you through the memory stage; a reviewer's own `memory_search`.
+- **One memory read.** Run the stage query once and record it with `keryx review start … --memory-query "<query>"`. Append each of your tool calls as one JSON line (`{"command": "…", "time": "<ISO>"}`) to `<package>/tool-calls/orchestrator.jsonl`. Readiness item 10, `memory-outside-stage`, blocks `review complete` and `review publish` on any other memory call; only `--waive memory-outside-stage "<operator quote>"` from a terminal lifts it. Detail: `SKILL.detail.md` § "Clean context".
+- **Open question.** Look in this skill and `SKILL.detail.md` first. If the answer is not there, ask the user: one `AskUserQuestion` interactively; unattended, the whole output is `STATUS: BLOCKED question — <the question>`. Never answer from memory or a guess.
+- **Named limit.** keryx cannot stop a runtime that loads the agent's memory before this skill starts, and reads of personal memory outside `keryx memory` are not visible to the log. The guarantee is instruction plus detection, not isolation.
+
 ## Workflow
 
 ```
@@ -609,12 +617,6 @@ Two rules, both load-bearing:
 - **Scope it to the change.** The whole memory index is not context; entries
   whose recorded scope does not intersect the changed files or modules are noise
   that costs budget in every reviewer prompt.
-
-Why this is required rather than advisory: `keryx flow init` already collects
-memory automatically for an implementation flow, and the review pipeline
-collected none for eleven rounds across flows 127 and 128. A recorded lesson
-naming the exact failure those rounds kept repeating existed the whole time and
-never reached a reviewer.
 
 Context modes:
 - `none`: no additional context collection; use only diff/path and local rules.
@@ -1591,7 +1593,6 @@ When a prompt carries `JOB_NAME` and `CONTEXT_PATH`, read that context document 
 | "I'll just run all reviewers for safety" | Over-reviews waste time; auto-detect for relevant scope |
 | "Spec compliance can wait until after quality review" | Stage 1 gate exists because unimplemented requirements invalidate quality work |
 | "I'll deduplicate findings manually in my head" | Always normalize to [F-NNN] format before consolidation to avoid losing findings |
-| "Minor findings from one reviewer cancel out the major from another" | Each finding stands independently; severity is per-finding, not averaged |
 | "The reviewer's own severity table said blocker" | There are no reviewer tables. One rubric, in **Severity (canonical)** above; a reviewer that ships one is the defect this replaced |
 | "It's a security/architecture finding, so it's a blocker" | Severity is the demonstrated outcome, not the domain that found it. `blocker` is exactly the four shapes |
 | "It will definitely break something eventually, so blocker" | Name the trigger and the outcome. Named → `major`. Unnamed → `info`. "Eventually" is neither |
@@ -1610,6 +1611,5 @@ When a prompt carries `JOB_NAME` and `CONTEXT_PATH`, read that context document 
 | "Steps 8–10 are done, I'll tick them now and ingest later" | `completed` means the ingest record exists. A plan that runs ahead of the artifacts is how an unrun review looked finished |
 | "The user said publish, so I can post the comment" | That chose whether, not what. Show the rendered body and get approval of it before any GitHub write |
 | "I cannot spawn reviewers, so I will review it myself" | A review nobody dispatched is not the review the report names. Output the Preflight 1 `BLOCKED` line and stop |
-| "No flags means no reviewers" | No flags → run auto-detection; never produce an empty review |
 | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
 | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |

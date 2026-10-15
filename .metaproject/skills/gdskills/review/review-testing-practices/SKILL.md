@@ -29,7 +29,7 @@ license: "MIT"
 # Review — Testing Practices
 
 Reviewer for local testing discipline. Read project test guides first when present, then apply
-the neutral baseline below.
+the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ---
 

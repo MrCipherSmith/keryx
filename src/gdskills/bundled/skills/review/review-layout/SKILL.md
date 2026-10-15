@@ -25,7 +25,7 @@ license: "MIT"
 
 # Review — Layout
 
-Reviewer for what the CSS actually renders.
+Reviewer for what the CSS actually renders. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 This lane exists because nobody else owns it. `review-frontend` owns React and
 MobX structure; `review-style` explicitly excludes everything but naming and

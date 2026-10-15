@@ -26,7 +26,7 @@ license: "MIT"
 
 Wave C. Reads the findings the domain reviewers produced and tries to **make each
 one fail on purpose**. Emits one verdict per finding it checked. It removes; it
-never adds and never sharpens.
+never adds and never sharpens. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
 
 ---
 
