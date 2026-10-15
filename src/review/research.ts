@@ -49,6 +49,7 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
       ? []
       : await coverageErrors(ledger?.dispatch, {
           root: projectRootOfPackage(packageDir),
+          packageDir,
           files: await packageScopeFiles(packageDir),
           changedLines: await packageChangedLines(packageDir),
           blastRadius: await packageHasBlastRadius(packageDir),

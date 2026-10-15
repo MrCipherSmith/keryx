@@ -394,3 +394,41 @@ describe("mutation gate by round depth", () => {
     expect(errors.join("\n")).toContain("missing");
   });
 });
+
+describe("light depth cannot be forged", () => {
+  const attended = { attended: true, pendingMutants: 3 } as const;
+  const files = ["src/a.ts", "src/b.ts"];
+
+  test("a forged changedLines is overruled by the diff recomputed from git", async () => {
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (
+      await coverageErrors(
+        { mode: "all", depth: "light", selected: light.required },
+        { root, ...attended, files, changedLines: 10, diffStats: async () => ({ files, changedLines: 3000 }) },
+      )
+    ).join("\n");
+    expect(errors).toContain("3000 changed lines exceeds 300");
+    expect(errors).toContain("never run");
+  });
+
+  test("an unresolvable diff is a full round", async () => {
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, diffStats: async () => undefined })).join("\n");
+    expect(errors).toContain("could not be resolved");
+  });
+
+  test("a recomputed small diff keeps the light round", async () => {
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    expect(await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, diffStats: async () => ({ files, changedLines: 40 }) })).toEqual([]);
+  });
+
+  test("a recorded full round-depth binds over a light dispatch", async () => {
+    const dir = path.join(root, "pkg");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "round-depth.json"), JSON.stringify({ requested: "full", depth: "full", reason: "--depth full" }));
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, packageDir: dir, diffStats: async () => ({ files, changedLines: 10 }) })).join("\n");
+    expect(errors).toContain("binds");
+    expect(errors).toContain("never run");
+  });
+});

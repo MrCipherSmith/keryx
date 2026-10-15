@@ -4,6 +4,8 @@ import path from "node:path";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers } from "./reviewers";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "./autonomous-answers";
+import { buildReviewScope } from "./scope";
+import { assertGitRevision } from "../lib/git-revision";
 
 export type ReviewMode = "all" | "diff";
 export type RoundDepth = "light" | "full";
@@ -306,7 +308,37 @@ export type CoverageOptions = {
   pendingMutants?: number | undefined;
   /** False for `keryx review run --autonomous`; defaults to the environment the process runs in. */
   attended?: boolean | undefined;
+  /**
+   * The package directory. When set, a dispatch that says `light` is checked against the diff the package's target names
+   * (recomputed from git), not against the recorded `scope-files.json`, and a recorded full round-depth binds.
+   */
+  packageDir?: string | undefined;
+  /** Recomputes the scope's files and changed lines for the light check; undefined when the diff cannot be resolved. Defaults to git, from the package manifest's target. */
+  diffStats?: (() => Promise<{ files: string[]; changedLines: number } | undefined>) | undefined;
 };
+
+/** The files and retained changed lines of `ref...head`, from one `git diff`; undefined when git cannot answer. */
+export async function gitDiffStats(root: string, target: { ref: string; head: string }): Promise<{ files: string[]; changedLines: number } | undefined> {
+  try {
+    assertGitRevision(target.ref);
+    assertGitRevision(target.head);
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    if (exitCode !== 0 || proc.signalCode !== null) return undefined;
+    const scope = buildReviewScope(stdout);
+    return { files: scope.files, changedLines: scope.counts.changedLinesRetained };
+  } catch {
+    return undefined;
+  }
+}
+
+async function packageDiffStats(options: CoverageOptions): Promise<{ files: string[]; changedLines: number } | undefined> {
+  if (options.diffStats !== undefined) return options.diffStats();
+  if (options.packageDir === undefined) return undefined;
+  const manifest = await readFile(path.join(options.packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
+  const { ref, head } = manifest?.target ?? {};
+  return typeof ref === "string" && typeof head === "string" ? gitDiffStats(options.root, { ref, head }) : undefined;
+}
 
 /** An attended run is every run except the autonomous runner's child shell. */
 export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -319,7 +351,17 @@ export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
  */
 async function effectiveDepth(record: Record<string, unknown>, options: CoverageOptions): Promise<{ depth: RoundDepth; refused?: string }> {
   if (record.depth !== "light") return { depth: "full" };
-  const decision = await decideRoundDepth(options.root, "auto", { files: options.files, changedLines: options.changedLines });
+  if (options.packageDir !== undefined) {
+    const recorded = await packageRoundDepth(options.packageDir);
+    if (recorded?.depth === "full" && recorded.stale === undefined) return { depth: "full", refused: `${ROUND_DEPTH_FILE} records a full round (${recorded.reason}), which binds` };
+  }
+  let input: DepthInput = { files: options.files, changedLines: options.changedLines };
+  if (options.packageDir !== undefined || options.diffStats !== undefined) {
+    const stats = await packageDiffStats(options);
+    if (stats === undefined) return { depth: "full", refused: "the diff could not be resolved from git to confirm the size" };
+    input = { files: stats.files, changedLines: stats.changedLines };
+  }
+  const decision = await decideRoundDepth(options.root, "auto", input);
   return decision.depth === "light" ? { depth: "light" } : { depth: "full", refused: decision.reason.replace(/^auto: /, "") };
 }
 

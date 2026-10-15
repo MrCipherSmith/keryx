@@ -174,7 +174,15 @@ describe("runMutation", () => {
     const out = path.join(base, "toplevel.txt");
     await writeFile(path.join(tree, "where.js"), `const r = require("child_process").spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" });\nrequire("fs").writeFileSync(${JSON.stringify(out)}, r.status + ":" + r.stdout);\nrequire("./check.js");\n`);
     const spec = parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]);
-    await runMutation({ worktree: tree, command: `"${process.execPath}" where.js`, mutants: spec });
+    // A GIT_DIR from a git hook must not reach the test run and point git back at the real repository.
+    const saved = process.env.GIT_DIR;
+    process.env.GIT_DIR = path.join(tree, ".git");
+    try {
+      await runMutation({ worktree: tree, command: `"${process.execPath}" where.js`, mutants: spec });
+    } finally {
+      if (saved === undefined) delete process.env.GIT_DIR;
+      else process.env.GIT_DIR = saved;
+    }
     const seen = await readFile(out, "utf8");
     expect(seen.startsWith("0:")).toBe(false);
     expect(seen).not.toContain(await realpath(tree));
@@ -182,7 +190,8 @@ describe("runMutation", () => {
 
   test("a SIGTERM during a run removes the scratch copy", async () => {
     const hold = path.join(base, "started");
-    await writeFile(path.join(tree, "hang.js"), `require("fs").writeFileSync(${JSON.stringify(hold)}, "x"); setTimeout(() => {}, 60000);\n`);
+    const pidFile = path.join(base, "pid");
+    await writeFile(path.join(tree, "hang.js"), `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); require("fs").writeFileSync(${JSON.stringify(hold)}, "x"); setTimeout(() => {}, 60000);\n`);
     const driver = path.join(base, "driver.ts");
     await writeFile(driver, `import { runMutation, parseMutantSpec } from ${JSON.stringify(path.resolve(import.meta.dir, "mutate.ts"))};\nawait runMutation({ worktree: ${JSON.stringify(tree)}, command: ${JSON.stringify(`"${process.execPath}" hang.js`)}, scratchRoot: ${JSON.stringify(scratch)}, mutants: parseMutantSpec([{ id: "A", file: "calc.js", anchor: "a + b", replacement: "a - b" }]) });\n`);
     const child = Bun.spawn([process.execPath, driver], { stdout: "ignore", stderr: "ignore" });
@@ -192,6 +201,18 @@ describe("runMutation", () => {
     child.kill("SIGTERM");
     await child.exited;
     expect(await readdir(scratch)).toEqual([]);
+    // The test suite the run spawned dies with it; it is not left running as an orphan.
+    const testPid = Number(await readFile(pidFile, "utf8"));
+    let alive = true;
+    for (let i = 0; i < 40 && alive; i++) {
+      try {
+        process.kill(testPid, 0);
+        await Bun.sleep(50);
+      } catch {
+        alive = false;
+      }
+    }
+    expect(alive).toBe(false);
   }, 30_000);
 
   test("a mutant that hangs is a timeout, not a survivor", async () => {

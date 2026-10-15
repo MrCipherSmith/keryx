@@ -107,10 +107,33 @@ export function parseMutantSpec(raw: unknown): MutantSpec[] {
   });
 }
 
+/** Process groups of the test commands running now; a signal kills them before the scratch copy goes. */
+const liveGroups = new Set<number>();
+
+function killLiveGroups(): void {
+  for (const pgid of liveGroups) {
+    try {
+      process.kill(-pgid, "SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }
+  liveGroups.clear();
+}
+
+/** The environment a test run gets: git cannot be pointed at another repository, so the ceiling holds. */
+function runEnv(scratchBase: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
+  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY"]) delete env[name];
+  return env;
+}
+
 function runCommand(command: string, cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<{ exitCode: number; timedOut: boolean; ms: number; output: string }> {
   return new Promise((resolve) => {
     const started = Date.now();
     const child = spawn(command, { cwd, env, shell: true, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    const group = child.pid;
+    if (group !== undefined) liveGroups.add(group);
     // stdout and stderr are interleaved in arrival order; only the end is kept, so a chatty suite cannot grow memory without bound.
     let output = "";
     const collect = (chunk: Buffer) => {
@@ -130,10 +153,12 @@ function runCommand(command: string, cwd: string, timeoutMs: number, env: NodeJS
     }, timeoutMs);
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (group !== undefined) liveGroups.delete(group);
       resolve({ exitCode: code ?? 1, timedOut, ms: Date.now() - started, output });
     });
     child.on("error", () => {
       clearTimeout(timer);
+      if (group !== undefined) liveGroups.delete(group);
       resolve({ exitCode: 127, timedOut, ms: Date.now() - started, output });
     });
   });
@@ -208,8 +233,8 @@ export async function runMutation(options: {
   await mkdir(scratchBase, { recursive: true });
   const scratch = await mkdtemp(path.join(scratchBase, "keryx-mutate-"));
   // The copy has no .git; without a ceiling a git command run by the tests would walk up into the real repository.
-  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
-  return withScratchSignalCleanup(() => rm(scratch, { recursive: true, force: true }), async () => {
+  const env = runEnv(scratchBase);
+  return withScratchSignalCleanup(async () => { killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
   try {
     const copy = path.join(scratch, "tree");
     await copyTree(worktree, copy, new Set([scratchBase, scratch]));

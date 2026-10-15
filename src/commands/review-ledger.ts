@@ -270,7 +270,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });
   }
   if (setAside.length > 0) ledger.setAside = setAside;
-  const blockers = await ledgerBlockers(ledger, canonical, { root, files, changedLines: await packageChangedLines(packageDir), blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
+  const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files, changedLines: await packageChangedLines(packageDir), blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
   const ready = blockers.length === 0;
   if (!rest.includes("--dry-run")) {
     await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
