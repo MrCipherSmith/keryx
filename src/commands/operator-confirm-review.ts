@@ -16,9 +16,11 @@
 
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import { cardSafe } from "../trigger/schedules";
 import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/github";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
+import { readChunkPlan } from "../review/chunks";
 import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate } from "../review/chunks-estimate";
 import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
 import { resolveReviewPackagePath } from "../review/managed";
@@ -91,7 +93,11 @@ function chunksAnswerSpec(): OperatorConfirmSpec<ChunksPrepared> {
       if (answer !== "yes" && answer !== "no") return { refusal: 'answer must be "yes" or "no"' };
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
-        const estimate = await estimateChunkRun(dir, ctx.projectRoot);
+        // Read-only: asking must not write `chunks.json` into the package.
+        if ((await readChunkPlan(dir)) === undefined) {
+          return { refusal: `No chunk plan exists yet for ${label(dir, ctx.projectRoot)}. Run \`keryx review chunks plan --package <dir>\` first (it writes chunks.json), then ask again.` };
+        }
+        const estimate = await estimateChunkRun(dir, ctx.projectRoot, undefined, { readOnly: true });
         if (estimate === null) return { refusal: "No chunks: the blast radius dropped no files, so there is nothing to run and nothing to answer." };
         if (!estimate.overCeiling) {
           return { refusal: `The chunk run needs ${estimate.chunks} pass(es), within the ceiling of ${estimate.maxPasses}: it goes ahead without a question.` };
@@ -120,7 +126,7 @@ function chunksAnswerSpec(): OperatorConfirmSpec<ChunksPrepared> {
     },
     async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_chunks_answer: nothing prepared for this card", isError: true };
-      const estimate = await estimateChunkRun(prepared.dir, ctx.projectRoot);
+      const estimate = await estimateChunkRun(prepared.dir, ctx.projectRoot, undefined, { readOnly: true });
       if (estimate === null || estimate.planKey !== prepared.planKey) {
         return { output: "The chunk plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
@@ -135,7 +141,7 @@ function chunksAnswerSpec(): OperatorConfirmSpec<ChunksPrepared> {
 // ---------------------------------------------------------------------------------------------------------------------
 // 2. review_publish
 
-type PublishPrepared = { dir: string; body: string; event: ReviewEvent; partial: boolean };
+type PublishPrepared = { dir: string; body: string; ref: string; event: ReviewEvent; partial: boolean };
 
 function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrepared> {
   const readiness = (): ReadinessOptions => ({ prLookup: seams.prLookup ?? trackerPrLookup, prFiles: seams.prFiles ?? githubPrFiles });
@@ -175,21 +181,21 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
           },
         });
         const bodyLines = result.body.trimEnd().split(/\r?\n/);
-        const preview = bodyLines.slice(0, BODY_PREVIEW_LINES).map((line) => `  ${line.length > BODY_PREVIEW_CHARS ? `${line.slice(0, BODY_PREVIEW_CHARS)}…` : line}`);
+        const preview = bodyLines.slice(0, BODY_PREVIEW_LINES).map((line) => `  ${cardSafe(line.length > BODY_PREVIEW_CHARS ? `${line.slice(0, BODY_PREVIEW_CHARS)}…` : line)}`);
         const failing = result.readiness.items.filter((item) => item.status === "fail").map((item) => item.id);
         const name = label(dir, ctx.projectRoot);
         return {
-          title: `Post this ${result.event} review${result.partial ? " (PARTIAL)" : ""} to ${target}?`,
+          title: `Post this ${result.event} review${result.partial ? " (PARTIAL)" : ""} to ${cardSafe(target)}?`,
           lines: [
-            `target: ${target}`,
+            `target: ${cardSafe(target)}`,
             `verdict: ${result.event}`,
-            result.partial ? `partial: yes — readiness is failing: ${failing.join(", ")}` : "partial: no — the readiness checklist passes",
+            result.partial ? `partial: yes — readiness is failing: ${cardSafe(failing.join(", "))}` : "partial: no — the readiness checklist passes",
             `body: ${result.body.length} characters, ${bodyLines.length} lines; the first ${Math.min(BODY_PREVIEW_LINES, bodyLines.length)}:`,
             ...preview,
             "yes: the review is posted to GitHub and cannot be taken back from here",
           ],
-          subject: `${target} (package ${name})`,
-          prepared: { dir, body: result.body, event: result.event, partial: result.partial },
+          subject: `${cardSafe(target)} (package ${name})`,
+          prepared: { dir, body: result.body, ref: target, event: result.event, partial: result.partial },
         };
       } catch (error) {
         return failed(error);
@@ -205,14 +211,15 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         post: post(),
         now: () => new Date(confirmation.at),
         confirmedVia: confirmation.confirmedVia,
-        // Only the body the operator saw is posted.
-        confirm: async (body) => {
-          changed = body !== prepared.body;
+        // Only the body, the target and the verdict the operator saw are posted. The event is fixed from `prepared`
+        // above; the target is re-read from the manifest, which a background job may have retargeted.
+        confirm: async (body, targetRef) => {
+          changed = body !== prepared.body || targetRef !== prepared.ref;
           return !changed;
         },
       });
       if (!result.posted) {
-        return { output: changed ? "The review body changed after the card was shown; nothing was posted. Ask again." : "review not published", isError: true };
+        return { output: changed ? "The review body or target changed after the card was shown; nothing was posted. Ask again." : "review not published", isError: true };
       }
       return { output: `published: ${result.event}${result.partial ? " (partial review)" : ""} (${confirmation.confirmedVia}, ${confirmation.at})` };
     },
@@ -245,7 +252,7 @@ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
           title: `Accept ${files.length} uncovered file(s) as not reviewed in ${name}?`,
           lines: [
             `${files.length} of ${report.counts.inScope} in-scope files were not looked at by any slice or chunk:`,
-            ...listFiles(files),
+            ...listFiles(files.map(cardSafe)),
             "yes: review complete will pass its coverage gate, and the package records that these files were not reviewed",
           ],
           subject: `package ${name}`,
@@ -304,9 +311,9 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
         return {
           title: `Accept failing readiness item ${item.number} (${item.id}) of ${name} as it is?`,
           lines: [
-            `item ${item.number} ${item.id}: ${item.title}`,
-            `failing: ${item.evidence}`,
-            ...(item.repair === undefined ? [] : [`repair would be: ${item.repair}`]),
+            `item ${item.number} ${item.id}: ${cardSafe(item.title)}`,
+            `failing: ${cardSafe(item.evidence)}`,
+            ...(item.repair === undefined ? [] : [`repair would be: ${cardSafe(item.repair)}`]),
             "yes: the item is recorded as waived by the operator, in the manifest and at the top of the report",
           ],
           subject: `package ${name}, item ${item.id}`,

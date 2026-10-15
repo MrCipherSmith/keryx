@@ -3,10 +3,11 @@
 // A "no" never reaches `invoke`, so the package must be byte-for-byte what it was.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { ensureChunkPlan } from "../review/chunks";
 import { readChunkEstimate } from "../review/chunks-estimate";
 import { computeCoverage, readCoverageWaiver } from "../review/coverage-complete";
 import type { PostResult, ReviewEvent } from "../review/publish";
@@ -83,6 +84,7 @@ describe("review_chunks_answer", () => {
 
   test("the card shows the pass count over the ceiling; yes records the answer, the card quote and confirmedVia", async () => {
     dropFiles(1100);
+    await ensureChunkPlan(pkg, root);
     const t = tool("review_chunks_answer");
     const result = await yes(t, { package: pkg, answer: "yes" });
     expect(result.card[0]).toBe("Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?");
@@ -101,6 +103,7 @@ describe("review_chunks_answer", () => {
 
   test("a yes answered in the remote topic is recorded as remote-card; answer=no records a declined run", async () => {
     dropFiles(1100);
+    await ensureChunkPlan(pkg, root);
     const t = tool("review_chunks_answer");
     const result = await yes(t, { package: pkg, answer: "no" }, "remote");
     expect(result.card[0]).toContain("Stop the 28-pass chunk run");
@@ -111,6 +114,7 @@ describe("review_chunks_answer", () => {
 
   test("a no changes nothing: the card was built, the tool was never invoked, no estimate is on disk", async () => {
     dropFiles(1100);
+    await ensureChunkPlan(pkg, root);
     const t = tool("review_chunks_answer");
     const card = asked(await ask(t, { package: pkg, answer: "yes" }));
     t.confirmationDeclined!(card.token);
@@ -121,8 +125,23 @@ describe("review_chunks_answer", () => {
     expect(existsSync(path.join(pkg, "chunk-estimate.json"))).toBe(false);
   });
 
+  test("asking never writes chunks.json: no plan yet is a refusal naming the command, and a no leaves the package as it was", async () => {
+    dropFiles(1100);
+    const t = tool("review_chunks_answer");
+    const refused = await ask(t, { package: pkg, answer: "yes" });
+    expect(refused).toEqual({ error: expect.stringContaining("keryx review chunks plan") });
+    expect(existsSync(path.join(pkg, "chunks.json"))).toBe(false);
+    // With a plan on disk, the card is built and a no adds no file.
+    await ensureChunkPlan(pkg, root);
+    const before = readdirSync(pkg).sort();
+    const card = asked(await ask(t, { package: pkg, answer: "yes" }));
+    t.confirmationDeclined!(card.token);
+    expect(readdirSync(pkg).sort()).toEqual(before);
+  });
+
   test("a run within the ceiling is refused: there is no question to answer", async () => {
     dropFiles(100);
+    await ensureChunkPlan(pkg, root);
     const refused = await ask(tool("review_chunks_answer"), { package: pkg, answer: "yes" });
     expect(refused).toEqual({ error: expect.stringContaining("within the ceiling of 25") });
   });
@@ -181,6 +200,21 @@ describe("review_publish", () => {
     const refused = await ask(tool("review_publish"), { package: pkg });
     expect(refused).toEqual({ error: expect.stringMatching(/cannot publish[\s\S]*verifier/i) });
     expect(posts).toEqual([]);
+  });
+
+  test("the manifest target changing between the card and the yes posts nothing", async () => {
+    makePackage();
+    const t = tool("review_publish");
+    const input = { package: pkg, partial: true };
+    const card = asked(await ask(t, input));
+    const manifest = readJson("manifest.json");
+    manifest["target"] = { kind: "pr", ref: "https://github.com/Presight-AI/vantage-frontend/pull/9999" };
+    put("manifest.json", manifest);
+    const result = await t.invoke(input, { confirmationToken: card.token } as never);
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("changed after the card was shown");
+    expect(posts).toEqual([]);
+    expect(existsSync(path.join(pkg, "published.json"))).toBe(false);
   });
 
   test("the report changing between the card and the yes posts nothing", async () => {

@@ -106,6 +106,8 @@ test("interactive mode: a run over the ceiling waits for a yes, and `chunks next
   expect(chunkModeOf(pkg)).toBe("interactive");
   const blocked = await chunkRunBlocker(pkg, root);
   expect(blocked).toContain("exceed the ceiling of 25 passes (1000 files)");
+  expect(blocked).toContain("call the `review_chunks_answer` tool");
+  expect(blocked).toContain("in a terminal");
   expect(blocked).toContain("--answer yes");
 
   const refused = await capture(() => runChunks(["next", "--package", pkg], { rejectUnknownFlags: () => {} }));
@@ -144,6 +146,8 @@ test("an answer recorded for another plan neither unblocks nor blocks a run that
   dropFiles(1250);
   const blocked = await chunkRunBlocker(pkg, root);
   expect(blocked).toContain("exceed the ceiling");
+  expect(blocked).toContain("call the `review_chunks_answer` tool");
+  expect(blocked).toContain("in a terminal");
   expect(blocked).toContain("--answer yes");
 });
 
