@@ -20,6 +20,8 @@ import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
 import { slateWriteSeedTool } from "./slate-tool";
 import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
+import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
+import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
@@ -335,6 +337,36 @@ export const SUBAGENT_CHILD_RESERVATION_MS = 5 * 60_000;
  * while this count bounds the turn's total spawns.
  */
 export const SUBAGENT_TURN_MAX_CHILDREN = 32;
+
+/**
+ * Flow 453: children one review wave may spawn. A wave is a pass of a review package's recorded chunk plan (or its
+ * round), named by the dispatcher in `review_wave`; each wave counts its own 32, so a deep review is not stopped by
+ * the turn's count.
+ */
+export const SUBAGENT_WAVE_MAX_CHILDREN = 32;
+
+/** Waves one parent turn may open: the chunk plan's own pass bound, so waves x 32 stays finite. */
+export const SUBAGENT_TURN_MAX_WAVES = DEFAULT_MAX_PASSES;
+
+const SUBAGENT_LEDGER_CAPS = {
+  maxChildren: SUBAGENT_TURN_MAX_CHILDREN,
+  maxScopeChildren: SUBAGENT_WAVE_MAX_CHILDREN,
+  maxScopes: SUBAGENT_TURN_MAX_WAVES,
+} as const;
+
+/** What to do next, appended to a refusal that came from a child-count cap. */
+function childCapHint(reason: string, waveLabel: string | undefined): string {
+  if (/scope count cap/.test(reason)) {
+    return ` (the turn has opened ${SUBAGENT_TURN_MAX_WAVES} review waves, the most one turn may; the turn cap is ${SUBAGENT_TURN_MAX_WAVES} waves of ${SUBAGENT_WAVE_MAX_CHILDREN} children. Next step: continue the review in a new turn.)`;
+  }
+  if (waveLabel !== undefined && /child count cap/.test(reason)) {
+    return ` (wave ${waveLabel} is full: the wave cap is ${SUBAGENT_WAVE_MAX_CHILDREN} children. Next step: finish this wave with \`review chunks record\` and dispatch the next wave.)`;
+  }
+  if (/child count cap/.test(reason)) {
+    return ` (the turn cap is ${SUBAGENT_TURN_MAX_CHILDREN} children for calls outside a review wave. Next step: continue in a new turn, or pass review_wave so each chunk wave counts its own ${SUBAGENT_WAVE_MAX_CHILDREN}.)`;
+  }
+  return "";
+}
 
 /**
  * Inclusive per-child model-round-trip budget when `max_rounds` is omitted.
@@ -903,7 +935,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
   const ledgerLimits = {
     maxRuntimeMs: DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
   };
-  let ledger = new RemainingBudgetLedger(ledgerLimits, { maxChildren: SUBAGENT_TURN_MAX_CHILDREN });
+  let ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
   const emitFleetEvent = (event: SpawnSubagentFleetEvent): void => {
     try {
       deps.onFleetEvent?.(event);
@@ -913,7 +945,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
   };
   deps.onLedgerReady?.({
     resetBudget: () => {
-      ledger = new RemainingBudgetLedger(ledgerLimits, { maxChildren: SUBAGENT_TURN_MAX_CHILDREN });
+      ledger = new RemainingBudgetLedger(ledgerLimits, SUBAGENT_LEDGER_CAPS);
     },
   });
   const parentProvenance: Provenance = {
@@ -930,7 +962,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "Spawn a bounded subagent to work on a focused subtask in parallel-safe isolation " +
         "(MAE multi-agent). Use for independent investigations, reviews, or research while " +
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
-        "label?: string, max_tool_calls?: integer, max_rounds?: integer, context_files?: string[], save_result_to?: string }. " +
+        "label?: string, max_tool_calls?: integer, max_rounds?: integer, context_files?: string[], save_result_to?: string, " +
+        "review_wave?: { package: string, pass: string } }. " +
+        "review_wave names the review package and chunk pass (or 'round') this child belongs to, so it counts " +
+        `against that wave's own ${SUBAGENT_WAVE_MAX_CHILDREN} children and not the turn's; a wave the package does not record is ignored. ` +
         "max_tool_calls is ADVISORY: it never stops the child, it only sets when the child is warned " +
         "(from 80% of it) to return its result; a hard tool-call cap exists only when the operator " +
         `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 40, capped ` +
@@ -1009,6 +1044,20 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             description:
               "Model-round budget (default 40, capped at 200). On reaching it the child gets one final " +
               "round to submit a partial result.",
+          },
+          review_wave: {
+            type: "object",
+            description:
+              "Review dispatch only: the review package directory (inside your project) and the pass this " +
+              "child belongs to - a chunk id from the package's chunks.json, or 'round'. The child then " +
+              `counts against that wave's own ${SUBAGENT_WAVE_MAX_CHILDREN} children, up to ${SUBAGENT_TURN_MAX_WAVES} waves ` +
+              "a turn. A wave the package does not record is ignored and the child counts against the turn.",
+            properties: {
+              package: { type: "string" },
+              pass: { type: "string" },
+            },
+            required: ["package", "pass"],
+            additionalProperties: false,
           },
           /**
            * Flow 204 — how much model this child's work is worth.
@@ -1388,7 +1437,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         }
       }
 
+      const reviewWave =
+        input.review_wave === undefined ? undefined : await resolveReviewWave(deps.cwd, input.review_wave);
+      const waveKey = reviewWave?.ok === true ? reviewWave.key : undefined;
       const ctx: SubagentContext = {
+        ...(waveKey !== undefined ? { childScope: waveKey } : {}),
         parentRunId,
         parentSessionId,
         parentProvenance,
@@ -1450,7 +1503,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         });
         return {
           status: "Denied",
-          output: `spawn_subagent denied by MAE: ${spawned.reason}`,
+          output: `spawn_subagent denied by MAE: ${spawned.reason}${childCapHint(
+            spawned.reason,
+            waveKey === undefined ? undefined : describeReviewWave(waveKey),
+          )}`,
           isError: true,
         };
       }
