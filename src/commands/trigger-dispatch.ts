@@ -76,7 +76,7 @@ import type {
 } from "../trigger/record";
 import { NETWORK_ON_WARNING } from "../trigger/describe";
 import { reserveTriggerSpend } from "../trigger/run";
-import { UNATTENDED_EXCLUDED_TOOLS, unattendedRefusal } from "../trigger/unattended";
+import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
 
 const execFileAsync = promisify(execFile);
 
@@ -139,7 +139,7 @@ export function buildUnattendedRoster(
   }),
 ): InteractiveTool[] {
   const tools = [...builtinReadOnlyTools(worktree), shellExecTool(worktree, runner), applyPatchTool(worktree)];
-  const excluded = tools.filter((tool) => UNATTENDED_EXCLUDED_TOOLS.includes(tool.definition.name));
+  const excluded = tools.filter((tool) => isUnattendedExcludedTool(tool.definition.name));
   if (excluded.length > 0) {
     throw new Error(`unattended roster must not offer: ${excluded.map((t) => t.definition.name).join(", ")}`);
   }

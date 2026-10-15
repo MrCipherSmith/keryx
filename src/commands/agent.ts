@@ -250,6 +250,11 @@ export interface ApprovalMeta {
   /** Flow 295 (AC7): the confirmation card, one line per element, for an `alwaysAsk` call. */
   card?: readonly string[];
   /**
+   * Flow 456 (AC1): the yes/no question an operator-confirmed card asks (`operator-confirm-tools.ts`). Present,
+   * an approver titles its dialog with it; absent, a card is `schedule_create`'s and keeps its own wording.
+   */
+  cardTitle?: string;
+  /**
    * Flow 306 (W6 T9): a `PreToolUse` lifecycle hook tightened this call's own
    * risk-gate decision to `ask` (a mode that would otherwise have resolved
    * `auto`, or a `read`-risk tool that never gates at all). Like
@@ -282,7 +287,18 @@ export interface ApprovalMeta {
  * fingerprint check, and never for a call under the untrusted-content floor;
  * hosts must offer it only for catalog-resolved MCP tools.
  */
-export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string; trustMcpTool?: boolean };
+export type ApprovalResponse =
+  | boolean
+  | {
+      approved: boolean;
+      fingerprint?: string;
+      trustMcpTool?: boolean;
+      /**
+       * Flow 456: the answer came from the remote topic, not this shell. A label for the record an
+       * operator-confirmed tool writes (`confirmedVia`); it never changes whether the call runs.
+       */
+      via?: "remote";
+    };
 
 /**
  * Optional marks on an approver. Without them a `false` is a person's refusal. `attended: false` is an approver
@@ -5726,6 +5742,8 @@ async function executeCallUnbounded(
   const hookInteractive = hooks?.runtime.interactive ?? true;
   // Flow 295 (F8): set only in the write branch below, after the operator's yes.
   let confirmationToken: string | undefined;
+  // Flow 456: where the operator answered an operator-confirmed card (`InteractiveToolContext.confirmationVia`).
+  let confirmationVia: "local" | "remote" | undefined;
   if (tool.confirmation !== undefined && risk !== "write") {
     // Flow 295: the operator confirmation lives in the write branch only; any
     // other risk would skip it, so such a tool is refused rather than run.
@@ -5954,12 +5972,14 @@ async function executeCallUnbounded(
     // draft that cannot be built refuses without asking. Then it is a hard floor like
     // `credentials`: every mode, `auto` included, asks.
     let card: readonly string[] | undefined;
+    let cardTitle: string | undefined;
     if (tool.confirmation !== undefined) {
       const confirmation = await tool.confirmation(input);
       if ("error" in confirmation) {
         return { output: `${call.name} refused: ${confirmation.error}`, isError: true };
       }
       card = confirmation.card;
+      cardTitle = confirmation.title;
       confirmationToken = confirmation.token;
     }
     const rawDecision = resolveApprovalDecision({
@@ -6007,7 +6027,7 @@ async function executeCallUnbounded(
               fingerprint,
               destructive,
               ...(credentials ? { credentials } : {}),
-              ...(card !== undefined ? { alwaysAsk: true, card } : {}),
+              ...(card !== undefined ? { alwaysAsk: true, card, ...(cardTitle !== undefined ? { cardTitle } : {}) } : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
               cause: classifyApprovalCause({
@@ -6026,6 +6046,7 @@ async function executeCallUnbounded(
           isError: true,
         };
       }
+      if (card !== undefined) confirmationVia = typeof response === "object" && response.via === "remote" ? "remote" : "local";
       // Fix round 4, F-001: an interactive operator's approval of a
       // `keryx.impact-evidence` `ask` IS the acknowledgement W8 strict mode
       // waits for — without recording it here, every later edit of the same
@@ -6090,6 +6111,7 @@ async function executeCallUnbounded(
   const result = await tool.invoke(input, {
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
+    ...(confirmationToken !== undefined && confirmationVia !== undefined ? { confirmationVia } : {}),
     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
   });
   if (review !== undefined && call.name === "shell_exec" && typeof input.command === "string") {

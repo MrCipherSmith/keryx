@@ -77,7 +77,7 @@ import type {
 import { reserveTriggerSpend } from "../trigger/run";
 export { verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
-import { UNATTENDED_EXCLUDED_TOOLS, unattendedRefusal } from "../trigger/unattended";
+import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
 import {
   createSpendMeter,
   deniedUnattendedApproval,
@@ -544,7 +544,7 @@ async function runLocked(
         ...granted,
         ...(deps.extraTools ?? []),
       ];
-      const offending = tools.filter((t) => UNATTENDED_EXCLUDED_TOOLS.includes(t.definition.name));
+      const offending = tools.filter((t) => isUnattendedExcludedTool(t.definition.name));
       if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);
       const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
       // Flow 306 (W6 T9, AC9): same unattended-untrusted, non-interactive

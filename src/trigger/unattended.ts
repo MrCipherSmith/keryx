@@ -33,12 +33,14 @@
 import { parsePatchTargets } from "../lib/patch-risk";
 import { commandWord, splitSegments, stripAssignments } from "../lib/shell-syntax";
 import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } from "../lib/command-risk";
+import { operatorConfirmToolNames } from "../commands/operator-confirm-tools";
 
 /**
  * Tools an unattended run is never offered in this version (AC5). The web and
  * MCP tools bring third-party content that cannot authorize anything; a
  * subagent would be a second agent outside this run's floor and spend cap;
- * `ask_user` has nobody to ask.
+ * `ask_user` has nobody to ask. The operator-confirmed gates are excluded too,
+ * through {@link isUnattendedExcludedTool}: check membership with that, not this list.
  */
 export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   "web_fetch",
@@ -50,6 +52,15 @@ export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
   // Flow 295 (AC7): creating a schedule needs an operator's confirmation, and an unattended run has none.
   "schedule_create",
 ];
+
+/**
+ * Flow 456 (AC1): whether an unattended run may never be offered `toolName` — the fixed list above, plus
+ * every operator-confirmed gate (`../commands/operator-confirm-tools.ts`), derived from its registry so a
+ * new gate is excluded the moment it is registered. Read at call time, never captured at module load.
+ */
+export function isUnattendedExcludedTool(toolName: string): boolean {
+  return UNATTENDED_EXCLUDED_TOOLS.includes(toolName) || operatorConfirmToolNames().includes(toolName);
+}
 
 /** `keryx flow` verbs only an operator (or the dispatcher itself) may run. */
 const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
@@ -202,7 +213,7 @@ export function unattendedPatchRefusal(patch: string): string | undefined {
  * has no objection here (the permission mode still governs it).
  */
 export function unattendedRefusal(toolName: string, input: Record<string, unknown>): string | undefined {
-  if (UNATTENDED_EXCLUDED_TOOLS.includes(toolName)) {
+  if (isUnattendedExcludedTool(toolName)) {
     return `\`${toolName}\` is not offered to an unattended run`;
   }
   if (toolName === "shell_exec") {

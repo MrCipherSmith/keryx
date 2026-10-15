@@ -58,6 +58,12 @@ export interface InteractiveToolContext {
    */
   confirmationToken?: string;
   /**
+   * Flow 456 (AC1): where the operator answered the card of THIS call. `remote` when the yes came from the
+   * remote topic (the approval mirror or a Telegram-started turn), `local` when it came from this shell. Set
+   * only together with {@link confirmationToken}; a tool that records the operator's decision labels it from here.
+   */
+  confirmationVia?: "local" | "remote";
+  /**
    * Flow 425: untrusted external content was read earlier in this turn. `ask_user` copies it onto the question, so
    * the review arbiter can tell a question that may have been shaped by that content and never decide it.
    */
@@ -83,7 +89,15 @@ export interface InteractiveTool {
    */
   confirmation?: (
     input: Record<string, unknown>,
-  ) => Promise<{ readonly card: readonly string[]; readonly token?: string } | { readonly error: string }>;
+  ) => Promise<
+    | {
+        readonly card: readonly string[];
+        readonly token?: string;
+        /** Flow 456: the question the dialog asks (`ApprovalMeta.cardTitle`). Absent: the schedule wording. */
+        readonly title?: string;
+      }
+    | { readonly error: string }
+  >;
   /** Flow 295 (F8): called with the confirmation's token when the operator declined, so the tool drops its draft. */
   confirmationDeclined?: (token: string) => void;
 }

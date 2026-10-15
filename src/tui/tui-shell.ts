@@ -1583,7 +1583,7 @@ export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | 
  * Flow 306 fix round 2 (finding C): whether an `alwaysAsk`+`card` approval
  * (`agent.ts`'s shape for both `schedule_create` and a `UserPromptSubmit`
  * hook's `ask`) is the `user_prompt` one, which must NOT be routed to
- * `confirmScheduleCard` — the two calls share a meta shape but not a
+ * `confirmOperatorCard` — the two calls share a meta shape but not a
  * question, and routing on the shape alone put "Create this schedule and
  * install its background timer?" in front of an operator being asked whether
  * their own chat message may reach the model. Extracted as a pure predicate,
@@ -1592,6 +1592,43 @@ export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | 
  */
 export function isUserPromptApprovalCard(tool: string): boolean {
   return tool === "user_prompt";
+}
+
+/** The wording of the operator-confirmation dialog: the yes/no choice and the transcript line for each answer. */
+export interface OperatorCardDialog {
+  readonly title: string;
+  readonly yes: { readonly id: string; readonly label: string; readonly description: string };
+  readonly no: { readonly id: string; readonly label: string; readonly description: string };
+  readonly confirmed: string;
+  readonly declined: string;
+  readonly phase: string;
+}
+
+/**
+ * Flow 456 (AC1): the dialog for an `alwaysAsk`+`card` approval. With a `cardTitle` (an
+ * operator-confirm gate, `operator-confirm-tools.ts`) the dialog asks that question with a plain
+ * yes/no; without one the card is `schedule_create`'s (or `/schedule`'s) and keeps its wording.
+ * Pure, so the wording is testable without mounting the shell.
+ */
+export function operatorCardDialog(cardTitle: string | undefined): OperatorCardDialog {
+  if (cardTitle === undefined) {
+    return {
+      title: "Create this schedule and install its background timer?",
+      yes: { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
+      no: { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
+      confirmed: "◇ schedule confirmed",
+      declined: "◇ schedule not created — nothing written or installed",
+      phase: "schedule",
+    };
+  }
+  return {
+    title: cardTitle,
+    yes: { id: "yes", label: "Yes", description: "Apply exactly what the card above says" },
+    no: { id: "no", label: "No", description: "Nothing is changed" },
+    confirmed: `◇ confirmed: ${cardTitle}`,
+    declined: "◇ declined — nothing changed",
+    phase: "confirmed",
+  };
 }
 
 /** Outcomes of the interactive shell_exec approval picker. */
@@ -5279,11 +5316,12 @@ export async function launchTuiAgentShell(opts: {
     // The flow-041 advisory context (blast radius + memory note) is loaded through
     // this loader — the same information the readline shell shows above its prompt.
     const approvalContext = createApprovalContextLoader(opts.session?.cwd ?? process.cwd());
-    // Flow 295 (AC6/AC7): the ONE confirmation dialog for a schedule — used by the
-    // `schedule_create` tool's approval and by `/schedule`. Prints the card, then
-    // offers exactly two choices; Esc/cancel is "no".
-    const confirmScheduleCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
+    // Flow 295 (AC6/AC7), generalised by flow 456: the ONE confirmation dialog for an
+    // operator-confirmed card — `schedule_create`, `/schedule` and every operator-confirm gate.
+    // Prints the card verbatim, then offers exactly two choices; Esc/cancel is "no".
+    const confirmOperatorCard = async (card: readonly string[], race?: DockRace, cardTitle?: string): Promise<boolean> => {
       const dockSignal = race?.signal ?? foregroundOperation.signal;
+      const dialog = operatorCardDialog(cardTitle);
       for (const line of card) {
         transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${roleChunk(otui, "attention", line)}` }));
       }
@@ -5291,42 +5329,37 @@ export async function launchTuiAgentShell(opts: {
       setMainAgent("blocked", "approval");
       const id = await chrome.withOverlay(() =>
         showComposerChoice(otui, r, chrome.dock, {
-          title: "Create this schedule and install its background timer?",
-          subtitle: card[0] ?? "",
-          cancelId: "cancel",
+          title: dialog.title,
+          subtitle: cardTitle === undefined ? card[0] ?? "" : card[card.length - 1] ?? "",
+          cancelId: dialog.no.id,
           onOpen: () => {
               chrome.blurComposer();
               race?.opened();
             },
           signal: dockSignal,
-          options: [
-            { id: "create", label: "Create and install", description: "Store it and install the timer shown above" },
-            { id: "cancel", label: "Cancel", description: "Nothing is written or installed" },
-          ],
+          options: [dialog.yes, dialog.no],
         }),
       );
       input.focus();
       if (race?.topicWon() === true) return false;
-      setMainAgent("running", id === "create" ? "schedule" : "denied");
+      const yes = id === dialog.yes.id;
+      setMainAgent("running", yes ? dialog.phase : "denied");
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
-          content:
-            id === "create"
-              ? otui.t`${roleChunk(otui, "ok", "◇ schedule confirmed")}`
-              : otui.t`${roleChunk(otui, "error", "◇ schedule not created — nothing written or installed")}`,
+          content: yes ? otui.t`${roleChunk(otui, "ok", dialog.confirmed)}` : otui.t`${roleChunk(otui, "error", dialog.declined)}`,
         }),
       );
-      return id === "create";
+      return yes;
     };
     // Flow 306 fix round 2 (finding C): a `UserPromptSubmit` hook `ask` (routed
     // here as the synthetic tool `user_prompt`, `agent.ts`'s `alwaysAsk: true` +
     // `card`) is NOT a schedule confirmation — it was falling into
-    // `confirmScheduleCard` below purely because both shapes carry
+    // `confirmOperatorCard` below purely because both shapes carry
     // `alwaysAsk`+`card`, which put "Create this schedule and install its
     // background timer?" in front of an operator being asked whether their own
     // chat message may reach the model. Same card-then-choice shape, accurate
-    // wording, never remembered — like `confirmScheduleCard`, this answers a
+    // wording, never remembered — like `confirmOperatorCard`, this answers a
     // gate a hook raised, not a grant a saved pattern could stand in for.
     const confirmUserPromptCard = async (card: readonly string[], race?: DockRace): Promise<boolean> => {
       const dockSignal = race?.signal ?? foregroundOperation.signal;
@@ -5413,19 +5446,19 @@ export async function launchTuiAgentShell(opts: {
 
       // Flow 306 fix round 2 (finding C): a `UserPromptSubmit` hook ask, before
       // the schedule branch below — both shapes carry `alwaysAsk`+`card`, and
-      // `confirmScheduleCard`'s schedule-install wording is wrong for a chat
+      // `confirmOperatorCard`'s schedule-install wording is wrong for a chat
       // message.
       if (isUserPromptApprovalCard(tool) && meta?.alwaysAsk === true && meta.card !== undefined) {
         addCauseLine(tool, meta);
         return confirmUserPromptCard(meta.card, race);
       }
 
-      // Flow 295 (AC6/AC7): an operator-confirmed call (schedule_create). The
-      // card is printed verbatim, the only choices are yes/no, and the answer is
-      // never remembered — no mode and no saved pattern answers it.
+      // Flow 295 (AC6/AC7), flow 456: an operator-confirmed call (schedule_create, an
+      // operator-confirm gate). The card is printed verbatim, the only choices are yes/no,
+      // and the answer is never remembered — no mode and no saved pattern answers it.
       if (meta?.alwaysAsk === true && meta.card !== undefined) {
         addCauseLine(tool, meta);
-        return confirmScheduleCard(meta.card, race);
+        return confirmOperatorCard(meta.card, race, meta.cardTitle);
       }
 
       // Multi-agent spawn: auto-allow read_only; ask for general.
@@ -5942,7 +5975,8 @@ export async function launchTuiAgentShell(opts: {
         decision === "allow" ? `◇ ${brief} approved in Telegram${rememberedNote}.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`,
       );
       if (decision !== "allow") return false;
-      return approvedAnswer();
+      // Flow 456: answered in the topic — an operator-confirmed card records `confirmedVia: "remote-card"`.
+      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
     };
     // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
     // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
@@ -5969,7 +6003,8 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
         if (!allowed) return false;
-        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+        // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
+        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
       };
     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
 
@@ -8797,7 +8832,7 @@ export async function launchTuiAgentShell(opts: {
                 tone === "ok" ? roleChunk(otui, "ok", text) : tone === "error" ? roleChunk(otui, "error", text) : dimChunk(otui, text);
               transcript.add(new otui.TextRenderable(r, { id: `sch${uid++}`, content: otui.t`${chunk}` }));
             },
-            confirm: (card) => confirmScheduleCard(card),
+            confirm: (card) => confirmOperatorCard(card),
           }));
           return;
         }
