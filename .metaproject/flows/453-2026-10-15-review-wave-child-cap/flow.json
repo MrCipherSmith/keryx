@@ -9,9 +9,9 @@
   "id": "453",
   "slug": "review-wave-child-cap",
   "title": "Review dispatch counts child agents per chunk wave",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T08:26:52.400Z",
-  "updatedAt": "2026-10-15T08:27:05.645Z",
+  "updatedAt": "2026-10-15T08:56:28.781Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:0b382ccedde3bc34313d60a4e97d2fd4d8c76cdf50e832f7d178e6a5769255e8",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1025"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -107,6 +107,11 @@
     {
       "at": "2026-10-15T08:27:05.645Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-15T08:56:28.781Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1025 (warning: PR is not a draft) (base: main)"
     }
   ],
   "origin": {
@@ -141,5 +146,6 @@
     "AC7": {
       "kind": "judged"
     }
-  }
+  },
+  "baseBranch": "main"
 }
