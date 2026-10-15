@@ -89,6 +89,7 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
     "budget",
     "tier",
     "status",
+    "verdict",
     "report-parity",
     "readiness",
     "reviewers",

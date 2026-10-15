@@ -39,6 +39,8 @@ export type InterimVerdict = {
   reportedReviewers: string[];
   /** Reviewers the package expects that have produced no result. `undefined` when the package does not say who was expected. */
   pendingReviewers: string[] | undefined;
+  /** True when only an ingested round is present: a pending reviewer may have run clean. */
+  pendingAmbiguous: boolean;
   /** Raw files that held no parsable reviewer result. */
   unreadable: string[];
   headline: string;
@@ -118,6 +120,7 @@ async function expectedReviewers(packageDir: string): Promise<string[] | undefin
   }
   const dispatch = object(object(await readJson(path.join(packageDir, "research.json")))?.dispatch);
   if (Array.isArray(dispatch?.selected)) for (const entry of dispatch.selected) if (text(entry) !== undefined) names.add((entry as string).trim());
+  names.delete("review-orchestrator");
   return names.size === 0 ? undefined : [...names].sort();
 }
 
@@ -166,7 +169,9 @@ export async function computeVerdict(packageDir: string): Promise<InterimVerdict
     : counts.blocker > 0 ? `${counts.blocker} open blocker(s): do not merge`
     : counts.major > 0 ? `${counts.major} open major(s): resolve or justify before merge`
     : "no open blockers or majors";
-  return { source, counts, total, verified, unverified, refuted, dismissed, open, reportedReviewers: [...reported].sort(), pendingReviewers, unreadable: raws.unreadable, headline };
+  // An ingested round lists only reviewers that raised a finding; one that ran clean is indistinguishable from one that never ran.
+  const pendingAmbiguous = useRound && raws.results.length === 0;
+  return { source, counts, total, verified, unverified, refuted, dismissed, open, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline };
 }
 
 export function renderVerdict(verdict: InterimVerdict, reviewId: string): string {
@@ -178,7 +183,7 @@ export function renderVerdict(verdict: InterimVerdict, reviewId: string): string
   lines.push(`reviewers reported: ${verdict.reportedReviewers.length === 0 ? "none" : verdict.reportedReviewers.join(", ")}`);
   lines.push(verdict.pendingReviewers === undefined
     ? "reviewers not reported: unknown (the package does not record who was expected)"
-    : `reviewers not reported: ${verdict.pendingReviewers.length === 0 ? "none" : verdict.pendingReviewers.join(", ")}`);
+    : `${verdict.pendingAmbiguous ? "reviewers with no findings or not reported" : "reviewers not reported"}: ${verdict.pendingReviewers.length === 0 ? "none" : verdict.pendingReviewers.join(", ")}`);
   for (const file of verdict.unreadable) lines.push(`unreadable result: ${file}`);
   if (verdict.open.length > 0) {
     lines.push("", "## Open blockers and majors", "");
